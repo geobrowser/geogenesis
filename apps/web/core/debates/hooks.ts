@@ -92,7 +92,6 @@ import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
-import type { RecordingPlaybackVariant } from './mobile-rendition';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -107,6 +106,7 @@ import {
 } from './rematch-claims-query-key';
 import { markRematchAnswered } from './rematch-join-intent';
 import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
+import type { RecordingUrlVariant } from './stream-playback';
 import { withQueryData } from './with-query-data';
 
 export const debateQueryNetworkOptions = {
@@ -146,7 +146,7 @@ export const debateQueryKeys = {
     debateId: string,
     filename: string,
     accountKey: string | null,
-    variant: RecordingPlaybackVariant | 'original' = 'original'
+    variant: RecordingUrlVariant | 'original' = 'original'
   ) => ['debates', 'recording-url', debateId, filename, accountKey, variant] as const,
   transcript: (debateId: string, format: TranscriptFormat) =>
     ['debates', 'transcript', dashlessId(debateId), format] as const,
@@ -1493,7 +1493,7 @@ export function useCompleteLocalRecordingUpload(debateId: string) {
 export const RECORDING_URL_STALE_MS = 5 * 60 * 1000;
 
 /** `variant: 'mobile'` signs the recording's feed rendition (GEO-3118, still named `mobile`) instead of the file itself. */
-type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingPlaybackVariant };
+type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingUrlVariant };
 
 /**
  * The signed playback URL for one debate recording, cached.
