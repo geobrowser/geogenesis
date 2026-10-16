@@ -720,20 +720,17 @@ export function DebateFeedPlayer({
         data-debate-playing={playing ? 'true' : 'false'}
         data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
         data-debate-pair-held={pairHeld ? 'true' : 'false'}
-        // Open rounds follows the export's 9:14 frame, 2px seam and radius of 4% of its width.
-        // The vertical radius percentage is adjusted for 9:14 so both axes have the same radius.
-        // Fixed formats keep their original tile proportions, with no gap and one outer radius.
+        // No gap and one radius on the outside: the two tiles are a single surface in the Figma
+        // frame, which is what lets the subtitle and the round card straddle the seam rather than
+        // sit inside one tile.
+        // 12px in the compact gallery (a profile's or claim's Activity), 16px in the feeds.
         //
         // `@container` so the round card sizes against the player rather than the viewport: this
         // same component is a feed card, an explore card and a fullscreen player, and a breakpoint
         // would get two of the three wrong.
         className={cx(
           'group @container relative flex flex-col overflow-hidden',
-          stamped
-            ? 'aspect-9/14 gap-[2px] rounded-[4%/calc(4%*9/14)] bg-black'
-            : reducedOverlays
-              ? 'rounded-lg'
-              : 'rounded-xl'
+          reducedOverlays ? 'rounded-lg' : 'rounded-xl'
         )}
       >
         <DebaterVideo
@@ -1338,7 +1335,7 @@ function DebaterVideo({
       // tile" is otherwise only checkable by counting DOM order.
       data-debate-slot={participant?.participant_slot}
       inert={inert}
-      className={cx('relative w-full overflow-hidden bg-grey-01', stamped ? 'min-h-0 flex-1' : 'aspect-480/289')}
+      className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
