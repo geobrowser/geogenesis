@@ -545,10 +545,40 @@ describe('LobbyVoice camera (GEO-3307)', () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
     renderVoice();
     fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
-    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
     cleanup();
     carryLobbyJoinChoice();
     expect(readCarriedLobbyChoice()).toEqual({ micOn: true, cameraOn: true });
+    clearCarriedLobbyChoice();
+    forgetLobbyDevices();
+  });
+
+  // Routing in releases the camera, which turns the choice off: the carry reads it from before.
+  it('carries a camera that routing into a debate released', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    const [camera] = mocks.created;
+    routeIntoDebate(() => undefined);
+    expect(camera!.stop).toHaveBeenCalled();
+    // The step-out carries after the lobby has re-rendered with the camera off.
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    carryLobbyJoinChoice();
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true, cameraOn: true });
+    clearCarriedLobbyChoice();
+    forgetLobbyDevices();
+  });
+
+  it('carries a camera turned off in the lobby as off', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+    await waitFor(() => expect(mocks.published.size).toBe(0));
+    routeIntoDebate(() => carryLobbyJoinChoice());
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true, cameraOn: false });
     clearCarriedLobbyChoice();
     forgetLobbyDevices();
   });
