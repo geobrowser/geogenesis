@@ -97,38 +97,47 @@ describe('claim response summaries', () => {
     expect(summaries.get('claim-a:stance')?.viewerResponse).toBeNull();
   });
 
-  it('paginates in deterministic 1,000-row pages and deduplicates rows repeated across pages', async () => {
+  it('walks cursor pages and deduplicates rows repeated across pages', async () => {
     const firstPage = Array.from({ length: CLAIM_RESPONSE_SUMMARY_PAGE_SIZE }, (_, index) =>
       row('claim-stance', 1, `user-${index}`, index % 2)
     );
+
     const duplicate = firstPage.at(-1)!;
+    const extraUserId = `user-${CLAIM_RESPONSE_SUMMARY_PAGE_SIZE}`;
     const fetchPage = vi
       .fn()
-      .mockResolvedValueOnce(firstPage)
-      .mockResolvedValueOnce([duplicate, row('claim-stance', 1, 'user-1000', 0)]);
+      .mockResolvedValueOnce({ items: firstPage, endCursor: 'cursor-1', hasNextPage: true })
+      .mockResolvedValueOnce({
+        items: [duplicate, row('claim-stance', 1, extraUserId, 0)],
+        endCursor: null,
+        hasNextPage: false,
+      });
 
     const summaries = await fetchClaimResponseSummaries({
       spaceId: 'space-1',
       targets: [{ entityId: 'claim-stance', responseKind: 'stance' }],
-      personalSpaceId: 'user-1000',
+      personalSpaceId: extraUserId,
       fetchPage,
     });
 
     expect(fetchPage).toHaveBeenCalledTimes(2);
-    expect(fetchPage.mock.calls.map(call => call[0].offset)).toEqual([0, 1000]);
+    expect(fetchPage.mock.calls.map(call => call[0].after)).toEqual([undefined, 'cursor-1']);
     expect(fetchPage.mock.calls[0]?.[0]).toMatchObject({
-      first: 1000,
+      first: CLAIM_RESPONSE_SUMMARY_PAGE_SIZE,
       filter: {
         spaceId: { is: 'space-1' },
         objectType: { is: 0 },
         or: [{ objectId: { is: 'claim-stance' }, voteKind: { is: 1 } }],
       },
     });
+
+    const positive = Math.ceil(CLAIM_RESPONSE_SUMMARY_PAGE_SIZE / 2) + 1;
+    const negative = Math.floor(CLAIM_RESPONSE_SUMMARY_PAGE_SIZE / 2);
     expect(summaries.get('claim-stance:stance')).toMatchObject({
-      counts: { positive: 501, negative: 500 },
+      counts: { positive, negative },
       viewerResponse: 'positive',
     });
-    expect(summaries.get('claim-stance:stance')?.responders).toHaveLength(1001);
+    expect(summaries.get('claim-stance:stance')?.responders).toHaveLength(positive + negative);
   });
 
   it('deduplicates avatar metadata in chunks and seeds every existing per-claim cache', async () => {

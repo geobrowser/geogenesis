@@ -15,16 +15,22 @@ const DEBATE_VOTE_BACKLINKS_PAGE_SOURCE = /* GraphQL */ `
     $votesDebatePropertyId: UUID!
     $voteTypeId: UUID!
     $first: Int!
-    $offset: Int!
+    $after: Cursor
   ) {
     entity(id: $id) {
-      backlinksList(
+      backlinks(
         first: $first
-        offset: $offset
+        after: $after
         filter: { typeId: { is: $votesDebatePropertyId }, fromEntity: { typeIds: { overlaps: [$voteTypeId] } } }
       ) {
-        fromEntity {
-          id
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          fromEntity {
+            id
+          }
         }
       }
     }
@@ -33,7 +39,10 @@ const DEBATE_VOTE_BACKLINKS_PAGE_SOURCE = /* GraphQL */ `
 
 export type DebateVoteBacklinksPageQuery = {
   entity: {
-    backlinksList: Array<{ fromEntity: { id: string } | null } | null> | null;
+    backlinks: {
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      nodes: Array<{ fromEntity: { id: string } | null } | null>;
+    };
   } | null;
 };
 
@@ -42,7 +51,7 @@ type DebateVoteBacklinksPageVariables = {
   votesDebatePropertyId: string;
   voteTypeId: string;
   first: number;
-  offset: number;
+  after?: string;
 };
 
 export const debateVoteBacklinksPageDocument = parse(DEBATE_VOTE_BACKLINKS_PAGE_SOURCE) as TypedDocumentNode<

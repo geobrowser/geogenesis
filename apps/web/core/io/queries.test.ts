@@ -7,6 +7,7 @@ import {
   buildSearchPath,
   flattenRestResults,
   getBatchEntities,
+  getDebateVoteEntities,
   getEntityBacklinks,
   getEntityNames,
   groupRestResults,
@@ -512,6 +513,49 @@ describe('getBatchEntities', () => {
     await Effect.runPromise(getBatchEntities(idsFor(ENTITY_ID_BATCH_SIZE)));
 
     expect(graphqlMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('getDebateVoteEntities', () => {
+  afterEach(() => graphqlMock.mockReset());
+
+  it('hydrates every vote the cursor walk collected, past the 100-row hydration cap', async () => {
+    const DEFAULT_PAGE_CAP = 100;
+    const voteIds = Array.from({ length: 150 }, (_, index) => `vote-${index}`);
+
+    graphqlMock.mockImplementation(
+      (args: { variables: { id?: string; after?: string; filter?: { id: { in: string[] } } } }) => {
+        const { variables } = args;
+
+        if (variables.filter?.id?.in) {
+          return Effect.succeed(variables.filter.id.in.slice(0, DEFAULT_PAGE_CAP).map(id => ({ id })));
+        }
+
+        if (!variables.after) {
+          return Effect.succeed({
+            items: voteIds.slice(0, 75).map(id => ({ fromEntity: { id } })),
+            endCursor: 'cursor-1',
+            hasNextPage: true,
+          });
+        }
+        return Effect.succeed({
+          items: voteIds.slice(75).map(id => ({ fromEntity: { id } })),
+          endCursor: 'cursor-2',
+          hasNextPage: false,
+        });
+      }
+    );
+
+    const entities = await Effect.runPromise(getDebateVoteEntities('debate-1'));
+
+    expect(entities).toHaveLength(voteIds.length);
+    expect(new Set(entities.map(entity => (entity as { id: string }).id))).toEqual(new Set(voteIds));
+
+    const hydrationSizes = graphqlMock.mock.calls
+      .map(([args]) => (args as { variables: { filter?: { id: { in: string[] } } } }).variables.filter?.id?.in?.length)
+      .filter((size): size is number => typeof size === 'number');
+    expect(hydrationSizes.length).toBeGreaterThan(1);
+    expect(Math.max(...hydrationSizes)).toBeLessThanOrEqual(ENTITY_ID_BATCH_SIZE);
   });
 });
 
