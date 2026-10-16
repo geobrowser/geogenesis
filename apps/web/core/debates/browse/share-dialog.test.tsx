@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
+import { parseShareLink } from '~/core/sharing/share-link';
 
 import { DebateShareDialog } from './share-dialog';
 
@@ -31,12 +32,12 @@ const cases = [
   ['Download debate video', 'download'],
 ] as const;
 const completed = () => mocks.capture.mock.calls.filter(([event]) => event === 'action_completed');
-function mount() {
+function mount(data = debate) {
   render(
     <DebateShareDialog
       open
       onOpenChange={vi.fn()}
-      debate={debate}
+      debate={data}
       spaceId="space"
       openerRef={React.createRef<HTMLButtonElement>()}
     />
@@ -46,6 +47,7 @@ beforeEach(() => {
   mocks.status = 'ready';
 });
 afterEach(() => {
+  delete window.lytics;
   cleanup();
   vi.restoreAllMocks();
   mocks.capture.mockReset();
@@ -104,4 +106,64 @@ it('retries preparation without claiming a completed download', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Retry preparing debate video' }));
   expect(mocks.retry).toHaveBeenCalledTimes(1);
   expect(completed()).toHaveLength(0);
+});
+
+const realDebate = {
+  ...debate,
+  id: '11111111111141118111111111111111',
+  participants: [{ profile_space_id: '22222222222242228222222222222222' }],
+} as Debate;
+const handoffs = () => mocks.capture.mock.calls.filter(([name]) => name === 'share_link_handoff');
+
+it.each(cases.slice(0, 3))('correlates the tagged %s destination with its synchronous handoff', (label, method) => {
+  let recordsAtOpen = -1;
+  const open = vi.spyOn(window, 'open').mockImplementation(() => {
+    recordsAtOpen = handoffs().length;
+    return null;
+  });
+  window.lytics = {
+    getContext: () => ({ is_identified: true }),
+    getIdentity: () => ({ personal_space_id: realDebate.participants[0].profile_space_id }),
+  };
+  mount(realDebate);
+  fireEvent.click(screen.getByRole('button', { name: label }));
+  const composer = new URL(open.mock.calls[0][0] as string);
+  const destination =
+    method === 'linkedin' ? composer.searchParams.get('text')!.split('\n').at(-1)! : composer.searchParams.get('url')!;
+  expect(recordsAtOpen).toBe(0);
+  expect(handoffs()).toHaveLength(1);
+  expect(handoffs()[0][1]).toMatchObject({
+    ...parseShareLink(new URL(destination).searchParams),
+    method,
+    sharer_role: 'debater',
+    handoff_kind: 'composer_requested',
+    space_id: 'space',
+  });
+  expect(destination).not.toContain(realDebate.participants[0].profile_space_id);
+});
+
+it('gives repeated copies different IDs and never counts downloads as link handoffs', async () => {
+  const write = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } });
+  mount(realDebate);
+  fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+  await waitFor(() => expect(handoffs()).toHaveLength(1));
+  fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+  await waitFor(() => expect(handoffs()).toHaveLength(2));
+  const ids = write.mock.calls.map(([url]) => parseShareLink(new URL(url).searchParams)!.share_id);
+  expect(ids[0]).not.toBe(ids[1]);
+  expect(handoffs().map(([, props]) => props.share_id)).toEqual(ids);
+  fireEvent.click(screen.getByRole('button', { name: 'Download debate video' }));
+  expect(handoffs()).toHaveLength(2);
+});
+
+it('does not record a link handoff when the clipboard rejects', async () => {
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+  });
+  mount(realDebate);
+  fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+  await waitFor(() => expect(completed()).toHaveLength(1));
+  expect(handoffs()).toHaveLength(0);
 });
