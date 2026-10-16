@@ -11,7 +11,9 @@ import { Text } from '~/design-system/text';
 import { MutedMicrophoneIndicator } from './debate-room-controls';
 import {
   ROOM_ENTER_CLASS,
+  ROOM_MOMENT_ENTER_CLASS,
   ROOM_OUTLINED_STYLE,
+  ROOM_UI_FONT,
   RoomDim,
   RoomExit,
   RoomMiddlePhrase,
@@ -53,13 +55,15 @@ export const tileChipSurface = 'bg-white/85';
 export function DebateTileChip({
   className,
   children,
+  openRounds = false,
   ...spanProps
-}: React.ComponentPropsWithoutRef<'span'> & { className?: string }) {
+}: React.ComponentPropsWithoutRef<'span'> & { openRounds?: boolean }) {
   return (
     <span
       {...spanProps}
       className={cx(
-        'inline-flex h-4 items-center gap-1 rounded-full px-1.5 text-[0.75rem] leading-none whitespace-nowrap',
+        'inline-flex items-center rounded-full leading-none whitespace-nowrap',
+        openRounds ? 'h-[4.4cqw] gap-[1cqw] px-[1.8cqw] text-[2.8cqw] font-medium' : 'h-4 gap-1 px-1.5 text-[0.75rem]',
         className
       )}
     >
@@ -88,7 +92,7 @@ export function DebatePositionChip({
   label,
   className,
   ...spanProps
-}: React.ComponentPropsWithoutRef<'span'> & { label: string }) {
+}: React.ComponentPropsWithoutRef<'span'> & { label: string; openRounds?: boolean }) {
   return (
     <DebateTileChip {...spanProps} className={cx('max-w-full shrink-0 truncate text-text', tileChipSurface, className)}>
       {label}
@@ -200,19 +204,32 @@ export function DebateVideoTile({
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
       data-active-speaker={active ? 'true' : 'false'}
       data-final-seconds={openRounds && finalSeconds ? 'true' : undefined}
+      style={openRounds ? { ...ROOM_UI_FONT, textRendering: 'auto' } : undefined}
       className={cx(
-        'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
-        openRounds && '@container',
+        'relative min-h-0 overflow-hidden bg-black shadow-card',
+        openRounds ? '@container aspect-[8/5] rounded-[3cqw]' : 'aspect-[5/3] rounded-lg',
         active && ['outline-[3px]', openRounds ? '-outline-offset-3' : 'outline-offset-0'],
         active && (openRounds ? (finalSeconds ? 'outline-[#FF4A26]' : 'outline-white') : 'outline-purple')
       )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
+      {openRounds && active && (
+        // A negative outline alone paints below positioned video content. Draw its inside edge
+        // above the media so the white/red speaker border remains visible on a live camera too.
+        <div
+          aria-hidden="true"
+          data-room-speaker-outline
+          className={cx(
+            'pointer-events-none absolute inset-0 z-50 rounded-[inherit] border-[3px]',
+            finalSeconds ? 'border-[#FF4A26]' : 'border-white'
+          )}
+        />
+      )}
       {openRounds && <RoomDim on={dimmed || endingTurn || upcoming} />}
       {/* Ending a turn hands the corner from the timer to the muted microphone and takes End turn
           away, so in Open rounds each fades rather than cutting (GEO-3347). Fixed formats cut. */}
       {(openRounds || endTurnAction) && (
-        <div className="absolute top-3 left-3 z-40">
+        <div className={cx('absolute z-40', openRounds ? 'top-[2.4cqw] left-[2.4cqw]' : 'top-3 left-3')}>
           {openRounds ? (
             <RoomExit layout="inline">
               {endTurnAction && <div className="pointer-events-auto">{endTurnAction}</div>}
@@ -227,7 +244,8 @@ export function DebateVideoTile({
         data-inactive-speaker={inactiveIndicatorId}
         data-visible={showInactiveIndicator ? 'true' : 'false'}
         className={cx(
-          'pointer-events-none absolute top-3 right-3 z-20',
+          'pointer-events-none absolute z-20',
+          openRounds ? 'top-[2.4cqw] right-[2.4cqw]' : 'top-3 right-3',
           !openRounds && (showInactiveIndicator ? 'opacity-100' : 'opacity-0')
         )}
       >
@@ -245,7 +263,12 @@ export function DebateVideoTile({
       </div>
       {/* The count-in's number is the countdown, so the timer steps aside for it. */}
       {(openRounds || countdown) && (
-        <div className="pointer-events-none absolute top-3 right-3 z-20">
+        <div
+          className={cx(
+            'pointer-events-none absolute z-20',
+            openRounds ? 'top-[2.4cqw] right-[2.4cqw]' : 'top-3 right-3'
+          )}
+        >
           {openRounds ? <RoomExit layout="inline">{!upcoming && countdown}</RoomExit> : countdown}
         </div>
       )}
@@ -277,12 +300,13 @@ export function DebateVideoTile({
         <div
           data-tile-chips={chipsHidden ? 'hidden' : 'visible'}
           className={cx(
-            'pointer-events-none absolute inset-x-3 bottom-3 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(auto,1fr)] items-center gap-2 transition-opacity duration-200 motion-reduce:transition-none',
+            'pointer-events-none absolute z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(auto,1fr)] items-center transition-opacity duration-200 motion-reduce:transition-none',
+            openRounds ? 'inset-x-[2.4cqw] bottom-[2.4cqw] gap-[1cqw]' : 'inset-x-3 bottom-3 gap-2',
             chipsHidden && 'opacity-0'
           )}
         >
           <div className="flex min-w-0 justify-start">
-            {positionLabel !== null && <DebatePositionChip label={positionLabel} />}
+            {positionLabel !== null && <DebatePositionChip label={positionLabel} openRounds={openRounds} />}
           </div>
           <div className="pointer-events-auto">{tileControls}</div>
           {/* No `min-w-0` here, unlike the label: it is what lets the column's `auto` minimum see
@@ -319,27 +343,28 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {upcoming && (
-              <div
-                className={cx(
-                  'absolute inset-0 text-center leading-[0.95] font-bold tracking-[-0.02em] text-white',
-                  ROOM_ENTER_CLASS
-                )}
-                style={ROOM_OUTLINED_STYLE}
-              >
-                <div
-                  className="absolute top-[30%] left-1/2 w-max max-w-[92%] -translate-x-1/2 -translate-y-1/2 text-[5.148cqw]"
-                  data-room-phrase="count-in"
-                  style={ROOM_OUTLINED_STYLE}
-                >
-                  {upcomingLabel}
+              <div className="absolute inset-0 text-center text-[16px] leading-[1.45]">
+                <div className="absolute top-[30%] left-1/2 w-max -translate-x-1/2 -translate-y-1/2">
+                  <span
+                    className="inline-block text-[5.148cqw] leading-[0.95] font-bold tracking-[-0.02em] whitespace-nowrap text-white"
+                    data-room-phrase="count-in"
+                    style={ROOM_OUTLINED_STYLE}
+                  >
+                    {upcomingLabel.replace("You're", 'You’re')}
+                  </span>
                 </div>
-                <div
-                  key={upcomingSeconds}
-                  className="absolute top-[64%] left-1/2 -translate-x-1/2 -translate-y-1/2 text-[15.6cqw] tabular-nums motion-safe:animate-[fadeIn_200ms_linear_both]"
-                  data-room-count-in
-                  style={ROOM_OUTLINED_STYLE}
-                >
-                  {upcomingSeconds}
+                <div className="absolute top-[64%] left-1/2 w-max -translate-x-1/2 -translate-y-1/2">
+                  <span
+                    key={upcomingSeconds}
+                    className={cx(
+                      'inline-block text-[15.6cqw] leading-[0.95] font-bold tracking-[-0.02em] whitespace-nowrap text-white',
+                      ROOM_MOMENT_ENTER_CLASS
+                    )}
+                    data-room-count-in
+                    style={{ ...ROOM_OUTLINED_STYLE, animationDuration: '200ms, 250ms' }}
+                  >
+                    {upcomingSeconds}
+                  </span>
                 </div>
               </div>
             )}
@@ -347,7 +372,7 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {showGo && (
-              <RoomTilePill data-room-pill="go" tone="white">
+              <RoomTilePill data-room-pill="go" tone="white" fadeInMs={200}>
                 Go
               </RoomTilePill>
             )}

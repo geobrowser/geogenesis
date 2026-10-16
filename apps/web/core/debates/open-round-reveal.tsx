@@ -138,7 +138,7 @@ export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) 
       {result.kind === 'wrap' && result.note && (
         <div className="absolute inset-x-0 top-[calc(50%+9cqw)] px-4 text-center">
           <span
-            className="inline-block max-w-full rounded-full bg-black/72 px-[2.8cqw] py-[1.4cqw] text-[2.8cqw] leading-[1.2] tracking-[0.01em] text-balance text-white"
+            className="inline-block max-w-full rounded-full bg-black/72 px-[2.8cqw] py-[1.4cqw] text-[2.8cqw] leading-[1.2] font-medium tracking-[0.01em] text-balance text-white"
             style={LABEL_FONT}
           >
             {result.note}
@@ -198,7 +198,7 @@ export type OpenRoundReveal = {
   /** Each debater's pick, while the reveal is up. */
   localPick: OpenRoundRevealedPick | null;
   remotePick: OpenRoundRevealedPick | null;
-  /** The tiles fade their chips while result text sits between them. */
+  /** Classic room boards keep the corner chips visible under the centered announcements. */
   chipsHidden: boolean;
   /** The end card and the thank-you overlay wait while the debate's last result is still up. */
   holdsEndCard: boolean;
@@ -319,7 +319,7 @@ export function useOpenRoundReveal({
     result,
     localPick: picksShown ? localPick : null,
     remotePick: picksShown ? remotePick : null,
-    chipsHidden: result !== null,
+    chipsHidden: false,
     holdsEndCard: maxReached || wrapHeld,
     holdsCountIn: resultPhase !== null && !countingIn,
     announcedRoundPhase:

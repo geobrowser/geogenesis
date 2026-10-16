@@ -62,7 +62,7 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     expect(extend()).toHaveAttribute('aria-pressed', 'true');
     // The pick turns white with a check, the other dims, and the question stays.
     expect(extend()).toHaveClass('bg-white', 'text-[#111]');
-    expect(extend().querySelector('svg')).toBeInTheDocument();
+    expect(extend()).toHaveTextContent('✓ Extend');
     expect(end()).toHaveClass('opacity-40');
     expect(screen.getByRole('heading', { name: 'Keep debating?' })).toBeInTheDocument();
 

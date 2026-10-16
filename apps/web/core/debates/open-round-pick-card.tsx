@@ -4,11 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { Check } from '~/design-system/icons/check';
-
 import type { OpenRoundPick } from './api';
-import { LABEL_FONT, STAMP_FONT } from './browse/stamp-styles';
-import { ROOM_ENTER_CLASS, ROOM_WHITE_GLASS_CLASS } from './debate-room-stamps';
+import { ROOM_BOLD_FONT, ROOM_LABEL_FONT, ROOM_WHITE_GLASS_CLASS } from './debate-room-stamps';
 
 export type OpenRoundPickContext = {
   previousPick: OpenRoundPick | null;
@@ -91,12 +88,12 @@ export function OpenRoundPickCard({
       data-open-round-pick-card={roundIndex}
       className={cx(
         'pointer-events-auto absolute top-1/2 left-1/2 z-40 grid w-[78%] -translate-x-1/2 -translate-y-1/2 justify-items-center gap-[3cqw] rounded-[5cqw] bg-[rgba(30,30,34,0.55)] px-[3.4cqw] pt-[3.4cqw] pb-[3.8cqw] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16),0_2cqw_6cqw_rgba(0,0,0,0.3)] backdrop-blur-[18px] backdrop-saturate-[1.3]',
-        ROOM_ENTER_CLASS
+        'motion-safe:animate-[fadeIn_250ms_linear_both]'
       )}
-      style={LABEL_FONT}
+      style={ROOM_LABEL_FONT}
     >
       <div className="flex items-center gap-[2.4cqw]">
-        <h2 id={headingId} className="text-[7cqw] leading-[0.95] font-bold tracking-[-0.02em]" style={STAMP_FONT}>
+        <h2 id={headingId} className="text-[7cqw] leading-[0.95] font-bold tracking-[-0.02em]" style={ROOM_BOLD_FONT}>
           Keep debating?
         </h2>
         <PickCountdown remainingSeconds={remainingSeconds} />
@@ -160,6 +157,7 @@ function PickChoice({
     <button
       type="button"
       aria-pressed={selected}
+      aria-label={`${label} ${detail}`}
       disabled={disabled}
       onClick={() => onPick(choice)}
       className={cx(
@@ -171,12 +169,8 @@ function PickChoice({
         disabled && selectedPick === null && 'opacity-50'
       )}
     >
-      <span
-        className="inline-flex items-center gap-[1cqw] text-[4.6cqw] leading-none font-bold [&_svg]:size-[1em]"
-        style={STAMP_FONT}
-      >
-        {selected && <Check />}
-        {label}
+      <span className="text-[4.6cqw] leading-none font-bold" style={ROOM_BOLD_FONT}>
+        {selected ? `✓ ${label}` : label}
       </span>
       <span className="text-[2.6cqw] leading-none font-normal opacity-75">{detail}</span>
     </button>
@@ -188,7 +182,7 @@ function PickCountdown({ remainingSeconds }: { remainingSeconds: number }) {
   const seconds = Math.max(0, remainingSeconds);
 
   return (
-    <span className="grid size-[7cqw] shrink-0 place-items-center rounded-full bg-black/50 text-[3cqw] leading-none font-medium tabular-nums shadow-[inset_0_0_0_0.5cqw_rgba(255,255,255,0.85)]">
+    <span className="grid size-[7cqw] shrink-0 place-items-center rounded-full bg-black/50 text-[3cqw] leading-none font-medium shadow-[inset_0_0_0_0.5cqw_rgba(255,255,255,0.85)]">
       <span aria-hidden="true">{seconds}</span>
       <span className="sr-only">{seconds} seconds to pick</span>
     </span>

@@ -4,7 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { LABEL_FONT, STAMP_FONT } from './browse/stamp-styles';
+import { LABEL_FONT } from './browse/stamp-styles';
+import { ROOM_BOLD_FONT, ROOM_UI_FONT } from './debate-room-stamps';
 
 const COUNTDOWN_SIZE = 51;
 const COUNTDOWN_CENTER = COUNTDOWN_SIZE / 2;
@@ -136,8 +137,11 @@ export function RecordingCountdownRing({
             ? ({
                 '--turn-timer-swell': stage.swell,
                 backgroundColor: final ? COUNTDOWN_WARNING_COLOR : undefined,
+                backgroundImage: buildUp && !final ? 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.25))' : undefined,
               } as React.CSSProperties)
-            : undefined
+            : buildUp
+              ? { backgroundImage: 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.25))' }
+              : undefined
         }
       >
         {final ? (
@@ -151,6 +155,20 @@ export function RecordingCountdownRing({
                 backgroundImage: 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.28) 0deg)',
                 maskImage: finalRimMask,
                 WebkitMaskImage: finalRimMask,
+              } as React.CSSProperties
+            }
+          />
+        ) : buildUp ? (
+          <span
+            aria-hidden="true"
+            data-turn-timer-track
+            className="absolute size-[calc(100%-4px)] rounded-full transition-[--turn-timer-rim] duration-500 ease-linear"
+            style={
+              {
+                '--turn-timer-rim': `${(1 - elapsedRatio) * 360}deg`,
+                backgroundImage: 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.3) 0deg)',
+                maskImage: turnTimerRimMask('2px'),
+                WebkitMaskImage: turnTimerRimMask('2px'),
               } as React.CSSProperties
             }
           />
@@ -198,9 +216,10 @@ export function RecordingCountdownRing({
           className="relative z-10"
           style={{
             color: numberColor,
-            fontFamily: (final ? STAMP_FONT : LABEL_FONT).fontFamily,
+            fontFamily: buildUp ? (final ? ROOM_BOLD_FONT : ROOM_UI_FONT).fontFamily : LABEL_FONT.fontFamily,
             fontSize: buildUp ? '4cqw' : 22,
             fontWeight: final ? 700 : 500,
+            fontVariantNumeric: buildUp ? 'tabular-nums' : undefined,
             lineHeight: 1,
             transform: 'none',
           }}

@@ -6190,8 +6190,8 @@ describe('DebateRoomPageClient', () => {
       );
       // The pick pills fade as the outlined announcement comes in, then are gone.
       await waitFor(() => expect(reveal('local')).toBeNull());
-      expect(chips('local')).toHaveAttribute('data-tile-chips', 'hidden');
-      expect(chips('remote')).toHaveAttribute('data-tile-chips', 'hidden');
+      expect(chips('local')).toHaveAttribute('data-tile-chips', 'visible');
+      expect(chips('remote')).toHaveAttribute('data-tile-chips', 'visible');
       expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
 
       // With no count-in from geo-chat, "Round 2" holds to the end of the window.
@@ -6452,12 +6452,10 @@ describe('DebateRoomPageClient', () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:00:56.500'));
       await renderLiveDebate(aliceOpening());
 
-      await waitFor(() => expect(phrase('local', 'count-in')).toHaveTextContent("You're up in"));
-      expect(phrase('local', 'count-in')?.parentElement).toHaveClass('text-white', 'font-bold');
-      expect(phrase('local', 'count-in')?.parentElement).toHaveStyle({
-        fontFamily: 'var(--font-geist-bold)',
-        textShadow: expect.stringContaining('0.04em'),
-      });
+      await waitFor(() => expect(phrase('local', 'count-in')).toHaveTextContent('You’re up in'));
+      expect(phrase('local', 'count-in')).toHaveClass('text-white', 'font-bold');
+      expect((phrase('local', 'count-in') as HTMLElement).style.fontFamily).toContain('var(--font-geist-bold)');
+      expect((phrase('local', 'count-in') as HTMLElement).style.textShadow).toContain('0.04em');
       expect(debateVideoTile('local').querySelector('[data-room-count-in]')).toHaveTextContent('4');
       expect(debateVideoTile('local').querySelector('[data-room-dim]')).toHaveAttribute('data-room-dim', 'on');
     });
@@ -6472,7 +6470,7 @@ describe('DebateRoomPageClient', () => {
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     });
 
-    it('builds the timer up from 10 s, then turns it and the outline red with "Wrap it up" for about 2 s', async () => {
+    it('builds the timer up from 10 s, then turns it and the outline red with "Wrap it up" through the final 5 s', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:44.000'));
       const view = await renderLiveDebate(openRoundsRoundOneSpeaking());
 
@@ -6488,13 +6486,14 @@ describe('DebateRoomPageClient', () => {
       expect(timer('local')).toHaveStyle({ scale: '1.3' });
       expect(timer('local')?.querySelector('[data-turn-timer-rim]')).toBeInTheDocument();
       expect(debateVideoTile('local')).toHaveClass('outline-[#FF4A26]');
+      expect(debateVideoTile('local').querySelector('[data-room-speaker-outline]')).toHaveClass('border-[#FF4A26]');
       expect(debateVideoTile('local')).not.toHaveClass('outline-purple');
       expect(pill('local', 'wrap-it-up')).toHaveTextContent('Wrap it up');
       expect(pill('local', 'wrap-it-up')).toHaveClass('rounded-full', 'bg-[#FF4A26]/90');
 
-      // 2.7 s left: the pill has gone, the red timer stays.
+      // 2.7 s left: the pill stays with the red timer, as in the mockup.
       rerenderAt(view, '20:02:49.500', openRoundsRoundOneSpeaking());
-      await waitFor(() => expect(pill('local', 'wrap-it-up')).toBeNull());
+      expect(pill('local', 'wrap-it-up')).toHaveTextContent('Wrap it up');
       expect(timer('local')).toHaveAttribute('data-turn-timer', 'final');
     });
 
@@ -6505,6 +6504,7 @@ describe('DebateRoomPageClient', () => {
 
       await waitFor(() => expect(timer('remote')).toHaveAttribute('data-turn-timer', 'final'));
       expect(debateVideoTile('remote')).toHaveClass('outline-[#FF4A26]');
+      expect(debateVideoTile('remote').querySelector('[data-room-speaker-outline]')).toHaveClass('border-[#FF4A26]');
     });
 
     it('labels your tile "Turn ended" when you end early, and puts up the other debater\'s turn', async () => {
@@ -6585,7 +6585,7 @@ describe('DebateRoomPageClient', () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('19:59:56.500'));
       await renderLiveDebate({ ...aliceOpening(), status: 'preflight', started_at: null });
 
-      await waitFor(() => expect(phrase('local', 'count-in')).toHaveTextContent("You're up in"));
+      await waitFor(() => expect(phrase('local', 'count-in')).toHaveTextContent('You’re up in'));
       expect(debateVideoTile('local').querySelector('[aria-label^="Phase timer:"]')).not.toBeInTheDocument();
     });
 

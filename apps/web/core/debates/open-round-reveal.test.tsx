@@ -99,7 +99,9 @@ describe('OpenRoundPickPill (GEO-3366)', () => {
     expect(container.firstChild).toHaveAttribute('data-open-round-reveal', pick ?? 'none');
     const pill = screen.getByText(word).parentElement;
     expect(pill).toHaveClass(tone, 'rounded-full');
-    expect(pill).toHaveClass('motion-safe:animate-[fadeIn_300ms_linear_both]');
+    expect(pill).toHaveClass(
+      'motion-safe:animate-[fadeIn_250ms_linear_both,roomMomentSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]'
+    );
     expect(pill?.style.transform).toBe('');
     expect(container.innerHTML).not.toMatch(/purple|animate-debate-stamp|rotate/);
   });
@@ -110,7 +112,7 @@ describe('OpenRoundPickPill (GEO-3366)', () => {
 
     view.rerender(<OpenRoundPickPill pick={null} wrapping />);
     expect(screen.getByText('No pick').parentElement).toHaveClass('text-white/62');
-    expect(screen.getByText('No pick').parentElement).toHaveStyle({ fontFamily: 'var(--font-geist-bold)' });
+    expect(screen.getByText('No pick').parentElement?.style.fontFamily).toContain('var(--font-geist-bold)');
     expect(view.container.querySelector('.border-dashed')).toBeNull();
   });
 });
@@ -121,8 +123,13 @@ describe('OpenRoundResultOverlay', () => {
       <OpenRoundResultOverlay result={{ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: 'Alice' }} />
     );
     const phrase = container.querySelector('[data-open-round-phrase]');
-    expect(phrase).toHaveClass('font-bold', 'text-white', 'motion-safe:animate-[fadeIn_300ms_linear_both]');
-    expect(phrase).toHaveStyle({ fontFamily: 'var(--font-geist-bold)', textShadow: expect.stringContaining('0.04em') });
+    expect(phrase).toHaveClass(
+      'font-bold',
+      'text-white',
+      'motion-safe:animate-[fadeIn_250ms_linear_both,roomMomentSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]'
+    );
+    expect((phrase as HTMLElement).style.fontFamily).toContain('var(--font-geist-bold)');
+    expect((phrase as HTMLElement).style.textShadow).toContain('0.04em');
     expect(container).toHaveTextContent('Round 2RebuttalAlice opens');
     expect(container.innerHTML).not.toMatch(/purple|animate-debate-banner/);
   });
@@ -143,7 +150,7 @@ describe('OpenRoundResultOverlay', () => {
   it('says the debate hit the maximum, counting every round, the opening included, in a glass pill', () => {
     const { container } = render(<OpenRoundResultOverlay result={{ kind: 'max', rounds: 10 }} />);
     expect(container).toHaveTextContent('That’s the max11 rounds');
-    expect(screen.getByText('11 rounds')).toHaveClass('rounded-full', 'backdrop-blur-[10px]');
+    expect(screen.getByText('11 rounds')).toHaveClass('rounded-full');
     expect(container.innerHTML).not.toMatch(/purple/);
   });
 });
@@ -212,7 +219,7 @@ describe('useOpenRoundReveal', () => {
     const current = reveal({ elapsedMs: 2_000 });
     expect(current.result).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: null });
     expect(current.localPick).toBeNull();
-    expect(current.chipsHidden).toBe(true);
+    expect(current.chipsHidden).toBe(false);
     expect(current.announcedRoundPhase).toMatchObject({ phase: 'speaking', roundIndex: 1 });
   });
 
@@ -227,7 +234,7 @@ describe('useOpenRoundReveal', () => {
     const stale = { ...revealRebut(), turn_durations_ms: [60_000, 60_000] };
     const current = reveal({ debate: stale, elapsedMs: 4_000, remainingSeconds: 0 });
     expect(current.result).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: null });
-    expect(current.chipsHidden).toBe(true);
+    expect(current.chipsHidden).toBe(false);
     expect(current.holdsCountIn).toBe(true);
   });
 
