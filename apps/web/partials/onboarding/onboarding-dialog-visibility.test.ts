@@ -14,5 +14,7 @@ describe('shouldOpenOnboardingDialog', () => {
   it('follows onboarding visibility for interactive steps', () => {
     expect(shouldOpenOnboardingDialog(true, 'enter-profile')).toBe(true);
     expect(shouldOpenOnboardingDialog(false, 'enter-profile')).toBe(false);
+    expect(shouldOpenOnboardingDialog(true, 'customize-feed')).toBe(true);
+    expect(shouldOpenOnboardingDialog(false, 'customize-feed')).toBe(false);
   });
 });

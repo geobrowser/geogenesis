@@ -13,6 +13,7 @@ import {
 } from '~/partials/onboarding/dialog';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
+import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 const mocks = vi.hoisted(() => ({ authenticated: false }));
@@ -37,6 +38,7 @@ function setup() {
   return renderHook(() => ({
     prepare: usePrepareOnboarding(),
     setSelectedTopicIds: useSetAtom(selectedTopicIdsAtom),
+    setFeedTopics: useSetAtom(feedTopicsAtom),
     setName: useSetAtom(nameAtom),
     setTopicId: useSetAtom(topicIdAtom),
     setAvatar: useSetAtom(avatarAtom),
@@ -50,6 +52,7 @@ function setup() {
     spaceId: useAtomValue(spaceIdAtom),
     step: useAtomValue(stepAtom),
     selectedTopicIds: useAtomValue(selectedTopicIdsAtom),
+    feedTopics: useAtomValue(feedTopicsAtom),
   }));
 }
 
@@ -98,6 +101,22 @@ describe('usePrepareOnboarding', () => {
     });
 
     expect(result.current.selectedTopicIds).toEqual([]);
+  });
+
+  // Held until the next personal space exists and then followed, so another account's picks
+  // would be published as this one's follows.
+  it('clears the held feed topics', () => {
+    const { result } = setup();
+    act(() => {
+      result.current.setFeedTopics({ address: '0xA', topics: [{ id: 'topic-a', name: 'Bitcoin' }] });
+    });
+    expect(result.current.feedTopics.topics).toHaveLength(1);
+
+    act(() => {
+      result.current.prepare();
+    });
+
+    expect(result.current.feedTopics).toEqual({ address: '', topics: [] });
   });
 
   // Reported in review: two callers gate on `!smartAccount` rather than `!authenticated`, and a

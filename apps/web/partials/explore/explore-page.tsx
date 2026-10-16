@@ -2,11 +2,14 @@
 
 import * as React from 'react';
 
+import { useAtomValue } from 'jotai';
+
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
 import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
 import { useAwaitedSmartAccount } from '~/core/hooks/use-awaited-smart-account';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useFollowedTopics } from '~/core/topics/use-followed-topics';
+import { normId } from '~/core/utils/norm-id';
 
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { EntityFeed } from '~/partials/feed/entity-feed';
@@ -14,6 +17,7 @@ import { EntityFeed } from '~/partials/feed/entity-feed';
 import { ExploreEmailCapturePopup } from './email-capture-popup';
 import { ExploreLiveLobbiesBanner } from './explore-live-lobbies-banner';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
+import { feedTopicsAtom, heldTopicsFor } from '~/atoms/onboarding-feed-topics';
 
 const FOR_YOU_SORT_OPTIONS: readonly ExplorePageSort[] = ['for-you', 'best', 'top', 'new'];
 
@@ -50,11 +54,17 @@ function ExploreForYouFeed({ walletAddress }: { walletAddress: string | null }) 
   const { topicIds, isLoading } = useFollowedTopics();
   // Before Privy restores the wallet, the account reads as signed out and the follows as empty.
   // `walletAddress` comes from the httpOnly wallet cookie, so wait for the account rather than serve Best.
-  const { awaitingAccount } = useAwaitedSmartAccount(walletAddress !== null);
+  const { smartAccountAddress, awaitingAccount } = useAwaitedSmartAccount(walletAddress !== null);
+
+  // Onboarding picks count as followed while their Interested actions are pending.
+  const heldPicks = heldTopicsFor(useAtomValue(feedTopicsAtom), smartAccountAddress);
 
   const followedTopicIds = React.useMemo(
-    () => (isLoading || awaitingAccount ? null : [...topicIds].sort()),
-    [awaitingAccount, isLoading, topicIds]
+    () =>
+      isLoading || awaitingAccount
+        ? null
+        : [...new Set([...topicIds, ...heldPicks.map(topic => normId(topic.id))])].sort(),
+    [awaitingAccount, isLoading, topicIds, heldPicks]
   );
 
   return (
