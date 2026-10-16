@@ -645,13 +645,13 @@ describe('leading Best with a playable debate', () => {
     `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   const mediaAsked: string[] = [];
 
-  const withMedia = (processed: Record<string, boolean>) =>
+  const withMedia = (processed: Record<string, boolean>, stills: string[] = []) =>
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
         mediaAsked.push(url);
         const id = Object.keys(processed).find(hex => url.includes(`/debates/${uuid(hex)}/media`));
-        const artifacts = id && processed[id] ? [{ kind: 'final_video' }] : [];
+        const artifacts = id && processed[id] ? [{ kind: 'final_video' }, ...stills.map(kind => ({ kind }))] : [];
         return new Response(JSON.stringify({ artifacts }), { status: 200 });
       })
     );
@@ -713,6 +713,32 @@ describe('leading Best with a playable debate', () => {
     await fetchExploreFeed({ ...leadArgs, cursor: 'w1:0:next' });
 
     expect(mediaAsked).toEqual([]);
+  });
+
+  // GEO-3280. The card paints these before its own debate and media queries return.
+  it("hands the lead debate's stills to the card, and only the lead's", async () => {
+    windows.queue = [rankedWindow()];
+    withMedia({ [D1]: true, [D2]: true }, ['speaker_still_slot_1', 'speaker_still_slot_2']);
+
+    const result = await fetchExploreFeed(leadArgs);
+    const [lead, ...rest] = result.items;
+
+    expect(lead.entityId).toBe(D1);
+    expect(lead.debatePosters).toEqual({
+      slot1: expect.stringMatching(new RegExp(`/debates/${uuid(D1)}/media/artifacts/speaker_still_slot_1/content$`)),
+      slot2: expect.stringMatching(new RegExp(`/debates/${uuid(D1)}/media/artifacts/speaker_still_slot_2/content$`)),
+    });
+    expect(rest.every(item => item.debatePosters === undefined)).toBe(true);
+  });
+
+  it('gives the lead no stills when geo-chat cut none', async () => {
+    windows.queue = [rankedWindow()];
+    withMedia({ [D2]: true });
+
+    const result = await fetchExploreFeed(leadArgs);
+
+    expect(result.items[0].entityId).toBe(D2);
+    expect(result.items[0].debatePosters).toBeUndefined();
   });
 });
 

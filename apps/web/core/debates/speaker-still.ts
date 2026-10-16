@@ -1,4 +1,5 @@
-import { type DebateMediaArtifact, getGeoChatApiBaseUrl } from './api';
+import type { DebateMediaArtifact } from './api';
+import { getGeoChatApiBaseUrl } from './geo-chat-public-base-url';
 
 /**
  * The still frame geo-chat's media job cuts from each debater's own recording, ten seconds into
