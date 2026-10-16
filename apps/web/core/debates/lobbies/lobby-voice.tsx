@@ -38,6 +38,7 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 import { Text } from '~/design-system/text';
 
 import { type DebateLobbyVoiceToken, dashlessId, getDebateLobbyVoiceToken } from '../api';
+import { cameraFailureMessage } from '../camera-failure';
 import { CameraIcon, MicrophoneIcon } from '../debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '../debate-room-ownership';
 import { useGeoChatAuth } from '../hooks';
@@ -626,19 +627,6 @@ function useParticipantVoiceStates(connected: boolean) {
     }
     return { speaking, micOn, cameras, connected };
   }, [cameraTracks, connected, participants, videoEnabled]);
-}
-
-export function cameraFailureMessage(failure: MediaDeviceFailure): string {
-  switch (failure) {
-    case MediaDeviceFailure.PermissionDenied:
-      return 'Camera blocked. Allow it in your browser, then try again.';
-    case MediaDeviceFailure.NotFound:
-      return 'No camera found. Connect one, then try again.';
-    case MediaDeviceFailure.DeviceInUse:
-      return 'Your camera is in use by another app.';
-    default:
-      return 'Camera unavailable.';
-  }
 }
 
 /** Holds the roster's voice state; a member room inside overrides it with its own. */

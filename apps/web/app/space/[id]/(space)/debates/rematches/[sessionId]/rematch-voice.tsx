@@ -27,6 +27,7 @@ import type { DebateRematchParticipant, DebateRematchSession } from '~/core/deba
 import { GeoChatRequestError } from '~/core/debates/api';
 import { AudioSettings, MobileSettingsSheet } from '~/core/debates/audio-settings';
 import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
+import { cameraFailureMessage } from '~/core/debates/camera-failure';
 import { CameraIcon, MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
 import { DeviceOptionGroup } from '~/core/debates/device-option-group';
@@ -1104,19 +1105,6 @@ function OpponentPresence({
  * boolean.
  */
 const TALKING_WHILE_MUTED: boolean = false;
-
-export function cameraFailureMessage(failure: MediaDeviceFailure): string {
-  switch (failure) {
-    case MediaDeviceFailure.PermissionDenied:
-      return 'Camera blocked. Allow it in your browser, then try again.';
-    case MediaDeviceFailure.NotFound:
-      return 'No camera found. Connect one, then try again.';
-    case MediaDeviceFailure.DeviceInUse:
-      return 'Your camera is in use by another app.';
-    default:
-      return 'Camera unavailable.';
-  }
-}
 
 export function micFailureMessage(failure: MediaDeviceFailure): string {
   switch (failure) {
