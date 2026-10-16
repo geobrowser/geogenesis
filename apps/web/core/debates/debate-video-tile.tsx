@@ -8,18 +8,15 @@ import { responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Text } from '~/design-system/text';
 
-import { ENDED_TILT, STAMP_INK } from './browse/stamp-styles';
 import { MutedMicrophoneIndicator } from './debate-room-controls';
 import {
   ROOM_ENTER_CLASS,
-  RoomBanner,
+  ROOM_OUTLINED_STYLE,
   RoomDim,
   RoomExit,
-  RoomMiddleBanner,
-  RoomStamp,
-  RoomTileStamp,
+  RoomMiddlePhrase,
+  RoomTilePill,
 } from './debate-room-stamps';
-import { COUNTDOWN_WARNING_COLOR } from './recording-countdown-ring';
 
 export const recordingOverlayTextShadow = {
   textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000',
@@ -133,7 +130,7 @@ export function DebateVideoTile({
   status,
   reveal,
   chipsHidden = false,
-  stamps = false,
+  openRounds = false,
   dimmed = false,
   finalSeconds = false,
   nextTurnName = null,
@@ -151,7 +148,7 @@ export function DebateVideoTile({
   showDebateEndsSoon?: boolean;
   endingTurn?: boolean;
   /**
-   * Stamps only: whether an ended turn is stamped "Turn ended". Only a turn that hands over to the
+   * Open rounds only: whether an ended turn is labelled "Turn ended". Only a turn that hands over to the
    * other speaker is; any other yield closes as soon as it is accepted, so its tile just dims.
    */
   turnEndedStamp?: boolean;
@@ -181,15 +178,14 @@ export function DebateVideoTile({
    */
   chipsHidden?: boolean;
   /**
-   * Open rounds (GEO-3315): draws the tile's moments in the stamps design the published player
-   * uses, rather than today's outlined phrases, which every fixed format keeps.
+   * Open rounds (GEO-3366): classic outlined type and glass pills. Fixed formats keep their overlays.
    */
-  stamps?: boolean;
-  /** Stamps only: dims the picture under a moment that spans both tiles, like the pick and the reveal. */
+  openRounds?: boolean;
+  /** Open rounds only: dims the picture under a moment that spans both tiles, like the pick and the reveal. */
   dimmed?: boolean;
-  /** Stamps only: the speaker's last five seconds, when their outline turns warning red with the timer. */
+  /** Open rounds only: the speaker's last five seconds, when their outline turns warning red with the timer. */
   finalSeconds?: boolean;
-  /** Stamps only: after you end your turn, whose turn it is now, on their tile. */
+  /** Open rounds only: after you end your turn, whose turn it is now, on their tile. */
   nextTurnName?: string | null;
   children: React.ReactNode;
 }) {
@@ -203,21 +199,21 @@ export function DebateVideoTile({
       aria-label={tileLabel}
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
       data-active-speaker={active ? 'true' : 'false'}
-      data-final-seconds={stamps && finalSeconds ? 'true' : undefined}
+      data-final-seconds={openRounds && finalSeconds ? 'true' : undefined}
       className={cx(
         'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
-        stamps && '@container',
+        openRounds && '@container',
         active && 'outline-[3px] outline-offset-0',
-        active && (stamps && finalSeconds ? 'outline-red-01' : 'outline-purple')
+        active && (openRounds ? (finalSeconds ? 'outline-red-01' : 'outline-white') : 'outline-purple')
       )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
-      {stamps && <RoomDim on={dimmed || endingTurn || upcoming} />}
+      {openRounds && <RoomDim on={dimmed || endingTurn || upcoming} />}
       {/* Ending a turn hands the corner from the timer to the muted microphone and takes End turn
           away, so in Open rounds each fades rather than cutting (GEO-3347). Fixed formats cut. */}
-      {(stamps || endTurnAction) && (
+      {(openRounds || endTurnAction) && (
         <div className="absolute top-3 left-3 z-40">
-          {stamps ? (
+          {openRounds ? (
             <RoomExit layout="inline">
               {endTurnAction && <div className="pointer-events-auto">{endTurnAction}</div>}
             </RoomExit>
@@ -232,10 +228,10 @@ export function DebateVideoTile({
         data-visible={showInactiveIndicator ? 'true' : 'false'}
         className={cx(
           'pointer-events-none absolute top-3 right-3 z-20',
-          !stamps && (showInactiveIndicator ? 'opacity-100' : 'opacity-0')
+          !openRounds && (showInactiveIndicator ? 'opacity-100' : 'opacity-0')
         )}
       >
-        {stamps ? (
+        {openRounds ? (
           <RoomExit layout="inline">
             {showInactiveIndicator && (
               <div className={ROOM_ENTER_CLASS}>
@@ -247,10 +243,10 @@ export function DebateVideoTile({
           showInactiveIndicator && <MutedMicrophoneIndicator />
         )}
       </div>
-      {/* The count-in's number stamp is the countdown, so the timer steps aside for it. */}
-      {(stamps || countdown) && (
+      {/* The count-in's number is the countdown, so the timer steps aside for it. */}
+      {(openRounds || countdown) && (
         <div className="pointer-events-none absolute top-3 right-3 z-20">
-          {stamps ? <RoomExit layout="inline">{!upcoming && countdown}</RoomExit> : countdown}
+          {openRounds ? <RoomExit layout="inline">{!upcoming && countdown}</RoomExit> : countdown}
         </div>
       )}
 
@@ -295,88 +291,79 @@ export function DebateVideoTile({
         </div>
       )}
 
-      {stamps ? (
-        // Each moment leaves as the next comes in, rather than cutting (`RoomExit`).
+      {openRounds ? (
         <>
-          <RoomExit exit="roll" className="z-30">
+          <RoomExit className="z-30">
             {closingMessage && (
-              <RoomMiddleBanner sizeCqw={5.6} data-room-banner="thanks">
+              <RoomMiddlePhrase sizeCqw={7} data-room-phrase="thanks">
                 Nice debate! Say thanks
-              </RoomMiddleBanner>
+              </RoomMiddlePhrase>
             )}
           </RoomExit>
 
           <RoomExit className="z-30">
             {endingTurn && turnEndedStamp && (
-              <RoomTileStamp data-room-stamp="ended" ink={STAMP_INK.none} sizeCqw={9} tilt={ENDED_TILT}>
+              <RoomTilePill data-room-pill="ended" tone="dashed" sizeCqw={6}>
                 Turn ended
-              </RoomTileStamp>
+              </RoomTilePill>
             )}
           </RoomExit>
 
-          <RoomExit exit="roll" className="z-30">
+          <RoomExit className="z-30">
             {nextTurnName && (
-              // After the stamp on the tile that ended has landed, as in the mockup.
-              <RoomMiddleBanner sizeCqw={6} delayMs={600} data-room-banner="turn">
+              <RoomTilePill sizeCqw={6} delayMs={600} data-room-pill="turn">
                 {nextTurnName}’s turn
-              </RoomMiddleBanner>
+              </RoomTilePill>
             )}
           </RoomExit>
 
-          <RoomExit exit="roll" className="z-30">
+          <RoomExit className="z-30">
             {upcoming && (
-              <>
-                <div className="absolute inset-x-0 top-[28%] -translate-y-1/2">
-                  <RoomBanner sizeCqw={6} data-room-banner="count-in">
-                    {upcomingLabel}
-                  </RoomBanner>
+              <div
+                className={cx(
+                  'absolute inset-0 flex flex-col items-center justify-center text-center font-bold text-white',
+                  ROOM_ENTER_CLASS
+                )}
+                style={ROOM_OUTLINED_STYLE}
+              >
+                <div className="text-[7cqw] leading-tight" data-room-phrase="count-in" style={ROOM_OUTLINED_STYLE}>
+                  {upcomingLabel}
                 </div>
-                <div className="absolute top-[66%] left-1/2 -translate-x-1/2 -translate-y-1/2">
-                  {/* A fresh stamp for every number, so each lands in turn. */}
-                  <RoomStamp
-                    key={upcomingSeconds}
-                    data-room-stamp="count-in"
-                    ink="text-purple"
-                    sizeCqw={14}
-                    tilt="0deg"
-                  >
-                    {upcomingSeconds}
-                  </RoomStamp>
+                <div
+                  className="mt-[1cqw] text-[24cqw] leading-none tabular-nums"
+                  data-room-count-in
+                  style={ROOM_OUTLINED_STYLE}
+                >
+                  {upcomingSeconds}
                 </div>
-              </>
+              </div>
             )}
           </RoomExit>
 
           <RoomExit className="z-30">
             {showGo && (
-              <RoomTileStamp data-room-stamp="go" ink="text-purple" sizeCqw={15} tilt="-3.2deg">
-                Go!
-              </RoomTileStamp>
+              <RoomTilePill data-room-pill="go" tone="white" sizeCqw={10}>
+                Go
+              </RoomTilePill>
             )}
           </RoomExit>
 
           <RoomExit className="z-30">
             {showWrapItUp && (
-              <RoomTileStamp
-                data-room-stamp="wrap-it-up"
-                sizeCqw={9}
-                tilt="-2deg"
-                style={{ color: COUNTDOWN_WARNING_COLOR }}
-              >
+              <RoomTilePill data-room-pill="wrap-it-up" tone="red" sizeCqw={6}>
                 Wrap it up
-              </RoomTileStamp>
+              </RoomTilePill>
             )}
           </RoomExit>
 
-          <RoomExit exit="roll" className="z-30">
+          <RoomExit className="z-30">
             {showDebateEndsSoon && (
-              <RoomMiddleBanner sizeCqw={6.6} data-room-banner="ends-soon">
+              <RoomMiddlePhrase sizeCqw={7} data-room-phrase="ends-soon">
                 Debate ends soon
-              </RoomMiddleBanner>
+              </RoomMiddlePhrase>
             )}
           </RoomExit>
 
-          {/* The pick reveal's stamp fades as the round's banner rolls in. */}
           <RoomExit className="z-[35]">{reveal}</RoomExit>
         </>
       ) : (
@@ -444,7 +431,7 @@ export function DebateVideoTile({
         </>
       )}
 
-      {!stamps && reveal}
+      {!openRounds && reveal}
 
       {overlayText && (
         <div

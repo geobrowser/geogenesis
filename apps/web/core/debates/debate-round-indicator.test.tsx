@@ -36,7 +36,7 @@ describe('DebateRoundIndicator', () => {
     expect(screen.getByText('Opening')).toBeInTheDocument();
     expect(screen.getByText('Opening. No rebuttal rounds yet. Another round is possible.')).toBeInTheDocument();
     expect(pips).toEqual(['0', 'next']);
-    expect(document.querySelector('[data-round-pip="0"]')).toHaveClass('bg-purple');
+    expect(document.querySelector('[data-round-pip="0"]')).toHaveClass('ring-text/20');
   });
 
   it('shows round N of the cap, one pip per round run, and highlights the current one', () => {
@@ -46,8 +46,8 @@ describe('DebateRoundIndicator', () => {
     expect(screen.getByText('of 11')).toBeInTheDocument();
     expect(screen.getByText('Round 5 of 11. 4 rebuttal rounds so far. Another round is possible.')).toBeInTheDocument();
     expect(pips).toEqual(['0', '1', '2', '3', '4', 'next']);
-    expect(document.querySelector('[data-round-pip="4"]')).toHaveClass('bg-purple');
-    expect(document.querySelector('[data-round-pip="3"]')).not.toHaveClass('bg-purple');
+    expect(document.querySelector('[data-round-pip="4"]')).toHaveClass('ring-text/20');
+    expect(document.querySelector('[data-round-pip="3"]')).not.toHaveClass('ring-text/20');
   });
 
   it('reads the cap from the debate rather than assuming 10', () => {
@@ -85,7 +85,7 @@ describe('DebateRoundIndicator', () => {
     const { pips } = renderIndicator({ phase: 'finished', roundIndex: 3, isFinalRound: false });
 
     expect(pips).toEqual(['0', '1', '2', '3']);
-    expect(document.querySelector('.bg-purple')).toBeNull();
+    expect(document.querySelector('[class~="ring-text/20"]')).toBeNull();
   });
 
   // GEO-3258: the required rebuttal round is certain, so it is never drawn as possible.
@@ -98,7 +98,7 @@ describe('DebateRoundIndicator', () => {
     ).toBeInTheDocument();
     expect(pips).toEqual(['0', '1', 'next']);
     expect(document.querySelector('[data-round-pip="1"]')).toHaveClass('bg-grey-03');
-    expect(document.querySelector('[data-round-pip="0"]')).toHaveClass('bg-purple');
+    expect(document.querySelector('[data-round-pip="0"]')).toHaveClass('ring-text/20');
   });
 
   it('draws the required round as played once it runs', () => {
@@ -106,7 +106,7 @@ describe('DebateRoundIndicator', () => {
 
     expect(screen.getByText('Round 2 of 11. 1 rebuttal round so far. Another round is possible.')).toBeInTheDocument();
     expect(pips).toEqual(['0', '1', 'next']);
-    expect(document.querySelector('[data-round-pip="1"]')).toHaveClass('bg-purple');
+    expect(document.querySelector('[data-round-pip="1"]')).toHaveClass('ring-text/20');
   });
 
   it('offers no further round when the cap is only the required rounds', () => {

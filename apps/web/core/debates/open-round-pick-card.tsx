@@ -8,6 +8,7 @@ import { Check } from '~/design-system/icons/check';
 
 import type { OpenRoundPick } from './api';
 import { LABEL_FONT } from './browse/stamp-styles';
+import { ROOM_GLASS_CLASS, ROOM_WHITE_GLASS_CLASS } from './debate-room-stamps';
 
 export type OpenRoundPickContext = {
   previousPick: OpenRoundPick | null;
@@ -35,7 +36,7 @@ type OpenRoundPickCardProps = {
 
 /**
  * Extend or End, after every Open rounds round but the cap (GEO-3178), as one dark panel on the seam
- * between the tiles in the stamps design (GEO-3315): the question and its countdown on one line, and
+ * between the tiles in the classic + glass design (GEO-3366): the question and its countdown on one line, and
  * the two choices under it. Sized in `cqw` of the tiles' grid.
  *
  * Picks are blind, so the card says nothing about the other debater's pick, not even whether they
@@ -88,7 +89,7 @@ export function OpenRoundPickCard({
     <section
       aria-labelledby={headingId}
       data-open-round-pick-card={roundIndex}
-      className="pointer-events-auto absolute top-1/2 left-1/2 z-40 grid w-[78%] -translate-x-1/2 -translate-y-1/2 gap-[2.4cqw] rounded-[6px] bg-[#141418] p-[3.4cqw] text-white shadow-[0_2cqw_6cqw_rgba(0,0,0,0.45)] motion-safe:animate-[fadeIn_150ms_linear_both]"
+      className="pointer-events-auto absolute top-1/2 left-1/2 z-40 grid w-[78%] -translate-x-1/2 -translate-y-1/2 gap-[2.4cqw] rounded-[4cqw] border border-white/20 bg-black/65 p-[3.4cqw] text-white shadow-[0_2cqw_6cqw_rgba(0,0,0,0.45)] backdrop-blur-xl motion-safe:animate-[fadeIn_150ms_linear_both]"
       style={LABEL_FONT}
     >
       <div className="flex items-center justify-between gap-[2cqw]">
@@ -132,8 +133,7 @@ export function OpenRoundPickCard({
 }
 
 /**
- * One choice, a solid button: Extend in purple, End in white. The picked one carries a check and an
- * outline, white round Extend and purple round End, and the other dims; either can still be tapped
+ * Two glass choices. The picked one turns white with a check, and the other dims; either can be tapped
  * until the window runs out.
  */
 function PickChoice({
@@ -160,10 +160,8 @@ function PickChoice({
       disabled={disabled}
       onClick={() => onPick(choice)}
       className={cx(
-        'grid gap-[1.2cqw] rounded-[4px] px-[2.8cqw] py-[2.6cqw] text-left transition-[opacity,filter] duration-150 enabled:hover:brightness-108 disabled:cursor-default',
-        choice === 'extend' ? 'bg-purple text-white' : 'bg-white text-text',
-        selected && 'outline-[0.6cqw] outline-offset-[0.6cqw]',
-        selected && (choice === 'extend' ? 'outline-white' : 'outline-purple'),
+        'grid gap-[1.2cqw] rounded-[2.6cqw] px-[2.8cqw] py-[2.6cqw] text-left transition-[opacity,filter] duration-150 enabled:hover:brightness-108 disabled:cursor-default',
+        selected ? ROOM_WHITE_GLASS_CLASS : ROOM_GLASS_CLASS,
         selectedPick !== null && !selected && 'opacity-35',
         disabled && selectedPick === null && 'opacity-50'
       )}

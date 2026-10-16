@@ -60,8 +60,8 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     fireEvent.click(extend());
     expect(view.onPick).toHaveBeenLastCalledWith('extend', expect.objectContaining({ previousPick: null }));
     expect(extend()).toHaveAttribute('aria-pressed', 'true');
-    // The pick shows a check and an outline, the other dims, and the question stays.
-    expect(extend()).toHaveClass('outline-white');
+    // The pick turns white with a check, the other dims, and the question stays.
+    expect(extend()).toHaveClass('bg-white/85', 'text-text');
     expect(extend().querySelector('svg')).toBeInTheDocument();
     expect(end()).toHaveClass('opacity-35');
     expect(screen.getByRole('heading', { name: 'Keep debating?' })).toBeInTheDocument();
@@ -73,6 +73,8 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     fireEvent.click(end());
     expect(view.onPick).toHaveBeenLastCalledWith('end', expect.objectContaining({ previousPick: 'extend' }));
     expect(end()).toHaveAttribute('aria-pressed', 'true');
+    expect(end()).toHaveClass('bg-white/85', 'text-text');
+    expect(extend()).toHaveClass('opacity-35', 'bg-black/40');
     expect(extend()).toHaveAttribute('aria-pressed', 'false');
   });
 

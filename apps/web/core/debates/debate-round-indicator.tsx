@@ -78,7 +78,7 @@ export function DebateRoundIndicator({
           ? 'h-[7px] border-[1.5px] border-dashed border-grey-03'
           : kind === 'required'
             ? 'h-1.5 bg-grey-03'
-            : cx('h-1.5', round === currentRound ? 'bg-purple ring-2 ring-purple/20' : 'bg-text')
+            : cx('h-1.5', round === currentRound ? 'bg-text ring-2 ring-text/20' : 'bg-text')
       )}
     />
   );

@@ -4,107 +4,115 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { BANNER_CLASS, BANNER_SUB_CLASS, LABEL_FONT, STAMP_CLASS, STAMP_FONT, TAG_CLASS } from './browse/stamp-styles';
+import { LABEL_FONT, STAMP_FONT } from './browse/stamp-styles';
 
-/**
- * The recording room's moments in an Open rounds debate, in the stamps design the published player
- * uses (GEO-3315): stamps that land on a tile, and purple banners that roll across one. Every size
- * is in `cqw` of the tile, so the room draws them in the mockup's proportions at any width; the tile
- * and the tiles' grid are size containers for it.
- *
- * Fixed formats keep today's outlined phrases and never draw these.
- */
+/** Open rounds room graphics (GEO-3366). Sizes follow the tile's width via its size container. */
+export const ROOM_GLASS_CLASS = 'border border-white/30 bg-black/40 text-white backdrop-blur-md';
+export const ROOM_WHITE_GLASS_CLASS = 'border border-white/70 bg-white/85 text-text backdrop-blur-md';
 
-/** A stamp over the middle of its box, landing from 1.3x as it appears. `delayMs` holds it back. */
-export function RoomStamp({
+/** White Geist Bold with a black outline, including the smaller count-in label. */
+export const ROOM_OUTLINED_STYLE = {
+  ...STAMP_FONT,
+  WebkitTextStroke: '0.06em #000',
+  paintOrder: 'stroke fill',
+  textShadow: '0 0.08em 0.25em rgba(0,0,0,0.45)',
+} as const;
+
+/** A glass pill that fades in without moving, rotating or scaling. */
+export function RoomPill({
   children,
-  ink,
+  tone = 'dark',
   sizeCqw,
-  tilt,
   delayMs = 0,
   className,
   style,
   ...props
 }: React.ComponentPropsWithoutRef<'span'> & {
-  /** The text colour as a class, which the border takes too. A style's `color` can stand in for it. */
-  ink?: string;
+  tone?: 'dark' | 'white' | 'red' | 'dashed';
   sizeCqw: number;
-  tilt: string;
   delayMs?: number;
 }) {
   return (
     <span
       {...props}
-      className={cx(STAMP_CLASS, 'motion-safe:animate-debate-stamp', ink, className)}
+      className={cx(
+        'inline-flex max-w-[92%] items-center rounded-full px-[0.65em] py-[0.35em] leading-none font-medium shadow-[0_0.12em_0.45em_rgba(0,0,0,0.2)]',
+        ROOM_ENTER_CLASS,
+        tone === 'white'
+          ? ROOM_WHITE_GLASS_CLASS
+          : tone === 'red'
+            ? 'border border-white/35 bg-[#FF4A26]/85 text-white backdrop-blur-md'
+            : [ROOM_GLASS_CLASS, tone === 'dashed' && 'border-dashed'],
+        className
+      )}
       style={{
-        ...STAMP_FONT,
+        ...LABEL_FONT,
         fontSize: `${sizeCqw}cqw`,
-        transform: `rotate(${tilt})`,
         animationDelay: delayMs ? `${delayMs}ms` : undefined,
         ...style,
       }}
     >
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }
 
-/** A stamp in the middle of its tile: the pick, "Go!", "Wrap it up", "Turn ended". */
-export function RoomTileStamp(props: React.ComponentProps<typeof RoomStamp>) {
+export function RoomTilePill(props: React.ComponentProps<typeof RoomPill>) {
   return (
     <div className="absolute inset-0 grid place-items-center">
-      <RoomStamp {...props} />
+      <RoomPill {...props} />
     </div>
   );
 }
 
-/** A purple banner rolling in across its box's full width, with an optional smaller second line. */
-export function RoomBanner({
+/** An outlined announcement and optional opener, fading in and out in place. */
+export function RoomPhrase({
   children,
   sub,
   sizeCqw,
-  delayMs = 0,
   className,
   ...props
 }: React.ComponentPropsWithoutRef<'div'> & {
   sub?: React.ReactNode;
   sizeCqw: number;
-  delayMs?: number;
 }) {
   return (
     <div
       {...props}
-      className={cx(BANNER_CLASS, 'motion-safe:animate-debate-banner', className)}
-      style={{ ...LABEL_FONT, fontSize: `${sizeCqw}cqw`, animationDelay: delayMs ? `${delayMs}ms` : undefined }}
+      className={cx('px-[0.6em] text-center leading-tight font-bold text-white', ROOM_ENTER_CLASS, className)}
+      style={{ ...ROOM_OUTLINED_STYLE, fontSize: `${sizeCqw}cqw` }}
     >
-      <span className="block truncate">{children}</span>
-      {sub && <span className={BANNER_SUB_CLASS}>{sub}</span>}
+      <span className="block text-balance">{children}</span>
+      {sub && <span className="mt-[0.35em] block truncate text-[0.6em]">{sub}</span>}
     </div>
   );
 }
 
-/** A banner across the middle of its box: a tile, or the seam between the two. */
-export function RoomMiddleBanner(props: React.ComponentProps<typeof RoomBanner>) {
+export function RoomMiddlePhrase(props: React.ComponentProps<typeof RoomPhrase>) {
   return (
     <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
-      <RoomBanner {...props} />
+      <RoomPhrase {...props} />
     </div>
   );
 }
 
-/** A small purple label, "Last word" or a round count. */
+/** Small glass label for the last speaker or a round count. */
 export function RoomTag({ className, style, ...props }: React.ComponentPropsWithoutRef<'span'>) {
   return (
     <span
       {...props}
-      className={cx(TAG_CLASS, 'inline-flex items-center uppercase', className)}
+      className={cx(
+        ROOM_GLASS_CLASS,
+        'inline-flex items-center rounded-full px-[0.65em] py-[0.35em] leading-none whitespace-nowrap',
+        className
+      )}
       style={{ ...LABEL_FONT, ...style }}
     />
   );
 }
 
 /**
- * The tile under a moment, dimmed as in the mockup so the stamp or banner reads over any picture.
+ * The tile under a moment, dimmed as in the mockup so the graphic reads over any picture.
  * Always there, and faded in and out, so one moment handing over to the next never flashes.
  */
 export function RoomDim({ on }: { on: boolean }) {
@@ -120,11 +128,11 @@ export function RoomDim({ on }: { on: boolean }) {
   );
 }
 
-/** How long a moment takes to leave: the banner's roll and the stamps' fade. */
+/** How long a moment takes to fade out. Playback also uses this duration for its banner exit. */
 export const ROOM_EXIT_MS = 300;
 
 const EXIT_CLASS = {
-  // A banner rolls on out the way it rolled in, as in the mockup.
+  // Legacy playback banners still roll; recording-room moments use the default fade.
   roll: 'motion-safe:animate-debate-banner-out',
   fade: 'motion-safe:animate-[fadeIn_300ms_linear_reverse_both]',
 } as const;

@@ -4,7 +4,7 @@ import { act, cleanup, render, renderHook, screen } from '@testing-library/react
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  OpenRoundPickStamp,
+  OpenRoundPickPill,
   OpenRoundResultOverlay,
   openRoundRevealStep,
   openRoundWrapNote,
@@ -89,39 +89,32 @@ describe('useOpenRoundRevealStep', () => {
   });
 });
 
-describe('OpenRoundPickStamp (GEO-3315)', () => {
-  it('stamps the pick onto the tile in its ink', () => {
-    const { container } = render(<OpenRoundPickStamp pick="extend" order="first" />);
-    expect(container.firstChild).toHaveAttribute('data-open-round-reveal', 'extend');
-    expect(screen.getByText('Extend')).toHaveClass('text-purple', 'uppercase');
-    expect(screen.getByText('Extend')).toHaveStyle({ transform: 'rotate(-3.2deg)' });
-  });
-
-  it('stamps a missing pick as a grey dashed no pick, neither Extend nor End', () => {
-    const { container } = render(<OpenRoundPickStamp pick={null} order="first" />);
-    expect(container.firstChild).toHaveAttribute('data-open-round-reveal', 'none');
-    expect(screen.getByText('No pick')).toHaveClass('border-dashed', 'text-grey-04');
-    expect(screen.queryByText('End')).not.toBeInTheDocument();
-    expect(screen.queryByText('Extend')).not.toBeInTheDocument();
-  });
-
-  it('lands the second stamp a beat later, leaning the other way, and only animates for those who allow motion', () => {
-    render(<OpenRoundPickStamp pick="end" order="second" />);
-    const stamp = screen.getByText('End');
-    expect(stamp).toHaveClass('text-text', 'motion-safe:animate-debate-stamp');
-    expect(stamp.className).not.toMatch(/(^| )animate-/);
-    expect(stamp).toHaveStyle({ transform: 'rotate(2.4deg)', animationDelay: '280ms' });
+describe('OpenRoundPickPill (GEO-3366)', () => {
+  it.each([
+    ['extend', 'Extend', 'bg-white/85'],
+    ['end', 'End', 'bg-black/40'],
+    [null, 'No pick', 'border-dashed'],
+  ] as const)('reveals %s in a glass pill on its tile', (pick, word, tone) => {
+    const { container } = render(<OpenRoundPickPill pick={pick} />);
+    expect(container.firstChild).toHaveAttribute('data-open-round-reveal', pick ?? 'none');
+    const pill = screen.getByText(word).parentElement;
+    expect(pill).toHaveClass(tone, 'rounded-full', 'backdrop-blur-md');
+    expect(pill).toHaveClass('motion-safe:animate-[fadeIn_300ms_linear_both]');
+    expect(pill?.style.transform).toBe('');
+    expect(container.innerHTML).not.toMatch(/purple|animate-debate-stamp|rotate/);
   });
 });
 
 describe('OpenRoundResultOverlay', () => {
-  it('announces a new round as a two-line banner, with who opens it and no count', () => {
+  it('announces a new round with outlined type and who opens it', () => {
     const { container } = render(
       <OpenRoundResultOverlay result={{ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: 'Alice' }} />
     );
-    expect(container.querySelector('[data-open-round-banner]')).toHaveClass('bg-purple');
+    const phrase = container.querySelector('[data-open-round-phrase]');
+    expect(phrase).toHaveClass('font-bold', 'text-white', 'motion-safe:animate-[fadeIn_300ms_linear_both]');
+    expect(phrase).toHaveStyle({ fontFamily: 'var(--font-geist-bold)', WebkitTextStroke: '0.06em #000' });
     expect(container).toHaveTextContent('Round 2 · RebuttalAlice opens');
-    expect(container.textContent).not.toMatch(/ in \d/);
+    expect(container.innerHTML).not.toMatch(/purple|animate-debate-banner/);
   });
 
   it('says "You open" to the opener', () => {
@@ -129,28 +122,19 @@ describe('OpenRoundResultOverlay', () => {
     expect(screen.getByText('You open')).toBeInTheDocument();
   });
 
-  it('ends with a purple banner, and a reason only when there is one', () => {
+  it('ends with outlined type, and a reason only when there is one', () => {
     const { container, rerender } = render(<OpenRoundResultOverlay result={{ kind: 'wrap', note: null }} />);
     expect(container.textContent).toBe('That’s a wrap');
-    expect(container.querySelector('[data-open-round-banner]')).toHaveClass('bg-purple');
+    expect(container.querySelector('[data-open-round-phrase]')).toHaveClass('text-white', 'font-bold');
     rerender(<OpenRoundResultOverlay result={{ kind: 'wrap', note: 'No picks in time' }} />);
     expect(container).toHaveTextContent('That’s a wrapNo picks in time');
   });
 
-  it('says the debate hit the maximum, with every round run, the opening included, as a purple tag', () => {
+  it('says the debate hit the maximum, counting every round, the opening included, in a glass pill', () => {
     const { container } = render(<OpenRoundResultOverlay result={{ kind: 'max', rounds: 10 }} />);
     expect(container).toHaveTextContent('That’s the max11 rounds');
-    expect(container.querySelector('[data-open-round-banner]')).toHaveClass('bg-purple');
-    expect(screen.getByText('11 rounds')).toHaveClass('bg-purple');
-  });
-
-  it('rolls the banner in only for those who allow motion', () => {
-    const { container } = render(
-      <OpenRoundResultOverlay result={{ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: null }} />
-    );
-    const banner = container.querySelector('[data-open-round-banner]');
-    expect(banner).toHaveClass('motion-safe:animate-debate-banner');
-    expect(banner?.className).not.toMatch(/(^| )animate-/);
+    expect(screen.getByText('11 rounds')).toHaveClass('rounded-full', 'backdrop-blur-md');
+    expect(container.innerHTML).not.toMatch(/purple/);
   });
 });
 
