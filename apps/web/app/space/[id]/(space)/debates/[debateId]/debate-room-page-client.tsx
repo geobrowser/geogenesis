@@ -2725,30 +2725,26 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     let cancelled = false;
     void (async () => {
       const pending = mediaSession.pendingPreview();
-      if (pending) {
-        await pending.catch(() => undefined);
-        if (cancelled) return;
-      }
+      if (pending) await pending.catch(() => undefined);
 
       const liveKinds = mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind);
-      let settled: { audioMuted: boolean; videoEnabled: boolean };
-      if (joinStateChosenHere.current) {
-        settled = { audioMuted, videoEnabled };
-      } else {
+      if (!joinStateChosenHere.current) {
         /*
          * A hand-off re-reads its tracks here, because they may not have landed at first render.
          * A cold arrival keeps the first-render decision instead: that one knows about the picker's
          * answer and the mic a lobby carried, and re-deriving would read "no tracks" over both.
+         *
+         * Settled and applied even when this run was cancelled: a card still adding a device keeps
+         * the preview 'ready', so the intro connection can start (and cancel this) before the
+         * hand-off lands, and a later drop would re-derive from the tracks the disconnect stopped.
          */
-        settled =
-          settledJoinStateRef.current ?? (handedOverAtMount.current ? inheritedJoinState(liveKinds, true) : inherited);
-        settledJoinStateRef.current = settled;
+        settledJoinStateRef.current ??= handedOverAtMount.current ? inheritedJoinState(liveKinds, true) : inherited;
+        setAudioMuted(settledJoinStateRef.current.audioMuted);
+        setVideoEnabled(settledJoinStateRef.current.videoEnabled);
       }
+      if (cancelled) return;
 
-      if (!joinStateChosenHere.current) {
-        setAudioMuted(settled.audioMuted);
-        setVideoEnabled(settled.videoEnabled);
-      }
+      const settled = joinStateChosenHere.current ? { audioMuted, videoEnabled } : settledJoinStateRef.current!;
       await ensureLocalPreview(kindsForJoinState(settled, liveKinds)).catch(() => undefined);
     })();
 
