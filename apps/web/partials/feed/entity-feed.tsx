@@ -18,7 +18,7 @@ import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explor
 import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
 import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 import { seenStore } from '~/core/explore/seen-demotion/seen-store';
-import { useAwaitedSmartAccount } from '~/core/hooks/use-awaited-smart-account';
+import { useFeedViewer } from '~/core/hooks/use-awaited-smart-account';
 import { exploreMoreFiltersOpenAtom } from '~/core/state/explore-more-filters';
 import { normId } from '~/core/utils/norm-id';
 
@@ -147,10 +147,11 @@ type EntityFeedProps = {
    */
   sendIdentityToken?: boolean;
   /**
-   * Whether the request carried a wallet cookie. When set, the first page waits for the smart
-   * account (see `useAwaitedSmartAccount`) instead of being fetched anonymously and then again.
+   * The wallet cookie the page was rendered with, if any. It keys the first page from hydration on
+   * (see `useFeedViewer`), rather than the page being fetched anonymously and then again once the
+   * smart account resolves.
    */
-  signedIn?: boolean;
+  walletAddress?: string | null;
 };
 
 async function fetchFeedPage(
@@ -253,7 +254,7 @@ export function EntityFeed({
   titleOpensSidePanel = false,
   claimCardVariant = 'feed',
   sendIdentityToken = false,
-  signedIn = false,
+  walletAddress = null,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
@@ -444,14 +445,17 @@ export function EntityFeed({
     [maxTopicSelections]
   );
 
-  // Key the query on the smart-account address because that hook is what writes the
-  // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier
-  // (before the cookie is set), which caused refetches to return anonymous data on
-  // sign-in and leave "Join space" buttons stuck for a few seconds.
-  const { smartAccountAddress, awaitingAccount } = useAwaitedSmartAccount(signedIn);
+  const isForYou = sort === 'for-you';
+  // Only where the server can use it, so no other page waits on Privy for a token: For you, and
+  // Best while interleaving is on (GEO-3144), which needs to know who is reading.
+  const usesIdentityToken = sendIdentityToken && (isForYou || (sort === 'best' && FEED_INTERLEAVING_ENABLED));
+  // Key the query on the wallet the server route will read from the cookie: the smart-account
+  // address once it resolves (that hook writes the cookie), and the cookie's own value until then.
+  // Privy's user.id updates earlier (before the cookie is set), which caused refetches to return
+  // anonymous data on sign-in and leave "Join space" buttons stuck for a few seconds.
+  const { viewerAddress, awaitingIdentityToken } = useFeedViewer(walletAddress, usesIdentityToken);
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
   // request, and caching them apart would refetch on a change the viewer never made.
-  const isForYou = sort === 'for-you';
   const requestedFollowedTopicIds = isForYou ? (followedTopicIds ?? []) : [];
   const queryKey = [
     apiEndpoint,
@@ -464,13 +468,10 @@ export function EntityFeed({
     // Only on For you, so every other sort's key, and so its cache, is unchanged.
     ...(isForYou ? [requestedFollowedTopicIds.join(',')] : []),
     // Last, so `placeholderData` below can tell a change of account from a change of filter.
-    smartAccountAddress,
+    viewerAddress,
   ];
 
-  // Only where the server can use it, so no other page waits on Privy for a token: For you, and
-  // Best while interleaving is on (GEO-3144), which needs to know who is reading.
-  const wantsIdentityToken =
-    sendIdentityToken && smartAccountAddress !== null && (isForYou || (sort === 'best' && FEED_INTERLEAVING_ENABLED));
+  const wantsIdentityToken = usesIdentityToken && viewerAddress !== null;
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
     queryKey,
@@ -486,7 +487,7 @@ export function EntityFeed({
         fixedParams,
         cursor: pageParam as string | undefined,
       }),
-    enabled: !awaitingAccount && (!isForYou || followedTopicIds !== null),
+    enabled: !awaitingIdentityToken && (!isForYou || followedTopicIds !== null),
     // When only the account changed (signing in on the page, or an account that arrived after the
     // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
     placeholderData: (previous, previousQuery) =>
@@ -692,7 +693,7 @@ export function EntityFeed({
       <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
-        ) : isLoading || awaitingAccount || (isForYou && followedTopicIds === null) ? (
+        ) : isLoading || awaitingIdentityToken || (isForYou && followedTopicIds === null) ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <LoadingSkeleton key={i} />
