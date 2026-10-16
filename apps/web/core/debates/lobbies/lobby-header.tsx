@@ -4,6 +4,10 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { copyShareLink } from '~/core/sharing/share-handoff';
+import { createShareLink } from '~/core/sharing/share-link';
+
 import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Text } from '~/design-system/text';
 
@@ -41,10 +45,11 @@ export function lobbyMetaLabel(lobby: Pick<LobbyPageView, 'members'>) {
 }
 
 function useCopyLink(lobbyId: string) {
+  const getContext = useActionContext('share_dialog', 'lobby', lobbyId);
   const [copied, setCopied] = React.useState(false);
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(lobbyShareUrl(lobbyId));
+      await copyShareLink(createShareLink(lobbyShareUrl(lobbyId), 'lobby', lobbyId, 'copy_link'), getContext());
       setCopied(true);
     } catch {
       setCopied(false);
