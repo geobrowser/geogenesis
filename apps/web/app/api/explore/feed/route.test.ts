@@ -6,13 +6,14 @@ import { NEWS_STORY_TYPE_ID } from '~/core/explore/explore-constants';
 
 import { GET } from './route';
 
-const mocks = vi.hoisted(() => ({ fetchFeed: vi.fn(), viewer: vi.fn(), freshState: vi.fn() }));
+const mocks = vi.hoisted(() => ({ fetchFeed: vi.fn(), viewer: vi.fn(), freshState: vi.fn(), context: vi.fn() }));
 
 vi.mock('~/core/explore/fetch-explore-feed', () => ({
   fetchExploreFeed: (args: unknown) => mocks.fetchFeed(args),
 }));
 vi.mock('~/core/explore/resolve-explore-feed-request-context', () => ({
-  resolveExploreFeedRequestContext: async () => ({
+  resolveExploreFeedRequestContext: async (...args: unknown[]) => ({
+    ...mocks.context(...args),
     browse: { featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null },
     memberOrEditorSpaceIds: [],
     walletAddress: null,
@@ -30,6 +31,7 @@ vi.mock('~/core/explore/for-you/resolve-for-you-viewer', async importOriginal =>
 beforeEach(() => {
   mocks.fetchFeed.mockReset();
   mocks.fetchFeed.mockResolvedValue({ items: [], nextCursor: null });
+  mocks.context.mockReset();
   mocks.viewer.mockReset();
   mocks.viewer.mockResolvedValue(null);
   mocks.freshState.mockReset();
@@ -224,6 +226,74 @@ describe('GET /api/explore/feed', () => {
       const body = await (await GET(new Request('https://example.com/api/explore/feed?sort=best'))).json();
 
       expect(body.items.map((i: { ranking: { version: string } }) => i.ranking.version)).toEqual(['best-1', 'best-1']);
+    });
+  });
+
+  // The CDN keys on the URL and ignores cookies, so the cacheable page lives at its own URL and
+  // the server must treat that URL as anonymous whoever asks.
+  describe('the public first page', () => {
+    const url = 'https://example.com/api/explore/feed?sort=best&public=1';
+    const item = (entityId: string) => ({ entityId });
+    const page = { items: [item('e1')], nextCursor: 'c1', feed: { name: 'best', version: 'best-1' } };
+
+    it('is read without cookies and without an identity token', async () => {
+      vi.stubEnv('NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED', 'true');
+      mocks.viewer.mockResolvedValue('viewer-1');
+      mocks.fetchFeed.mockResolvedValue(page);
+
+      await GET(new Request(url, { headers: { authorization: 'Bearer token', cookie: 'wallet-address=0xabc' } }));
+
+      expect(mocks.context).toHaveBeenCalledWith(undefined, { anonymous: true });
+      expect(mocks.viewer).not.toHaveBeenCalled();
+      expect(sentArgs().reorderWindow).toBeUndefined();
+    });
+
+    it('carries the CDN cache headers', async () => {
+      mocks.fetchFeed.mockResolvedValue(page);
+
+      const response = await GET(new Request(url));
+
+      expect(response.headers.get('cache-control')).toBe('public, s-maxage=30, stale-while-revalidate=60');
+    });
+
+    it.each([
+      ['the personal URL', 'sort=best'],
+      ['a For you request', 'sort=for-you&public=1'],
+      ['a later page', 'sort=best&public=1&cursor=abc'],
+      ['a filtered page', 'sort=best&public=1&typeIds=x'],
+      ['a stray parameter', 'sort=best&public=1&x=1'],
+      ['public set to something else', 'sort=best&public=0'],
+    ])('does not cache %s', async (_name, query) => {
+      mocks.fetchFeed.mockResolvedValue(page);
+
+      const response = await GET(new Request(`https://example.com/api/explore/feed?${query}`));
+
+      expect(response.headers.get('cache-control')).toBeNull();
+    });
+
+    it('does not cache an empty page', async () => {
+      mocks.fetchFeed.mockResolvedValue({ items: [], nextCursor: null });
+
+      expect((await GET(new Request(url))).headers.get('cache-control')).toBeNull();
+    });
+
+    it('does not cache an error', async () => {
+      mocks.fetchFeed.mockRejectedValue(new Error('boom'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const response = await GET(new Request(url));
+
+      expect(response.status).toBe(503);
+      expect(response.headers.get('cache-control')).toBeNull();
+    });
+
+    it('keeps a personalized page private even on the public URL', async () => {
+      mocks.fetchFeed.mockResolvedValue(page);
+      mocks.viewer.mockResolvedValue('viewer-1');
+
+      const response = await GET(new Request('https://example.com/api/explore/feed?sort=for-you'));
+
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
     });
   });
 });

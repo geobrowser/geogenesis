@@ -13,7 +13,7 @@ import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cac
 import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
-import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
+import { type ExplorePageSort, PUBLIC_FEED_PARAM } from '~/core/explore/explore-feed-params';
 import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
 import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
@@ -152,7 +152,45 @@ type EntityFeedProps = {
    * smart account resolves.
    */
   walletAddress?: string | null;
+  /**
+   * Fetch the signed-out first page of Best from the CDN-cached anonymous URL (Explore only). Used
+   * only when nobody is signed in and the request is the plain first Best page; anything else keeps
+   * the personal URL, because the CDN ignores cookies.
+   */
+  cdnFirstPage?: boolean;
 };
+
+/**
+ * The query string of a feed request. `anonymous` adds the cacheable-URL marker, and only to the
+ * plain first Best page: any cursor, filter or other sort stays on the uncached URL.
+ */
+export function buildFeedQuery(params: {
+  sort: ExplorePageSort;
+  time: ExploreTime | undefined;
+  spaceIds: readonly string[];
+  typeIds: readonly string[] | undefined;
+  topicIds: readonly string[];
+  followedTopicIds: readonly string[];
+  fixedParams: Record<string, string>;
+  cursor: string | undefined;
+  anonymous?: boolean;
+}): string {
+  const sp = new URLSearchParams();
+  sp.set('sort', params.sort);
+  // Absent means "no time filter" — see the route's parseTime. Sending nothing is what keeps a
+  // hidden range out of the feed it isn't shown for.
+  if (params.time !== undefined) sp.set('time', params.time);
+  // Omitted rather than sent as `all` when nothing is ticked: the routes read an absent parameter
+  // as "no narrowing", which is the same answer with one fewer special string in it.
+  if (params.spaceIds.length > 0) sp.set('spaceIds', params.spaceIds.join(','));
+  if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
+  if (params.topicIds.length > 0) sp.set('topicIds', params.topicIds.join(','));
+  if (params.followedTopicIds.length > 0) sp.set('followedTopicIds', params.followedTopicIds.join(','));
+  for (const [key, value] of Object.entries(params.fixedParams)) sp.set(key, value);
+  if (params.cursor) sp.set('cursor', params.cursor);
+  if (params.anonymous && sp.toString() === 'sort=best') sp.set(PUBLIC_FEED_PARAM, '1');
+  return sp.toString();
+}
 
 async function fetchFeedPage(
   apiEndpoint: string,
@@ -168,22 +206,10 @@ async function fetchFeedPage(
     fixedParams: Record<string, string>;
     cursor: string | undefined;
     identityToken?: string | null;
+    anonymous?: boolean;
   }
 ): Promise<ExploreFeedResult> {
-  const sp = new URLSearchParams();
-  sp.set('sort', params.sort);
-  // Absent means "no time filter" — see the route's parseTime. Sending nothing is what keeps a
-  // hidden range out of the feed it isn't shown for.
-  if (params.time !== undefined) sp.set('time', params.time);
-  // Omitted rather than sent as `all` when nothing is ticked: the routes read an absent parameter
-  // as "no narrowing", which is the same answer with one fewer special string in it.
-  if (params.spaceIds.length > 0) sp.set('spaceIds', params.spaceIds.join(','));
-  if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
-  if (params.topicIds.length > 0) sp.set('topicIds', params.topicIds.join(','));
-  if (params.followedTopicIds.length > 0) sp.set('followedTopicIds', params.followedTopicIds.join(','));
-  for (const [key, value] of Object.entries(params.fixedParams)) sp.set(key, value);
-  if (params.cursor) sp.set('cursor', params.cursor);
-  const res = await fetch(`${apiEndpoint}?${sp.toString()}`, {
+  const res = await fetch(`${apiEndpoint}?${buildFeedQuery(params)}`, {
     credentials: 'include',
     ...(params.identityToken ? { headers: { authorization: `Bearer ${params.identityToken}` } } : {}),
   });
@@ -255,6 +281,7 @@ export function EntityFeed({
   claimCardVariant = 'feed',
   sendIdentityToken = false,
   walletAddress = null,
+  cdnFirstPage = false,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
@@ -478,6 +505,7 @@ export function EntityFeed({
     queryFn: async ({ pageParam }) =>
       fetchFeedPage(apiEndpoint, {
         identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
+        anonymous: cdnFirstPage && viewerAddress === null && !wantsIdentityToken,
         sort,
         time: requestedTime,
         spaceIds: requestedSpaceIds,

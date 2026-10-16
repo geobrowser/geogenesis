@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
-import { parseExplorePageSort, parseExploreTime } from '~/core/explore/explore-feed-params';
+import { PUBLIC_FEED_PARAM, parseExplorePageSort, parseExploreTime } from '~/core/explore/explore-feed-params';
 import { EXPLORE_FEED_POLICY } from '~/core/explore/explore-feed-policy';
 import { parseExploreTypeIdsParam } from '~/core/explore/explore-type-filter';
 import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
@@ -38,6 +38,22 @@ function feedInterleavingEnabled(): boolean {
   return process.env.NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED === 'true';
 }
 
+/**
+ * The signed-out first page of Best, which is identical for every reader (seen demotion runs in
+ * the browser), so the CDN may keep it. Vercel's cache key ignores cookies, so the cacheable page
+ * lives at its own URL (`public=1`) and the server treats that URL as anonymous whatever cookies or
+ * tokens arrive; the personalized URL is never given these headers.
+ */
+const PUBLIC_FEED_CACHE_CONTROL = 'public, s-maxage=30, stale-while-revalidate=60';
+
+/** Only exactly `?sort=best&public=1` is cached, so arbitrary query strings cannot fill the cache. */
+function isCacheablePublicFirstPage(searchParams: URLSearchParams): boolean {
+  const keys = [...searchParams.keys()].sort();
+  return (
+    keys.length === 2 && keys[0] === PUBLIC_FEED_PARAM && keys[1] === 'sort' && searchParams.get('sort') === 'best'
+  );
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const pageSort = parseExplorePageSort(searchParams.get('sort'));
@@ -53,15 +69,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ items: [], nextCursor: null });
   }
 
+  const anonymous = searchParams.get(PUBLIC_FEED_PARAM) === '1';
   const { browse, memberOrEditorSpaceIds, walletAddress, personalMemberSpaceId } =
-    await resolveExploreFeedRequestContext();
+    await resolveExploreFeedRequestContext(undefined, { anonymous });
 
   // GEO-3140. For you personalizes only for a viewer proven by a Privy identity token, and only
   // when gaia's private route is configured (GAIA_INTERNAL_TOKEN). GEO-3144's interleaving needs the
   // viewer on Best too, but only while it is switched on.
   const interleaving = feedInterleavingEnabled();
   const viewerId =
-    sort === 'best' && (pageSort === 'for-you' || interleaving)
+    !anonymous && sort === 'best' && (pageSort === 'for-you' || interleaving)
       ? await resolveForYouViewer(request, { walletAddress, personalMemberSpaceId })
       : null;
   const personalized = viewerId !== null;
@@ -135,7 +152,12 @@ export async function GET(request: Request) {
       nextCursor: personalized ? encodePersonalizedCursor(asOf, result.nextCursor) : result.nextCursor,
     };
     // A personalized page belongs to one person: never let any cache between here and them keep it.
-    return NextResponse.json(body, personalized ? { headers: { 'cache-control': 'private, no-store' } } : undefined);
+    if (personalized) return NextResponse.json(body, { headers: { 'cache-control': 'private, no-store' } });
+    // An empty page is never kept: it is as likely a dependency hiccup as a truth.
+    if (anonymous && isCacheablePublicFirstPage(searchParams) && items.length > 0) {
+      return NextResponse.json(body, { headers: { 'cache-control': PUBLIC_FEED_CACHE_CONTROL } });
+    }
+    return NextResponse.json(body);
   } catch (e) {
     console.error('explore feed', e);
     return feedUnavailableResponse();

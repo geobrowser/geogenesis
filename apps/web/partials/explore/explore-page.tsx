@@ -33,6 +33,7 @@ const EXPLORE_FEED_PROPS = {
   claimCardVariant: 'debate-panel-mobile',
   feedTopSpacingClassName: '',
   sendIdentityToken: true,
+  cdnFirstPage: true,
 } satisfies React.ComponentProps<typeof EntityFeed>;
 
 /**
