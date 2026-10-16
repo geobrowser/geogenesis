@@ -111,6 +111,8 @@ export type DebateMediaArtifactKind =
   | 'preview_image'
   | 'social_video'
   | 'social_preview_image'
+  | 'speaker_still_slot_1'
+  | 'speaker_still_slot_2'
   | 'transcript_json'
   | 'subtitle_srt'
   | 'subtitle_vtt'
