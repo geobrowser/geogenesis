@@ -1929,6 +1929,55 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.roomConnect).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the mic and the controls when the camera turned on beside it fails', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const audioTrack = createLocalAudioTrack();
+    mocks.createLocalTracks.mockResolvedValueOnce([audioTrack]);
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <MicOnlyHandover />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('1'));
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <MicOnlyHandover />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalledWith(audioTrack));
+    const connectsBefore = mocks.roomConnect.mock.calls.length;
+    mocks.createLocalTracks.mockRejectedValueOnce(
+      Object.assign(new Error('Could not start video source'), { name: 'NotReadableError' })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+
+    expect(
+      await screen.findByText('Your camera may be in use by another app. Close it and try again.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(audioTrack.stop).not.toHaveBeenCalled();
+    expect(mocks.roomConnect).toHaveBeenCalledTimes(connectsBefore);
+
+    const videoTrack = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+    mocks.createLocalTracks.mockResolvedValueOnce([videoTrack]);
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalledWith(videoTrack), {
+      timeout: 3000,
+    });
+    expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+    expect(
+      screen.queryByText('Your camera may be in use by another app. Close it and try again.')
+    ).not.toBeInTheDocument();
+    expect(mocks.createLocalTracks).toHaveBeenLastCalledWith(expect.objectContaining({ audio: false }));
+    expect(audioTrack.stop).not.toHaveBeenCalled();
+  });
+
   it('waits for a hand-off still in flight rather than closing it', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     let open!: (tracks: unknown[]) => void;
