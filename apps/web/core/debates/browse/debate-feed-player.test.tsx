@@ -6,7 +6,6 @@ import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/d
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations } from '~/core/debates/playback-utils';
 import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
-import { recordAnimationRestarts } from '~/core/debates/turn-timer-fixtures';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
 
 import { DebateFeedPlayer } from './debate-feed-player';
@@ -1945,7 +1944,11 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     ...overrides,
   });
   // Picks are placed on the player's clock from the debate's start.
-  const startedDebate = { ...debate, started_at: '2026-10-13T19:00:00.000Z' } as unknown as Debate;
+  const startedDebate = {
+    ...debate,
+    open_rounds: { required_rebuttal_rounds: 1 },
+    started_at: '2026-10-13T19:00:00.000Z',
+  } as unknown as Debate;
   const renderAt = (
     playheadSeconds: number,
     overrides: Parameters<typeof controllerFixture>[0] extends infer T ? Partial<T> : never
@@ -1957,9 +1960,8 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
   const stamps = (container: HTMLElement) =>
     [...container.querySelectorAll('[data-debate-stamp]')].map(stamp => stamp.getAttribute('data-debate-stamp'));
 
-  // The banner crosses the seam, so the top tile's name steps out from under it and comes back
-  // after the cut; the bottom tile's, half a player away, stays.
-  it('hides the top debater’s name while the banner is up, and only then', () => {
+  // Both identity rows leave with the caption and claim corners, then return after the cut.
+  it('hides both debaters’ names throughout the break, in sync with the caption', () => {
     const playbackBreaks = breaks({
       breaks: [extendBreak],
       picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
@@ -1968,33 +1970,64 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       ([...container.querySelectorAll('[data-debater-row]')] as HTMLElement[]).map(row => row.style.opacity);
 
     const { container, rerender } = renderAt(61.5, { playbackBreaks });
-    expect(rows(container)).toEqual(['1', '1']);
+    expect(rows(container)).toEqual(['0', '0']);
 
     mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 62.2, playbackBreaks });
     rerender(<DebateFeedPlayer debate={startedDebate} active />);
     expect(container.querySelector('[data-debate-banner]')).not.toBeNull();
-    expect(rows(container)).toEqual(['0', '1']);
+    expect(rows(container)).toEqual(['0', '0']);
 
     mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 2, playheadSeconds: 72.5, playbackBreaks });
     rerender(<DebateFeedPlayer debate={startedDebate} active />);
     expect(rows(container)).toEqual(['1', '1']);
   });
 
-  it('asks "Keep debating?" first, then stamps each pick onto its debater', () => {
-    const playbackBreaks = breaks({
-      breaks: [extendBreak],
-      picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
-    });
-    const { container, rerender } = renderAt(60.6, { playbackBreaks });
-    expect(container.querySelector('[data-debate-question]')?.textContent).toBe('Keep debating?');
-    expect(container.querySelector('[data-debate-banner]')).toBeNull();
+  it.each(['extend', 'final_end'] as const)(
+    'keeps "Keep debating?" with the votes until the %s title arrives',
+    kind => {
+      const playbackBreaks = breaks({
+        breaks: [{ ...extendBreak, kind, nextRoundIndex: kind === 'final_end' ? null : extendBreak.nextRoundIndex }],
+        picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
+      });
+      const { container, rerender } = renderAt(60.6, { playbackBreaks });
+      expect(container.querySelector('[data-debate-question]')?.textContent).toBe('Keep debating?');
+      expect(container.querySelector('[data-debate-banner]')).toBeNull();
 
-    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 61.5, playbackBreaks });
-    rerender(<DebateFeedPlayer debate={startedDebate} active />);
-    expect(container.querySelector('[data-debate-question]')).toBeNull();
-    expect(stamps(container)).toEqual(['extend', 'extend']);
-    // On the page ahead of its moment, held until the stamps have landed, so its roll-in plays whole.
-    expect((container.querySelector('[data-debate-banner]') as HTMLElement).style.animationDelay).toContain('1850ms');
+      mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 61.5, playbackBreaks });
+      rerender(<DebateFeedPlayer debate={startedDebate} active />);
+      const questionExit = container.querySelector('[data-debate-question-out]') as HTMLElement;
+      // The question holds with the revealed picks, then fades over the final 300ms before the title.
+      expect(questionExit.style.animationDelay).toContain('1550ms');
+      expect(questionExit.style.animationPlayState).toBe('paused');
+      expect(stamps(container)).toEqual(['extend', 'extend']);
+      // On the page ahead of its moment, held until the stamps have landed, so its roll-in plays whole.
+      expect((container.querySelector('[data-debate-banner]') as HTMLElement).style.animationDelay).toContain('1850ms');
+      expect(container.querySelector('[data-debate-banner]')?.getAttribute('data-debate-banner')).toBe(
+        kind === 'final_end' ? 'wrap' : 'round'
+      );
+    }
+  );
+
+  it('shows Extend, End and No pick as level glass pills on their own videos', () => {
+    for (const choice of ['extend', 'end', null] as const) {
+      const playbackBreaks = breaks({
+        breaks: [{ ...extendBreak, kind: 'final_end', nextRoundIndex: null }],
+        picks: choice ? [pick(0, 1, choice, '2026-10-13T19:01:01.000Z')] : [],
+      });
+      const { container, unmount } = renderAt(61.5, { playbackBreaks });
+      const pills = [...container.querySelectorAll<HTMLElement>('[data-debate-stamp]')];
+      expect(pills).toHaveLength(2);
+      expect(pills[0].getAttribute('data-debate-stamp')).toBe(choice ?? 'none');
+      expect(pills[0].className).toContain(
+        choice === 'extend' ? 'bg-white' : choice === 'end' ? 'bg-[rgba(36,36,40,0.48)]' : 'border-dashed'
+      );
+      for (const pill of pills) {
+        expect(pill.className).toContain('rounded-full');
+        expect(pill.style.transform).toBe('');
+      }
+      expect(container.innerHTML).not.toContain('purple');
+      unmount();
+    }
   });
 
   it('then says what the picks mean: the next round and who opens it', () => {
@@ -2005,10 +2038,17 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     const { container } = renderAt(62.1, { playbackBreaks });
     // The round in the badge's words at one size, and who opens it on its own line beneath.
     const banner = container.querySelector('[data-debate-banner="round"]');
-    expect(banner?.firstElementChild?.textContent).toBe('Round 2 · Rebuttal');
+    expect(banner?.firstElementChild?.textContent).toMatch(/^Round 2Rebuttal.+ opens$/);
+    expect(banner?.querySelector('span')?.textContent).toBe('Round 2');
     expect(banner?.querySelector('[data-debate-banner-sub]')?.textContent).toMatch(/^\S+ opens$/);
     expect((banner as HTMLElement | null)?.style.fontSize).toBe('');
-    expect(stamps(container)).toEqual(['extend', 'extend']);
+    const pickExits = [...container.querySelectorAll<HTMLElement>('[data-debate-pick-out]')];
+    expect(pickExits).toHaveLength(2);
+    expect(pickExits[0].style.animationDelay).toContain('2850ms');
+    const titleExit = container.querySelector('[data-debate-banner-out]') as HTMLElement;
+    expect(pickExits[0].style.animationDelay).toBe(titleExit.style.animationDelay);
+    // Picks stay fully visible while the round title arrives, then fade with it before the cut.
+    expect(pickExits[0].style.animationDelay).toBe(pickExits[1].style.animationDelay);
   });
 
   // The playhead's first sample in a break lands up to a quarter of a second in. Graphics mounted
@@ -2024,10 +2064,11 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(banner.style.animationDelay).toContain('300ms');
   });
 
-  it('rolls the banner out over the last moment before the cut', () => {
+  it('fades the announcement out in place before the cut', () => {
     const { container } = renderAt(62.5, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
     const out = container.querySelector('[data-debate-banner-out]') as HTMLElement;
-    expect(out.className).toContain('animate-debate-banner-out');
+    expect(out.className).toContain('fadeIn_300ms_linear_reverse_both');
+    expect(out.className).not.toContain('banner-out');
     // The cut is 3.15 s in; the roll-out takes the 0.3 s before it.
     expect(out.style.animationDelay).toContain('2850ms');
     expect(out.style.animationPlayState).toBe('paused');
@@ -2036,10 +2077,13 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
   it('holds the animations at the playhead, so a scrub into the break lands mid-stamp', () => {
     const { container } = renderAt(61.2, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
     const root = container.querySelector('[data-debate-break="extend"]') as HTMLElement;
-    expect(root.style.getPropertyValue('--break-t')).toBe('1200');
+    expect(root.style.getPropertyValue('--break-t')).toBe('');
+    expect((root.closest('[data-debate-ready]') as HTMLElement).style.getPropertyValue('--break-t')).toBe('1200');
     const second = container.querySelectorAll('[data-debate-stamp]')[1] as HTMLElement;
     expect(second.style.animationPlayState).toBe('paused');
-    expect(second.style.animationDelay).toContain('1380ms');
+    expect(second.style.animationDelay).toContain('1100ms');
+    const first = container.querySelector('[data-debate-stamp]') as HTMLElement;
+    expect(first.style.animationDelay).toBe(second.style.animationDelay);
   });
 
   /** Gives the recording a position on the debate's clock: running on with the fake clock from `fromS`, or held. */
@@ -2122,8 +2166,8 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(stamps(container)).toEqual(['extend', 'none']);
     const banner = container.querySelector('[data-debate-banner="wrap"]');
     expect(banner?.textContent).toBe('That’s a wrap');
-    // Purple like every other banner, so it stands out as much as a new round does.
-    expect(banner?.className).toContain('bg-purple');
+    expect(banner?.firstElementChild?.getAttribute('style')).toContain('--font-calibre');
+    expect(container.innerHTML).not.toContain('purple');
     // The reason sits beneath the banner, where the mockup puts it.
     expect(container.querySelector('[data-debate-break]')?.textContent).toMatch(/didn't pick in time$/);
   });
@@ -2133,7 +2177,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     const { container } = renderAt(60.5, { playbackBreaks: breaks({ breaks: [leadIn] }) });
     expect(container.querySelector('[data-debate-question]')).toBeNull();
     expect(stamps(container)).toEqual([]);
-    expect(container.querySelector('[data-debate-banner="round"]')?.textContent).toMatch(/^Round 2 · /);
+    expect(container.querySelector('[data-debate-banner="round"]')?.textContent).toMatch(/^Round 2Rebuttal/);
   });
 
   it('stamps "Ended early" and bands whose turn it is over an early end’s quiet', () => {
@@ -2149,7 +2193,39 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     });
     // In the breaks' design: a stamp on the debater who ended, a banner for the next speaker.
     expect(container.querySelector('[data-debate-stamp="ended"]')?.textContent).toBe('Ended early');
-    expect(container.querySelector('[data-debate-banner="turn"]')?.textContent).toMatch(/’s turn$/);
+    const next = container.querySelector('[data-debate-banner="turn"]');
+    expect(next?.textContent).toMatch(/’s turn$/);
+    expect(next?.className).toContain('rounded-full');
+    expect(container.querySelector('[data-debate-stamp="ended"]')?.className).toContain('border-dashed');
+  });
+
+  it('holds the next-speaker delay on the playhead while paused, and follows a scrub into the cue', () => {
+    vi.useFakeTimers();
+    try {
+      const playbackBreaks = breaks({
+        earlyEnds: [{ turnIndex: 0, nextTurnIndex: 1, startMs: 30_000, endMs: 33_000, endedSlot: 1, nextSlot: 2 }],
+      });
+      const { container, rerender } = renderAt(30.2, { playbackBreaks, playing: false });
+      const next = container.querySelector('[data-debate-banner="turn"]') as HTMLElement;
+      const clock = next.parentElement?.parentElement?.parentElement as HTMLElement;
+      expect(next.style.animationDelay).toContain('600ms');
+      expect(next.style.animationPlayState).toBe('paused');
+      expect(clock.style.getPropertyValue('--break-t')).toBe('200');
+      act(() => vi.advanceTimersByTime(2_000));
+      expect(clock.style.getPropertyValue('--break-t')).toBe('200');
+
+      mocks.controller = controllerFixture({
+        mutedByUser: false,
+        turnSlot: 1,
+        playheadSeconds: 30.9,
+        playbackBreaks,
+        playing: false,
+      });
+      rerender(<DebateFeedPlayer debate={startedDebate} active />);
+      expect(clock.style.getPropertyValue('--break-t')).toBe('900');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // GEO-3347: the stamp, its dim and the banner used to cut out in one frame.
@@ -2178,7 +2254,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       });
       rerender(<DebateFeedPlayer debate={startedDebate} active />);
       expect(stamp()?.closest('[data-room-leaving]')).not.toBeNull();
-      expect(banner()?.closest('[data-room-leaving]')?.className).toContain('animate-debate-banner-out');
+      expect(banner()?.closest('[data-room-leaving]')?.className).toContain('fadeIn_300ms_linear_reverse_both');
 
       act(() => vi.advanceTimersByTime(300));
       expect(stamp()).toBeNull();
@@ -2216,11 +2292,27 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
   const openRounds = { ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
   const at = (playheadSeconds: number) => controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds });
 
-  it('opens with the purple "Round 1 · Opening" banner instead of the round card', () => {
+  it('opens with stacked outlined type', () => {
     mocks.controller = at(0.5);
     const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
     expect(container.querySelector('[data-round-banner]')?.getAttribute('data-round-banner')).toBe('Round 1 · Opening');
     expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-banner]')?.textContent).toBe('Round 1Opening');
+    expect(container.innerHTML).not.toContain('bg-purple');
+  });
+
+  it('mounts the opening at frame zero and drives its entry and exit from one held clock', () => {
+    mocks.controller = at(0);
+    const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const banner = container.querySelector('[data-round-banner]') as HTMLElement;
+    expect(banner).not.toBeNull();
+    expect(banner.style.getPropertyValue('--break-t')).toBe('');
+    expect((banner.closest('[data-debate-ready]') as HTMLElement).style.getPropertyValue('--break-t')).toBe('0');
+    const exit = container.querySelector('[data-round-banner-out]') as HTMLElement;
+    expect(exit.style.animationDelay).toContain('1500ms');
+    expect((exit.firstElementChild as HTMLElement).style.animationDelay).toContain('0ms');
+    expect(exit.style.animationPlayState).toBe('paused');
+    expect((exit.firstElementChild as HTMLElement).style.animationPlayState).toBe('paused');
   });
 
   it('keeps the round card in a fixed-format debate', () => {
@@ -2230,83 +2322,36 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
     expect(container.querySelector('[data-round-banner]')).toBeNull();
   });
 
-  it('labels the round beside the timer as a purple tag', () => {
+  it('labels the round beside the timer in sentence case on glass', () => {
     mocks.controller = at(12);
     const open = render(<DebateFeedPlayer debate={openRounds} active />).container;
-    expect(open.querySelector('[data-round-badge] [data-round-tag]')?.className).toContain('bg-purple');
+    const tag = open.querySelector('[data-round-badge] [data-round-tag]');
+    expect(tag?.className).toContain('backdrop-blur');
+    expect(tag?.className).not.toContain('uppercase');
+    expect(tag?.textContent).toBe('Round 1 · Opening');
 
     mocks.controller = at(12);
     const fixed = render(<DebateFeedPlayer debate={debate} active />).container;
     expect(fixed.querySelector('[data-round-badge] [data-round-tag]')).toBeNull();
   });
 
-  it('builds the timer up over a turn’s last ten seconds and turns it red for the last five', () => {
-    const timer = (secondsLeft: number, d: Debate) => {
-      mocks.controller = { ...at(12), turnState: { slot: 1, seconds: secondsLeft, progress: 0.5 } };
-      return render(<DebateFeedPlayer debate={d} active />).container.querySelector('[data-turn-timer]');
-    };
-    expect(timer(18, openRounds)?.getAttribute('data-turn-timer')).toBe('steady');
-    expect(timer(8, openRounds)?.getAttribute('data-turn-timer')).toBe('building');
-    expect(timer(4, openRounds)?.getAttribute('data-turn-timer')).toBe('final');
-    // A fixed format keeps today's timer.
-    expect(timer(4, debate)?.getAttribute('data-turn-timer')).toBe('steady');
-    // Down to its ring, which jumps between samples as it always has rather than easing.
-    expect(timer(4, debate)?.innerHTML).not.toContain('turn-timer-rim]');
-  });
-
-  it('keeps the red rim draining across a second, restarting only the pulse', () => {
-    const { restarts, restore } = recordAnimationRestarts();
-    const at = (secondsLeft: number) => {
-      mocks.controller = {
-        ...controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 }),
-        turnState: { slot: 1, seconds: secondsLeft, progress: 0.9 },
-      };
-      return <DebateFeedPlayer debate={openRounds} active />;
-    };
-    const rim = (container: HTMLElement) => container.querySelector('[data-turn-timer-rim]');
-    try {
-      const view = render(at(3.9));
-      const before = rim(view.container);
-      expect(before).not.toBeNull();
-      restarts.length = 0;
-
-      view.rerender(at(3.4));
-      // Within a second: no pulse.
-      expect(restarts).toEqual([]);
-
-      view.rerender(at(2.9));
-      // A new second pulses, and the rim is the same element, so its drain carries on.
-      expect(restarts).toEqual(['none']);
-      expect(rim(view.container)).toBe(before);
-    } finally {
-      restore();
+  it('keeps the classic timer plain throughout the last ten seconds in both formats', () => {
+    for (const format of [openRounds, debate]) {
+      for (const seconds of [18, 10, 8, 5, 4, 1, 0]) {
+        mocks.controller = { ...at(12), turnState: { slot: 1, seconds, progress: 0.75 } };
+        const { container, unmount } = render(<DebateFeedPlayer debate={format} active />);
+        const timer = container.querySelector('[data-turn-timer]');
+        expect(timer?.getAttribute('data-turn-timer')).toBe('steady');
+        expect(timer?.innerHTML).not.toMatch(/bg-red|animate-|swell|glow/);
+        expect(timer?.getAttribute('style')).toBeNull();
+        expect(timer?.querySelector('[data-turn-timer-rim]')?.getAttribute('style')).toContain('90deg');
+        expect(timer?.querySelector('[data-turn-timer-rim]')?.className.includes('transition-[--turn-timer-rim]')).toBe(
+          format === openRounds
+        );
+        expect(container.querySelector('[data-round-badge]')?.getAttribute('style')).not.toContain('right:');
+        unmount();
+      }
     }
-  });
-
-  it('starts the red rim full as the timer turns red, rather than easing up from the turn’s progress', () => {
-    const at = (secondsLeft: number) => {
-      mocks.controller = {
-        ...controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 }),
-        turnState: { slot: 1, seconds: secondsLeft, progress: 0.75 },
-      };
-      return <DebateFeedPlayer debate={openRounds} active />;
-    };
-    const rim = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-turn-timer-rim]');
-
-    const view = render(at(5.4));
-    const turnRim = rim(view.container);
-    // Three quarters of the turn gone: the rim is a quarter of the way round.
-    expect(turnRim?.style.getPropertyValue('--turn-timer-rim')).toBe('90deg');
-
-    view.rerender(at(4.9));
-    const redRim = rim(view.container);
-    // A new element, so it shows its full five-second angle at once instead of transitioning to it.
-    expect(redRim).not.toBe(turnRim);
-    expect(redRim?.style.getPropertyValue('--turn-timer-rim')).toBe(`${(4.9 / 5) * 360}deg`);
-
-    view.rerender(at(3.9));
-    // Within the red phase it keeps draining on the same element.
-    expect(rim(view.container)).toBe(redRim);
   });
 
   it('draws a claim counter in each corner from the start, and the live cards only in a fixed format', () => {
@@ -2332,12 +2377,316 @@ describe('turnTimerScale', () => {
   });
 });
 
-describe('Open rounds in-app player: the last word (GEO-3277)', () => {
+describe('Open rounds in-app player: announcement visibility', () => {
   const openRounds = { ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
+
+  // Advance the media independently of React's quarter-second time samples.
+  const mediaFrames = (startMs: number) => {
+    let positionMs = startMs;
+    let id = 0;
+    const pending = new Map<number, FrameRequestCallback>();
+    mocks.livePosition = () => positionMs;
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(callback => {
+      pending.set(++id, callback);
+      return id;
+    });
+    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(frame => {
+      pending.delete(frame);
+    });
+    return (ms: number, beforePaint?: () => void) => {
+      positionMs = ms;
+      const callbacks = [...pending.values()];
+      pending.clear();
+      act(() => {
+        callbacks.forEach(callback => callback(performance.now()));
+        beforePaint?.();
+      });
+    };
+  };
+  const furniture = (container: HTMLElement) => [
+    ...container.querySelectorAll<HTMLElement>('[data-debater-row], [data-claim-corner]'),
+  ];
+  const expectFurniture = (container: HTMLElement, hidden: boolean) => {
+    for (const element of furniture(container)) {
+      expect(element.style.opacity).toBe(hidden ? '0' : '1');
+      expect(element.style.visibility).toBe(hidden ? 'hidden' : '');
+      expect(element.hasAttribute('inert')).toBe(hidden);
+    }
+  };
+  const breakAtSixty = (kind: 'lead_in' | 'extend' | 'final_end') => ({
+    breaks: [
+      {
+        kind,
+        roundIndex: 0,
+        nextRoundIndex: kind === 'final_end' ? null : 1,
+        decidingStartMs: 60_000,
+        startMs: 64_000,
+        endMs: 72_000,
+      },
+    ],
+    earlyEnds: [],
+    picks: [],
+  });
+
+  it.each(['lead_in', 'extend', 'final_end'] as const)(
+    'hides every covered element in the %s fade start frame',
+    kind => {
+      const frame = mediaFrames(60_050);
+      mocks.controller = controllerFixture({
+        mutedByUser: false,
+        turnSlot: 1,
+        playheadSeconds: 60.05,
+        subtitle: 'The current subtitle',
+        playbackBreaks: breakAtSixty(kind),
+      });
+      const { container, queryByText } = render(<DebateFeedPlayer debate={openRounds} active />);
+      const player = container.querySelector('[data-debate-ready]') as HTMLElement;
+      const overlay = container.querySelector('[data-debate-break]') as HTMLElement;
+      expectFurniture(container, false);
+      expect(queryByText('The current subtitle')).not.toBeNull();
+      frame(60_299);
+      expect(player.style.getPropertyValue('--break-t')).toBe('299');
+      expectFurniture(container, false);
+      frame(60_300, () => expectFurniture(container, true));
+      // The dim, title/question, and background visibility all read the same clock and commit before paint.
+      expect(player.style.getPropertyValue('--break-t')).toBe('300');
+      expect(overlay.style.getPropertyValue('--break-t')).toBe('');
+      expectFurniture(container, true);
+      expect(queryByText('The current subtitle')).toBeNull();
+      expect(container.querySelector('[data-turn-timer]')).toBeNull();
+      expect(container.querySelector('[data-round-badge]')).toBeNull();
+      frame(60_300); // buffering cannot advance either the fade or the background visibility.
+      expectFurniture(container, true);
+    }
+  );
+
+  it('restores once at the end of an opening and ignores late samples from inside that opening', () => {
+    const frame = mediaFrames(1_700);
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 1.7,
+      subtitle: 'Speaking again',
+    });
+    const { container, rerender, queryByText } = render(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, true);
+    frame(1_800, () => expectFurniture(container, false));
+    expectFurniture(container, false);
+    expect(queryByText('Speaking again')).not.toBeNull();
+    expect(container.querySelector('[data-turn-timer]')).not.toBeNull();
+    // The corner label returns at full strength with the other furniture, without a second fade.
+    expect((container.querySelector('[data-round-badge]') as HTMLElement).style.opacity).toBe('1');
+    for (const sample of [1.72, 1.9, 1.75, 2]) {
+      mocks.controller = controllerFixture({
+        mutedByUser: false,
+        turnSlot: 1,
+        playheadSeconds: sample,
+        subtitle: 'Speaking again',
+      });
+      rerender(<DebateFeedPlayer debate={openRounds} active />);
+      expectFurniture(container, false);
+      frame(1_850);
+      expectFurniture(container, false);
+    }
+  });
+
+  it('keeps restored names and counters visible when the media clock jitters backwards across the opening boundary', () => {
+    const frame = mediaFrames(1_700);
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 1.7 });
+    const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, true);
+    for (const ms of [1_801, 1_795, 1_820, 1_780, 1_840]) {
+      frame(ms, () => expectFurniture(container, false));
+    }
+  });
+
+  it('does not replay the opening after a stale sample arrives while the media clock is unavailable', () => {
+    const frame = mediaFrames(1_700);
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 1.7 });
+    const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
+    frame(1_850);
+    expectFurniture(container, false);
+    mocks.livePosition = null;
+    for (const sample of [1.9, 1.72, 1.95, 0.5, 1.75]) {
+      mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: sample });
+      rerender(<DebateFeedPlayer debate={openRounds} active />);
+      expectFurniture(container, false);
+    }
+  });
+
+  it.each(['lead_in', 'extend'] as const)(
+    'restores once after the %s round cut has published the incoming turn',
+    kind => {
+      const frame = mediaFrames(62_100);
+      const playbackBreaks = breakAtSixty(kind);
+      mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 62.1, playbackBreaks });
+      const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
+      expectFurniture(container, true);
+      frame(72_000);
+      // Do not flash the outgoing turn's controls while its seek is being published.
+      expectFurniture(container, true);
+      for (const sample of [72.1, 62.9, 72.2]) {
+        mocks.controller = controllerFixture({
+          mutedByUser: false,
+          turnSlot: 2,
+          playheadSeconds: sample,
+          playbackBreaks,
+        });
+        rerender(<DebateFeedPlayer debate={openRounds} active />);
+        expectFurniture(container, false);
+        frame(72_200);
+        expectFurniture(container, false);
+      }
+      mocks.livePosition = null;
+      mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 2, playheadSeconds: 62.9, playbackBreaks });
+      rerender(<DebateFeedPlayer debate={openRounds} active />);
+      expectFurniture(container, false);
+      const seekBack = vi.fn<(seconds: number) => void>();
+      seekBack.mockImplementation(seconds => {
+        mocks.controller = controllerFixture({
+          mutedByUser: false,
+          turnSlot: 2,
+          playheadSeconds: seconds,
+          playbackBreaks,
+          seekBoth: seekBack,
+        });
+      });
+      seekBack(62.9);
+      rerender(<DebateFeedPlayer debate={openRounds} active />);
+      fireEvent.change(container.querySelector('input[type="range"]') as HTMLInputElement, {
+        target: { value: '61.5' },
+      });
+      expect((container.querySelector('[data-debate-ready]') as HTMLElement).style.getPropertyValue('--break-t')).toBe(
+        '1500'
+      );
+      expectFurniture(container, true);
+    }
+  );
+
+  it('does not flash the background between the final wrap and the end card, and restores it on replay', () => {
+    const frame = mediaFrames(63_100);
+    const playbackBreaks = breakAtSixty('final_end');
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 63.1, playbackBreaks });
+    const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, true);
+    frame(72_000);
+    expectFurniture(container, true);
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 72.1,
+      playbackBreaks,
+      playbackEnded: false,
+    });
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, true);
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 72.1,
+      playbackBreaks,
+      playbackEnded: true,
+    });
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, true);
+    frame(12_000);
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12, playbackBreaks });
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, false);
+  });
+
+  it('hides and restores covered furniture together through every round, a pause, and the final wrap', () => {
+    const subtitle = 'The current subtitle';
+    const at = (playheadSeconds: number, playing = true, finalWrap = false) =>
+      controllerFixture({
+        mutedByUser: false,
+        turnSlot: 1,
+        playheadSeconds,
+        playing,
+        subtitle,
+        playbackBreaks: {
+          breaks: finalWrap
+            ? [
+                {
+                  kind: 'final_end',
+                  roundIndex: 1,
+                  nextRoundIndex: null,
+                  decidingStartMs: 60_000,
+                  startMs: 64_000,
+                  endMs: 72_000,
+                },
+              ]
+            : [],
+          earlyEnds: [],
+          picks: [],
+        },
+      });
+    mocks.controller = at(12);
+    const { container, rerender, queryByText } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const top = container.querySelector('[data-debate-slot="1"]') as HTMLElement;
+    const row = top.querySelector('[data-debater-row]') as HTMLElement;
+    const furniture = [...container.querySelectorAll<HTMLElement>('[data-debater-row], [data-claim-corner]')];
+    expect(furniture).toHaveLength(4);
+    fireEvent.focus(row.querySelector('button') as HTMLElement);
+    fireEvent.click(top.querySelector('[data-testid="claim-counter"]') as HTMLElement);
+
+    for (const [seconds, playing, wrap] of [
+      [0.1, true, false],
+      [0.5, false, false],
+      [1.7, true, false],
+      [60.1, true, false],
+      [62.2, true, true],
+      [63, false, true],
+    ] as const) {
+      mocks.controller = at(seconds, playing, wrap);
+      rerender(<DebateFeedPlayer debate={openRounds} active />);
+      expect(container.querySelector(wrap ? '[data-debate-banner="wrap"]' : '[data-round-banner]')).not.toBeNull();
+      for (const element of furniture) {
+        expect(element.style.opacity).toBe('0');
+        expect(element.style.visibility).toBe('hidden');
+        expect(element.hasAttribute('inert')).toBe(true);
+        expect(element.className).not.toContain('transition-[padding-bottom,opacity]');
+      }
+      expect(queryByText(subtitle)).toBeNull();
+      expect(container.querySelector('[data-turn-timer]')).toBeNull();
+      expect(container.querySelector('[data-round-badge]')).toBeNull();
+    }
+
+    mocks.controller = at(12);
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    for (const element of furniture) {
+      expect(element.style.opacity).toBe('1');
+      expect(element.style.visibility).toBe('');
+      expect(element.hasAttribute('inert')).toBe(false);
+    }
+    expect(queryByText(subtitle)).not.toBeNull();
+    expect(container.querySelector('[data-turn-timer]')).not.toBeNull();
+    expect(container.querySelector('[data-round-badge]')).not.toBeNull();
+  });
+
+  it('puts play and pause feedback above the popup without dismissing a paused announcement', () => {
+    const controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 0.5 });
+    mocks.controller = controller;
+    const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const video = container.querySelector('[aria-label="Pause or play"]') as HTMLElement;
+    fireEvent.click(video);
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+    const feedback = container.querySelector('[data-playback-feedback]') as HTMLElement;
+    expect(feedback.className).toContain('z-30');
+    expect(feedback.className).toContain('opacity-100');
+
+    mocks.controller = { ...controller, playing: false };
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    expect(container.querySelector('[data-round-banner]')).not.toBeNull();
+    fireEvent.click(video);
+    expect(controller.togglePlayback).toHaveBeenCalledTimes(2);
+    expect(feedback.className).toContain('z-30');
+    expect(feedback.className).toContain('opacity-100');
+  });
 
   // Copilot, #2843: under a banner the corner faded out but stayed clickable, and an open list faded
   // with it.
-  it('steps the claim corner out from under a banner, and keeps it while its list is open', () => {
+  it('keeps an active claim list hidden while an announcement covers it', () => {
     const extend = {
       kind: 'extend' as const,
       roundIndex: 0,
@@ -2358,11 +2707,13 @@ describe('Open rounds in-app player: the last word (GEO-3277)', () => {
     expect(corner().hasAttribute('data-yield')).toBe(true);
 
     act(() => (container.querySelector('[data-debate-slot="1"] [data-testid="claim-counter"]') as HTMLElement).click());
-    expect(corner().style.opacity).toBe('1');
-    expect(corner().hasAttribute('data-yield')).toBe(false);
+    expect(corner().style.opacity).toBe('0');
+    expect(corner().style.visibility).toBe('hidden');
+    expect(corner().hasAttribute('inert')).toBe(true);
+    expect(corner().hasAttribute('data-yield')).toBe(true);
   });
 
-  it('tags the last speaker before a pick "Last word", and no one else', () => {
+  it('never shows a Last word label, including before a pick', () => {
     // Round 2's closing turn (index 3) ends at 120 s and an Extend pick follows it.
     const turnSegments: DebateMediaTurnSegment[] = [
       { turn_index: 2, participant_slot: 1, output_start_ms: 60_000, output_end_ms: 90_000, duration_ms: 30_000 },
@@ -2391,11 +2742,9 @@ describe('Open rounds in-app player: the last word (GEO-3277)', () => {
         playbackBreaks,
       });
       const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
-      return [...container.querySelectorAll('[data-last-word]')].map(tag =>
-        tag.closest('[data-debate-slot]')?.getAttribute('data-debate-slot')
-      );
+      return [...container.querySelectorAll('[data-last-word]')];
     };
-    expect(tagAt(100)).toEqual(['2']);
+    expect(tagAt(100)).toEqual([]);
     expect(tagAt(70)).toEqual([]);
   });
 });

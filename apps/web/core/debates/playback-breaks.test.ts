@@ -146,10 +146,17 @@ describe('breakAnnouncesRound', () => {
 
 describe('earlyEndCueAt', () => {
   it('covers the quiet between Preston’s last word and Adam’s first, and a moment past it', () => {
-    expect(earlyEndCueAt(BREAKS.earlyEnds, 270_944)).toEqual({ endedSlot: 1, nextSlot: 2 });
+    expect(earlyEndCueAt(BREAKS.earlyEnds, 270_944)).toEqual({
+      endedSlot: 1,
+      nextSlot: 2,
+      ageMs: 0,
+      durationMs: 4_406,
+    });
     expect(earlyEndCueAt(BREAKS.earlyEnds, 274_650 + EARLY_END_HOLD_MS - 1)).toEqual({
       endedSlot: 1,
       nextSlot: 2,
+      ageMs: 4_405,
+      durationMs: 4_406,
     });
     expect(earlyEndCueAt(BREAKS.earlyEnds, 270_943)).toBeNull();
     expect(earlyEndCueAt(BREAKS.earlyEnds, 274_650 + EARLY_END_HOLD_MS)).toBeNull();

@@ -171,7 +171,9 @@ export function roundCardAt(
   turnCount: TurnCount,
   playheadSeconds: number,
   /** A round something else already announced, as a condensed Open rounds break does (GEO-3277). */
-  announced?: (round: number) => boolean
+  announced?: (round: number) => boolean,
+  /** Mount a transparent start frame for smooth Open rounds playback. */
+  includeStart = false
 ): RoundCue | null {
   const current = currentSpan(spans, playheadSeconds);
   if (!current || announced?.(roundOf(current))) return null;
@@ -181,7 +183,7 @@ export function roundCardAt(
 
   const untilEnd = ROUND_CARD_MS - ageMs;
   const opacity = ageMs < FADE_IN_MS ? ageMs / FADE_IN_MS : untilEnd < FADE_OUT_MS ? untilEnd / FADE_OUT_MS : 1;
-  if (opacity <= 0) return null;
+  if (opacity <= 0 && !includeStart) return null;
 
   return { ...cueFor(current, turnCount, opacity), ageMs };
 }

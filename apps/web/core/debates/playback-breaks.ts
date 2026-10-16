@@ -266,13 +266,21 @@ export type EarlyEndCue = {
   /** Who ended their turn early, and who speaks next. */
   endedSlot: ParticipantSlot;
   nextSlot: ParticipantSlot;
+  /** The cue's playhead clock, so delayed labels survive pauses and scrubs. */
+  ageMs: number;
+  durationMs: number;
 };
 
 /** "Ended early" and whose turn it is, over an early end's quiet and a moment past it. */
 export function earlyEndCueAt(earlyEnds: readonly PlayerEarlyEnd[], playheadMs: number): EarlyEndCue | null {
   const current = earlyEnds.find(entry => playheadMs >= entry.startMs && playheadMs < entry.endMs + EARLY_END_HOLD_MS);
   if (!current?.endedSlot || !current.nextSlot) return null;
-  return { endedSlot: current.endedSlot, nextSlot: current.nextSlot };
+  return {
+    endedSlot: current.endedSlot,
+    nextSlot: current.nextSlot,
+    ageMs: playheadMs - current.startMs,
+    durationMs: current.endMs + EARLY_END_HOLD_MS - current.startMs,
+  };
 }
 
 /**

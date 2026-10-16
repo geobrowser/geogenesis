@@ -5,31 +5,30 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { ActionSurface, ActionSurfaceDiv } from '~/core/action-context-provider';
-import type { DebateClaim } from '~/core/debates/api';
+import type { DebateClaim, DebateParticipant } from '~/core/debates/api';
 import type { StackedCard } from '~/core/debates/claim-ticker';
+import { speakerLabel } from '~/core/debates/playback-utils';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
+import { Avatar } from '~/design-system/avatar';
 import { TargetSolid } from '~/design-system/icons/target-solid';
 
 import { ClaimIconButton } from './debate-claim-ticker';
-import { LABEL_FONT, STAMP_CLASS, STAMP_FONT, TAG_CLASS } from './stamp-styles';
+import { PLAYER_GLASS_CLASS, PLAYER_LABEL_FONT } from './player-overlay-styles';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 
-/** How long the "+1 claim" takes to come out of the counter and go. Matches its animations below. */
-const PLUS_ONE_MS = 1_100;
-/** How long the newest claim's card stays tinted after its +1, fading as it goes. */
-const FRESH_MS = 3_000;
 /** The pause on the video before the list opens, and after the pointer leaves before it closes. */
 const OPEN_AFTER_MS = 150;
 const CLOSE_AFTER_MS = 250;
+const LIST_EXIT_MS = 180;
 
 /**
  * One debater's claims in an Open rounds debate (GEO-3317): a count rather than each claim's text
  * over the video.
  *
  * - The counter sits in the tile's bottom-right corner from the start, at 0.
- * - When a claim is said it goes up by one, and a "+1 claim" rises out of it and fades.
+ * - When a claim is said the count goes up without animation.
  * - Resting the pointer on the counter opens what this debater has claimed so far, newest nearest
  *   the counter, each with the vote. The list is part of the counter's box, so moving up into it
  *   keeps it open; it closes a moment after the pointer leaves both. A tap on the counter does the
@@ -42,24 +41,21 @@ const CLOSE_AFTER_MS = 250;
  */
 export function DebateClaimCounter({
   history,
-  playheadMs,
   name,
+  speaker = null,
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
-  onSeeAll,
   onActiveChange,
 }: {
   /** What this debater has claimed so far, oldest first. */
   history: StackedCard[];
-  playheadMs: number;
-  /** The debater's first name, for the list's header. */
+  /** Fallback name for a claim card whose speaker is unavailable. */
   name: string;
+  speaker?: DebateParticipant | null;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string, position: boolean | null) => void;
-  /** Opens the debate's Claims panel. Without it, the list has no "See all". */
-  onSeeAll?: () => void;
   /** Whether the list is open or a keyboard is inside it, so the player keeps the corner visible. */
   onActiveChange?: (active: boolean) => void;
 }) {
@@ -81,11 +77,16 @@ export function DebateClaimCounter({
   const pressing = React.useRef(false);
 
   const count = history.length;
-  const newest = history.at(-1);
-  const newestAgeMs = newest ? playheadMs - newest.window.startMs : Number.POSITIVE_INFINITY;
-  const popping = newest !== undefined && newestAgeMs >= 0 && newestAgeMs < PLUS_ONE_MS;
-  const fresh = newest !== undefined && newestAgeMs >= 0 && newestAgeMs < FRESH_MS;
   const open = !dismissed && (hovered || pinned || keyboardInside) && count > 0;
+  const [listPresent, setListPresent] = React.useState(false);
+  React.useEffect(() => {
+    if (open) {
+      setListPresent(true);
+      return;
+    }
+    const timer = setTimeout(() => setListPresent(false), LIST_EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [open]);
   const active = open || keyboardInside;
   React.useEffect(() => onActiveChange?.(active), [active, onActiveChange]);
 
@@ -152,7 +153,7 @@ export function DebateClaimCounter({
       onPointerCancel={() => {
         pressing.current = false;
       }}
-      // Keyboard focus anywhere inside (the counter, a vote, See all) holds the list open, so the
+      // Keyboard focus anywhere inside (the counter or a vote) holds the list open, so the
       // control a keyboard user is on is never unmounted under them. It lets go when focus leaves.
       onFocus={() => {
         if (!pressing.current) setKeyboardInside(true);
@@ -165,36 +166,30 @@ export function DebateClaimCounter({
         if (!pointerOver) releaseDismissal();
       }}
     >
-      {open && (
-        <ClaimList
-          history={history}
-          name={name}
-          freshClaimId={fresh ? newest.window.claim.id : null}
-          freshness={fresh ? 1 - newestAgeMs / FRESH_MS : 0}
-          rowsByClaimId={rowsByClaimId}
-          entitiesByClaimId={entitiesByClaimId}
-          onAnswered={onAnswered}
-          onSeeAll={onSeeAll}
-        />
+      {(open || listPresent) && count > 0 && (
+        <div
+          data-claim-list-presence={open ? 'open' : 'closed'}
+          inert={!open}
+          aria-hidden={!open || undefined}
+          className={cx(
+            'transition-[opacity,translate] duration-180 ease-out motion-reduce:transition-none starting:opacity-0 motion-safe:starting:translate-y-[0.8cqw]',
+            open
+              ? 'opacity-100 motion-safe:translate-y-0'
+              : 'pointer-events-none opacity-0 motion-safe:translate-y-[0.8cqw]'
+          )}
+        >
+          <ClaimList
+            active={open}
+            history={history}
+            name={name}
+            speaker={speaker}
+            rowsByClaimId={rowsByClaimId}
+            entitiesByClaimId={entitiesByClaimId}
+            onAnswered={onAnswered}
+          />
+        </div>
       )}
       <span className="relative inline-flex">
-        {popping && (
-          // Three layers, three motions, as the mockup moves it: rising its own height and a gap out
-          // of the counter (500 ms), growing from half size (350 ms), and fading in by 88 ms and out
-          // over its last 300 ms. It starts behind the counter, anchored to its right edge.
-          <span
-            key={newest.window.claim.id}
-            aria-hidden
-            data-claim-plus-one
-            className="pointer-events-none absolute right-0 bottom-0 z-0 motion-safe:animate-[claimPlusRise_500ms_cubic-bezier(0.33,1,0.68,1)_both] motion-reduce:hidden"
-          >
-            <span className="block origin-bottom-right motion-safe:animate-[claimPlusGrow_350ms_cubic-bezier(0.33,1,0.68,1)_both]">
-              <span className="block motion-safe:animate-[claimPlusFade_1100ms_linear_both]">
-                <ClaimStamp>+1 claim</ClaimStamp>
-              </span>
-            </span>
-          </span>
-        )}
         <button
           ref={countRef}
           type="button"
@@ -202,15 +197,9 @@ export function DebateClaimCounter({
           aria-expanded={open}
           aria-label={`${count} ${count === 1 ? 'claim' : 'claims'} so far. ${open ? 'Hide' : 'Show'} them`}
           onClick={toggle}
-          className="relative z-[1] cursor-pointer"
+          className="relative z-[1] inline-flex cursor-pointer"
         >
-          {/* The bump as the +1 leaves: a half sine up to 1.22x and back, from the right edge. */}
-          <span
-            key={popping ? newest.window.claim.id : 'still'}
-            className={cx('block origin-right', popping && 'motion-safe:animate-[claimCounterBump_450ms_linear]')}
-          >
-            <ClaimCount count={count} />
-          </span>
+          <ClaimCount count={count} />
         </button>
       </span>
     </div>
@@ -218,7 +207,7 @@ export function DebateClaimCounter({
 }
 
 /**
- * The count beside the target icon, on the round tag's purple, at the mockup's size.
+ * The count beside the target icon, on the player's glass pill.
  *
  * The icon sits inline on the number's baseline and drops by 0.17em, which puts its middle on the
  * middle of the digits (Geist's cap height) in every browser. Centring with flexbox centres the
@@ -227,7 +216,10 @@ export function DebateClaimCounter({
  */
 function ClaimCount({ count }: { count: number }) {
   return (
-    <span className={cx(TAG_CLASS, 'inline-block text-[2.6cqw] tabular-nums')} style={LABEL_FONT}>
+    <span
+      className={cx(PLAYER_GLASS_CLASS, 'inline-block text-[2.6cqw] text-white tabular-nums')}
+      style={PLAYER_LABEL_FONT}
+    >
       <span className="mr-[0.4em] inline-block align-[-0.17em]">
         <TargetSolid />
       </span>
@@ -236,33 +228,22 @@ function ClaimCount({ count }: { count: number }) {
   );
 }
 
-/** The +1's face: the breaks' stamp at 3.6cqw, leaning a little. */
-function ClaimStamp({ children }: { children: React.ReactNode }) {
-  return (
-    <span className={cx(STAMP_CLASS, 'inline-block rotate-[-1.6deg] text-[3.6cqw] text-purple')} style={STAMP_FONT}>
-      {children}
-    </span>
-  );
-}
-
 function ClaimList({
+  active,
   history,
   name,
-  freshClaimId,
-  freshness,
+  speaker,
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
-  onSeeAll,
 }: {
+  active: boolean;
   history: StackedCard[];
   name: string;
-  freshClaimId: string | null;
-  freshness: number;
+  speaker: DebateParticipant | null;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string, position: boolean | null) => void;
-  onSeeAll?: () => void;
 }) {
   // Newest first in the document, laid out bottom-up: the newest sits nearest the counter, and a
   // list taller than its cap opens scrolled to it, older claims above.
@@ -272,31 +253,11 @@ function ClaimList({
   const paint = React.useCallback(() => {
     if (scrollRef.current) paintTopFade(scrollRef.current, fades);
   }, [fades]);
-  // On every layout of the list (a claim arriving, a card tinting) and on every scroll.
+  // On every layout of the list and on every scroll.
   React.useLayoutEffect(paint);
 
   return (
-    <div data-claim-list className="grid w-[76cqw] gap-[1.2cqw]">
-      <div
-        className="flex items-baseline justify-between gap-[2cqw] px-[0.4cqw] text-[2.8cqw] leading-none font-medium text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]"
-        style={LABEL_FONT}
-      >
-        <span className="truncate">
-          {name}’s claims · {history.length}
-        </span>
-        {onSeeAll && (
-          <button
-            type="button"
-            onClick={event => {
-              event.stopPropagation();
-              onSeeAll();
-            }}
-            className="shrink-0 text-white/80 underline underline-offset-[0.3em] hover:text-white"
-          >
-            See all
-          </button>
-        )}
-      </div>
+    <div data-claim-list className="w-[76cqw]">
       {/* Never more than about two and a half cards tall: older claims scroll, fading at the top,
           and the list stays clear of the round tag and timer at the tile's top. */}
       <div
@@ -306,9 +267,11 @@ function ClaimList({
       >
         {newestFirst.map(card => (
           <ClaimListCard
+            active={active}
             key={card.window.claim.id}
             card={card}
-            freshness={card.window.claim.id === freshClaimId ? freshness : 0}
+            name={name}
+            speaker={speaker}
             row={rowsByClaimId.get(card.window.claim.id) ?? null}
             entity={entitiesByClaimId.get(card.window.claim.id) ?? null}
             onAnswered={onAnswered}
@@ -348,9 +311,14 @@ function paintTopFade(list: HTMLElement, fades: boolean) {
   }
 }
 
-function ClaimListCard(props: {
+function ClaimListCard({
+  active,
+  ...props
+}: {
+  active: boolean;
   card: StackedCard;
-  freshness: number;
+  name: string;
+  speaker: DebateParticipant | null;
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
@@ -359,26 +327,32 @@ function ClaimListCard(props: {
   if (!claim.spaceId) return null;
   return (
     // The same surface as the live claim card it replaces, so votes stay comparable across the two.
-    <ActionSurface asChild value={{ component: 'debate_claim_ticker', target_id: claim.id, target_type: 'claim' }}>
+    <ActionSurface
+      asChild
+      trackImpression={active}
+      value={{ component: 'debate_claim_ticker', target_id: claim.id, target_type: 'claim' }}
+    >
       <ClaimListCardBody {...props} spaceId={claim.spaceId} />
     </ActionSurface>
   );
 }
 
 /**
- * A claim and its vote column: Agree, the share who agree, Disagree. The share only shows once a
- * claim has a vote. Thumbs are solid so they read at this size, each with a 24px target.
+ * The classic card: debater, agreement percentage and thumbs in a header above the claim.
+ * The share only shows once a claim has votes; the outlined thumbs keep a 24px minimum target.
  */
 function ClaimListCardBody({
   card,
-  freshness,
+  name,
+  speaker,
   row,
   entity,
   onAnswered,
   spaceId,
 }: {
   card: StackedCard;
-  freshness: number;
+  name: string;
+  speaker: DebateParticipant | null;
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
@@ -404,7 +378,7 @@ function ClaimListCardBody({
         title={control.actionTitle(side) || label}
         onClick={() => control.respond(side)}
         tone="glass"
-        layout="column"
+        layout="header"
       />
     );
   };
@@ -414,34 +388,23 @@ function ClaimListCardBody({
     // measures (and so reports an impression) through an `ActionSurfaceDiv` beneath it.
     <ActionSurfaceDiv
       data-claim-list-card={claim.id}
-      data-fresh={freshness > 0 || undefined}
-      className="grid grid-cols-[1fr_auto] items-center gap-x-[2.4cqw] rounded-[4px] [mask-image:var(--claim-ramp,none)] py-[1.4cqw] pr-[1.2cqw] pl-[2.6cqw] text-white backdrop-blur-[22px] transition-[background-color,box-shadow] duration-300 [-webkit-mask-image:var(--claim-ramp,none)]"
-      // The newest claim's tint fades over its first three seconds, as in the mockup.
-      style={
-        freshness > 0
-          ? {
-              backgroundColor: `color-mix(in srgb, var(--color-purple) ${(18 + 25 * freshness).toFixed(1)}%, transparent)`,
-              // The purple lifted 40% toward white, as the mockup's lighter edge.
-              boxShadow: `inset 0 0 0 0.3cqw color-mix(in srgb, color-mix(in srgb, var(--color-purple) 60%, white) ${(100 * freshness).toFixed(1)}%, transparent)`,
-            }
-          : { backgroundColor: 'rgba(21, 21, 21, 0.55)' }
-      }
+      className="grid gap-[1.2cqw] rounded-[8px] bg-[#151515]/55 [mask-image:var(--claim-ramp,none)] p-[2.4cqw] text-left text-white backdrop-blur-[22px] [-webkit-mask-image:var(--claim-ramp,none)]"
     >
-      <span className="line-clamp-3 text-[3.3cqw] leading-[1.25]">{claim.text}</span>
-      <span className="grid min-w-[7cqw] content-center justify-items-center" style={LABEL_FONT}>
-        {vote(true)}
-        {summary.percent === null ? (
-          <span aria-hidden className="h-[2.4cqw]" />
-        ) : (
-          <span
-            className="py-[0.6cqw] text-[2.6cqw] leading-none font-semibold tabular-nums"
-            title={`${summary.percent}% agree`}
-          >
-            {summary.percent}%
-          </span>
-        )}
-        {vote(false)}
-      </span>
+      <div
+        data-claim-list-header
+        className="flex items-center gap-[1.2cqw] text-[2.7cqw] leading-none whitespace-nowrap"
+      >
+        <span className="block size-[3.4cqw] shrink-0 overflow-hidden rounded-full bg-white [&>svg]:size-full">
+          <Avatar avatarUrl={speaker?.avatar_cid} value={speaker?.profile_space_id ?? name} size={16} />
+        </span>
+        <span className="min-w-0 truncate">{speaker ? speakerLabel(speaker) : name}</span>
+        {summary.percent !== null && <span className="shrink-0 text-white/70">· {summary.percent}% agree</span>}
+        <span className="ml-auto flex shrink-0 gap-[1.6cqw]">
+          {vote(true)}
+          {vote(false)}
+        </span>
+      </div>
+      <div className="line-clamp-2 text-[3.3cqw] leading-[1.25]">{claim.text}</div>
     </ActionSurfaceDiv>
   );
 }
