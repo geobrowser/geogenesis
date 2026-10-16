@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useFeatureFlag } from '~/core/state/feature-flags';
+
 import { Avatar } from '~/design-system/avatar';
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -45,6 +47,8 @@ export function ChallengeAcceptedPrompt({
   const other = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
 
   useScrollLock();
+  // Leads into the claim picker, which is audio-only without the flag.
+  const videoEnabled = useFeatureFlag('debateVideo');
 
   if (!you || !other) return null;
 
@@ -71,6 +75,7 @@ export function ChallengeAcceptedPrompt({
             avatarValue={you.profile_space_id}
             initialJoinState={initialJoinState}
             onJoinStateChange={rememberChoice}
+            camera={videoEnabled}
             fallback={<RematchParticipant participant={you} label="You" />}
           />
           <div className="relative grid w-7 place-items-center">

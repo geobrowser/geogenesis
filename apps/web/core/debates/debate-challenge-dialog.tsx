@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useFeatureFlag } from '~/core/state/feature-flags';
+
 import { Avatar } from '~/design-system/avatar';
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -47,6 +49,8 @@ export function DebateChallengeDialog({
   const other = challenge.requester;
 
   useScrollLock();
+  // Leads into the claim picker, which is audio-only without the flag.
+  const videoEnabled = useFeatureFlag('debateVideo');
 
   const shownJoinState = React.useRef<DebateJoinState>({ micOn: false, cameraOn: false });
   const rememberShownJoinState = React.useCallback((state: DebateJoinState) => {
@@ -88,6 +92,7 @@ export function DebateChallengeDialog({
             avatarValue={you.profile_space_id}
             fallback={<ChallengeParticipant participant={you} label="You" />}
             onJoinStateChange={rememberShownJoinState}
+            camera={videoEnabled}
           />
           <div className="relative grid w-7 place-items-center">
             <span

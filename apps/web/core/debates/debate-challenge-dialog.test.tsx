@@ -9,6 +9,12 @@ import type { DebateChallenge } from './api';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { registerLobbyCapture } from './lobbies/step-out';
 
+const flags = vi.hoisted(() => ({ debateVideo: true }));
+
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (id: string) => (id === 'debateVideo' ? flags.debateVideo : false),
+}));
+
 const media = vi.hoisted(() => ({
   releaseSession: vi.fn(),
   beginSession: vi.fn(),
@@ -68,6 +74,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof DebateChallenge
 let permission: PermissionState = 'prompt';
 
 beforeEach(() => {
+  flags.debateVideo = true;
   permission = 'prompt';
   Object.defineProperty(navigator, 'permissions', {
     configurable: true,
@@ -141,6 +148,22 @@ describe('DebateChallengeDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
 
     expect(onAccept).toHaveBeenCalledWith({ micOn: false, cameraOn: true });
+  });
+
+  // Without debateVideo the picker it leads to is audio-only, so the card offers the mic alone.
+  it('offers and opens the mic alone with debateVideo off', async () => {
+    flags.debateVideo = false;
+    permission = 'granted';
+    media.ensurePreview.mockResolvedValue([{ mediaStreamTrack: { kind: 'audio' } }]);
+    const onAccept = vi.fn();
+    renderDialog({ onAccept });
+
+    expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
+    expect(media.ensurePreview).toHaveBeenCalledWith({ audio: true, video: false });
+    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+    expect(onAccept).toHaveBeenCalledWith({ micOn: true, cameraOn: false });
   });
 
   it('stops the devices when the card is dismissed', () => {

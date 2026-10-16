@@ -10,6 +10,12 @@ import { ChallengeAcceptedPrompt } from './challenge-accepted-prompt';
 import { registerLobbyCapture } from './lobbies/step-out';
 import { clearRematchJoinIntents, readRematchJoinIntent, rememberRematchJoinIntent } from './rematch-join-intent';
 
+const flags = vi.hoisted(() => ({ debateVideo: true }));
+
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (id: string) => (id === 'debateVideo' ? flags.debateVideo : false),
+}));
+
 const media = vi.hoisted(() => ({
   releaseSession: vi.fn(),
   beginSession: vi.fn(),
@@ -79,6 +85,7 @@ function renderPrompt(props: Partial<React.ComponentProps<typeof ChallengeAccept
 }
 
 beforeEach(() => {
+  flags.debateVideo = true;
   clearRematchJoinIntents();
   media.beginSession.mockReset();
   media.releaseSession.mockReset();
@@ -195,6 +202,17 @@ describe('ChallengeAcceptedPrompt', () => {
     expect(await screen.findByRole('button', { name: 'Turn microphone off' })).toBeInTheDocument();
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: false });
+  });
+
+  it('offers the mic alone and saves no camera with debateVideo off', async () => {
+    flags.debateVideo = false;
+    rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: true });
+    renderPrompt();
+
+    expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+    await waitFor(() => expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: false }));
+    expect(media.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ video: true }));
   });
 
   it('renders nothing when it cannot name both people', () => {

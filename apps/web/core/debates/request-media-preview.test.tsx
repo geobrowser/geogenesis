@@ -288,6 +288,26 @@ describe('DebateRequestMediaPreview', () => {
     await waitFor(() => expect(mocks.ensurePreview).toHaveBeenLastCalledWith({ audio: false, video: true }));
   });
 
+  it('offers and opens the mic alone when the card has no camera', async () => {
+    mocks.permission = 'granted';
+    const onJoinStateChange = vi.fn();
+    mount({ camera: false, onJoinStateChange });
+
+    expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
+    expect(mocks.ensurePreview).toHaveBeenCalledWith({ audio: true, video: false });
+    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+    expect(onJoinStateChange).toHaveBeenLastCalledWith({ micOn: true, cameraOn: false });
+  });
+
+  it('reports no camera block on a card with no camera', async () => {
+    mocks.permission = 'granted';
+    mocks.cameraPermission = 'denied';
+    mount({ camera: false });
+
+    expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
+    expect(screen.queryByText(/Camera is blocked/)).toBeNull();
+  });
+
   it('does not touch the camera when permission has never been asked', async () => {
     mocks.permission = 'prompt';
     mount();
