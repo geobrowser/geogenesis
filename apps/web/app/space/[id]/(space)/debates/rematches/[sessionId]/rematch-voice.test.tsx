@@ -2947,6 +2947,19 @@ describe('with debateVideo off', () => {
     expect(readRematchJoinIntent('debate-9')).toStrictEqual({ micOn: true });
   });
 
+  it('keeps master’s layout: small avatars and a Mute label at every width', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    for (const avatar of screen.getAllByTestId('pair-avatar')) {
+      expect(avatar.className).toContain('size-8');
+      expect(avatar.className).not.toContain('size-14');
+    }
+    const label = screen.getByRole('button', { name: /^(Mute|Unmute)( microphone)?$/ }).querySelector('span');
+    expect(label?.className ?? '').not.toContain('max-[400px]:hidden');
+  });
+
   it('draws avatars, not the other person’s camera', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
     mocks.opponentCameraPublication = { track: { attach: vi.fn(), detach: vi.fn() } };
