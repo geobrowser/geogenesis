@@ -112,7 +112,7 @@ describe('OpenRoundPickPill (GEO-3366)', () => {
 
     view.rerender(<OpenRoundPickPill pick={null} wrapping />);
     expect(screen.getByText('No pick').parentElement).toHaveClass('text-white/62');
-    expect(screen.getByText('No pick').parentElement?.style.fontFamily).toContain('var(--font-geist-bold)');
+    expect(screen.getByText('No pick').parentElement?.style.fontFamily).toContain('var(--font-calibre)');
     expect(view.container.querySelector('.border-dashed')).toBeNull();
   });
 });
@@ -128,8 +128,10 @@ describe('OpenRoundResultOverlay', () => {
       'text-white',
       'motion-safe:animate-[fadeIn_250ms_linear_both,roomMomentSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]'
     );
-    expect((phrase as HTMLElement).style.fontFamily).toContain('var(--font-geist-bold)');
-    expect((phrase as HTMLElement).style.textShadow).toContain('0.04em');
+    expect((phrase as HTMLElement).style.fontFamily).toContain('var(--font-calibre)');
+    expect((phrase as HTMLElement).style.textShadow).toBe(
+      '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000'
+    );
     expect(container).toHaveTextContent('Round 2RebuttalAlice opens');
     expect(container.innerHTML).not.toMatch(/purple|animate-debate-banner/);
   });
@@ -142,7 +144,7 @@ describe('OpenRoundResultOverlay', () => {
   it('ends with outlined type, and a reason only when there is one', () => {
     const { container, rerender } = render(<OpenRoundResultOverlay result={{ kind: 'wrap', note: null }} />);
     expect(container.textContent).toBe('That’s a wrap');
-    expect(container.querySelector('[data-open-round-phrase]')).toHaveClass('text-white', 'font-bold');
+    expect(container.querySelector('[data-open-round-phrase]')).toHaveClass('text-white', 'font-semibold');
     rerender(<OpenRoundResultOverlay result={{ kind: 'wrap', note: 'No picks in time' }} />);
     expect(container).toHaveTextContent('That’s a wrapNo picks in time');
   });

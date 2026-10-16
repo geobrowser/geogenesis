@@ -4,8 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { LABEL_FONT } from './browse/stamp-styles';
-import { ROOM_BOLD_FONT, ROOM_UI_FONT } from './debate-room-stamps';
+import { LABEL_FONT, STAMP_FONT } from './browse/stamp-styles';
 
 const COUNTDOWN_SIZE = 51;
 const COUNTDOWN_CENTER = COUNTDOWN_SIZE / 2;
@@ -82,7 +81,7 @@ export function useRestartedEach<T extends HTMLElement>(tick: number | null) {
 }
 
 /** The room's red rim, at the disc's very edge. */
-const finalRimMask = turnTimerRimMask('0.55cqw');
+const finalRimMask = turnTimerRimMask('3px');
 
 export function RecordingCountdownRing({
   remainingSeconds,
@@ -167,8 +166,8 @@ export function RecordingCountdownRing({
               {
                 '--turn-timer-rim': `${(1 - elapsedRatio) * 360}deg`,
                 backgroundImage: 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.3) 0deg)',
-                maskImage: turnTimerRimMask('2px'),
-                WebkitMaskImage: turnTimerRimMask('2px'),
+                maskImage: turnTimerRimMask('3px'),
+                WebkitMaskImage: turnTimerRimMask('3px'),
               } as React.CSSProperties
             }
           />
@@ -216,7 +215,7 @@ export function RecordingCountdownRing({
           className="relative z-10"
           style={{
             color: numberColor,
-            fontFamily: buildUp ? (final ? ROOM_BOLD_FONT : ROOM_UI_FONT).fontFamily : LABEL_FONT.fontFamily,
+            fontFamily: (final ? STAMP_FONT : LABEL_FONT).fontFamily,
             fontSize: buildUp ? '4cqw' : 22,
             fontWeight: final ? 700 : 500,
             fontVariantNumeric: buildUp ? 'tabular-nums' : undefined,

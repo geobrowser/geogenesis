@@ -6453,9 +6453,11 @@ describe('DebateRoomPageClient', () => {
       await renderLiveDebate(aliceOpening());
 
       await waitFor(() => expect(phrase('local', 'count-in')).toHaveTextContent('You’re up in'));
-      expect(phrase('local', 'count-in')).toHaveClass('text-white', 'font-bold');
-      expect((phrase('local', 'count-in') as HTMLElement).style.fontFamily).toContain('var(--font-geist-bold)');
-      expect((phrase('local', 'count-in') as HTMLElement).style.textShadow).toContain('0.04em');
+      expect(phrase('local', 'count-in')).toHaveClass('text-white', 'font-semibold');
+      expect((phrase('local', 'count-in') as HTMLElement).style.fontFamily).toContain('var(--font-calibre)');
+      expect((phrase('local', 'count-in') as HTMLElement).style.textShadow).toBe(
+        '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000'
+      );
       expect(debateVideoTile('local').querySelector('[data-room-count-in]')).toHaveTextContent('4');
       expect(debateVideoTile('local').querySelector('[data-room-dim]')).toHaveAttribute('data-room-dim', 'on');
     });

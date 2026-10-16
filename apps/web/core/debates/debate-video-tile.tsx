@@ -19,16 +19,9 @@ import {
   RoomMiddlePhrase,
   RoomTilePill,
 } from './debate-room-stamps';
+import { recordingLabelTextShadow, recordingOverlayTextShadow } from './recording-overlay-styles';
 
-export const recordingOverlayTextShadow = {
-  textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000',
-};
-
-// Label/phrase overlays in Figma are dark text with a white outline (the inverse of the big
-// numbers and "GO!", which stay white-on-black via recordingOverlayTextShadow).
-export const recordingLabelTextShadow = {
-  textShadow: '-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, 0 4px 12px rgba(0,0,0,0.25)',
-};
+export { recordingLabelTextShadow, recordingOverlayTextShadow } from './recording-overlay-styles';
 
 /**
  * The translucent fill the tile chips share.
@@ -63,7 +56,7 @@ export function DebateTileChip({
       {...spanProps}
       className={cx(
         'inline-flex items-center rounded-full leading-none whitespace-nowrap',
-        openRounds ? 'h-[4.4cqw] gap-[1cqw] px-[1.8cqw] text-[2.8cqw] font-medium' : 'h-4 gap-1 px-1.5 text-[0.75rem]',
+        openRounds ? 'h-[4.4cqw] gap-[1cqw] px-[1.8cqw] text-[2.8cqw]' : 'h-4 gap-1 px-1.5 text-[0.75rem]',
         className
       )}
     >
@@ -204,7 +197,7 @@ export function DebateVideoTile({
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
       data-active-speaker={active ? 'true' : 'false'}
       data-final-seconds={openRounds && finalSeconds ? 'true' : undefined}
-      style={openRounds ? { ...ROOM_UI_FONT, textRendering: 'auto' } : undefined}
+      style={openRounds ? ROOM_UI_FONT : undefined}
       className={cx(
         'relative min-h-0 overflow-hidden bg-black shadow-card',
         openRounds ? '@container aspect-[8/5] rounded-[3cqw]' : 'aspect-[5/3] rounded-lg',
@@ -346,7 +339,7 @@ export function DebateVideoTile({
               <div className="absolute inset-0 text-center text-[16px] leading-[1.45]">
                 <div className="absolute top-[30%] left-1/2 w-max -translate-x-1/2 -translate-y-1/2">
                   <span
-                    className="inline-block text-[5.148cqw] leading-[0.95] font-bold tracking-[-0.02em] whitespace-nowrap text-white"
+                    className="inline-block text-[5.148cqw] leading-[0.95] font-semibold tracking-[-0.02em] whitespace-nowrap text-white"
                     data-room-phrase="count-in"
                     style={ROOM_OUTLINED_STYLE}
                   >
@@ -372,7 +365,7 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {showGo && (
-              <RoomTilePill data-room-pill="go" tone="white" fadeInMs={200}>
+              <RoomTilePill data-room-pill="go" tone="white" fadeInMs={200} fontWeight={700}>
                 Go
               </RoomTilePill>
             )}

@@ -4,19 +4,9 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-/** Retain the export's fallbacks, including the system glyph used for the selection check. */
-export const ROOM_BOLD_FONT = {
-  fontFamily: 'var(--font-geist-bold), var(--font-calibre), system-ui, sans-serif',
-  textRendering: 'auto',
-} as const;
-export const ROOM_LABEL_FONT = {
-  fontFamily: 'var(--font-geist-medium), var(--font-calibre), system-ui, sans-serif',
-  textRendering: 'auto',
-} as const;
-export const ROOM_UI_FONT = {
-  fontFamily: 'var(--font-calibre), system-ui, -apple-system, "Segoe UI", sans-serif',
-  textRendering: 'auto',
-} as const;
+import { recordingFont, recordingOverlayTextShadow } from './recording-overlay-styles';
+
+export const ROOM_UI_FONT = recordingFont;
 
 /** Option 5, Debate room / Open rounds (GEO-3366). The export scales type by .78 and pills by .86. */
 export const ROOM_GLASS_CLASS = 'bg-black/66 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.24)]';
@@ -28,11 +18,10 @@ export const ROOM_END_TURN_CLASS =
 export const ROOM_MOMENT_ENTER_CLASS =
   'motion-safe:animate-[fadeIn_250ms_linear_both,roomMomentSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]';
 
-/** White Geist Bold with a black outline, including the smaller count-in label. */
+/** Open rounds keeps its white type, using the fixed-format room's face and outline weight. */
 export const ROOM_OUTLINED_STYLE = {
-  ...ROOM_BOLD_FONT,
-  textShadow:
-    '-0.04em -0.04em 0 #000, 0 -0.04em 0 #000, 0.04em -0.04em 0 #000, 0.04em 0 0 #000, 0.04em 0.04em 0 #000, 0 0.04em 0 #000, -0.04em 0.04em 0 #000, -0.04em 0 0 #000, 0 0.06em 0.18em rgba(0,0,0,0.55)',
+  ...recordingFont,
+  ...recordingOverlayTextShadow,
 } as const;
 
 /** A glass pill that fades in with the reference's small settle, without moving across the tile. */
@@ -41,6 +30,7 @@ export function RoomPill({
   tone = 'dark',
   delayMs = 0,
   fadeInMs = 250,
+  fontWeight = 600,
   className,
   style,
   ...props
@@ -48,12 +38,14 @@ export function RoomPill({
   tone?: 'dark' | 'white' | 'red' | 'dashed';
   delayMs?: number;
   fadeInMs?: number;
+  fontWeight?: 600 | 700;
 }) {
   return (
     <span
       {...props}
       className={cx(
-        'inline-flex max-w-[92%] items-center rounded-full px-[4.644cqw] py-[2.064cqw] text-[4.816cqw] leading-none font-semibold',
+        'inline-flex max-w-[92%] items-center rounded-full px-[4.644cqw] py-[2.064cqw] text-[4.816cqw] leading-none',
+        fontWeight === 700 ? 'font-bold' : 'font-semibold',
         ROOM_MOMENT_ENTER_CLASS,
         tone === 'white'
           ? [ROOM_WHITE_GLASS_CLASS, 'shadow-[0_1cqw_3cqw_rgba(0,0,0,0.2)] backdrop-blur-[14px]']
@@ -65,7 +57,7 @@ export function RoomPill({
         className
       )}
       style={{
-        ...ROOM_BOLD_FONT,
+        ...ROOM_UI_FONT,
         animationDelay: delayMs ? `${delayMs}ms, ${delayMs}ms` : undefined,
         animationDuration: `${fadeInMs}ms, 250ms`,
         ...style,
@@ -90,24 +82,25 @@ export function RoomPhrase({
   eyebrow,
   sub,
   sizeCqw,
+  fontWeight = 600,
   className,
   ...props
 }: React.ComponentPropsWithoutRef<'div'> & {
   eyebrow?: React.ReactNode;
   sub?: React.ReactNode;
   sizeCqw: number;
+  fontWeight?: 600 | 700;
 }) {
   const card = eyebrow !== undefined || sub !== undefined;
   return (
     <div
       {...props}
       className={cx(
-        'mx-auto grid w-max max-w-[92%] justify-items-center text-center leading-[0.95] font-bold tracking-[-0.02em] text-white',
+        'mx-auto grid w-max max-w-[92%] justify-items-center text-center leading-[0.95] tracking-[-0.02em] text-white',
+        fontWeight === 700 ? 'font-bold' : 'font-semibold',
         ROOM_MOMENT_ENTER_CLASS,
         className
       )}
-      // In the export, the round card inherits its outline from its 16px wrapper. Single phrases
-      // instead size the outline with their own type. Keep the card's three lines equally outlined.
       style={{ ...ROOM_OUTLINED_STYLE, fontSize: card ? '16px' : `${sizeCqw}cqw` }}
     >
       {eyebrow && (
@@ -146,7 +139,7 @@ export function RoomTag({ className, style, ...props }: React.ComponentPropsWith
         'inline-flex items-center rounded-full px-[2.2cqw] py-[1.1cqw] leading-none font-medium tracking-[0.04em] whitespace-nowrap',
         className
       )}
-      style={{ ...ROOM_LABEL_FONT, ...style }}
+      style={{ ...ROOM_UI_FONT, ...style }}
     />
   );
 }

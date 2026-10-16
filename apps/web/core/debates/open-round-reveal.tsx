@@ -3,8 +3,8 @@
 import * as React from 'react';
 
 import type { Debate, OpenRoundPick, OpenRoundRevealedPick, ParticipantSlot } from './api';
-import { LABEL_FONT, STAMP_WORD } from './browse/stamp-styles';
-import { RoomMiddlePhrase, RoomTag, RoomTilePill } from './debate-room-stamps';
+import { STAMP_WORD } from './browse/stamp-styles';
+import { ROOM_UI_FONT, RoomMiddlePhrase, RoomTag, RoomTilePill } from './debate-room-stamps';
 import { rebuttalRoundsLabel } from './debate-round-indicator';
 import {
   type OpenRoundsRoomPhase,
@@ -129,6 +129,7 @@ export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) 
     <div data-open-round-result={result.kind} className="pointer-events-none absolute inset-0 z-[45]">
       <RoomMiddlePhrase
         sizeCqw={result.kind === 'round' ? 14.04 : 8.58}
+        fontWeight={result.kind === 'round' ? 700 : 600}
         eyebrow={role ? round : undefined}
         data-open-round-phrase
         sub={result.kind === 'round' ? openRoundOpenerLine(result.opener) : undefined}
@@ -139,7 +140,7 @@ export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) 
         <div className="absolute inset-x-0 top-[calc(50%+9cqw)] px-4 text-center">
           <span
             className="inline-block max-w-full rounded-full bg-black/72 px-[2.8cqw] py-[1.4cqw] text-[2.8cqw] leading-[1.2] font-medium tracking-[0.01em] text-balance text-white"
-            style={LABEL_FONT}
+            style={ROOM_UI_FONT}
           >
             {result.note}
           </span>

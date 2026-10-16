@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { OpenRoundPick } from './api';
-import { ROOM_BOLD_FONT, ROOM_LABEL_FONT, ROOM_WHITE_GLASS_CLASS } from './debate-room-stamps';
+import { ROOM_UI_FONT, ROOM_WHITE_GLASS_CLASS } from './debate-room-stamps';
 
 export type OpenRoundPickContext = {
   previousPick: OpenRoundPick | null;
@@ -90,10 +90,10 @@ export function OpenRoundPickCard({
         'pointer-events-auto absolute top-1/2 left-1/2 z-40 grid w-[78%] -translate-x-1/2 -translate-y-1/2 justify-items-center gap-[3cqw] rounded-[5cqw] bg-[rgba(30,30,34,0.55)] px-[3.4cqw] pt-[3.4cqw] pb-[3.8cqw] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16),0_2cqw_6cqw_rgba(0,0,0,0.3)] backdrop-blur-[18px] backdrop-saturate-[1.3]',
         'motion-safe:animate-[fadeIn_250ms_linear_both]'
       )}
-      style={ROOM_LABEL_FONT}
+      style={ROOM_UI_FONT}
     >
       <div className="flex items-center gap-[2.4cqw]">
-        <h2 id={headingId} className="text-[7cqw] leading-[0.95] font-bold tracking-[-0.02em]" style={ROOM_BOLD_FONT}>
+        <h2 id={headingId} className="text-[7cqw] leading-[0.95] font-semibold tracking-[-0.02em]">
           Keep debating?
         </h2>
         <PickCountdown remainingSeconds={remainingSeconds} />
@@ -169,9 +169,7 @@ function PickChoice({
         disabled && selectedPick === null && 'opacity-50'
       )}
     >
-      <span className="text-[4.6cqw] leading-none font-bold" style={ROOM_BOLD_FONT}>
-        {selected ? `✓ ${label}` : label}
-      </span>
+      <span className="text-[4.6cqw] leading-none font-semibold">{selected ? `✓ ${label}` : label}</span>
       <span className="text-[2.6cqw] leading-none font-normal opacity-75">{detail}</span>
     </button>
   );
