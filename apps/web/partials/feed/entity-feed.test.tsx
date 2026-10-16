@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -34,6 +34,8 @@ const mocks = vi.hoisted(() => ({
     memberOf: { id: string; name: string }[];
     featuredError?: boolean;
   } | null,
+  /** The smart-account address `useSmartAccount` reports; null until Privy restores the wallet. */
+  accountAddress: null as string | null,
 }));
 
 vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
@@ -66,7 +68,9 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: null }),
+  useSmartAccount: () => ({
+    smartAccount: mocks.accountAddress ? { account: { address: mocks.accountAddress } } : null,
+  }),
 }));
 
 vi.mock('~/design-system/menu', () => ({
@@ -99,6 +103,7 @@ beforeEach(() => {
   mocks.queryKeys = [];
   mocks.error = null;
   mocks.browseSidebar = null;
+  mocks.accountAddress = null;
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [], nextCursor: null }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -648,5 +653,62 @@ describe('EntityFeed more filters', () => {
     render(<EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showSortFilter />);
 
     expect(screen.queryByRole('button', { name: 'More filters' })).toBeNull();
+  });
+});
+
+// A signed-in reader's account is null for the first renders, until Privy restores the wallet. Keyed
+// on the address, the feed used to fetch anonymously, render, blank and fetch again (2026-10-16).
+describe('EntityFeed for a reader the wallet cookie says is signed in', () => {
+  const ADDRESS = '0x00000000000000000000000000000000000000aa';
+
+  function renderFeed(signedIn: boolean) {
+    return render(
+      <EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showTimeFilter={false} signedIn={signedIn} />
+    );
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('holds the first request, showing skeletons, until the account resolves', () => {
+    const { rerender } = renderFeed(true);
+    expect(mocks.queryOptions?.enabled).toBe(false);
+    expect(screen.queryByText('No entities match these filters yet.')).toBeNull();
+
+    mocks.accountAddress = ADDRESS;
+    rerender(<EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showTimeFilter={false} signedIn />);
+    expect(mocks.queryOptions?.enabled).toBe(true);
+    expect((mocks.queryOptions?.queryKey as unknown[]).at(-1)).toBe(ADDRESS);
+  });
+
+  it('gives up waiting after five seconds, so a stale cookie cannot hold the feed', () => {
+    vi.useFakeTimers();
+    renderFeed(true);
+    expect(mocks.queryOptions?.enabled).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(mocks.queryOptions?.enabled).toBe(true);
+    expect((mocks.queryOptions?.queryKey as unknown[]).at(-1)).toBeNull();
+  });
+
+  it('does not wait for a reader with no wallet cookie', () => {
+    renderFeed(false);
+    expect(mocks.queryOptions?.enabled).toBe(true);
+  });
+
+  it('keeps the cards up across a change of account, but not a change of filter', () => {
+    renderFeed(false);
+    const placeholderData = mocks.queryOptions?.placeholderData as (
+      previous: unknown,
+      previousQuery: { queryKey: unknown[] } | undefined
+    ) => unknown;
+    const key = mocks.queryOptions?.queryKey as unknown[];
+    const previous = { pages: [] };
+
+    expect(placeholderData(previous, { queryKey: [...key.slice(0, -1), ADDRESS] })).toBe(previous);
+    expect(placeholderData(previous, { queryKey: [key[0], 'new', ...key.slice(2)] })).toBeUndefined();
+    expect(placeholderData(previous, undefined)).toBeUndefined();
   });
 });
