@@ -178,7 +178,7 @@ export function DebateClaimCounter({
           aria-expanded={open}
           aria-label={`${count} ${count === 1 ? 'claim' : 'claims'} so far. ${open ? 'Hide' : 'Show'} them`}
           onClick={toggle}
-          className="relative z-[1] cursor-pointer"
+          className="relative z-[1] inline-flex cursor-pointer"
         >
           <ClaimCount count={count} />
         </button>
@@ -253,7 +253,7 @@ function ClaimList({
               event.stopPropagation();
               onSeeAll();
             }}
-            className="shrink-0 text-white/80 underline underline-offset-[0.3em] hover:text-white"
+            className="shrink-0 text-white/85 underline underline-offset-[0.3em] hover:text-white"
           >
             See all
           </button>
@@ -380,7 +380,7 @@ function ClaimListCardBody({
     // measures (and so reports an impression) through an `ActionSurfaceDiv` beneath it.
     <ActionSurfaceDiv
       data-claim-list-card={claim.id}
-      className="grid gap-[1.2cqw] rounded-lg bg-[#151515]/55 [mask-image:var(--claim-ramp,none)] p-[2.4cqw] text-left text-white backdrop-blur-[22px] [-webkit-mask-image:var(--claim-ramp,none)]"
+      className="grid gap-[1.2cqw] rounded-[8px] bg-[#151515]/55 [mask-image:var(--claim-ramp,none)] p-[2.4cqw] text-left text-white backdrop-blur-[22px] [-webkit-mask-image:var(--claim-ramp,none)]"
     >
       <div
         data-claim-list-header
@@ -390,9 +390,7 @@ function ClaimListCardBody({
           <Avatar avatarUrl={speaker?.avatar_cid} value={speaker?.profile_space_id ?? name} size={16} />
         </span>
         <span className="min-w-0 truncate">{speaker ? speakerLabel(speaker) : name}</span>
-        {summary.percent !== null && (
-          <span className="shrink-0 text-white/70 tabular-nums">· {summary.percent}% agree</span>
-        )}
+        {summary.percent !== null && <span className="shrink-0 text-white/70">· {summary.percent}% agree</span>}
         <span className="ml-auto flex shrink-0 gap-[1.6cqw]">
           {vote(true)}
           {vote(false)}

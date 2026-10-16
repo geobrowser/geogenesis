@@ -2026,11 +2026,11 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     const { container } = renderAt(62.1, { playbackBreaks });
     // The round in the badge's words at one size, and who opens it on its own line beneath.
     const banner = container.querySelector('[data-debate-banner="round"]');
-    expect(banner?.firstElementChild?.textContent).toBe('Round 2Rebuttal');
+    expect(banner?.firstElementChild?.textContent).toMatch(/^Round 2Rebuttal.+ opens$/);
     expect(banner?.querySelector('span')?.textContent).toBe('Round 2');
     expect(banner?.querySelector('[data-debate-banner-sub]')?.textContent).toMatch(/^\S+ opens$/);
     expect((banner as HTMLElement | null)?.style.fontSize).toBe('');
-    expect(stamps(container)).toEqual(['extend', 'extend']);
+    expect(stamps(container)).toEqual([]);
   });
 
   // The playhead's first sample in a break lands up to a quarter of a second in. Graphics mounted
@@ -2176,6 +2176,35 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(next?.textContent).toMatch(/’s turn$/);
     expect(next?.className).toContain('rounded-full');
     expect(container.querySelector('[data-debate-stamp="ended"]')?.className).toContain('border-dashed');
+  });
+
+  it('holds the next-speaker delay on the playhead while paused, and follows a scrub into the cue', () => {
+    vi.useFakeTimers();
+    try {
+      const playbackBreaks = breaks({
+        earlyEnds: [{ turnIndex: 0, nextTurnIndex: 1, startMs: 30_000, endMs: 33_000, endedSlot: 1, nextSlot: 2 }],
+      });
+      const { container, rerender } = renderAt(30.2, { playbackBreaks, playing: false });
+      const next = container.querySelector('[data-debate-banner="turn"]') as HTMLElement;
+      const clock = next.parentElement?.parentElement?.parentElement as HTMLElement;
+      expect(next.style.animationDelay).toContain('600ms');
+      expect(next.style.animationPlayState).toBe('paused');
+      expect(clock.style.getPropertyValue('--break-t')).toBe('200');
+      act(() => vi.advanceTimersByTime(2_000));
+      expect(clock.style.getPropertyValue('--break-t')).toBe('200');
+
+      mocks.controller = controllerFixture({
+        mutedByUser: false,
+        turnSlot: 1,
+        playheadSeconds: 30.9,
+        playbackBreaks,
+        playing: false,
+      });
+      rerender(<DebateFeedPlayer debate={startedDebate} active />);
+      expect(clock.style.getPropertyValue('--break-t')).toBe('900');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // GEO-3347: the stamp, its dim and the banner used to cut out in one frame.

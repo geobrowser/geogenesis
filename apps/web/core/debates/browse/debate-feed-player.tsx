@@ -911,7 +911,12 @@ export function DebateFeedPlayer({
           !betweenTurns &&
           !endCardShown &&
           (!reducedOverlays || (active && playing && mutedByUser)) && (
-            <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
+            <span
+              className={cx(
+                'pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white',
+                !stamped && '[text-box:trim-both_cap_alphabetic] md:max-w-[90%]'
+              )}
+            >
               {subtitle}
             </span>
           )}
@@ -926,7 +931,7 @@ export function DebateFeedPlayer({
               roundTurns={roundTurns}
               playing={playing}
             />
-            <DebateEarlyEndLabels cue={earlyEndCue} names={breakNames} />
+            <DebateEarlyEndLabels cue={earlyEndCue} names={breakNames} playing={playing} />
           </>
         )}
 

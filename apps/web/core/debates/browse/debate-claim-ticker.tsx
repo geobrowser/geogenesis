@@ -1052,7 +1052,7 @@ export function ClaimIconButton({
         selected
           ? cx(
               layout === 'header' ? 'hover:bg-white/15' : glass ? 'bg-white/15' : 'bg-divider',
-              position ? 'text-green' : 'text-red-01'
+              position ? 'text-green' : layout === 'header' ? 'text-[#ff4a26]' : 'text-red-01'
             )
           : glass
             ? layout === 'header'
@@ -1061,11 +1061,21 @@ export function ClaimIconButton({
             : 'text-grey-04 hover:bg-divider hover:text-text disabled:hover:bg-transparent disabled:hover:text-grey-04'
       )}
     >
-      <ResponsePositionIcon
-        responseKind={responseKind}
-        position={position}
-        selected={layout === 'header' ? false : selected || column}
-      />
+      {layout === 'header' ? (
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+          aria-hidden
+          style={position ? undefined : { transform: 'scaleY(-1)' }}
+        >
+          <path d="M5 7.5V14H2.5V7.5H5Zm0 0 2.6-5c.9 0 1.6.8 1.4 1.7L8.6 6h4.1c.9 0 1.5.8 1.3 1.6l-1.2 5.2c-.2.7-.8 1.2-1.5 1.2H5" />
+        </svg>
+      ) : (
+        <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected || column} />
+      )}
     </button>
   );
 }

@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { ParticipantSlot } from '~/core/debates/api';
-import { ROOM_ENTER_CLASS, RoomExit } from '~/core/debates/debate-room-stamps';
+import { RoomExit } from '~/core/debates/debate-room-stamps';
 import { openRoundWrapNote } from '~/core/debates/open-round-reveal';
 import {
   BREAK_QUESTION_MS,
@@ -25,6 +25,7 @@ import {
   PLAYER_LABEL_FONT,
   PLAYER_PICK_BASE_CLASS,
   PLAYER_PICK_CLASS,
+  PLAYER_PICK_STYLE,
   PLAYER_TITLE_CLASS,
   PLAYER_TITLE_STYLE,
 } from './player-overlay-styles';
@@ -146,7 +147,11 @@ export function advanceBreakClock(displayedMs: number, targetMs: number, frameMs
  * the playhead is while paused or on a break's first sample. That sample lands up to a quarter of a
  * second into the break, which is why nothing moves before `BREAK_SETTLE_MS`.
  */
-function useBreakClock(ref: React.RefObject<HTMLDivElement | null>, cue: BreakCue | null, playing: boolean) {
+function useBreakClock(
+  ref: React.RefObject<HTMLDivElement | null>,
+  cue: Pick<BreakCue, 'elapsedMs' | 'playedMs'> | null,
+  playing: boolean
+) {
   const sample = React.useRef({ elapsedMs: 0, at: 0 });
   const displayed = React.useRef<number | null>(null);
   const elapsedMs = cue?.elapsedMs ?? null;
@@ -240,6 +245,7 @@ export function DebateBreakOverlay({
       )}
 
       {picks &&
+        (wrap || cue.elapsedMs < bannerAtMs) &&
         SLOTS.map((slot, order) => {
           const key = picks[slot] ?? 'none';
           return (
@@ -249,7 +255,7 @@ export function DebateBreakOverlay({
                 className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS[key], PLAYER_ENTER_CLASS)}
                 style={
                   {
-                    ...PLAYER_LABEL_FONT,
+                    ...PLAYER_PICK_STYLE,
                     ...heldAt(BREAK_SETTLE_MS + BREAK_QUESTION_MS + order * BREAK_STAMP_GAP_MS),
                   } as React.CSSProperties
                 }
@@ -269,7 +275,7 @@ export function DebateBreakOverlay({
         >
           <div
             data-debate-banner={wrap ? 'wrap' : 'round'}
-            className={cx(PLAYER_ENTER_CLASS, 'px-[4cqw] text-center')}
+            className={cx(PLAYER_ENTER_CLASS, 'text-center')}
             style={heldAt(bannerAtMs)}
           >
             {wrap ? (
@@ -277,24 +283,18 @@ export function DebateBreakOverlay({
                 That’s a wrap
               </div>
             ) : (
-              <PlayerRoundTitle {...nextRound} />
-            )}
-            {opener && (
-              <span
-                data-debate-banner-sub
-                className={cx(PLAYER_TITLE_CLASS, 'mt-[1.6cqw] block truncate text-[4.8cqw]')}
-                style={PLAYER_TITLE_STYLE}
-              >
-                {opener}
-              </span>
+              <PlayerRoundTitle {...nextRound} sub={opener} />
             )}
           </div>
         </div>
       )}
       {note && cue.elapsedMs >= bannerAtMs - MOUNT_AHEAD_MS && (
-        <div className={cx('absolute inset-x-0 top-[calc(50%+9cqw)] text-center', APPEAR)} style={heldAt(bannerAtMs)}>
+        <div
+          className="absolute inset-x-0 top-[calc(50%+9cqw)] animate-[fadeIn_250ms_linear_both] text-center"
+          style={heldAt(bannerAtMs + 200)}
+        >
           <span
-            className="inline-block max-w-[90%] rounded-full bg-black/72 px-[2.8cqw] py-[1.4cqw] text-[2.8cqw] leading-[1.2] tracking-[0.01em] text-white backdrop-blur-[10px]"
+            className="inline-block max-w-[90%] rounded-full bg-black/72 px-[2.8cqw] py-[1.4cqw] text-[2.8cqw] leading-[1.2] tracking-[0.01em] text-white"
             style={PLAYER_LABEL_FONT}
           >
             {note}
@@ -306,18 +306,28 @@ export function DebateBreakOverlay({
 }
 
 /** Early ends use level glass pills and fade away with the dim. */
-export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; names: BreakNames }) {
+export function DebateEarlyEndLabels({
+  cue,
+  names,
+  playing,
+}: {
+  cue: EarlyEndCue | null;
+  names: BreakNames;
+  playing: boolean;
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  useBreakClock(ref, cue ? { elapsedMs: cue.ageMs, playedMs: cue.durationMs } : null, playing);
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 z-[22]">
+    <div ref={ref} aria-hidden className="pointer-events-none absolute inset-0 z-[22]">
       <RoomExit>
         {cue && (
           // The debater who ended is dimmed under their stamp, as in the mockup.
           <div data-debate-early-end className={cx(TILE_CLASS[cue.endedSlot], 'grid place-items-center')}>
-            <div className={cx('absolute inset-0 bg-black/42', ROOM_ENTER_CLASS)} />
+            <div className="absolute inset-0 bg-black/42" />
             <span
               data-debate-stamp="ended"
               className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS.none, PLAYER_ENTER_CLASS, 'relative')}
-              style={PLAYER_LABEL_FONT}
+              style={{ ...PLAYER_PICK_STYLE, ...heldAt(0) }}
             >
               Ended early
             </span>
@@ -330,7 +340,7 @@ export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; 
             <div
               data-debate-banner="turn"
               className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS.end, PLAYER_ENTER_CLASS, 'max-w-[90%] truncate')}
-              style={PLAYER_LABEL_FONT}
+              style={{ ...PLAYER_PICK_STYLE, ...heldAt(600) }}
             >
               {names[cue.nextSlot]}’s turn
             </div>

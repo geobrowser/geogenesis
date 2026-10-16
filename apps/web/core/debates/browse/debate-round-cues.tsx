@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import type { RoundCue } from '~/core/debates/round-cues';
 
-import { PLAYER_GLASS_CLASS, PLAYER_LABEL_FONT, PLAYER_TITLE_CLASS, PLAYER_TITLE_STYLE } from './player-overlay-styles';
+import { PLAYER_GLASS_CLASS, PLAYER_LABEL_FONT, PLAYER_TITLE_STYLE } from './player-overlay-styles';
 
 /**
  * An outline in every direction rather than the four corners the recording room uses.
@@ -192,12 +192,12 @@ export function DebateRoundBanner({ cue }: { cue: RoundCue | null }) {
     <div
       aria-hidden
       data-round-banner={cue.label}
-      className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] -translate-y-1/2 text-center motion-safe:opacity-[var(--round-opacity)]"
-      style={{ '--round-opacity': cue.opacity } as React.CSSProperties}
+      className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] -translate-y-1/2 text-center"
+      style={{ opacity: cue.opacity }}
     >
       <div
-        className="motion-safe:animate-[debatePlayerSettle_250ms_ease-out_both]"
-        style={{ animationDelay: `-${cue.ageMs ?? 0}ms` }}
+        className="motion-safe:animate-[debatePlayerSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]"
+        style={{ animationDelay: `-${cue.ageMs ?? 0}ms`, animationPlayState: 'paused' }}
       >
         <PlayerRoundTitle round={cue.round} role={cue.role} />
       </div>
@@ -206,15 +206,27 @@ export function DebateRoundBanner({ cue }: { cue: RoundCue | null }) {
 }
 
 /** Shared by the opening and the next-round announcement, at the export's 9/18cqw sizes. */
-export function PlayerRoundTitle({ round, role }: { round: string; role: string | null }) {
+export function PlayerRoundTitle({ round, role, sub }: { round: string; role: string | null; sub?: string | null }) {
   return (
-    <div className={cx(PLAYER_TITLE_CLASS, 'mx-auto w-max max-w-[92%]')} style={PLAYER_TITLE_STYLE}>
+    <div
+      className="mx-auto grid w-max max-w-[92%] justify-items-center text-center text-white"
+      style={PLAYER_TITLE_STYLE}
+    >
       <span
-        className={cx('block', role ? 'text-[9cqw] leading-none tracking-[-0.01em] text-white/88' : 'text-[18cqw]')}
+        className={
+          role
+            ? 'text-[9cqw] leading-none font-semibold tracking-[-0.01em] text-white/88'
+            : 'text-[18cqw] leading-[0.95] font-bold tracking-[-0.03em]'
+        }
       >
         {round}
       </span>
-      {role && <span className="block text-[18cqw] tracking-[-0.03em]">{role}</span>}
+      {role && <span className="text-[18cqw] leading-[0.95] font-bold tracking-[-0.03em]">{role}</span>}
+      {sub && (
+        <span data-debate-banner-sub className="mt-[1.6cqw] text-[4.8cqw] leading-none font-semibold">
+          {sub}
+        </span>
+      )}
     </div>
   );
 }
