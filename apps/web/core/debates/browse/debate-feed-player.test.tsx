@@ -181,6 +181,8 @@ function controllerFixture(overrides: {
   playbackBreaks?: DebatePlaybackController['playbackBreaks'];
   turnSegments?: DebateMediaTurnSegment[];
   roundTurns?: DebatePlaybackController['roundTurns'];
+  /** Per-tile stills (GEO-3280); null where geo-chat cut none. */
+  posters?: { slot1: string | null; slot2: string | null };
 }) {
   /*
    * Four 30s turns from `turnSlot`, and `turnState` read off them rather than pinned.
@@ -199,6 +201,8 @@ function controllerFixture(overrides: {
     slot2VideoRef: { current: null },
     slot1Participant: participant(1),
     slot2Participant: participant(2),
+    slot1Poster: overrides.posters?.slot1 ?? null,
+    slot2Poster: overrides.posters?.slot2 ?? null,
     urls: overrides.urls ?? { slot1: 'https://cdn.test/slot1.webm', slot2: 'https://cdn.test/slot2.webm' },
     ready: overrides.ready ?? true,
     error: null,
@@ -396,6 +400,45 @@ describe('player layout', () => {
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
     expect(container.querySelector('[data-debate-byline]')).toBeNull();
+  });
+});
+
+describe('poster stills (GEO-3280)', () => {
+  const posters = { slot1: 'https://chat.test/still-1', slot2: 'https://chat.test/still-2' };
+
+  it("paints each debater's still under their video before the recording has a frame", () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, posters });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const stills = Array.from(container.querySelectorAll('img[data-debate-poster]'));
+    expect(stills.map(img => img.getAttribute('src'))).toEqual([posters.slot1, posters.slot2]);
+    // Under the video in the same button, so the video covers it once it has a frame.
+    expect(stills[0].nextElementSibling?.tagName).toBe('VIDEO');
+    expect(stills[0].getAttribute('loading')).toBe('eager');
+  });
+
+  it('still shows the picture while the recording URL is being signed, instead of "Loading…"', () => {
+    mocks.controller = controllerFixture({
+      mutedByUser: true,
+      turnSlot: 1,
+      posters,
+      urls: { slot1: null, slot2: null },
+    });
+    const { container, queryByText } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelectorAll('img[data-debate-poster]')).toHaveLength(2);
+    expect(queryByText('Loading…')).toBeNull();
+  });
+
+  it('keeps the plain placeholder for a debate with no stills', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, urls: { slot1: null, slot2: null } });
+    const { container, queryAllByText } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('img[data-debate-poster]')).toBeNull();
+    expect(queryAllByText('Loading…')).toHaveLength(2);
+  });
+
+  it("fetches a far-away card's stills lazily", () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, posters });
+    const { container } = render(<DebateFeedPlayer debate={debate} active={false} />);
+    expect(container.querySelector('img[data-debate-poster]')?.getAttribute('loading')).toBe('lazy');
   });
 });
 
