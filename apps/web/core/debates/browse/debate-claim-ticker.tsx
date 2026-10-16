@@ -962,7 +962,7 @@ function TickerClaimHeader({
           label={copy.positiveAction}
           selected={control.viewerPosition === true}
           disabled={!control.canRespond}
-          pending={control.isResponsePending}
+          pending={control.isResponseSubmitting}
           title={control.actionTitle(true) || copy.positiveAction}
           onClick={() => control.respond(true)}
           tone={tone}
@@ -973,7 +973,7 @@ function TickerClaimHeader({
           label={copy.negativeAction}
           selected={control.viewerPosition === false}
           disabled={!control.canRespond}
-          pending={control.isResponsePending}
+          pending={control.isResponseSubmitting}
           title={control.actionTitle(false) || copy.negativeAction}
           onClick={() => control.respond(false)}
           tone={tone}
