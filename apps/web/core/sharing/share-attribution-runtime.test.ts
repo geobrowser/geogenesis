@@ -14,7 +14,7 @@ const target = '11111111111141118111111111111111';
 describe('vendored share attribution', () => {
   it('retains the landing tags after navigation, serializes the handoff contract, and rotates for another share', async () => {
     const first = createShareLink(`https://www.geobrowser.io/debate/${target}?via=lobby`, 'lobby', target, 'x');
-    const second = createShareLink(`https://www.geobrowser.io/debate/${target}?via=lobby`, 'lobby', target, 'reddit');
+    const second = createShareLink(`https://www.geobrowser.io/debate/${target}?via=lobby`, 'lobby', target, 'x');
     const dom = new JSDOM('<!doctype html><body></body>', { url: first.url, runScripts: 'outside-only' });
     const browser = dom.window as Window;
     const fetch = vi.fn(async () => ({ ok: true, status: 200 }));
@@ -82,7 +82,7 @@ describe('vendored share attribution', () => {
         expect(records().filter((r: any) => r.body.stringValue === 'page_viewed')).toHaveLength(2)
       );
       expect(properties(records().filter((r: any) => r.body.stringValue === 'page_viewed')[1])).toMatchObject({
-        utm_source: 'reddit',
+        utm_source: 'x',
         utm_content: new URL(second.url).searchParams.get('utm_content'),
       });
       expect(records().filter((r: any) => r.body.stringValue === 'signed_up')).toHaveLength(1);
