@@ -1982,25 +1982,31 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(rows(container)).toEqual(['1', '1']);
   });
 
-  it('asks "Keep debating?" first, then stamps each pick onto its debater', () => {
-    const playbackBreaks = breaks({
-      breaks: [extendBreak],
-      picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
-    });
-    const { container, rerender } = renderAt(60.6, { playbackBreaks });
-    expect(container.querySelector('[data-debate-question]')?.textContent).toBe('Keep debating?');
-    expect(container.querySelector('[data-debate-banner]')).toBeNull();
+  it.each(['extend', 'final_end'] as const)(
+    'keeps "Keep debating?" with the votes until the %s title arrives',
+    kind => {
+      const playbackBreaks = breaks({
+        breaks: [{ ...extendBreak, kind, nextRoundIndex: kind === 'final_end' ? null : extendBreak.nextRoundIndex }],
+        picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
+      });
+      const { container, rerender } = renderAt(60.6, { playbackBreaks });
+      expect(container.querySelector('[data-debate-question]')?.textContent).toBe('Keep debating?');
+      expect(container.querySelector('[data-debate-banner]')).toBeNull();
 
-    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 61.5, playbackBreaks });
-    rerender(<DebateFeedPlayer debate={startedDebate} active />);
-    const questionExit = container.querySelector('[data-debate-question-out]') as HTMLElement;
-    // The question completes its fade at 1100ms instead of unmounting on a coarse time sample.
-    expect(questionExit.style.animationDelay).toContain('800ms');
-    expect(questionExit.style.animationPlayState).toBe('paused');
-    expect(stamps(container)).toEqual(['extend', 'extend']);
-    // On the page ahead of its moment, held until the stamps have landed, so its roll-in plays whole.
-    expect((container.querySelector('[data-debate-banner]') as HTMLElement).style.animationDelay).toContain('1850ms');
-  });
+      mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 61.5, playbackBreaks });
+      rerender(<DebateFeedPlayer debate={startedDebate} active />);
+      const questionExit = container.querySelector('[data-debate-question-out]') as HTMLElement;
+      // The question holds with the revealed picks, then fades over the final 300ms before the title.
+      expect(questionExit.style.animationDelay).toContain('1550ms');
+      expect(questionExit.style.animationPlayState).toBe('paused');
+      expect(stamps(container)).toEqual(['extend', 'extend']);
+      // On the page ahead of its moment, held until the stamps have landed, so its roll-in plays whole.
+      expect((container.querySelector('[data-debate-banner]') as HTMLElement).style.animationDelay).toContain('1850ms');
+      expect(container.querySelector('[data-debate-banner]')?.getAttribute('data-debate-banner')).toBe(
+        kind === 'final_end' ? 'wrap' : 'round'
+      );
+    }
+  );
 
   it('shows Extend, End and No pick as level glass pills on their own videos', () => {
     for (const choice of ['extend', 'end', null] as const) {

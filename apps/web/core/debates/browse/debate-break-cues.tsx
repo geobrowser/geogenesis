@@ -158,7 +158,8 @@ export function DebateBreakOverlay({
         <div
           data-debate-question-out
           className={cx('absolute inset-0 grid place-items-center px-4 text-center', PLAYER_EXIT_CLASS)}
-          style={heldAt(BREAK_SETTLE_MS + BREAK_QUESTION_MS - BREAK_BANNER_OUT_MS)}
+          // Hold through the vote reveal, then clear the seam for either the round or wrap title.
+          style={heldAt(bannerAtMs - BREAK_BANNER_OUT_MS)}
         >
           <div
             data-debate-question
