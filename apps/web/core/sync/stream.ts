@@ -70,6 +70,8 @@ export type GeoEvent =
   | {
       type: typeof LOCAL_CHANGES_CLEARED;
       spaceId: string;
+      valueIds?: string[];
+      relationIds?: string[];
     }
   | {
       type: typeof CHANGES_PUBLISHED;
