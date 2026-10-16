@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { Avatar } from '~/design-system/avatar';
+import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 import type { DebateChallenge, DebateParticipantSummary } from './api';
@@ -85,16 +86,11 @@ export function DebateChallengeDialog({
               type="button"
               onClick={onNotNow}
               disabled={busy}
-              className="flex h-7 w-full items-center justify-center rounded-full border border-grey-02 bg-white px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50"
+              className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
             >
               Not now
             </button>
-            <button
-              type="button"
-              onClick={onAccept}
-              disabled={busy}
-              className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
-            >
+            <button type="button" onClick={onAccept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
               Explore claims
             </button>
           </div>

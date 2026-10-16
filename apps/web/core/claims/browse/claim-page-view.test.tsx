@@ -91,6 +91,8 @@ const mocks = vi.hoisted(() => ({
   commentPosition: null as Record<string, unknown> | null,
   /** Whether the viewer's own response is still confirming, per the shared position control. */
   isResponsePending: false,
+  /** Whether it has yet to reach the bundler — the narrower window the pills wait on (GEO-2889). */
+  isResponseSubmitting: false,
   /** Props the position pills received. */
   positionControl: null as Record<string, unknown> | null,
   /**
@@ -115,6 +117,15 @@ vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
 }));
 vi.mock('~/partials/entity-page/editable-entity-header', () => ({
   EditableHeading: () => <div data-testid="editable-heading" />,
+}));
+vi.mock('~/partials/entity-page/entity-page-actions', () => ({
+  EntityPageActions: ({ isVoteable, showCreate = true }: { isVoteable?: boolean; showCreate?: boolean }) => (
+    <div
+      data-testid="entity-page-actions"
+      data-voteable={String(Boolean(isVoteable))}
+      data-show-create={String(showCreate)}
+    />
+  ),
 }));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
@@ -222,12 +233,13 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     responseError: null,
     isConnected: false,
     isResponsePending: mocks.isResponsePending,
+    isResponseSubmitting: mocks.isResponseSubmitting,
   }),
 }));
 vi.mock('./claim-position-comment', () => ({
   ClaimPositionCommentControl: (props: Record<string, unknown>) => {
     mocks.positionControl = props;
-    return <div data-testid="position" />;
+    return <div data-testid="position">{props.positionRowEndSlot as React.ReactNode}</div>;
   },
 }));
 vi.mock('./claim-comment-position', () => ({
@@ -279,7 +291,7 @@ vi.mock('~/partials/profile/profile-activity-section', () => ({
     return <div data-testid="activity" />;
   },
 }));
-vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
+vi.mock('~/partials/editor/lazy-editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 vi.mock('~/partials/comments/comments-section', () => ({
   CommentSection: ({
     title,
@@ -349,6 +361,7 @@ beforeEach(() => {
   mocks.record.fetchNextDebatesPage = () => {};
   mocks.commentPosition = null;
   mocks.isResponsePending = false;
+  mocks.isResponseSubmitting = false;
   mocks.positionControl = null;
 });
 
@@ -561,6 +574,17 @@ describe('ClaimPageView record', () => {
     expect(screen.getByTestId('editable-description')).toBeInTheDocument();
   });
 
+  it('puts history and the menu beside the pills in edit mode only, without create or votes', () => {
+    const view = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    expect(screen.queryByTestId('entity-page-actions')).not.toBeInTheDocument();
+
+    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-1" isEditing />);
+    const actions = screen.getByTestId('entity-page-actions');
+    expect(screen.getByTestId('position')).toContainElement(actions);
+    expect(actions).toHaveAttribute('data-voteable', 'false');
+    expect(actions).toHaveAttribute('data-show-create', 'false');
+  });
+
   it('makes Activity select claim record tabs inside a side panel', () => {
     const setActiveSystemTab = vi.fn();
     mocks.sidePanel = { activeTabId: null, activeSystemTab: null, setActiveSystemTab };
@@ -696,12 +720,22 @@ describe('ClaimPageView position', () => {
   // The claim page is where a confirming response was pressed again and published a retraction.
   // The pills guard against that quietly: the side reads as taken at once, with no note or wait
   // cursor, and only the presses that would undo it are dropped until it lands.
-  it('marks the pills pending while the response confirms, without announcing a wait', () => {
+  it('marks the pills pending until the response reaches the bundler, without announcing a wait', () => {
     mocks.isResponsePending = true;
+    mocks.isResponseSubmitting = true;
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(mocks.positionControl?.pending).toBe(true);
     expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
+  });
+
+  // GEO-2889: inclusion is the slow part (p90 ~30s), and the pills no longer wait on it.
+  it('releases the pills once the response is submitted, before it lands', () => {
+    mocks.isResponsePending = true;
+    mocks.isResponseSubmitting = false;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.positionControl?.pending).toBe(false);
   });
 
   it('releases the pills once it has landed', () => {

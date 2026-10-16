@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { preferredRecordingMimeType, reportDebateRecorderFailure, startDebateRecorder } from './debate-recorder';
+import {
+  RECORDING_VIDEO_BITS_PER_SECOND,
+  preferredRecordingMimeType,
+  reportDebateRecorderFailure,
+  startDebateRecorder,
+} from './debate-recorder';
 
 const analytics = vi.hoisted(() => ({ capture: vi.fn() }));
 vi.mock('~/core/analytics', () => analytics);
@@ -14,12 +19,14 @@ function fakeRecorder(behaviour: FakeBehaviour = {}) {
       return (behaviour.supported ?? ['video/webm;codecs=vp9,opus']).includes(mimeType);
     }
     mimeType: string;
+    options: MediaRecorderOptions | undefined;
     state: RecordingState = 'inactive';
     startedWith: number | undefined;
     constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
       super();
       if (behaviour.throwOnConstruct) throw behaviour.throwOnConstruct;
       this.mimeType = options?.mimeType ?? '';
+      this.options = options;
       instances.push(this);
     }
     start(timeslice?: number) {
@@ -54,6 +61,26 @@ describe('startDebateRecorder', () => {
     expect(wire).toHaveBeenCalledWith(instances[0], 'video/webm;codecs=vp9,opus');
     expect(instances[0].startedWith).toBe(1_000);
     expect(analytics.capture).not.toHaveBeenCalled();
+  });
+
+  it('pins the video bitrate instead of taking the browser default', () => {
+    const { Recorder, instances } = fakeRecorder();
+    startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1_000, wire: vi.fn(), Recorder });
+    expect(instances[0].options).toEqual({
+      mimeType: 'video/webm;codecs=vp9,opus',
+      videoBitsPerSecond: RECORDING_VIDEO_BITS_PER_SECOND,
+    });
+
+    // With no supported WebM candidate the browser still picks the container, but not the bitrate.
+    const fallback = fakeRecorder({ supported: [] });
+    startDebateRecorder({
+      stream,
+      debateId: 'debate-1',
+      timesliceMs: 1_000,
+      wire: vi.fn(),
+      Recorder: fallback.Recorder,
+    });
+    expect(fallback.instances[0].options).toEqual({ videoBitsPerSecond: RECORDING_VIDEO_BITS_PER_SECOND });
   });
 
   it('reports a browser without MediaRecorder', () => {

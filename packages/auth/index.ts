@@ -1,5 +1,8 @@
+import './src/ensure-web-storage.js';
 export {
   usePrivy,
+  // App-wide observers should not wait for wallet activation before handling auth.
+  useLogin as usePrivyLogin,
   useLogout,
   // Privy's headless email login — `sendCode`/`loginWithCode` against an address already in hand,
   // so someone who has just typed their email into another form is not asked for it twice
@@ -25,4 +28,4 @@ export { getGeoChain } from './src/chain.js';
 export { useGeoLogin } from './src/use-login.js';
 // Mounted once for the life of the app. A headless login authenticates without creating the
 // embedded wallet the modal flow creates, and nothing downstream works without one.
-export { useEnsureEmbeddedWallet } from './src/use-ensure-embedded-wallet.js';
+export { retryEmbeddedWalletSetup, useEnsureEmbeddedWallet } from './src/use-ensure-embedded-wallet.js';

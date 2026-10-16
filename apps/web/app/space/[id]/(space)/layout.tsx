@@ -15,16 +15,18 @@ import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
+import { spacePageEntityId } from '~/core/utils/space/space-page';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
+import { CopyAvailabilityLinkMenuItem } from '~/partials/availability/copy-availability-link-menu-item';
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH, PROFILE_COVER_SIZE } from '~/partials/entity-page/entity-page-layout';
-import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
+import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/lazy-personal-profile-bio-starter-merge';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
@@ -106,6 +108,8 @@ export default async function Layout(props0: LayoutProps) {
    * not the other is worse than neither.
    */
   const isProfile = Spaces.isPersonProfileSpace(props.space);
+  // Asked of the same space as `isProfile`, which it defers to — see `isTopicHomeSpace`.
+  const isTopicSpace = Spaces.isTopicHomeSpace(props.space);
 
   /*
    * `props.space` is the same space the wave above asked about everywhere but
@@ -156,7 +160,7 @@ export default async function Layout(props0: LayoutProps) {
      * profile and after a failed read, where this is a passthrough.
      */
     <HydrationBoundary state={profile?.dehydratedState}>
-      <EntityStoreProvider id={props.id} spaceId={spaceId}>
+      <EntityStoreProvider id={props.id} spaceId={spaceId} initialEntities={props.initialEntities}>
         <RouteEditorProvider
           id={props.id}
           spaceId={spaceId}
@@ -193,6 +197,7 @@ export default async function Layout(props0: LayoutProps) {
                   spaceId={spaceId}
                   entityId={props.id}
                   keepSpaceActions={isProfile}
+                  menuItems={isProfile ? <CopyAvailabilityLinkMenuItem profileSpaceId={spaceId} /> : undefined}
                   // The name the server already read, until the store has one.
                   fallbackName={props.space?.entity?.name ?? null}
                   nameAccessoryComponent={
@@ -203,7 +208,7 @@ export default async function Layout(props0: LayoutProps) {
                   }
                   actionsComponent={
                     isProfile ? (
-                      <ProfileActions spaceId={spaceId} personEntityId={props.id} />
+                      <ProfileActions spaceId={spaceId} name={props.space?.entity?.name ?? null} />
                     ) : typeIds.includes(SystemIds.PERSON_TYPE) ? (
                       <ProfileDebateButton spaceId={spaceId} />
                     ) : null
@@ -291,6 +296,7 @@ export default async function Layout(props0: LayoutProps) {
                       typeIds={typeIds}
                       isProfile={isProfile}
                       personRecordCounts={personRecordCounts}
+                      isTopicSpace={isTopicSpace}
                     />
                   </React.Suspense>
                 </div>
@@ -334,6 +340,7 @@ const getSpaceFrontPage = async (spaceId: string) => {
       blockRelations: [],
       blocks: [],
       initialCollectionItems: {},
+      initialEntities: [],
       space: null,
       avatarUrl: null,
       coverUrl: null,
@@ -351,8 +358,9 @@ const getSpaceFrontPage = async (spaceId: string) => {
   // Gated to the e2e/test environment: on testnet/mainnet a fresh space can also
   // have an empty entity.id during the indexer-lag window, and handing out the
   // synthetic id there attaches edits to an entity that permanently diverges from
-  // the real home entity once it indexes. Outside test env we render the empty
-  // entity and let the next request pick up the indexed one.
+  // the real home entity once it indexes. Outside test env the editor gets
+  // `spacePageEntityId` below instead, which is derived rather than synthetic
+  // and is published with the `Types -> Space` relation that makes it the page.
   if (!entity.id && process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true') {
     const syntheticPage = await cachedFetchEntityPage(spaceId, spaceId);
     const syntheticEntity = syntheticPage?.entity ?? null;
@@ -382,6 +390,7 @@ const getSpaceFrontPage = async (spaceId: string) => {
       blockRelations: syntheticEntity?.relations ?? [],
       blocks: [],
       initialCollectionItems: {},
+      initialEntities: [],
       space: spaceWithSyntheticEntity,
       avatarUrl: syntheticEntity ? (Entities.avatar(syntheticEntity.relations) ?? null) : null,
       coverUrl: syntheticEntity ? (Entities.cover(syntheticEntity.relations) ?? null) : null,
@@ -436,7 +445,10 @@ const getSpaceFrontPage = async (spaceId: string) => {
   ]);
 
   return {
-    id: entity.id,
+    // Never `''`. A space with no page entity used to hand `''` to the editor here, so every
+    // Name / Description / Types edit on it was stored against no entity and dropped at publish
+    // (GEO-2966). It now gets the id its page will be created at; see `spacePageEntityId`.
+    id: spacePageEntityId(space),
     tabEntities,
     tabRelations,
     tabs,
@@ -445,6 +457,19 @@ const getSpaceFrontPage = async (spaceId: string) => {
     // pass — a gallery needs the dimensions on them to size its cards on the first paint.
     blocks: [...blocks, ...shownPropertyEntities],
     initialCollectionItems,
+    /**
+     * Everything fetched here, for `EntityStoreProvider` to seed the store with — see
+     * `fetchEntityPageData`. `entity` is scoped to this space, a subset of what `useHydrateEntity`
+     * fetches next; the store merges values and relations by id, so the full copy only adds to it.
+     * Left out when it has no id yet, since `props.id` is then a page that does not exist.
+     */
+    initialEntities: [
+      ...(entity.id ? [entity] : []),
+      ...allBlocks,
+      ...shownPropertyEntities,
+      ...tabEntities,
+      ...Object.values(initialCollectionItems).flat(),
+    ],
     space,
     avatarUrl: Entities.avatar(entity.relations) ?? null,
     coverUrl: Entities.cover(entity.relations) ?? null,

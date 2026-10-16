@@ -40,6 +40,8 @@ export function useClaimResponseSummaryBatch({
   const { personalSpaceId, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
   const normalizedTargets = normalizeClaimResponseTargets(targets);
 
+  const batchEnabled = enabled && !isPersonalSpaceLoading && normalizedTargets.length > 0;
+
   const responseBatch = useQuery({
     queryKey: [
       ...claimResponseSummariesQueryKeyPrefix(personalSpaceId, spaceId),
@@ -53,7 +55,7 @@ export function useClaimResponseSummaryBatch({
         personalSpaceId,
         signal,
       }),
-    enabled: enabled && !isPersonalSpaceLoading && normalizedTargets.length > 0,
+    enabled: batchEnabled,
     staleTime: 30_000,
     retry: 2,
     // GEO-2599: the query key contains the whole target list, so adding a claim —
@@ -73,6 +75,38 @@ export function useClaimResponseSummaryBatch({
     // different space's data.
     placeholderData: keepPreviousData,
   });
+  /*
+   * Asks again for a batch fetch a vote cancelled.
+   *
+   * A vote's read-back cancels every batch in its space (`use-entity-vote`), so a batch still in
+   * flight can't land after it with the pre-vote numbers, then refreshes only the claim voted on. A
+   * cancelled fetch goes back to whatever it had before — nothing, on a first fetch; the old answer,
+   * on a refresh — idle, and nothing asks again: its key hasn't changed, and a query doesn't refetch
+   * for being stale. Every other claim in it would stay unseeded, or stay at the numbers the refresh
+   * was replacing, for as long as the page is open.
+   *
+   * A fetch is known to have been cancelled when it goes idle having neither answered nor failed:
+   * both of those stamp the query, and a cancellation puts back the stamps it started with. Keyed
+   * on the target list, since a new list is a different query and its fetch a different fetch.
+   */
+  const batchKey = JSON.stringify([personalSpaceId, spaceId, normalizedTargets.map(claimResponseTargetKey)]);
+  const inFlight = React.useRef<{ key: string; dataUpdatedAt: number; errorUpdatedAt: number } | null>(null);
+  const askAgain = React.useEffectEvent(() => void responseBatch.refetch());
+  const { fetchStatus, dataUpdatedAt, errorUpdatedAt } = responseBatch;
+  React.useEffect(() => {
+    if (fetchStatus === 'fetching') {
+      if (inFlight.current?.key !== batchKey) inFlight.current = { key: batchKey, dataUpdatedAt, errorUpdatedAt };
+      return;
+    }
+    // Paused for the network is still in flight.
+    if (fetchStatus === 'paused') return;
+    const fetch = inFlight.current;
+    inFlight.current = null;
+    if (!fetch || fetch.key !== batchKey || !batchEnabled) return;
+    const cancelled = dataUpdatedAt === fetch.dataUpdatedAt && errorUpdatedAt === fetch.errorUpdatedAt;
+    if (cancelled) askAgain();
+  }, [batchEnabled, batchKey, dataUpdatedAt, errorUpdatedAt, fetchStatus]);
+
   const responderSpaceIds = responseBatch.data ? claimResponseSummaryResponderSpaceIds(responseBatch.data) : [];
 
   useQuery({

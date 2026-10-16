@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { observeOperation } from '~/core/analytics-operations';
 import { CURRENT_BOUNTY_SPACE_IDS } from '~/core/bounties/constants';
 import { buildExpressInterestOps } from '~/core/bounties/interest-ops';
 import { INTERESTED_IN_BOUNTY_PROPERTY_ID } from '~/core/bounties/ontology';
@@ -27,7 +29,7 @@ export function useInterestedBountyIds(bountyIds: string[]) {
   // bounty's DAO space (an earlier geogenesis shape). A row is the viewer's
   // when it lives in their personal space OR points from their space entity —
   // both checks need only the personal space id.
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isSuccess } = useQuery({
     enabled: Boolean(personalSpaceId) && bountyIds.length > 0,
     queryKey: [INTERESTED_IN_QUERY_KEY, personalSpaceId, key],
     queryFn: () => {
@@ -59,7 +61,10 @@ export function useInterestedBountyIds(bountyIds: string[]) {
 
   // Until the first fetch settles every bounty looks un-registered, so callers need
   // this to avoid offering a button that would write a duplicate relation.
-  return { interestedIds, isLoading };
+  // `isLoading` is false for a failed read too, which leaves `interestedIds` empty — "interested in
+  // nothing". Anything that acts on that answer, rather than just drawing it, waits for
+  // `isInterestKnown`.
+  return { interestedIds, isLoading, isInterestKnown: isSuccess };
 }
 
 type ProposeInterestArgs = {
@@ -82,6 +87,7 @@ type ProposeInterestArgs = {
  * handed straight to `makeProposal`, like the rest of the bounty writes.
  */
 export function useInterestedInBounty() {
+  const getContext = useActionContext('bounty_interest', 'bounty', '');
   const { makeProposal } = usePublish();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const queryClient = useQueryClient();
@@ -95,10 +101,18 @@ export function useInterestedInBounty() {
   const canRegisterInterest = Boolean(personalSpaceId && isRegistered);
 
   const registerInterest = React.useCallback(
-    async ({ bountyId, bountyName, bountySpaceId }: ProposeInterestArgs) => {
-      if (!personalSpaceId || !isRegistered) return;
-      if (submittedBountyIds.current.has(bountyId)) return;
+    async ({ bountyId, bountyName, bountySpaceId }: ProposeInterestArgs): Promise<boolean> => {
+      if (!personalSpaceId || !isRegistered) return false;
+      // Already sent this session, so already recorded as far as the caller is concerned.
+      if (submittedBountyIds.current.has(bountyId)) return true;
 
+      const operation = observeOperation(
+        'bounty_interest',
+        'bounty',
+        bountyId,
+        undefined,
+        getContext({ target_type: 'bounty', target_id: bountyId })
+      );
       submittedBountyIds.current.add(bountyId);
       setPendingBountyId(bountyId);
 
@@ -108,6 +122,7 @@ export function useInterestedInBounty() {
         bountySpaceId,
       });
 
+      let recorded = false;
       try {
         await makeProposal({
           values: [],
@@ -115,19 +130,24 @@ export function useInterestedInBounty() {
           spaceId: personalSpaceId,
           name: `Interested in: ${bountyName}`,
           onSuccess: () => {
+            recorded = true;
+            operation.succeeded();
             void queryClient.invalidateQueries({ queryKey: [INTERESTED_IN_QUERY_KEY, personalSpaceId] });
             void queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all });
           },
           onError: () => {
+            operation.failed('unknown');
             // Failed publishes are retryable, so release the guard.
             submittedBountyIds.current.delete(bountyId);
           },
         });
       } finally {
+        operation.failed('unknown');
         setPendingBountyId(null);
       }
+      return recorded;
     },
-    [isRegistered, makeProposal, personalSpaceId, queryClient]
+    [getContext, isRegistered, makeProposal, personalSpaceId, queryClient]
   );
 
   return { registerInterest, pendingBountyId, canRegisterInterest };

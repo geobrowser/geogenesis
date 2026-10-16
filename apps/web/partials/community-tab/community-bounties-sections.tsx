@@ -148,7 +148,7 @@ function InProgressBountyGrid({ bounties }: BountyGridProps) {
  */
 function AvailableBountyGrid({ bounties, allBounties }: BountyGridProps) {
   const bountyIds = React.useMemo(() => allBounties.map(bounty => bounty.id), [allBounties]);
-  const { interestedIds, isLoading: isInterestLoading } = useInterestedBountyIds(bountyIds);
+  const { interestedIds, isLoading: isInterestLoading, isInterestKnown } = useInterestedBountyIds(bountyIds);
   const { registerInterest, pendingBountyId, canRegisterInterest } = useInterestedInBounty();
 
   return (
@@ -160,9 +160,10 @@ function AvailableBountyGrid({ bounties, allBounties }: BountyGridProps) {
           isInterested={interestedIds.has(bounty.id)}
           isPending={pendingBountyId === bounty.id}
           isInterestLoading={isInterestLoading}
+          isInterestKnown={isInterestKnown}
           canRegisterInterest={canRegisterInterest}
           onRegisterInterest={target =>
-            void registerInterest({
+            registerInterest({
               bountyId: target.id,
               bountyName: target.name,
               bountySpaceId: target.spaceId,

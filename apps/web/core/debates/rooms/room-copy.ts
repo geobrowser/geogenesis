@@ -5,6 +5,9 @@ import type { DebateRoomPresenceState } from './room-presence';
  * to make swapping them one file.
  */
 
+/** Stands in for the opponent's name until one is known, on every surface that names them. */
+export const UNNAMED_OPPONENT = 'Your opponent';
+
 /** The indicator's label. Present in every state, so the pill never renders empty. */
 export function roomPresenceLabel(state: DebateRoomPresenceState, opponentName: string): string {
   switch (state) {
@@ -42,22 +45,37 @@ export function roomPresenceNote(state: DebateRoomPresenceState, opponentName: s
 }
 
 /**
- * The join prompt's urgency turns on `due` and `others_present`, both of which the server supplies
- * on the upcoming-rooms row.
+ * The banner that tells someone elsewhere on Geo their room has opened. Whether the opponent is in
+ * comes from the server's `others_present` on the upcoming-rooms row.
  */
 export const ROOM_JOIN_PROMPT = {
-  title: 'Your scheduled debate',
-  waitingNow: 'Someone is waiting for you now',
-  startingNow: 'Your debate is starting now',
-  scheduled: (startsAt: string) => `Your debate starts at ${startsAt}`,
+  title: 'Your debate room is open',
+  scheduledIn: (minutes: number) => `Scheduled in ${minutes} ${minutes === 1 ? 'min' : 'mins'}`,
+  scheduledAgo: (minutes: number) => `Scheduled for ${minutes} ${minutes === 1 ? 'min' : 'mins'} ago`,
+  startingNow: 'Starting now',
+  opponentJoined: (opponentName: string) => `${opponentName} is waiting`,
+  opponentNotJoined: (opponentName: string) => `${opponentName} hasn’t joined yet`,
   join: 'Join debate',
   notNow: 'Not now',
 } as const;
 
-/** Shown to someone who arrived before the door unlocked. */
+/** The same banner for a lobby the viewer asked to be reminded of (GEO-3133). */
+export const LOBBY_JOIN_PROMPT = {
+  title: (name: string | undefined) => (name ? `${name} is open` : 'Your lobby is open'),
+  subtitle: 'A debate lobby you asked to be reminded of',
+  join: 'Join lobby',
+} as const;
+
+/**
+ * Shown to someone who arrived before the door unlocked. The lead is read off the room rather than
+ * written here, since geo-chat stores it per room and may change it for new ones.
+ */
 export const ROOM_NOT_YET_OPEN = {
-  title: 'The room isn’t open yet',
-  opensAt: (opensAt: string) => `You can join from ${opensAt}.`,
+  message: (opensAt: string, leadMinutes: number | null) =>
+    leadMinutes
+      ? `The debate room opens ${leadMinutes} ${leadMinutes === 1 ? 'minute' : 'minutes'} early at ${opensAt}. In the meantime explore Geo.`
+      : `The debate room opens at ${opensAt}. In the meantime explore Geo.`,
+  explore: 'Explore',
 } as const;
 
 /** Under a disabled Request debate in a room, while the opponent has not arrived. */

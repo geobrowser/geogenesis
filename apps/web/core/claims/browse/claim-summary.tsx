@@ -331,7 +331,7 @@ export function ClaimSideSummary({
  * *ready to argue* a side, a viewer-relative offer. These are people who *responded*, a fact about
  * the claim. Two populations, two places, so neither has to be explained.
  */
-function ClaimResponders({
+export function ClaimResponders({
   entityId,
   spaceId,
   responseKind,

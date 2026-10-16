@@ -62,6 +62,12 @@ type EditableTabGroupProps = {
   systemTabsBefore?: SystemTab[];
   systemTabsAfter?: SystemTab[];
   overviewHref: string;
+  /**
+   * Where deleting the open tab lands. Defaults to `overviewHref`, which is also the base of every
+   * tab link; the two differ only where the bare URL is not the page's own content — a topic
+   * space, whose bare URL is its Explore feed and whose authored page lives at `/overview`.
+   */
+  closedTabHref?: string;
   className?: string;
 };
 
@@ -72,6 +78,7 @@ export function EditableTabGroup({
   systemTabsBefore = [],
   systemTabsAfter = [],
   overviewHref,
+  closedTabHref = overviewHref,
   className = '',
 }: EditableTabGroupProps) {
   const { storage } = useMutate();
@@ -250,7 +257,7 @@ export function EditableTabGroup({
       if (sidePanelTab) {
         sidePanelTab.setActiveTabId(null);
       } else {
-        router.replace(overviewHref, { scroll: false });
+        router.replace(closedTabHref, { scroll: false });
       }
     }
   };

@@ -1,79 +1,46 @@
-import { cookies } from 'next/headers';
+import * as React from 'react';
 
-import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
+import { cookies } from 'next/headers';
+import { preload } from 'react-dom';
+
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { browseSidebarMemberSpaceIds } from '~/core/debates/claim-space-allowlist';
-import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
-import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
-import { normId } from '~/core/utils/norm-id';
+import { PUBLIC_BEST_FEED_PATH } from '~/core/explore/explore-feed-params';
 
 import { ExplorePage } from '~/partials/explore/explore-page';
+import { ExploreSidePanelContainer } from '~/partials/explore/explore-side-panel-container';
+
+/**
+ * The request the Best feed makes on mount (`fetchFeedPage`, credentials included): the CDN-cached
+ * anonymous URL for a signed-out reader, the personal one for a signed-in reader. The href must
+ * match the feed's own URL exactly or the browser runs the request twice. The client can't send it
+ * until the whole bundle, Privy and wagmi among it, has downloaded and hydrated, about 2s into a cold load. Preloading it from the HTML starts it on
+ * first parse, and the feed's own `fetch` adopts the in-flight response. Skipped when For you opens
+ * the page, which asks for something else.
+ */
+const SIGNED_IN_BEST_FEED_PRELOAD_HREF = '/api/explore/feed?sort=best';
 
 export default async function ExploreRoutePage() {
   const wallet = (await cookies()).get(WALLET_ADDRESS)?.value;
-
-  let memberSpaceId: string | null = null;
-  try {
-    memberSpaceId = wallet ? await resolveMemberSpaceFromWalletSafe(wallet) : null;
-  } catch {
-    memberSpaceId = null;
+  // A signed-in reader's Best request carries an identity token while interleaving is on, and a
+  // preload can't send one, so the feed's fetch would ignore it and the request would run twice.
+  const bestSendsIdentityToken = wallet !== undefined && process.env.NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED === 'true';
+  if (process.env.NEXT_PUBLIC_FOR_YOU_ENABLED !== 'true' && !bestSendsIdentityToken) {
+    preload(wallet === undefined ? PUBLIC_BEST_FEED_PATH : SIGNED_IN_BEST_FEED_PRELOAD_HREF, {
+      as: 'fetch',
+      crossOrigin: 'use-credentials',
+    });
   }
 
-  // Fire every fetch in parallel. Each branch handles its own failure so one
-  // degraded indexer call doesn't drop the whole page.
-  const featuredSpacesPromise = fetchFeaturedSpacesShared().catch(() => [] as FeaturedSpace[]);
-  // Reuse the same in-flight Root-topic traversal for the Browse Featured-spaces
-  // section and the Explore Join-spaces panel.
-  const browsePromise = fetchBrowseSidebarData(memberSpaceId, featuredSpacesPromise).catch(() =>
-    fetchBrowseSidebarData(null, featuredSpacesPromise).catch(() => null)
-  );
-  const sidePanelPromise = fetchExploreSidePanelData({
-    memberSpaceId,
-    featuredSpacesPromise,
-  });
-
-  const [browseRaw, sidePanel] = await Promise.all([browsePromise, sidePanelPromise]);
-
-  const browse: BrowseSidebarData = browseRaw ?? {
-    featured: [],
-    editorOf: [],
-    memberOf: [],
-    documentationImage: null,
-    personalSpaceId: null,
-  };
-
-  const seen = new Set<string>();
-  const initialSpaceOptions: { value: string; label: string }[] = [];
-  for (const row of [...browse.featured, ...browse.editorOf, ...browse.memberOf]) {
-    const k = normId(row.id);
-    if (seen.has(k)) continue;
-    seen.add(k);
-    initialSpaceOptions.push({ value: row.id, label: row.name });
-  }
-
-  // Joined, or with a membership still pending — the spaces the filter opens on (GEO-2789). One
-  // set because the reader does not experience the difference: they chose the space at sign-up and
-  // it is theirs from that moment, whether or not an approval has landed yet.
-  //
-  // Read off `browse`, the same rows that build the menu above, and through the same helper the
-  // debates surfaces use — so the two cannot disagree about what "yours" means, and a space cannot
-  // be offered as an option without being recognised as one of theirs. The side panel's
-  // `pendingMembershipSpaceIds` looks like the obvious source and is not: it only checks pending
-  // requests against *featured* spaces, so a pending membership anywhere else was listed on the
-  // menu and left unticked.
-  const memberSpaceIds = [...browseSidebarMemberSpaceIds(browse, browse.personalSpaceId)];
-
+  // The rail streams in behind its own boundary: nothing in it is above the fold, and awaiting it
+  // here held the whole document — feed shell, CSS and JS requests — until its slowest call landed.
   return (
     <ExplorePage
-      initialSpaceOptions={initialSpaceOptions}
-      memberSpaceIds={memberSpaceIds}
-      featuredSpaces={sidePanel.featuredSpaces}
-      featuredRankings={sidePanel.featuredRankings}
-      pendingMembershipSpaceIds={sidePanel.pendingMembershipSpaceIds}
-      memberOrEditorSpaceIds={sidePanel.memberOrEditorSpaceIds}
-      communityCalls={sidePanel.communityCalls}
+      sidePanel={
+        <React.Suspense fallback={null}>
+          <ExploreSidePanelContainer />
+        </React.Suspense>
+      }
+      walletAddress={wallet || null}
     />
   );
 }

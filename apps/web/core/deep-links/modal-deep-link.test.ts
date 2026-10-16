@@ -8,7 +8,12 @@ describe('DEEP_LINK_MODALS', () => {
   // These appear in URLs written down outside this repo, so a rename is a breaking change and the
   // list is worth pinning rather than leaving to whoever edits the map next.
   it('pins the values that appear in shipped URLs', () => {
-    expect(DEEP_LINK_MODALS).toEqual({ signIn: 'signin', debates: 'debates', roomAccess: 'room-access' });
+    expect(DEEP_LINK_MODALS).toEqual({
+      signIn: 'signin',
+      debates: 'debates',
+      roomAccess: 'room-access',
+      availability: 'availability',
+    });
   });
 
   it('gives every link a distinct value', () => {
@@ -113,6 +118,13 @@ describe('toModal', () => {
   it('adds the sub-target and attribution when given', () => {
     expect(toModal({ modal: 'debates', pathname: '/explore', target: 'people', via: 'email' })).toBe(
       '/explore?modal=debates&modalTarget=people&via=email'
+    );
+  });
+
+  // GEO-3152: the calendar's Back to Debates returns to a page that may carry its own state.
+  it("merges into a path's own query and keeps its fragment", () => {
+    expect(toModal({ modal: 'debates', pathname: '/space/abc?proposal=1#votes' })).toBe(
+      '/space/abc?proposal=1&modal=debates#votes'
     );
   });
 

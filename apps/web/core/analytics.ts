@@ -3,6 +3,13 @@
 import { ID } from '~/core/id';
 import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 
+import { notifyActionPageView, pageContext } from './action-context';
+import { analyticsRuntime, isAnalyticsEnabled } from './analytics-context';
+import type { AnalyticsEventName } from './analytics-events';
+import { withSignupVisitor } from './auth/signup-visitor';
+
+export type { AnalyticsEventName } from './analytics-events';
+
 export type AnalyticsProperties = Record<string, unknown>;
 
 export type SearchAnalyticsSurface = 'entity' | 'global' | 'space';
@@ -23,10 +30,11 @@ const SEARCH_ANALYTICS_PROPERTIES = {
 type AnalyticsIdentity = string | number | AnalyticsProperties;
 
 type GeoAnalyticsRuntime = {
+  getContext?: () => AnalyticsProperties;
   measurementContextRevision?: () => number;
   reconcileAnonymousIdentity?: () => void;
   bindIdentity?: (accessToken: string) => Promise<boolean>;
-  capture?: (eventName: string, properties?: AnalyticsProperties) => void;
+  capture?: (eventName: AnalyticsEventName, properties?: AnalyticsProperties) => void;
   identify?: (user: AnalyticsIdentity, traits?: AnalyticsProperties) => void;
   identifyUser?: (user: AnalyticsIdentity, traits?: AnalyticsProperties) => void;
   pageViewed?: (properties?: AnalyticsProperties) => void;
@@ -50,7 +58,7 @@ type GeoAnalyticsRuntime = {
 type PendingCall =
   | {
       method: 'capture';
-      eventName: string;
+      eventName: AnalyticsEventName;
       properties: AnalyticsProperties;
     }
   | {
@@ -125,17 +133,57 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-b916886eb8f2.js';
+const analyticsScriptSrc = '/geo-analytics-57eb31cbb455.js';
+
+/**
+ * Amplitude autocapture, as `true` would enable it, minus "[Amplitude] Viewport Content Updated".
+ *
+ * That tracker (`elementInteractions.viewportContentUpdated`, on by default) keeps every element it
+ * has seen enter the viewport in a map it only clears when Amplitude decides the page ended: a full
+ * navigation or unload. In this app most movement never ends a page (the side panel, its tabs,
+ * feeds), so each card that scrolls into view stays in that map forever with its whole subtree:
+ * ~2,400 DOM nodes per profile tab switch, until the tab runs out of memory.
+ *
+ * Every other feature is listed explicitly because an object turns off anything it leaves out
+ * that `true` would have turned on (network tracking, web vitals, frustration interactions).
+ */
+const amplitudeAutocapture = {
+  attribution: true,
+  fileDownloads: true,
+  formInteractions: true,
+  pageViews: true,
+  sessions: true,
+  pageUrlEnrichment: true,
+  webVitals: true,
+  frustrationInteractions: true,
+  networkTracking: true,
+  // `{ enabled: false }`, not `false`: the SDK only converts a bare `false` when it arrives through
+  // remote config. Locally it spreads it into `{ exposureDuration: 150 }`, which leaves it on.
+  elementInteractions: { viewportContentUpdated: { enabled: false } },
+};
 const collectorUrl = 'https://c.geobrowser.io';
 
+let internalAccount = false;
 let scriptRequested = false;
 let lastPageView: { key: string; timestamp: number } | null = null;
 const pendingCalls: PendingCall[] = [];
+// Calls wait here until the runtime script loads, which a blocker can prevent for the life of the
+// tab. Hard-bounded; identity calls displace events first, since later events rely on them.
+const MAX_PENDING_CALLS = 1000;
+const IDENTITY_METHODS = new Set<PendingCall['method']>([
+  'identifyUser',
+  'signedUp',
+  'loggedIn',
+  'sessionRestored',
+  'loggedOut',
+  'identityReset',
+  'reconcileAnonymousIdentity',
+]);
 
 // NEXT_PUBLIC_ prefix is required: this loader runs client-side, and Next only exposes
 // NEXT_PUBLIC_* env vars to the browser bundle. Set NEXT_PUBLIC_DISABLE_POSTHOG='1' to keep
 // analytics off (e.g. during local dev).
-export const isAnalyticsEnabled = process.env.NEXT_PUBLIC_DISABLE_POSTHOG !== '1';
+export { isAnalyticsEnabled } from './analytics-context';
 
 export function initAnalytics() {
   if (typeof window === 'undefined' || typeof document === 'undefined' || !isAnalyticsEnabled) {
@@ -155,6 +203,7 @@ export function initAnalytics() {
     environment: analyticsEnvironment(hostname),
     autoPageViews: false,
     autoRouteTracking: false,
+    amplitudeAutocapture,
   };
   window.GeoAnalyticsConfig = window.lyticsConfig;
 
@@ -169,6 +218,63 @@ export function initAnalytics() {
 
   scriptRequested = true;
 
+  // Off the critical path (the runtime is ~150KB that would otherwise compete with the app's own
+  // chunks and the first debate video). Everything fired meanwhile waits in `pendingCalls`, which
+  // `flushPendingCalls` drains in order once the runtime is up.
+  deferUntilIdle(loadAnalyticsScript);
+}
+
+/** The longest the runtime waits for an idle moment before loading anyway. */
+export const ANALYTICS_IDLE_TIMEOUT_MS = 4000;
+
+/**
+ * Runs `task` once, at the first of: the browser going idle after the window `load` event, the
+ * viewer's first interaction (so an early click or a short visit is captured by the real runtime
+ * rather than a queue), or the idle timeout. `requestIdleCallback` is missing in Safari, where a
+ * timer stands in.
+ */
+function deferUntilIdle(task: () => void) {
+  let done = false;
+  const cleanups: (() => void)[] = [];
+
+  const run = () => {
+    if (done) return;
+    done = true;
+    for (const cleanup of cleanups) cleanup();
+    task();
+  };
+
+  const schedule = () => {
+    if (done) return;
+    if (typeof window.requestIdleCallback === 'function') {
+      const handle = window.requestIdleCallback(run, { timeout: ANALYTICS_IDLE_TIMEOUT_MS });
+      cleanups.push(() => window.cancelIdleCallback?.(handle));
+    } else {
+      const handle = window.setTimeout(run, 1);
+      cleanups.push(() => window.clearTimeout(handle));
+    }
+  };
+
+  const backstop = window.setTimeout(run, ANALYTICS_IDLE_TIMEOUT_MS + 1000);
+  cleanups.push(() => window.clearTimeout(backstop));
+
+  for (const type of ['pointerdown', 'keydown', 'touchstart'] as const) {
+    window.addEventListener(type, run, { once: true, passive: true });
+    cleanups.push(() => window.removeEventListener(type, run));
+  }
+  // Leaving before idle is the one case a timer cannot cover; the script cannot send from a
+  // closing page, but starting it here at least lets a bfcache restore find it loaded.
+  window.addEventListener('pagehide', run, { once: true });
+  cleanups.push(() => window.removeEventListener('pagehide', run));
+
+  if (document.readyState === 'complete') schedule();
+  else {
+    window.addEventListener('load', schedule, { once: true });
+    cleanups.push(() => window.removeEventListener('load', schedule));
+  }
+}
+
+function loadAnalyticsScript() {
   const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${analyticsScriptSrc}"]`);
 
   if (existingScript) {
@@ -178,7 +284,7 @@ export function initAnalytics() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-uRaIbrjyGABCgpsoCj9CefxylFMK6p/6CN5nLSw8m8A=';
+  script.integrity = 'sha256-V+sxy7RVYf4GqdINSdi2aJLgykgQW9+QIhc/tLQDXKw=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;
@@ -187,12 +293,17 @@ export function initAnalytics() {
   document.head.appendChild(script);
 }
 
-export function capture(eventName: string, properties: AnalyticsProperties = {}) {
+export function capture(eventName: AnalyticsEventName, properties: AnalyticsProperties = {}) {
+  // An attributed action may complete on another route. Explicit nulls also
+  // prevent the runtime from filling absent page entities from that later route.
+  const route = properties.page_view_id ? { page_entity_id: null, page_entity_type: null } : pageContext();
   callOrQueue({
     method: 'capture',
     eventName,
     properties: {
       app: appName,
+      ...route,
+      ...trafficProperties(),
       ...properties,
     },
   });
@@ -274,10 +385,11 @@ export function pageViewed(properties: AnalyticsProperties = {}) {
       app: appName,
       page_title: document.title,
       page_url: window.location.href,
-      page_path: window.location.pathname,
+      ...pageContext(),
       ...properties,
     },
   });
+  notifyActionPageView();
 }
 
 export function identify(user: AnalyticsIdentity, traits: AnalyticsProperties = {}) {
@@ -440,6 +552,7 @@ export function sessionRestored(user: AnalyticsIdentity, properties: AnalyticsPr
 }
 
 export function loggedOut(properties: AnalyticsProperties = {}) {
+  internalAccount = false;
   callOrQueue({
     method: 'loggedOut',
     properties: cleanProperties({
@@ -455,6 +568,7 @@ export function reconcileAnonymousAnalyticsIdentity() {
 }
 
 export function resetAnalyticsIdentity(properties: AnalyticsProperties = {}) {
+  internalAccount = false;
   callOrQueue({
     method: 'identityReset',
     properties: cleanProperties({
@@ -504,14 +618,11 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
   }
 
   const loginAccount = params.loginAccount;
-  const authFlow = properties.auth_flow;
-  const isManualLoginFlow = authFlow === 'manual_login';
   const authProperties = cleanProperties({
     ...identity,
     ...(params.isNewUser ? privySignupProperties(params.user) : {}),
     source: 'privy',
     auth_provider: 'privy',
-    auth_flow: isManualLoginFlow ? 'manual_login' : 'session_restore',
     is_new_user: params.isNewUser,
     was_already_authenticated: params.wasAlreadyAuthenticated,
     login_method: params.loginMethod,
@@ -520,9 +631,10 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
     login_wallet_chain_type: loginAccount?.chainType,
     login_wallet_connector_type: loginAccount?.connectorType,
     ...properties,
+    auth_flow: params.wasAlreadyAuthenticated ? 'session_restore' : 'manual_login',
   });
 
-  if (params.wasAlreadyAuthenticated && !isManualLoginFlow) {
+  if (params.wasAlreadyAuthenticated) {
     sessionRestored(identity, authProperties);
   } else if (params.isNewUser) {
     signedUp(identity, authProperties);
@@ -540,6 +652,13 @@ function callOrQueue(call: PendingCall) {
 
   if (invokeRuntime(call)) {
     return;
+  }
+
+  if (pendingCalls.length >= MAX_PENDING_CALLS) {
+    if (!IDENTITY_METHODS.has(call.method)) return;
+    // Room for an identity call comes from the oldest event, keeping the bound hard.
+    const evict = pendingCalls.findIndex(queued => !IDENTITY_METHODS.has(queued.method));
+    pendingCalls.splice(evict === -1 ? 0 : evict, 1);
   }
 
   pendingCalls.push(call);
@@ -666,7 +785,7 @@ function invokeRuntimeUnsafe(call: PendingCall) {
   }
 
   if (call.method === 'signedUp' && analytics.signedUp) {
-    analytics.signedUp(call.user, call.properties);
+    analytics.signedUp(call.user, withSignupVisitor(call.properties));
     return true;
   }
 
@@ -710,17 +829,29 @@ function invokeRuntimeUnsafe(call: PendingCall) {
   return false;
 }
 
-function analyticsRuntime() {
-  return window.lytics || window.geoAnalytics;
+function trafficProperties() {
+  return {
+    is_automated:
+      typeof navigator !== 'undefined' &&
+      (navigator.webdriver === true || /HeadlessChrome|PhantomJS/i.test(navigator.userAgent)),
+    is_test: process.env.NEXT_PUBLIC_IS_TEST_ENV === '1',
+    is_internal:
+      internalAccount ||
+      process.env.NEXT_PUBLIC_IS_TEST_ENV === '1' ||
+      (typeof window !== 'undefined' && !isProductionGenesisHost(window.location.hostname)),
+  };
 }
 
 function privyIdentityProperties(user: PrivyAnalyticsUser, properties: AnalyticsProperties = {}) {
+  const teamIds = (process.env.NEXT_PUBLIC_ANALYTICS_TEAM_ACCOUNT_IDS ?? '').split(',').map(id => id.trim());
+  internalAccount = !!user.id && teamIds.includes(user.id);
   const wallet = user.wallet ?? null;
 
   return cleanProperties({
     user_id: user.id,
     privy_user_id: user.id,
     auth_provider: 'privy',
+    ...trafficProperties(),
     privy_user_created_at: formatDate(user.createdAt),
     has_privy_email: Boolean(user.email),
     has_privy_phone: Boolean(user.phone),

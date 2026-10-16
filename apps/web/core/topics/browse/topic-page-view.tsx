@@ -4,11 +4,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { usePathname } from 'next/navigation';
-
 import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { readTypes } from '~/core/database/entities';
-import { useEntityCommentCount } from '~/core/hooks/use-entity-comment-count';
+import { TopicFollowControl } from '~/core/follows/follow-control';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useActiveTabIdForEditor, useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -24,8 +22,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { CommentSection } from '~/partials/comments/comments-section';
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { RelationsGroup as EditableRelationsGroup } from '~/partials/entity-page/editable-entity-page';
 import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
@@ -79,28 +76,20 @@ const TOPIC_META_CHIP_CLASS = `${META_CHIP_CLASS} text-grey-04`;
  * Topic type while standing on it. A query parameter on the entity's own URL stays valid: the
  * generic entity page reads it, renders the same blocks, and the reader keeps their place.
  */
-type TopicTab = 'explore' | 'blocks' | 'comments' | 'custom';
+type TopicTab = 'explore' | 'blocks' | 'custom';
 
 export function resolveTopicTab({
   entityId,
-  pathname,
   authoredTabId,
   panel,
 }: {
   /** The topic itself — as a tab id, it names the topic's own block content. */
   entityId: string;
-  pathname: string;
   authoredTabId: string | null;
   panel: { activeTabId: string | null; activeSystemTab: string | null } | null;
 }): TopicTab {
-  if (panel) {
-    if (panel.activeTabId) return ID.equals(panel.activeTabId, entityId) ? 'blocks' : 'custom';
-    if (panel.activeSystemTab === 'comments') return 'comments';
-    return 'explore';
-  }
-
-  if (authoredTabId) return ID.equals(authoredTabId, entityId) ? 'blocks' : 'custom';
-  if (pathname.endsWith('/comments')) return 'comments';
+  const activeTabId = panel ? panel.activeTabId : authoredTabId;
+  if (activeTabId) return ID.equals(activeTabId, entityId) ? 'blocks' : 'custom';
   return 'explore';
 }
 
@@ -139,10 +128,8 @@ export function TopicPageView({
   isEditing?: boolean;
 }) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
-  const pathname = usePathname();
   const activeAuthoredTabId = useActiveTabIdForEditor();
   const sidePanelTab = useEntitySidePanelActiveTab();
-  const { count: commentCount, isLoading: commentCountLoading } = useEntityCommentCount(entityId);
   const fullTopicSpaceIds = useTopicSpaceScope(spaceId);
   const topicSpaceIds = React.useMemo(
     () => limitTopicFeedSpaceIds(fullTopicSpaceIds, spaceId),
@@ -186,7 +173,6 @@ export function TopicPageView({
   const ancestors = useTopicAncestors(entityId, spaceId);
   const activeTab = resolveTopicTab({
     entityId,
-    pathname,
     authoredTabId: activeAuthoredTabId,
     panel: sidePanelTab,
   });
@@ -233,12 +219,6 @@ export function TopicPageView({
 
   const systemTabs = [
     { label: 'Explore', href: overviewHref, sidePanelKey: 'overview' },
-    {
-      label: 'Comments',
-      href: `${overviewHref}/comments`,
-      sidePanelKey: 'comments',
-      badge: commentCountLoading ? undefined : String(commentCount),
-    },
     // Sits on the authored side of the rule, at the head of the tabs this topic wrote for itself —
     // it is one of them, not one of the product's record tabs, and it is addressed like one. No
     // `sidePanelKey`: the panel selects it by tab id, which is what `StaticTab` falls back to, so
@@ -374,7 +354,12 @@ export function TopicPageView({
               )}
               {isCurated && <span className={TOPIC_META_CHIP_CLASS}>Curated</span>}
             </div>
-            <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
+            {/* GEO-3191: following is a topic's one action, so it stands where the votes were. */}
+            <EntityPageActions
+              entityId={entityId}
+              spaceId={spaceId}
+              leading={<TopicFollowControl topic={{ id: entityId, name: entity.name }} />}
+            />
           </div>
 
           <TopicComposition topicId={entityId} spaceId={spaceId} spaceIds={topicSpaceIds} />
@@ -417,9 +402,6 @@ function TopicTabPanel({
   // tab id equal to its own entity id as *not a tab* — `isTab` requires `tabId !== entityId` — so
   // the Overview URL lands on the root blocks and an authored tab id lands on that tab's.
   if (activeTab === 'custom' || activeTab === 'blocks') return <Editor spaceId={spaceId} shouldHandleOwnSpacing />;
-  if (activeTab === 'comments') {
-    return <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType="topic" variant="tab" />;
-  }
 
   return <TopicFeed topicId={entityId} spaceId={spaceId} spaceIds={topicSpaceIds} />;
 }

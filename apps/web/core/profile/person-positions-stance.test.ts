@@ -1,8 +1,15 @@
 import { print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
-import { decodeVoteOrder, personVoteOrderDocument } from './person-position-order';
-import { applyFilter, heldPositionsCount } from './use-person-positions';
+import {
+  decodeVoteOrder,
+  personBestOrderDocument,
+  personScoreOrderDocument,
+  personVoteOrderDocument,
+} from './person-position-order';
+import { POSITION_VOTE_KINDS, POSITION_VOTE_TYPES } from './profile-facts';
+import { personPositionIndexDocument } from './use-person-position-index';
+import { applyFilter } from './use-person-positions';
 
 /**
  * How a person answered each claim, read off their votes (GEO-2859).
@@ -318,49 +325,29 @@ describe('applyFilter', () => {
     expect(applyFilter(dashed, ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'])).toHaveLength(1);
   });
 
-  /*
-   * Top's order arrives from a connection that cannot tell a held position from
-   * a retracted one, so the vote table narrows it. The `new` order is already
-   * narrowed, which is why this is a second argument rather than a property of
-   * the order.
-   */
-  it('drops claims the vote table no longer counts as answered', () => {
-    expect(applyFilter(order, null, new Set(['a', 'c']))).toEqual(['a', 'c']);
-  });
-
-  it('applies the filter and the answered set together', () => {
-    expect(applyFilter(order, ['b', 'c'], new Set(['a', 'b']))).toEqual(['b']);
-  });
-
   it('has nothing to give before the order arrives', () => {
     expect(applyFilter(undefined, null)).toEqual([]);
   });
 });
 
 /**
- * The number above the list counts the same claims the list shows.
+ * Every `votedBy` read that means "positions" asks for held positions only (GEO-2962).
  *
- * `entitiesConnection(votedBy:)` counts a retracted vote, because the row is
- * still there — 211 against 194 on one account. There is no server-side way to
- * ask it not to, so the vote table is what the number comes from.
+ * A retraction rewrites the vote row to "neither" rather than removing it, so without
+ * `votedByTypes` the Top and Best orders and the filter index list claims the person no longer
+ * holds a position on — 211 against 194 on one account. The New order drops them in its decode;
+ * these three have to ask the server to, with the same kinds and types the count uses.
  */
-describe('heldPositionsCount', () => {
-  it('prefers the vote table, which can tell the difference', () => {
-    expect(heldPositionsCount({ total: 194, isError: false }, 211)).toBe(194);
-  });
+describe('the votedBy reads', () => {
+  it('leave retracted positions out, with the kinds and types the count uses', () => {
+    expect(POSITION_VOTE_KINDS).toEqual([1]);
+    expect(POSITION_VOTE_TYPES).toEqual([0, 1]);
 
-  it('counts an empty record as zero rather than falling through', () => {
-    expect(heldPositionsCount({ total: 0, isError: false }, 3)).toBe(0);
-  });
-
-  it('says nothing while the vote table is still out', () => {
-    // Rather than printing the server's number and correcting it a beat later.
-    expect(heldPositionsCount({ total: null, isError: false }, 211)).toBeNull();
-  });
-
-  it('falls back to the server count when the vote read failed', () => {
-    // Overstated, and better than a headline number that never arrives.
-    expect(heldPositionsCount({ total: null, isError: true }, 211)).toBe(211);
+    for (const document of [personBestOrderDocument, personScoreOrderDocument, personPositionIndexDocument]) {
+      const source = print(document);
+      expect(source).toContain('votedByKinds: $kinds');
+      expect(source).toContain('votedByTypes: $types');
+    }
   });
 });
 

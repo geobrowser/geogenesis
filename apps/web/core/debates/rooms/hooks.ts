@@ -45,7 +45,8 @@ export function useDebateRoom(roomId: string, enabled = true) {
     // `authenticated`, or the fetcher throws before it reaches the wire and the page reports a
     // failure at a viewer who has simply not signed in — or has, and Privy is still restoring.
     enabled: enabled && Boolean(roomId) && ready && authenticated,
-    refetchInterval: present ? ROOM_POLL_MS : false,
+    // A lobby is read from `/debate-lobbies/{id}`; its room view only says it is one.
+    refetchInterval: query => (query.state.data?.kind === 'lobby' ? false : present ? ROOM_POLL_MS : false),
   });
 }
 
@@ -56,7 +57,7 @@ export function useDebateRoom(roomId: string, enabled = true) {
  * The server parses this as a uuid and rejects anything else, so the fallback is uuid-shaped: a
  * page served over plain http on a LAN address has no `crypto.randomUUID`.
  */
-function useConnectionId() {
+export function useConnectionId() {
   const ref = React.useRef<string>('');
   if (!ref.current) ref.current = globalThis.crypto?.randomUUID?.() ?? fallbackUuid();
   return ref.current;

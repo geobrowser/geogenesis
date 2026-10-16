@@ -11,6 +11,7 @@ import {
   DAY_INITIAL_HOUR,
   DAY_START_HOUR,
   SLOT_MINUTES,
+  WEEKDAY_LABELS,
   addDays,
   clampToDay,
   columnFor,
@@ -27,7 +28,6 @@ import { Text } from '~/design-system/text';
 
 /** Height of one slot row. The whole grid's geometry follows from this. */
 const SLOT_PX = 24;
-const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ROWS_PER_HOUR = 60 / SLOT_MINUTES;
 
 const KIND_LABELS: Record<BlockKind, string> = {

@@ -100,16 +100,16 @@ export function createDebateAttentionStore(
 const DEFAULT_HIDE_GRACE_MS = 60_000;
 
 /**
- * Presence uses a longer grace than polling cadence does, because the cost of being wrong is not
- * symmetric: a poll that pauses for a minute too long costs nothing, while dropping someone from
- * matchmaking costs them a debate and costs the requester a reply that never comes.
+ * How long a hidden tab stays online (GEO-3119). Preston's call: thirty seconds, down from three
+ * minutes, so a backgrounded tab leaves the online list quickly.
  *
- * Three minutes is long enough that checking a calendar, reading a notification or answering a
- * message does not take you out of the pool, and short enough that a closed laptop leaves it while
- * the person is still plausibly coming back. It is deliberately a number to tune from evidence
- * rather than a derived constant — measure before shortening it.
+ * Being *requestable* does not wait for this. geo-chat already stops offering live requests the
+ * moment a tab reports hidden (`debate_visible`, GEO-3028) or after three minutes with no real
+ * input (GEO-3119). This only decides when a hidden person stops showing as online at all. It is
+ * also held open while the viewer has something of their own pending — see `DebateCoordinator` —
+ * so glancing away never costs anyone their own request or session.
  */
-const PRESENCE_HIDE_GRACE_MS = 180_000;
+export const PRESENCE_HIDE_GRACE_MS = 30_000;
 
 /**
  * Is this tab on screen, or recently so?
@@ -329,7 +329,7 @@ export function useDebateVisibility() {
 /**
  * Is the viewer here? Drives the gateway's `debate_presence`, and therefore `is_online`.
  *
- * **Visibility, with a three-minute grace — this reverses GEO-2849, deliberately.** That change
+ * **Visibility, with a short grace (`PRESENCE_HIDE_GRACE_MS`) — this reverses GEO-2849, deliberately.** That change
  * made presence mean "a tab is open and heartbeating", which is true of an abandoned tab forever:
  * `last_seen_at` never goes stale, so the 90-second server window never elapses and people sit in
  * the matchmaking pool indefinitely. Yaniv requested debates from several such ghosts and got no

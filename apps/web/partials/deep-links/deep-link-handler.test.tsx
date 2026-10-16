@@ -13,6 +13,9 @@ const mocks = {
   authenticated: false,
   openSignIn: vi.fn(),
   signInOptions: null as { redirectTo?: string; analytics?: Record<string, unknown> } | null,
+  // The debates link starts its own sign-in for a tab that needs one, so the two are told apart by
+  // their callback: the sign-in link passes none, the debates link opens the hub when it settles.
+  hubSignInComplete: null as (() => void) | null,
   openHub: vi.fn(),
   replaceState: vi.fn(),
 };
@@ -27,8 +30,9 @@ vi.mock('@geogenesis/auth', () => ({
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: (_onComplete: unknown, options: (typeof mocks)['signInOptions']) => {
-    mocks.signInOptions = options;
+  usePrivySignIn: (onComplete: (() => void) | undefined, options: (typeof mocks)['signInOptions']) => {
+    if (onComplete) mocks.hubSignInComplete = onComplete;
+    else mocks.signInOptions = options;
     return mocks.openSignIn;
   },
 }));
@@ -55,6 +59,7 @@ describe('DeepLinkHandler', () => {
     mocks.ready = true;
     mocks.authenticated = false;
     mocks.signInOptions = null;
+    mocks.hubSignInComplete = null;
     mocks.openSignIn.mockReset();
     mocks.openHub.mockReset();
     mocks.replaceState.mockReset();
@@ -123,7 +128,9 @@ describe('DeepLinkHandler', () => {
       render(<DeepLinkHandler />);
 
       expect(mocks.signInOptions?.redirectTo).toBe('/explore');
-      expect(mocks.signInOptions?.analytics).toEqual({ link_source: 'marketing' });
+      expect(mocks.signInOptions?.analytics).toEqual(
+        expect.objectContaining({ link_source: 'marketing', auth_trigger: 'deep_link', auth_control: 'open_sign_in' })
+      );
     });
   });
 
@@ -163,13 +170,27 @@ describe('DeepLinkHandler', () => {
       expect(mocks.openHub).toHaveBeenCalledWith('people');
     });
 
-    // Signed-out narrowing is the hub's (`visibleTab`, GEO-2725), so a signed-in-only tab is
-    // passed straight through rather than second-guessed here.
-    it('passes a signed-in-only tab to the hub unchanged', () => {
+    it('passes a signed-in-only tab to the hub unchanged for a signed-in viewer', () => {
+      mocks.authenticated = true;
       mocks.search = 'modal=debates&modalTarget=requests';
 
       render(<DeepLinkHandler />);
 
+      expect(mocks.openSignIn).not.toHaveBeenCalled();
+      expect(mocks.openHub).toHaveBeenCalledWith('requests');
+    });
+
+    // The scheduling emails link to Requests. Signed out there is no Requests tab, so the hub opened
+    // on Explore with the request nowhere in sight; the viewer signs in first instead.
+    it('signs a signed-out viewer in before opening a signed-in-only tab', () => {
+      mocks.search = 'modal=debates&modalTarget=requests';
+
+      render(<DeepLinkHandler />);
+
+      expect(mocks.openSignIn).toHaveBeenCalledTimes(1);
+      expect(mocks.openHub).not.toHaveBeenCalled();
+
+      mocks.hubSignInComplete?.();
       expect(mocks.openHub).toHaveBeenCalledWith('requests');
     });
 

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getApiProposalCanExecute,
+  getEffectiveApiProposalStatus,
   getSpaceTopicProposalDetails,
   getSubspaceProposalDetails,
   getVotingSettingsProposalDetails,
+  isApiProposalExecutionWindowClosed,
   mapApiActionsToProposalType,
   proposalTypeFromActionTypes,
 } from './proposal';
@@ -222,5 +225,53 @@ describe('proposalTypeFromActionTypes', () => {
 
   it('answers for a proposal with no actions at all', () => {
     expect(proposalTypeFromActionTypes([])).toBe('ADD_EDIT');
+  });
+});
+
+// GEO-2609: proposal 995f… kept status EXECUTABLE and `canExecute: true` from the
+// API for weeks after its `executeBy` (1787525526) passed, while the contract's
+// `canExecuteProposal` had long returned false. These pin the deadline gate.
+describe('execution deadline', () => {
+  const EXECUTE_BY = 1_787_525_526;
+  const passed = {
+    canExecute: true,
+    votingMode: 'SLOW' as const,
+    quorum: { required: 1, current: 1, progress: 1, reached: true },
+    threshold: { required: '5100000', current: 1, progress: 1, reached: true },
+    status: 'EXECUTABLE' as const,
+    executeBy: EXECUTE_BY,
+  };
+
+  it('offers execution up to and including executeBy, matching the contract', () => {
+    // The contract refuses only when `block.timestamp > executeBy`.
+    expect(getApiProposalCanExecute(passed, EXECUTE_BY - 1)).toBe(true);
+    expect(getApiProposalCanExecute(passed, EXECUTE_BY)).toBe(true);
+  });
+
+  it('never offers execution once executeBy has passed, whatever the API says', () => {
+    expect(getApiProposalCanExecute(passed, EXECUTE_BY + 1)).toBe(false);
+    expect(getApiProposalCanExecute({ ...passed, votingMode: 'FAST' }, EXECUTE_BY + 1)).toBe(false);
+  });
+
+  it('never shows an expired EXECUTABLE proposal as executable', () => {
+    expect(getEffectiveApiProposalStatus(passed, EXECUTE_BY + 1)).toBe('REJECTED');
+    expect(getEffectiveApiProposalStatus(passed, EXECUTE_BY)).toBe('EXECUTABLE');
+  });
+
+  it('leaves settled outcomes alone after the deadline', () => {
+    expect(getEffectiveApiProposalStatus({ status: 'ACCEPTED', executeBy: EXECUTE_BY }, EXECUTE_BY + 1)).toBe(
+      'ACCEPTED'
+    );
+    expect(getEffectiveApiProposalStatus({ status: 'PROPOSED', executeBy: EXECUTE_BY }, EXECUTE_BY + 1)).toBe(
+      'PROPOSED'
+    );
+  });
+
+  it('treats a zero, null or missing executeBy as "no window yet", not as expired', () => {
+    // v2 leaves executeBy at zero until the first vote; older API deployments omit it.
+    for (const executeBy of [0, null, undefined]) {
+      expect(isApiProposalExecutionWindowClosed({ executeBy }, EXECUTE_BY + 1)).toBe(false);
+      expect(getApiProposalCanExecute({ ...passed, executeBy }, EXECUTE_BY + 1)).toBe(true);
+    }
   });
 });

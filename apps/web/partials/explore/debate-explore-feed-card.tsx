@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
@@ -15,8 +16,10 @@ import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
+import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
+import { useCoveredByMobileSheet } from '~/core/state/mobile-sheet-cover';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FullscreenLink } from '~/design-system/fullscreen-link';
@@ -166,11 +169,15 @@ export function DebateExploreFeedCard({
   // report at the 0.4 threshold deactivates rather than landing ambiguously inside the band —
   // a ratio reported exactly at a threshold is the normal case, not an edge case.
   const [active, setActive] = React.useState(false);
+  // Any part of the card on screen. The observer reports crossing in and out of view as well as
+  // its two thresholds, so this needs no threshold of its own.
+  const [onScreen, setOnScreen] = React.useState(false);
   React.useEffect(() => {
     if (!container) return;
     const observer = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
+          setOnScreen(entry.isIntersecting);
           setActive(current => {
             if (!entry.isIntersecting) return false;
             if (entry.intersectionRatio >= ACTIVATE_RATIO) return true;
@@ -190,6 +197,15 @@ export function DebateExploreFeedCard({
   // is this one's turn. A card that is allowed but scrolled away still stops,
   // because its own judgement above is unchanged.
   const playbackAllowed = useDebatePlaybackAllowed(debateId);
+  // A card nobody can see stops playing and lets go of its media: behind a mobile sheet (the side
+  // panel, the Debates hub), or off screen on the mobile layout. Paused video still holds its
+  // decoders and buffered frames, and on a phone that adds up to a reloaded tab. The card keeps its
+  // signed URLs, so it reattaches quickly (GEO-3067's `releaseMedia`). Cards inside a sheet, like a
+  // profile's Activity gallery, are not covered by it. Desktop keeps off-screen cards loaded so
+  // the next one starts at once.
+  const coveredBySheet = useCoveredByMobileSheet();
+  const isMobileLayout = useIsMobileLayout();
+  const releaseMedia = coveredBySheet || (isMobileLayout && !onScreen);
 
   const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
@@ -240,6 +256,16 @@ export function DebateExploreFeedCard({
 
   const requestPlayback = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!onPlaybackRequest) return;
+    // Clicks that are not asks to play pass straight through. A finished debate's end card is drawn
+    // inside this wrapper, and its vote, its voter list and its way into the claims panel are not
+    // media controls — capturing them swallowed the vote and handed playback to a debate that had
+    // ended. Only its replay asks to play. The voter list is portalled out of this DOM but its
+    // clicks still bubble through React's tree, so a target outside the wrapper is let go too.
+    const target = event.target;
+    if (target instanceof Node && !event.currentTarget.contains(target)) return;
+    const onEndCard = target instanceof Element && target.closest('[data-debate-end-card]') !== null;
+    const isReplay = target instanceof Element && target.closest('[data-end-card-replay]') !== null;
+    if (onEndCard && !isReplay) return;
     if (active && playbackAllowed) {
       pendingPlaybackRequestRef.current = false;
       onPlaybackRequest(debateId);
@@ -249,8 +275,14 @@ export function DebateExploreFeedCard({
     // This first click either activates the card or transfers the gate. It must not also reach the
     // player's full-tile toggle (or another media control) before the player is both active and
     // allowed, or React's batched ownership update can briefly run it alongside the old owner.
-    event.preventDefault();
-    event.stopPropagation();
+    //
+    // The end card's replay is the exception: it is let through. The player holds a replay until it
+    // is handed playback, so it cannot run alongside the old owner — and swallowing it here left an
+    // ended debate with nothing to resume, so Replay took a second tap.
+    if (!isReplay) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
 
     if (active) {
       pendingPlaybackRequestRef.current = false;
@@ -275,6 +307,8 @@ export function DebateExploreFeedCard({
   // share dialog, the app's comments panel — is the card's to own and to render once. Same
   // arrangement, same reason, as `DebateFeedItem` on the full-screen feed.
   const [claimsOpen, setClaimsOpen] = React.useState(false);
+  // Stable, because `DebateCardVideos` is memoized and a fresh function each render would undo it.
+  const openClaims = React.useCallback(() => setClaimsOpen(true), []);
   const share = useDebateShareAction();
   const { commentsTarget, openComments } = useEntityCommentsPanel();
   // Nulls read as "not enabled", which is how the count stands down with the media above. Shares a
@@ -316,13 +350,16 @@ export function DebateExploreFeedCard({
     // See the prop's own note: an explore card can be a data block row listing a debate from
     // another space, and only the lookup finds that space's votes.
     responseKind: 'infer' as const,
-    onClaims: mediaMounted ? () => setClaimsOpen(true) : undefined,
+    onClaims: mediaMounted ? () => openClaims() : undefined,
     onShare: mediaMounted ? share.onOpen : undefined,
     shareOpen: share.open,
   };
 
   return (
-    <article ref={setContainer} className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
+    <ActionSurfaceArticle
+      ref={setContainer}
+      className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0"
+    >
       {/* Meta, title, media and the interaction bar share one column, capped so the whole card
           fits the viewport it is watched in — see {@link DEBATE_CARD_COLUMN_STYLE}. A cap rather
           than the full column width because feed columns, especially data blocks, can be much
@@ -346,6 +383,7 @@ export function DebateExploreFeedCard({
             <div className="ml-auto flex shrink-0 items-center gap-1">
               {endSlot}
               <FullscreenLink
+                requiresFullPage
                 href={NavUtils.toEntity(item.spaceId, item.entityId)}
                 entityId={item.entityId}
                 spaceId={item.spaceId}
@@ -370,7 +408,13 @@ export function DebateExploreFeedCard({
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
-            <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} reducedOverlays={compactChrome} />
+            <DebateCardVideos
+              debate={readyDebate}
+              active={active && playbackAllowed && !coveredBySheet}
+              releaseMedia={releaseMedia}
+              reducedOverlays={compactChrome}
+              onOpenClaims={openClaims}
+            />
           ) : (
             <DebateVideoSkeleton />
           )}
@@ -413,7 +457,7 @@ export function DebateExploreFeedCard({
           ) : null}
         </>
       ) : null}
-    </article>
+    </ActionSurfaceArticle>
   );
 }
 
@@ -426,13 +470,26 @@ export function DebateExploreFeedCard({
 const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
   active,
+  releaseMedia,
   reducedOverlays,
+  onOpenClaims,
 }: {
   debate: Debate;
   active: boolean;
+  releaseMedia: boolean;
   reducedOverlays: boolean;
+  onOpenClaims: () => void;
 }) {
-  return <DebateFeedPlayer debate={debate} active={active} preload reducedOverlays={reducedOverlays} />;
+  return (
+    <DebateFeedPlayer
+      debate={debate}
+      active={active}
+      preload
+      releaseMedia={releaseMedia}
+      reducedOverlays={reducedOverlays}
+      onOpenClaims={onOpenClaims}
+    />
+  );
 });
 
 function DebateVideoSkeleton() {

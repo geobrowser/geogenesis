@@ -13,6 +13,13 @@ export type Space = {
   entity: SpaceEntity;
   address: Address;
   topicId: string | null;
+  /**
+   * Whether the space has any profile entity at all — a topic or a `page`. A personal
+   * space with neither registered on-chain but never got its profile published (the
+   * publish userOp failed or was dropped after registration), so it has no name and no
+   * Space-typed entity to publish into.
+   */
+  hasProfile: boolean;
 
   // In v2, editors/members are identified by their memberSpaceId (hex format), not wallet address
   editors: string[];
@@ -36,6 +43,7 @@ export function SpaceDto(space: RemoteSpace): Space {
     entity: spaceEntity,
     address: space.address,
     topicId: space.topicId ?? null,
+    hasProfile: space.topic != null || space.page != null,
     editors: space.editorsList.map(editor => editor.memberSpaceId),
     members: space.membersList.map(member => member.memberSpaceId),
     totalMembers: space.members.totalCount,

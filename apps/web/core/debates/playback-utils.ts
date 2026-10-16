@@ -45,16 +45,34 @@ export function hasSocialVideo(media: DebateMediaResponse | undefined): boolean 
   return media?.artifacts.some(artifact => artifact.kind === 'social_video') ?? false;
 }
 
-export function normalizeTurnDurationsMs(values: number[]) {
-  const normalized = values.filter(value => Number.isFinite(value) && value > 0);
-  return normalized.length > 0 ? normalized : [30_000, 30_000];
+/**
+ * The debate row's own turn allowance, or `null` when it cannot be trusted (GEO-2956).
+ *
+ * This used to invent `[30_000, 30_000]` for an empty array and quietly drop any entry that was
+ * not a positive number. Both are wrong answers that look plausible: a two-turn schedule laid
+ * over a six-turn recording reads as a content problem, not a data one, and dropping one entry
+ * shifts every later turn onto the wrong speaker.
+ *
+ * The catalog in `formats.ts` is deliberately not a fallback either. The row snapshots the
+ * durations at creation and the id does not version them: 65 of the 185 complete debates the
+ * API listed on 2026-09-30 carry `turn_format_id: 'standard'` with the old four-turn allowance,
+ * which `standard` no longer resolves to. So the caller gets `null` and has to use what the
+ * render recorded (`turn_segments`) or say it cannot play the debate.
+ */
+export function usableTurnDurationsMs(values: readonly number[] | null | undefined): readonly number[] | null {
+  if (!Array.isArray(values) || values.length === 0) return null;
+  return values.every(value => Number.isFinite(value) && value > 0) ? values : null;
 }
 
-export function timelineSecondsFor(turnDurationsMs: number[]) {
+export function timelineSecondsFor(turnDurationsMs: readonly number[]) {
   return turnDurationsMs.reduce((sum, value) => sum + value / 1_000, 0);
 }
 
-export function turnStateForTime(firstSlot: ParticipantSlot, turnDurationsMs: number[], seconds: number): TurnState {
+export function turnStateForTime(
+  firstSlot: ParticipantSlot,
+  turnDurationsMs: readonly number[],
+  seconds: number
+): TurnState {
   let elapsedBoundary = 0;
   for (let index = 0; index < turnDurationsMs.length; index += 1) {
     const segmentSeconds = turnDurationsMs[index] / 1_000;
@@ -488,7 +506,7 @@ export function turnSpansFromSegments(segments: DebateMediaTurnSegment[]): TurnS
 }
 
 /** The same list off the format's allowance, for a debate whose segments never arrived. */
-export function turnSpansForDurations(firstSlot: ParticipantSlot, turnDurationsMs: number[]): TurnSpan[] {
+export function turnSpansForDurations(firstSlot: ParticipantSlot, turnDurationsMs: readonly number[]): TurnSpan[] {
   let startSeconds = 0;
   return turnDurationsMs.map((durationMs, index) => {
     const endSeconds = startSeconds + durationMs / 1_000;

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
+  isModalOpen: false,
   userWallet: undefined as { address: string } | undefined,
   linkedAccounts: [] as Array<{ type: string; walletClientType?: string }>,
   walletsReady: true,
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@privy-io/react-auth', () => ({
   usePrivy: () => ({
     authenticated: mocks.authenticated,
+    isModalOpen: mocks.isModalOpen,
     user: { wallet: mocks.userWallet, linkedAccounts: mocks.linkedAccounts },
   }),
   useWallets: () => ({ wallets: mocks.wallets, ready: mocks.walletsReady }),
@@ -25,12 +27,13 @@ vi.mock('@privy-io/wagmi', () => ({
   useSetActiveWallet: () => ({ setActiveWallet: mocks.setActiveWallet }),
 }));
 
-import { useEnsureEmbeddedWallet } from './use-ensure-embedded-wallet';
+import { retryEmbeddedWalletSetup, useEnsureEmbeddedWallet } from './use-ensure-embedded-wallet';
 
 const embedded = { address: '0xabc', walletClientType: 'privy' };
 
 beforeEach(() => {
   mocks.authenticated = true;
+  mocks.isModalOpen = false;
   mocks.userWallet = undefined;
   mocks.linkedAccounts = [];
   mocks.walletsReady = true;
@@ -101,6 +104,37 @@ describe('useEnsureEmbeddedWallet', () => {
     await new Promise(resolve => setTimeout(resolve, 30));
 
     expect(mocks.createWallet).not.toHaveBeenCalled();
+  });
+
+  // The sign-up the agree/disagree buttons start. Privy's modal is authenticated and still open while
+  // its own `createOnLogin` request is in flight; a second request from here raced it, and the loser
+  // came back as "A user cannot have more than one ethereum embedded and one imported wallet".
+  it('leaves wallet creation to the login modal while it is open', async () => {
+    mocks.isModalOpen = true;
+    const { rerender } = renderHook(() => useEnsureEmbeddedWallet());
+
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(mocks.createWallet).not.toHaveBeenCalled();
+
+    // The modal closes with the wallet it made.
+    mocks.isModalOpen = false;
+    mocks.linkedAccounts = [{ type: 'wallet', walletClientType: 'privy' }];
+    mocks.wallets = [embedded];
+    rerender();
+
+    await waitFor(() => expect(mocks.setActiveWallet).toHaveBeenCalledWith(embedded));
+    expect(mocks.createWallet).not.toHaveBeenCalled();
+  });
+
+  it('creates one itself once the modal closes without having made one', async () => {
+    mocks.isModalOpen = true;
+    const { rerender } = renderHook(() => useEnsureEmbeddedWallet());
+    await new Promise(resolve => setTimeout(resolve, 30));
+
+    mocks.isModalOpen = false;
+    rerender();
+
+    await waitFor(() => expect(mocks.createWallet).toHaveBeenCalledTimes(1));
   });
 
   it('still creates one when the account genuinely has none linked', async () => {
@@ -278,5 +312,36 @@ describe('useEnsureEmbeddedWallet', () => {
 
       expect(mocks.setActiveWallet).toHaveBeenCalledTimes(3);
     });
+  });
+});
+
+// GEO-3245: the navbar's Reconnect asks for a retry from outside the hook.
+describe('retryEmbeddedWalletSetup', () => {
+  it('activates an already-activated wallet again', async () => {
+    mocks.wallets = [embedded];
+
+    renderHook(() => useEnsureEmbeddedWallet());
+    await waitFor(() => expect(mocks.setActiveWallet).toHaveBeenCalledTimes(1));
+
+    act(() => retryEmbeddedWalletSetup());
+
+    await waitFor(() => expect(mocks.setActiveWallet).toHaveBeenCalledTimes(2));
+  });
+
+  it('gives a creation that gave up a fresh budget', async () => {
+    vi.useFakeTimers();
+    mocks.createWallet.mockRejectedValue(new Error('network'));
+
+    renderHook(() => useEnsureEmbeddedWallet());
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+    }
+    expect(mocks.createWallet).toHaveBeenCalledTimes(3);
+
+    act(() => retryEmbeddedWalletSetup());
+
+    await vi.waitFor(() => expect(mocks.createWallet).toHaveBeenCalledTimes(4));
   });
 });

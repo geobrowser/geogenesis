@@ -33,7 +33,7 @@ import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submiss
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
-import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
+import { rankingComposeNeedsAccountStep, useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
@@ -81,7 +81,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     isLoading: isLoadingCreateAccess,
     ensureAccess,
     recheckAccess,
-  } = useRankingComposeAccess(composeAccessSpaceId);
+  } = useRankingComposeAccess(composeAccessSpaceId, entityId);
 
   // Member of the target space
   const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
@@ -89,7 +89,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
   const [rankingComposeReturnHref, setRankingComposeReturnHref] = useAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
-  const enqueuePendingAction = useEnqueuePendingAction();
+  const enqueuePendingAction = useEnqueuePendingAction('ranking_composer');
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   const handleBack = React.useCallback(() => {
@@ -105,7 +105,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   React.useEffect(() => {
     if (accessStatus === 'ready' || accessStatus === 'not-found') return;
     // If log-in/sign-up is needed, come back to this compose screen
-    if (accessStatus === 'needs-login' || accessStatus === 'needs-onboarding') {
+    if (rankingComposeNeedsAccountStep(accessStatus, isAccountSetupPending)) {
       setPostOnboardingRedirect(window.location.pathname + window.location.search);
     }
     if (accessStatus === 'needs-onboarding' && !isAccountSetupPending) {
@@ -132,8 +132,13 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
 
-  const { globalRankingEntityIds, globalLeaderboard, aggregatedSubmitterSpaceIds, aggregatedRankingCount } =
-    useRankingBlockRelations();
+  const {
+    globalRankingEntityIds,
+    globalLeaderboard,
+    aggregatedSubmitterRefs,
+    aggregatedSubmitterSpaceIds,
+    aggregatedRankingCount,
+  } = useRankingBlockRelations();
 
   const globalOrderedIds = globalRankingEntityIds;
 
@@ -610,6 +615,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       periodLabel={periodLabel}
       hasRankedByOthers={hasRankedByOthers}
       submissions={submissions}
+      aggregatedSubmitterRefs={aggregatedSubmitterRefs}
       aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
       aggregatedRankingCount={aggregatedRankingCount}
     />

@@ -1,15 +1,52 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
+import type { EntitiesOrderBy } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
+import { ENTITY_ORDER_BY } from '~/core/io/entity-order-by';
 import type { DataType, Property } from '~/core/types';
 
 export type SortDirection = 'asc' | 'desc';
 
-export type ColumnSortState = {
-  columnId: string;
-  direction: SortDirection;
-} | null;
+/**
+ * Sorts that are not backed by a property on the entity. A property sort runs
+ * through the per-property ordering function; a built-in sort is an entity-level
+ * `orderBy` on the entities connection instead.
+ * - `best`: the indexer's ranking score, the same score Explore's Best uses.
+ * - `created_at`: when the entity was first indexed.
+ *
+ * The same keys are the persisted `order_by` values (see `persisted-sort.ts`).
+ */
+export const BUILT_IN_SORTS = ['best', 'created_at'] as const;
+export type BuiltInSort = (typeof BUILT_IN_SORTS)[number];
+
+export function isBuiltInSort(value: unknown): value is BuiltInSort {
+  return typeof value === 'string' && (BUILT_IN_SORTS as readonly string[]).includes(value);
+}
+
+export type PropertySortState = { kind: 'property'; columnId: string; direction: SortDirection };
+export type BuiltInSortState = { kind: 'builtin'; sort: BuiltInSort; direction: SortDirection };
+export type ColumnSortState = PropertySortState | BuiltInSortState | null;
+
+export type BuiltInSortOption = {
+  sort: BuiltInSort;
+  label: string;
+};
+
+/** Both directions apply to every entry: the menu offers the same Ascending / Descending step as a property. */
+export const BUILT_IN_SORT_OPTIONS: readonly BuiltInSortOption[] = [
+  { sort: 'best', label: 'Best' },
+  { sort: 'created_at', label: 'Created' },
+];
+
+export function builtInSortLabel(sort: BuiltInSort): string {
+  return BUILT_IN_SORT_OPTIONS.find(option => option.sort === sort)?.label ?? sort;
+}
+
+/** Server ordering for a built-in sort, from the table the claims browse shares. */
+export function builtInSortOrderBy({ sort, direction }: BuiltInSortState): EntitiesOrderBy[] {
+  return ENTITY_ORDER_BY[sort][direction];
+}
 
 export const SORTABLE_DATA_TYPES: readonly DataType[] = [
   'TEXT',
@@ -47,8 +84,17 @@ export function propertySortLabel(property: Property): string {
   return property.name ?? property.id;
 }
 
+/** Display label for an active sort: the built-in name, or the property name with its id as fallback. */
+export function sortStateLabel(sortState: NonNullable<ColumnSortState>, properties: Property[]): string {
+  if (sortState.kind === 'builtin') return builtInSortLabel(sortState.sort);
+  const property = propertyForSort(sortState.columnId, properties);
+  return property ? propertySortLabel(property) : sortState.columnId;
+}
+
 export function nextSortDirection(current: ColumnSortState, columnId: string): ColumnSortState {
-  if (current?.columnId !== columnId) return { columnId, direction: 'asc' };
-  if (current.direction === 'asc') return { columnId, direction: 'desc' };
+  if (current?.kind !== 'property' || current.columnId !== columnId) {
+    return { kind: 'property', columnId, direction: 'asc' };
+  }
+  if (current.direction === 'asc') return { kind: 'property', columnId, direction: 'desc' };
   return null;
 }

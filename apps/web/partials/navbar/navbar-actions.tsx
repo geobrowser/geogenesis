@@ -10,19 +10,23 @@ import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
-import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
+import { useDebateSchedule } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
+import { geoNotificationsApiUrl } from '~/core/notifications/api';
 import { useEditable } from '~/core/state/editable-store';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
+import { useWalletStall } from '~/core/wallet/use-wallet-stall';
+import { navbarAccountState } from '~/core/wallet/wallet-stall';
 
 import { Avatar } from '~/design-system/avatar';
+import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME } from '~/design-system/button';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
@@ -31,19 +35,20 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Toggle } from '~/design-system/toggle';
 
-import { AvailabilityModal } from '~/partials/availability/availability-modal';
+import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
 import { useCreateEntityActions } from '../create-entity/use-create-entity-actions';
 import { avatarAtom } from '../onboarding/dialog';
+import { EmailNotificationsMenuItem } from './email-notifications-menu-item';
 
 function useUser() {
-  const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
+  const { smartAccount, isLoading: isLoadingSmartAccount, error } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { profile, isLoading: isLoadingProfile } = useGeoProfile(address);
 
-  return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile };
+  return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile, error };
 }
 
 const MOBILE_NAVBAR_QUERY = '(max-width: 639px)';
@@ -88,21 +93,28 @@ export function NavbarActions() {
   const [hasOpenedSchedule, setHasOpenedSchedule] = React.useState(false);
   const avatarTriggerRef = React.useRef<HTMLButtonElement>(null);
 
-  const { isLoading: isUserLoading, profile: resolvedProfile, address: resolvedAddress } = useUser();
+  const {
+    isLoading: isUserLoading,
+    profile: resolvedProfile,
+    address: resolvedAddress,
+    error: smartAccountError,
+  } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
-  const { user } = usePrivy();
+  const { user, authenticated } = usePrivy();
+  // Signed in with no smart account is not signed out (GEO-3245): Log in does nothing for it.
+  const walletStall = useWalletStall({ authenticated, address: resolvedAddress, error: smartAccountError });
   const isMobileNavbar = useIsMobileNavbar();
   const spaceId = useSpaceId();
   const { canCreateInSpace, createEntity, createProperty, createSpace } = useCreateEntityActions(spaceId);
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
-  // Read here rather than inside the modal so the week is usually cached by the time the menu is
+  // Read here as well as inside the modal so the week is usually cached by the time the menu is
   // opened. The modal holds the grid back until this answers, so a slow read costs a moment of
   // "Loading your schedule" rather than a wrong one.
-  const { blocks: scheduleBlocks, isError: scheduleError, refetch: refetchSchedule } = useDebateSchedule();
+  useDebateSchedule();
 
   // A re-resolve mid-session (see below) would swap the avatar for the skeleton, unmounting the node
   // the dialogs below return focus to. The last resolved identity stands in for that window, and is
@@ -115,7 +127,6 @@ export function NavbarActions() {
     if (!isUserLoading && resolvedAddress)
       lastIdentity.current = { address: resolvedAddress, profile: resolvedProfile };
   }, [isUserLoading, resolvedAddress, resolvedProfile]);
-  const saveSchedule = useSaveDebateSchedule();
 
   // The navbar's own content is swapped inside one stable tree rather than being
   // returned from competing branches. Returning a `<div>` from one branch and a
@@ -131,7 +142,31 @@ export function NavbarActions() {
     const address = resolvedAddress ?? held?.address;
     const profile = resolvedProfile ?? held?.profile;
 
-    if (isUserLoading && !held) {
+    const state = navbarAccountState({
+      authenticated,
+      isLoading: isUserLoading,
+      hasAddress: Boolean(address),
+      hasHeldIdentity: Boolean(held),
+      stalled: walletStall.stalled,
+    });
+
+    if (state === 'stalled') {
+      return (
+        <div key="navbar-content" className="flex items-center gap-4">
+          <Button
+            variant="secondary"
+            className={PILL_BUTTON_SECONDARY_CLASS_NAME}
+            onClick={walletStall.reconnect}
+            disabled={walletStall.reconnecting}
+            title="Your account didn’t finish loading"
+          >
+            {walletStall.reconnecting ? 'Reconnecting…' : 'Reconnect'}
+          </Button>
+        </div>
+      );
+    }
+
+    if (state === 'loading') {
       return (
         <div key="navbar-content" className="flex items-center gap-4">
           {!isMobileNavbar ? <Skeleton className="h-7 w-[66px]" radius="rounded-full" /> : null}
@@ -140,7 +175,7 @@ export function NavbarActions() {
       );
     }
 
-    if (!address) {
+    if (state === 'signed_out' || !address) {
       return <GeoConnectButton key="navbar-content" />;
     }
 
@@ -259,6 +294,8 @@ export function NavbarActions() {
                     (`debateQueryKeys.schedule`), which everyone signed in has. */}
                 <button
                   type="button"
+                  data-geo-analytics-label="Profile menu set my schedule"
+                  data-geo-analytics-intent="open_debate_schedule"
                   onClick={() => {
                     onOpenChange(false);
                     setHasOpenedSchedule(true);
@@ -268,6 +305,10 @@ export function NavbarActions() {
                 >
                   Set my schedule
                 </button>
+                {/* GEO-3029. Needs a personal space to register against, and the service configured. */}
+                {personalSpaceId && geoNotificationsApiUrl() ? (
+                  <EmailNotificationsMenuItem className={PROFILE_MENU_DIVIDED_ACTION_CLASS} />
+                ) : null}
                 {/* Sign out keeps its own group below the divider — the destructive action
                   stays alone at the bottom where people expect it. */}
                 <div className="border-t border-grey-02">
@@ -292,15 +333,12 @@ export function NavbarActions() {
       {/* `openerRef` is the avatar, not the item that was clicked: that item unmounts with the
           popover on the same click, leaving no live node for the dialog to return focus to. */}
       {hasOpenedSchedule ? (
-        <AvailabilityModal
+        <OwnScheduleModal
           key="availability-modal"
           open={isScheduleOpen}
           onOpenChange={setIsScheduleOpen}
-          blocks={scheduleBlocks}
-          error={scheduleError}
-          onRetry={() => refetchSchedule()}
-          onSave={nextBlocks => saveSchedule.mutate(nextBlocks)}
           openerRef={avatarTriggerRef}
+          surface="navbar"
         />
       ) : null}
     </>

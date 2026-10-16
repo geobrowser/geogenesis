@@ -50,7 +50,7 @@ describe('AnalyticsUserIdentifier', () => {
     delete (window as any).geoAnalytics;
   });
 
-  it('emits a restored session when Privy is already authenticated on readiness', async () => {
+  it('identifies an authenticated user without inferring how authentication happened', async () => {
     mocks.privyState.ready = true;
     mocks.privyState.authenticated = true;
     mocks.privyState.user = { id: 'did:privy:existing-user', email: { address: 'person@example.com' } };
@@ -60,18 +60,9 @@ describe('AnalyticsUserIdentifier', () => {
     render(<AnalyticsUserIdentifier />);
 
     await waitFor(() => {
-      expect((window as any).lytics.sessionRestored).toHaveBeenCalledTimes(1);
+      expect((window as any).lytics.identifyUser).toHaveBeenCalledTimes(1);
     });
-
-    expect((window as any).lytics.sessionRestored.mock.calls[0][0]).toMatchObject({
-      user_id: 'did:privy:existing-user',
-      privy_user_id: 'did:privy:existing-user',
-    });
-    expect((window as any).lytics.sessionRestored.mock.calls[0][1]).toMatchObject({
-      auth_flow: 'session_restore',
-      is_new_user: false,
-      was_already_authenticated: true,
-    });
+    expect((window as any).lytics.sessionRestored).not.toHaveBeenCalled();
     expect((window as any).lytics.identifyUser).toHaveBeenCalledWith(
       expect.objectContaining({
         user_id: 'did:privy:existing-user',
@@ -97,7 +88,7 @@ describe('AnalyticsUserIdentifier', () => {
     expect((window as any).lytics.sessionRestored).not.toHaveBeenCalled();
   });
 
-  it('waits for the Privy user object before restoring an authenticated boot session', async () => {
+  it('waits for the Privy user object before identifying an authenticated session', async () => {
     mocks.privyState.ready = true;
     mocks.privyState.authenticated = true;
 
@@ -108,11 +99,11 @@ describe('AnalyticsUserIdentifier', () => {
     view.rerender(<AnalyticsUserIdentifier />);
 
     await waitFor(() => {
-      expect((window as any).lytics.sessionRestored).toHaveBeenCalledTimes(1);
+      expect((window as any).lytics.identifyUser).toHaveBeenCalledTimes(1);
     });
   });
 
-  it('refreshes identity traits without duplicating restored-session events', async () => {
+  it('refreshes identity traits without producing auth events', async () => {
     mocks.privyState.ready = true;
     mocks.privyState.authenticated = true;
     mocks.privyState.user = { id: 'did:privy:with-space' };
@@ -121,7 +112,7 @@ describe('AnalyticsUserIdentifier', () => {
     const view = render(<AnalyticsUserIdentifier />);
 
     await waitFor(() => {
-      expect((window as any).lytics.sessionRestored).toHaveBeenCalledTimes(1);
+      expect((window as any).lytics.identifyUser).toHaveBeenCalledTimes(1);
     });
 
     mocks.personalSpaceState.personalSpaceId = 'space-1';
@@ -131,7 +122,7 @@ describe('AnalyticsUserIdentifier', () => {
     await waitFor(() => {
       expect((window as any).lytics.identifyUser).toHaveBeenCalledTimes(2);
     });
-    expect((window as any).lytics.sessionRestored).toHaveBeenCalledTimes(1);
+    expect((window as any).lytics.sessionRestored).not.toHaveBeenCalled();
     expect((window as any).lytics.identifyUser.mock.calls[1][0]).toMatchObject({
       personal_space_id: 'space-1',
       personal_space_registered: true,

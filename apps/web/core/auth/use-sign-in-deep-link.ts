@@ -2,7 +2,11 @@
 
 import { usePrivy } from '@geogenesis/auth';
 
+import { marketingAuthProperties } from '~/core/auth-attempt';
 import { SIGN_IN_MODAL } from '~/core/auth/sign-in-deep-link';
+import { dashlessId } from '~/core/debates/api';
+import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
+import { claimLobbySignInPrompt } from '~/core/debates/lobbies/lobby-guest-sign-in';
 import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep-link';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
@@ -16,13 +20,40 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 export function useSignInDeepLink() {
   const { ready, authenticated } = usePrivy();
   const link = useDeepLinkParams(SIGN_IN_MODAL);
+  const roomId = typeof window === 'undefined' ? undefined : /^\/debate\/([^/]+)$/.exec(window.location.pathname)?.[1];
+  // A lobby's shared link (GEO-3126). No `auth_intent`: there is no lobby action to resume.
+  const lobbyId = roomId && link.via === LOBBY_LINK_VIA ? dashlessId(roomId) : undefined;
 
   const openSignIn = usePrivySignIn(undefined, {
     // Not the current URL, which still holds the trigger: a viewer who signs up goes through
     // onboarding and gets pushed back here afterwards, and being handed the modal a second time
     // is exactly the confusion the modal was opened to resolve.
     redirectTo: link.cleanUrl,
-    analytics: { link_source: link.via ?? undefined },
+    analytics: {
+      link_source: link.via ?? undefined,
+      component: link.via === 'invite' ? 'invite_link' : 'sign_in_deep_link',
+      auth_control: lobbyId ? 'join_lobby' : roomId ? 'join_debate' : 'open_sign_in',
+      ...(lobbyId
+        ? {
+            target_type: 'debate_lobby',
+            target_id: lobbyId,
+            page_type: 'debate_room',
+            page_entity_id: lobbyId,
+            page_entity_type: 'debate_lobby',
+          }
+        : roomId
+          ? {
+              target_type: 'debate_room',
+              target_id: roomId,
+              page_type: 'debate_room',
+              page_entity_id: roomId,
+              page_entity_type: 'debate_room',
+              auth_intent: 'join_debate',
+            }
+          : {}),
+      auth_trigger: link.via === 'invite' ? 'invite_link' : 'deep_link',
+      ...marketingAuthProperties(typeof window === 'undefined' ? '' : window.location.search),
+    },
   });
 
   useDeepLinkEffect({
@@ -34,6 +65,9 @@ export function useSignInDeepLink() {
       // Already signed in: the link has done its job by landing them here, and a login dialog over
       // a live session is noise. The trigger is cleared either way.
       if (authenticated) return;
+      // The lobby page would otherwise open a second prompt after this one (GEO-3270). Any room:
+      // a bare lobby link's fallback notice signs in as `room`, and the lobby can load after.
+      if (roomId) claimLobbySignInPrompt(roomId);
       openSignIn();
     },
   });

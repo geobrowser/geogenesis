@@ -29,27 +29,26 @@ describe('topicConnectionCountsDocument', () => {
   });
 
   it('counts entities, not relations', () => {
-    // The distinction the topic page's composition strip gets wrong by design: a claim carrying
-    // `Topics` in two spaces is two relations and one claim, and this list is *ordered* by the
-    // number, so it has to be a count of things.
     const printed = print(topicConnectionCountsDocument(1));
 
     expect(printed).toContain('entitiesConnection');
     expect(printed).not.toContain('relationsConnection');
   });
 
-  it('reaches debates through the claims that name the topic, not through the topic', () => {
+  it('counts debates using the same direct Topics relation as the other buckets', () => {
     const printed = print(topicConnectionCountsDocument(1)).replace(/\s+/g, ' ');
 
-    expect(printed).toContain(
-      'debates0: entitiesConnection( filter: {typeIds: {overlaps: $debateTypeIds}, relations: {some: {typeId: {is: $debateClaimsPropertyId}, toEntity: {relations: {some: {typeId: {is: $topicsPropertyId}, toEntityId: {is: $topic0}}}}}}} )'
-    );
-
-    // And a claim reaches its topic in one hop, so the two buckets cannot silently become the same
-    // query.
-    expect(printed).toContain(
-      'claims0: entitiesConnection( filter: {typeIds: {overlaps: $claimTypeIds}, relations: {some: {typeId: {is: $topicsPropertyId}, toEntityId: {is: $topic0}}}} )'
-    );
+    for (const [bucket, type] of [
+      ['claims', 'claim'],
+      ['news', 'news'],
+      ['debates', 'debate'],
+    ]) {
+      expect(printed).toContain(
+        `${bucket}0: entitiesConnection( filter: {typeIds: {overlaps: $${type}TypeIds}, relations: {some: {typeId: {is: $topicsPropertyId}, toEntityId: {is: $topic0}}}} )`
+      );
+    }
+    expect(printed).not.toContain('$debateClaimsPropertyId');
+    expect(printed).not.toContain('toEntity:');
   });
 });
 

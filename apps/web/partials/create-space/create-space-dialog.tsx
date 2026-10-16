@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { type VotingSettingsInput } from '~/core/hooks/use-deploy-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -127,6 +128,7 @@ export function useOpenCreateSpaceDialog() {
 }
 
 export function CreateSpaceDialog() {
+  const getContext = useActionContext('create_space', 'space_draft', '', { overlay: 'modal' });
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const [open, onOpenChange] = useAtom(createSpaceDialogOpenAtom);
@@ -201,8 +203,10 @@ export function CreateSpaceDialog() {
     setPendingCreatedSpace(current => {
       if (current?.status === 'pending') return current;
 
+      const jobId = crypto.randomUUID();
       return {
-        jobId: crypto.randomUUID(),
+        jobId,
+        attribution: getContext({ target_type: 'space_draft', target_id: jobId }),
         type: spaceType,
         spaceName: name,
         spaceImage: image || undefined,

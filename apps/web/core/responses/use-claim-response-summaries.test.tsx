@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { claimResponseSummariesQueryKeyPrefix } from './claim-response-summary-query-keys';
 import { useClaimResponseSummaryBatch } from './use-claim-response-summaries';
 
 const mocks = vi.hoisted(() => ({
@@ -196,6 +197,67 @@ describe('useClaimResponseSummaryBatch', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     await waitFor(() => expect(mocks.loadMetadataCaches).toHaveBeenCalled());
     expect(result.current.isError).toBe(false);
+  });
+});
+
+describe('useClaimResponseSummaryBatch after a vote cancels it', () => {
+  const targets = [{ entityId: 'claim-1', responseKind: 'stance' as const }];
+  // What a vote's read-back does to every batch in its space (`use-entity-vote`).
+  const cancelSpaceBatches = (queryClient: QueryClient) =>
+    act(() => queryClient.cancelQueries({ queryKey: claimResponseSummariesQueryKeyPrefix('profile-1', 'space-1') }));
+
+  it('asks again for a batch cancelled before it ever answered', async () => {
+    // Cancelled on its first fetch, a query goes back to no data and idle, and nothing asks again:
+    // every claim but the one voted on stayed unseeded for as long as the page was open.
+    const { queryClient, wrapper } = createHarness();
+    mocks.loadCaches.mockReturnValueOnce(new Promise(() => {}));
+
+    const { result } = renderHook(() => useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true }), {
+      wrapper,
+    });
+    await waitFor(() => expect(mocks.loadCaches).toHaveBeenCalledTimes(1));
+
+    await cancelSpaceBatches(queryClient);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mocks.loadCaches).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks again for a refresh a vote cancelled, rather than keeping the numbers it was replacing', async () => {
+    // The end card refreshes its batch when it comes on screen. Cancelled, the refresh went back to
+    // the old answer and nothing asked again, so every claim but the one voted on kept the numbers
+    // from when the debate started.
+    const { queryClient, wrapper } = createHarness();
+    const { result } = renderHook(() => useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    mocks.loadCaches.mockReturnValueOnce(new Promise(() => {}));
+    const refreshed = new Map([['claim-1:stance', { responders: [] }]]) as never;
+    mocks.loadCaches.mockResolvedValueOnce(refreshed);
+    act(() => {
+      void result.current.refetch();
+    });
+    await waitFor(() => expect(result.current.fetchStatus).toBe('fetching'));
+    await cancelSpaceBatches(queryClient);
+
+    await waitFor(() => expect(result.current.data).toBe(refreshed));
+    expect(mocks.loadCaches).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not ask again after a fetch that answered', async () => {
+    // Answering stamps the query, which is what tells it apart from a cancellation. Without that,
+    // every answer would read as a cancelled fetch and ask again, forever.
+    const { wrapper } = createHarness();
+    const { result } = renderHook(() => useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)));
+
+    expect(mocks.loadCaches).toHaveBeenCalledTimes(1);
+    expect(result.current.fetchStatus).toBe('idle');
   });
 });
 

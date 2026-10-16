@@ -8,8 +8,10 @@ import { SquareButton } from '~/design-system/button';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
+import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
-export const SubtopicsDialogPopoverContext = React.createContext<HTMLDivElement | null>(null);
+// Keep the search popover and shared menus on the same dialog-local host.
+export const SubtopicsDialogPopoverContext = ElevatedPopoverPortalContext;
 
 interface SubtopicsDialogShellProps {
   open: boolean;

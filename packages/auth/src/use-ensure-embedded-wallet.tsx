@@ -1,7 +1,8 @@
+import './ensure-web-storage.js';
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
 import { useSetActiveWallet } from '@privy-io/wagmi';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 /** What `useSmartAccount` looks for: Privy's own embedded wallet, not a linked external one. */
 const EMBEDDED_WALLET_TYPE = 'privy';
@@ -21,6 +22,32 @@ const MAX_ATTEMPTS = 3;
  * watching an empty onboarding screen while it waits.
  */
 const RETRY_DELAY_MS = 2_000;
+
+// Bumped by `retryEmbeddedWalletSetup`. Module-level because the hook is mounted once at the app root
+// while the control asking for a retry — the navbar's Reconnect (GEO-3245) — lives elsewhere.
+let retryGeneration = 0;
+const retryListeners = new Set<() => void>();
+
+function subscribeToRetries(listener: () => void) {
+  retryListeners.add(listener);
+  return () => {
+    retryListeners.delete(listener);
+  };
+}
+
+/**
+ * Gives the mounted `useEnsureEmbeddedWallet` a fresh budget: both attempt counts go back to zero and
+ * the wallet is activated in wagmi again, even if an earlier activation succeeded.
+ *
+ * Not a cure for an account whose embedded wallet never reaches `useWallets()` — nothing here can
+ * make Privy connect it, and creating one is still skipped because the account already has one. It
+ * covers the sessions that gave up after three failures, which otherwise stay stranded until a page
+ * load.
+ */
+export function retryEmbeddedWalletSetup() {
+  retryGeneration += 1;
+  retryListeners.forEach(listener => listener());
+}
 
 /**
  * Keeps an authenticated session holding an embedded wallet that wagmi knows about.
@@ -51,7 +78,7 @@ const RETRY_DELAY_MS = 2_000;
 export function useEnsureEmbeddedWallet() {
   const { setActiveWallet } = useSetActiveWallet();
   const { wallets, ready: walletsReady } = useWallets();
-  const { authenticated, user } = usePrivy();
+  const { authenticated, user, isModalOpen } = usePrivy();
   const { createWallet } = useCreateWallet();
 
   const createWalletRef = useRef(createWallet);
@@ -79,6 +106,12 @@ export function useEnsureEmbeddedWallet() {
   const walletToActivate =
     embeddedWallet ?? (linkedWalletAddress ? wallets.find(w => w.address === linkedWalletAddress) : undefined);
 
+  const generation = useSyncExternalStore(
+    subscribeToRetries,
+    () => retryGeneration,
+    () => 0
+  );
+
   const [createAttempts, setCreateAttempts] = useState(0);
   const createInFlightRef = useRef(false);
   const activatedAddressRef = useRef<string | null>(null);
@@ -98,6 +131,18 @@ export function useEnsureEmbeddedWallet() {
   const addressToActivate = walletToActivate?.address;
   const attemptsForAddress = addressToActivate ? (activateAttempts[addressToActivate] ?? 0) : 0;
 
+  // A retry starts both budgets over. The first render's generation is not a retry.
+  // Declared before both effects below: effects run in order, and the activation effect must see the
+  // cleared record in the same commit, or it skips the address it was asked to activate again.
+  const seenGenerationRef = useRef(generation);
+  useEffect(() => {
+    if (seenGenerationRef.current === generation) return;
+    seenGenerationRef.current = generation;
+    activatedAddressRef.current = null;
+    setCreateAttempts(0);
+    setActivateAttempts({});
+  }, [generation]);
+
   useEffect(() => {
     // `walletsReady` is the guard that stops this firing at everybody who already has a wallet.
     // A restored session sets `authenticated` before `wallets` has hydrated, so on every page load
@@ -105,6 +150,15 @@ export function useEnsureEmbeddedWallet() {
     // `createWallet` rejecting -- Privy errors when one already exists -- and if hydration outlasts
     // the retry delay, an existing account can burn all three attempts before its wallet appears.
     if (!authenticated || !walletsReady || embeddedWallet || accountHasEmbeddedWallet) return;
+    // The modal login flips `authenticated` *before* it provisions the `createOnLogin` wallet: its
+    // account-create screen only starts once the user exists, and runs inside the still-open modal.
+    // `linkedAccounts` cannot cover that window -- the wallet does not exist yet -- so asking here
+    // raced Privy's own request. Whichever landed second was refused with "A user cannot have more
+    // than one ethereum embedded and one imported wallet", and when ours won, the refused one was
+    // Privy's, which shows that message as a "Something went wrong" modal over a fresh sign-up.
+    // Waiting for the modal to close lets Privy finish; this stays the fallback for headless logins,
+    // which never open it, and for a modal flow whose own create failed.
+    if (isModalOpen) return;
     if (createAttempts >= MAX_ATTEMPTS || createInFlightRef.current) return;
 
     let cancelled = false;
@@ -120,7 +174,14 @@ export function useEnsureEmbeddedWallet() {
       .catch((error: unknown) => {
         // Either something else created it first — in which case `embeddedWallet` is about to appear
         // and the guard above stops us — or it genuinely failed and we try again.
-        if (cancelled) return;
+        //
+        // A cancelled attempt still counts. `isModalOpen` is a dependency, so a create that opens
+        // Privy's modal tears this effect down mid-flight, and closing the modal runs it again. Left
+        // uncounted, a persistent failure would retry on every close with the budget never spent.
+        if (cancelled) {
+          setCreateAttempts(attempts => attempts + 1);
+          return;
+        }
         // Logged, because the whole reason this file exists is that its failures were invisible: the
         // symptom was onboarding never appearing, with nothing in the app pointing at why. Matches
         // how `useSmartAccount` reports its own init failures.
@@ -135,7 +196,7 @@ export function useEnsureEmbeddedWallet() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, walletsReady, embeddedWallet, accountHasEmbeddedWallet, createAttempts]);
+  }, [authenticated, walletsReady, embeddedWallet, accountHasEmbeddedWallet, isModalOpen, createAttempts]);
 
   // `walletToActivate` is read through a ref so that a new object for the same address does not
   // re-run this; the address is the dependency.
@@ -177,7 +238,9 @@ export function useEnsureEmbeddedWallet() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, addressToActivate, attemptsForAddress]);
+    // `generation` is a dependency so that a retry re-activates an address this effect already
+    // finished with; the reset below clears the record that would otherwise skip it.
+  }, [authenticated, addressToActivate, attemptsForAddress, generation]);
 
   // Giving up is the state that strands a session, so it is the one worth saying out loud.
   useEffect(() => {

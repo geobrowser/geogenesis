@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { capture } from '~/core/analytics';
+import { type AnalyticsEventName, capture } from '~/core/analytics';
 import { errorName } from '~/core/utils/error-name';
 
 import { useDebateMediaArtifactUrl } from './hooks';
@@ -349,7 +349,7 @@ export function isUnretryableShareError(error: unknown): boolean {
   return UNRETRYABLE_SHARE_ERROR_NAMES.has(errorName(error));
 }
 
-export function captureSocialVideoEvent(eventName: string, properties: Record<string, unknown>) {
+export function captureSocialVideoEvent(eventName: AnalyticsEventName, properties: Record<string, unknown>) {
   try {
     capture(eventName, properties);
   } catch {

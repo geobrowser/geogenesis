@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
+import { browseSidebarVisibleSpaces, fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { normId } from '~/core/utils/norm-id';
@@ -26,8 +26,10 @@ const EMPTY_BROWSE: BrowseSidebarData = {
 };
 
 /** Auth, memberships, and visible spaces shared by Explore and contextual Topic feeds. */
-export async function resolveExploreFeedRequestContext(routeSpaceId?: string) {
-  const walletAddress = (await cookies()).get(WALLET_ADDRESS)?.value ?? null;
+export async function resolveExploreFeedRequestContext(routeSpaceId?: string, options: { anonymous?: boolean } = {}) {
+  // `anonymous` never looks at the cookie jar, so a response built here cannot depend on who asked.
+  // The CDN keys on the URL alone and ignores cookies, so a cacheable page must come from here.
+  const walletAddress = options.anonymous ? null : ((await cookies()).get(WALLET_ADDRESS)?.value ?? null);
   let personalMemberSpaceId: string | null = null;
   let memberOrEditorSpaceIds: string[] = [];
 
@@ -61,9 +63,7 @@ export async function resolveExploreFeedRequestContext(routeSpaceId?: string) {
   }
 
   if (routeSpaceId) {
-    const visibleSpaceIds = new Set(
-      [...browse.featured, ...browse.editorOf, ...browse.memberOf].map(space => normId(space.id))
-    );
+    const visibleSpaceIds = new Set(browseSidebarVisibleSpaces(browse).map(space => normId(space.id)));
     if (!visibleSpaceIds.has(normId(routeSpaceId))) {
       browse = {
         ...browse,
@@ -72,5 +72,5 @@ export async function resolveExploreFeedRequestContext(routeSpaceId?: string) {
     }
   }
 
-  return { browse, memberOrEditorSpaceIds, walletAddress };
+  return { browse, memberOrEditorSpaceIds, walletAddress, personalMemberSpaceId };
 }

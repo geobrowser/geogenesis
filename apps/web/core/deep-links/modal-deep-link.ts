@@ -3,6 +3,7 @@
  *
  *     /explore?modal=signin&via=marketing              GEO-2727
  *     /explore?modal=debates&modalTarget=people        GEO-2746
+ *     /space/<id>?modal=availability                   a person's bookable week
  *
  * The rule the repo already follows, written down: **a fragment addresses a position in the
  * document, a query param triggers an action.** `buildBlockLink` puts a block id in the fragment
@@ -47,6 +48,7 @@ export const DEEP_LINK_MODALS = {
   signIn: 'signin',
   debates: 'debates',
   roomAccess: 'room-access',
+  availability: 'availability',
 } as const;
 
 export type ModalDeepLink = (typeof DEEP_LINK_MODALS)[keyof typeof DEEP_LINK_MODALS];
@@ -97,11 +99,22 @@ export function urlWithoutModal(pathname: string, params: ReadableParams, hash =
   return `${pathname}${search ? `?${search}` : ''}${fragment}`;
 }
 
-/** Builds a link. Each feature wraps this with its own modal value and default pathname. */
+/**
+ * Builds a link. Each feature wraps this with its own modal value and default pathname.
+ *
+ * `pathname` may carry a query and a fragment of its own (a page returned to with its state, as the
+ * debate calendar's Back to Debates does): the trigger merges into that query, ahead of the
+ * fragment, rather than starting a second one.
+ */
 export function toModal(options: { modal: ModalDeepLink; pathname: string; target?: string; via?: string }): string {
-  const params = new URLSearchParams();
+  const hashAt = options.pathname.indexOf('#');
+  const fragment = hashAt === -1 ? '' : options.pathname.slice(hashAt);
+  const beforeHash = hashAt === -1 ? options.pathname : options.pathname.slice(0, hashAt);
+  const queryAt = beforeHash.indexOf('?');
+  const path = queryAt === -1 ? beforeHash : beforeHash.slice(0, queryAt);
+  const params = new URLSearchParams(queryAt === -1 ? '' : beforeHash.slice(queryAt + 1));
   params.set(MODAL_PARAM, options.modal);
   if (options.target) params.set(MODAL_TARGET_PARAM, options.target);
   if (options.via) params.set(VIA_PARAM, options.via);
-  return `${options.pathname}?${params.toString()}`;
+  return `${path}?${params.toString()}${fragment}`;
 }

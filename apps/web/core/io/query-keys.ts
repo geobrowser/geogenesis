@@ -31,6 +31,11 @@ export function profileBySpaceIdQueryKey(spaceId: string) {
   return ['profile-by-space-id', validateSpaceId(spaceId) ?? spaceId] as const;
 }
 
+/** Keyed on the set, since `fetchPersonalSpacesByPageIds` resolves the whole set in two reads. */
+export function personalSpacesByPageIdsQueryKey(pageIds: string[]) {
+  return ['personal-spaces-by-page-ids', normalizeSpaceIds(pageIds)] as const;
+}
+
 export function spacesByIdsQueryKey(spaceIds: string[]) {
   return ['spaces-by-ids', normalizeSpaceIds(spaceIds)] as const;
 }

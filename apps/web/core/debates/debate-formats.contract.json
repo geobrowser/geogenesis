@@ -1,0 +1,10 @@
+[
+  { "id": "dev-short", "label": "7/7 4/4 3/3", "turn_durations_ms": [7000, 7000, 4000, 4000, 3000, 3000] },
+  { "id": "standard", "label": "1/1 45/45 30/30", "turn_durations_ms": [60000, 60000, 45000, 45000, 30000, 30000] },
+  { "id": "extended-standard", "label": "45/45 30/30", "turn_durations_ms": [45000, 45000, 30000, 30000] },
+  {
+    "id": "triple-standard",
+    "label": "45/45 30/30 30/30",
+    "turn_durations_ms": [45000, 45000, 30000, 30000, 30000, 30000]
+  }
+]

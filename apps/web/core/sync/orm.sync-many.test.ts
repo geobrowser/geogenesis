@@ -4,6 +4,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { EntitiesOrderBy } from '../gql/graphql';
 import { getAllEntities, getBatchEntities, getEntitiesOrderedByPropertyConnection } from '../io/queries';
 import type { Entity, Value } from '../types';
 import { E } from './orm';
@@ -154,6 +155,80 @@ describe('E.syncMany pagination', () => {
     expect(vi.mocked(getBatchEntities).mock.calls.map(call => call[0].length)).toEqual([50, 50, 17]);
     expect(result.merged.map(e => e.id)).toEqual(ids);
     expect(result.remote).toHaveLength(ids.length);
+  });
+
+  it('sends one request for the same id set asked for in a different order, or with repeats', async () => {
+    vi.mocked(getBatchEntities).mockImplementation((batchIds: string[]) =>
+      Effect.succeed(batchIds.map(id => makeEntity(id, `Entity ${id}`)))
+    );
+
+    const [first, second] = await Promise.all([
+      E.syncMany({ store, cache, where: { id: { in: ['c', 'a', 'b'] } }, first: 3 }),
+      E.syncMany({ store, cache, where: { id: { in: ['b', 'c', 'a', 'a'] } }, first: 4 }),
+    ]);
+
+    expect(vi.mocked(getBatchEntities)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getBatchEntities).mock.calls[0][0]).toEqual(['a', 'b', 'c']);
+    expect(first.merged.map(e => e.id)).toEqual(['c', 'a', 'b']);
+    expect(second.merged.map(e => e.id)).toEqual(['b', 'c', 'a', 'a']);
+  });
+
+  it('orders collection id queries on the server when a built-in orderBy is set', async () => {
+    const served = [makeEntity('entity-b', 'Entity B'), makeEntity('entity-a', 'Entity A')];
+    vi.mocked(getAllEntities).mockReturnValue(
+      Effect.succeed({ entities: served, endCursor: 'cursor-a', hasNextPage: true })
+    );
+
+    const result = await E.syncMany({
+      store,
+      cache,
+      where: { id: { in: ['entity-a', 'entity-b'] } },
+      first: 9,
+      orderBy: [EntitiesOrderBy.RankingScoreDesc, EntitiesOrderBy.IdAsc],
+    });
+
+    expect(vi.mocked(getBatchEntities)).not.toHaveBeenCalled();
+    expect(vi.mocked(getEntitiesOrderedByPropertyConnection)).not.toHaveBeenCalled();
+    const [options, signal] = vi.mocked(getAllEntities).mock.calls[0] ?? [];
+    expect(signal).toBeUndefined();
+    expect(options).toEqual(
+      expect.objectContaining({ limit: 9, orderBy: [EntitiesOrderBy.RankingScoreDesc, EntitiesOrderBy.IdAsc] })
+    );
+    // The id list rides along inside the filter rather than as a batch fetch.
+    expect(JSON.stringify(options?.filter)).toContain('entity-a');
+    expect(JSON.stringify(options?.filter)).toContain('entity-b');
+    // Server order wins over the caller's id order.
+    expect(result.merged.map(e => e.id)).toEqual(['entity-b', 'entity-a']);
+    expect(result.endCursor).toBe('cursor-a');
+    expect(result.hasNextPage).toBe(true);
+  });
+
+  it('drops empty relation targets and keeps unnamed members when an id list is ordered', async () => {
+    vi.mocked(getAllEntities).mockReturnValue(Effect.succeed({ entities: [], endCursor: null, hasNextPage: false }));
+    vi.mocked(getEntitiesOrderedByPropertyConnection).mockReturnValue(
+      Effect.succeed({ entities: [], endCursor: null, hasNextPage: false })
+    );
+
+    await E.syncMany({
+      store,
+      cache,
+      where: { id: { in: ['entity-a', '', 'entity-b'] } },
+      first: 9,
+      orderBy: [EntitiesOrderBy.CreatedAtDesc],
+    });
+    await E.syncMany({
+      store,
+      cache,
+      where: { id: { in: ['entity-a', '', 'entity-b'] } },
+      first: 9,
+      sort: { propertyId: 'score-property', direction: 'desc' },
+    });
+
+    const [orderedOptions] = vi.mocked(getAllEntities).mock.calls[0] ?? [];
+    const [sortedOptions] = vi.mocked(getEntitiesOrderedByPropertyConnection).mock.calls[0] ?? [];
+    // No '' in the list, and no `name` exclusion wrapped around an explicit id list.
+    expect(orderedOptions?.filter).toEqual({ id: { in: ['entity-a', 'entity-b'] } });
+    expect(sortedOptions?.filter).toEqual({ id: { in: ['entity-a', 'entity-b'] } });
   });
 
   it.each([

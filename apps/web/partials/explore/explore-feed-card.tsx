@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { ActionSurfaceArticle } from '~/core/action-context-provider';
+import { CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
@@ -15,12 +16,20 @@ import { PublishedRecordingPlayer } from '~/partials/community-calls/published-r
 import { type ClaimCardVariant, ClaimExploreFeedCard } from './claim-explore-feed-card';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 import { DebateExploreMetaRow } from './debate-explore-meta-row';
-import { EXPLORE_CARD_CLASS, ExploreCardActions, ExploreCardDefaultBody } from './explore-card-chrome';
+import {
+  EXPLORE_CARD_CLASS,
+  ExploreCardActions,
+  ExploreCardDefaultBody,
+  ExploreCardSurface,
+} from './explore-card-chrome';
 import { ExploreCardTitle } from './explore-card-title';
 import { ExploreMetaRow } from './explore-meta-row';
 import { RankingCardBody } from './explore-ranking-card-body';
+import { TopicExploreFeedCardArticle } from './topic-explore-feed-card';
 
 type ExploreFeedCardProps = {
+  itemPosition?: number;
+  listId?: string;
   item: ExploreFeedItem;
   /** Hide the space thumbnail + space-name link in the meta row. Useful when the card is rendered inside the space it references (e.g. the activity tab). */
   hideSpaceLink?: boolean;
@@ -49,6 +58,7 @@ type ExploreFeedCardProps = {
 
 const COMMUNITY_CALL_EVENT_TYPE = normId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
 const CLAIM_TYPE = normId(CLAIM_TYPE_ID);
+const TOPIC_TYPE = normId(TOPIC_TYPE_ID);
 const RANKING_BLOCK_TYPE = normId(RANKING_BLOCK_TYPE_ID);
 
 type CardBodyProps = {
@@ -92,6 +102,19 @@ function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyP
  * the debate can't actually be watched. Everything else renders one of the bodies below.
  */
 export function ExploreFeedCard(props: ExploreFeedCardProps) {
+  return (
+    <ExploreCardSurface
+      item={props.item}
+      itemPosition={props.itemPosition}
+      listId={props.listId}
+      variant={props.claimCardVariant}
+    >
+      <ExploreFeedCardBody {...props} />
+    </ExploreCardSurface>
+  );
+}
+
+function ExploreFeedCardBody(props: ExploreFeedCardProps) {
   const isDebate = isDebateEntity(props.item.types);
   if (isDebate) {
     return (
@@ -127,6 +150,21 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
     );
   }
 
+  // Topics trade the votes for Follow (GEO-3191), and lead their metadata with the follower count.
+  // No connection counts here: see `TopicExploreFeedCard` for why the main feed doesn't ask.
+  const isTopic = props.item.types.some(type => normId(type.id) === TOPIC_TYPE);
+  if (isTopic) {
+    return (
+      <TopicExploreFeedCardArticle
+        item={props.item}
+        counts={null}
+        hideSpaceLink={props.hideSpaceLink}
+        hideJoinButton={props.hideJoinButton}
+        titleOpensSidePanel={props.titleOpensSidePanel}
+      />
+    );
+  }
+
   return <BaseExploreFeedCard {...props} />;
 }
 
@@ -143,7 +181,7 @@ function BaseExploreFeedCard({
   const cardActions = <ExploreCardActions item={item} />;
 
   return (
-    <article className={EXPLORE_CARD_CLASS}>
+    <ActionSurfaceArticle className={EXPLORE_CARD_CLASS}>
       {compactDebateChrome ? (
         <DebateExploreMetaRow
           item={item}
@@ -173,6 +211,6 @@ function BaseExploreFeedCard({
           compactTitle={compactDebateChrome}
         />
       )}
-    </article>
+    </ActionSurfaceArticle>
   );
 }

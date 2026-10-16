@@ -5,25 +5,28 @@ import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { RevertedUserOperationError } from '@geogenesis/auth/account';
 import { useQuery } from '@tanstack/react-query';
 
-import { useCookies } from 'react-cookie';
-
-import { Cookie, WALLET_ADDRESS } from '../cookie';
+import { forgetSyncedWalletCookie, syncWalletCookie } from '../cookie/sync-wallet-cookie';
 import { ReceiptConfirmationTimeoutError } from '../errors';
 import { GEO_NETWORK } from '../sdk/geo-network';
-import { MAX_QUEUE_WAIT_MS, enqueueFor, withSubmissionRetry } from './smart-account-send-queue';
+import {
+  MAX_QUEUE_WAIT_MS,
+  enqueueFor,
+  recoverAlreadyKnownSubmission,
+  submitOrResumeUserOperation,
+  withSubmissionRetry,
+} from './smart-account-send-queue';
+import { sendTransactionReportingSubmission } from './smart-account-submission';
 
 export function smartAccountQueryKey(
   walletAddress: string | null | undefined,
-  embeddedWalletAddress: string | null | undefined,
-  cookieWalletAddress: string | null | undefined
+  embeddedWalletAddress: string | null | undefined
 ) {
-  return ['smart-account', walletAddress, embeddedWalletAddress, cookieWalletAddress] as const;
+  return ['smart-account', walletAddress, embeddedWalletAddress] as const;
 }
 
 export function useSmartAccount() {
   const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
   const { wallets } = useWallets();
-  const [cookies] = useCookies([WALLET_ADDRESS]);
 
   // Privy embedded wallet — the EIP-7702 authority for the configured Geo chain. We need this
   // separately from the wagmi WalletClient because viem's signAuthorization rejects
@@ -36,7 +39,7 @@ export function useSmartAccount() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: smartAccountQueryKey(walletClient?.account.address, embeddedWallet?.address, cookies.walletAddress),
+    queryKey: smartAccountQueryKey(walletClient?.account.address, embeddedWallet?.address),
     queryFn: async () => {
       // ZeroDev EIP-7702 on every Geo chain — the chain identity comes from the
       // env-driven GEO_NETWORK config, so a network flip changes nothing here.
@@ -48,6 +51,7 @@ export function useSmartAccount() {
       // WalletClient is JSON-RPC and would be rejected by viem's
       // signAuthorization action).
       if (!embeddedWallet) {
+        forgetSyncedWalletCookie();
         return null;
       }
 
@@ -101,11 +105,25 @@ export function useSmartAccount() {
       //    included-but-REVERTED op is different: nothing landed on-chain, so
       //    surfacing it immediately is safe (a retry can't duplicate anything)
       //    and required (receipt.success=false must not read as success).
+      //
+      //    The "past every caller's retry window" half of that does NOT hold, and
+      //    never did: Effect's Schedule.elapsed starts at the first FAILURE, so a
+      //    receipt timeout at 90s opens a fresh 10s retry window and the caller
+      //    re-runs the send. On 2026-09-30 that re-run prepared the same op against
+      //    the still-pending nonce, the bundler answered "already known", and a
+      //    FAST publish that landed ~70s later was reported as failed with its vote
+      //    and execute never sent. Two guards now sit under every caller:
+      //    submitOrResumeUserOperation resumes the receipt wait for a re-run of the
+      //    same calls instead of submitting again, and recoverAlreadyKnownSubmission
+      //    treats "already known" as the accepted submission it is and waits on its
+      //    hash.
       const eoaAddress = zeroDevAccount.account.address;
 
-      // Longer than every caller retry window (max 10s today) plus slack, so a
-      // surfaced receipt failure can't trigger a re-submission. This is also the
-      // number MAX_QUEUE_WAIT_MS is sized against — a sendUserOperation holds its
+      // How long a submitted op's receipt is waited for before the failure is
+      // surfaced. Surfacing it does trigger a caller re-run (see the note on
+      // Schedule.elapsed above); submitOrResumeUserOperation turns that re-run into
+      // a second wait on the same hash. This is also the number MAX_QUEUE_WAIT_MS is
+      // sized against — a sendUserOperation holds its
       // queue slot for this long in the worst case.
       const RECEIPT_DEADLINE_MS = 90_000;
 
@@ -161,10 +179,20 @@ export function useSmartAccount() {
         // Queue-wait bounded: sendTransaction callers sit under
         // useSmartAccountTransaction's timeout, and the bound is what guarantees a
         // timed-out call never submits later (see QueuedSendTimeoutError).
-        sendTransaction: (...args: Parameters<typeof zeroDevAccount.sendTransaction>) =>
-          enqueueFor(eoaAddress, () => withSubmissionRetry(() => zeroDevAccount.sendTransaction(...args)), {
-            maxQueueWaitMs: MAX_QUEUE_WAIT_MS,
-          }),
+        //
+        // `onSubmitted` swaps the kernel's opaque submit-and-wait for the same two steps
+        // run separately, so the caller hears when the bundler accepted the op (GEO-2889).
+        // Same queue slot, held through inclusion either way.
+        sendTransaction: (txArgs, options) =>
+          enqueueFor(
+            eoaAddress,
+            () => {
+              const onSubmitted = options?.onSubmitted;
+              if (!onSubmitted) return withSubmissionRetry(() => zeroDevAccount.sendTransaction(txArgs));
+              return sendTransactionReportingSubmission(zeroDevAccount, txArgs, onSubmitted);
+            },
+            { maxQueueWaitMs: MAX_QUEUE_WAIT_MS }
+          ),
         // Deliberately NOT queue-wait bounded: publish/comment/deploy callers have no
         // outer timeout, only error-triggered retries, so a long queue wait should
         // block-and-succeed rather than fail.
@@ -174,18 +202,21 @@ export function useSmartAccount() {
           // The retry wraps the SUBMISSION ONLY. confirmInclusion must stay outside it:
           // once a hash exists the op may be landing, and re-running the send from a
           // confirm-phase failure is the duplicate-publish hazard described in (2) above.
-          enqueueFor(eoaAddress, async () => {
-            const hash = await withSubmissionRetry(() => zeroDevAccount.sendUserOperation(args));
-            await confirmInclusion(hash);
-            return hash;
-          }),
+          enqueueFor(eoaAddress, () =>
+            submitOrResumeUserOperation(
+              eoaAddress,
+              args.calls,
+              () =>
+                withSubmissionRetry(() => recoverAlreadyKnownSubmission(() => zeroDevAccount.sendUserOperation(args))),
+              confirmInclusion
+            )
+          ),
       };
 
-      if (!cookies.walletAddress || cookies.walletAddress !== wrapped.account.address) {
-        // The EOA address — registry now keys permissions on this directly (no Safe
-        // indirection) so the cookie value matches what `SpaceRegistry.enter` sees.
-        await Cookie.onConnectionChange({ type: 'connect', address: wrapped.account.address });
-      }
+      // The EOA address — registry now keys permissions on this directly (no Safe
+      // indirection) so the cookie value matches what `SpaceRegistry.enter` sees.
+      // Skips the Server Action when this tab already sent this address (see `syncWalletCookie`).
+      await syncWalletCookie(wrapped.account.address);
 
       return wrapped;
     },

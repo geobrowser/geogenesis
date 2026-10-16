@@ -8,7 +8,9 @@ import { Effect } from 'effect';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { requestSpaceMembership } from '~/core/access/request-space-membership';
+import { trackAuthOnboarding } from '~/core/auth-attempt';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
+import { type PersonalSpaceIdData, markPersonalProfilePublished } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getSpace } from '~/core/io/queries';
@@ -63,6 +65,8 @@ export function PendingPersonalSpaceRunner() {
   // Dedupe: never run two creation chains for the same topic at once (the
   // effect re-fires on every `pending`/atom change).
   const runningRef = React.useRef<string | null>(null);
+  // The persisted failure this load has already offered a retry for.
+  const reportedFailureRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (!address) return;
@@ -76,9 +80,27 @@ export function PendingPersonalSpaceRunner() {
       return;
     }
 
+    // A failure persisted by an earlier page load. Onboarding stays gated off while a
+    // pending record exists, but the retry that went with the failure lived only in the
+    // status bar, which is in-memory: after a reload the account had no dialog, no retry
+    // and no space, and only signing out cleared it. Offer the retry again, once per
+    // load; re-running creation is idempotent.
+    if (pending.status === 'failed') {
+      if (reportedFailureRef.current === pending.topicId) return;
+      reportedFailureRef.current = pending.topicId;
+      const { topicId } = pending;
+      reportError("Account setup didn't finish.", () => {
+        setPending({ topicId, address, status: 'pending' });
+      });
+      return;
+    }
+
     if (pending.status !== 'pending') return;
 
     const topicId = pending.topicId;
+    // This load has seen this job running, so a failure it reports later is reported
+    // there with its error, not again here.
+    reportedFailureRef.current = topicId;
     if (runningRef.current === topicId) return;
     runningRef.current = topicId;
 
@@ -92,7 +114,16 @@ export function PendingPersonalSpaceRunner() {
     // finally. Re-entry is safe because creation is idempotent — it returns the
     // existing id when registration already landed.
     let resolved = false;
-    const resolve = (spaceId: string) => {
+    // Set once the profile + topic userOp is sent. An error after that point (an indexer
+    // read, say) is not a missing profile.
+    let profileSent = false;
+    // `profilePublished` is false when registration landed but the profile publish did
+    // not. The account is still usable (it has a space), so the cache is seeded the same
+    // way; the caller offers the retry. The seed deliberately leaves `needsProfile`
+    // unset so onboarding doesn't pop over that retry — once the cache goes stale, or on
+    // a reload or another browser, the index reports the missing profile and onboarding
+    // reopens to finish it.
+    const resolve = (spaceId: string, profilePublished = true) => {
       if (resolved) return;
       resolved = true;
 
@@ -101,11 +132,12 @@ export function PendingPersonalSpaceRunner() {
       // redirects itself onto the real space the moment `setPending(null)`
       // clears the pending state, so no navigation is needed here.
       store.remapSpaceId(pendingPersonalSpaceId(topicId), spaceId);
-      queryClient.setQueryData(['personal-space-id', address], {
+      queryClient.setQueryData<PersonalSpaceIdData>(['personal-space-id', address], {
         isRegistered: true,
         personalSpaceId: spaceId,
         personalEntityId: topicId,
       });
+      if (profilePublished) trackAuthOnboarding('personal_space', 'completed');
       setResolvedSpaceId(spaceId);
       setPending(null);
 
@@ -237,6 +269,9 @@ export function PendingPersonalSpaceRunner() {
           spaceImage: avatar || undefined,
           topicId,
           onRegistered: registeredSpaceId => {
+            // Fires once the profile + topic userOp is sent, so the profile is on its way.
+            profileSent = true;
+            markPersonalProfilePublished(address);
             resolve(registeredSpaceId);
             settleMembership(registeredSpaceId);
           },
@@ -253,12 +288,30 @@ export function PendingPersonalSpaceRunner() {
         // exhausting, an indexer read erroring). Reporting those as "account setup
         // failed" leaves the user unregistered in the UI while their space exists
         // on-chain. Ask the chain before believing the error.
+        //
+        // But registered is not finished when the profile was never sent. Resolving that
+        // as success is how accounts got wedged with a space and no profile: no name, no
+        // page, the pending job cleared, and onboarding gated off for good because the
+        // account counted as registered. Resolve the space so the account works and offer
+        // the retry — re-running creation skips registration and publishes only the profile.
         try {
           const registered = await readRegisteredSpaceId(address);
-          if (registered) {
-            console.warn('[PendingPersonalSpace] creation reported an error but the space is registered', error);
+          if (registered && profileSent) {
+            console.warn('[PendingPersonalSpace] creation reported an error after the profile was sent', error);
             resolve(registered);
             settleMembership(registered);
+            return;
+          }
+          if (registered) {
+            console.warn('[PendingPersonalSpace] space is registered but the profile publish failed', error);
+            resolve(registered, false);
+            settleMembership(registered);
+            // The interest picks were just settled; don't request them again on retry.
+            setSelectedTopicIds([]);
+            trackAuthOnboarding('personal_space', 'failed');
+            reportError(`Profile setup didn't finish: ${describeError(error)}`, () => {
+              setPending({ topicId, address, status: 'pending' });
+            });
             return;
           }
         } catch {
@@ -269,6 +322,7 @@ export function PendingPersonalSpaceRunner() {
         // enrich is still in flight or rejected (seededIds, not enrich results).
         void targetsPromise.then(rollbackPending, rollbackPending);
         console.error('[PendingPersonalSpace] creation failed', error);
+        trackAuthOnboarding('personal_space', 'failed');
         setPending({ topicId, address, status: 'failed' });
         reportError(`Account setup failed: ${describeError(error)}`, () => {
           setPending({ topicId, address, status: 'pending' });
