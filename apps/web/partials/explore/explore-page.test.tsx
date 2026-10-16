@@ -1,20 +1,28 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ExplorePage } from './explore-page';
+import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 
 const mocks = vi.hoisted(() => ({
   flags: {} as Record<string, boolean>,
   feedProps: [] as Record<string, unknown>[],
+  smartAccount: null as null | { account: { address: string } },
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: string) => mocks.flags[id] ?? false,
 }));
 
-vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));
+vi.mock('~/core/hooks/use-awaited-smart-account', () => ({
+  useAwaitedSmartAccount: (signedIn: boolean) => ({
+    smartAccountAddress: mocks.smartAccount?.account.address ?? null,
+    awaitingAccount: signedIn && !mocks.smartAccount,
+  }),
+}));
 vi.mock('~/core/topics/use-followed-topics', () => ({
   useFollowedTopics: () => ({ topicIds: new Set(['bbbb', 'aaaa']), isLoading: false }),
 }));
@@ -42,6 +50,7 @@ function renderExplore() {
 beforeEach(() => {
   mocks.flags = {};
   mocks.feedProps = [];
+  mocks.smartAccount = null;
 });
 afterEach(cleanup);
 
@@ -102,6 +111,38 @@ describe('ExplorePage For you sort', () => {
       sortOptions: ['for-you', 'best', 'top', 'new'],
       followedTopicIds: ['aaaa', 'bbbb'],
     });
+  });
+
+  function renderWithHeldPicks(owner: string) {
+    const store = createStore();
+    store.set(feedTopicsAtom, {
+      address: owner,
+      topics: [
+        { id: 'cccc', name: 'Bitcoin' },
+        { id: 'aaaa', name: 'Already followed' },
+      ],
+    });
+    render(
+      <Provider store={store}>
+        <ExplorePage sidePanel={null} />
+      </Provider>
+    );
+  }
+
+  it('counts onboarding picks still waiting to be followed', () => {
+    mocks.flags = { forYouFeed: true };
+    mocks.smartAccount = { account: { address: '0xA' } };
+    renderWithHeldPicks('0xa');
+
+    expect(mocks.feedProps.at(-1)?.followedTopicIds).toEqual(['aaaa', 'bbbb', 'cccc']);
+  });
+
+  it("ignores another account's held picks", () => {
+    mocks.flags = { forYouFeed: true };
+    mocks.smartAccount = { account: { address: '0xB' } };
+    renderWithHeldPicks('0xA');
+
+    expect(mocks.feedProps.at(-1)?.followedTopicIds).toEqual(['aaaa', 'bbbb']);
   });
 
   // Privy restores the wallet after mount; until then the follows read as empty.
