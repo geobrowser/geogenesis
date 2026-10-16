@@ -6,6 +6,7 @@ import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/d
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations } from '~/core/debates/playback-utils';
 import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
+import { recordAnimationRestarts } from '~/core/debates/turn-timer-fixtures';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
 
 import { DebateFeedPlayer } from './debate-feed-player';
@@ -2206,6 +2207,61 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
     expect(timer(4, debate)?.getAttribute('data-turn-timer')).toBe('steady');
     // Down to its ring, which jumps between samples as it always has rather than easing.
     expect(timer(4, debate)?.innerHTML).not.toContain('turn-timer-rim]');
+  });
+
+  it('keeps the red rim draining across a second, restarting only the pulse', () => {
+    const { restarts, restore } = recordAnimationRestarts();
+    const at = (secondsLeft: number) => {
+      mocks.controller = {
+        ...controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 }),
+        turnState: { slot: 1, seconds: secondsLeft, progress: 0.9 },
+      };
+      return <DebateFeedPlayer debate={openRounds} active />;
+    };
+    const rim = (container: HTMLElement) => container.querySelector('[data-turn-timer-rim]');
+    try {
+      const view = render(at(3.9));
+      const before = rim(view.container);
+      expect(before).not.toBeNull();
+      restarts.length = 0;
+
+      view.rerender(at(3.4));
+      // Within a second: no pulse.
+      expect(restarts).toEqual([]);
+
+      view.rerender(at(2.9));
+      // A new second pulses, and the rim is the same element, so its drain carries on.
+      expect(restarts).toEqual(['none']);
+      expect(rim(view.container)).toBe(before);
+    } finally {
+      restore();
+    }
+  });
+
+  it('starts the red rim full as the timer turns red, rather than easing up from the turn’s progress', () => {
+    const at = (secondsLeft: number) => {
+      mocks.controller = {
+        ...controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 }),
+        turnState: { slot: 1, seconds: secondsLeft, progress: 0.75 },
+      };
+      return <DebateFeedPlayer debate={openRounds} active />;
+    };
+    const rim = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-turn-timer-rim]');
+
+    const view = render(at(5.4));
+    const turnRim = rim(view.container);
+    // Three quarters of the turn gone: the rim is a quarter of the way round.
+    expect(turnRim?.style.getPropertyValue('--turn-timer-rim')).toBe('90deg');
+
+    view.rerender(at(4.9));
+    const redRim = rim(view.container);
+    // A new element, so it shows its full five-second angle at once instead of transitioning to it.
+    expect(redRim).not.toBe(turnRim);
+    expect(redRim?.style.getPropertyValue('--turn-timer-rim')).toBe(`${(4.9 / 5) * 360}deg`);
+
+    view.rerender(at(3.9));
+    // Within the red phase it keeps draining on the same element.
+    expect(rim(view.container)).toBe(redRim);
   });
 
   it('draws a claim counter in each corner from the start, and the live cards only in a fixed format', () => {

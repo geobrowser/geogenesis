@@ -35,7 +35,7 @@ export default async function ExploreRoutePage() {
           <ExploreSidePanelContainer />
         </React.Suspense>
       }
-      signedIn={Boolean(wallet)}
+      walletAddress={wallet || null}
     />
   );
 }

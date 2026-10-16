@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
 import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useAwaitedSmartAccount } from '~/core/hooks/use-awaited-smart-account';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useFollowedTopics } from '~/core/topics/use-followed-topics';
 
@@ -14,9 +14,6 @@ import { EntityFeed } from '~/partials/feed/entity-feed';
 import { ExploreEmailCapturePopup } from './email-capture-popup';
 import { ExploreLiveLobbiesBanner } from './explore-live-lobbies-banner';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
-
-/** Bounds the wait for a signed-in account, so a stale wallet cookie can't hold the skeleton up. */
-const FOR_YOU_ACCOUNT_WAIT_MS = 5_000;
 
 const FOR_YOU_SORT_OPTIONS: readonly ExplorePageSort[] = ['for-you', 'best', 'top', 'new'];
 
@@ -48,18 +45,11 @@ const FOR_YOU_ENABLED_FOR_EVERYONE = process.env.NEXT_PUBLIC_FOR_YOU_ENABLED ===
  * GEO-3083. Its own component so the follow query only runs with the flag on, and so the feed
  * remounts, opening on For you, when the flag turns on after hydration.
  */
-function ExploreForYouFeed({ signedIn }: { signedIn: boolean }) {
+function ExploreForYouFeed({ walletAddress }: { walletAddress: string | null }) {
   const { topicIds, isLoading } = useFollowedTopics();
   // Before Privy restores the wallet, the account reads as signed out and the follows as empty.
-  // `signedIn` comes from the httpOnly wallet cookie, so wait for the account rather than serve Best.
-  const { smartAccount } = useSmartAccount();
-  const [accountWaitOver, setAccountWaitOver] = React.useState(false);
-  const awaitingAccount = signedIn && !smartAccount && !accountWaitOver;
-  React.useEffect(() => {
-    if (!awaitingAccount) return;
-    const timer = setTimeout(() => setAccountWaitOver(true), FOR_YOU_ACCOUNT_WAIT_MS);
-    return () => clearTimeout(timer);
-  }, [awaitingAccount]);
+  // `walletAddress` comes from the httpOnly wallet cookie, so wait for the account rather than serve Best.
+  const { awaitingAccount } = useAwaitedSmartAccount(walletAddress !== null);
 
   const followedTopicIds = React.useMemo(
     () => (isLoading || awaitingAccount ? null : [...topicIds].sort()),
@@ -72,6 +62,7 @@ function ExploreForYouFeed({ signedIn }: { signedIn: boolean }) {
       initialSort="for-you"
       sortOptions={FOR_YOU_SORT_OPTIONS}
       followedTopicIds={followedTopicIds}
+      walletAddress={walletAddress}
     />
   );
 }
@@ -82,11 +73,11 @@ type Props = {
    * inside Suspense) so its data never holds up the page.
    */
   sidePanel: React.ReactNode;
-  /** Whether the request carried a wallet cookie. */
-  signedIn?: boolean;
+  /** The wallet cookie the request carried, if any. */
+  walletAddress?: string | null;
 };
 
-export function ExplorePage({ sidePanel, signedIn = false }: Props) {
+export function ExplorePage({ sidePanel, walletAddress = null }: Props) {
   // GEO-2914. Hidden, not removed: the panel and everything in it is still built and still fed by
   // the route's own queries, so turning the flag on restores it without a deploy — and the tickets
   // still open against its contents have somewhere to land.
@@ -115,9 +106,9 @@ export function ExplorePage({ sidePanel, signedIn = false }: Props) {
           <ExploreLiveLobbiesBanner />
         </div>
         {forYouEnabled ? (
-          <ExploreForYouFeed signedIn={signedIn} />
+          <ExploreForYouFeed walletAddress={walletAddress} />
         ) : (
-          <EntityFeed {...EXPLORE_FEED_PROPS} initialSort="best" />
+          <EntityFeed {...EXPLORE_FEED_PROPS} initialSort="best" walletAddress={walletAddress} />
         )}
       </main>
     </EntityPageSidebarLayout>

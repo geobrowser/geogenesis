@@ -6,23 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession, DebateRematchStatus } from './api';
 import { debateRematchClaimKey, holdOpenDebateTab, resetDebateTabIdForTests } from './debate-tab-claims';
+import { FakeLockManager, rematchSessionFixture } from './rematch-session-fixtures';
 import { useLeaveRematchOnExit } from './use-leave-rematch-on-exit';
 
-const session = (overrides: Partial<DebateRematchSession> = {}): DebateRematchSession => ({
-  id: 'session-1',
-  source_debate_id: 'debate-1',
-  source_space_id: 'space-1',
-  status: 'browsing',
-  participants: [],
-  decision_expires_at: '2026-09-24T17:00:00Z',
-  browsing_expires_at: '2026-09-24T18:00:00Z',
-  request: null,
-  converted_debate_id: null,
-  recently_rejected_claim_ids: [],
-  created_at: '2026-09-24T17:00:00Z',
-  updated_at: '2026-09-24T17:00:00Z',
-  ...overrides,
-});
+const session = rematchSessionFixture;
 
 const leave = vi.fn();
 
@@ -119,28 +106,6 @@ describe('leaving a debate-again session on exit', () => {
     expect(leave).toHaveBeenCalledTimes(1);
   });
 });
-
-/**
- * One browser profile's Web Locks, shared by every "tab" in a test. A tab that closes has its locks
- * dropped by the browser, which is what calling a hold's release models.
- */
-class FakeLockManager {
-  held: LockInfo[] = [];
-
-  async request(name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<void>) {
-    const info: LockInfo = { name, mode: options.mode ?? 'exclusive', clientId: 'test' };
-    this.held.push(info);
-    try {
-      await callback({ name, mode: info.mode! });
-    } finally {
-      this.held = this.held.filter(lock => lock !== info);
-    }
-  }
-
-  async query(): Promise<LockManagerSnapshot> {
-    return { held: [...this.held], pending: [] };
-  }
-}
 
 describe('leaving a debate-again session with the picker open in several tabs', () => {
   let locks: FakeLockManager;

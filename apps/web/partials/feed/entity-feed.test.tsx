@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -34,6 +34,15 @@ const mocks = vi.hoisted(() => ({
     memberOf: { id: string; name: string }[];
     featuredError?: boolean;
   } | null,
+  /** The smart-account address `useSmartAccount` reports; null until Privy restores the wallet. */
+  accountAddress: null as string | null,
+  /** The identity token Privy has restored; null until it has. */
+  identityToken: null as string | null,
+}));
+
+vi.mock('@geogenesis/auth', async importOriginal => ({
+  ...(await importOriginal<typeof import('@geogenesis/auth')>()),
+  useIdentityToken: () => ({ identityToken: mocks.identityToken }),
 }));
 
 vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
@@ -66,7 +75,9 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: null }),
+  useSmartAccount: () => ({
+    smartAccount: mocks.accountAddress ? { account: { address: mocks.accountAddress } } : null,
+  }),
 }));
 
 vi.mock('~/design-system/menu', () => ({
@@ -99,6 +110,7 @@ beforeEach(() => {
   mocks.queryKeys = [];
   mocks.error = null;
   mocks.browseSidebar = null;
+  mocks.accountAddress = null;
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [], nextCursor: null }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -648,5 +660,106 @@ describe('EntityFeed more filters', () => {
     render(<EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showSortFilter />);
 
     expect(screen.queryByRole('button', { name: 'More filters' })).toBeNull();
+  });
+});
+
+// A signed-in reader's account is null for the first renders, until Privy restores the wallet and
+// ZeroDev builds the account. Keyed on that address, the feed used to fetch anonymously, render,
+// blank and fetch again (2026-10-16); #2890 made it wait for the account instead, which held the
+// first card back by a second or two. The server reads the same cookie, so the feed keys on it.
+describe('EntityFeed for a reader with a wallet cookie', () => {
+  const ADDRESS = '0x00000000000000000000000000000000000000aa';
+
+  function renderFeed(walletAddress: string | null) {
+    return render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="best"
+        showTimeFilter={false}
+        walletAddress={walletAddress}
+      />
+    );
+  }
+
+  function renderForYou() {
+    return render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="for-you"
+        showTimeFilter={false}
+        sendIdentityToken
+        followedTopicIds={[]}
+        walletAddress={ADDRESS}
+      />
+    );
+  }
+
+  afterEach(() => {
+    mocks.identityToken = null;
+    vi.useRealTimers();
+  });
+
+  it('sends the first request at once, keyed on the cookie, before the account resolves', () => {
+    const { rerender } = renderFeed(ADDRESS);
+    expect(mocks.queryOptions?.enabled).toBe(true);
+    expect((mocks.queryOptions?.queryKey as unknown[]).at(-1)).toBe(ADDRESS);
+    const firstKey = mocks.queryOptions?.queryKey;
+
+    mocks.accountAddress = ADDRESS;
+    rerender(
+      <EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showTimeFilter={false} walletAddress={ADDRESS} />
+    );
+    // The same key, so the account arriving does not refetch.
+    expect(mocks.queryOptions?.queryKey).toEqual(firstKey);
+  });
+
+  it('holds a request that carries an identity token until Privy restores the token', () => {
+    const { rerender } = renderForYou();
+    expect(mocks.queryOptions?.enabled).toBe(false);
+    expect(screen.queryByText('No entities match these filters yet.')).toBeNull();
+
+    mocks.identityToken = 'token';
+    rerender(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="for-you"
+        showTimeFilter={false}
+        sendIdentityToken
+        followedTopicIds={[]}
+        walletAddress={ADDRESS}
+      />
+    );
+    expect(mocks.queryOptions?.enabled).toBe(true);
+    expect((mocks.queryOptions?.queryKey as unknown[]).at(-1)).toBe(ADDRESS);
+  });
+
+  it('gives up waiting for the token after five seconds, so a stale cookie cannot hold the feed', () => {
+    vi.useFakeTimers();
+    renderForYou();
+    expect(mocks.queryOptions?.enabled).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(mocks.queryOptions?.enabled).toBe(true);
+  });
+
+  it('does not wait for a reader with no wallet cookie', () => {
+    renderFeed(null);
+    expect(mocks.queryOptions?.enabled).toBe(true);
+    expect((mocks.queryOptions?.queryKey as unknown[]).at(-1)).toBeNull();
+  });
+
+  it('keeps the cards up across a change of account, but not a change of filter', () => {
+    renderFeed(null);
+    const placeholderData = mocks.queryOptions?.placeholderData as (
+      previous: unknown,
+      previousQuery: { queryKey: unknown[] } | undefined
+    ) => unknown;
+    const key = mocks.queryOptions?.queryKey as unknown[];
+    const previous = { pages: [] };
+
+    expect(placeholderData(previous, { queryKey: [...key.slice(0, -1), ADDRESS] })).toBe(previous);
+    expect(placeholderData(previous, { queryKey: [key[0], 'new', ...key.slice(2)] })).toBeUndefined();
+    expect(placeholderData(previous, undefined)).toBeUndefined();
   });
 });
