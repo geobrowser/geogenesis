@@ -288,11 +288,19 @@ function parsePointValue(val: string): { lon: number; lat: number } | null {
     // Not JSON. The comma form below is the other encoding, not a failure.
   }
 
-  // `parseCoordinates` reads `"lat, lon"` in that order, trims, and rejects anything that is not two
-  // numbers — the same reading the entity page renders from, so the published point and the drawn
-  // one cannot disagree.
+  // `"lat, lon"`, in that order — the same reading the entity page renders from, so the published
+  // point and the drawn one cannot disagree.
+  const parts = val.split(',').map(part => part.trim());
+  if (parts.length !== 2 || !parts.every(isFiniteDecimal)) return null;
+
   const coordinates = GeoPoint.parseCoordinates(val);
   return coordinates ? { lon: coordinates.longitude, lat: coordinates.latitude } : null;
+}
+
+const DECIMAL_TOKEN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+function isFiniteDecimal(part: string): boolean {
+  return DECIMAL_TOKEN.test(part) && Number.isFinite(Number(part));
 }
 
 /**
