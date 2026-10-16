@@ -10,8 +10,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
-import { carryLobbyMic, clearCarriedLobbyMic, forgetLobbyMic, reportLobbyMic } from '~/core/debates/lobbies/step-out';
-import { clearRematchJoinIntents, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
+import {
+  carryLobbyMic,
+  clearCarriedLobbyMic,
+  forgetLobbyMic,
+  readCarriedLobbyMic,
+  reportLobbyMic,
+} from '~/core/debates/lobbies/step-out';
+import {
+  carryJoinIntentIntoDebate,
+  clearRematchJoinIntents,
+  readRematchJoinIntent,
+  rememberRematchJoinIntent,
+} from '~/core/debates/rematch-join-intent';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { PAIR_PILL } from './rematch-pair-header';
@@ -578,6 +589,22 @@ describe('RematchVoiceHeader', () => {
     await flushOwnership();
 
     expect(mocks.livekitRoomProps[0]?.audio).toBe(false);
+  });
+
+  // A challenge card answered inside a lobby: the step-out carries the lobby mic, then the card
+  // records its own choice. The card is the later, more direct answer.
+  it('joins with the card’s muted mic over a live mic carried from the lobby', async () => {
+    stepOutOfLobbyWithMic(true);
+    rememberRematchJoinIntent('session-1', { micOn: false, cameraOn: false });
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(mocks.livekitRoomProps[0]?.audio).toBe(false);
+
+    // The ready room reads the picker's recorded answer, and finds no lobby mic left to outrank it.
+    carryJoinIntentIntoDebate('session-1', 'debate-1');
+    expect(readRematchJoinIntent('debate-1')).toEqual({ micOn: false, cameraOn: false });
+    expect(readCarriedLobbyMic()).toBeNull();
   });
 
   it('resets the microphone default when the route moves between rematch sessions', async () => {
