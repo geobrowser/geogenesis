@@ -64,7 +64,7 @@ describe('FeatureFlagsDialog', () => {
         exploreSidePanel: false,
         forYouFeed: false,
         lobbyHosting: false,
-      debateVideo: false,
+        debateVideo: false,
         bountiesTab: true,
       });
     });
