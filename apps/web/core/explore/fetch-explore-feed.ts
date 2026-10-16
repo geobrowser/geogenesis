@@ -1,7 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
-import { after } from 'next/server';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
@@ -17,6 +16,7 @@ import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-memb
 import { collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import { normId } from '~/core/utils/norm-id';
 import { createPromiseTtlCache } from '~/core/utils/promise-ttl-cache';
+import { runAfterResponse } from '~/core/utils/run-after-response';
 
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
@@ -67,8 +67,8 @@ import {
   encodeFreshSlotCursor,
 } from './fresh-slot/fresh-slot-cursor';
 import { type FreshMergedRow, mergeFreshSlot } from './fresh-slot/merge-fresh-slot';
-import { readSharedFreshList, writeSharedFreshList } from './fresh-slot/shared-fresh-list';
 import { recordRecentFreshScope } from './fresh-slot/recent-fresh-scopes';
+import { readSharedFreshList, writeSharedFreshList } from './fresh-slot/shared-fresh-list';
 import { leadWithPlayableDebate } from './lead-with-playable-debate';
 import type { SeenDemotionPageConfig } from './seen-demotion/seen-demotion-config';
 
@@ -730,15 +730,6 @@ function rememberLatestFreshList(scopeKey: string, list: FreshList) {
     const oldestKey = latestFreshLists.keys().next().value;
     if (typeof oldestKey !== 'string') break;
     latestFreshLists.delete(oldestKey);
-  }
-}
-
-/** Keeps a serverless instance alive for `work` after the response; outside a request, just runs it. */
-function runAfterResponse(work: () => Promise<unknown>) {
-  try {
-    after(work);
-  } catch {
-    void work();
   }
 }
 
