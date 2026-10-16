@@ -1492,7 +1492,7 @@ export function useCompleteLocalRecordingUpload(debateId: string) {
  */
 export const RECORDING_URL_STALE_MS = 5 * 60 * 1000;
 
-/** `variant: 'mobile'` signs the recording's mobile rendition (GEO-3118) instead of the file itself. */
+/** `variant: 'mobile'` signs the recording's feed rendition (GEO-3118, still named `mobile`) instead of the file itself. */
 type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingPlaybackVariant };
 
 /**

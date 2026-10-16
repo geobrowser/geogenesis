@@ -99,7 +99,8 @@ export type DebateRecording = {
   framerate: number | null;
   video_bits_per_second: number | null;
   /**
-   * MIME type of the recording's 720p H.264 mobile rendition (GEO-3118), or null/absent until
+   * MIME type of the recording's feed rendition (GEO-3118) — 480p-capped H.264, played on every
+   * device that can play it, though the variant is still called `mobile` — or null/absent until
    * geo-chat has written one. Sign it with `getRecordingUrl(..., { variant: 'mobile' })`.
    */
   mobile_content_type?: string | null;

@@ -26,7 +26,7 @@ vi.mock('./hooks', () => ({
   useDebateMedia: () => ({ data: { turn_segments: [] }, isPending: false, isLoading: false, error: null }),
 }));
 
-// The real selection, with the flag and the device check replaced: those two are covered in
+// The real selection, with the flag and the browser check replaced: those two are covered in
 // mobile-rendition.test.ts, and what matters here is what the hook does with the answer.
 vi.mock('./mobile-rendition', async importOriginal => {
   const actual = await importOriginal<typeof import('./mobile-rendition')>();
@@ -35,7 +35,6 @@ vi.mock('./mobile-rendition', async importOriginal => {
     recordingPlaybackVariant: (recording: Parameters<typeof actual.recordingPlaybackVariant>[0]) =>
       actual.recordingPlaybackVariant(recording, {
         enabled: mocks.mobileRenditionsOn,
-        isMobile: () => true,
         canPlay: () => true,
       }),
   };
@@ -70,7 +69,7 @@ function debateFixture(mobile: { slot1: string | null; slot2: string | null }): 
   } as unknown as Debate;
 }
 
-/** GEO-3118: on a phone the feed signs each recording's 720p H.264 rendition when it has one. */
+/** GEO-3118: the feed signs each recording's 480p H.264 feed rendition when it has one. */
 describe('useDebatePlayback — mobile renditions (GEO-3118)', () => {
   beforeEach(() => {
     mocks.mobileRenditionsOn = false;
