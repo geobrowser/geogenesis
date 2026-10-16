@@ -1,6 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
+import { type DocumentNode, print } from 'graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
@@ -19,6 +20,7 @@ const graph = vi.hoisted(() => ({
   best: [] as unknown[],
   fresh: [] as unknown[],
   freshCalls: [] as Record<string, unknown>[],
+  freshQueries: [] as unknown[],
   bestCalls: 0,
 }));
 
@@ -39,6 +41,7 @@ vi.mock('~/core/io/graphql-client', () => ({
     }
     if (operation === 'ExploreEntitiesConnection') {
       graph.freshCalls.push(variables);
+      graph.freshQueries.push(query);
       return Effect.succeed({ entities: graph.fresh, endCursor: null, hasNextPage: false });
     }
     throw new Error(`unexpected operation ${operation}`);
@@ -105,6 +108,7 @@ beforeEach(() => {
     entity(bestIds[100]!, CLAIM_TYPE_ID),
   ];
   graph.freshCalls = [];
+  graph.freshQueries = [];
   graph.bestCalls = 0;
   // A different instant per test, so the module's Fresh list cache never carries between tests.
   clock += 10_000_000;
@@ -190,6 +194,12 @@ describe('a whole scroll with the fresh slot on', () => {
     );
     // Later pages ran hours later and still asked for the same range (or were served from cache).
     expect(new Set(ranges).size).toBe(1);
+  });
+
+  it('asks for the Fresh list without hasNextPage, which re-runs the whole filter', async () => {
+    await scroll({ config: { ...ON, freshnessHours: 24 }, revision: 1 });
+    expect(graph.freshQueries.length).toBeGreaterThan(0);
+    for (const query of graph.freshQueries) expect(print(query as DocumentNode)).not.toContain('hasNextPage');
   });
 });
 

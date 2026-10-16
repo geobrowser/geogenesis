@@ -40,7 +40,10 @@ import {
   targetMixAppliesTo,
 } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
-import { exploreEntitiesConnectionDocument } from './explore-entities-document';
+import {
+  exploreEntitiesConnectionDocument,
+  exploreEntitiesNoPageInfoConnectionDocument,
+} from './explore-entities-document';
 import { exploreForYouBestConnectionDocument, exploreForYouConnectionDocument } from './explore-for-you-document';
 import { FOR_YOU_FEED, composeForYouPage } from './explore-for-you-mix';
 import type { ExploreCompleteIndexNode } from './explore-index-selection';
@@ -419,10 +422,12 @@ async function fetchExploreEntitiesPage(args: {
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
+  /** For callers that read neither `hasNextPage` nor `endCursor`; the page then reports false / null. */
+  skipPageInfo?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
-      query: exploreEntitiesConnectionDocument,
+      query: args.skipPageInfo ? exploreEntitiesNoPageInfoConnectionDocument : exploreEntitiesConnectionDocument,
       decoder: decodeExploreEntities,
       variables: {
         limit: args.limit,
@@ -741,6 +746,8 @@ async function fetchFreshEntitiesPage(args: {
         requireName: args.requireName,
         requireDebateTagOnClaims: args.requireDebateTagOnClaims,
         entityFilter: combineEntityFilters(args.entityFilter, range),
+        // Only `entities` is read from this list; `hasNextPage` would re-run the whole filter (~2s).
+        skipPageInfo: true,
       });
       if (!pinned) {
         runAfterResponse(() => writeSharedFreshList(scopeKey, { asOfMs, page: fetched }, FRESH_LIST_MAX_STALE_MS));
