@@ -6,30 +6,12 @@ import cx from 'classnames';
 
 import type { RoundCue } from '~/core/debates/round-cues';
 
+import {
+  PLAYBACK_ROUND_EYEBROW_CLASS,
+  PLAYBACK_ROUND_HEADLINE_CLASS,
+  PLAYBACK_OUTLINE_STYLE as roundCardTextShadow,
+} from './playback-typography';
 import { PLAYER_GLASS_CLASS, PLAYER_LABEL_FONT, PLAYER_TITLE_STYLE } from './player-overlay-styles';
-
-/**
- * An outline in every direction rather than the four corners the recording room uses.
- *
- * Its `recordingOverlayTextShadow` is sized for the 7.5rem count-in, where corner copies of a
- * stroke that thick overlap into a continuous edge. At smaller sizes they do not, and the gaps
- * land on the cardinal points — the top of an "R", the side of a "1" — which reads as a broken
- * outline rather than a thin one. Eight copies close it for the cost of four more shadows.
- *
- * In `em` rather than pixels, because this card is sized as a fraction of the player and so spans
- * something like 60px on a phone to 180px on a wide one. A fixed 2px outline is right at the
- * bottom of that range and invisible at the top; a proportional one is the same outline at every
- * width, which is the whole point of sizing the card this way.
- *
- * Black, and white type inside it, which is the opposite of the phrase treatment the debaters see.
- * That one is dark type in a white outline and it works because it sits mid-frame over a face; the
- * seam is where the top tile's scrim has run all the way to black, so dark type there leaves the
- * outline holding an empty shape.
- */
-const roundCardTextShadow = {
-  textShadow:
-    '-0.035em -0.035em 0 #000, 0 -0.035em 0 #000, 0.035em -0.035em 0 #000, 0.035em 0 0 #000, 0.035em 0.035em 0 #000, 0 0.035em 0 #000, -0.035em 0.035em 0 #000, -0.035em 0 0 #000, 0 0.05em 0.16em rgba(0,0,0,0.55)',
-};
 
 /**
  * How wide the round's name is drawn, as a share of the player.
@@ -97,7 +79,7 @@ export function DebateRoundCard({ cue }: { cue: RoundCue | null }) {
       {/* The round takes the headline itself where the format names no role — a lone eyebrow over
           the seam would read as a stray caption rather than as a card. */}
       <span
-        className={cx('block', cue.role ? 'font-semibold text-white/85' : 'font-bold tracking-[-0.02em] text-white')}
+        className={cx('block', cue.role ? PLAYBACK_ROUND_EYEBROW_CLASS : PLAYBACK_ROUND_HEADLINE_CLASS)}
         style={{
           ...roundCardTextShadow,
           fontSize: `${cue.role ? ROUND_CQW : NAME_CQW}cqw`,
@@ -110,7 +92,7 @@ export function DebateRoundCard({ cue }: { cue: RoundCue | null }) {
       </span>
       {cue.role && (
         <span
-          className="block font-bold tracking-[-0.02em] text-white"
+          className={cx('block', PLAYBACK_ROUND_HEADLINE_CLASS)}
           style={{ ...roundCardTextShadow, fontSize: `${NAME_CQW}cqw`, lineHeight: 0.95 }}
         >
           {cue.role}
@@ -205,7 +187,7 @@ export function DebateRoundBanner({ cue }: { cue: RoundCue | null }) {
   );
 }
 
-/** Shared by the opening and the next-round announcement, at the export's 9/18cqw sizes. */
+/** Opening and next-round announcements use the same type weights and outline as fixed formats. */
 export function PlayerRoundTitle({ round, role, sub }: { round: string; role: string | null; sub?: string | null }) {
   return (
     <div
@@ -215,13 +197,13 @@ export function PlayerRoundTitle({ round, role, sub }: { round: string; role: st
       <span
         className={
           role
-            ? 'text-[9cqw] leading-none font-semibold tracking-[-0.01em] text-white/88'
-            : 'text-[18cqw] leading-[0.95] font-bold tracking-[-0.03em]'
+            ? cx(PLAYBACK_ROUND_EYEBROW_CLASS, 'text-[9cqw] leading-none')
+            : cx(PLAYBACK_ROUND_HEADLINE_CLASS, 'text-[18cqw] leading-none')
         }
       >
         {round}
       </span>
-      {role && <span className="text-[18cqw] leading-[0.95] font-bold tracking-[-0.03em]">{role}</span>}
+      {role && <span className={cx(PLAYBACK_ROUND_HEADLINE_CLASS, 'text-[18cqw] leading-[0.95]')}>{role}</span>}
       {sub && (
         <span data-debate-banner-sub className="mt-[1.6cqw] text-[4.8cqw] leading-none font-semibold">
           {sub}

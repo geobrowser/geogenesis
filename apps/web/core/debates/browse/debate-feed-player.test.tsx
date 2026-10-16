@@ -2150,7 +2150,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(stamps(container)).toEqual(['extend', 'none']);
     const banner = container.querySelector('[data-debate-banner="wrap"]');
     expect(banner?.textContent).toBe('That’s a wrap');
-    expect(banner?.firstElementChild?.getAttribute('style')).toContain('--font-geist-bold');
+    expect(banner?.firstElementChild?.getAttribute('style')).toContain('--font-calibre');
     expect(container.innerHTML).not.toContain('purple');
     // The reason sits beneath the banner, where the mockup puts it.
     expect(container.querySelector('[data-debate-break]')?.textContent).toMatch(/didn't pick in time$/);
@@ -2276,7 +2276,7 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
   const openRounds = { ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
   const at = (playheadSeconds: number) => controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds });
 
-  it('opens with stacked outlined Geist type', () => {
+  it('opens with stacked outlined type', () => {
     mocks.controller = at(0.5);
     const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
     expect(container.querySelector('[data-round-banner]')?.getAttribute('data-round-banner')).toBe('Round 1 · Opening');

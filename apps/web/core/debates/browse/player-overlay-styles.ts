@@ -1,14 +1,13 @@
 /** Open rounds playback only. The recording room keeps its own stamps design. */
-export const PLAYER_LABEL_FONT = { fontFamily: 'var(--font-geist-medium)', fontWeight: 500 } as const;
-// The export has Geist 500 and 700 only: its 600-weight picks resolve to the bold face.
-export const PLAYER_PICK_STYLE = { fontFamily: 'var(--font-geist-bold)', fontWeight: 600 } as const;
+import { PLAYBACK_FONT_FAMILY, PLAYBACK_OUTLINE_STYLE, PLAYBACK_ROUND_HEADLINE_CLASS } from './playback-typography';
+
+export const PLAYER_LABEL_FONT = { fontFamily: PLAYBACK_FONT_FAMILY, fontWeight: 500 } as const;
+export const PLAYER_PICK_STYLE = { fontFamily: PLAYBACK_FONT_FAMILY, fontWeight: 600 } as const;
 export const PLAYER_TITLE_STYLE = {
-  fontFamily: 'var(--font-geist-bold)',
-  textShadow:
-    '-0.04em -0.04em 0 #000, 0 -0.04em 0 #000, 0.04em -0.04em 0 #000, 0.04em 0 0 #000, 0.04em 0.04em 0 #000, 0 0.04em 0 #000, -0.04em 0.04em 0 #000, -0.04em 0 0 #000, 0 0.06em 0.18em rgba(0,0,0,0.55)',
+  fontFamily: PLAYBACK_FONT_FAMILY,
+  ...PLAYBACK_OUTLINE_STYLE,
 } as const;
-export const PLAYER_TITLE_CLASS =
-  'text-center leading-[0.95] font-bold tracking-[-0.02em] whitespace-nowrap text-white';
+export const PLAYER_TITLE_CLASS = `${PLAYBACK_ROUND_HEADLINE_CLASS} text-center leading-[0.95] whitespace-nowrap`;
 export const PLAYER_GLASS_CLASS =
   'rounded-full bg-black/66 px-[2.2cqw] py-[1.1cqw] leading-none tracking-[0.01em] whitespace-nowrap text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.24)] backdrop-blur-[10px]';
 export const PLAYER_PICK_BASE_CLASS =
