@@ -299,6 +299,20 @@ describe('DebateRequestMediaPreview', () => {
     expect(onJoinStateChange).toHaveBeenLastCalledWith({ micOn: true, cameraOn: false });
   });
 
+  it.each([
+    ['NotAllowedError', 'Allow access to your microphone to continue.'],
+    ['NotReadableError', 'Your microphone may be in use by another app. Close it and try again.'],
+    ['AbortError', 'Your microphone may be in use by another app. Close it and try again.'],
+    ['UnknownError', 'We could not start your microphone. Check your devices and try again.'],
+  ])('explains a %s on a card with no camera without mentioning one', async (name, copy) => {
+    mocks.permission = 'granted';
+    mocks.ensurePreview.mockRejectedValue(Object.assign(new Error('nope'), { name }));
+    mount({ camera: false });
+
+    expect(await screen.findByText(copy)).toBeInTheDocument();
+    expect(screen.queryByText(/camera/i)).toBeNull();
+  });
+
   it('reports no camera block on a card with no camera', async () => {
     mocks.permission = 'granted';
     mocks.cameraPermission = 'denied';

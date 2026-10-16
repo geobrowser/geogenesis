@@ -631,26 +631,32 @@ function sameMediaDeviceOptions(current: MediaDeviceOption[], next: MediaDeviceO
  * `error.message` is the browser's own text — "Permission denied", or a sentence about user agents
  * and platform contexts.
  */
-export function preJoinMediaFailure(error: unknown): {
+export function preJoinMediaFailure(
+  error: unknown,
+  /** The kinds that were asked for, so a mic-only surface never mentions a camera. */
+  kinds: { audio: boolean; video: boolean } = { audio: true, video: true }
+): {
   state: Exclude<PreJoinMediaState, 'requesting' | 'ready'>;
   message: string;
 } {
+  const both = kinds.audio && kinds.video;
+  const devices = both ? 'camera and microphone' : kinds.video ? 'camera' : 'microphone';
   const name = error instanceof DOMException || error instanceof Error ? error.name : '';
   if (name === 'NotAllowedError' || name === 'SecurityError') {
-    return { state: 'denied', message: 'Allow access to your camera and microphone to continue.' };
+    return { state: 'denied', message: `Allow access to your ${devices} to continue.` };
   }
   if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-    return { state: 'unavailable', message: 'Connect a camera and microphone, then try again.' };
+    return { state: 'unavailable', message: `Connect a ${devices}, then try again.` };
   }
   if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') {
     return {
       state: 'error',
-      message: 'Your camera or microphone may be in use by another app. Close it and try again.',
+      message: `Your ${both ? 'camera or microphone' : devices} may be in use by another app. Close it and try again.`,
     };
   }
   return {
     state: 'error',
-    message: 'We could not start your camera and microphone. Check your devices and try again.',
+    message: `We could not start your ${devices}. Check your devices and try again.`,
   };
 }
 
