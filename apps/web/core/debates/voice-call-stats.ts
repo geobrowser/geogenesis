@@ -72,11 +72,16 @@ export const MIC_LEVEL_FLOOR_DB = -100;
  * The growth of a cumulative counter since the previous reading of the same stream. A counter that
  * went backwards has not restarted (that shows as a new stream): RTCP's lost count can shrink when
  * late packets turn up, which is no new loss.
+ *
+ * With no earlier reading of the stream, the whole count is this interval's. With an earlier reading
+ * that lacked this counter, the interval's share is unknown: the server's first loss report can land
+ * after our first packet count, and its lifetime total over one interval's packets reads 4.5% as 50%.
  */
-function growth(current?: number, previous?: number) {
+function growth(current: number | undefined, previous: number | undefined, readBefore: boolean) {
   if (current === undefined) return null;
-  // A cumulative loss count is negative when duplicates outnumber losses, first reading or not.
-  return Math.max(0, previous === undefined ? current : current - previous);
+  if (previous === undefined) return readBefore ? null : Math.max(0, current);
+  // A cumulative loss count is negative when duplicates outnumber losses.
+  return Math.max(0, current - previous);
 }
 
 function sum(values: (number | null)[]) {
@@ -103,20 +108,22 @@ export function voiceSampleMetrics(
 ): VoiceSampleMetrics {
   const sameStream = previousSender?.streamId === sender.streamId ? previousSender : undefined;
   const sameSource = previousSender?.sourceId === sender.sourceId ? previousSender : undefined;
-  const sent = growth(sender.packets, sameStream?.packets);
-  const sentLost = growth(sender.packetsLost, sameStream?.packetsLost);
-  const energy = growth(sender.energy, sameSource?.energy);
-  const micSeconds = growth(sender.samplesDuration, sameSource?.samplesDuration);
+  const sent = growth(sender.packets, sameStream?.packets, sameStream !== undefined);
+  const sentLost = growth(sender.packetsLost, sameStream?.packetsLost, sameStream !== undefined);
+  const energy = growth(sender.energy, sameSource?.energy, sameSource !== undefined);
+  const micSeconds = growth(sender.samplesDuration, sameSource?.samplesDuration, sameSource !== undefined);
 
   const tracks = [...receivers.entries()];
   const across = (read: (current: ReceiverSnapshot, previous?: ReceiverSnapshot) => number | null) =>
     sum(tracks.map(([id, current]) => read(current, previousReceivers?.get(id))));
-  const received = across((current, previous) => growth(current.packets, previous?.packets));
-  const receivedLost = across((current, previous) => growth(current.packetsLost, previous?.packetsLost));
-  const samples = across((current, previous) => growth(current.samples, previous?.samples));
+  const received = across((current, previous) => growth(current.packets, previous?.packets, previous !== undefined));
+  const receivedLost = across((current, previous) =>
+    growth(current.packetsLost, previous?.packetsLost, previous !== undefined)
+  );
+  const samples = across((current, previous) => growth(current.samples, previous?.samples, previous !== undefined));
   const concealed = across((current, previous) => {
-    const all = growth(current.concealedSamples, previous?.concealedSamples);
-    const silent = growth(current.silentConcealedSamples, previous?.silentConcealedSamples);
+    const all = growth(current.concealedSamples, previous?.concealedSamples, previous !== undefined);
+    const silent = growth(current.silentConcealedSamples, previous?.silentConcealedSamples, previous !== undefined);
     return all === null ? null : Math.max(0, all - (silent ?? 0));
   });
   const jitters = tracks.flatMap(([, current]) => (current.jitter === undefined ? [] : [current.jitter]));

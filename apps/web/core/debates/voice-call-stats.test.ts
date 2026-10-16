@@ -87,6 +87,23 @@ describe('voiceSampleMetrics (GEO-3340)', () => {
     expect(metrics.recv_loss_pct).toBe(0);
   });
 
+  // Copilot on #2884 (round 3): the server's first loss report can land after our first packet
+  // count. Lifetime loss over one interval's packets would read 4.5% as 50%.
+  it('leaves loss unmeasured when the previous reading had no loss count yet', () => {
+    const metrics = voiceSampleMetrics(
+      { streamId: '1', packets: 1_100, packetsLost: 50 },
+      { streamId: '1', packets: 1_000 },
+      receivers([
+        ['remote-a:9', { streamId: '9', packets: 2_000, packetsLost: 40, samples: 96_000, concealedSamples: 960 }],
+      ]),
+      receivers([['remote-a:9', { streamId: '9', packets: 1_000, samples: 48_000 }]])
+    );
+    expect(metrics.sent_packets).toBe(100);
+    expect(metrics.send_loss_pct).toBeNull();
+    expect(metrics.recv_loss_pct).toBeNull();
+    expect(metrics.recv_concealed_pct).toBeNull();
+  });
+
   // RTCP's cumulative loss shrinks when packets thought lost turn up late.
   it('reads a shrinking loss count as no new loss, not a restart', () => {
     const metrics = voiceSampleMetrics(
