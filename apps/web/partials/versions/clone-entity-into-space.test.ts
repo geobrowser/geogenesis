@@ -157,6 +157,53 @@ describe('cloneEntityIntoSpace — related entities', () => {
     expect(written.relations.some(r => r.fromEntity.id === 'custom-property')).toBe(false);
   });
 
+  it('never copies a person whose type is recorded in their own space', () => {
+    store.relations = [
+      relation({ id: 'rel', from: ENTITY, to: 'a-person' }),
+      relation({
+        id: 'person-type',
+        from: 'a-person',
+        to: SystemIds.PERSON_TYPE,
+        typeId: SystemIds.TYPES_PROPERTY,
+        spaceId: 'their-own-profile-space',
+      }),
+    ];
+    store.values = [value('a-person', SOURCE, 'person-v')];
+
+    const written = run();
+
+    expect(written.values.some(v => v.entity.id === 'a-person')).toBe(false);
+  });
+
+  it('never copies a property defined in the space that declared it', () => {
+    store.relations = [
+      relation({ id: 'rel', from: ENTITY, to: 'a-property' }),
+      relation({
+        id: 'property-type',
+        from: 'a-property',
+        to: SystemIds.PROPERTY,
+        typeId: SystemIds.TYPES_PROPERTY,
+        spaceId: 'the-space-that-declared-it',
+      }),
+    ];
+    store.values = [value('a-property', SOURCE, 'property-v')];
+
+    const written = run();
+
+    expect(written.values.some(v => v.entity.id === 'a-property')).toBe(false);
+  });
+
+  it('copies a related entity’s source-space values only', () => {
+    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'related' })];
+    store.values = [value('related', SOURCE, 'here-v'), value('related', 'somewhere-else', 'elsewhere-v')];
+
+    const written = run();
+
+    const forRelated = written.values.filter(v => v.entity.id === 'related');
+    expect(forRelated).toHaveLength(1);
+    expect(forRelated[0]?.property.id).toBe('prop-here-v');
+  });
+
   it('leaves the source copies in place — the clone adds, it does not move', () => {
     store.relations = [relation({ id: 'rel', from: ENTITY, to: 'related' })];
     store.values = [value('related', SOURCE, 'related-v')];

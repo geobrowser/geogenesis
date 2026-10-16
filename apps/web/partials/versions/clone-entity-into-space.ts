@@ -70,13 +70,15 @@ function isMediaUrl(value: string | undefined): value is string {
   return typeof value === 'string' && (value.startsWith('ipfs://') || value.startsWith('http'));
 }
 
-/** Whether a related target is a person, an account or a space — owned by someone, not by a move. */
-function isNeverCopied(entityId: string, sourceSpaceId: string): boolean {
+/**
+ * Whether a related target is one of the kinds above — owned by someone or shared by everyone,
+ * either way not a move's to copy.
+ */
+function isNeverCopied(entityId: string): boolean {
   return (
     getRelations({
       selector: relation =>
         relation.fromEntity.id === entityId &&
-        relation.spaceId === sourceSpaceId &&
         relation.type.id === SystemIds.TYPES_PROPERTY &&
         NEVER_COPIED_TYPE_IDS.has(normId(relation.toEntity.id)),
     }).length > 0
@@ -111,7 +113,7 @@ export function cloneEntityIntoSpace(entityId: string, sourceSpaceId: string, ta
     })
       .map(relation => relation.toEntity.id)
       .filter(id => !entityIds.has(id) && !mediaEntityIds.has(id) && !SYSTEM_ENTITY_IDS.has(normId(id)))
-      .filter(id => !isNeverCopied(id, sourceSpaceId))
+      .filter(id => !isNeverCopied(id))
   );
 
   const valueEntityIds = new Set([...entityIds, ...mediaEntityIds, ...relatedEntityIds]);
