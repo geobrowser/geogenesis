@@ -47,7 +47,7 @@ const {
   useLobbyReminderSaving,
 } = await import('./hooks');
 const { debateQueryKeys } = await import('../hooks');
-const { readCarriedLobbyMic, reportLobbyMic, routeIntoDebate } = await import('./step-out');
+const { readCarriedLobbyChoice, reportLobbyMic, routeIntoDebate } = await import('./step-out');
 const { withLobbyClaimLists } = await import('./lobby-claim-lists-state');
 const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
 const { lobbyDebateSeen, lobbyRoomVoteSeen, markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
@@ -290,7 +290,7 @@ describe('useLobbyPresence', () => {
     reportLobbyMic(true);
     act(() => routeIntoDebate(go));
     await waitFor(() => expect(go).toHaveBeenCalled());
-    expect(readCarriedLobbyMic()).toBe(true);
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true });
     expect(api.stepOutOfDebateLobby).toHaveBeenCalledWith(
       'lobby1',
       { connection_id: expect.any(String) },
@@ -512,7 +512,7 @@ describe('useLobbyPresence', () => {
     act(() => routeIntoDebate(go));
     await waitFor(() => expect(go).toHaveBeenCalled());
     expect(consumeDebateReturnDestination()).toBe('/debate/lobby1');
-    expect(readCarriedLobbyMic()).toBe(true);
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true });
     expect(api.stepOutOfDebateLobby).not.toHaveBeenCalled();
   });
 
@@ -548,7 +548,7 @@ describe('useLobbyPresence', () => {
     act(() => routeIntoDebate(go));
     await waitFor(() => expect(go).toHaveBeenCalled());
     expect(consumeDebateReturnDestination()).toBeNull();
-    expect(readCarriedLobbyMic()).toBeNull();
+    expect(readCarriedLobbyChoice()).toBeNull();
   });
 
   it('reports voice from the tab that holds it', async () => {

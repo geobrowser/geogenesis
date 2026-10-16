@@ -11,11 +11,11 @@ import type { DebateLobbyVoiceToken } from '../api';
 import type { MemberLobbyPageView } from './lobby-view';
 import {
   type LobbyCapture,
-  carryLobbyMic,
-  clearCarriedLobbyMic,
-  forgetLobbyMic,
+  carryLobbyJoinChoice,
+  clearCarriedLobbyChoice,
+  forgetLobbyDevices,
   lobbyCaptureLive,
-  readCarriedLobbyMic,
+  readCarriedLobbyChoice,
   registerLobbyStepOut,
   releaseLobbyCapture,
   routeIntoDebate,
@@ -351,25 +351,25 @@ describe('LobbyVoice', () => {
     renderVoice();
     await screen.findByRole('button', { name: /Unmute|Mute/ });
     cleanup();
-    carryLobbyMic();
-    expect(readCarriedLobbyMic()).toBe(false);
+    carryLobbyJoinChoice();
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: false });
 
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token());
     renderVoice();
     await screen.findByRole('button', { name: /Unmute|Mute/ });
     cleanup();
-    carryLobbyMic();
-    expect(readCarriedLobbyMic()).toBe(true);
-    clearCarriedLobbyMic();
-    forgetLobbyMic();
+    carryLobbyJoinChoice();
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true });
+    clearCarriedLobbyChoice();
+    forgetLobbyDevices();
   });
 
   it('gives a listener no mic to carry', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_publish: false }));
     renderVoice(lobby('listener'));
     expect(await screen.findByText('You’re listening')).toBeTruthy();
-    carryLobbyMic();
-    expect(readCarriedLobbyMic()).toBeNull();
+    carryLobbyJoinChoice();
+    expect(readCarriedLobbyChoice()).toBeNull();
   });
 
   // GEO-3134: LiveKit revokes publishing before the refetch brings the listener role.
@@ -539,6 +539,48 @@ describe('LobbyVoice camera (GEO-3307)', () => {
     expect(camera!.stop).toHaveBeenCalled();
     await waitFor(() => expect(mocks.published.size).toBe(0));
     expect(mocks.unpublishTrack).toHaveBeenCalledWith(camera, true);
+  });
+
+  it('leaves its camera for the step-out to carry', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    cleanup();
+    carryLobbyJoinChoice();
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true, cameraOn: true });
+    clearCarriedLobbyChoice();
+    forgetLobbyDevices();
+  });
+
+  // Routing in releases the camera, which turns the choice off: the carry reads it from before.
+  it('carries a camera that routing into a debate released', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    const [camera] = mocks.created;
+    routeIntoDebate(() => undefined);
+    expect(camera!.stop).toHaveBeenCalled();
+    // The step-out carries after the lobby has re-rendered with the camera off.
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    carryLobbyJoinChoice();
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true, cameraOn: true });
+    clearCarriedLobbyChoice();
+    forgetLobbyDevices();
+  });
+
+  it('carries a camera turned off in the lobby as off', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+    await waitFor(() => expect(mocks.published.size).toBe(0));
+    routeIntoDebate(() => carryLobbyJoinChoice());
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true, cameraOn: false });
+    clearCarriedLobbyChoice();
+    forgetLobbyDevices();
   });
 
   // GEO-3161: the off switch mints a mic-only token.

@@ -368,6 +368,28 @@ describe('DebateMediaSessionProvider', () => {
   });
 });
 
+describe('DebateMediaSessionProvider join choice', () => {
+  it('hands a card’s choice to the session it is promoted to, and clears it for the next surface', async () => {
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose mic only' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Promote debate' }));
+
+    await waitFor(() => expect(screen.getByTestId('session-key')).toHaveTextContent('debate:debate-1'));
+    expect(screen.getByTestId('join-choice')).toHaveTextContent('{"micOn":true,"cameraOn":false}');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start other match' }));
+
+    await waitFor(() => expect(screen.getByTestId('session-key')).toHaveTextContent('match:match-2'));
+    expect(screen.getByTestId('join-choice')).toHaveTextContent('null');
+  });
+});
+
 describe('DebateMediaSessionProvider acquisition that outlives its card', () => {
   it('stops tracks that arrive after the session was released', async () => {
     const stop = vi.fn();
@@ -670,6 +692,10 @@ function MediaSessionHarness() {
     <>
       <div data-testid="preview-stream">{streamId(media.previewStream)}</div>
       <div data-testid="session-key">{media.activeSessionKey ?? 'none'}</div>
+      <div data-testid="join-choice">{JSON.stringify(media.joinChoiceRef.current)}</div>
+      <button type="button" onClick={() => (media.joinChoiceRef.current = { micOn: true, cameraOn: false })}>
+        Choose mic only
+      </button>
       <div data-testid="preview-state">{media.previewState}</div>
       <div data-testid="audio-output-supported">{media.audioOutputSupported ? 'yes' : 'no'}</div>
       <div data-testid="audio-output-error">{media.audioOutputError ?? 'none'}</div>
