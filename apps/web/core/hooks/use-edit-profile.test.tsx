@@ -59,7 +59,7 @@ vi.mock('~/core/analytics', () => ({
 }));
 
 vi.mock('jotai', () => ({ useSetAtom: () => mocks.setStoredAvatar }));
-vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));
+vi.mock('~/partials/onboarding/onboarding-atoms', () => ({ avatarAtom: {} }));
 
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
