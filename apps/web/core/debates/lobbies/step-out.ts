@@ -16,6 +16,17 @@ export function registerLobbyStepOut(stepOut: () => Promise<void>) {
   };
 }
 
+/** Stops this tab's lobby camera, set while a lobby room may be publishing one. */
+let releaseLobbyCamera: (() => void) | null = null;
+
+/** Set by the lobby's voice room; the returned function clears it. */
+export function registerLobbyCameraRelease(release: () => void) {
+  releaseLobbyCamera = release;
+  return () => {
+    if (releaseLobbyCamera === release) releaseLobbyCamera = null;
+  };
+}
+
 /**
  * Every way into a debate goes through here: steps out of this tab's lobby first so the unmount's
  * leave does not take the viewer off its roster. Synchronous outside a lobby.
@@ -23,6 +34,8 @@ export function registerLobbyStepOut(stepOut: () => Promise<void>) {
 export function routeIntoDebate(go: () => void) {
   // Only the lobby being stepped out of now carries its mic; `stepOut` writes it.
   clearCarriedLobbyMic();
+  // iPhone Safari keeps one camera capture: the lobby's must stop before the next screen opens its own.
+  releaseLobbyCamera?.();
   const stepOut = stepOutOfCurrentLobby;
   if (!stepOut) return go();
   void Promise.race([stepOut(), new Promise<void>(resolve => setTimeout(resolve, STEP_OUT_WAIT_MS))]).then(go);
