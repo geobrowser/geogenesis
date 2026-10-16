@@ -129,7 +129,7 @@ export function DebateBreakOverlay({
   firstSlot: ParticipantSlot;
   roundTurns: TurnCount;
   playing: boolean;
-  clock?: { positionMs: () => number | null; originMs: number };
+  clock?: { positionMs: () => number | null; originMs: number; resetKey?: string | number };
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   usePlaybackAnimationClock(ref, sharedClock ? null : cue, playing, clock);
@@ -181,7 +181,8 @@ export function DebateBreakOverlay({
               key={slot}
               data-debate-pick-out={slot}
               className={cx(TILE_CLASS[slot], 'grid place-items-center', !wrap && PLAYER_EXIT_CLASS)}
-              style={wrap ? undefined : heldAt(bannerAtMs - BREAK_BANNER_OUT_MS)}
+              // Keep both votes readable under the next title, as they are under the wrap.
+              style={wrap ? undefined : heldAt(cue.playedMs - BREAK_BANNER_OUT_MS)}
             >
               <span
                 data-debate-stamp={key}
@@ -248,7 +249,7 @@ export function DebateEarlyEndLabels({
   cue: EarlyEndCue | null;
   names: BreakNames;
   playing: boolean;
-  clock?: { positionMs: () => number | null; originMs: number };
+  clock?: { positionMs: () => number | null; originMs: number; resetKey?: string | number };
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
   usePlaybackAnimationClock(ref, cue ? { elapsedMs: cue.ageMs, playedMs: cue.durationMs } : null, playing, clock);

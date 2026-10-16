@@ -2044,7 +2044,10 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect((banner as HTMLElement | null)?.style.fontSize).toBe('');
     const pickExits = [...container.querySelectorAll<HTMLElement>('[data-debate-pick-out]')];
     expect(pickExits).toHaveLength(2);
-    expect(pickExits[0].style.animationDelay).toContain('1550ms');
+    expect(pickExits[0].style.animationDelay).toContain('2850ms');
+    const titleExit = container.querySelector('[data-debate-banner-out]') as HTMLElement;
+    expect(pickExits[0].style.animationDelay).toBe(titleExit.style.animationDelay);
+    // Picks stay fully visible while the round title arrives, then fade with it before the cut.
     expect(pickExits[0].style.animationDelay).toBe(pickExits[1].style.animationDelay);
   });
 
@@ -2487,6 +2490,30 @@ describe('Open rounds in-app player: announcement visibility', () => {
     }
   });
 
+  it('keeps restored names and counters visible when the media clock jitters backwards across the opening boundary', () => {
+    const frame = mediaFrames(1_700);
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 1.7 });
+    const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, true);
+    for (const ms of [1_801, 1_795, 1_820, 1_780, 1_840]) {
+      frame(ms, () => expectFurniture(container, false));
+    }
+  });
+
+  it('does not replay the opening after a stale sample arrives while the media clock is unavailable', () => {
+    const frame = mediaFrames(1_700);
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 1.7 });
+    const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
+    frame(1_850);
+    expectFurniture(container, false);
+    mocks.livePosition = null;
+    for (const sample of [1.9, 1.72, 1.95, 0.5, 1.75]) {
+      mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: sample });
+      rerender(<DebateFeedPlayer debate={openRounds} active />);
+      expectFurniture(container, false);
+    }
+  });
+
   it.each(['lead_in', 'extend'] as const)(
     'restores once after the %s round cut has published the incoming turn',
     kind => {
@@ -2510,6 +2537,29 @@ describe('Open rounds in-app player: announcement visibility', () => {
         frame(72_200);
         expectFurniture(container, false);
       }
+      mocks.livePosition = null;
+      mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 2, playheadSeconds: 62.9, playbackBreaks });
+      rerender(<DebateFeedPlayer debate={openRounds} active />);
+      expectFurniture(container, false);
+      const seekBack = vi.fn<(seconds: number) => void>();
+      seekBack.mockImplementation(seconds => {
+        mocks.controller = controllerFixture({
+          mutedByUser: false,
+          turnSlot: 2,
+          playheadSeconds: seconds,
+          playbackBreaks,
+          seekBoth: seekBack,
+        });
+      });
+      seekBack(62.9);
+      rerender(<DebateFeedPlayer debate={openRounds} active />);
+      fireEvent.change(container.querySelector('input[type="range"]') as HTMLInputElement, {
+        target: { value: '61.5' },
+      });
+      expect((container.querySelector('[data-debate-ready]') as HTMLElement).style.getPropertyValue('--break-t')).toBe(
+        '1500'
+      );
+      expectFurniture(container, true);
     }
   );
 

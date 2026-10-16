@@ -15,6 +15,7 @@ import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import {
   BREAK_SETTLE_MS,
+  type PlayerBreak,
   breakAnnouncesRound,
   breakCueAt,
   breakCuts,
@@ -188,6 +189,8 @@ export function DebateFeedPlayer({
     beginScrub,
     endScrub,
   } = controller;
+  const [animationSeekGeneration, resetAnimationSeek] = React.useReducer((generation: number) => generation + 1, 0);
+  const animationSeekKey = `${debate.id}:${animationSeekGeneration}`;
   const showBylines = !reducedOverlays;
   const bylines = useParticipantBylines(debate.participants, showBylines && (active || preload));
   const bylineFor = (participant: DebateParticipant | null) => {
@@ -221,11 +224,13 @@ export function DebateFeedPlayer({
   // starts playback lets the pair go first.
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
+    if (playbackEnded) resetAnimationSeek();
     pair.release();
     togglePlaybackRaw();
   };
   const playFromStart = () => {
     measurement.control('replay');
+    resetAnimationSeek();
     pair.release();
     void playFromStartRaw();
   };
@@ -272,6 +277,7 @@ export function DebateFeedPlayer({
   };
   const seekBoth = (seconds: number) => {
     measurement.control('seek');
+    resetAnimationSeek();
     seekBothRaw(seconds);
   };
 
@@ -307,6 +313,7 @@ export function DebateFeedPlayer({
     const request = `${debate.id}@${initialSeekSeconds}`;
     if (appliedInitialSeekRef.current === request) return;
     appliedInitialSeekRef.current = request;
+    resetAnimationSeek();
     seekBothRaw(initialSeekSeconds);
   }, [debate.id, initialSeekSeconds, ready, seekBothRaw]);
 
@@ -426,6 +433,11 @@ export function DebateFeedPlayer({
   const endCardShown = showReplay && !reducedOverlays;
   const [announcementShown, setAnnouncementShown] = React.useState(false);
   const announcementShownRef = React.useRef(false);
+  const completedBreaksRef = React.useRef<{ key: string; active: PlayerBreak | null; done: Set<number> }>({
+    key: animationSeekKey,
+    active: null,
+    done: new Set(),
+  });
   const currentBreak = React.useMemo(
     () => playbackBreaks.breaks.find(entry => playheadMs >= entry.decidingStartMs && playheadMs < entry.endMs),
     [playbackBreaks.breaks, playheadMs]
@@ -434,10 +446,27 @@ export function DebateFeedPlayer({
     const last = playbackBreaks.breaks.find(entry => entry.kind === 'final_end');
     return last ? last.decidingStartMs + BREAK_SETTLE_MS : null;
   }, [playbackBreaks.breaks]);
-  const announcementOriginMs = currentBreak?.decidingStartMs ?? playheadMs - (roundCard?.ageMs ?? 0);
+  const announcementOriginMs = currentBreak?.decidingStartMs ?? Math.round(playheadMs - (roundCard?.ageMs ?? 0));
   const syncAnnouncement = React.useCallback(
     (elapsedMs: number | null, fromFrame: boolean) => {
       const positionMs = livePositionMs() ?? (elapsedMs === null ? playheadMs : announcementOriginMs + elapsedMs);
+      const drawnPositionMs = elapsedMs === null ? positionMs : announcementOriginMs + elapsedMs;
+      if (completedBreaksRef.current.key !== animationSeekKey) {
+        completedBreaksRef.current = { key: animationSeekKey, active: null, done: new Set() };
+      }
+      const history = completedBreaksRef.current;
+      // Remember a cut only once the incoming turn has been published. Retain that completion
+      // through stale samples and unavailable media; an explicit seek/replay clears it above.
+      if (
+        history.active &&
+        history.active.decidingStartMs !== currentBreak?.decidingStartMs &&
+        positionMs >= history.active.endMs
+      ) {
+        history.done.add(history.active.decidingStartMs);
+        history.active = null;
+      }
+      const cutCompleted = currentBreak ? history.done.has(currentBreak.decidingStartMs) : false;
+      if (currentBreak && !cutCompleted) history.active = currentBreak;
       const next =
         stamped &&
         !reducedOverlays &&
@@ -445,7 +474,8 @@ export function DebateFeedPlayer({
           endCardShown ||
           (finalWrapStartMs !== null && positionMs >= finalWrapStartMs) ||
           (currentBreak &&
-            positionMs >= currentBreak.decidingStartMs + BREAK_SETTLE_MS &&
+            !cutCompleted &&
+            drawnPositionMs >= currentBreak.decidingStartMs + BREAK_SETTLE_MS &&
             // Wait for the cut to publish the incoming turn before restoring its controls.
             // Once restored, an older sample cannot hide them again after the media has moved on.
             (positionMs < currentBreak.endMs || announcementShownRef.current)) ||
@@ -461,6 +491,7 @@ export function DebateFeedPlayer({
     },
     [
       announcementOriginMs,
+      animationSeekKey,
       breakCue,
       currentBreak,
       endCardShown,
@@ -478,7 +509,7 @@ export function DebateFeedPlayer({
       ? (breakCue ?? (roundCard ? { elapsedMs: roundCard.ageMs ?? 0, playedMs: ROUND_CARD_MS } : null))
       : null,
     playing,
-    { positionMs: livePositionMs, originMs: announcementOriginMs },
+    { positionMs: livePositionMs, originMs: announcementOriginMs, resetKey: animationSeekKey },
     syncAnnouncement
   );
   // Watched to the end, whichever layout it ended in — a compact tile never shows the end card, and
@@ -825,7 +856,10 @@ export function DebateFeedPlayer({
                   className={
                     mutedByUser
                       ? undefined
-                      : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100'
+                      : cx(
+                          'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100',
+                          stamped && 'duration-150 ease-out motion-reduce:transition-none'
+                        )
                   }
                 >
                   {mutedByUser ? <SpeakerMuted /> : <Speaker />}
@@ -877,6 +911,7 @@ export function DebateFeedPlayer({
                 }}
                 className={cx(
                   'transition-opacity',
+                  stamped && 'duration-150 ease-out motion-reduce:transition-none',
                   scrubberShown
                     ? 'opacity-100'
                     : // `[&_button]:` as well as the wrapper itself, because the claim markers inside
@@ -973,7 +1008,11 @@ export function DebateFeedPlayer({
               cue={earlyEndCue}
               names={breakNames}
               playing={playing}
-              clock={{ positionMs: livePositionMs, originMs: playheadMs - (earlyEndCue?.ageMs ?? 0) }}
+              clock={{
+                positionMs: livePositionMs,
+                originMs: Math.round(playheadMs - (earlyEndCue?.ageMs ?? 0)),
+                resetKey: animationSeekKey,
+              }}
             />
           </>
         )}
@@ -1004,7 +1043,7 @@ export function DebateFeedPlayer({
             CENTERED_PLAYBACK_CONTROL_CLASS,
             'pointer-events-none z-30 grid transition-[opacity,scale] md:hidden',
             stamped ? 'duration-200 ease-out motion-reduce:scale-100 motion-reduce:transition-none' : 'duration-300',
-            flash.visible ? 'scale-100 opacity-100' : 'scale-110 opacity-0'
+            flash.visible ? 'scale-100 opacity-100' : stamped ? 'scale-[1.025] opacity-0' : 'scale-110 opacity-0'
           )}
         >
           {flash.icon === 'pause' ? <Pause /> : <Play />}

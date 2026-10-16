@@ -78,6 +78,53 @@ describe('playback animation clock', () => {
     expect(Number(element.style.getPropertyValue('--break-t'))).toBe(600);
   });
 
+  it('holds completed progress across an unmounted cue, missing media and a paused stale sample', () => {
+    const element = document.createElement('div');
+    const ref = { current: element };
+    const { rerender } = renderHook(
+      ({ elapsedMs, playing }: { elapsedMs: number | null; playing: boolean }) =>
+        usePlaybackAnimationClock(ref, elapsedMs === null ? null : { elapsedMs, playedMs: 1_800 }, playing, {
+          positionMs: () => null,
+          originMs: 0,
+        }),
+      { initialProps: { elapsedMs: 1_800 as number | null, playing: true } }
+    );
+    for (const props of [
+      { elapsedMs: null, playing: true },
+      { elapsedMs: 1_720, playing: true },
+      { elapsedMs: 1_750, playing: false },
+      { elapsedMs: 1_760, playing: true },
+    ]) {
+      rerender(props);
+      expect(element.style.getPropertyValue('--break-t')).toBe('1800');
+    }
+  });
+
+  it('allows an intentional seek of only a few milliseconds to cross a completed phase boundary', () => {
+    const element = document.createElement('div');
+    const ref = { current: element };
+    let live = 1_810;
+    const { rerender } = renderHook(
+      ({ resetKey }) =>
+        usePlaybackAnimationClock(ref, { elapsedMs: 1_790, playedMs: 1_800 }, true, {
+          positionMs: () => live,
+          originMs: 0,
+          resetKey,
+        }),
+      { initialProps: { resetKey: 0 } }
+    );
+    live = 1_790;
+    frame(16);
+    expect(element.style.getPropertyValue('--break-t')).toBe('1800');
+    rerender({ resetKey: 1 });
+    expect(element.style.getPropertyValue('--break-t')).toBe('1790');
+    live = 20;
+    frame(32);
+    expect(element.style.getPropertyValue('--break-t')).toBe('1790');
+    rerender({ resetKey: 2 });
+    expect(element.style.getPropertyValue('--break-t')).toBe('20');
+  });
+
   it('corrects drift equally over the same time on 60 Hz and 120 Hz displays', () => {
     const sixty = advanceBreakClock(1_000, 1_100, 1_000 / 60, 3_000);
     const half = advanceBreakClock(1_000, 1_100, 1_000 / 120, 3_000);

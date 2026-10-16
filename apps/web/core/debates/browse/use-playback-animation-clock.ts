@@ -35,7 +35,7 @@ export function usePlaybackAnimationClock(
   ref: React.RefObject<HTMLDivElement | null>,
   cue: { elapsedMs: number; playedMs: number } | null,
   playing: boolean,
-  source?: { positionMs: () => number | null; originMs: number },
+  source?: { positionMs: () => number | null; originMs: number; resetKey?: string | number },
   onTime?: (elapsedMs: number | null, fromFrame: boolean) => void
 ) {
   const sourceRef = React.useRef(source);
@@ -44,44 +44,60 @@ export function usePlaybackAnimationClock(
     sourceRef.current = source;
     onTimeRef.current = onTime;
   });
-  const sample = React.useRef<{ elapsedMs: number; at: number; originMs?: number }>({ elapsedMs: 0, at: 0 });
+  const sample = React.useRef<{ elapsedMs: number; at: number; originMs?: number; resetKey?: string | number }>({
+    elapsedMs: 0,
+    at: 0,
+  });
   const displayed = React.useRef<number | null>(null);
   const elapsedMs = cue?.elapsedMs ?? null;
   const playedMs = cue?.playedMs ?? 0;
   const originMs = source?.originMs;
+  const resetKey = source?.resetKey;
 
   const write = React.useCallback(
-    (ms: number, fromFrame = false) => {
-      displayed.current = ms;
-      ref.current?.style.setProperty('--break-t', String(ms));
-      onTimeRef.current?.(ms, fromFrame);
+    (ms: number, fromFrame = false, reset = false) => {
+      const previous = displayed.current;
+      // Media reads can wobble backwards slightly. Re-crossing a phase boundary replayed the
+      // title's exit and hid already-restored names/counters. Keep small corrections monotonic;
+      // explicit seeks/replays reset even a tiny jump. Callers without a seek key still follow large jumps.
+      const managedSeeks = sourceRef.current?.resetKey !== undefined;
+      const next =
+        !reset && previous !== null && ms < previous && (managedSeeks || previous - ms <= BREAK_CLOCK_SNAP_MS)
+          ? previous
+          : ms;
+      displayed.current = next;
+      ref.current?.style.setProperty('--break-t', String(next));
+      onTimeRef.current?.(next, fromFrame);
     },
     [ref]
   );
 
   React.useLayoutEffect(() => {
     if (elapsedMs === null) {
-      displayed.current = null;
+      // Retain the last cue's progress across unmounting. A late sample may briefly put that
+      // same cue back on the page while its media element is unavailable.
       onTimeRef.current?.(null, false);
       return;
     }
-    const originChanged = sample.current.originMs !== originMs;
-    sample.current = { elapsedMs, at: performance.now(), originMs };
+    const reset = sample.current.originMs !== originMs || sample.current.resetKey !== resetKey;
+    sample.current = { elapsedMs, at: performance.now(), originMs, resetKey };
     if (
       !playing ||
       displayed.current === null ||
-      originChanged ||
+      reset ||
       Math.abs(displayed.current - elapsedMs) > BREAK_CLOCK_SNAP_MS
     ) {
       const currentSource = sourceRef.current;
       const live = currentSource?.positionMs();
       write(
-        Math.min(playedMs, Math.max(0, live == null || !currentSource ? elapsedMs : live - currentSource.originMs))
+        Math.min(playedMs, Math.max(0, live == null || !currentSource ? elapsedMs : live - currentSource.originMs)),
+        false,
+        reset
       );
     } else {
       onTimeRef.current?.(displayed.current, false);
     }
-  }, [elapsedMs, onTime, originMs, playedMs, playing, write]);
+  }, [elapsedMs, onTime, originMs, playedMs, playing, resetKey, write]);
 
   const shown = elapsedMs !== null;
   React.useEffect(() => {
