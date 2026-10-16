@@ -9,7 +9,9 @@ import {
   useLocalParticipantPermissions,
   useParticipants,
   useRoomContext,
+  useTracks,
 } from '@livekit/components-react';
+import type { TrackReference } from '@livekit/components-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -18,6 +20,7 @@ import cx from 'classnames';
 import {
   ConnectionState,
   DisconnectReason,
+  type LocalParticipant,
   MediaDeviceFailure,
   ParticipantEvent,
   type Room,
@@ -25,6 +28,7 @@ import {
   type RoomOptions,
   Track,
   type TrackPublication,
+  VideoPresets,
 } from 'livekit-client';
 
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
@@ -32,21 +36,27 @@ import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-polic
 import { Text } from '~/design-system/text';
 
 import { type DebateLobbyVoiceToken, dashlessId, getDebateLobbyVoiceToken } from '../api';
-import { MicrophoneIcon } from '../debate-room-controls';
+import { CameraIcon, MicrophoneIcon } from '../debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '../debate-room-ownership';
 import { useGeoChatAuth } from '../hooks';
+import { tokenAllowsCamera } from '../livekit-grant';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { lobbyErrorMessage } from './lobby-format';
 import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
-import { reportLobbyMic } from './step-out';
+import { registerLobbyCameraRelease, reportLobbyMic } from './step-out';
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
 
-/** Who is speaking and whose mic is on, by dashless user id (the LiveKit identity). */
-export type LobbyVoiceStates = { speaking: ReadonlySet<string>; micOn: ReadonlySet<string>; connected: boolean };
+/** Who is speaking, whose mic is on and whose camera is showing, by dashless user id (the LiveKit identity). */
+export type LobbyVoiceStates = {
+  speaking: ReadonlySet<string>;
+  micOn: ReadonlySet<string>;
+  cameras: ReadonlyMap<string, TrackReference>;
+  connected: boolean;
+};
 
-const NO_VOICE: LobbyVoiceStates = { speaking: new Set(), micOn: new Set(), connected: false };
+const NO_VOICE: LobbyVoiceStates = { speaking: new Set(), micOn: new Set(), cameras: new Map(), connected: false };
 const LobbyVoiceContext = React.createContext<LobbyVoiceStates>(NO_VOICE);
 
 /** Voice state for the roster; empty outside a connected room. */
@@ -66,8 +76,19 @@ function rolePublishes(lobby: MemberLobbyPageView) {
 const ROOM_OPTIONS: RoomOptions = {
   // LiveKit's default reconnect gives up after ~37s; this rides out deploys and brief drops.
   reconnectPolicy: new ExtendedReconnectPolicy(),
-  // Pinned as in the debate room: the audio armor slow connections rely on.
-  publishDefaults: { red: true, dtx: true },
+  // Up to 40 people and many cameras: only tiles on screen receive video, sized to the tile, and
+  // publishers stop encoding layers nobody watches.
+  adaptiveStream: true,
+  dynacast: true,
+  videoCaptureDefaults: { resolution: VideoPresets.h360.resolution },
+  publishDefaults: {
+    // Pinned as in the debate room: the audio armor slow connections rely on.
+    red: true,
+    dtx: true,
+    simulcast: true,
+    videoSimulcastLayers: [VideoPresets.h180],
+    videoEncoding: { maxBitrate: 300_000, maxFramerate: 20 },
+  },
 };
 
 /**
@@ -172,6 +193,7 @@ export function LobbyVoice({
     connectedRef.current = false;
     setConnectFailed(false);
     setMicFailure(null);
+    setCameraFailure(null);
     setEpoch(value => value + 1);
   }, [accountKey, canPublish, lobbyId, queryClient]);
 
@@ -189,6 +211,23 @@ export function LobbyVoice({
   React.useEffect(() => {
     if (listenOnly) setMicChoice(false);
   }, [listenOnly]);
+
+  // A mic-only token (lobby video off, GEO-3161) or a listen-only one offers no camera.
+  const cameraAllowed = Boolean(data?.can_publish) && tokenAllowsCamera(data?.token ?? '');
+  // Off on join and on every promotion until the speaker turns it on.
+  const [cameraIntent, setCameraIntent] = React.useState(false);
+  const [cameraFailure, setCameraFailure] = React.useState<MediaDeviceFailure | null>(null);
+  React.useEffect(() => {
+    if (!cameraAllowed) setCameraIntent(false);
+  }, [cameraAllowed]);
+  const handleCameraChoice = React.useCallback((enabled: boolean) => {
+    setCameraIntent(enabled);
+    if (enabled) setCameraFailure(null);
+  }, []);
+  const handleCameraFailure = React.useCallback((failure: MediaDeviceFailure | null) => {
+    setCameraIntent(false);
+    setCameraFailure(failure ?? MediaDeviceFailure.Other);
+  }, []);
 
   // What stepping out to debate carries to the picker or ready room. Only a mic of the viewer's own
   // here counts: a listener, or voice held by another tab, leaves the next screen at its default.
@@ -216,9 +255,14 @@ export function LobbyVoice({
     if (micProblem) return setMicFailure(micProblem);
     if (!connectedRef.current) setConnectFailed(true);
   }, []);
-  const handleMediaDeviceFailure = React.useCallback((failure?: MediaDeviceFailure) => {
-    setMicFailure(failure ?? null);
-  }, []);
+  // The camera's failures come through here too; they must not read as a mic problem.
+  const handleMediaDeviceFailure = React.useCallback(
+    (failure?: MediaDeviceFailure, kind?: MediaDeviceKind) => {
+      if (kind === 'videoinput') return handleCameraFailure(failure ?? null);
+      setMicFailure(failure ?? null);
+    },
+    [handleCameraFailure]
+  );
   // Unmuting tries the mic again, so a permission granted since can take effect.
   const handleMicChoice = React.useCallback((enabled: boolean) => {
     setMicChoice(enabled);
@@ -276,6 +320,11 @@ export function LobbyVoice({
       <ConnectedVoice
         canPublish={data.can_publish}
         micFailure={micFailure}
+        cameraAllowed={cameraAllowed}
+        cameraIntent={cameraIntent}
+        cameraFailure={cameraFailure}
+        onCameraChoice={handleCameraChoice}
+        onCameraFailure={handleCameraFailure}
         roomRef={roomRef}
         onMicChoice={handleMicChoice}
         onRetry={retry}
@@ -310,6 +359,11 @@ type VoiceNotice = {
 function ConnectedVoice({
   canPublish,
   micFailure,
+  cameraAllowed,
+  cameraIntent,
+  cameraFailure,
+  onCameraChoice,
+  onCameraFailure,
   roomRef,
   onMicChoice,
   onRetry,
@@ -321,6 +375,11 @@ function ConnectedVoice({
 }: {
   canPublish: boolean;
   micFailure: MediaDeviceFailure | null;
+  cameraAllowed: boolean;
+  cameraIntent: boolean;
+  cameraFailure: MediaDeviceFailure | null;
+  onCameraChoice: (enabled: boolean) => void;
+  onCameraFailure: (failure: MediaDeviceFailure | null) => void;
   roomRef: React.MutableRefObject<Room | null>;
   onMicChoice: (enabled: boolean) => void;
   onRetry: () => void;
@@ -371,7 +430,28 @@ function ConnectedVoice({
     if (!canPublish || mayPublish) return;
     onMicChoice(false);
     void localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
-  }, [canPublish, localParticipant, mayPublish, onMicChoice]);
+    onCameraChoice(false);
+    releaseLocalCamera(localParticipant);
+  }, [canPublish, localParticipant, mayPublish, onCameraChoice, onMicChoice]);
+
+  // `<LiveKitRoom video>` only applies on connect, so the camera follows the choice from here.
+  const cameraOn = cameraAllowed && mayPublish && cameraIntent;
+  React.useEffect(() => {
+    if (!connected || !cameraAllowed || !mayPublish) return;
+    void Promise.resolve(localParticipant.setCameraEnabled(cameraOn)).catch((error: unknown) => {
+      if (cameraOn) onCameraFailure(error instanceof Error ? (MediaDeviceFailure.getFailure(error) ?? null) : null);
+    });
+  }, [cameraAllowed, cameraOn, connected, localParticipant, mayPublish, onCameraFailure]);
+
+  // Stepping out into a debate stops the camera before the next screen asks for it.
+  React.useEffect(
+    () =>
+      registerLobbyCameraRelease(() => {
+        onCameraChoice(false);
+        releaseLocalCamera(localParticipant);
+      }),
+    [localParticipant, onCameraChoice]
+  );
 
   // A host's mute arrives as a muted track; remembering it keeps a reconnect from unmuting.
   React.useEffect(() => {
@@ -414,12 +494,15 @@ function ConnectedVoice({
           notice={{
             message: micFailure
               ? 'Your microphone isn’t available.'
-              : isMicrophoneEnabled
-                ? 'You’re on the mic'
-                : 'You’re muted',
-            visible: Boolean(micFailure),
+              : cameraFailure
+                ? cameraFailureMessage(cameraFailure)
+                : isMicrophoneEnabled
+                  ? 'You’re on the mic'
+                  : 'You’re muted',
+            visible: Boolean(micFailure || cameraFailure),
           }}
           mic={{ on: isMicrophoneEnabled && !micFailure, onToggle: setMicrophone }}
+          camera={cameraAllowed ? { on: cameraOn, onToggle: onCameraChoice } : undefined}
         />
       ) : (
         <VoiceBar notice={{ message: 'You’re listening' }} listening />
@@ -474,9 +557,21 @@ function useRoomEnding(
   }, [room]);
 }
 
-/** Who is speaking and whose mic is on in the room this sits in. */
+/** Stops and unpublishes this tab's camera, so the camera light goes off and the device is free. */
+function releaseLocalCamera(participant: LocalParticipant) {
+  const track = participant.getTrackPublication(Track.Source.Camera)?.track;
+  // Stops the device synchronously before anything awaits.
+  if (track) void participant.unpublishTrack(track, true).catch(() => undefined);
+}
+
+const CAMERA_SOURCES = [Track.Source.Camera];
+// Besides publish, unpublish and subscription changes; not active speakers, which change constantly.
+const CAMERA_UPDATES = { updateOnlyOn: [RoomEvent.TrackMuted, RoomEvent.TrackUnmuted] };
+
+/** Who is speaking, whose mic is on and whose camera shows in the room this sits in. */
 function useParticipantVoiceStates(connected: boolean) {
   const participants = useParticipants();
+  const cameraTracks = useTracks(CAMERA_SOURCES, CAMERA_UPDATES);
   return React.useMemo<LobbyVoiceStates>(() => {
     const speaking = new Set<string>();
     const micOn = new Set<string>();
@@ -486,8 +581,26 @@ function useParticipantVoiceStates(connected: boolean) {
       micOn.add(id);
       if (participant.isSpeaking) speaking.add(id);
     }
-    return { speaking, micOn, connected };
-  }, [connected, participants]);
+    const cameras = new Map<string, TrackReference>();
+    for (const reference of cameraTracks) {
+      if (!reference.publication.track || reference.publication.isMuted) continue;
+      cameras.set(dashlessId(reference.participant.identity).toLowerCase(), reference);
+    }
+    return { speaking, micOn, cameras, connected };
+  }, [cameraTracks, connected, participants]);
+}
+
+export function cameraFailureMessage(failure: MediaDeviceFailure): string {
+  switch (failure) {
+    case MediaDeviceFailure.PermissionDenied:
+      return 'Camera blocked. Allow it in your browser, then try again.';
+    case MediaDeviceFailure.NotFound:
+      return 'No camera found. Connect one, then try again.';
+    case MediaDeviceFailure.DeviceInUse:
+      return 'Your camera is in use by another app.';
+    default:
+      return 'Camera unavailable.';
+  }
 }
 
 /** Holds the roster's voice state; a member room inside overrides it with its own. */
@@ -633,10 +746,13 @@ function ConnectedGuestVoice({
 function VoiceBar({
   notice,
   mic,
+  camera,
   listening = false,
 }: {
   notice: VoiceNotice;
   mic?: { on: boolean; onToggle: (enabled: boolean) => void };
+  /** Only when the token allows a camera; listeners and a lobby with video off get none. */
+  camera?: { on: boolean; onToggle: (enabled: boolean) => void };
   /** Connected without a mic: a disabled "Listening" pill stands in for Mute. */
   listening?: boolean;
 }) {
@@ -657,7 +773,22 @@ function VoiceBar({
               {mic.on ? 'Mute' : 'Unmute'}
             </span>
           </HubPillButton>
-        ) : listening ? (
+        ) : null}
+        {mic && camera ? (
+          <HubPillButton
+            variant={camera.on ? 'secondary' : 'primary'}
+            analyticsLabel={camera.on ? 'Lobby camera off' : 'Lobby camera on'}
+            aria-label={camera.on ? 'Turn camera off' : 'Turn camera on'}
+            onClick={() => camera.onToggle(!camera.on)}
+            className="md:h-10"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <CameraIcon disabled={!camera.on} />
+              <span className="md:sr-only">{camera.on ? 'Camera off' : 'Camera on'}</span>
+            </span>
+          </HubPillButton>
+        ) : null}
+        {mic ? null : listening ? (
           <span
             aria-hidden
             className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-grey-01 px-3 text-metadata text-grey-03 md:h-10"
