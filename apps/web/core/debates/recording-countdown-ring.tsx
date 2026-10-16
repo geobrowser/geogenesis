@@ -81,7 +81,7 @@ export function useRestartedEach<T extends HTMLElement>(tick: number | null) {
 }
 
 /** The room's red rim, at the disc's very edge. */
-const finalRimMask = turnTimerRimMask('3px');
+const finalRimMask = turnTimerRimMask('0.55cqw');
 
 export function RecordingCountdownRing({
   remainingSeconds,
@@ -119,19 +119,26 @@ export function RecordingCountdownRing({
       data-timer-progress={progress}
       data-turn-timer={buildUp ? stage.phase : undefined}
       className={cx('relative grid shrink-0 place-items-center', buildUp && TURN_TIMER_SCALE_CLASS)}
-      style={{ width: COUNTDOWN_SIZE, height: COUNTDOWN_SIZE, ...(buildUp ? { scale: stage.scale } : null) }}
+      style={{
+        width: buildUp ? '9cqw' : COUNTDOWN_SIZE,
+        height: buildUp ? '9cqw' : COUNTDOWN_SIZE,
+        ...(buildUp ? { scale: stage.scale } : null),
+      }}
     >
       <div
         // Its swell and glow restart each second of the last ten (`useRestartedEach`), without
         // remounting, so the rim keeps draining across the second. Reduced motion keeps the colour
         // and the draining rim, without the pulse or the glow.
         ref={faceRef}
-        className={cx(
-          'relative grid size-full place-items-center rounded-full',
-          turnTimerPulseClass(stage),
-          final && 'bg-red-01'
-        )}
-        style={counting ? ({ '--turn-timer-swell': stage.swell } as React.CSSProperties) : undefined}
+        className={cx('relative grid size-full place-items-center rounded-full', turnTimerPulseClass(stage))}
+        style={
+          counting
+            ? ({
+                '--turn-timer-swell': stage.swell,
+                backgroundColor: final ? COUNTDOWN_WARNING_COLOR : undefined,
+              } as React.CSSProperties)
+            : undefined
+        }
       >
         {final ? (
           <span
@@ -192,7 +199,7 @@ export function RecordingCountdownRing({
           style={{
             color: numberColor,
             fontFamily: (final ? STAMP_FONT : LABEL_FONT).fontFamily,
-            fontSize: 22,
+            fontSize: buildUp ? '4cqw' : 22,
             fontWeight: final ? 700 : 500,
             lineHeight: 1,
             transform: 'none',

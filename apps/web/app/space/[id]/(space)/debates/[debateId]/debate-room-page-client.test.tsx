@@ -6183,7 +6183,7 @@ describe('DebateRoomPageClient', () => {
 
       rerenderAt(view, '20:02:05.700', openRoundsRevealRebut());
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'round'));
-      expect(result()?.textContent).toBe('Round 2 · RebuttalYou open');
+      expect(result()?.textContent).toBe('Round 2RebuttalYou open');
       expect(document.querySelector('[data-debate-round-indicator]')).toHaveAttribute(
         'data-debate-round-indicator',
         '1'
@@ -6196,7 +6196,7 @@ describe('DebateRoomPageClient', () => {
 
       // With no count-in from geo-chat, "Round 2" holds to the end of the window.
       rerenderAt(view, '20:02:06.900', openRoundsRevealRebut());
-      expect(result()?.textContent).toBe('Round 2 · RebuttalYou open');
+      expect(result()?.textContent).toBe('Round 2RebuttalYou open');
       expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
     });
 
@@ -6226,7 +6226,7 @@ describe('DebateRoomPageClient', () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:09.000'));
       await renderLiveDebate(revealRebutWithCountIn());
 
-      await waitFor(() => expect(result()).toHaveTextContent('Round 2 · RebuttalAlice opens'));
+      await waitFor(() => expect(result()).toHaveTextContent('Round 2RebuttalAlice opens'));
       expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
     });
 
@@ -6443,7 +6443,7 @@ describe('DebateRoomPageClient', () => {
       await renderLiveDebate(aliceOpening());
 
       await waitFor(() => expect(pill('local', 'go')).toHaveTextContent('Go'));
-      expect(pill('local', 'go')).toHaveClass('rounded-full', 'bg-white/85');
+      expect(pill('local', 'go')).toHaveClass('rounded-full', 'bg-white');
       expect(screen.queryByText('GO!')).not.toBeInTheDocument();
     });
 
@@ -6456,7 +6456,7 @@ describe('DebateRoomPageClient', () => {
       expect(phrase('local', 'count-in')?.parentElement).toHaveClass('text-white', 'font-bold');
       expect(phrase('local', 'count-in')?.parentElement).toHaveStyle({
         fontFamily: 'var(--font-geist-bold)',
-        WebkitTextStroke: '0.06em #000',
+        textShadow: expect.stringContaining('0.04em'),
       });
       expect(debateVideoTile('local').querySelector('[data-room-count-in]')).toHaveTextContent('4');
       expect(debateVideoTile('local').querySelector('[data-room-dim]')).toHaveAttribute('data-room-dim', 'on');
@@ -6487,10 +6487,10 @@ describe('DebateRoomPageClient', () => {
       await waitFor(() => expect(timer('local')).toHaveAttribute('data-turn-timer', 'final'));
       expect(timer('local')).toHaveStyle({ scale: '1.3' });
       expect(timer('local')?.querySelector('[data-turn-timer-rim]')).toBeInTheDocument();
-      expect(debateVideoTile('local')).toHaveClass('outline-red-01');
+      expect(debateVideoTile('local')).toHaveClass('outline-[#FF4A26]');
       expect(debateVideoTile('local')).not.toHaveClass('outline-purple');
       expect(pill('local', 'wrap-it-up')).toHaveTextContent('Wrap it up');
-      expect(pill('local', 'wrap-it-up')).toHaveClass('rounded-full', 'bg-[#FF4A26]/85');
+      expect(pill('local', 'wrap-it-up')).toHaveClass('rounded-full', 'bg-[#FF4A26]/90');
 
       // 2.7 s left: the pill has gone, the red timer stays.
       rerenderAt(view, '20:02:49.500', openRoundsRoundOneSpeaking());
@@ -6504,7 +6504,7 @@ describe('DebateRoomPageClient', () => {
       await renderLiveDebate(openRoundsRoundOneSpeaking());
 
       await waitFor(() => expect(timer('remote')).toHaveAttribute('data-turn-timer', 'final'));
-      expect(debateVideoTile('remote')).toHaveClass('outline-red-01');
+      expect(debateVideoTile('remote')).toHaveClass('outline-[#FF4A26]');
     });
 
     it('labels your tile "Turn ended" when you end early, and puts up the other debater\'s turn', async () => {
@@ -6517,7 +6517,7 @@ describe('DebateRoomPageClient', () => {
       await waitFor(() => expect(pill('local', 'ended')).toHaveTextContent('Turn ended'));
       expect(screen.queryByText('Ending turn…')).not.toBeInTheDocument();
       expect(pill('remote', 'turn')).toHaveTextContent('Bob’s turn');
-      expect(pill('remote', 'turn')).toHaveClass('rounded-full', 'backdrop-blur-md');
+      expect(pill('remote', 'turn')).toHaveClass('rounded-full', 'backdrop-blur-[14px]');
       expect(pill('local', 'ended')).toHaveClass('border-dashed');
     });
 
@@ -6900,7 +6900,11 @@ function expectDebateVideoTileInColor(participant: 'local' | 'remote') {
 
 function expectActiveDebateVideoTile(participant: 'local' | 'remote', outline = 'outline-purple') {
   expect(debateVideoTile(participant)).toHaveAttribute('data-active-speaker', 'true');
-  expect(debateVideoTile(participant)).toHaveClass('outline-[3px]', 'outline-offset-0', outline);
+  expect(debateVideoTile(participant)).toHaveClass(
+    'outline-[3px]',
+    outline === 'outline-purple' ? 'outline-offset-0' : '-outline-offset-3',
+    outline
+  );
 }
 
 function expectInactiveDebateVideoTile(participant: 'local' | 'remote') {

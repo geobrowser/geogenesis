@@ -3326,7 +3326,11 @@ function DebateRecordingModal({
   });
   // Open rounds uses classic outlined type and glass pills (GEO-3366).
   const openRoundsStyle = isOpenRoundsDebate(debate);
-  const pickReveal = (pick: OpenRoundRevealedPick | null) => (pick ? <OpenRoundPickPill pick={pick.pick} /> : null);
+  const localTileFirst = localParticipant?.position !== false;
+  const pickReveal = (pick: OpenRoundRevealedPick | null, first: boolean) =>
+    pick ? (
+      <OpenRoundPickPill pick={pick.pick} wrapping={reveal.result?.kind === 'wrap'} delayMs={first ? 0 : 280} />
+    ) : null;
   // The pick, the reveal and what it means span both tiles, so both dim under them.
   const tilesDimmed =
     openRoundsStyle && (countdown.openRounds?.phase === 'deciding' || reveal.step === 'flip' || reveal.result !== null);
@@ -3338,7 +3342,7 @@ function DebateRecordingModal({
       ? openRoundLastWord(debate, countdown.turnIndex)
       : null;
   const lastWordChip = !lastWord ? null : openRoundsStyle ? (
-    <RoomTag data-open-round-last-word={lastWord} className="text-[2.6cqw]">
+    <RoomTag data-open-round-last-word={lastWord} className="text-[2.8cqw]">
       Last word
     </RoomTag>
   ) : (
@@ -3504,7 +3508,7 @@ function DebateRecordingModal({
         )
       }
       tileControls={!openRoundsStyle && countdown.activeSlot === localSlot ? lastWordChip : null}
-      reveal={pickReveal(reveal.localPick)}
+      reveal={pickReveal(reveal.localPick, localTileFirst)}
       chipsHidden={reveal.chipsHidden}
       openRounds={openRoundsStyle}
       dimmed={tilesDimmed}
@@ -3545,7 +3549,7 @@ function DebateRecordingModal({
       countdown={remoteCountdown}
       tileControls={!openRoundsStyle && remoteSpeaking ? lastWordChip : null}
       status={openRoundsStyle && remoteSpeaking ? lastWordChip : undefined}
-      reveal={pickReveal(reveal.remotePick)}
+      reveal={pickReveal(reveal.remotePick, !localTileFirst)}
       chipsHidden={reveal.chipsHidden}
       openRounds={openRoundsStyle}
       dimmed={tilesDimmed}

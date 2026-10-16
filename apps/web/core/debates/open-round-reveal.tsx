@@ -2,11 +2,9 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import type { Debate, OpenRoundPick, OpenRoundRevealedPick, ParticipantSlot } from './api';
 import { LABEL_FONT, STAMP_WORD } from './browse/stamp-styles';
-import { ROOM_GLASS_CLASS, RoomMiddlePhrase, RoomTag, RoomTilePill } from './debate-room-stamps';
+import { RoomMiddlePhrase, RoomTag, RoomTilePill } from './debate-room-stamps';
 import { rebuttalRoundsLabel } from './debate-round-indicator';
 import {
   type OpenRoundsRoomPhase,
@@ -91,13 +89,28 @@ export function useOpenRoundRevealStep(
 }
 
 /** Each pick fades onto its debater: Extend white, End dark glass, No pick dashed. */
-export function OpenRoundPickPill({ pick }: { pick: OpenRoundPick | null }) {
+export function OpenRoundPickPill({
+  pick,
+  wrapping = false,
+  delayMs = 0,
+}: {
+  pick: OpenRoundPick | null;
+  wrapping?: boolean;
+  delayMs?: number;
+}) {
   const key = pick ?? 'none';
   return (
     <div aria-hidden="true" data-open-round-reveal={key} className="pointer-events-none absolute inset-0 z-[35]">
-      <RoomTilePill tone={pick === 'extend' ? 'white' : pick === 'end' ? 'dark' : 'dashed'} sizeCqw={8}>
-        {STAMP_WORD[key]}
-      </RoomTilePill>
+      {wrapping ? (
+        // Option 5's final wrap board changes the revealed pills to outlined words.
+        <RoomMiddlePhrase sizeCqw={10.14} className={pick === null ? 'text-white/62' : undefined}>
+          {STAMP_WORD[key]}
+        </RoomMiddlePhrase>
+      ) : (
+        <RoomTilePill tone={pick === 'extend' ? 'white' : pick === 'end' ? 'dark' : 'dashed'} delayMs={delayMs}>
+          {STAMP_WORD[key]}
+        </RoomTilePill>
+      )}
     </div>
   );
 }
@@ -111,22 +124,21 @@ export type OpenRoundResult =
 
 /** The next round and its opener, or the ending, in outlined type across the tiles' seam. */
 export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) {
+  const [round, role] = result.kind === 'round' ? result.label.split(' · ') : [];
   return (
     <div data-open-round-result={result.kind} className="pointer-events-none absolute inset-0 z-[45]">
       <RoomMiddlePhrase
-        sizeCqw={5}
+        sizeCqw={result.kind === 'round' ? 14.04 : 8.58}
+        eyebrow={role ? round : undefined}
         data-open-round-phrase
         sub={result.kind === 'round' ? openRoundOpenerLine(result.opener) : undefined}
       >
-        {result.kind === 'round' ? result.label : result.kind === 'wrap' ? 'That’s a wrap' : 'That’s the max'}
+        {result.kind === 'round' ? (role ?? round) : result.kind === 'wrap' ? 'That’s a wrap' : 'That’s the max'}
       </RoomMiddlePhrase>
       {result.kind === 'wrap' && result.note && (
-        <div className="absolute inset-x-0 top-[calc(50%+7.5cqw)] px-4 text-center">
+        <div className="absolute inset-x-0 top-[calc(50%+9cqw)] px-4 text-center">
           <span
-            className={cx(
-              ROOM_GLASS_CLASS,
-              'inline-block max-w-full rounded-full px-[2.2cqw] py-[1.3cqw] text-[2.8cqw] leading-tight text-balance'
-            )}
+            className="inline-block max-w-full rounded-full bg-black/72 px-[2.8cqw] py-[1.4cqw] text-[2.8cqw] leading-[1.2] tracking-[0.01em] text-balance text-white"
             style={LABEL_FONT}
           >
             {result.note}

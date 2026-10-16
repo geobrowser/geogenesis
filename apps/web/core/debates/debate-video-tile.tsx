@@ -203,8 +203,8 @@ export function DebateVideoTile({
       className={cx(
         'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
         openRounds && '@container',
-        active && 'outline-[3px] outline-offset-0',
-        active && (openRounds ? (finalSeconds ? 'outline-red-01' : 'outline-white') : 'outline-purple')
+        active && ['outline-[3px]', openRounds ? '-outline-offset-3' : 'outline-offset-0'],
+        active && (openRounds ? (finalSeconds ? 'outline-[#FF4A26]' : 'outline-white') : 'outline-purple')
       )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
@@ -295,7 +295,7 @@ export function DebateVideoTile({
         <>
           <RoomExit className="z-30">
             {closingMessage && (
-              <RoomMiddlePhrase sizeCqw={7} data-room-phrase="thanks">
+              <RoomMiddlePhrase sizeCqw={5.46} data-room-phrase="thanks">
                 Nice debate! Say thanks
               </RoomMiddlePhrase>
             )}
@@ -303,7 +303,7 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {endingTurn && turnEndedStamp && (
-              <RoomTilePill data-room-pill="ended" tone="dashed" sizeCqw={6}>
+              <RoomTilePill data-room-pill="ended" tone="dashed">
                 Turn ended
               </RoomTilePill>
             )}
@@ -311,7 +311,7 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {nextTurnName && (
-              <RoomTilePill sizeCqw={6} delayMs={600} data-room-pill="turn">
+              <RoomTilePill delayMs={600} data-room-pill="turn">
                 {nextTurnName}’s turn
               </RoomTilePill>
             )}
@@ -321,16 +321,21 @@ export function DebateVideoTile({
             {upcoming && (
               <div
                 className={cx(
-                  'absolute inset-0 flex flex-col items-center justify-center text-center font-bold text-white',
+                  'absolute inset-0 text-center leading-[0.95] font-bold tracking-[-0.02em] text-white',
                   ROOM_ENTER_CLASS
                 )}
                 style={ROOM_OUTLINED_STYLE}
               >
-                <div className="text-[7cqw] leading-tight" data-room-phrase="count-in" style={ROOM_OUTLINED_STYLE}>
+                <div
+                  className="absolute top-[30%] left-1/2 w-max max-w-[92%] -translate-x-1/2 -translate-y-1/2 text-[5.148cqw]"
+                  data-room-phrase="count-in"
+                  style={ROOM_OUTLINED_STYLE}
+                >
                   {upcomingLabel}
                 </div>
                 <div
-                  className="mt-[1cqw] text-[24cqw] leading-none tabular-nums"
+                  key={upcomingSeconds}
+                  className="absolute top-[64%] left-1/2 -translate-x-1/2 -translate-y-1/2 text-[15.6cqw] tabular-nums motion-safe:animate-[fadeIn_200ms_linear_both]"
                   data-room-count-in
                   style={ROOM_OUTLINED_STYLE}
                 >
@@ -342,7 +347,7 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {showGo && (
-              <RoomTilePill data-room-pill="go" tone="white" sizeCqw={10}>
+              <RoomTilePill data-room-pill="go" tone="white">
                 Go
               </RoomTilePill>
             )}
@@ -350,7 +355,7 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {showWrapItUp && (
-              <RoomTilePill data-room-pill="wrap-it-up" tone="red" sizeCqw={6}>
+              <RoomTilePill data-room-pill="wrap-it-up" tone="red">
                 Wrap it up
               </RoomTilePill>
             )}
@@ -358,7 +363,7 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {showDebateEndsSoon && (
-              <RoomMiddlePhrase sizeCqw={7} data-room-phrase="ends-soon">
+              <RoomMiddlePhrase sizeCqw={6.24} data-room-phrase="ends-soon">
                 Debate ends soon
               </RoomMiddlePhrase>
             )}

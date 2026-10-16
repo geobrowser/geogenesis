@@ -7,8 +7,8 @@ import cx from 'classnames';
 import { Check } from '~/design-system/icons/check';
 
 import type { OpenRoundPick } from './api';
-import { LABEL_FONT } from './browse/stamp-styles';
-import { ROOM_GLASS_CLASS, ROOM_WHITE_GLASS_CLASS } from './debate-room-stamps';
+import { LABEL_FONT, STAMP_FONT } from './browse/stamp-styles';
+import { ROOM_ENTER_CLASS, ROOM_WHITE_GLASS_CLASS } from './debate-room-stamps';
 
 export type OpenRoundPickContext = {
   previousPick: OpenRoundPick | null;
@@ -89,17 +89,20 @@ export function OpenRoundPickCard({
     <section
       aria-labelledby={headingId}
       data-open-round-pick-card={roundIndex}
-      className="pointer-events-auto absolute top-1/2 left-1/2 z-40 grid w-[78%] -translate-x-1/2 -translate-y-1/2 gap-[2.4cqw] rounded-[4cqw] border border-white/20 bg-black/65 p-[3.4cqw] text-white shadow-[0_2cqw_6cqw_rgba(0,0,0,0.45)] backdrop-blur-xl motion-safe:animate-[fadeIn_150ms_linear_both]"
+      className={cx(
+        'pointer-events-auto absolute top-1/2 left-1/2 z-40 grid w-[78%] -translate-x-1/2 -translate-y-1/2 justify-items-center gap-[3cqw] rounded-[5cqw] bg-[rgba(30,30,34,0.55)] px-[3.4cqw] pt-[3.4cqw] pb-[3.8cqw] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16),0_2cqw_6cqw_rgba(0,0,0,0.3)] backdrop-blur-[18px] backdrop-saturate-[1.3]',
+        ROOM_ENTER_CLASS
+      )}
       style={LABEL_FONT}
     >
-      <div className="flex items-center justify-between gap-[2cqw]">
-        <h2 id={headingId} className="text-[5.8cqw] leading-none font-medium tracking-[-0.01em]">
+      <div className="flex items-center gap-[2.4cqw]">
+        <h2 id={headingId} className="text-[7cqw] leading-[0.95] font-bold tracking-[-0.02em]" style={STAMP_FONT}>
           Keep debating?
         </h2>
         <PickCountdown remainingSeconds={remainingSeconds} />
       </div>
 
-      <div role="group" aria-labelledby={headingId} className="grid grid-cols-2 gap-[2.2cqw]">
+      <div role="group" aria-labelledby={headingId} className="flex gap-[2.4cqw]">
         <PickChoice
           choice="extend"
           label="Extend"
@@ -160,17 +163,22 @@ function PickChoice({
       disabled={disabled}
       onClick={() => onPick(choice)}
       className={cx(
-        'grid gap-[1.2cqw] rounded-[2.6cqw] px-[2.8cqw] py-[2.6cqw] text-left transition-[opacity,filter] duration-150 enabled:hover:brightness-108 disabled:cursor-default',
-        selected ? ROOM_WHITE_GLASS_CLASS : ROOM_GLASS_CLASS,
-        selectedPick !== null && !selected && 'opacity-35',
+        'grid justify-items-center gap-[0.8cqw] rounded-full border-0 px-[4.4cqw] py-[2.2cqw] transition-[opacity,filter] duration-150 enabled:hover:brightness-108 disabled:cursor-default',
+        selected
+          ? [ROOM_WHITE_GLASS_CLASS, 'shadow-[0_0_0_0.5cqw_rgba(255,255,255,0.35)]']
+          : 'bg-black/66 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.3)]',
+        selectedPick !== null && !selected && 'opacity-40',
         disabled && selectedPick === null && 'opacity-50'
       )}
     >
-      <span className="inline-flex items-center gap-[1cqw] text-[4.8cqw] leading-none font-medium">
+      <span
+        className="inline-flex items-center gap-[1cqw] text-[4.6cqw] leading-none font-bold [&_svg]:size-[1em]"
+        style={STAMP_FONT}
+      >
         {selected && <Check />}
         {label}
       </span>
-      <span className="text-[2.8cqw] leading-none opacity-72">{detail}</span>
+      <span className="text-[2.6cqw] leading-none font-normal opacity-75">{detail}</span>
     </button>
   );
 }
@@ -180,7 +188,7 @@ function PickCountdown({ remainingSeconds }: { remainingSeconds: number }) {
   const seconds = Math.max(0, remainingSeconds);
 
   return (
-    <span className="grid size-[8.4cqw] shrink-0 place-items-center rounded-full text-[3.6cqw] leading-none font-medium tabular-nums shadow-[inset_0_0_0_0.5cqw_rgba(255,255,255,0.85)]">
+    <span className="grid size-[7cqw] shrink-0 place-items-center rounded-full bg-black/50 text-[3cqw] leading-none font-medium tabular-nums shadow-[inset_0_0_0_0.5cqw_rgba(255,255,255,0.85)]">
       <span aria-hidden="true">{seconds}</span>
       <span className="sr-only">{seconds} seconds to pick</span>
     </span>

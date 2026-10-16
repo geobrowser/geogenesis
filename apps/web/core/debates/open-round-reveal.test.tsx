@@ -91,17 +91,27 @@ describe('useOpenRoundRevealStep', () => {
 
 describe('OpenRoundPickPill (GEO-3366)', () => {
   it.each([
-    ['extend', 'Extend', 'bg-white/85'],
-    ['end', 'End', 'bg-black/40'],
+    ['extend', 'Extend', 'bg-white'],
+    ['end', 'End', 'bg-[rgba(36,36,40,0.48)]'],
     [null, 'No pick', 'border-dashed'],
   ] as const)('reveals %s in a glass pill on its tile', (pick, word, tone) => {
     const { container } = render(<OpenRoundPickPill pick={pick} />);
     expect(container.firstChild).toHaveAttribute('data-open-round-reveal', pick ?? 'none');
     const pill = screen.getByText(word).parentElement;
-    expect(pill).toHaveClass(tone, 'rounded-full', 'backdrop-blur-md');
+    expect(pill).toHaveClass(tone, 'rounded-full');
     expect(pill).toHaveClass('motion-safe:animate-[fadeIn_300ms_linear_both]');
     expect(pill?.style.transform).toBe('');
     expect(container.innerHTML).not.toMatch(/purple|animate-debate-stamp|rotate/);
+  });
+
+  it('changes the picks to outlined words for the final wrap board', () => {
+    const view = render(<OpenRoundPickPill pick={null} />);
+    expect(screen.getByText('No pick').parentElement).toHaveClass('border-dashed');
+
+    view.rerender(<OpenRoundPickPill pick={null} wrapping />);
+    expect(screen.getByText('No pick').parentElement).toHaveClass('text-white/62');
+    expect(screen.getByText('No pick').parentElement).toHaveStyle({ fontFamily: 'var(--font-geist-bold)' });
+    expect(view.container.querySelector('.border-dashed')).toBeNull();
   });
 });
 
@@ -112,8 +122,8 @@ describe('OpenRoundResultOverlay', () => {
     );
     const phrase = container.querySelector('[data-open-round-phrase]');
     expect(phrase).toHaveClass('font-bold', 'text-white', 'motion-safe:animate-[fadeIn_300ms_linear_both]');
-    expect(phrase).toHaveStyle({ fontFamily: 'var(--font-geist-bold)', WebkitTextStroke: '0.06em #000' });
-    expect(container).toHaveTextContent('Round 2 · RebuttalAlice opens');
+    expect(phrase).toHaveStyle({ fontFamily: 'var(--font-geist-bold)', textShadow: expect.stringContaining('0.04em') });
+    expect(container).toHaveTextContent('Round 2RebuttalAlice opens');
     expect(container.innerHTML).not.toMatch(/purple|animate-debate-banner/);
   });
 
@@ -133,7 +143,7 @@ describe('OpenRoundResultOverlay', () => {
   it('says the debate hit the maximum, counting every round, the opening included, in a glass pill', () => {
     const { container } = render(<OpenRoundResultOverlay result={{ kind: 'max', rounds: 10 }} />);
     expect(container).toHaveTextContent('That’s the max11 rounds');
-    expect(screen.getByText('11 rounds')).toHaveClass('rounded-full', 'backdrop-blur-md');
+    expect(screen.getByText('11 rounds')).toHaveClass('rounded-full', 'backdrop-blur-[10px]');
     expect(container.innerHTML).not.toMatch(/purple/);
   });
 });

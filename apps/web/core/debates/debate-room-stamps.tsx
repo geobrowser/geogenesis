@@ -6,48 +6,47 @@ import cx from 'classnames';
 
 import { LABEL_FONT, STAMP_FONT } from './browse/stamp-styles';
 
-/** Open rounds room graphics (GEO-3366). Sizes follow the tile's width via its size container. */
-export const ROOM_GLASS_CLASS = 'border border-white/30 bg-black/40 text-white backdrop-blur-md';
-export const ROOM_WHITE_GLASS_CLASS = 'border border-white/70 bg-white/85 text-text backdrop-blur-md';
+/** Option 5, Debate room / Open rounds (GEO-3366). The export scales type by .78 and pills by .86. */
+export const ROOM_GLASS_CLASS =
+  'bg-black/66 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.24)] backdrop-blur-[10px]';
+export const ROOM_WHITE_GLASS_CLASS = 'bg-white text-[#111]';
 
 /** White Geist Bold with a black outline, including the smaller count-in label. */
 export const ROOM_OUTLINED_STYLE = {
   ...STAMP_FONT,
-  WebkitTextStroke: '0.06em #000',
-  paintOrder: 'stroke fill',
-  textShadow: '0 0.08em 0.25em rgba(0,0,0,0.45)',
+  textShadow:
+    '-0.04em -0.04em 0 #000, 0 -0.04em 0 #000, 0.04em -0.04em 0 #000, 0.04em 0 0 #000, 0.04em 0.04em 0 #000, 0 0.04em 0 #000, -0.04em 0.04em 0 #000, -0.04em 0 0 #000, 0 0.06em 0.18em rgba(0,0,0,0.55)',
 } as const;
 
 /** A glass pill that fades in without moving, rotating or scaling. */
 export function RoomPill({
   children,
   tone = 'dark',
-  sizeCqw,
   delayMs = 0,
   className,
   style,
   ...props
 }: React.ComponentPropsWithoutRef<'span'> & {
   tone?: 'dark' | 'white' | 'red' | 'dashed';
-  sizeCqw: number;
   delayMs?: number;
 }) {
   return (
     <span
       {...props}
       className={cx(
-        'inline-flex max-w-[92%] items-center rounded-full px-[0.65em] py-[0.35em] leading-none font-medium shadow-[0_0.12em_0.45em_rgba(0,0,0,0.2)]',
+        'inline-flex max-w-[92%] items-center rounded-full px-[4.644cqw] py-[2.064cqw] text-[4.816cqw] leading-none font-semibold',
         ROOM_ENTER_CLASS,
         tone === 'white'
-          ? ROOM_WHITE_GLASS_CLASS
+          ? [ROOM_WHITE_GLASS_CLASS, 'shadow-[0_1cqw_3cqw_rgba(0,0,0,0.2)]']
           : tone === 'red'
-            ? 'border border-white/35 bg-[#FF4A26]/85 text-white backdrop-blur-md'
-            : [ROOM_GLASS_CLASS, tone === 'dashed' && 'border-dashed'],
+            ? 'bg-[#FF4A26]/90 text-white backdrop-blur-[14px]'
+            : tone === 'dashed'
+              ? 'border-[0.5cqw] border-dashed border-white/60 bg-transparent text-white/80'
+              : 'bg-[rgba(36,36,40,0.48)] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur-[14px]',
         className
       )}
       style={{
-        ...LABEL_FONT,
-        fontSize: `${sizeCqw}cqw`,
+        ...STAMP_FONT,
         animationDelay: delayMs ? `${delayMs}ms` : undefined,
         ...style,
       }}
@@ -68,22 +67,43 @@ export function RoomTilePill(props: React.ComponentProps<typeof RoomPill>) {
 /** An outlined announcement and optional opener, fading in and out in place. */
 export function RoomPhrase({
   children,
+  eyebrow,
   sub,
   sizeCqw,
   className,
   ...props
 }: React.ComponentPropsWithoutRef<'div'> & {
+  eyebrow?: React.ReactNode;
   sub?: React.ReactNode;
   sizeCqw: number;
 }) {
   return (
     <div
       {...props}
-      className={cx('px-[0.6em] text-center leading-tight font-bold text-white', ROOM_ENTER_CLASS, className)}
+      className={cx(
+        'mx-auto grid w-max max-w-[92%] justify-items-center text-center leading-[0.95] font-bold tracking-[-0.02em] text-white',
+        ROOM_ENTER_CLASS,
+        className
+      )}
       style={{ ...ROOM_OUTLINED_STYLE, fontSize: `${sizeCqw}cqw` }}
     >
-      <span className="block text-balance">{children}</span>
-      {sub && <span className="mt-[0.35em] block truncate text-[0.6em]">{sub}</span>}
+      {eyebrow && (
+        <span
+          className="text-[7.02cqw] leading-none font-semibold tracking-[-0.01em] text-white/88"
+          style={ROOM_OUTLINED_STYLE}
+        >
+          {eyebrow}
+        </span>
+      )}
+      <span className={cx('block text-balance', Boolean(eyebrow) && 'tracking-[-0.03em]')}>{children}</span>
+      {sub && (
+        <span
+          className="mt-[1.6cqw] max-w-full truncate text-[3.744cqw] leading-none font-semibold tracking-normal"
+          style={ROOM_OUTLINED_STYLE}
+        >
+          {sub}
+        </span>
+      )}
     </div>
   );
 }
@@ -103,7 +123,7 @@ export function RoomTag({ className, style, ...props }: React.ComponentPropsWith
       {...props}
       className={cx(
         ROOM_GLASS_CLASS,
-        'inline-flex items-center rounded-full px-[0.65em] py-[0.35em] leading-none whitespace-nowrap',
+        'inline-flex items-center rounded-full px-[2.2cqw] py-[1.1cqw] leading-none tracking-[0.01em] whitespace-nowrap',
         className
       )}
       style={{ ...LABEL_FONT, ...style }}

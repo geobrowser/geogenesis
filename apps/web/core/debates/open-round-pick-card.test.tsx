@@ -61,9 +61,9 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     expect(view.onPick).toHaveBeenLastCalledWith('extend', expect.objectContaining({ previousPick: null }));
     expect(extend()).toHaveAttribute('aria-pressed', 'true');
     // The pick turns white with a check, the other dims, and the question stays.
-    expect(extend()).toHaveClass('bg-white/85', 'text-text');
+    expect(extend()).toHaveClass('bg-white', 'text-[#111]');
     expect(extend().querySelector('svg')).toBeInTheDocument();
-    expect(end()).toHaveClass('opacity-35');
+    expect(end()).toHaveClass('opacity-40');
     expect(screen.getByRole('heading', { name: 'Keep debating?' })).toBeInTheDocument();
 
     await act(async () => undefined);
@@ -73,8 +73,8 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     fireEvent.click(end());
     expect(view.onPick).toHaveBeenLastCalledWith('end', expect.objectContaining({ previousPick: 'extend' }));
     expect(end()).toHaveAttribute('aria-pressed', 'true');
-    expect(end()).toHaveClass('bg-white/85', 'text-text');
-    expect(extend()).toHaveClass('opacity-35', 'bg-black/40');
+    expect(end()).toHaveClass('bg-white', 'text-[#111]');
+    expect(extend()).toHaveClass('opacity-40', 'bg-black/66');
     expect(extend()).toHaveAttribute('aria-pressed', 'false');
   });
 
