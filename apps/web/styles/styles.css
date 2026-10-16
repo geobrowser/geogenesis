@@ -915,3 +915,23 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
   z-index: 60 !important;
   width: var(--radix-popper-anchor-width);
 }
+
+/* Open rounds playback: a small settle in place, with no wipe or travelling exit. */
+@keyframes debatePlayerEnter {
+  from {
+    opacity: 0;
+    scale: 0.97;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+@keyframes debatePlayerSettle {
+  from {
+    scale: 0.97;
+  }
+  to {
+    scale: 1;
+  }
+}

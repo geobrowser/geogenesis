@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import type { RoundCue } from '~/core/debates/round-cues';
 
-import { BANNER_CLASS, LABEL_FONT, TAG_CLASS } from './stamp-styles';
+import { PLAYER_GLASS_CLASS, PLAYER_LABEL_FONT, PLAYER_TITLE_CLASS, PLAYER_TITLE_STYLE } from './player-overlay-styles';
 
 /**
  * An outline in every direction rather than the four corners the recording room uses.
@@ -153,9 +153,9 @@ export function DebateRoundBadge({
   rightPx,
 }: {
   cue: RoundCue | null;
-  /** Open rounds: a square purple tag in the breaks' type, as the stamps design has it (GEO-3314). */
+  /** Use the Open rounds player's glass treatment. */
   stamped?: boolean;
-  /** Its distance from the tile's right edge, where a growing turn timer needs it to make room. */
+  /** Optional distance from the tile's right edge. */
   rightPx?: number;
 }) {
   if (!cue) return null;
@@ -176,8 +176,8 @@ export function DebateRoundBadge({
       <span
         aria-hidden
         data-round-tag={stamped || undefined}
-        className={cx('truncate', stamped && cx(TAG_CLASS, 'text-[2.8cqw] uppercase'))}
-        style={stamped ? LABEL_FONT : undefined}
+        className={cx('truncate', stamped && cx(PLAYER_GLASS_CLASS, 'text-[2.8cqw]'))}
+        style={stamped ? PLAYER_LABEL_FONT : undefined}
       >
         {cue.label}
       </span>
@@ -185,36 +185,32 @@ export function DebateRoundBadge({
   );
 }
 
-/**
- * The round card's Open rounds form (GEO-3314): the breaks' purple banner across the seam, "Round 1 ·
- * Opening", rolling in, holding and rolling out over the card's own run. In practice it announces
- * only the opening, since every later round is announced by its break.
- *
- * A CSS animation rather than one driven by the playhead's samples, which arrive about four times a
- * second: started from where the playhead stood when the banner went up, so one that appears part
- * way in (a scrub, a late first sample) picks up at the right point, then runs on its own.
- */
+/** The Open rounds opening: stacked outlined type, fading in place on the playhead. */
 export function DebateRoundBanner({ cue }: { cue: RoundCue | null }) {
   if (!cue) return null;
-  return <RoundBannerRun key={cue.label} label={cue.label} startAgeMs={cue.ageMs ?? 0} />;
-}
-
-function RoundBannerRun({ label, startAgeMs }: { label: string; startAgeMs: number }) {
-  // Fixed at mount: re-reading the age from each sample would step the roll back and forth.
-  const [delayMs] = React.useState(() => -startAgeMs);
   return (
     <div
       aria-hidden
-      data-round-banner={label}
-      className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] -translate-y-1/2"
+      data-round-banner={cue.label}
+      className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] -translate-y-1/2 text-center motion-safe:opacity-[var(--round-opacity)]"
+      style={{ '--round-opacity': cue.opacity } as React.CSSProperties}
     >
       <div
-        // 1800ms is `ROUND_CARD_MS`: Tailwind reads class names from source, so it is written out.
-        className={cx(BANNER_CLASS, 'truncate text-[5cqw] motion-safe:animate-[debateBannerInOut_1800ms_linear_both]')}
-        style={{ ...LABEL_FONT, animationDelay: `${delayMs}ms` }}
+        className="motion-safe:animate-[debatePlayerSettle_220ms_ease-out_both]"
+        style={{ animationDelay: `-${cue.ageMs ?? 0}ms` }}
       >
-        {label}
+        <PlayerRoundTitle round={cue.round} role={cue.role} />
       </div>
+    </div>
+  );
+}
+
+/** Shared by the opening and the next-round announcement over a break. Geist fits at 15cqw. */
+export function PlayerRoundTitle({ round, role }: { round: string; role: string | null }) {
+  return (
+    <div className={PLAYER_TITLE_CLASS} style={PLAYER_TITLE_STYLE}>
+      <span className={cx('block', role ? 'text-[7.5cqw]' : 'text-[15cqw]')}>{round}</span>
+      {role && <span className="block text-[15cqw] leading-[0.95]">{role}</span>}
     </div>
   );
 }

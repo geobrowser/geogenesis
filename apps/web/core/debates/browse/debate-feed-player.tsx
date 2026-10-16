@@ -23,14 +23,7 @@ import {
   silentAt,
 } from '~/core/debates/playback-breaks';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
-import {
-  TURN_TIMER_SCALE_CLASS,
-  turnTimerBuildUp,
-  turnTimerPulseClass,
-  turnTimerRimMask,
-  turnTimerScale,
-  useRestartedEach,
-} from '~/core/debates/recording-countdown-ring';
+import { turnTimerRimMask } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
@@ -51,7 +44,7 @@ import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } fr
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
-import { LABEL_FONT, STAMP_FONT, TAG_CLASS } from './stamp-styles';
+import { PLAYER_GLASS_CLASS, PLAYER_LABEL_FONT } from './player-overlay-styles';
 import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
@@ -365,7 +358,7 @@ export function DebateFeedPlayer({
 
   // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
   // it belongs to is spoken, rather than appearing a beat late on the first one.
-  // The agreed stamps design (GEO-3277, GEO-3314, GEO-3316, GEO-3317) is Open rounds only for now.
+  // Open rounds has its own playback treatment; fixed formats retain the classic overlays.
   const stamped = isOpenRoundsDebate(debate);
 
   const ticker = useDebateClaimTicker(debate, {
@@ -648,7 +641,6 @@ export function DebateFeedPlayer({
       return (
         <DebateClaimCounter
           history={history}
-          playheadMs={playheadMs}
           name={breakNames[slot as 1 | 2]}
           rowsByClaimId={ticker.rowsByClaimId}
           entitiesByClaimId={ticker.entitiesByClaimId}
@@ -1440,15 +1432,8 @@ function DebaterVideo({
 
       {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
-      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} buildUp={stamped} />}
-      {countdown && (
-        <DebateRoundBadge
-          cue={roundBadge ?? null}
-          stamped={stamped}
-          // Kept clear of the timer as it grows over a turn's last ten seconds.
-          rightPx={stamped ? TIMER_RIGHT_PX + TIMER_PX * turnTimerScale(countdown.seconds) + 8 : undefined}
-        />
-      )}
+      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
+      {countdown && <DebateRoundBadge cue={roundBadge ?? null} stamped={stamped} />}
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
@@ -1613,6 +1598,15 @@ function DebaterVideo({
           clearScrubber === 'on-hover' && 'group-hover:pb-5'
         )}
       >
+        {lastWord && (
+          <span
+            data-last-word
+            className={cx(PLAYER_GLASS_CLASS, 'absolute bottom-full left-0 mb-[1.5cqw] text-[2.6cqw] text-white')}
+            style={PLAYER_LABEL_FONT}
+          >
+            Last word
+          </span>
+        )}
         {/* The face, with Follow as a "+" pinned to its bottom edge (GEO-3305), the way short-video
             apps do it: a pill beside the name and the position chip was one chip too many for the
             band. The badge can't sit inside a button, so the face is its own pointer target for the
@@ -1651,11 +1645,6 @@ function DebaterVideo({
               {participant && (
                 <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
               )}
-              {lastWord && (
-                <span data-last-word className={cx(TAG_CLASS, 'shrink-0 text-[2.6cqw] uppercase')} style={LABEL_FONT}>
-                  Last word
-                </span>
-              )}
             </span>
             {byline && (
               <span data-debate-byline title={byline} className="truncate text-[0.75rem] leading-4 text-white/80">
@@ -1671,75 +1660,24 @@ function DebaterVideo({
   );
 }
 
-/** The turn timer's size and inset from the tile's corner, in px (`size-8`, `right-3`). */
-const TIMER_PX = 32;
-const TIMER_RIGHT_PX = 12;
-
-function CountdownBadge({
-  seconds,
-  progress,
-  buildUp = false,
-}: {
-  seconds: number;
-  progress: number;
-  buildUp?: boolean;
-}) {
-  // The ring shows time remaining, so it shrinks as the turn elapses rather than filling up.
+/** The classic ring stays the same size and colour throughout playback. */
+function CountdownBadge({ seconds, progress }: { seconds: number; progress: number }) {
   const remaining = 1 - Math.max(0, Math.min(1, progress));
-  const whole = Math.ceil(seconds);
-  // Open rounds, as the design mockup has it: from 10 s the timer swells each second and grows a
-  // step with each swell; from 5 s it turns red at its full size and holds there, its rim draining
-  // over the last five seconds and each second landing with a red glow.
-  const stage = turnTimerBuildUp(buildUp ? seconds : Infinity);
-  const { counting, final } = stage;
-  const degrees = final ? (Math.max(0, seconds) / 5) * 360 : remaining * 360;
-  // Hollowed into a ring so the badge's own backing shows through the middle. Today's ring sits 2px
-  // inside the badge; the red one runs at its very edge, 0.55cqw thick, around a solid red disc.
-  const ringMask = turnTimerRimMask(final ? '0.55cqw' : '2px');
-  const faceRef = useRestartedEach<HTMLDivElement>(counting ? whole : null);
+  const ringMask = turnTimerRimMask('2px');
   return (
-    <div
-      data-turn-timer={stage.phase}
-      className={cx('absolute top-3 right-3 z-10 size-8', TURN_TIMER_SCALE_CLASS)}
-      style={{ scale: stage.scale }}
-    >
-      <div
-        // Its swell and glow restart each second (`useRestartedEach`) without remounting it, so the
-        // rim inside keeps draining across the second rather than stepping.
-        ref={faceRef}
-        className={cx(
-          'grid size-8 origin-top-right place-items-center rounded-full',
-          turnTimerPulseClass(stage),
-          final ? 'bg-red-01' : 'bg-linear-to-b from-black/50 to-black/25'
-        )}
-        style={{ '--turn-timer-swell': stage.swell } as React.CSSProperties}
-      >
+    <div data-turn-timer="steady" className="absolute top-3 right-3 z-10 size-8">
+      <div className="grid size-8 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
         <span
-          // A fresh rim on turning red: its angle switches from the whole turn's progress to the
-          // last five seconds', and easing between the two would refill it before it drains. Within
-          // either it stays mounted, so it eases from second to second.
-          key={final ? 'final' : 'turn'}
           data-turn-timer-rim
-          className={cx(
-            'col-start-1 row-start-1 rounded-full',
-            // Smooth only for the Open rounds build-up; a fixed format's ring jumps as it always has.
-            buildUp && 'transition-[--turn-timer-rim] duration-300 ease-linear',
-            final ? 'size-8' : 'size-7'
-          )}
-          style={
-            {
-              '--turn-timer-rim': `${degrees}deg`,
-              backgroundImage: `conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,${final ? 0.28 : 0.3}) 0deg)`,
-              maskImage: ringMask,
-              WebkitMaskImage: ringMask,
-            } as React.CSSProperties
-          }
+          className="col-start-1 row-start-1 size-7 rounded-full"
+          style={{
+            backgroundImage: `conic-gradient(#ffffff ${remaining * 360}deg, rgba(255,255,255,0.3) 0deg)`,
+            maskImage: ringMask,
+            WebkitMaskImage: ringMask,
+          }}
         />
-        <span
-          className="col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none font-medium text-white tabular-nums"
-          style={final ? { ...STAMP_FONT, fontWeight: 700 } : undefined}
-        >
-          {whole}
+        <span className="col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none font-medium text-white tabular-nums">
+          {Math.ceil(seconds)}
         </span>
       </div>
     </div>

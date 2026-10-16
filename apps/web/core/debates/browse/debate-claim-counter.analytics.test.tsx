@@ -51,7 +51,6 @@ it('measures each claim in the list as its own surface', () => {
   const { container } = render(
     <DebateClaimCounter
       history={[said('a', 1_000), said('b', 2_000)]}
-      playheadMs={30_000}
       name="Preston"
       rowsByClaimId={new Map()}
       entitiesByClaimId={new Map()}

@@ -13,13 +13,9 @@ import type { Entity } from '~/core/types';
 import { TargetSolid } from '~/design-system/icons/target-solid';
 
 import { ClaimIconButton } from './debate-claim-ticker';
-import { LABEL_FONT, STAMP_CLASS, STAMP_FONT, TAG_CLASS } from './stamp-styles';
+import { PLAYER_GLASS_CLASS, PLAYER_LABEL_FONT } from './player-overlay-styles';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 
-/** How long the "+1 claim" takes to come out of the counter and go. Matches its animations below. */
-const PLUS_ONE_MS = 1_100;
-/** How long the newest claim's card stays tinted after its +1, fading as it goes. */
-const FRESH_MS = 3_000;
 /** The pause on the video before the list opens, and after the pointer leaves before it closes. */
 const OPEN_AFTER_MS = 150;
 const CLOSE_AFTER_MS = 250;
@@ -29,7 +25,7 @@ const CLOSE_AFTER_MS = 250;
  * over the video.
  *
  * - The counter sits in the tile's bottom-right corner from the start, at 0.
- * - When a claim is said it goes up by one, and a "+1 claim" rises out of it and fades.
+ * - When a claim is said the count goes up without animation.
  * - Resting the pointer on the counter opens what this debater has claimed so far, newest nearest
  *   the counter, each with the vote. The list is part of the counter's box, so moving up into it
  *   keeps it open; it closes a moment after the pointer leaves both. A tap on the counter does the
@@ -42,7 +38,6 @@ const CLOSE_AFTER_MS = 250;
  */
 export function DebateClaimCounter({
   history,
-  playheadMs,
   name,
   rowsByClaimId,
   entitiesByClaimId,
@@ -52,7 +47,6 @@ export function DebateClaimCounter({
 }: {
   /** What this debater has claimed so far, oldest first. */
   history: StackedCard[];
-  playheadMs: number;
   /** The debater's first name, for the list's header. */
   name: string;
   rowsByClaimId: Map<string, DebateClaim>;
@@ -81,10 +75,6 @@ export function DebateClaimCounter({
   const pressing = React.useRef(false);
 
   const count = history.length;
-  const newest = history.at(-1);
-  const newestAgeMs = newest ? playheadMs - newest.window.startMs : Number.POSITIVE_INFINITY;
-  const popping = newest !== undefined && newestAgeMs >= 0 && newestAgeMs < PLUS_ONE_MS;
-  const fresh = newest !== undefined && newestAgeMs >= 0 && newestAgeMs < FRESH_MS;
   const open = !dismissed && (hovered || pinned || keyboardInside) && count > 0;
   const active = open || keyboardInside;
   React.useEffect(() => onActiveChange?.(active), [active, onActiveChange]);
@@ -169,8 +159,6 @@ export function DebateClaimCounter({
         <ClaimList
           history={history}
           name={name}
-          freshClaimId={fresh ? newest.window.claim.id : null}
-          freshness={fresh ? 1 - newestAgeMs / FRESH_MS : 0}
           rowsByClaimId={rowsByClaimId}
           entitiesByClaimId={entitiesByClaimId}
           onAnswered={onAnswered}
@@ -178,23 +166,6 @@ export function DebateClaimCounter({
         />
       )}
       <span className="relative inline-flex">
-        {popping && (
-          // Three layers, three motions, as the mockup moves it: rising its own height and a gap out
-          // of the counter (500 ms), growing from half size (350 ms), and fading in by 88 ms and out
-          // over its last 300 ms. It starts behind the counter, anchored to its right edge.
-          <span
-            key={newest.window.claim.id}
-            aria-hidden
-            data-claim-plus-one
-            className="pointer-events-none absolute right-0 bottom-0 z-0 motion-safe:animate-[claimPlusRise_500ms_cubic-bezier(0.33,1,0.68,1)_both] motion-reduce:hidden"
-          >
-            <span className="block origin-bottom-right motion-safe:animate-[claimPlusGrow_350ms_cubic-bezier(0.33,1,0.68,1)_both]">
-              <span className="block motion-safe:animate-[claimPlusFade_1100ms_linear_both]">
-                <ClaimStamp>+1 claim</ClaimStamp>
-              </span>
-            </span>
-          </span>
-        )}
         <button
           ref={countRef}
           type="button"
@@ -204,13 +175,7 @@ export function DebateClaimCounter({
           onClick={toggle}
           className="relative z-[1] cursor-pointer"
         >
-          {/* The bump as the +1 leaves: a half sine up to 1.22x and back, from the right edge. */}
-          <span
-            key={popping ? newest.window.claim.id : 'still'}
-            className={cx('block origin-right', popping && 'motion-safe:animate-[claimCounterBump_450ms_linear]')}
-          >
-            <ClaimCount count={count} />
-          </span>
+          <ClaimCount count={count} />
         </button>
       </span>
     </div>
@@ -218,7 +183,7 @@ export function DebateClaimCounter({
 }
 
 /**
- * The count beside the target icon, on the round tag's purple, at the mockup's size.
+ * The count beside the target icon, on the player's glass pill.
  *
  * The icon sits inline on the number's baseline and drops by 0.17em, which puts its middle on the
  * middle of the digits (Geist's cap height) in every browser. Centring with flexbox centres the
@@ -227,7 +192,10 @@ export function DebateClaimCounter({
  */
 function ClaimCount({ count }: { count: number }) {
   return (
-    <span className={cx(TAG_CLASS, 'inline-block text-[2.6cqw] tabular-nums')} style={LABEL_FONT}>
+    <span
+      className={cx(PLAYER_GLASS_CLASS, 'inline-block text-[2.6cqw] text-white tabular-nums')}
+      style={PLAYER_LABEL_FONT}
+    >
       <span className="mr-[0.4em] inline-block align-[-0.17em]">
         <TargetSolid />
       </span>
@@ -236,20 +204,9 @@ function ClaimCount({ count }: { count: number }) {
   );
 }
 
-/** The +1's face: the breaks' stamp at 3.6cqw, leaning a little. */
-function ClaimStamp({ children }: { children: React.ReactNode }) {
-  return (
-    <span className={cx(STAMP_CLASS, 'inline-block rotate-[-1.6deg] text-[3.6cqw] text-purple')} style={STAMP_FONT}>
-      {children}
-    </span>
-  );
-}
-
 function ClaimList({
   history,
   name,
-  freshClaimId,
-  freshness,
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
@@ -257,8 +214,6 @@ function ClaimList({
 }: {
   history: StackedCard[];
   name: string;
-  freshClaimId: string | null;
-  freshness: number;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string, position: boolean | null) => void;
@@ -272,14 +227,14 @@ function ClaimList({
   const paint = React.useCallback(() => {
     if (scrollRef.current) paintTopFade(scrollRef.current, fades);
   }, [fades]);
-  // On every layout of the list (a claim arriving, a card tinting) and on every scroll.
+  // On every layout of the list and on every scroll.
   React.useLayoutEffect(paint);
 
   return (
     <div data-claim-list className="grid w-[76cqw] gap-[1.2cqw]">
       <div
         className="flex items-baseline justify-between gap-[2cqw] px-[0.4cqw] text-[2.8cqw] leading-none font-medium text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]"
-        style={LABEL_FONT}
+        style={PLAYER_LABEL_FONT}
       >
         <span className="truncate">
           {name}’s claims · {history.length}
@@ -308,7 +263,6 @@ function ClaimList({
           <ClaimListCard
             key={card.window.claim.id}
             card={card}
-            freshness={card.window.claim.id === freshClaimId ? freshness : 0}
             row={rowsByClaimId.get(card.window.claim.id) ?? null}
             entity={entitiesByClaimId.get(card.window.claim.id) ?? null}
             onAnswered={onAnswered}
@@ -350,7 +304,6 @@ function paintTopFade(list: HTMLElement, fades: boolean) {
 
 function ClaimListCard(props: {
   card: StackedCard;
-  freshness: number;
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
@@ -371,14 +324,12 @@ function ClaimListCard(props: {
  */
 function ClaimListCardBody({
   card,
-  freshness,
   row,
   entity,
   onAnswered,
   spaceId,
 }: {
   card: StackedCard;
-  freshness: number;
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
@@ -414,21 +365,10 @@ function ClaimListCardBody({
     // measures (and so reports an impression) through an `ActionSurfaceDiv` beneath it.
     <ActionSurfaceDiv
       data-claim-list-card={claim.id}
-      data-fresh={freshness > 0 || undefined}
-      className="grid grid-cols-[1fr_auto] items-center gap-x-[2.4cqw] rounded-[4px] [mask-image:var(--claim-ramp,none)] py-[1.4cqw] pr-[1.2cqw] pl-[2.6cqw] text-white backdrop-blur-[22px] transition-[background-color,box-shadow] duration-300 [-webkit-mask-image:var(--claim-ramp,none)]"
-      // The newest claim's tint fades over its first three seconds, as in the mockup.
-      style={
-        freshness > 0
-          ? {
-              backgroundColor: `color-mix(in srgb, var(--color-purple) ${(18 + 25 * freshness).toFixed(1)}%, transparent)`,
-              // The purple lifted 40% toward white, as the mockup's lighter edge.
-              boxShadow: `inset 0 0 0 0.3cqw color-mix(in srgb, color-mix(in srgb, var(--color-purple) 60%, white) ${(100 * freshness).toFixed(1)}%, transparent)`,
-            }
-          : { backgroundColor: 'rgba(21, 21, 21, 0.55)' }
-      }
+      className="grid grid-cols-[1fr_auto] items-center gap-x-[2.4cqw] rounded-[3cqw] border border-white/15 bg-black/60 [mask-image:var(--claim-ramp,none)] py-[1.4cqw] pr-[1.2cqw] pl-[2.6cqw] text-white backdrop-blur-[22px] [-webkit-mask-image:var(--claim-ramp,none)]"
     >
       <span className="line-clamp-3 text-[3.3cqw] leading-[1.25]">{claim.text}</span>
-      <span className="grid min-w-[7cqw] content-center justify-items-center" style={LABEL_FONT}>
+      <span className="grid min-w-[7cqw] content-center justify-items-center" style={PLAYER_LABEL_FONT}>
         {vote(true)}
         {summary.percent === null ? (
           <span aria-hidden className="h-[2.4cqw]" />
@@ -437,7 +377,7 @@ function ClaimListCardBody({
             className="py-[0.6cqw] text-[2.6cqw] leading-none font-semibold tabular-nums"
             title={`${summary.percent}% agree`}
           >
-            {summary.percent}%
+            {summary.percent}% agree
           </span>
         )}
         {vote(false)}
