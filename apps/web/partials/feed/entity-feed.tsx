@@ -18,7 +18,7 @@ import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explor
 import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
 import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 import { seenStore } from '~/core/explore/seen-demotion/seen-store';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useAwaitedSmartAccount } from '~/core/hooks/use-awaited-smart-account';
 import { exploreMoreFiltersOpenAtom } from '~/core/state/explore-more-filters';
 import { normId } from '~/core/utils/norm-id';
 
@@ -146,6 +146,11 @@ type EntityFeedProps = {
    * Explore only; harmless where the server does not personalize.
    */
   sendIdentityToken?: boolean;
+  /**
+   * Whether the request carried a wallet cookie. When set, the first page waits for the smart
+   * account (see `useAwaitedSmartAccount`) instead of being fetched anonymously and then again.
+   */
+  signedIn?: boolean;
 };
 
 async function fetchFeedPage(
@@ -185,6 +190,10 @@ async function fetchFeedPage(
     throw new Error('Feed failed');
   }
   return res.json() as Promise<ExploreFeedResult>;
+}
+
+function sameFeedOtherThanAccount(a: readonly unknown[], b: readonly unknown[]) {
+  return a.length === b.length && a.slice(0, -1).every((part, i) => part === b[i]);
 }
 
 type TopicFacetResult = { topics: Array<{ id: string; name: string | null; count: number }> };
@@ -244,6 +253,7 @@ export function EntityFeed({
   titleOpensSidePanel = false,
   claimCardVariant = 'feed',
   sendIdentityToken = false,
+  signedIn = false,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
@@ -438,8 +448,7 @@ export function EntityFeed({
   // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier
   // (before the cookie is set), which caused refetches to return anonymous data on
   // sign-in and leave "Join space" buttons stuck for a few seconds.
-  const { smartAccount } = useSmartAccount();
-  const smartAccountAddress = smartAccount?.account.address ?? null;
+  const { smartAccountAddress, awaitingAccount } = useAwaitedSmartAccount(signedIn);
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
   // request, and caching them apart would refetch on a change the viewer never made.
   const isForYou = sort === 'for-you';
@@ -452,9 +461,10 @@ export function EntityFeed({
     typeIdsKey,
     topicIdsKey,
     fixedParamsKey,
-    smartAccountAddress,
     // Only on For you, so every other sort's key, and so its cache, is unchanged.
     ...(isForYou ? [requestedFollowedTopicIds.join(',')] : []),
+    // Last, so `placeholderData` below can tell a change of account from a change of filter.
+    smartAccountAddress,
   ];
 
   // Only where the server can use it, so no other page waits on Privy for a token: For you, and
@@ -476,7 +486,11 @@ export function EntityFeed({
         fixedParams,
         cursor: pageParam as string | undefined,
       }),
-    enabled: !isForYou || followedTopicIds !== null,
+    enabled: !awaitingAccount && (!isForYou || followedTopicIds !== null),
+    // When only the account changed (signing in on the page, or an account that arrived after the
+    // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery && sameFeedOtherThanAccount(previousQuery.queryKey, queryKey) ? previous : undefined,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: last => last.nextCursor ?? undefined,
     retry: 2,
@@ -678,7 +692,7 @@ export function EntityFeed({
       <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
-        ) : isLoading || (isForYou && followedTopicIds === null) ? (
+        ) : isLoading || awaitingAccount || (isForYou && followedTopicIds === null) ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <LoadingSkeleton key={i} />

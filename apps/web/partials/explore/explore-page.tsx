@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
 import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useAwaitedSmartAccount } from '~/core/hooks/use-awaited-smart-account';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useFollowedTopics } from '~/core/topics/use-followed-topics';
 
@@ -14,9 +14,6 @@ import { EntityFeed } from '~/partials/feed/entity-feed';
 import { ExploreEmailCapturePopup } from './email-capture-popup';
 import { ExploreLiveLobbiesBanner } from './explore-live-lobbies-banner';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
-
-/** Bounds the wait for a signed-in account, so a stale wallet cookie can't hold the skeleton up. */
-const FOR_YOU_ACCOUNT_WAIT_MS = 5_000;
 
 const FOR_YOU_SORT_OPTIONS: readonly ExplorePageSort[] = ['for-you', 'best', 'top', 'new'];
 
@@ -52,14 +49,7 @@ function ExploreForYouFeed({ signedIn }: { signedIn: boolean }) {
   const { topicIds, isLoading } = useFollowedTopics();
   // Before Privy restores the wallet, the account reads as signed out and the follows as empty.
   // `signedIn` comes from the httpOnly wallet cookie, so wait for the account rather than serve Best.
-  const { smartAccount } = useSmartAccount();
-  const [accountWaitOver, setAccountWaitOver] = React.useState(false);
-  const awaitingAccount = signedIn && !smartAccount && !accountWaitOver;
-  React.useEffect(() => {
-    if (!awaitingAccount) return;
-    const timer = setTimeout(() => setAccountWaitOver(true), FOR_YOU_ACCOUNT_WAIT_MS);
-    return () => clearTimeout(timer);
-  }, [awaitingAccount]);
+  const { awaitingAccount } = useAwaitedSmartAccount(signedIn);
 
   const followedTopicIds = React.useMemo(
     () => (isLoading || awaitingAccount ? null : [...topicIds].sort()),
@@ -72,6 +62,7 @@ function ExploreForYouFeed({ signedIn }: { signedIn: boolean }) {
       initialSort="for-you"
       sortOptions={FOR_YOU_SORT_OPTIONS}
       followedTopicIds={followedTopicIds}
+      signedIn={signedIn}
     />
   );
 }
@@ -117,7 +108,7 @@ export function ExplorePage({ sidePanel, signedIn = false }: Props) {
         {forYouEnabled ? (
           <ExploreForYouFeed signedIn={signedIn} />
         ) : (
-          <EntityFeed {...EXPLORE_FEED_PROPS} initialSort="best" />
+          <EntityFeed {...EXPLORE_FEED_PROPS} initialSort="best" signedIn={signedIn} />
         )}
       </main>
     </EntityPageSidebarLayout>
