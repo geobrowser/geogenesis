@@ -29,6 +29,7 @@ import {
   turnTimerPulseClass,
   turnTimerRimMask,
   turnTimerScale,
+  useRestartedEach,
 } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
@@ -1653,6 +1654,7 @@ function CountdownBadge({
   // Hollowed into a ring so the badge's own backing shows through the middle. Today's ring sits 2px
   // inside the badge; the red one runs at its very edge, 0.55cqw thick, around a solid red disc.
   const ringMask = turnTimerRimMask(final ? '0.55cqw' : '2px');
+  const faceRef = useRestartedEach<HTMLDivElement>(counting ? whole : null);
   return (
     <div
       data-turn-timer={stage.phase}
@@ -1660,8 +1662,9 @@ function CountdownBadge({
       style={{ scale: stage.scale }}
     >
       <div
-        // Re-mounted each second, which restarts its swell and glow.
-        key={counting ? whole : 'steady'}
+        // Its swell and glow restart each second (`useRestartedEach`) without remounting it, so the
+        // rim inside keeps draining across the second rather than stepping.
+        ref={faceRef}
         className={cx(
           'grid size-8 origin-top-right place-items-center rounded-full',
           turnTimerPulseClass(stage),
@@ -1670,6 +1673,11 @@ function CountdownBadge({
         style={{ '--turn-timer-swell': stage.swell } as React.CSSProperties}
       >
         <span
+          // A fresh rim on turning red: its angle switches from the whole turn's progress to the
+          // last five seconds', and easing between the two would refill it before it drains. Within
+          // either it stays mounted, so it eases from second to second.
+          key={final ? 'final' : 'turn'}
+          data-turn-timer-rim
           className={cx(
             'col-start-1 row-start-1 rounded-full',
             // Smooth only for the Open rounds build-up; a fixed format's ring jumps as it always has.
