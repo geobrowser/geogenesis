@@ -28,6 +28,7 @@ import {
 } from '~/core/hooks/use-user-voted-entity-ids';
 import { withRetryAfterJitter } from '~/core/io/errors/retry-utils';
 import { getUserEntityResponse } from '~/core/io/queries';
+import { pushMarketingEvent } from '~/core/marketing-events';
 import {
   claimResponseSummariesQueryKeyPrefix,
   loadClaimResponseSummaryCaches,
@@ -52,6 +53,7 @@ import {
   recordFailedResponse,
 } from '~/core/responses/failed-response-retries';
 import { geo } from '~/core/sdk/geo-client';
+import { LOCAL_VOTES_LIST_ID } from '~/core/state/local-votes';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
@@ -589,6 +591,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
         entityName,
         personalSpaceId: votingPersonalSpaceId,
         retryKey,
+        attribution,
       };
     },
     onSuccess: (submission, { direction }, context) => {
@@ -604,6 +607,14 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
         user_operation_hash: submission.transaction,
       };
       context?.operation.outcome('vote_cast', 'submitted', outcomeProperties);
+      // A vote saved from this device's signed-out votes was already counted as anonymous when cast.
+      if (direction !== 'clear' && context?.attribution.list_id !== LOCAL_VOTES_LIST_ID) {
+        pushMarketingEvent('geo_vote', {
+          target_id: submission.pending.entityId,
+          space_id: submission.pending.spaceId,
+          vote_kind: submission.pending.responseKind,
+        });
+      }
       submission.pending.onIndexed = () => context?.operation.outcome('vote_cast', 'indexed', outcomeProperties);
       syncVotedLists(direction, submission.pending);
       // Taking a position on a claim (agree/disagree, verify/dispute) says the user wants to

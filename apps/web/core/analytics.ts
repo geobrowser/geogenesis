@@ -7,6 +7,7 @@ import { notifyActionPageView, pageContext } from './action-context';
 import { analyticsRuntime, isAnalyticsEnabled } from './analytics-context';
 import type { AnalyticsEventName } from './analytics-events';
 import { withSignupVisitor } from './auth/signup-visitor';
+import { pushMarketingEvent } from './marketing-events';
 
 export type { AnalyticsEventName } from './analytics-events';
 
@@ -218,6 +219,63 @@ export function initAnalytics() {
 
   scriptRequested = true;
 
+  // Off the critical path (the runtime is ~150KB that would otherwise compete with the app's own
+  // chunks and the first debate video). Everything fired meanwhile waits in `pendingCalls`, which
+  // `flushPendingCalls` drains in order once the runtime is up.
+  deferUntilIdle(loadAnalyticsScript);
+}
+
+/** The longest the runtime waits for an idle moment before loading anyway. */
+export const ANALYTICS_IDLE_TIMEOUT_MS = 4000;
+
+/**
+ * Runs `task` once, at the first of: the browser going idle after the window `load` event, the
+ * viewer's first interaction (so an early click or a short visit is captured by the real runtime
+ * rather than a queue), or the idle timeout. `requestIdleCallback` is missing in Safari, where a
+ * timer stands in.
+ */
+function deferUntilIdle(task: () => void) {
+  let done = false;
+  const cleanups: (() => void)[] = [];
+
+  const run = () => {
+    if (done) return;
+    done = true;
+    for (const cleanup of cleanups) cleanup();
+    task();
+  };
+
+  const schedule = () => {
+    if (done) return;
+    if (typeof window.requestIdleCallback === 'function') {
+      const handle = window.requestIdleCallback(run, { timeout: ANALYTICS_IDLE_TIMEOUT_MS });
+      cleanups.push(() => window.cancelIdleCallback?.(handle));
+    } else {
+      const handle = window.setTimeout(run, 1);
+      cleanups.push(() => window.clearTimeout(handle));
+    }
+  };
+
+  const backstop = window.setTimeout(run, ANALYTICS_IDLE_TIMEOUT_MS + 1000);
+  cleanups.push(() => window.clearTimeout(backstop));
+
+  for (const type of ['pointerdown', 'keydown', 'touchstart'] as const) {
+    window.addEventListener(type, run, { once: true, passive: true });
+    cleanups.push(() => window.removeEventListener(type, run));
+  }
+  // Leaving before idle is the one case a timer cannot cover; the script cannot send from a
+  // closing page, but starting it here at least lets a bfcache restore find it loaded.
+  window.addEventListener('pagehide', run, { once: true });
+  cleanups.push(() => window.removeEventListener('pagehide', run));
+
+  if (document.readyState === 'complete') schedule();
+  else {
+    window.addEventListener('load', schedule, { once: true });
+    cleanups.push(() => window.removeEventListener('load', schedule));
+  }
+}
+
+function loadAnalyticsScript() {
   const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${analyticsScriptSrc}"]`);
 
   if (existingScript) {
@@ -581,6 +639,7 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
     sessionRestored(identity, authProperties);
   } else if (params.isNewUser) {
     signedUp(identity, authProperties);
+    pushMarketingEvent('geo_account_created', { user_id: identity.user_id as string });
   } else {
     loggedIn(identity, authProperties);
   }

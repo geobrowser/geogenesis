@@ -29,6 +29,7 @@ import {
   turnTimerPulseClass,
   turnTimerRimMask,
   turnTimerScale,
+  useRestartedEach,
 } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
@@ -162,6 +163,8 @@ export function DebateFeedPlayer({
     slot2VideoRef,
     slot1Participant,
     slot2Participant,
+    slot1Poster,
+    slot2Poster,
     urls,
     ready,
     error,
@@ -742,6 +745,8 @@ export function DebateFeedPlayer({
           participant={slot1Participant}
           byline={bylineFor(slot1Participant)}
           src={slot1Src}
+          poster={slot1Poster}
+          posterEager={active || preload}
           videoRef={slot1VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}
@@ -812,6 +817,8 @@ export function DebateFeedPlayer({
           participant={slot2Participant}
           byline={bylineFor(slot2Participant)}
           src={slot2Src}
+          poster={slot2Poster}
+          posterEager={active || preload}
           videoRef={slot2VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}
@@ -1005,6 +1012,8 @@ function DebaterVideo({
   participant,
   byline,
   src,
+  poster = null,
+  posterEager = false,
   videoRef,
   buffer = false,
   concealed = false,
@@ -1035,6 +1044,14 @@ function DebaterVideo({
   participant: DebateParticipant | null;
   byline: string | null;
   src: string | null;
+  /**
+   * A still of this debater, painted under the video so the tile has a picture before the recording
+   * has a frame (GEO-3280). Behind rather than the `poster` attribute: the tile is held invisible
+   * while its partner cannot show a frame, and an attribute poster would hide with it.
+   */
+  poster?: string | null;
+  /** Fetch the still now rather than when it nears the viewport: the active card and the preloading one. */
+  posterEager?: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
   /** Ask the browser to buffer this recording rather than stop at its header. See the player's `buffer`. */
   buffer?: boolean;
@@ -1324,13 +1341,31 @@ function DebaterVideo({
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
+        {poster && (
+          <img
+            src={poster}
+            alt=""
+            data-debate-poster=""
+            aria-hidden
+            draggable={false}
+            loading={posterEager ? 'eager' : 'lazy'}
+            fetchPriority={posterEager ? 'high' : 'auto'}
+            decoding="async"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          />
+        )}
         {src ? (
           <video
             ref={videoRef}
             // Both tiles fade in together, and only once both have a frame — see `concealed`.
+            // `relative` so it stacks above the absolutely positioned still; a static video paints
+            // under any positioned sibling whatever the DOM order.
+            // The fade in is slower than the fade out: the still is cut ten seconds into the
+            // debater's first turn, not at the frame playback starts on, so a quick fade reads as a
+            // jump cut between two poses. Hiding stays quick.
             className={cx(
-              'h-full w-full object-cover transition-opacity duration-200',
-              concealed ? 'opacity-0' : 'opacity-100'
+              'relative h-full w-full object-cover transition-opacity',
+              concealed ? 'opacity-0 duration-200' : 'opacity-100 duration-500'
             )}
             playsInline
             // `metadata` by default: enough to paint a frame and know the shape of the recording,
@@ -1349,7 +1384,15 @@ function DebaterVideo({
             onTimeUpdate={onPlaybackTick}
           />
         ) : (
-          <div className="grid h-full place-items-center bg-bg text-grey-04">Loading…</div>
+          <div
+            className={cx(
+              'relative grid h-full place-items-center text-grey-04',
+              // Transparent over a still, so the picture shows through while the URL is being signed.
+              poster ? 'bg-transparent' : 'bg-bg'
+            )}
+          >
+            {!poster && 'Loading…'}
+          </div>
         )}
       </button>
 
@@ -1653,6 +1696,7 @@ function CountdownBadge({
   // Hollowed into a ring so the badge's own backing shows through the middle. Today's ring sits 2px
   // inside the badge; the red one runs at its very edge, 0.55cqw thick, around a solid red disc.
   const ringMask = turnTimerRimMask(final ? '0.55cqw' : '2px');
+  const faceRef = useRestartedEach<HTMLDivElement>(counting ? whole : null);
   return (
     <div
       data-turn-timer={stage.phase}
@@ -1660,8 +1704,9 @@ function CountdownBadge({
       style={{ scale: stage.scale }}
     >
       <div
-        // Re-mounted each second, which restarts its swell and glow.
-        key={counting ? whole : 'steady'}
+        // Its swell and glow restart each second (`useRestartedEach`) without remounting it, so the
+        // rim inside keeps draining across the second rather than stepping.
+        ref={faceRef}
         className={cx(
           'grid size-8 origin-top-right place-items-center rounded-full',
           turnTimerPulseClass(stage),
@@ -1670,6 +1715,11 @@ function CountdownBadge({
         style={{ '--turn-timer-swell': stage.swell } as React.CSSProperties}
       >
         <span
+          // A fresh rim on turning red: its angle switches from the whole turn's progress to the
+          // last five seconds', and easing between the two would refill it before it drains. Within
+          // either it stays mounted, so it eases from second to second.
+          key={final ? 'final' : 'turn'}
+          data-turn-timer-rim
           className={cx(
             'col-start-1 row-start-1 rounded-full',
             // Smooth only for the Open rounds build-up; a fixed format's ring jumps as it always has.

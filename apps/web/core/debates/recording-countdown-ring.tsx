@@ -62,10 +62,12 @@ export function turnTimerRimMask(width: string) {
 }
 
 /**
- * Restarts an element's own CSS animations each time `tick` changes, without remounting it, so
- * whatever it holds (the timer's rim, mid-drain) carries on. `null` leaves them alone.
+ * A ref whose element's own CSS animations restart each time `tick` changes, without remounting it,
+ * so whatever it holds (the timer's rim, mid-drain) carries on. `null` leaves them alone. The room's
+ * timer and the published player's both pulse with it.
  */
-function useRestartedEach(ref: React.RefObject<HTMLElement | null>, tick: number | null) {
+export function useRestartedEach<T extends HTMLElement>(tick: number | null) {
+  const ref = React.useRef<T>(null);
   React.useLayoutEffect(() => {
     const element = ref.current;
     if (tick === null || !element) return;
@@ -74,7 +76,8 @@ function useRestartedEach(ref: React.RefObject<HTMLElement | null>, tick: number
     element.style.animation = 'none';
     void element.offsetWidth;
     element.style.animation = '';
-  }, [ref, tick]);
+  }, [tick]);
+  return ref;
 }
 
 /** The room's red rim, at the disc's very edge. */
@@ -99,7 +102,6 @@ export function RecordingCountdownRing({
   buildUp?: { remainingMs: number } | null;
 }) {
   const gradientId = React.useId();
-  const faceRef = React.useRef<HTMLDivElement>(null);
   const elapsedRatio = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
   const muted = variant === 'muted';
   const stage = turnTimerBuildUp(buildUp ? remainingSeconds : Infinity);
@@ -107,7 +109,7 @@ export function RecordingCountdownRing({
   const ringColor = muted ? 'rgba(190,190,190,0.92)' : variant === 'warning' ? COUNTDOWN_WARNING_COLOR : '#FFFFFF';
   const numberColor = muted ? 'var(--color-grey-02)' : '#FFFFFF';
   const dashOffset = COUNTDOWN_CIRCUMFERENCE * elapsedRatio;
-  useRestartedEach(faceRef, counting ? remainingSeconds : null);
+  const faceRef = useRestartedEach<HTMLDivElement>(counting ? remainingSeconds : null);
   const rimDegrees = final && buildUp ? (Math.max(0, Math.min(5_000, buildUp.remainingMs)) / 5_000) * 360 : 0;
 
   return (

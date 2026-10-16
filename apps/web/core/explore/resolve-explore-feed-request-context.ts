@@ -26,8 +26,10 @@ const EMPTY_BROWSE: BrowseSidebarData = {
 };
 
 /** Auth, memberships, and visible spaces shared by Explore and contextual Topic feeds. */
-export async function resolveExploreFeedRequestContext(routeSpaceId?: string) {
-  const walletAddress = (await cookies()).get(WALLET_ADDRESS)?.value ?? null;
+export async function resolveExploreFeedRequestContext(routeSpaceId?: string, options: { anonymous?: boolean } = {}) {
+  // `anonymous` never looks at the cookie jar, so a response built here cannot depend on who asked.
+  // The CDN keys on the URL alone and ignores cookies, so a cacheable page must come from here.
+  const walletAddress = options.anonymous ? null : ((await cookies()).get(WALLET_ADDRESS)?.value ?? null);
   let personalMemberSpaceId: string | null = null;
   let memberOrEditorSpaceIds: string[] = [];
 

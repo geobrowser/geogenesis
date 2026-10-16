@@ -6,6 +6,7 @@ import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/d
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations } from '~/core/debates/playback-utils';
 import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
+import { recordAnimationRestarts } from '~/core/debates/turn-timer-fixtures';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
 
 import { DebateFeedPlayer } from './debate-feed-player';
@@ -180,6 +181,8 @@ function controllerFixture(overrides: {
   playbackBreaks?: DebatePlaybackController['playbackBreaks'];
   turnSegments?: DebateMediaTurnSegment[];
   roundTurns?: DebatePlaybackController['roundTurns'];
+  /** Per-tile stills (GEO-3280); null where geo-chat cut none. */
+  posters?: { slot1: string | null; slot2: string | null };
 }) {
   /*
    * Four 30s turns from `turnSlot`, and `turnState` read off them rather than pinned.
@@ -198,6 +201,8 @@ function controllerFixture(overrides: {
     slot2VideoRef: { current: null },
     slot1Participant: participant(1),
     slot2Participant: participant(2),
+    slot1Poster: overrides.posters?.slot1 ?? null,
+    slot2Poster: overrides.posters?.slot2 ?? null,
     urls: overrides.urls ?? { slot1: 'https://cdn.test/slot1.webm', slot2: 'https://cdn.test/slot2.webm' },
     ready: overrides.ready ?? true,
     error: null,
@@ -395,6 +400,47 @@ describe('player layout', () => {
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
     expect(container.querySelector('[data-debate-byline]')).toBeNull();
+  });
+});
+
+describe('poster stills (GEO-3280)', () => {
+  const posters = { slot1: 'https://chat.test/still-1', slot2: 'https://chat.test/still-2' };
+
+  it("paints each debater's still under their video before the recording has a frame", () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, posters });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const stills = Array.from(container.querySelectorAll('img[data-debate-poster]'));
+    expect(stills.map(img => img.getAttribute('src'))).toEqual([posters.slot1, posters.slot2]);
+    // Under the video in the same button, so the video covers it once it has a frame.
+    expect(stills[0].nextElementSibling?.tagName).toBe('VIDEO');
+    // DOM order alone is not enough: an absolute still paints over a static video.
+    expect(stills[0].nextElementSibling?.classList.contains('relative')).toBe(true);
+    expect(stills[0].getAttribute('loading')).toBe('eager');
+  });
+
+  it('still shows the picture while the recording URL is being signed, instead of "Loading…"', () => {
+    mocks.controller = controllerFixture({
+      mutedByUser: true,
+      turnSlot: 1,
+      posters,
+      urls: { slot1: null, slot2: null },
+    });
+    const { container, queryByText } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelectorAll('img[data-debate-poster]')).toHaveLength(2);
+    expect(queryByText('Loading…')).toBeNull();
+  });
+
+  it('keeps the plain placeholder for a debate with no stills', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, urls: { slot1: null, slot2: null } });
+    const { container, queryAllByText } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('img[data-debate-poster]')).toBeNull();
+    expect(queryAllByText('Loading…')).toHaveLength(2);
+  });
+
+  it("fetches a far-away card's stills lazily", () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, posters });
+    const { container } = render(<DebateFeedPlayer debate={debate} active={false} />);
+    expect(container.querySelector('img[data-debate-poster]')?.getAttribute('loading')).toBe('lazy');
   });
 });
 
@@ -2106,6 +2152,42 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(container.querySelector('[data-debate-banner="turn"]')?.textContent).toMatch(/’s turn$/);
   });
 
+  // GEO-3347: the stamp, its dim and the banner used to cut out in one frame.
+  it('lets "Ended early" and the turn banner leave rather than cutting them', () => {
+    vi.useFakeTimers();
+    try {
+      const turnSegments: DebateMediaTurnSegment[] = [
+        { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 30_000, duration_ms: 30_000 },
+        { turn_index: 1, participant_slot: 2, output_start_ms: 33_000, output_end_ms: 63_000, duration_ms: 30_000 },
+      ];
+      const playbackBreaks = breaks({
+        earlyEnds: [{ turnIndex: 0, nextTurnIndex: 1, startMs: 30_000, endMs: 33_000, endedSlot: 1, nextSlot: 2 }],
+      });
+      const { container, rerender } = renderAt(33.2, { turnSegments, playbackBreaks });
+      const stamp = () => container.querySelector('[data-debate-stamp="ended"]');
+      const banner = () => container.querySelector('[data-debate-banner="turn"]');
+      expect(stamp()?.closest('[data-room-leaving]')).toBeNull();
+
+      // Past the cue's hold: both are still drawn, on their way out.
+      mocks.controller = controllerFixture({
+        mutedByUser: false,
+        turnSlot: 2,
+        playheadSeconds: 34,
+        turnSegments,
+        playbackBreaks,
+      });
+      rerender(<DebateFeedPlayer debate={startedDebate} active />);
+      expect(stamp()?.closest('[data-room-leaving]')).not.toBeNull();
+      expect(banner()?.closest('[data-room-leaving]')?.className).toContain('animate-debate-banner-out');
+
+      act(() => vi.advanceTimersByTime(300));
+      expect(stamp()).toBeNull();
+      expect(banner()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // Both mics are open between rounds now: nothing said while nobody holds a turn may be heard or
   // captioned, including an older render's lead-in kept at the front of the next turn.
   it('keeps a break silent and uncaptioned, then plays the round', () => {
@@ -2170,6 +2252,61 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
     expect(timer(4, debate)?.getAttribute('data-turn-timer')).toBe('steady');
     // Down to its ring, which jumps between samples as it always has rather than easing.
     expect(timer(4, debate)?.innerHTML).not.toContain('turn-timer-rim]');
+  });
+
+  it('keeps the red rim draining across a second, restarting only the pulse', () => {
+    const { restarts, restore } = recordAnimationRestarts();
+    const at = (secondsLeft: number) => {
+      mocks.controller = {
+        ...controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 }),
+        turnState: { slot: 1, seconds: secondsLeft, progress: 0.9 },
+      };
+      return <DebateFeedPlayer debate={openRounds} active />;
+    };
+    const rim = (container: HTMLElement) => container.querySelector('[data-turn-timer-rim]');
+    try {
+      const view = render(at(3.9));
+      const before = rim(view.container);
+      expect(before).not.toBeNull();
+      restarts.length = 0;
+
+      view.rerender(at(3.4));
+      // Within a second: no pulse.
+      expect(restarts).toEqual([]);
+
+      view.rerender(at(2.9));
+      // A new second pulses, and the rim is the same element, so its drain carries on.
+      expect(restarts).toEqual(['none']);
+      expect(rim(view.container)).toBe(before);
+    } finally {
+      restore();
+    }
+  });
+
+  it('starts the red rim full as the timer turns red, rather than easing up from the turn’s progress', () => {
+    const at = (secondsLeft: number) => {
+      mocks.controller = {
+        ...controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 }),
+        turnState: { slot: 1, seconds: secondsLeft, progress: 0.75 },
+      };
+      return <DebateFeedPlayer debate={openRounds} active />;
+    };
+    const rim = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-turn-timer-rim]');
+
+    const view = render(at(5.4));
+    const turnRim = rim(view.container);
+    // Three quarters of the turn gone: the rim is a quarter of the way round.
+    expect(turnRim?.style.getPropertyValue('--turn-timer-rim')).toBe('90deg');
+
+    view.rerender(at(4.9));
+    const redRim = rim(view.container);
+    // A new element, so it shows its full five-second angle at once instead of transitioning to it.
+    expect(redRim).not.toBe(turnRim);
+    expect(redRim?.style.getPropertyValue('--turn-timer-rim')).toBe(`${(4.9 / 5) * 360}deg`);
+
+    view.rerender(at(3.9));
+    // Within the red phase it keeps draining on the same element.
+    expect(rim(view.container)).toBe(redRim);
   });
 
   it('draws a claim counter in each corner from the start, and the live cards only in a fixed format', () => {

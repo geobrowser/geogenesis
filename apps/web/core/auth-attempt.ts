@@ -4,6 +4,7 @@ import { ACTION_CONTEXT_FIELDS, pageContext } from './action-context';
 import { type AnalyticsEventName, type AnalyticsProperties, capture } from './analytics';
 import { isAnalyticsEnabled, readAnalyticsContext } from './analytics-context';
 import { equals } from './id/normalize';
+import { pushMarketingEvent } from './marketing-events';
 
 const PREFIX = 'geo:auth-attempt:v1:';
 const POINTER = 'geo:auth-attempt:active';
@@ -205,6 +206,7 @@ export function beginAuthAttempt(properties: AnalyticsProperties = {}) {
   ownedAttemptId = attempt.id;
   save(attempt);
   captureAuthEvent('auth_attempt_started', attemptProperties(attempt));
+  pushMarketingEvent('geo_sign_up_start');
   return attempt;
 }
 export function openAuthAttempt(properties: AnalyticsProperties = { auth_trigger: 'redirect' }) {

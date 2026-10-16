@@ -3335,12 +3335,14 @@ function DebateRecordingModal({
   const connecting = countdown.effectiveStatus === 'connecting';
   const remoteEndingTurn =
     countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
+  // Only a yield that hands over to the other speaker gets a handoff window to stamp "Turn ended" and
+  // name their turn in. Any other closes as soon as geo-chat accepts it (GEO-3347).
+  const localYieldHandsOver = localEndingTurn && turnYieldHandsOver(debate, countdown.turnIndex);
   // You ended your turn and theirs follows straight on, which they are counted into on their own
   // screen. Otherwise the pick, a lead-in or the end comes next.
   const remoteTurnIsNext =
     stamps &&
-    localEndingTurn &&
-    openRoundRunsStraightOn(debate, countdown.turnIndex) &&
+    localYieldHandsOver &&
     countdown.incomingSlot !== null &&
     countdown.incomingSlot === remoteParticipant?.participant_slot;
   const remoteSpeaking = remoteParticipant !== null && countdown.activeSlot === remoteParticipant.participant_slot;
@@ -3369,6 +3371,7 @@ function DebateRecordingModal({
       upcomingSeconds={localUpcomingSeconds}
       upcomingLabel={localUpcomingLabel}
       endingTurn={localEndingTurn}
+      turnEndedStamp={localYieldHandsOver}
       endTurnAction={
         canEndLocalTurn || (endTurnPending && localEndingTurn) ? (
           <button
@@ -4006,6 +4009,17 @@ export function localTurnStartsInSeconds(
 function openRoundRunsStraightOn(debate: Debate, turnIndex: number | null) {
   if (turnIndex === null) return false;
   return openRoundLastWord(debate, turnIndex) === null && openRoundLeadInAfterTurn(debate, turnIndex) === 0;
+}
+
+/**
+ * Whether ending a turn early hands over to the other speaker, the only yield geo-chat gives a
+ * handoff window, as its `ends_round` rule has it. An Open round's second turn hands over to the
+ * pick, a required round's lead-in or the end, and the debate's last turn to the end; either yield
+ * closes the moment the server accepts it.
+ */
+function turnYieldHandsOver(debate: Debate, turnIndex: number | null) {
+  if (turnIndex === null || turnIndex + 1 >= debate.turn_durations_ms.length) return false;
+  return !isOpenRoundsDebate(debate) || turnIndex % 2 === 0;
 }
 
 function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex: number): ParticipantSlot {

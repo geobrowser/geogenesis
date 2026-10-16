@@ -44,6 +44,8 @@ export type LocalVotesState = {
 export const LOCAL_VOTES_STORAGE_KEY = 'geo:local-votes:v1';
 /** Past this the oldest vote is dropped. One transaction per vote on save, so this bounds that too. */
 export const LOCAL_VOTES_CAP = 50;
+/** The action-context list id of votes published from this device's signed-out votes. */
+export const LOCAL_VOTES_LIST_ID = 'local_votes';
 export const LOCAL_VOTE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const EMPTY: LocalVotesState = { votes: [], prompt: { shownCount: 0, dismissCount: 0 }, save: null };
