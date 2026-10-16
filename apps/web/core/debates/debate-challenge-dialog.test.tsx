@@ -98,6 +98,18 @@ describe('DebateChallengeDialog', () => {
     expect(media.releaseSession).toHaveBeenCalledWith('debate-challenge:challenge-1');
   });
 
+  it('accepts with the state the card shows while its devices are still opening', async () => {
+    permission = 'granted';
+    media.ensurePreview.mockReturnValue(new Promise(() => undefined));
+    const onAccept = vi.fn();
+    renderDialog({ onAccept });
+    await waitFor(() => expect(media.ensurePreview).toHaveBeenCalledWith({ audio: true, video: true }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+
+    expect(onAccept).toHaveBeenCalledWith({ micOn: true, cameraOn: true });
+  });
+
   it('stops the devices when the card is dismissed', () => {
     const view = renderDialog();
 

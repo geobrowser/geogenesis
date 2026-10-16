@@ -40,7 +40,6 @@ import { routeIntoDebate } from './lobbies/step-out';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
-import { useOptionalDebateMediaSession } from './media-session';
 import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
@@ -239,8 +238,6 @@ export function DebateCoordinator() {
   const rematchAnswered = Boolean(activity?.rematch && hasAnsweredRematchJoin(activity.rematch.id));
   const [, setAnsweredRematchTick] = React.useState(0);
   const leaveRematch = useLeaveDebateRematch(activity?.rematch?.id ?? '');
-  // Optional: a missing provider should cost the media choice, not the card.
-  const mediaSession = useOptionalDebateMediaSession();
   const [rematchJoinError, setRematchJoinError] = React.useState<string | null>(null);
   const promptedChallenge = challenge && challenge.id !== snoozedChallengeId ? challenge : null;
 
@@ -558,17 +555,9 @@ export function DebateCoordinator() {
           challenge={promptedChallenge}
           busy={acceptChallenge.isPending || rejectChallenge.isPending}
           error={challengeError instanceof Error ? challengeError.message : null}
-          onAccept={() => {
-            /*
-             * What they chose, captured now rather than in `onSuccess`: accepting unmounts this
-             * card, which stops the devices, so by the time the session id arrives there is
-             * nothing left to read. Recording it against that id is also what stops the sender's
-             * card appearing in front of the person who just answered here.
-             */
-            const kinds = new Set(
-              (mediaSession?.localTracksRef.current ?? []).map(track => track.mediaStreamTrack.kind)
-            );
-            const chosen = { micOn: kinds.has('audio'), cameraOn: kinds.has('video') };
+          onAccept={chosen => {
+            // Recorded against the session id, which is also what stops the sender's card
+            // appearing in front of the person who just answered here.
             acceptChallenge.mutate(promptedChallenge.id, {
               onSuccess: result => {
                 if (!result.session) return;

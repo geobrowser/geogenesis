@@ -8,6 +8,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateChallenge, DebateParticipantSummary } from './api';
 import { debateChallengeMediaSessionKey } from './media-session';
+import type { DebateJoinState } from './request-join-state';
 import { DebateRequestMediaPreview } from './request-media-preview';
 import { useScrollLock } from './use-scroll-lock';
 
@@ -15,7 +16,8 @@ type DebateChallengeDialogProps = {
   challenge: DebateChallenge;
   busy: boolean;
   error: string | null;
-  onAccept: () => void;
+  /** Called with the state the card shows, which can run ahead of the devices still opening. */
+  onAccept: (chosen: DebateJoinState) => void;
   /** Rejects the challenge for good. */
   onReject: () => void;
   /** Closes this popup and nothing else. The challenge stays live in the hub's Requests tab. */
@@ -45,6 +47,11 @@ export function DebateChallengeDialog({
   const other = challenge.requester;
 
   useScrollLock();
+
+  const shownJoinState = React.useRef<DebateJoinState>({ micOn: false, cameraOn: false });
+  const rememberShownJoinState = React.useCallback((state: DebateJoinState) => {
+    shownJoinState.current = state;
+  }, []);
 
   /*
    * Deliberately no hand-off here, unlike `DebateRequestDialog`.
@@ -80,6 +87,7 @@ export function DebateChallengeDialog({
             avatarCid={you.avatar_cid}
             avatarValue={you.profile_space_id}
             fallback={<ChallengeParticipant participant={you} label="You" />}
+            onJoinStateChange={rememberShownJoinState}
           />
           <div className="relative grid w-7 place-items-center">
             <span
@@ -109,7 +117,7 @@ export function DebateChallengeDialog({
             >
               Not now
             </button>
-            <button type="button" onClick={onAccept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+            <button type="button" onClick={() => onAccept(shownJoinState.current)} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
               Explore claims
             </button>
           </div>
