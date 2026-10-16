@@ -63,6 +63,7 @@ import {
   encodeFreshSlotCursor,
 } from './fresh-slot/fresh-slot-cursor';
 import { type FreshMergedRow, mergeFreshSlot } from './fresh-slot/merge-fresh-slot';
+import { readSharedFreshList, writeSharedFreshList } from './fresh-slot/shared-fresh-list';
 import { leadWithPlayableDebate } from './lead-with-playable-debate';
 import type { SeenDemotionPageConfig } from './seen-demotion/seen-demotion-config';
 
@@ -707,7 +708,15 @@ async function fetchFreshEntitiesPage(args: {
     freshnessHours: args.freshnessHours,
   });
 
-  const load = async (asOfMs: number): Promise<FreshList> => {
+  const cacheKey = (asOfMs: number) => JSON.stringify({ scopeKey, asOfSec: Math.floor(asOfMs / 1000) });
+  const usable = (list: FreshList | null | undefined): list is FreshList =>
+    !!list && list.asOfMs <= args.asOfMs && args.asOfMs - list.asOfMs <= FRESH_LIST_MAX_STALE_MS;
+
+  /**
+   * `pinned`: a later page of a scroll, whose pin is in the past. Another instance may have built
+   * exactly that list and shared it; a pinned list is never shared, since it is not the newest.
+   */
+  const load = async (asOfMs: number, { pinned }: { pinned: boolean }): Promise<FreshList> => {
     const asOfSec = Math.floor(asOfMs / 1000);
     const range: EntityFilter = {
       createdAt: {
@@ -715,8 +724,12 @@ async function fetchFreshEntitiesPage(args: {
         lessThanOrEqualTo: String(asOfSec),
       },
     };
-    const page = await freshListCache.get(JSON.stringify({ scopeKey, asOfSec }), () =>
-      fetchExploreEntitiesPage({
+    const page = await freshListCache.get(cacheKey(asOfMs), async () => {
+      if (pinned) {
+        const shared = await readSharedFreshList<ExploreEntitiesPageResponse>(scopeKey);
+        if (shared?.asOfMs === asOfMs) return shared.page;
+      }
+      const fetched = await fetchExploreEntitiesPage({
         spaceIds: args.spaceIds,
         time: args.time,
         limit: FRESH_SLOT_CANDIDATE_LIMIT,
@@ -728,19 +741,33 @@ async function fetchFreshEntitiesPage(args: {
         requireName: args.requireName,
         requireDebateTagOnClaims: args.requireDebateTagOnClaims,
         entityFilter: combineEntityFilters(args.entityFilter, range),
-      })
-    );
+      });
+      if (!pinned) {
+        runAfterResponse(() => writeSharedFreshList(scopeKey, { asOfMs, page: fetched }, FRESH_LIST_MAX_STALE_MS));
+      }
+      return fetched;
+    });
     const list = { asOfMs, page };
     rememberLatestFreshList(scopeKey, list);
     return list;
   };
 
   if (args.startsScroll) {
-    const latest = latestFreshLists.get(scopeKey);
-    if (latest && latest.asOfMs <= args.asOfMs && args.asOfMs - latest.asOfMs <= FRESH_LIST_MAX_STALE_MS) {
+    let latest = latestFreshLists.get(scopeKey);
+    if (!usable(latest)) {
+      // A cold instance holds nothing; start from the list another instance shared.
+      const shared = await readSharedFreshList<ExploreEntitiesPageResponse>(scopeKey);
+      if (usable(shared)) {
+        rememberLatestFreshList(scopeKey, shared);
+        // So this scroll's later pages, pinned to it, find it here too.
+        void freshListCache.get(cacheKey(shared.asOfMs), async () => shared.page);
+        latest = shared;
+      }
+    }
+    if (usable(latest)) {
       if (latest.asOfMs < args.asOfMs) {
         runAfterResponse(() =>
-          load(args.asOfMs).catch(error => {
+          load(args.asOfMs, { pinned: false }).catch(error => {
             console.error('explore fresh slot: background Fresh list refresh failed', error);
           })
         );
@@ -748,7 +775,7 @@ async function fetchFreshEntitiesPage(args: {
       return latest;
     }
   }
-  return load(args.asOfMs);
+  return load(args.asOfMs, { pinned: !args.startsScroll });
 }
 
 // "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.

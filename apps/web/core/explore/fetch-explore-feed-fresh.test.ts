@@ -49,6 +49,7 @@ vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberR
 
 const { FRESH_LIST_MAX_STALE_MS, fetchExploreFeed } = await import('./fetch-explore-feed');
 const { encodeExploreWindowCursor } = await import('./explore-window-cursor');
+const { setSharedFreshListStoreForTests } = await import('./fresh-slot/shared-fresh-list');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const browse = {
@@ -244,6 +245,101 @@ describe('a new scroll while an older Fresh list is held', () => {
     const page = await firstPage(later);
     expect(pinOf(page)).toBe(minute(later));
     expect(upperBounds()).toEqual([minute(clock), minute(later)].map(ms => String(ms / 1000)));
+  });
+});
+
+// GEO-3279. A cold instance holds no Fresh list of its own; it starts from one another instance
+// shared through Upstash, instead of paying the Fresh query in front of its first response.
+describe('a Fresh list shared between instances', () => {
+  const minute = (at: number) => Math.floor(at / FRESH_SLOT_AS_OF_STEP_MS) * FRESH_SLOT_AS_OF_STEP_MS;
+  const shared = new Map<string, string>();
+  const writes: { value: string; ttlMs: number }[] = [];
+  const page = (now: number, cursor: string | null = null) =>
+    fetchExploreFeed({
+      browse,
+      sort: 'best',
+      time: 'all',
+      spaceFilterIds: null,
+      cursor,
+      memberOrEditorSpaceIds: [],
+      typeIds: [DEBATE_TYPE_ID, CLAIM_TYPE_ID],
+      freshSlot: { config: ON, revision: 1, now },
+    });
+  const freshItems = (served: Awaited<ReturnType<typeof fetchExploreFeed>>) =>
+    served.items.filter(item => item.ranking?.slot === 'fresh').map(item => item.entityId);
+  /** What another instance would have shared: a list pinned at `asOfMs` with only `ids` in it. */
+  const shareFromElsewhere = (asOfMs: number, ids: string[]) => {
+    const [key] = [...shared.keys()];
+    shared.set(
+      key!,
+      JSON.stringify({
+        asOfMs,
+        page: { entities: ids.map(value => entity(value, CLAIM_TYPE_ID)), endCursor: null, hasNextPage: false },
+      })
+    );
+  };
+
+  beforeEach(() => {
+    shared.clear();
+    writes.length = 0;
+    setSharedFreshListStoreForTests({
+      read: async key => shared.get(key) ?? null,
+      write: async (key, value, ttlMs) => {
+        shared.set(key, value);
+        writes.push({ value, ttlMs });
+      },
+    });
+    return () => setSharedFreshListStoreForTests(null);
+  });
+
+  it('shares the list it built, for as long as a scroll may start from it', async () => {
+    await page(clock);
+    await vi.waitFor(() => expect(writes).toHaveLength(1));
+    expect(JSON.parse(writes[0]!.value).asOfMs).toBe(minute(clock));
+    expect(writes[0]!.ttlMs).toBe(FRESH_LIST_MAX_STALE_MS);
+  });
+
+  it('starts a scroll from a shared list without querying, and pins the scroll to it', async () => {
+    // Learn the scope's key, then stand in for another instance's newer list. This instance's own
+    // list is too old to serve, so only the shared one can answer without a query.
+    await page(clock);
+    await vi.waitFor(() => expect(writes).toHaveLength(1));
+    const later = clock + FRESH_LIST_MAX_STALE_MS + 10 * FRESH_SLOT_AS_OF_STEP_MS;
+    const elsewhere = [id('s', 1), id('s', 2), id('s', 3)];
+    shareFromElsewhere(minute(later - 2 * FRESH_SLOT_AS_OF_STEP_MS), elsewhere);
+    graph.freshCalls = [];
+
+    const served = await page(later);
+    expect(freshItems(served)).toEqual(elsewhere);
+    expect(decodeFreshSlotCursor(served.nextCursor, 0).asOfMs).toBe(minute(later - 2 * FRESH_SLOT_AS_OF_STEP_MS));
+    // The current minute's list loads behind the response, as for a list held locally.
+    await vi.waitFor(() => expect(graph.freshCalls).toHaveLength(1));
+  });
+
+  it('ignores a shared list too old to start from', async () => {
+    await page(clock);
+    await vi.waitFor(() => expect(writes).toHaveLength(1));
+    const later = clock + 2 * FRESH_LIST_MAX_STALE_MS;
+    shareFromElsewhere(minute(later) - FRESH_LIST_MAX_STALE_MS - FRESH_SLOT_AS_OF_STEP_MS, [id('s', 1)]);
+    graph.freshCalls = [];
+
+    const served = await page(later);
+    expect(decodeFreshSlotCursor(served.nextCursor, 0).asOfMs).toBe(minute(later));
+    expect(graph.freshCalls).toHaveLength(1);
+  });
+
+  it('queries as before when the shared store fails', async () => {
+    setSharedFreshListStoreForTests({
+      read: async () => {
+        throw new Error('upstash down');
+      },
+      write: async () => {
+        throw new Error('upstash down');
+      },
+    });
+    const served = await page(clock);
+    expect(freshItems(served).length).toBeGreaterThan(0);
+    expect(graph.freshCalls).toHaveLength(1);
   });
 });
 
