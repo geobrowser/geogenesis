@@ -85,7 +85,7 @@ function isNeverCopied(entityId: string): boolean {
   );
 }
 
-export function cloneEntityIntoSpace(entityId: string, sourceSpaceId: string, targetSpaceId: string, storage: Mutator) {
+function collectCopyTargets(entityId: string, sourceSpaceId: string) {
   const { entityIds, relationFromIds } = collectSubtree(entityId, sourceSpaceId);
 
   // Cover/avatar/image properties point at a standalone image or video entity
@@ -101,20 +101,33 @@ export function cloneEntityIntoSpace(entityId: string, sourceSpaceId: string, ta
 
   const mediaEntityIds = new Set(mediaRelations.map(r => r.toEntity.id).filter(id => !entityIds.has(id)));
 
-  const relatedEntityIds = new Set(
-    getRelations({
-      selector: relation =>
-        relationFromIds.has(relation.fromEntity.id) &&
-        relation.spaceId === sourceSpaceId &&
-        relation.type.id !== SystemIds.BLOCKS &&
-        relation.type.id !== SystemIds.TABS_PROPERTY &&
-        relation.renderableType !== 'IMAGE' &&
-        relation.renderableType !== 'VIDEO',
-    })
-      .map(relation => relation.toEntity.id)
-      .filter(id => !entityIds.has(id) && !mediaEntityIds.has(id) && !SYSTEM_ENTITY_IDS.has(normId(id)))
-      .filter(id => !isNeverCopied(id))
+  const relatedCandidateIds = getRelations({
+    selector: relation =>
+      relationFromIds.has(relation.fromEntity.id) &&
+      relation.spaceId === sourceSpaceId &&
+      relation.type.id !== SystemIds.BLOCKS &&
+      relation.type.id !== SystemIds.TABS_PROPERTY &&
+      relation.renderableType !== 'IMAGE' &&
+      relation.renderableType !== 'VIDEO',
+  })
+    .map(relation => relation.toEntity.id)
+    .filter(id => !entityIds.has(id) && !mediaEntityIds.has(id) && !SYSTEM_ENTITY_IDS.has(normId(id)));
+
+  return { entityIds, relationFromIds, mediaRelations, mediaEntityIds, relatedCandidateIds };
+}
+
+export function collectHydrationTargetIds(entityId: string, sourceSpaceId: string): string[] {
+  const { mediaEntityIds, relatedCandidateIds } = collectCopyTargets(entityId, sourceSpaceId);
+  return [...new Set([...mediaEntityIds, ...relatedCandidateIds])];
+}
+
+export function cloneEntityIntoSpace(entityId: string, sourceSpaceId: string, targetSpaceId: string, storage: Mutator) {
+  const { entityIds, relationFromIds, mediaRelations, mediaEntityIds, relatedCandidateIds } = collectCopyTargets(
+    entityId,
+    sourceSpaceId
   );
+
+  const relatedEntityIds = new Set(relatedCandidateIds.filter(id => !isNeverCopied(id)));
 
   const valueEntityIds = new Set([...entityIds, ...mediaEntityIds, ...relatedEntityIds]);
   const relationSourceIds = new Set([...relationFromIds, ...mediaEntityIds]);

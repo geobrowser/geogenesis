@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 import { useState } from 'react';
 
@@ -9,7 +11,10 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
+import { E } from '~/core/sync/orm';
+import { GeoEventStream } from '~/core/sync/stream';
 import { useMutate } from '~/core/sync/use-mutate';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 import { NavUtils, hasName } from '~/core/utils/utils';
 
@@ -17,7 +22,7 @@ import { GeoImage } from '~/design-system/geo-image';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Input } from '~/design-system/input';
 
-import { cloneEntityIntoSpace } from '~/partials/versions/clone-entity-into-space';
+import { cloneEntityIntoSpace, collectHydrationTargetIds } from '~/partials/versions/clone-entity-into-space';
 import { collectMoveDeletions } from '~/partials/versions/move-entity-deletions';
 import { collectBacklinkRetargets } from '~/partials/versions/retarget-move-backlinks';
 
@@ -38,6 +43,8 @@ export const MoveEntityToSpace = ({
 }: MoveEntityToSpaceProps) => {
   const router = useRouter();
   const { storage } = useMutate();
+  const { store, stream } = useSyncEngine();
+  const cache = useQueryClient();
 
   const { personalSpaceId } = usePersonalSpaceId();
   const { space: personalSpace } = useSpace(personalSpaceId ?? undefined);
@@ -64,8 +71,29 @@ export const MoveEntityToSpace = ({
       ? namedSpaces
       : namedSpaces.filter(space => space?.entity?.name?.toLowerCase()?.includes(query.toLowerCase()));
 
-  const moveEntityToSpace = (targetSpaceId: string) => {
-    if (!targetSpaceId || targetSpaceId === sourceSpaceId) return;
+  const moveEntityToSpace = async (targetSpaceId: string) => {
+    if (!targetSpaceId || targetSpaceId === sourceSpaceId) return false;
+
+    // 0. Load the related targets. The copy reads the store, and a target nobody opened is not in
+    // it — so it would be copied as nothing.
+    const hydrationIds = collectHydrationTargetIds(entityId, sourceSpaceId);
+
+    if (hydrationIds.length > 0) {
+      try {
+        const { merged, remote } = await E.syncMany({
+          store,
+          cache,
+          where: { id: { in: hydrationIds } },
+          first: hydrationIds.length,
+        });
+
+        if (merged.length > 0) {
+          stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
+        }
+      } catch {
+        return false;
+      }
+    }
 
     // 1. Clone entity into target space
     cloneEntityIntoSpace(entityId, sourceSpaceId, targetSpaceId, storage);
@@ -86,6 +114,8 @@ export const MoveEntityToSpace = ({
     collectBacklinkRetargets(entityId, sourceSpaceId, targetSpaceId).forEach(relation => {
       storage.relations.set(relation);
     });
+
+    return true;
   };
 
   return (
@@ -107,8 +137,9 @@ export const MoveEntityToSpace = ({
           <MoveSpaceItem
             key={space.id}
             space={space}
-            onSelect={() => {
-              moveEntityToSpace(space.id);
+            onSelect={async () => {
+              const moved = await moveEntityToSpace(space.id);
+              if (!moved) return;
               router.push(NavUtils.toEntity(space.id, entityId, true, entityName));
               onDone?.();
             }}

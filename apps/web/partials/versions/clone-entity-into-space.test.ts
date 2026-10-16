@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { cloneEntityIntoSpace } from './clone-entity-into-space';
+import { cloneEntityIntoSpace, collectHydrationTargetIds } from './clone-entity-into-space';
 
 const store = vi.hoisted(() => ({ relations: [] as any[], values: [] as any[] }));
 
@@ -212,5 +212,55 @@ describe('cloneEntityIntoSpace — related entities', () => {
 
     expect(written.values.every(v => v.spaceId === TARGET)).toBe(true);
     expect(store.values.find(v => v.id === 'related-v')?.spaceId).toBe(SOURCE);
+  });
+});
+
+describe('collectHydrationTargetIds', () => {
+  const unloaded = () => collectHydrationTargetIds(ENTITY, SOURCE);
+
+  it('names a related target that has nothing in the store yet', () => {
+    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'never-opened' })];
+
+    expect(unloaded()).toEqual(['never-opened']);
+  });
+
+  it('names a target the exclusions would drop once it is loaded', () => {
+    store.relations = [
+      relation({ id: 'rel', from: ENTITY, to: 'a-person' }),
+      relation({
+        id: 'person-type',
+        from: 'a-person',
+        to: SystemIds.PERSON_TYPE,
+        typeId: SystemIds.TYPES_PROPERTY,
+        spaceId: 'their-own-profile-space',
+      }),
+    ];
+
+    expect(unloaded()).toContain('a-person');
+  });
+
+  it('names the media entity behind an image property', () => {
+    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'an-image', renderableType: 'IMAGE' })];
+
+    expect(unloaded()).toEqual(['an-image']);
+  });
+
+  it('leaves out the subtree and shared ontology, which need no fetching', () => {
+    store.relations = [
+      relation({ id: 'block-rel', from: ENTITY, to: 'a-block', typeId: SystemIds.BLOCKS }),
+      relation({ id: 'ontology-rel', from: ENTITY, to: SystemIds.PERSON_TYPE }),
+    ];
+
+    expect(unloaded()).toEqual([]);
+  });
+
+  it('copies nothing for an unloaded target, and its values once the fetch has landed', () => {
+    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'never-opened' })];
+
+    expect(run().values.some(v => v.entity.id === 'never-opened')).toBe(false);
+
+    store.values = [value('never-opened', SOURCE, 'fetched-v')];
+
+    expect(run().values.some(v => v.entity.id === 'never-opened')).toBe(true);
   });
 });
