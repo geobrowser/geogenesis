@@ -636,7 +636,7 @@ export function checkEntityExists(entityId: string, signal?: AbortController['si
   });
 }
 
-function getBatchEntitiesForDebateVotes(entityIds: string[], signal?: AbortController['signal']) {
+function getBatchEntitiesForDebateVotesPage(entityIds: string[], signal?: AbortController['signal']) {
   return graphql({
     query: EntitiesBatchForDebateVotesDocument,
     decoder: (data: EntitiesBatchForDebateVotesQuery) =>
@@ -644,6 +644,19 @@ function getBatchEntitiesForDebateVotes(entityIds: string[], signal?: AbortContr
     variables: { filter: { id: { in: entityIds } } },
     signal,
   });
+}
+
+function getBatchEntitiesForDebateVotes(entityIds: string[], signal?: AbortController['signal']) {
+  if (entityIds.length === 0) return Effect.succeed([] as Entity[]);
+  if (entityIds.length <= ENTITY_ID_BATCH_SIZE) return getBatchEntitiesForDebateVotesPage(entityIds, signal);
+
+  return Effect.map(
+    Effect.all(
+      batchEntityIds(entityIds).map(batch => getBatchEntitiesForDebateVotesPage(batch, signal)),
+      { concurrency: ENTITY_ID_BATCH_CONCURRENCY }
+    ),
+    pages => pages.flat()
+  );
 }
 
 function commentConnectionVariables(targetEntityId: string) {
