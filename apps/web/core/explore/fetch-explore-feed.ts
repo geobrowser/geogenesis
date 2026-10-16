@@ -1,5 +1,3 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-
 import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
@@ -28,7 +26,7 @@ import {
   decodeExploreCardEntity,
 } from './explore-card-item';
 import { exploreCompleteIndexDocument } from './explore-complete-index-document';
-import { EXPLORE_ENTITY_NAME_PROPERTY_ID, EXPLORE_PAGE_SIZE } from './explore-constants';
+import { EXPLORE_PAGE_SIZE } from './explore-constants';
 import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
 import {
   EXPLORE_DIVERSITY_WINDOW_SIZE,
@@ -44,11 +42,18 @@ import {
   exploreEntitiesConnectionDocument,
   exploreEntitiesNoPageInfoConnectionDocument,
 } from './explore-entities-document';
+import {
+  type ExploreTime,
+  buildExploreFeedFilter,
+  combineEntityFilters,
+  timeThresholdSec,
+} from './explore-feed-filter';
 import { exploreForYouBestConnectionDocument, exploreForYouConnectionDocument } from './explore-for-you-document';
 import { FOR_YOU_FEED, composeForYouPage } from './explore-for-you-mix';
 import type { ExploreCompleteIndexNode } from './explore-index-selection';
 import { exploreRelationIndexDocument } from './explore-relation-index-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import { topicFilterClauses } from './explore-topic-filter';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import {
   type ExploreForYouCursor,
@@ -77,7 +82,8 @@ import type { SeenDemotionPageConfig } from './seen-demotion/seen-demotion-confi
  * `top` ranks by the integer score property; `new` is reverse-chronological.
  */
 export type ExploreSort = 'new' | 'top' | 'best';
-export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
+export type { ExploreTime } from './explore-feed-filter';
+export { buildExploreFeedFilter } from './explore-feed-filter';
 
 // Re-exported so the many components importing the card's item shape from here keep working; it is
 // defined alongside the card builder in `explore-card-item`, which the Coverage section also uses.
@@ -143,29 +149,6 @@ export type ExploreCompletePopulationScope = {
   relationFilter?: RelationFilter;
 };
 
-// Entities we never want to surface in any feed.
-// - `System type` relation to the `System` entity: marks system-managed rows.
-// - `types` relation to `Data block` / `Text block`: these are block entities that
-//   exist as internal structure of parent entities and aren't meaningful on their own.
-const SYSTEM_TYPE_PROPERTY_ID = '88b3d6ad288c529ca2120e1c24819185';
-const SYSTEM_ENTITY_ID = '2ff7ea098b9e50bc9be78a0cafa268d0';
-const DATA_BLOCK_TYPE_ID = 'b8803a8665de412bbb357e0c84adf473';
-const TEXT_BLOCK_TYPE_ID = '76474f2f00894e77a0410b39fb17d0bf';
-
-const FEED_EXCLUDED_RELATIONS_FILTER = {
-  relations: {
-    none: {
-      or: [
-        { typeId: { is: SYSTEM_TYPE_PROPERTY_ID }, toEntityId: { is: SYSTEM_ENTITY_ID } },
-        {
-          typeId: { is: SystemIds.TYPES_PROPERTY },
-          toEntityId: { in: [DATA_BLOCK_TYPE_ID, TEXT_BLOCK_TYPE_ID] },
-        },
-      ],
-    },
-  },
-} satisfies EntityFilter;
-
 /**
  * How long one request will keep scanning for a window with something in it, and the hard stop on
  * how many it will look at. See the loop in `fetchExploreFeed` for why the scan happens here.
@@ -183,30 +166,6 @@ const FEED_EXCLUDED_RELATIONS_FILTER = {
  */
 const MAX_EMPTY_WINDOW_SCAN_MS = 3_000;
 const MAX_EMPTY_WINDOW_SCANS = 6;
-
-function timeThresholdSec(filter: ExploreTime): number | null {
-  const now = Math.floor(Date.now() / 1000);
-  switch (filter) {
-    case 'today':
-      return now - 86400;
-    case 'week':
-      return now - 7 * 86400;
-    case 'month':
-      return now - 30 * 86400;
-    case 'year':
-      return now - 365 * 86400;
-    case 'all':
-    default:
-      return null;
-  }
-}
-
-function combineEntityFilters(...filters: Array<EntityFilter | undefined>): EntityFilter | undefined {
-  const present = filters.filter((filter): filter is EntityFilter => filter !== undefined);
-  if (present.length === 0) return undefined;
-  if (present.length === 1) return present[0];
-  return { and: present };
-}
 
 type ExploreEntitiesPageResponse = {
   entities: ExploreCardEntity[];
@@ -268,6 +227,7 @@ async function fetchBestEntitiesByTypePage(args: {
   limit: number;
   offset: number;
   typeIds: readonly string[];
+  topicIds?: readonly string[];
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
 }): Promise<ExploreEntitiesPageResponse> {
@@ -290,7 +250,7 @@ async function fetchBestEntitiesByTypePage(args: {
         maxPerType: args.offset + args.limit,
         createdAfter: t != null ? String(t) : undefined,
         filter: combineEntityFilters(
-          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
+          mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims, args.topicIds),
           args.entityFilter
         ),
         spaceIdsForLists: args.spaceIds,
@@ -379,39 +339,20 @@ async function fetchForYouStreamPage(args: {
   );
 }
 
-export function buildExploreFeedFilter(args: {
-  spaceIds: string[];
-  time: ExploreTime;
-  typeIds?: readonly string[];
-  requireName?: boolean;
-  requireDebateTagOnClaims?: boolean;
-  includeEntityScopeInFilter?: boolean;
-  entityFilter?: EntityFilter;
-}): EntityFilter {
-  const t = timeThresholdSec(args.time);
-  const base: EntityFilter = {
-    ...FEED_EXCLUDED_RELATIONS_FILTER,
-    ...(args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : {}),
-    ...(args.includeEntityScopeInFilter
-      ? {
-          spaceIds: { overlaps: [...args.spaceIds] },
-          ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
-        }
-      : {}),
-    ...(args.requireName !== false
-      ? {
-          values: {
-            some: {
-              spaceId: { in: args.spaceIds },
-              propertyId: { is: EXPLORE_ENTITY_NAME_PROPERTY_ID },
-              text: { isNull: false, isNot: '' },
-            },
-          },
-        }
-      : {}),
-    ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
+/**
+ * The `filter` the two Best paths send: the debate-tag gate and the topic AND clauses,
+ * or `undefined` when neither applies so the ranked walk keeps its no-filter fast path.
+ */
+function mergeBestFilter(
+  spaceIds: string[],
+  requireDebateTagOnClaims: boolean | undefined,
+  topicIds: readonly string[] | undefined
+): EntityFilter | undefined {
+  const filter: EntityFilter = {
+    ...(requireDebateTagOnClaims ? claimsRequireDebateTagFilter(spaceIds) : {}),
+    ...topicFilterClauses(topicIds),
   };
-  return combineEntityFilters(base, args.entityFilter) ?? base;
+  return Object.keys(filter).length > 0 ? filter : undefined;
 }
 
 async function fetchExploreEntitiesPage(args: {
@@ -421,6 +362,7 @@ async function fetchExploreEntitiesPage(args: {
   after: string | null;
   orderBy: EntitiesOrderBy[];
   typeIds?: readonly string[];
+  topicIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
@@ -867,6 +809,7 @@ async function fetchTopEntitiesPage(args: {
   limit: number;
   after: string | null;
   typeIds?: readonly string[];
+  topicIds?: readonly string[];
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
@@ -919,6 +862,7 @@ async function fetchBestEntitiesPage(args: {
   time: ExploreTime;
   limit: number;
   after: string | null;
+  topicIds?: readonly string[];
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
 }): Promise<ExploreEntitiesPageResponse> {
@@ -943,10 +887,10 @@ async function fetchBestEntitiesPage(args: {
         // are 1.7x and 2.3x slower with the argument rather than 135x, and they have no
         // equivalent cliff, so New and Top keep filtering server-side where it is exact.
         createdAfter: t != null ? String(t) : undefined,
-        // Left undefined when the caller does not ask for the tag gate, so the sort keeps its
+        // Left undefined when there is neither a tag gate nor a topic pick, so the sort keeps its
         // no-filter fast path unless there is a clause the connection genuinely does not know.
         filter: combineEntityFilters(
-          args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
+          mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims, args.topicIds),
           args.entityFilter
         ),
         spaceIdsForLists: args.spaceIds,
@@ -1002,6 +946,7 @@ export async function fetchExploreFeed(args: {
    * the ranked queries is the kind of change GEO-2793 measured turning 43ms into seconds.
    */
   excludeTypeIds?: readonly string[];
+  topicIds?: readonly string[];
   /** If true (default), filter out entities with null or empty `name`. */
   requireName?: boolean;
   /**
@@ -1122,15 +1067,19 @@ export async function fetchExploreFeed(args: {
   const windowSize =
     args.sort === 'best' && (args.typeIds?.length ?? 0) !== 1 ? EXPLORE_DIVERSITY_WINDOW_SIZE : scanChunk;
 
+  const bestWithTopics = args.sort === 'best' && (args.topicIds?.length ?? 0) > 0;
+
   // Best with a type selection goes to the server (GEO-2885); Best with none keeps the untyped
   // walk, which is the right plan when there is no type argument and is what the by-type
-  // connection cannot serve — it matches nothing without `typeIds`.
+  // connection cannot serve — it matches nothing without `typeIds`. Topics take neither of those
+  // paths — Best with a topic selection goes to the exact score-ordered walk, per `bestWithTopics`.
   const completeSort =
     (args.completePopulationScopes?.length ?? 0) > 0 && (args.sort === 'best' || args.sort === 'new')
       ? args.sort
       : null;
   const usesCompletePopulation = completeSort !== null;
-  const bestFiltersServerSide = !usesCompletePopulation && args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
+  const bestFiltersServerSide =
+    !usesCompletePopulation && args.sort === 'best' && !bestWithTopics && (args.typeIds?.length ?? 0) > 0;
 
   const fetchWindow = (windowAfter: string | null) =>
     completeSort !== null
@@ -1145,50 +1094,66 @@ export async function fetchExploreFeed(args: {
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
           scopes: args.completePopulationScopes ?? [],
         })
-      : bestFiltersServerSide
-        ? fetchBestEntitiesByTypePage({
+      : bestWithTopics
+        ? fetchTopEntitiesPage({
             spaceIds: baseIds,
             time: args.time,
             limit: windowSize,
-            // This path paginates by offset, and the window cursor's `after` slot carries it as
-            // a decimal string. Anything unparseable restarts at 0, matching the tolerance
-            // `decodeExploreWindowCursor` already documents.
-            offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
-            typeIds: args.typeIds ?? [],
+            after: windowAfter,
+            typeIds: args.typeIds,
+            topicIds: args.topicIds,
+            requireName: args.requireName,
             requireDebateTagOnClaims: args.requireDebateTagOnClaims,
             entityFilter: args.entityFilter,
           })
-        : args.sort === 'best'
-          ? fetchBestEntitiesPage({
+        : bestFiltersServerSide
+          ? fetchBestEntitiesByTypePage({
               spaceIds: baseIds,
               time: args.time,
               limit: windowSize,
-              after: windowAfter,
+              // This path paginates by offset, and the window cursor's `after` slot carries it as
+              // a decimal string. Anything unparseable restarts at 0, matching the tolerance
+              // `decodeExploreWindowCursor` already documents.
+              offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
+              typeIds: args.typeIds ?? [],
+              topicIds: args.topicIds,
               requireDebateTagOnClaims: args.requireDebateTagOnClaims,
               entityFilter: args.entityFilter,
             })
-          : args.sort === 'top'
-            ? fetchTopEntitiesPage({
+          : args.sort === 'best'
+            ? fetchBestEntitiesPage({
                 spaceIds: baseIds,
                 time: args.time,
                 limit: windowSize,
                 after: windowAfter,
-                typeIds: args.typeIds,
-                requireName: args.requireName,
+                topicIds: args.topicIds,
                 requireDebateTagOnClaims: args.requireDebateTagOnClaims,
                 entityFilter: args.entityFilter,
               })
-            : fetchExploreEntitiesPage({
-                spaceIds: baseIds,
-                time: args.time,
-                limit: windowSize,
-                after: windowAfter,
-                orderBy: [EntitiesOrderBy.CreatedAtDesc],
-                typeIds: args.typeIds,
-                requireName: args.requireName,
-                requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-                entityFilter: args.entityFilter,
-              });
+            : args.sort === 'top'
+              ? fetchTopEntitiesPage({
+                  spaceIds: baseIds,
+                  time: args.time,
+                  limit: windowSize,
+                  after: windowAfter,
+                  typeIds: args.typeIds,
+                  topicIds: args.topicIds,
+                  requireName: args.requireName,
+                  requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+                  entityFilter: args.entityFilter,
+                })
+              : fetchExploreEntitiesPage({
+                  spaceIds: baseIds,
+                  time: args.time,
+                  limit: windowSize,
+                  after: windowAfter,
+                  orderBy: [EntitiesOrderBy.CreatedAtDesc],
+                  typeIds: args.typeIds,
+                  topicIds: args.topicIds,
+                  requireName: args.requireName,
+                  requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+                  entityFilter: args.entityFilter,
+                });
 
   const excludeTypeIds = args.excludeTypeIds ?? [];
 

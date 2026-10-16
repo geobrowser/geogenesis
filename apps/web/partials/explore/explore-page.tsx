@@ -25,6 +25,7 @@ const EXPLORE_FEED_PROPS = {
   initialTime: 'month',
   showSortFilter: true,
   showMoreFilters: true,
+  showTopicFilter: true,
   typeOptions: EXPLORE_ENTITY_TYPES,
   initialTypeIds: DEFAULT_EXPLORE_TYPE_IDS,
   compactHeader: true,
