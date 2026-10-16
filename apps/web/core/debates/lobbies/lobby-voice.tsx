@@ -217,6 +217,7 @@ export function LobbyVoice({
   // Off on join and on every promotion until the speaker turns it on.
   const [cameraIntent, setCameraIntent] = React.useState(false);
   const [cameraFailure, setCameraFailure] = React.useState<MediaDeviceFailure | null>(null);
+  // Also covers taking voice back from another tab: its retry clears the token first.
   React.useEffect(() => {
     if (!cameraAllowed) setCameraIntent(false);
   }, [cameraAllowed]);
@@ -452,6 +453,9 @@ function ConnectedVoice({
       }),
     [localParticipant, onCameraChoice]
   );
+  // A server step-out unmounts this before the route runs, and the room's disconnect only stops the
+  // camera after awaiting the network; iPhone needs the device free by the time the next screen asks.
+  React.useEffect(() => () => stopLocalCamera(localParticipant), [localParticipant]);
 
   // A host's mute arrives as a muted track; remembering it keeps a reconnect from unmuting.
   React.useEffect(() => {
@@ -557,11 +561,18 @@ function useRoomEnding(
   }, [room]);
 }
 
-/** Stops and unpublishes this tab's camera, so the camera light goes off and the device is free. */
+/** Stops this tab's camera device at once, so the camera light goes off and the device is free. */
+function stopLocalCamera(participant: LocalParticipant) {
+  participant.getTrackPublication(Track.Source.Camera)?.track?.stop();
+}
+
+/** Stops and unpublishes this tab's camera. */
 function releaseLocalCamera(participant: LocalParticipant) {
   const track = participant.getTrackPublication(Track.Source.Camera)?.track;
-  // Stops the device synchronously before anything awaits.
-  if (track) void participant.unpublishTrack(track, true).catch(() => undefined);
+  if (!track) return;
+  // Unpublishing waits on a publish still in flight; the device stops now regardless.
+  track.stop();
+  void participant.unpublishTrack(track, true).catch(() => undefined);
 }
 
 const CAMERA_SOURCES = [Track.Source.Camera];

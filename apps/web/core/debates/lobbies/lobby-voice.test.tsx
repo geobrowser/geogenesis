@@ -21,6 +21,7 @@ import {
 const mocks = vi.hoisted(() => ({
   getDebateLobbyVoiceToken: vi.fn(),
   acquired: true,
+  requestTakeover: false,
   roomProps: null as Record<string, unknown> | null,
   connectionState: 'connected',
   canPlayAudio: true,
@@ -86,7 +87,7 @@ vi.mock('../hooks', async importOriginal => ({
 vi.mock('../debate-room-ownership', () => ({
   createDebateRoomOwnershipCoordinator: () => ({
     acquire: async () => ({ acquired: mocks.acquired, waitedForLocalRelease: false }),
-    requestTakeover: async () => false,
+    requestTakeover: async () => mocks.requestTakeover,
     release: async () => undefined,
     close: () => undefined,
   }),
@@ -174,6 +175,7 @@ function renderVoice(view = lobby(), onConnectedChange = vi.fn(), joined = true)
 
 beforeEach(() => {
   mocks.acquired = true;
+  mocks.requestTakeover = false;
   mocks.roomProps = null;
   mocks.connectionState = ConnectionState.Connected;
   mocks.canPlayAudio = true;
@@ -493,6 +495,37 @@ describe('LobbyVoice camera (GEO-3307)', () => {
     await waitFor(() => expect(go).toHaveBeenCalled());
     expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeTruthy();
     unregister();
+  });
+
+  // A server step-out unmounts the room before the route into the debate runs.
+  it('stops the camera synchronously when the room unmounts', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    const { unmount } = renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    const camera = { stop: vi.fn() };
+    mocks.localCamera = camera;
+
+    unmount();
+    expect(camera.stop).toHaveBeenCalled();
+    // Nothing is registered any more, so a later route cannot reach it.
+    camera.stop.mockClear();
+    routeIntoDebate(vi.fn());
+    expect(camera.stop).not.toHaveBeenCalled();
+  });
+
+  it('starts with the camera off after taking voice back from another tab', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(true));
+
+    mocks.requestTakeover = true;
+    act(() =>
+      mocks.roomListeners.get('disconnected')?.forEach(listener => listener(DisconnectReason.DUPLICATE_IDENTITY))
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Use voice here' }));
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeTruthy();
+    expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(false);
   });
 
   it('hands the roster each unmuted camera, by dashless id', async () => {
