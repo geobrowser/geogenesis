@@ -360,8 +360,9 @@ function ConnectedVoice({
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
   const { localParticipant, isMicrophoneEnabled, microphoneTrack } = useLocalParticipant();
 
-  // A request card over the lobby releases this before opening its own mic.
-  const capturedMic = connected ? (microphoneTrack as LocalTrackPublication | undefined)?.track : undefined;
+  // A request card over the lobby releases this before opening its own mic. Held through a reconnect,
+  // which republishes the same track.
+  const capturedMic = (microphoneTrack as LocalTrackPublication | undefined)?.track;
   React.useEffect(() => {
     if (!capturedMic) return;
     return registerLobbyCapture('audio', {

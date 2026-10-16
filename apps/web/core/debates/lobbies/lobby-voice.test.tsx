@@ -246,8 +246,16 @@ describe('LobbyVoice', () => {
     expect(captureOn()).toBe(true);
   });
 
-  it('registers no capture while disconnected', async () => {
+  it('keeps its mic capture registered through a reconnect', async () => {
     mocks.microphoneTrack = { track: {} };
+    mocks.connectionState = ConnectionState.Reconnecting;
+    renderVoice();
+    await waitFor(() => expect(mocks.roomProps).not.toBeNull());
+
+    expect(lobbyCaptureLive('audio')).toBe(true);
+  });
+
+  it('registers no capture without a mic track', async () => {
     mocks.connectionState = ConnectionState.Connecting;
     renderVoice();
     await waitFor(() => expect(mocks.roomProps).not.toBeNull());
