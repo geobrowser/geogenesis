@@ -61,6 +61,7 @@ import {
 import { BEST_FEED_VERSION, type FeedDescriptor } from './for-you/feed-version';
 import { type FreshSlotConfig, freshSlotActive } from './fresh-slot/fresh-slot-config';
 import {
+  FRESH_SLOT_AS_OF_STEP_MS,
   FRESH_SLOT_CANDIDATE_LIMIT,
   decodeFreshSlotCursor,
   encodeFreshSlotCursor,
@@ -702,6 +703,8 @@ async function fetchFreshEntitiesPage(args: {
   asOfMs: number;
   freshnessHours: number;
   startsScroll: boolean;
+  /** The scheduled warm-up (GEO-3308): build this minute's list and share it before returning. */
+  warm?: boolean;
 }): Promise<FreshList> {
   const scopeKey = JSON.stringify({
     spaceIds: args.spaceIds.map(normId).sort(),
@@ -750,7 +753,9 @@ async function fetchFreshEntitiesPage(args: {
         skipPageInfo: true,
       });
       if (!pinned) {
-        runAfterResponse(() => writeSharedFreshList(scopeKey, { asOfMs, page: fetched }, FRESH_LIST_MAX_STALE_MS));
+        const share = () => writeSharedFreshList(scopeKey, { asOfMs, page: fetched }, FRESH_LIST_MAX_STALE_MS);
+        if (args.warm) await share();
+        else runAfterResponse(share);
       }
       return fetched;
     });
@@ -782,7 +787,30 @@ async function fetchFreshEntitiesPage(args: {
       return latest;
     }
   }
-  return load(args.asOfMs, { pinned: !args.startsScroll });
+  return load(args.asOfMs, { pinned: !args.startsScroll && !args.warm });
+}
+
+/**
+ * GEO-3308. Builds and shares the Fresh list for the current minute, the way a first page would
+ * have, so the first visitor of a scope after a quiet spell reads it instead of waiting on gaia.
+ * The arguments are the ones the request path derives for the scope.
+ */
+export async function warmSharedFreshList(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  typeIds: readonly string[];
+  requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
+  freshnessHours: number;
+  now?: number;
+}): Promise<FreshList> {
+  const { now = Date.now(), ...scope } = args;
+  return fetchFreshEntitiesPage({
+    ...scope,
+    asOfMs: Math.floor(now / FRESH_SLOT_AS_OF_STEP_MS) * FRESH_SLOT_AS_OF_STEP_MS,
+    startsScroll: false,
+    warm: true,
+  });
 }
 
 // "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.

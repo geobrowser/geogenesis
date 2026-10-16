@@ -50,7 +50,7 @@ vi.mock('~/core/io/graphql-client', () => ({
 vi.mock('~/core/io/subgraph', () => ({ fetchProfile: () => Effect.succeed(null) }));
 vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberRequest: async () => null }));
 
-const { FRESH_LIST_MAX_STALE_MS, fetchExploreFeed } = await import('./fetch-explore-feed');
+const { FRESH_LIST_MAX_STALE_MS, fetchExploreFeed, warmSharedFreshList } = await import('./fetch-explore-feed');
 const { encodeExploreWindowCursor } = await import('./explore-window-cursor');
 const { setSharedFreshListStoreForTests } = await import('./fresh-slot/shared-fresh-list');
 
@@ -336,6 +336,38 @@ describe('a Fresh list shared between instances', () => {
     const served = await page(later);
     expect(decodeFreshSlotCursor(served.nextCursor, 0).asOfMs).toBe(minute(later));
     expect(graph.freshCalls).toHaveLength(1);
+  });
+
+  // GEO-3308. The scheduled warm-up builds the list the request path would, under the same key.
+  describe('warmed by the schedule', () => {
+    const warm = (now: number) =>
+      warmSharedFreshList({
+        spaceIds: [SPACE],
+        time: 'all',
+        typeIds: [DEBATE_TYPE_ID, CLAIM_TYPE_ID],
+        freshnessHours: ON.freshnessHours,
+        now,
+      });
+
+    it('shares this minute\'s list before it returns', async () => {
+      await warm(clock);
+      expect(writes).toHaveLength(1);
+      expect(JSON.parse(writes[0]!.value).asOfMs).toBe(minute(clock));
+      expect(writes[0]!.ttlMs).toBe(FRESH_LIST_MAX_STALE_MS);
+      expect(graph.freshCalls).toHaveLength(1);
+    });
+
+    it('leaves a first page that follows nothing to refresh, under the key the request path reads', async () => {
+      await warm(clock);
+      const [warmedKey] = [...shared.keys()];
+      graph.freshCalls = [];
+
+      const served = await page(clock + 5_000);
+      expect(freshItems(served).length).toBeGreaterThan(0);
+      expect(graph.freshCalls).toHaveLength(0);
+      expect([...shared.keys()]).toEqual([warmedKey]);
+      expect(writes).toHaveLength(1);
+    });
   });
 
   it('queries as before when the shared store fails', async () => {
