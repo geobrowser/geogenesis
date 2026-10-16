@@ -37,6 +37,7 @@ import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession
 import { readRematchJoinIntent, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
@@ -396,8 +397,11 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   const [micFailure, setMicFailure] = React.useState<MediaDeviceFailure | null>(null);
   const [cameraFailure, setCameraFailure] = React.useState<MediaDeviceFailure | null>(null);
 
-  const cameraAllowed = join.data ? tokenAllowsCamera(join.data.token) : false;
-  const [cameraIntent, setCameraIntent] = React.useState(() => cameraEnabledByDefault(session));
+  // Off: audio only, as before GEO-3165. Gated where read, since the flag reads off until hydration.
+  const videoEnabled = useFeatureFlag('debateVideo');
+  const cameraAllowed = videoEnabled && join.data ? tokenAllowsCamera(join.data.token) : false;
+  const [cameraChoice, setCameraIntent] = React.useState(() => cameraEnabledByDefault(session));
+  const cameraIntent = videoEnabled && cameraChoice;
   const handleCameraIntentChange = React.useCallback((enabled: boolean) => {
     if (enabled) setCameraFailure(null);
     setCameraIntent(enabled);
@@ -642,6 +646,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
         onRoomLive={handleRoomLive}
         opponentUserId={opponent.user_id}
         micFailure={micFailure}
+        videoEnabled={videoEnabled}
         cameraAllowed={cameraAllowed}
         cameraFailure={cameraFailure}
         cameraIntent={cameraIntent}
@@ -722,6 +727,7 @@ function VoiceHeaderBody({
   onRoomLive,
   opponentUserId,
   micFailure,
+  videoEnabled,
   cameraAllowed,
   cameraFailure,
   cameraIntent,
@@ -741,6 +747,8 @@ function VoiceHeaderBody({
   onRoomLive: () => void;
   opponentUserId: string;
   micFailure: MediaDeviceFailure | null;
+  /** Off: no video tiles, the other person's included. */
+  videoEnabled: boolean;
   cameraAllowed: boolean;
   cameraFailure: MediaDeviceFailure | null;
   cameraIntent: boolean;
@@ -939,9 +947,12 @@ function VoiceHeaderBody({
         : null;
 
   const opponentCamera = opponentParticipant?.getTrackPublication(Track.Source.Camera);
-  const localVideo = cameraTrack?.track && !cameraTrack.isMuted ? <TrackVideo track={cameraTrack.track} /> : null;
+  const localVideo =
+    videoEnabled && cameraTrack?.track && !cameraTrack.isMuted ? <TrackVideo track={cameraTrack.track} /> : null;
   const opponentVideo =
-    opponentCamera?.track && !opponentCamera.isMuted ? <TrackVideo track={opponentCamera.track} /> : null;
+    videoEnabled && opponentCamera?.track && !opponentCamera.isMuted ? (
+      <TrackVideo track={opponentCamera.track} />
+    ) : null;
 
   const opponentState: PairMicState = !opponentParticipant
     ? 'waiting'
