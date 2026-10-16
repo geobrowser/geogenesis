@@ -14,6 +14,7 @@ import {
 import {
   PLAYER_ENTER_CLASS,
   PLAYER_EXIT_CLASS,
+  PLAYER_FURNITURE_OPACITY,
   PLAYER_GLASS_CLASS,
   PLAYER_LABEL_FONT,
   PLAYER_TITLE_STYLE,
@@ -156,7 +157,10 @@ export function DebateRoundBadge({
         'pointer-events-none absolute top-3 right-13 z-10 flex h-8 max-w-[calc(100%-6rem)] items-center leading-none font-medium text-white transition-[right] duration-300',
         !stamped && 'rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem]'
       )}
-      style={{ opacity: stamped ? 1 : cue.opacity, ...(rightPx !== undefined && { right: rightPx }) }}
+      style={{
+        opacity: stamped ? PLAYER_FURNITURE_OPACITY : cue.opacity,
+        ...(rightPx !== undefined && { right: rightPx }),
+      }}
     >
       <span className="sr-only">{cue.role ? `${cue.round}, ${cue.role}` : cue.round}</span>
       {/* Truncating rather than wrapping: the badge is one line beside a 32px circle, and a second

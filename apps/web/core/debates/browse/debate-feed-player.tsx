@@ -45,9 +45,11 @@ import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } fr
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import { PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
 import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 import { usePlaybackAnimationClock } from './use-playback-animation-clock';
+import { useVideoCutTransition } from './use-video-cut-transition';
 
 /**
  * How many times a tile will rebuild a recording whose media pipeline died, per source (GEO-2985).
@@ -409,10 +411,17 @@ export function DebateFeedPlayer({
     [playbackBreaks.breaks, playbackBreaks.picks, playheadMs, reducedOverlays]
   );
   const cuts = React.useMemo(() => breakCuts(playbackBreaks), [playbackBreaks]);
+  const { slot1CanvasRef, slot2CanvasRef, seekAcrossCut } = useVideoCutTransition({
+    slot1VideoRef,
+    slot2VideoRef,
+    seek: seekBothRaw,
+    enabled: stamped && active,
+    resetKey: `${animationSeekKey}:${slot1Src}:${slot2Src}`,
+  });
   useBreakCuts(cuts, {
     playheadMs,
     running: playing && !isScrubbing,
-    seek: seekBothRaw,
+    seek: seekAcrossCut,
     positionMs: livePositionMs,
   });
   const earlyEndCue = React.useMemo(
@@ -779,6 +788,10 @@ export function DebateFeedPlayer({
          * without one. They are the difference between "the browser refused" and
          * "the app never noticed", which look identical on screen.
          */
+        data-announcement={stamped && announcementShown ? 'true' : undefined}
+        style={
+          stamped ? ({ '--debate-furniture-opacity': announcementShown ? 0 : 1 } as React.CSSProperties) : undefined
+        }
         data-debate-ready={ready ? 'true' : 'false'}
         data-debate-active={active ? 'true' : 'false'}
         data-debate-playing={playing ? 'true' : 'false'}
@@ -794,6 +807,8 @@ export function DebateFeedPlayer({
         // would get two of the three wrong.
         className={cx(
           'group @container relative flex flex-col overflow-hidden',
+          stamped &&
+            'transition-[--debate-furniture-opacity] duration-200 ease-out data-[announcement=true]:duration-0 motion-reduce:transition-none',
           reducedOverlays ? 'rounded-lg' : 'rounded-xl'
         )}
       >
@@ -805,6 +820,7 @@ export function DebateFeedPlayer({
           poster={slot1Poster}
           posterEager={active || preload}
           videoRef={slot1VideoRef}
+          cutCanvasRef={stamped ? slot1CanvasRef : undefined}
           buffer={active || buffer}
           concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 1 && !betweenTurns}
@@ -876,6 +892,7 @@ export function DebateFeedPlayer({
           poster={slot2Poster}
           posterEager={active || preload}
           videoRef={slot2VideoRef}
+          cutCanvasRef={stamped ? slot2CanvasRef : undefined}
           buffer={active || buffer}
           concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 2 && !betweenTurns}
@@ -974,6 +991,7 @@ export function DebateFeedPlayer({
           (!betweenTurns || (stamped && Boolean(breakCue))) &&
           (!reducedOverlays || (active && playing && mutedByUser)) && (
             <span
+              style={stamped ? { opacity: PLAYER_FURNITURE_OPACITY } : undefined}
               className={cx(
                 'pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white',
                 !stamped && '[text-box:trim-both_cap_alphabetic] md:max-w-[90%]'
@@ -1104,6 +1122,7 @@ function DebaterVideo({
   poster = null,
   posterEager = false,
   videoRef,
+  cutCanvasRef,
   buffer = false,
   concealed = false,
   audible,
@@ -1140,6 +1159,7 @@ function DebaterVideo({
   /** Fetch the still now rather than when it nears the viewport: the active card and the preloading one. */
   posterEager?: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  cutCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
   /** Ask the browser to buffer this recording rather than stop at its header. See the player's `buffer`. */
   buffer?: boolean;
   /**
@@ -1476,6 +1496,14 @@ function DebaterVideo({
             {!poster && 'Loading…'}
           </div>
         )}
+        {cutCanvasRef && (
+          <canvas
+            ref={cutCanvasRef}
+            aria-hidden
+            data-video-cut-frame
+            className="pointer-events-none absolute inset-0 size-full opacity-0"
+          />
+        )}
       </button>
 
       {/* What a tile says when its recording cannot be revived.
@@ -1591,7 +1619,10 @@ function DebaterVideo({
           data-claim-corner
           inert={hideForAnnouncement}
           data-yield={hideForAnnouncement || undefined}
-          style={{ opacity: hideForAnnouncement ? 0 : 1, visibility: hideForAnnouncement ? 'hidden' : undefined }}
+          style={{
+            opacity: hideForAnnouncement ? 0 : stamped ? PLAYER_FURNITURE_OPACITY : 1,
+            visibility: hideForAnnouncement ? 'hidden' : undefined,
+          }}
           className={cx(
             'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end duration-150',
             stamped
@@ -1686,7 +1717,7 @@ function DebaterVideo({
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setNameFocused(false);
         }}
         style={{
-          opacity: hideForAnnouncement ? 0 : nameFocused ? 1 : 1 - cardYield,
+          opacity: hideForAnnouncement ? 0 : stamped ? PLAYER_FURNITURE_OPACITY : nameFocused ? 1 : 1 - cardYield,
           visibility: hideForAnnouncement ? 'hidden' : undefined,
         }}
         className={cx(
@@ -1769,7 +1800,11 @@ function CountdownBadge({
   const remaining = 1 - Math.max(0, Math.min(1, progress));
   const ringMask = turnTimerRimMask('2px');
   return (
-    <div data-turn-timer="steady" className="absolute top-3 right-3 z-10 size-8">
+    <div
+      data-turn-timer="steady"
+      style={smooth ? { opacity: PLAYER_FURNITURE_OPACITY } : undefined}
+      className="absolute top-3 right-3 z-10 size-8"
+    >
       <div className="grid size-8 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
         <span
           data-turn-timer-rim

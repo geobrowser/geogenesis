@@ -13,7 +13,7 @@ export const PLAYER_GLASS_CLASS =
 export const PLAYER_PICK_BASE_CLASS =
   'inline-flex items-center rounded-full px-[5.4cqw] py-[2.4cqw] text-[5.6cqw] leading-none font-semibold whitespace-nowrap';
 export const PLAYER_PICK_CLASS = {
-  extend: 'bg-white text-[#111] shadow-[0_1cqw_3cqw_rgba(0,0,0,0.2)] backdrop-blur-[14px]',
+  extend: 'bg-white/85 text-[#111] shadow-[0_1cqw_3cqw_rgba(0,0,0,0.2)] backdrop-blur-[14px]',
   end: 'bg-[rgba(36,36,40,0.48)] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur-[14px]',
   none: 'border-[0.5cqw] border-dashed border-white/60 text-white/80',
 } as const;
@@ -24,3 +24,6 @@ export const PLAYER_EXIT_CLASS = 'animate-[fadeIn_300ms_linear_reverse_both]';
 
 /** Dim and panel entrances use a soft fade without moving the video underneath. */
 export const PLAYER_FADE_CLASS = 'animate-[fadeIn_250ms_ease-out_both]';
+
+/** One inherited fade brings all Open rounds furniture back together after an announcement. */
+export const PLAYER_FURNITURE_OPACITY = 'var(--debate-furniture-opacity, 1)';

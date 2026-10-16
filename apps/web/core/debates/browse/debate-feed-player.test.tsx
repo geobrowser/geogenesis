@@ -9,6 +9,7 @@ import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
 
 import { DebateFeedPlayer } from './debate-feed-player';
+import { PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
 
 const SPACE_1 = '11111111111111111111111111111111';
 const SPACE_1_DASHED = '11111111-1111-1111-1111-111111111111';
@@ -1979,7 +1980,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
 
     mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 2, playheadSeconds: 72.5, playbackBreaks });
     rerender(<DebateFeedPlayer debate={startedDebate} active />);
-    expect(rows(container)).toEqual(['1', '1']);
+    expect(rows(container)).toEqual([PLAYER_FURNITURE_OPACITY, PLAYER_FURNITURE_OPACITY]);
   });
 
   it.each(['extend', 'final_end'] as const)(
@@ -2019,7 +2020,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       expect(pills).toHaveLength(2);
       expect(pills[0].getAttribute('data-debate-stamp')).toBe(choice ?? 'none');
       expect(pills[0].className).toContain(
-        choice === 'extend' ? 'bg-white' : choice === 'end' ? 'bg-[rgba(36,36,40,0.48)]' : 'border-dashed'
+        choice === 'extend' ? 'bg-white/85' : choice === 'end' ? 'bg-[rgba(36,36,40,0.48)]' : 'border-dashed'
       );
       for (const pill of pills) {
         expect(pill.className).toContain('rounded-full');
@@ -2343,7 +2344,7 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
         const timer = container.querySelector('[data-turn-timer]');
         expect(timer?.getAttribute('data-turn-timer')).toBe('steady');
         expect(timer?.innerHTML).not.toMatch(/bg-red|animate-|swell|glow/);
-        expect(timer?.getAttribute('style')).toBeNull();
+        expect((timer as HTMLElement).style.opacity).toBe(format === openRounds ? PLAYER_FURNITURE_OPACITY : '');
         expect(timer?.querySelector('[data-turn-timer-rim]')?.getAttribute('style')).toContain('90deg');
         expect(timer?.querySelector('[data-turn-timer-rim]')?.className.includes('transition-[--turn-timer-rim]')).toBe(
           format === openRounds
@@ -2407,8 +2408,12 @@ describe('Open rounds in-app player: announcement visibility', () => {
     ...container.querySelectorAll<HTMLElement>('[data-debater-row], [data-claim-corner]'),
   ];
   const expectFurniture = (container: HTMLElement, hidden: boolean) => {
+    const player = container.querySelector<HTMLElement>('[data-debate-ready]')!;
+    expect(player.style.getPropertyValue('--debate-furniture-opacity')).toBe(hidden ? '0' : '1');
+    expect(player.className).toContain('transition-[--debate-furniture-opacity]');
+    expect(player.className).toContain('data-[announcement=true]:duration-0');
     for (const element of furniture(container)) {
-      expect(element.style.opacity).toBe(hidden ? '0' : '1');
+      expect(element.style.opacity).toBe(hidden ? '0' : PLAYER_FURNITURE_OPACITY);
       expect(element.style.visibility).toBe(hidden ? 'hidden' : '');
       expect(element.hasAttribute('inert')).toBe(hidden);
     }
@@ -2474,8 +2479,8 @@ describe('Open rounds in-app player: announcement visibility', () => {
     expectFurniture(container, false);
     expect(queryByText('Speaking again')).not.toBeNull();
     expect(container.querySelector('[data-turn-timer]')).not.toBeNull();
-    // The corner label returns at full strength with the other furniture, without a second fade.
-    expect((container.querySelector('[data-round-badge]') as HTMLElement).style.opacity).toBe('1');
+    // The corner label inherits the same return fade as the rest of the furniture.
+    expect((container.querySelector('[data-round-badge]') as HTMLElement).style.opacity).toBe(PLAYER_FURNITURE_OPACITY);
     for (const sample of [1.72, 1.9, 1.75, 2]) {
       mocks.controller = controllerFixture({
         mutedByUser: false,
@@ -2655,7 +2660,7 @@ describe('Open rounds in-app player: announcement visibility', () => {
     mocks.controller = at(12);
     rerender(<DebateFeedPlayer debate={openRounds} active />);
     for (const element of furniture) {
-      expect(element.style.opacity).toBe('1');
+      expect(element.style.opacity).toBe(PLAYER_FURNITURE_OPACITY);
       expect(element.style.visibility).toBe('');
       expect(element.hasAttribute('inert')).toBe(false);
     }
