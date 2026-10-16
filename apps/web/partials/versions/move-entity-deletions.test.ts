@@ -2,6 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cloneEntityIntoSpace } from './clone-entity-into-space';
 import { collectMoveDeletions } from './move-entity-deletions';
 
 const store = vi.hoisted(() => ({ relations: [] as any[], values: [] as any[] }));
@@ -15,6 +16,7 @@ vi.mock('~/core/sync/use-store', () => ({
 
 const SOURCE = 'space-source';
 const OTHER = 'space-other';
+const TARGET = 'space-target';
 const ENTITY = 'entity-moved';
 
 const relation = (over: Partial<Record<string, any>>) => ({
@@ -97,5 +99,37 @@ describe('collectMoveDeletions', () => {
     const { values } = collectMoveDeletions(ENTITY, SOURCE);
 
     expect(values).toHaveLength(0);
+  });
+
+  it('clears a block that only another space points at', () => {
+    store.relations = [
+      relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS }),
+      relation({ id: 'far-ref', from: 'unrelated', to: 'block', spaceId: OTHER }),
+    ];
+    store.values = [value('block', SOURCE, 'block-v')];
+
+    const { values } = collectMoveDeletions(ENTITY, SOURCE);
+
+    expect(values.map(v => v.id)).toEqual(['block-v']);
+  });
+
+  it('still clears a block after the clone has copied it into the destination', () => {
+    store.relations = [
+      {
+        ...relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS }),
+        renderableType: 'RELATION',
+        toEntity: { id: 'block', name: null, value: 'block' },
+      },
+    ];
+    store.values = [{ ...value('block', SOURCE, 'block-v'), property: { id: 'prop-block-v' }, value: 'x' }];
+
+    cloneEntityIntoSpace(ENTITY, SOURCE, TARGET, {
+      values: { set: (v: any) => store.values.push(v) },
+      relations: { set: (r: any) => store.relations.push(r) },
+    } as any);
+
+    const { values } = collectMoveDeletions(ENTITY, SOURCE);
+
+    expect(values.map(v => v.id)).toEqual(['block-v']);
   });
 });

@@ -29,7 +29,7 @@ export function collectMoveDeletions(
   const orphanedDescendantIds = [...subtreeIds].filter(id => {
     if (id === entityId) return false;
     const externalRefs = getRelations({
-      selector: r => r.toEntity.id === id && !containmentRelationIds.has(r.id),
+      selector: r => r.toEntity.id === id && r.spaceId === sourceSpaceId && !containmentRelationIds.has(r.id),
     });
     return externalRefs.length === 0;
   });
