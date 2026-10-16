@@ -139,6 +139,32 @@ function EditorFooter({
 }
 
 /**
+ * What the claim and topic views add beneath themselves while editing.
+ *
+ * References (backlinks) are an editor's tool there, not a reader's: the read views already
+ * surface what matters about incoming links (sources, debates, subtopics), so the raw "Referenced
+ * by" list only comes back in edit mode. Unlike the property toggle it ignores `hideProperties`,
+ * matching the generic `EditorFooter`, which shows backlinks in the side panel too.
+ */
+function CustomViewEditFooter({
+  entityId,
+  spaceId,
+  hideProperties = false,
+}: {
+  entityId: string;
+  spaceId: string;
+  hideProperties?: boolean;
+}) {
+  return (
+    <>
+      {hideProperties ? null : <ToggleEntityPage id={entityId} spaceId={spaceId} />}
+      <Spacer height={40} />
+      <EntityBacklinks entityId={entityId} />
+    </>
+  );
+}
+
+/**
  * Which custom read view this entity gets, if any.
  *
  * Claims keep their custom surface while editing, matching personal-space profiles: product-owned
@@ -244,7 +270,11 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
           isEditing={isEditing}
-          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
+          footer={
+            isEditing ? (
+              <CustomViewEditFooter entityId={entityId} spaceId={spaceId} hideProperties={props.hideProperties} />
+            ) : undefined
+          }
         />
       </>
     );
@@ -276,7 +306,11 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
           isEditing={isEditing}
-          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
+          footer={
+            isEditing ? (
+              <CustomViewEditFooter entityId={entityId} spaceId={spaceId} hideProperties={props.hideProperties} />
+            ) : undefined
+          }
         />
       </>
     );
