@@ -2074,7 +2074,8 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
   it('holds the animations at the playhead, so a scrub into the break lands mid-stamp', () => {
     const { container } = renderAt(61.2, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
     const root = container.querySelector('[data-debate-break="extend"]') as HTMLElement;
-    expect(root.style.getPropertyValue('--break-t')).toBe('1200');
+    expect(root.style.getPropertyValue('--break-t')).toBe('');
+    expect((root.closest('[data-debate-ready]') as HTMLElement).style.getPropertyValue('--break-t')).toBe('1200');
     const second = container.querySelectorAll('[data-debate-stamp]')[1] as HTMLElement;
     expect(second.style.animationPlayState).toBe('paused');
     expect(second.style.animationDelay).toContain('1100ms');
@@ -2302,7 +2303,8 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
     const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
     const banner = container.querySelector('[data-round-banner]') as HTMLElement;
     expect(banner).not.toBeNull();
-    expect(banner.style.getPropertyValue('--break-t')).toBe('0');
+    expect(banner.style.getPropertyValue('--break-t')).toBe('');
+    expect((banner.closest('[data-debate-ready]') as HTMLElement).style.getPropertyValue('--break-t')).toBe('0');
     const exit = container.querySelector('[data-round-banner-out]') as HTMLElement;
     expect(exit.style.animationDelay).toContain('1500ms');
     expect((exit.firstElementChild as HTMLElement).style.animationDelay).toContain('0ms');
@@ -2374,6 +2376,174 @@ describe('turnTimerScale', () => {
 
 describe('Open rounds in-app player: announcement visibility', () => {
   const openRounds = { ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
+
+  // Advance the media independently of React's quarter-second time samples.
+  const mediaFrames = (startMs: number) => {
+    let positionMs = startMs;
+    let id = 0;
+    const pending = new Map<number, FrameRequestCallback>();
+    mocks.livePosition = () => positionMs;
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(callback => {
+      pending.set(++id, callback);
+      return id;
+    });
+    vi.spyOn(globalThis, 'cancelAnimationFrame').mockImplementation(frame => {
+      pending.delete(frame);
+    });
+    return (ms: number, beforePaint?: () => void) => {
+      positionMs = ms;
+      const callbacks = [...pending.values()];
+      pending.clear();
+      act(() => {
+        callbacks.forEach(callback => callback(performance.now()));
+        beforePaint?.();
+      });
+    };
+  };
+  const furniture = (container: HTMLElement) => [
+    ...container.querySelectorAll<HTMLElement>('[data-debater-row], [data-claim-corner]'),
+  ];
+  const expectFurniture = (container: HTMLElement, hidden: boolean) => {
+    for (const element of furniture(container)) {
+      expect(element.style.opacity).toBe(hidden ? '0' : '1');
+      expect(element.style.visibility).toBe(hidden ? 'hidden' : '');
+      expect(element.hasAttribute('inert')).toBe(hidden);
+    }
+  };
+  const breakAtSixty = (kind: 'lead_in' | 'extend' | 'final_end') => ({
+    breaks: [
+      {
+        kind,
+        roundIndex: 0,
+        nextRoundIndex: kind === 'final_end' ? null : 1,
+        decidingStartMs: 60_000,
+        startMs: 64_000,
+        endMs: 72_000,
+      },
+    ],
+    earlyEnds: [],
+    picks: [],
+  });
+
+  it.each(['lead_in', 'extend', 'final_end'] as const)(
+    'hides every covered element in the %s fade start frame',
+    kind => {
+      const frame = mediaFrames(60_050);
+      mocks.controller = controllerFixture({
+        mutedByUser: false,
+        turnSlot: 1,
+        playheadSeconds: 60.05,
+        subtitle: 'The current subtitle',
+        playbackBreaks: breakAtSixty(kind),
+      });
+      const { container, queryByText } = render(<DebateFeedPlayer debate={openRounds} active />);
+      const player = container.querySelector('[data-debate-ready]') as HTMLElement;
+      const overlay = container.querySelector('[data-debate-break]') as HTMLElement;
+      expectFurniture(container, false);
+      expect(queryByText('The current subtitle')).not.toBeNull();
+      frame(60_299);
+      expect(player.style.getPropertyValue('--break-t')).toBe('299');
+      expectFurniture(container, false);
+      frame(60_300, () => expectFurniture(container, true));
+      // The dim, title/question, and background visibility all read the same clock and commit before paint.
+      expect(player.style.getPropertyValue('--break-t')).toBe('300');
+      expect(overlay.style.getPropertyValue('--break-t')).toBe('');
+      expectFurniture(container, true);
+      expect(queryByText('The current subtitle')).toBeNull();
+      expect(container.querySelector('[data-turn-timer]')).toBeNull();
+      expect(container.querySelector('[data-round-badge]')).toBeNull();
+      frame(60_300); // buffering cannot advance either the fade or the background visibility.
+      expectFurniture(container, true);
+    }
+  );
+
+  it('restores once at the end of an opening and ignores late samples from inside that opening', () => {
+    const frame = mediaFrames(1_700);
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 1.7,
+      subtitle: 'Speaking again',
+    });
+    const { container, rerender, queryByText } = render(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, true);
+    frame(1_800, () => expectFurniture(container, false));
+    expectFurniture(container, false);
+    expect(queryByText('Speaking again')).not.toBeNull();
+    expect(container.querySelector('[data-turn-timer]')).not.toBeNull();
+    // The corner label returns at full strength with the other furniture, without a second fade.
+    expect((container.querySelector('[data-round-badge]') as HTMLElement).style.opacity).toBe('1');
+    for (const sample of [1.72, 1.9, 1.75, 2]) {
+      mocks.controller = controllerFixture({
+        mutedByUser: false,
+        turnSlot: 1,
+        playheadSeconds: sample,
+        subtitle: 'Speaking again',
+      });
+      rerender(<DebateFeedPlayer debate={openRounds} active />);
+      expectFurniture(container, false);
+      frame(1_850);
+      expectFurniture(container, false);
+    }
+  });
+
+  it.each(['lead_in', 'extend'] as const)(
+    'restores once after the %s round cut has published the incoming turn',
+    kind => {
+      const frame = mediaFrames(62_100);
+      const playbackBreaks = breakAtSixty(kind);
+      mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 62.1, playbackBreaks });
+      const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
+      expectFurniture(container, true);
+      frame(72_000);
+      // Do not flash the outgoing turn's controls while its seek is being published.
+      expectFurniture(container, true);
+      for (const sample of [72.1, 62.9, 72.2]) {
+        mocks.controller = controllerFixture({
+          mutedByUser: false,
+          turnSlot: 2,
+          playheadSeconds: sample,
+          playbackBreaks,
+        });
+        rerender(<DebateFeedPlayer debate={openRounds} active />);
+        expectFurniture(container, false);
+        frame(72_200);
+        expectFurniture(container, false);
+      }
+    }
+  );
+
+  it('does not flash the background between the final wrap and the end card, and restores it on replay', () => {
+    const frame = mediaFrames(63_100);
+    const playbackBreaks = breakAtSixty('final_end');
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 63.1, playbackBreaks });
+    const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, true);
+    frame(72_000);
+    expectFurniture(container, true);
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 72.1,
+      playbackBreaks,
+      playbackEnded: false,
+    });
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, true);
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 72.1,
+      playbackBreaks,
+      playbackEnded: true,
+    });
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, true);
+    frame(12_000);
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12, playbackBreaks });
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    expectFurniture(container, false);
+  });
 
   it('hides and restores covered furniture together through every round, a pause, and the final wrap', () => {
     const subtitle = 'The current subtitle';

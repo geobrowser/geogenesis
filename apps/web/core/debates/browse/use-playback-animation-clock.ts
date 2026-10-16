@@ -35,11 +35,14 @@ export function usePlaybackAnimationClock(
   ref: React.RefObject<HTMLDivElement | null>,
   cue: { elapsedMs: number; playedMs: number } | null,
   playing: boolean,
-  source?: { positionMs: () => number | null; originMs: number }
+  source?: { positionMs: () => number | null; originMs: number },
+  onTime?: (elapsedMs: number | null, fromFrame: boolean) => void
 ) {
   const sourceRef = React.useRef(source);
+  const onTimeRef = React.useRef(onTime);
   React.useLayoutEffect(() => {
     sourceRef.current = source;
+    onTimeRef.current = onTime;
   });
   const sample = React.useRef<{ elapsedMs: number; at: number; originMs?: number }>({ elapsedMs: 0, at: 0 });
   const displayed = React.useRef<number | null>(null);
@@ -48,9 +51,10 @@ export function usePlaybackAnimationClock(
   const originMs = source?.originMs;
 
   const write = React.useCallback(
-    (ms: number) => {
+    (ms: number, fromFrame = false) => {
       displayed.current = ms;
       ref.current?.style.setProperty('--break-t', String(ms));
+      onTimeRef.current?.(ms, fromFrame);
     },
     [ref]
   );
@@ -58,6 +62,7 @@ export function usePlaybackAnimationClock(
   React.useLayoutEffect(() => {
     if (elapsedMs === null) {
       displayed.current = null;
+      onTimeRef.current?.(null, false);
       return;
     }
     const originChanged = sample.current.originMs !== originMs;
@@ -73,8 +78,10 @@ export function usePlaybackAnimationClock(
       write(
         Math.min(playedMs, Math.max(0, live == null || !currentSource ? elapsedMs : live - currentSource.originMs))
       );
+    } else {
+      onTimeRef.current?.(displayed.current, false);
     }
-  }, [elapsedMs, originMs, playedMs, playing, write]);
+  }, [elapsedMs, onTime, originMs, playedMs, playing, write]);
 
   const shown = elapsedMs !== null;
   React.useEffect(() => {
@@ -88,11 +95,15 @@ export function usePlaybackAnimationClock(
       if (live != null && currentSource) {
         // Read the media clock directly when available: buffering, pause and seeking hold the
         // graphic with the footage rather than letting a wall clock finish its animation.
-        write(Math.min(playedMs, Math.max(0, live - currentSource.originMs)));
+        write(Math.min(playedMs, Math.max(0, live - currentSource.originMs)), true);
       } else {
         const target = sampled + Math.min(now - at, MAX_AHEAD_MS);
         write(
-          Math.min(sampled + MAX_AHEAD_MS, advanceBreakClock(displayed.current ?? target, target, now - last, playedMs))
+          Math.min(
+            sampled + MAX_AHEAD_MS,
+            advanceBreakClock(displayed.current ?? target, target, now - last, playedMs)
+          ),
+          true
         );
       }
       last = now;

@@ -156,7 +156,7 @@ export function DebateRoundBadge({
         'pointer-events-none absolute top-3 right-13 z-10 flex h-8 max-w-[calc(100%-6rem)] items-center leading-none font-medium text-white transition-[right] duration-300',
         !stamped && 'rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem]'
       )}
-      style={{ opacity: cue.opacity, ...(rightPx !== undefined && { right: rightPx }) }}
+      style={{ opacity: stamped ? 1 : cue.opacity, ...(rightPx !== undefined && { right: rightPx }) }}
     >
       <span className="sr-only">{cue.role ? `${cue.round}, ${cue.role}` : cue.round}</span>
       {/* Truncating rather than wrapping: the badge is one line beside a 32px circle, and a second
@@ -179,13 +179,20 @@ export function DebateRoundBanner({
   cue,
   playing = false,
   clock,
+  sharedClock = false,
 }: {
   cue: RoundCue | null;
   playing?: boolean;
+  sharedClock?: boolean;
   clock?: { positionMs: () => number | null; originMs: number };
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
-  usePlaybackAnimationClock(ref, cue ? { elapsedMs: cue.ageMs ?? 0, playedMs: ROUND_CARD_MS } : null, playing, clock);
+  usePlaybackAnimationClock(
+    ref,
+    cue && !sharedClock ? { elapsedMs: cue.ageMs ?? 0, playedMs: ROUND_CARD_MS } : null,
+    playing,
+    clock
+  );
   if (!cue) return null;
   return (
     <div

@@ -121,8 +121,10 @@ export function DebateBreakOverlay({
   roundTurns,
   playing,
   clock,
+  sharedClock = false,
 }: {
   cue: BreakCue | null;
+  sharedClock?: boolean;
   names: BreakNames;
   firstSlot: ParticipantSlot;
   roundTurns: TurnCount;
@@ -130,7 +132,7 @@ export function DebateBreakOverlay({
   clock?: { positionMs: () => number | null; originMs: number };
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
-  usePlaybackAnimationClock(ref, cue, playing, clock);
+  usePlaybackAnimationClock(ref, sharedClock ? null : cue, playing, clock);
   if (!cue) return null;
 
   const picks = cue.picks;

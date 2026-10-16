@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { flushSync } from 'react-dom';
 
 import { ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
@@ -13,6 +14,7 @@ import { isOpenRoundsDebate } from '~/core/debates/open-rounds';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import {
+  BREAK_SETTLE_MS,
   breakAnnouncesRound,
   breakCueAt,
   breakCuts,
@@ -23,7 +25,7 @@ import {
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { turnTimerRimMask } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
-import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
+import { ROUND_CARD_MS, roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { markDebateWatched } from '~/core/debates/watched-debates';
@@ -44,6 +46,7 @@ import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-r
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
+import { usePlaybackAnimationClock } from './use-playback-animation-clock';
 
 /**
  * How many times a tile will rebuild a recording whose media pipeline died, per source (GEO-2985).
@@ -421,9 +424,63 @@ export function DebateFeedPlayer({
   // The end card is where an ended debate lands, except on a compact gallery tile — which has no
   // room for it and keeps the plain centred replay.
   const endCardShown = showReplay && !reducedOverlays;
-  // The caption, identity, claims and turn labels leave together for the entire announcement.
-  // A single flag also covers the final wrap and stays put when playback is paused.
-  const announcementShown = stamped && Boolean(roundCard || breakCue || endCardShown);
+  const [announcementShown, setAnnouncementShown] = React.useState(false);
+  const announcementShownRef = React.useRef(false);
+  const currentBreak = React.useMemo(
+    () => playbackBreaks.breaks.find(entry => playheadMs >= entry.decidingStartMs && playheadMs < entry.endMs),
+    [playbackBreaks.breaks, playheadMs]
+  );
+  const finalWrapStartMs = React.useMemo(() => {
+    const last = playbackBreaks.breaks.find(entry => entry.kind === 'final_end');
+    return last ? last.decidingStartMs + BREAK_SETTLE_MS : null;
+  }, [playbackBreaks.breaks]);
+  const announcementOriginMs = currentBreak?.decidingStartMs ?? playheadMs - (roundCard?.ageMs ?? 0);
+  const syncAnnouncement = React.useCallback(
+    (elapsedMs: number | null, fromFrame: boolean) => {
+      const positionMs = livePositionMs() ?? (elapsedMs === null ? playheadMs : announcementOriginMs + elapsedMs);
+      const next =
+        stamped &&
+        !reducedOverlays &&
+        Boolean(
+          endCardShown ||
+          (finalWrapStartMs !== null && positionMs >= finalWrapStartMs) ||
+          (currentBreak &&
+            positionMs >= currentBreak.decidingStartMs + BREAK_SETTLE_MS &&
+            // Wait for the cut to publish the incoming turn before restoring its controls.
+            // Once restored, an older sample cannot hide them again after the media has moved on.
+            (positionMs < currentBreak.endMs || announcementShownRef.current)) ||
+          (!breakCue && roundCard && elapsedMs !== null && elapsedMs < ROUND_CARD_MS)
+        );
+      if (next === announcementShownRef.current) return;
+      announcementShownRef.current = next;
+      // Only phase boundaries render React. Commit those inside the same frame that advances the
+      // CSS clock, so furniture cannot precede the fade or reappear on a stale timeupdate sample.
+      // Layout synchronization already commits before paint and must not call flushSync.
+      if (fromFrame) flushSync(() => setAnnouncementShown(next));
+      else setAnnouncementShown(next);
+    },
+    [
+      announcementOriginMs,
+      breakCue,
+      currentBreak,
+      endCardShown,
+      finalWrapStartMs,
+      livePositionMs,
+      playheadMs,
+      reducedOverlays,
+      roundCard,
+      stamped,
+    ]
+  );
+  usePlaybackAnimationClock(
+    measurement.elementRef,
+    stamped && !reducedOverlays
+      ? (breakCue ?? (roundCard ? { elapsedMs: roundCard.ageMs ?? 0, playedMs: ROUND_CARD_MS } : null))
+      : null,
+    playing,
+    { positionMs: livePositionMs, originMs: announcementOriginMs },
+    syncAnnouncement
+  );
   // Watched to the end, whichever layout it ended in — a compact tile never shows the end card, and
   // a debate finished there must not come back as a suggestion.
   React.useEffect(() => {
@@ -878,10 +935,8 @@ export function DebateFeedPlayer({
           real only where the render retained speech from before the incoming debater's clock
           started (GEO-2754), which is the one case where they are already talking as it lands. */}
         {subtitle &&
-          !roundCard &&
-          !breakCue &&
-          !betweenTurns &&
-          !endCardShown &&
+          (stamped ? !announcementShown : !roundCard && !breakCue && !endCardShown) &&
+          (!betweenTurns || (stamped && Boolean(breakCue))) &&
           (!reducedOverlays || (active && playing && mutedByUser)) && (
             <span
               className={cx(
@@ -896,6 +951,7 @@ export function DebateFeedPlayer({
         {stamped ? (
           <DebateRoundBanner
             cue={roundCard}
+            sharedClock
             playing={playing}
             clock={{ positionMs: livePositionMs, originMs: playheadMs - (roundCard?.ageMs ?? 0) }}
           />
@@ -906,6 +962,7 @@ export function DebateFeedPlayer({
           <>
             <DebateBreakOverlay
               cue={breakCue}
+              sharedClock
               clock={{ positionMs: livePositionMs, originMs: playheadMs - (breakCue?.elapsedMs ?? 0) }}
               names={breakNames}
               firstSlot={debate.first_participant_slot}
