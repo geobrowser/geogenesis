@@ -19,6 +19,7 @@ import { Input } from '~/design-system/input';
 
 import { cloneEntityIntoSpace } from '~/partials/versions/clone-entity-into-space';
 import { collectMoveDeletions } from '~/partials/versions/move-entity-deletions';
+import { collectBacklinkRetargets } from '~/partials/versions/retarget-move-backlinks';
 
 type MoveEntityToSpaceProps = {
   entityId: EntityId;
@@ -78,6 +79,13 @@ export const MoveEntityToSpace = ({
 
     storage.values.deleteMany(values);
     storage.relations.deleteMany(relations);
+
+    // 3. Point this space's backlinks at where the data went. They survive the move untouched —
+    // the entity id has not changed — but a `toSpaceId` naming the source space now names a space
+    // the entity's data just left.
+    collectBacklinkRetargets(entityId, sourceSpaceId, targetSpaceId).forEach(relation => {
+      storage.relations.set(relation);
+    });
   };
 
   return (
