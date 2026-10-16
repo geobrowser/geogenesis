@@ -569,8 +569,9 @@ function stopLocalCamera(participant: LocalParticipant) {
 /** Stops and unpublishes this tab's camera. */
 function releaseLocalCamera(participant: LocalParticipant) {
   const track = participant.getTrackPublication(Track.Source.Camera)?.track;
+  // A camera still publishing has no publication yet, so it is missed here and keeps capturing
+  // until that publish fails after the disconnect.
   if (!track) return;
-  // Unpublishing waits on a publish still in flight; the device stops now regardless.
   track.stop();
   void participant.unpublishTrack(track, true).catch(() => undefined);
 }
