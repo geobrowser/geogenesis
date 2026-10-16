@@ -8,6 +8,7 @@ import type { DebateMediaResponse } from '~/core/debates/api';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { hasProcessedVideo } from '~/core/debates/playback-utils';
 import { geoChatBaseUrl } from '~/core/debates/server/geo-chat-base-url';
+import { speakerStillUrl } from '~/core/debates/speaker-still';
 import { EntitiesOrderBy, type EntityFilter, type RelationFilter } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
@@ -1385,10 +1386,12 @@ export async function fetchExploreFeed(args: {
   //
   // GEO-3234: `playableLeads` is filled by the check's callback, hence a holder, not a `let`.
   const playableLeads: { ids: Set<string> | null } = { ids: null };
+  let leadPosters: LeadPosters | null = null;
   if (args.leadWithPlayableDebate && args.sort === 'best' && windowAfter === null) {
+    const stills = new Map<string, DebatePosters>();
     const led = await leadWithPlayableDebate(window.rows, {
       isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
-      isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal),
+      isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal, stills),
       onPlayable: args.markPlayableLeads
         ? rows => {
             playableLeads.ids = new Set(rows.map(row => normId(row.entityId)));
@@ -1399,16 +1402,18 @@ export async function fetchExploreFeed(args: {
     // merging the led order again moves no boundary (GEO-3221).
     merged = mergeFresh({ ...window, rows: led }, shownAtWindowStart);
     ordered = merged ? mergedRows(merged) : led;
+    leadPosters = postersOfLead(led, stills);
   }
 
   // Serving a prefix and advancing the cursor past the whole scan is what dropped ranks
   // 23-30 of every page before (GEO-2695). The offset keeps the rest reachable.
   const served = ordered.slice(windowOffset, windowOffset + pageSize);
   const leadIds = playableLeads.ids;
-  const slice =
+  const marked =
     leadIds !== null && window.feed?.name === 'best'
       ? served.map(row => (leadIds.has(normId(row.entityId)) ? { ...row, playableLead: true } : row))
       : served;
+  const slice = withLeadPosters(marked, leadPosters);
 
   const nextWindowCursor = scanBudgetSpent
     ? null
@@ -1580,10 +1585,12 @@ async function serveForYouPage(args: {
   let page = result.page;
   // GEO-3070, as for Best: the first page opens on a playable debate.
   if (args.leadWithPlayableDebate && args.cursor === null) {
+    const stills = new Map<string, DebatePosters>();
     page = await leadWithPlayableDebate(page, {
       isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
-      isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal),
+      isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal, stills),
     });
+    page = withLeadPosters(page, postersOfLead(page, stills));
   }
 
   return {
@@ -1600,11 +1607,46 @@ async function serveForYouPage(args: {
  * by, so the lead slot never holds a debate the card would then refuse to play. A Debate entity's id
  * is its geo-chat debate id, hyphenated.
  */
-async function debateHasProcessedVideo(entityId: string, signal: AbortSignal): Promise<boolean> {
-  const response = await fetch(`${geoChatBaseUrl()}/debates/${ID.hexToUuid(entityId)}/media`, {
+async function debateHasProcessedVideo(
+  entityId: string,
+  signal: AbortSignal,
+  stills?: Map<string, DebatePosters>
+): Promise<boolean> {
+  const debateId = ID.hexToUuid(entityId);
+  const response = await fetch(`${geoChatBaseUrl()}/debates/${debateId}/media`, {
     signal,
     cache: 'no-store',
   });
   if (!response.ok) return false;
-  return hasProcessedVideo((await response.json()) as DebateMediaResponse);
+  const media = (await response.json()) as DebateMediaResponse;
+  const processed = hasProcessedVideo(media);
+  // GEO-3280. The same URLs the card's player builds from the same response, so the browser loads
+  // each still once, whichever of the two paints it first.
+  if (processed && stills) {
+    const posters = {
+      slot1: speakerStillUrl(debateId, 1, media.artifacts),
+      slot2: speakerStillUrl(debateId, 2, media.artifacts),
+    };
+    if (posters.slot1 || posters.slot2) stills.set(normId(entityId), posters);
+  }
+  return processed;
+}
+
+type DebatePosters = NonNullable<ExploreFeedItem['debatePosters']>;
+type LeadPosters = { entityId: string; posters: DebatePosters };
+
+/**
+ * The stills of the debate the lead check put first, if it put one there. A row that only passed the
+ * check is left alone: one card's stills is what the first paint needs, and a poster on every
+ * candidate would compete with it for the connection.
+ */
+function postersOfLead(led: readonly ExploreFeedRow[], stills: Map<string, DebatePosters>): LeadPosters | null {
+  const lead = led[0];
+  const posters = lead ? stills.get(normId(lead.entityId)) : undefined;
+  return lead && posters ? { entityId: normId(lead.entityId), posters } : null;
+}
+
+function withLeadPosters<T extends ExploreFeedRow>(rows: T[], lead: LeadPosters | null): T[] {
+  if (!lead) return rows;
+  return rows.map(row => (normId(row.entityId) === lead.entityId ? { ...row, debatePosters: lead.posters } : row));
 }

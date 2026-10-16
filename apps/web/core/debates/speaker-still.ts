@@ -1,4 +1,5 @@
-import { type DebateMediaArtifact, getGeoChatApiBaseUrl } from './api';
+import type { DebateMediaArtifact } from './api';
+import { getGeoChatApiBaseUrl } from './geo-chat-public-base-url';
 
 /**
  * The still frame geo-chat's media job cuts from each debater's own recording, ten seconds into
@@ -18,5 +19,8 @@ export function speakerStillUrl(
   if (!artifacts?.some(artifact => artifact.kind === kind)) return null;
   // The durable content route, not a presigned URL: it is unauthenticated and 302s to a fresh
   // presigned GET, so a poster painted late in a long session does not 403 on an expired signature.
-  return `${getGeoChatApiBaseUrl()}/debates/${encodeURIComponent(debateId)}/media/artifacts/${kind}/content`;
+  // One spelling of the id whoever builds it: geo-chat returns `debate.id` without hyphens, the feed
+  // derives it hyphenated from the entity id, and two spellings are two images to the browser.
+  const id = debateId.replace(/-/g, '').toLowerCase();
+  return `${getGeoChatApiBaseUrl()}/debates/${encodeURIComponent(id)}/media/artifacts/${kind}/content`;
 }

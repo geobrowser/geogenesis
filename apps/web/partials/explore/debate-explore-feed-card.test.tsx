@@ -363,6 +363,23 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.queryByTestId('fallback')).toBeNull();
   });
 
+  // GEO-3280. The feed's lead debate arrives with its stills, so the card paints them at once.
+  it("paints the feed's stills in place of the placeholders until the player takes over", () => {
+    const posters = { slot1: 'https://chat.test/still-1', slot2: 'https://chat.test/still-2' };
+    const { container } = renderCard({ item: { ...item, debatePosters: posters } });
+
+    const stills = [...container.querySelectorAll<HTMLImageElement>('img[data-debate-poster]')];
+    expect(stills.map(img => img.getAttribute('src'))).toEqual([posters.slot1, posters.slot2]);
+    expect(stills.every(img => img.getAttribute('fetchpriority') === 'high')).toBe(true);
+    expect(container.querySelector('.animate-pulse')).toBeNull();
+
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    intersectAll(0.7);
+    expect(screen.getByTestId('player')).toBeDefined();
+    expect(container.querySelector('img[data-debate-poster]')).toBeNull();
+  });
+
   it('keeps compact Activity chrome to one metadata row and two title lines', async () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
