@@ -24,6 +24,7 @@ import {
   PLAYER_EXIT_CLASS,
   PLAYER_GLASS_CLASS,
   PLAYER_LABEL_FONT,
+  PLAYER_PICK_BASE_CLASS,
   PLAYER_PICK_CLASS,
   PLAYER_TITLE_CLASS,
   PLAYER_TITLE_STYLE,
@@ -246,12 +247,7 @@ export function DebateBreakOverlay({
             <div key={slot} className={cx(TILE_CLASS[slot], 'grid place-items-center')}>
               <span
                 data-debate-stamp={key}
-                className={cx(
-                  PLAYER_GLASS_CLASS,
-                  PLAYER_PICK_CLASS[key],
-                  PLAYER_ENTER_CLASS,
-                  'px-[4cqw] py-[2cqw] text-[7cqw]'
-                )}
+                className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS[key], PLAYER_ENTER_CLASS, 'text-[7cqw]')}
                 style={
                   {
                     ...PLAYER_LABEL_FONT,
@@ -321,12 +317,7 @@ export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; 
             <div className={cx('absolute inset-0 bg-black/42', ROOM_ENTER_CLASS)} />
             <span
               data-debate-stamp="ended"
-              className={cx(
-                PLAYER_GLASS_CLASS,
-                PLAYER_PICK_CLASS.none,
-                PLAYER_ENTER_CLASS,
-                'relative px-[4cqw] py-[2cqw] text-[6cqw]'
-              )}
+              className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS.none, PLAYER_ENTER_CLASS, 'relative text-[6cqw]')}
               style={PLAYER_LABEL_FONT}
             >
               Ended early

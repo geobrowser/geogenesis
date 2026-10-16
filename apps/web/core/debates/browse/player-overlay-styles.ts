@@ -6,8 +6,9 @@ export const PLAYER_TITLE_STYLE = {
     '-0.035em -0.035em 0 #000, 0 -0.035em 0 #000, 0.035em -0.035em 0 #000, 0.035em 0 0 #000, 0.035em 0.035em 0 #000, 0 0.035em 0 #000, -0.035em 0.035em 0 #000, -0.035em 0 0 #000, 0 0.05em 0.16em rgba(0,0,0,0.55)',
 } as const;
 export const PLAYER_TITLE_CLASS = 'text-center leading-none font-bold tracking-[-0.02em] text-white';
-export const PLAYER_GLASS_CLASS =
-  'rounded-full border border-white/20 bg-black/45 px-[2.2cqw] py-[1.2cqw] leading-none whitespace-nowrap backdrop-blur-[16px]';
+const GLASS_SHAPE_CLASS = 'rounded-full border leading-none whitespace-nowrap backdrop-blur-[16px]';
+export const PLAYER_GLASS_CLASS = `${GLASS_SHAPE_CLASS} border-white/20 bg-black/45 px-[2.2cqw] py-[1.2cqw]`;
+export const PLAYER_PICK_BASE_CLASS = `${GLASS_SHAPE_CLASS} px-[4cqw] py-[2cqw]`;
 export const PLAYER_PICK_CLASS = {
   extend: 'border-white/70 bg-white/90 text-black',
   end: 'border-white/20 bg-black/60 text-white',
