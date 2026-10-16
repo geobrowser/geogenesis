@@ -512,13 +512,6 @@
   }
 }
 
-/* Animate once on the player; newly mounted names, counters and timers inherit the same phase. */
-@property --debate-furniture-opacity {
-  syntax: '<number>';
-  inherits: true;
-  initial-value: 1;
-}
-
 /* The turn timer's rim over its last five seconds, an animatable angle so it drains smoothly
    between the playhead's samples. */
 @property --turn-timer-rim {

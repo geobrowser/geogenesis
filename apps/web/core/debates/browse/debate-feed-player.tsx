@@ -23,10 +23,10 @@ import {
   earlyEndCueAt,
   silentAt,
 } from '~/core/debates/playback-breaks';
-import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
+import { type TurnState, clampSeconds, speakerLabel, turnStateFromSegments } from '~/core/debates/playback-utils';
 import { turnTimerRimMask } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
-import { ROUND_CARD_MS, roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
+import { ROUND_CARD_MS, roundBadgeAt, roundCardAt, roundParts } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { markDebateWatched } from '~/core/debates/watched-debates';
@@ -45,7 +45,7 @@ import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } fr
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
-import { PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
+import { PLAYER_EXIT_MS, PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
 import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 import { usePlaybackAnimationClock } from './use-playback-animation-clock';
@@ -396,8 +396,8 @@ export function DebateFeedPlayer({
     [playbackBreaks.breaks, playheadSeconds, playing, reducedOverlays, roundTurns, stamped, turnSpans]
   );
   const roundBadge = React.useMemo(
-    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, roundTurns, playheadSeconds) : null),
-    [playheadSeconds, playing, reducedOverlays, roundTurns, turnSpans]
+    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, roundTurns, playheadSeconds, stamped) : null),
+    [playheadSeconds, playing, reducedOverlays, roundTurns, stamped, turnSpans]
   );
 
   /**
@@ -440,8 +440,10 @@ export function DebateFeedPlayer({
   // The end card is where an ended debate lands, except on a compact gallery tile — which has no
   // room for it and keeps the plain centred replay.
   const endCardShown = showReplay && !reducedOverlays;
-  const [announcementShown, setAnnouncementShown] = React.useState(false);
-  const announcementShownRef = React.useRef(false);
+  type AnnouncementPhase = 'clear' | 'covered' | 'returning';
+  const [announcementPhase, setAnnouncementPhase] = React.useState<AnnouncementPhase>('clear');
+  const announcementShown = announcementPhase === 'covered';
+  const announcementPhaseRef = React.useRef<AnnouncementPhase>('clear');
   const completedBreaksRef = React.useRef<{ key: string; active: PlayerBreak | null; done: Set<number> }>({
     key: animationSeekKey,
     active: null,
@@ -476,27 +478,44 @@ export function DebateFeedPlayer({
       }
       const cutCompleted = currentBreak ? history.done.has(currentBreak.decidingStartMs) : false;
       if (currentBreak && !cutCompleted) history.active = currentBreak;
-      const next =
-        stamped &&
-        !reducedOverlays &&
-        Boolean(
-          endCardShown ||
-          (finalWrapStartMs !== null && positionMs >= finalWrapStartMs) ||
-          (currentBreak &&
+      let opacity = 1;
+      let returning = false;
+      if (stamped && !reducedOverlays) {
+        if (endCardShown || (finalWrapStartMs !== null && positionMs >= finalWrapStartMs)) {
+          opacity = 0;
+        } else {
+          // The title and returning furniture are complementary halves of the same 300ms exit.
+          // Read its drawn clock, not a later seek/timeupdate or a second wall-clock transition.
+          const returnOpacity = (elapsed: number, end: number) =>
+            Math.max(0, Math.min(1, (elapsed - (end - PLAYER_EXIT_MS)) / PLAYER_EXIT_MS));
+          if (
+            currentBreak &&
             !cutCompleted &&
-            drawnPositionMs >= currentBreak.decidingStartMs + BREAK_SETTLE_MS &&
-            // Wait for the cut to publish the incoming turn before restoring its controls.
-            // Once restored, an older sample cannot hide them again after the media has moved on.
-            (positionMs < currentBreak.endMs || announcementShownRef.current)) ||
-          (!breakCue && roundCard && elapsedMs !== null && elapsedMs < ROUND_CARD_MS)
-        );
-      if (next === announcementShownRef.current) return;
-      announcementShownRef.current = next;
+            breakCue &&
+            drawnPositionMs >= currentBreak.decidingStartMs + BREAK_SETTLE_MS
+          ) {
+            opacity =
+              currentBreak.kind === 'final_end'
+                ? 0
+                : returnOpacity(drawnPositionMs - currentBreak.decidingStartMs, breakCue.playedMs);
+            returning = opacity > 0;
+          } else if (!breakCue && roundCard && elapsedMs !== null) {
+            opacity = returnOpacity(elapsedMs, ROUND_CARD_MS);
+            returning = opacity > 0;
+          }
+        }
+        measurement.elementRef.current?.style.setProperty('--debate-furniture-opacity', String(opacity));
+      } else {
+        measurement.elementRef.current?.style.removeProperty('--debate-furniture-opacity');
+      }
+      const next: AnnouncementPhase = opacity === 0 ? 'covered' : returning ? 'returning' : 'clear';
+      if (next === announcementPhaseRef.current) return;
+      announcementPhaseRef.current = next;
       // Only phase boundaries render React. Commit those inside the same frame that advances the
       // CSS clock, so furniture cannot precede the fade or reappear on a stale timeupdate sample.
       // Layout synchronization already commits before paint and must not call flushSync.
-      if (fromFrame) flushSync(() => setAnnouncementShown(next));
-      else setAnnouncementShown(next);
+      if (fromFrame) flushSync(() => setAnnouncementPhase(next));
+      else setAnnouncementPhase(next);
     },
     [
       announcementOriginMs,
@@ -506,6 +525,7 @@ export function DebateFeedPlayer({
       endCardShown,
       finalWrapStartMs,
       livePositionMs,
+      measurement.elementRef,
       playheadMs,
       reducedOverlays,
       roundCard,
@@ -521,6 +541,35 @@ export function DebateFeedPlayer({
     { positionMs: livePositionMs, originMs: announcementOriginMs, resetKey: animationSeekKey },
     syncAnnouncement
   );
+  // During a break's exit there is no live turn yet. Prepare the incoming timer and label so
+  // they join the same crossfade rather than appearing abruptly after the automatic seek.
+  const incomingSpan =
+    announcementPhase === 'returning' && currentBreak && breakCue?.nextRoundIndex != null
+      ? turnSpans.find(span => Math.floor(span.index / 2) === breakCue.nextRoundIndex)
+      : null;
+  const incomingState =
+    incomingSpan && currentBreak
+      ? (turnStateFromSegments(
+          controller.turnSegments,
+          Math.max(incomingSpan.startSeconds, currentBreak.endMs / 1000)
+        ) ?? {
+          slot: incomingSpan.slot,
+          seconds: Math.max(
+            0,
+            incomingSpan.endSeconds - Math.max(incomingSpan.startSeconds, currentBreak.endMs / 1000)
+          ),
+          progress: 0,
+        })
+      : null;
+  const displayedTurn = incomingState ?? turnState;
+  const incomingRound = incomingSpan ? roundParts(incomingSpan.index, roundTurns) : null;
+  const displayedRoundBadge = incomingRound
+    ? {
+        ...incomingRound,
+        label: incomingRound.role ? `${incomingRound.round} · ${incomingRound.role}` : incomingRound.round,
+        opacity: 1,
+      }
+    : roundBadge;
   // Watched to the end, whichever layout it ended in — a compact tile never shows the end card, and
   // a debate finished there must not come back as a suggestion.
   React.useEffect(() => {
@@ -789,9 +838,6 @@ export function DebateFeedPlayer({
          * "the app never noticed", which look identical on screen.
          */
         data-announcement={stamped && announcementShown ? 'true' : undefined}
-        style={
-          stamped ? ({ '--debate-furniture-opacity': announcementShown ? 0 : 1 } as React.CSSProperties) : undefined
-        }
         data-debate-ready={ready ? 'true' : 'false'}
         data-debate-active={active ? 'true' : 'false'}
         data-debate-playing={playing ? 'true' : 'false'}
@@ -807,8 +853,6 @@ export function DebateFeedPlayer({
         // would get two of the three wrong.
         className={cx(
           'group @container relative flex flex-col overflow-hidden',
-          stamped &&
-            'transition-[--debate-furniture-opacity] duration-200 ease-out data-[announcement=true]:duration-0 motion-reduce:transition-none',
           reducedOverlays ? 'rounded-lg' : 'rounded-xl'
         )}
       >
@@ -824,8 +868,8 @@ export function DebateFeedPlayer({
           buffer={active || buffer}
           concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 1 && !betweenTurns}
-          countdown={playing && !announcementShown && turnState?.slot === 1 ? turnState : null}
-          roundBadge={turnState?.slot === 1 ? roundBadge : null}
+          countdown={playing && !announcementShown && displayedTurn?.slot === 1 ? displayedTurn : null}
+          roundBadge={displayedTurn?.slot === 1 ? displayedRoundBadge : null}
           // Fixed formats retain the top row's crossfade. Open rounds hides both identity rows
           // and claim corners together, including lists that reach into the announcement's space.
           cardYield={stamped ? 0 : (roundCard?.opacity ?? 0)}
@@ -896,8 +940,8 @@ export function DebateFeedPlayer({
           buffer={active || buffer}
           concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 2 && !betweenTurns}
-          countdown={playing && !announcementShown && turnState?.slot === 2 ? turnState : null}
-          roundBadge={turnState?.slot === 2 ? roundBadge : null}
+          countdown={playing && !announcementShown && displayedTurn?.slot === 2 ? displayedTurn : null}
+          roundBadge={displayedTurn?.slot === 2 ? displayedRoundBadge : null}
           hideForAnnouncement={announcementShown}
           mutedByUser={mutedByUser}
           isResuming={isResuming}

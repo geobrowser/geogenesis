@@ -14,6 +14,7 @@ import {
 import {
   PLAYER_ENTER_CLASS,
   PLAYER_EXIT_CLASS,
+  PLAYER_EXIT_MS,
   PLAYER_FURNITURE_OPACITY,
   PLAYER_GLASS_CLASS,
   PLAYER_LABEL_FONT,
@@ -205,7 +206,7 @@ export function DebateRoundBanner({
       data-round-banner={cue.label}
       className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] -translate-y-1/2 text-center"
     >
-      <div data-round-banner-out className={PLAYER_EXIT_CLASS} style={heldAt(ROUND_CARD_MS - 300)}>
+      <div data-round-banner-out className={PLAYER_EXIT_CLASS} style={heldAt(ROUND_CARD_MS - PLAYER_EXIT_MS)}>
         <div className={PLAYER_ENTER_CLASS} style={heldAt(0)}>
           <PlayerRoundTitle round={cue.round} role={cue.role} />
         </div>

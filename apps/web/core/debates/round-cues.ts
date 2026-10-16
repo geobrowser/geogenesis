@@ -200,13 +200,19 @@ export function roundCardAt(
  * the card was drawn. By the reply the handover is long past, so the badge is simply already up —
  * which is what it was doing before, without needing a second case to say so.
  */
-export function roundBadgeAt(spans: TurnSpan[], turnCount: TurnCount, playheadSeconds: number): RoundCue | null {
+export function roundBadgeAt(
+  spans: TurnSpan[],
+  turnCount: TurnCount,
+  playheadSeconds: number,
+  /** Keep the cue available when Open rounds owns visibility through its shared announcement clock. */
+  includeStart = false
+): RoundCue | null {
   const current = currentSpan(spans, playheadSeconds);
   if (!current) return null;
 
   const ageMs = (playheadSeconds - roundStartSeconds(spans, roundOf(current))) * 1_000;
   const opacity = Math.max(0, Math.min(1, (ageMs - (ROUND_CARD_MS - HANDOVER_MS)) / HANDOVER_MS));
-  if (opacity <= 0) return null;
+  if (opacity <= 0 && !includeStart) return null;
 
   return cueFor(current, turnCount, opacity);
 }

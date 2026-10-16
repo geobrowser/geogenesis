@@ -21,6 +21,7 @@ import { PlayerRoundTitle } from './debate-round-cues';
 import {
   PLAYER_ENTER_CLASS,
   PLAYER_EXIT_CLASS,
+  PLAYER_EXIT_MS,
   PLAYER_FADE_CLASS,
   PLAYER_LABEL_FONT,
   PLAYER_PICK_BASE_CLASS,
@@ -31,9 +32,6 @@ import {
 } from './player-overlay-styles';
 import { STAMP_WORD } from './stamp-styles';
 import { heldAt, usePlaybackAnimationClock } from './use-playback-animation-clock';
-
-/** The announcement fades before the cut to the next speaker. */
-const BREAK_BANNER_OUT_MS = 300;
 
 /**
  * How early a graphic is put on the page ahead of its start. The playhead arrives about four times
@@ -148,7 +146,7 @@ export function DebateBreakOverlay({
       <div
         data-debate-dim-out
         className={cx('absolute inset-0', !wrap && PLAYER_EXIT_CLASS)}
-        style={wrap ? undefined : heldAt(Math.max(0, cue.playedMs - BREAK_BANNER_OUT_MS))}
+        style={wrap ? undefined : heldAt(Math.max(0, cue.playedMs - PLAYER_EXIT_MS))}
       >
         <div
           data-debate-dim
@@ -161,7 +159,7 @@ export function DebateBreakOverlay({
           data-debate-question-out
           className={cx('absolute inset-0 grid place-items-center px-4 text-center', PLAYER_EXIT_CLASS)}
           // Hold through the vote reveal, then clear the seam for either the round or wrap title.
-          style={heldAt(bannerAtMs - BREAK_BANNER_OUT_MS)}
+          style={heldAt(bannerAtMs - PLAYER_EXIT_MS)}
         >
           <div
             data-debate-question
@@ -182,7 +180,7 @@ export function DebateBreakOverlay({
               data-debate-pick-out={slot}
               className={cx(TILE_CLASS[slot], 'grid place-items-center', !wrap && PLAYER_EXIT_CLASS)}
               // Keep both votes under the title, then leave with it at the next-round cut.
-              style={wrap ? undefined : heldAt(cue.playedMs - BREAK_BANNER_OUT_MS)}
+              style={wrap ? undefined : heldAt(cue.playedMs - PLAYER_EXIT_MS)}
             >
               <div
                 data-debate-pick-recede={slot}
@@ -213,7 +211,7 @@ export function DebateBreakOverlay({
           data-debate-banner-out
           // The wrap holds; a next-round announcement fades before the cut.
           className={cx('absolute inset-x-0 top-1/2 -translate-y-1/2', !wrap && PLAYER_EXIT_CLASS)}
-          style={wrap ? undefined : heldAt(cue.playedMs - BREAK_BANNER_OUT_MS)}
+          style={wrap ? undefined : heldAt(cue.playedMs - PLAYER_EXIT_MS)}
         >
           <div
             data-debate-banner={wrap ? 'wrap' : 'round'}
