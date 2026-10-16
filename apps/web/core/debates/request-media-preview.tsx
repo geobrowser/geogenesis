@@ -82,11 +82,8 @@ function MediaPreview({
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const initialJoinStateRef = React.useRef(initialJoinState);
 
-  /*
-   * A kind a live lobby is capturing stays the lobby's until toggled here: this card never opens a
-   * second capture of it (iPhone Safari keeps one per kind), and without an earlier choice it shows
-   * the lobby's state, so the next screen joins the way the person already was.
-   */
+  // A kind the lobby captures stays the lobby's until toggled here: never opened twice (iPhone Safari
+  // keeps one capture per kind), and shown as the lobby has it unless a choice was saved.
   const lobbyMic = useLobbyCapture('audio');
   const lobbyCamera = useLobbyCapture('video');
   const [toggledHere, setToggledHere] = React.useState({ mic: false, camera: false });
