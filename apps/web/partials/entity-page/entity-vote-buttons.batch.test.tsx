@@ -193,7 +193,10 @@ describe('EntityVoteButtons claims-page batching', () => {
     expect(view.getByText('7')).toBeInTheDocument();
     expect(view.getByRole('button', { name: 'Remove upvote' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(view.getByRole('button', { name: 'Downvote' }));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative');
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith(
+      'negative',
+      expect.objectContaining({ onError: expect.any(Function) })
+    );
   });
 
   it('passes the optimistic viewer response to responder avatars immediately', () => {
@@ -212,8 +215,11 @@ describe('EntityVoteButtons claims-page batching', () => {
     mocks.smartAccount = {};
     const view = renderButtons(true, true);
 
-    fireEvent.click(view.getByTitle('Remove agreement'));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('clear');
+    fireEvent.click(view.getByRole('button', { name: 'Remove agreement' }));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith(
+      'clear',
+      expect.objectContaining({ onError: expect.any(Function) })
+    );
 
     mocks.optimisticResponse = 'negative';
     view.rerender(
@@ -221,8 +227,11 @@ describe('EntityVoteButtons claims-page batching', () => {
         <EntityVoteButtons entityId="claim-1" spaceId="space-1" responseKind="stance" />
       </ClaimResponseBatchBoundary>
     );
-    fireEvent.click(view.getByTitle('Agree'));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('positive');
+    fireEvent.click(view.getByRole('button', { name: 'Agree' }));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith(
+      'positive',
+      expect.objectContaining({ onError: expect.any(Function) })
+    );
 
     mocks.optimisticResponse = 'positive';
     view.rerender(
@@ -230,8 +239,11 @@ describe('EntityVoteButtons claims-page batching', () => {
         <EntityVoteButtons entityId="claim-1" spaceId="space-1" responseKind="stance" />
       </ClaimResponseBatchBoundary>
     );
-    fireEvent.click(view.getByTitle('Disagree'));
-    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative');
+    fireEvent.click(view.getByRole('button', { name: 'Disagree' }));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith(
+      'negative',
+      expect.objectContaining({ onError: expect.any(Function) })
+    );
   });
 
   it('renders 50 batched claims with one summary request and no individual response requests', async () => {

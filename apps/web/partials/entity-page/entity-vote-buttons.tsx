@@ -36,6 +36,7 @@ import {
   entityResponseCountsQueryKey,
   hasUnpublishedClaimResponseKindEdit,
   resolveEntityResponseKind,
+  responseErrorMessage,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
@@ -57,7 +58,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
-import { VOTE_BUTTON_CLASS, VOTE_BUTTON_CONFIRMING_CLASS } from '~/partials/entity-page/vote-button-styles';
+import { ResponseButton } from '~/partials/entity-page/response-button';
+import { VOTE_BUTTON_HOVER_CLASS, VOTE_BUTTON_RESTING_CLASS } from '~/partials/entity-page/vote-button-styles';
 
 import { slideUpPopoverContainerAtom } from '~/atoms';
 
@@ -197,6 +199,8 @@ function EntityResponseButtons({
   // control, which can unmount mid-sign-up and take the vote with it.
   const promptSignIn = usePrivySignIn();
 
+  const [responseError, setResponseError] = React.useState<string | null>(null);
+
   const { data: responseCounts } = useQuery<{ positive: number; negative: number } | null>({
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, queryResponseKind),
     queryFn: () =>
@@ -322,21 +326,27 @@ function EntityResponseButtons({
   }
 
   function handlePositiveResponse() {
+    setResponseError(null);
     if (!isConnected) {
       queueResponse('positive');
       return;
     }
     dropLocalVote();
-    submitResponse(activeResponse === 'positive' ? 'clear' : 'positive');
+    submitResponse(activeResponse === 'positive' ? 'clear' : 'positive', {
+      onError: error => setResponseError(responseErrorMessage(error)),
+    });
   }
 
   function handleNegativeResponse() {
+    setResponseError(null);
     if (!isConnected) {
       queueResponse('negative');
       return;
     }
     dropLocalVote();
-    submitResponse(activeResponse === 'negative' ? 'clear' : 'negative');
+    submitResponse(activeResponse === 'negative' ? 'clear' : 'negative', {
+      onError: error => setResponseError(responseErrorMessage(error)),
+    });
   }
 
   const scoreLabel = formatScore(displayScore);
@@ -481,6 +491,7 @@ function EntityResponseButtons({
         positiveActive={positiveActive}
         negativeActive={negativeActive}
         disabled={responseDisabled}
+        pending={isProcessingResponse}
         positiveTitle={positiveTitle}
         negativeTitle={negativeTitle}
         onPositive={handlePositiveResponse}
@@ -489,47 +500,28 @@ function EntityResponseButtons({
     );
   }
 
-  /*
-   * Everything the two thumbs share, so the two cannot drift — and so this control matches the claim
-   * pills while a response confirms, which is how they came apart in the first place: #2587 and #2598
-   * taught the pills how to behave in that window and nothing tied the thumbs to them.
-   *
-   * For the tens of seconds a response spends confirming (`isProcessingResponse`, the hook's own
-   * account of that window), the pills and now the thumbs:
-   *
-   * - **ignore presses.** The held thumb is this client's guess until the write lands, and pressing a
-   *   held thumb means "remove" — so a second press, or a double-click, published a retraction nobody
-   *   asked for mid-confirmation;
-   * - say so to assistive technology with `aria-disabled`, and to the pointer with `cursor-progress`;
-   * - drop the hover step, since nothing under the pointer is going to happen;
-   * - put `RESPONSE_CONFIRMING_COPY` in the tooltip, as the pills' `actionTitle` does;
-   * - stay at full strength: `aria-disabled` rather than `disabled`, so the side still reads as taken.
-   *
-   * Inline only. `DebateVotePill` draws this control in the debate overlay and shares its handlers,
-   * so the guard sits on these buttons rather than in `handlePositiveResponse` — widening it to the
-   * overlay belongs with unifying the pills and the thumbs into one control.
-   */
-  const voteButtonProps = (onPress: () => void, title: string) => ({
-    onClick: () => {
-      if (!isProcessingResponse) onPress();
-    },
-    disabled: responseDisabled,
-    'aria-disabled': isProcessingResponse || undefined,
-    title: isProcessingResponse ? RESPONSE_CONFIRMING_COPY : title,
-    className: cx(
-      'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-      isProcessingResponse ? VOTE_BUTTON_CONFIRMING_CLASS : VOTE_BUTTON_CLASS,
-      responseDisabled && 'cursor-default opacity-50',
-      isProcessingResponse && 'cursor-progress'
-    ),
-  });
+  // The two thumbs share `ResponseButton` with the claim pills and the debate overlay.
+  const thumbClassName = cx(
+    'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
+    VOTE_BUTTON_RESTING_CLASS
+  );
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       {claimResponderAvatarsPosition === 'leading' ? claimResponderAvatarsTrigger('leading') : null}
-      <button {...voteButtonProps(handlePositiveResponse, positiveTitle)}>
+      <ResponseButton
+        selected={positiveActive}
+        pending={isProcessingResponse}
+        disabled={responseDisabled}
+        actionTitle={positiveTitle}
+        ariaLabel={positiveTitle}
+        tooltip
+        onPress={handlePositiveResponse}
+        className={thumbClassName}
+        hoverClassName={VOTE_BUTTON_HOVER_CLASS}
+      >
         <ResponsePositionIcon responseKind={queryResponseKind} position selected={positiveActive} />
-      </button>
+      </ResponseButton>
       <RespondersPopover entityId={entityId} spaceId={spaceId} responseKind={queryResponseKind}>
         <button
           className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
@@ -539,9 +531,19 @@ function EntityResponseButtons({
           {displayLabel}
         </button>
       </RespondersPopover>
-      <button {...voteButtonProps(handleNegativeResponse, negativeTitle)}>
+      <ResponseButton
+        selected={negativeActive}
+        pending={isProcessingResponse}
+        disabled={responseDisabled}
+        actionTitle={negativeTitle}
+        ariaLabel={negativeTitle}
+        tooltip
+        onPress={handleNegativeResponse}
+        className={thumbClassName}
+        hoverClassName={VOTE_BUTTON_HOVER_CLASS}
+      >
         <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
-      </button>
+      </ResponseButton>
       {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}
       {isResponseIndexingDelayed ? (
         // Hidden from layout in the bar, not removed from the page. This is the only `aria-live`
@@ -554,6 +556,11 @@ function EntityResponseButtons({
         // same sentence in a `title` attribute — read on focus, never announced as a live update.
         <span aria-live="polite" className={cx(compact ? 'sr-only' : 'ml-1 text-metadata text-grey-04')}>
           {RESPONSE_CONFIRMING_COPY}
+        </span>
+      ) : null}
+      {responseError ? (
+        <span role="alert" className={cx(compact ? 'sr-only' : 'ml-1 text-metadata text-red-01')}>
+          {responseError}
         </span>
       ) : null}
     </div>
@@ -638,6 +645,7 @@ function DebateVotePill({
   positiveActive,
   negativeActive,
   disabled,
+  pending,
   positiveTitle,
   negativeTitle,
   onPositive,
@@ -648,11 +656,17 @@ function DebateVotePill({
   positiveActive: boolean;
   negativeActive: boolean;
   disabled: boolean;
+  pending: boolean;
   positiveTitle: string;
   negativeTitle: string;
   onPositive: () => void;
   onNegative: () => void;
 }) {
+  const arrowClassName = cx(
+    'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
+    VOTE_BUTTON_RESTING_CLASS
+  );
+
   return (
     <div
       data-entity-vote-presentation={`debate-${orientation}`}
@@ -661,35 +675,33 @@ function DebateVotePill({
         orientation === 'vertical' ? 'w-9 flex-col py-2' : 'h-7 px-2.5'
       )}
     >
-      <button
-        type="button"
-        aria-label={positiveTitle}
-        aria-pressed={positiveActive}
+      <ResponseButton
+        selected={positiveActive}
+        pending={pending}
         disabled={disabled}
-        title={positiveTitle}
-        onClick={onPositive}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
+        actionTitle={positiveTitle}
+        ariaLabel={positiveTitle}
+        tooltip
+        onPress={onPositive}
+        className={arrowClassName}
+        hoverClassName={VOTE_BUTTON_HOVER_CLASS}
       >
         <VoteArrow direction="up" filled={positiveActive} />
-      </button>
+      </ResponseButton>
       <span className="text-metadataMedium text-text tabular-nums">{score}</span>
-      <button
-        type="button"
-        aria-label={negativeTitle}
-        aria-pressed={negativeActive}
+      <ResponseButton
+        selected={negativeActive}
+        pending={pending}
         disabled={disabled}
-        title={negativeTitle}
-        onClick={onNegative}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
+        actionTitle={negativeTitle}
+        ariaLabel={negativeTitle}
+        tooltip
+        onPress={onNegative}
+        className={arrowClassName}
+        hoverClassName={VOTE_BUTTON_HOVER_CLASS}
       >
         <VoteArrow direction="down" filled={negativeActive} />
-      </button>
+      </ResponseButton>
     </div>
   );
 }

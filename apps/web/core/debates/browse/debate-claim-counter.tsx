@@ -401,6 +401,7 @@ function ClaimListCardBody({
         label={label}
         selected={position === side}
         disabled={!control.canRespond}
+        pending={control.isResponseSubmitting}
         title={control.actionTitle(side) || label}
         onClick={() => control.respond(side)}
         tone="glass"
