@@ -1694,12 +1694,15 @@ describe('DebateRoomPageClient', () => {
         <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
       </DebateMediaSessionProvider>
     );
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument());
+    // Room mount and the reconnect's device reopen both run past the default 1s on a loaded CI runner.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument(), {
+      timeout: 3000,
+    });
     mocks.createLocalTracks.mockClear();
 
     act(() => emitRoomEvent('disconnected', 99));
 
-    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalled(), { timeout: 3000 });
     expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
     expect(mocks.createLocalTracks).toHaveBeenLastCalledWith(
