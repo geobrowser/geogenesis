@@ -17,7 +17,10 @@ export const PLAYER_PICK_CLASS = {
   end: 'bg-[rgba(36,36,40,0.48)] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur-[14px]',
   none: 'border-[0.5cqw] border-dashed border-white/60 text-white/80',
 } as const;
-/** Linear fade and cubic settle have separate curves, as in the export. */
+/** One quiet settle across announcements and picks; reduced motion keeps only the fade. */
 export const PLAYER_ENTER_CLASS =
-  'animate-[fadeIn_250ms_linear_both] motion-safe:animate-[fadeIn_250ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]';
+  'animate-[fadeIn_250ms_linear_both] motion-safe:animate-[fadeIn_250ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.22,1,0.36,1)_both]';
 export const PLAYER_EXIT_CLASS = 'animate-[fadeIn_300ms_linear_reverse_both]';
+
+/** Dim and panel entrances use a soft fade without moving the video underneath. */
+export const PLAYER_FADE_CLASS = 'animate-[fadeIn_250ms_ease-out_both]';

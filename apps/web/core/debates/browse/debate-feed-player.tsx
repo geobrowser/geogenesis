@@ -373,8 +373,12 @@ export function DebateFeedPlayer({
     () =>
       (playing || stamped) && !reducedOverlays
         ? // A condensed break's own graphic already announced the round it leads into (GEO-3277).
-          roundCardAt(turnSpans, roundTurns, playheadSeconds, round =>
-            breakAnnouncesRound(playbackBreaks.breaks, round)
+          roundCardAt(
+            turnSpans,
+            roundTurns,
+            playheadSeconds,
+            round => breakAnnouncesRound(playbackBreaks.breaks, round),
+            stamped
           )
         : null,
     [playbackBreaks.breaks, playheadSeconds, playing, reducedOverlays, roundTurns, stamped, turnSpans]
@@ -889,17 +893,31 @@ export function DebateFeedPlayer({
             </span>
           )}
 
-        {stamped ? <DebateRoundBanner cue={roundCard} /> : <DebateRoundCard cue={roundCard} />}
+        {stamped ? (
+          <DebateRoundBanner
+            cue={roundCard}
+            playing={playing}
+            clock={{ positionMs: livePositionMs, originMs: playheadMs - (roundCard?.ageMs ?? 0) }}
+          />
+        ) : (
+          <DebateRoundCard cue={roundCard} />
+        )}
         {!endCardShown && (
           <>
             <DebateBreakOverlay
               cue={breakCue}
+              clock={{ positionMs: livePositionMs, originMs: playheadMs - (breakCue?.elapsedMs ?? 0) }}
               names={breakNames}
               firstSlot={debate.first_participant_slot}
               roundTurns={roundTurns}
               playing={playing}
             />
-            <DebateEarlyEndLabels cue={earlyEndCue} names={breakNames} playing={playing} />
+            <DebateEarlyEndLabels
+              cue={earlyEndCue}
+              names={breakNames}
+              playing={playing}
+              clock={{ positionMs: livePositionMs, originMs: playheadMs - (earlyEndCue?.ageMs ?? 0) }}
+            />
           </>
         )}
 
@@ -927,7 +945,8 @@ export function DebateFeedPlayer({
           data-playback-feedback
           className={cx(
             CENTERED_PLAYBACK_CONTROL_CLASS,
-            'pointer-events-none z-30 grid transition-[opacity,scale] duration-300 md:hidden',
+            'pointer-events-none z-30 grid transition-[opacity,scale] md:hidden',
+            stamped ? 'duration-200 ease-out motion-reduce:scale-100 motion-reduce:transition-none' : 'duration-300',
             flash.visible ? 'scale-100 opacity-100' : 'scale-110 opacity-0'
           )}
         >
@@ -939,13 +958,20 @@ export function DebateFeedPlayer({
           trackImpression={endCardShown}
           value={{ component: 'debate_end_card', target_id: debate.id, target_type: 'debate' }}
         >
-          <MeasuredEndCard
-            debate={debate}
-            enabled={active && ready && !reducedOverlays}
-            shown={endCardShown}
-            onOpenClaims={onOpenClaims}
-            onReplay={replayFromEndCard}
-          />
+          <div
+            className={cx(
+              'contents',
+              stamped && endCardShown && '[&>[data-debate-end-card]>section]:animate-[fadeIn_250ms_ease-out_both]'
+            )}
+          >
+            <MeasuredEndCard
+              debate={debate}
+              enabled={active && ready && !reducedOverlays}
+              shown={endCardShown}
+              onOpenClaims={onOpenClaims}
+              onReplay={replayFromEndCard}
+            />
+          </div>
         </ActionSurface>
 
         {error && (
@@ -1402,7 +1428,7 @@ function DebaterVideo({
         <div className={cx('absolute top-3 left-3 flex items-center gap-2', stamped ? 'z-30' : 'z-10')}>{topLeft}</div>
       )}
 
-      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
+      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} smooth={stamped} />}
       {countdown && <DebateRoundBadge cue={roundBadge ?? null} stamped={stamped} />}
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
@@ -1472,7 +1498,9 @@ function DebaterVideo({
           style={{ opacity: hideForAnnouncement ? 0 : 1, visibility: hideForAnnouncement ? 'hidden' : undefined }}
           className={cx(
             'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end duration-150',
-            stamped ? 'transition-[padding-bottom]' : 'transition-[padding-bottom,opacity]',
+            stamped
+              ? 'transition-[padding-bottom] ease-out motion-reduce:transition-none'
+              : 'transition-[padding-bottom,opacity]',
             // Hidden counters and lists cannot intercept clicks or keyboard focus under the popup.
             '[&[data-yield]_*]:pointer-events-none!',
             // Two widths, by state rather than by screen. A live claim takes the whole tile,
@@ -1567,7 +1595,9 @@ function DebaterVideo({
         }}
         className={cx(
           'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-center gap-2 duration-150',
-          stamped ? 'transition-[padding-bottom]' : 'transition-[padding-bottom,opacity]',
+          stamped
+            ? 'transition-[padding-bottom] ease-out motion-reduce:transition-none'
+            : 'transition-[padding-bottom,opacity]',
           cardYield > 0.5 && '[&_[data-debater-avatar]]:pointer-events-none [&_button]:pointer-events-none',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
@@ -1631,7 +1661,15 @@ function DebaterVideo({
 }
 
 /** The classic ring stays the same size and colour throughout playback. */
-function CountdownBadge({ seconds, progress }: { seconds: number; progress: number }) {
+function CountdownBadge({
+  seconds,
+  progress,
+  smooth = false,
+}: {
+  seconds: number;
+  progress: number;
+  smooth?: boolean;
+}) {
   const remaining = 1 - Math.max(0, Math.min(1, progress));
   const ringMask = turnTimerRimMask('2px');
   return (
@@ -1639,9 +1677,15 @@ function CountdownBadge({ seconds, progress }: { seconds: number; progress: numb
       <div className="grid size-8 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
         <span
           data-turn-timer-rim
-          className="col-start-1 row-start-1 size-7 rounded-full"
+          className={cx(
+            'col-start-1 row-start-1 size-7 rounded-full',
+            smooth && 'transition-[--turn-timer-rim] duration-250 ease-linear motion-reduce:transition-none'
+          )}
           style={{
-            backgroundImage: `conic-gradient(#ffffff ${remaining * 360}deg, rgba(255,255,255,0.3) 0deg)`,
+            ...(smooth && { '--turn-timer-rim': `${remaining * 360}deg` }),
+            backgroundImage: smooth
+              ? 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.3) 0deg)'
+              : `conic-gradient(#ffffff ${remaining * 360}deg, rgba(255,255,255,0.3) 0deg)`,
             maskImage: ringMask,
             WebkitMaskImage: ringMask,
           }}

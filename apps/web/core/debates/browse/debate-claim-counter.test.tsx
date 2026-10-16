@@ -64,6 +64,9 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
+// Closing cards remain briefly as an inert picture; user interaction follows the open panel.
+const visibleList = (container: HTMLElement) =>
+  container.querySelector('[data-claim-list-presence="open"] [data-claim-list]');
 const counter = (container: HTMLElement) => container.querySelector('[data-claim-counter]') as HTMLElement;
 const hover = (el: HTMLElement) => fireEvent.pointerEnter(el, { pointerType: 'mouse' });
 const leave = (el: HTMLElement) => fireEvent.pointerLeave(el, { pointerType: 'mouse' });
@@ -75,7 +78,7 @@ describe('DebateClaimCounter (GEO-3317)', () => {
 
     hover(counter(container));
     act(() => vi.advanceTimersByTime(500));
-    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(visibleList(container)).toBeNull();
   });
 
   it('never shows a claim’s text unless asked', () => {
@@ -99,29 +102,47 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     const { container } = renderCounter([said('a', 1_000), said('b', 2_000)]);
     hover(counter(container));
     act(() => vi.advanceTimersByTime(100));
-    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(visibleList(container)).toBeNull();
     act(() => vi.advanceTimersByTime(100));
-    expect(container.querySelector('[data-claim-list]')).not.toBeNull();
+    expect(visibleList(container)).not.toBeNull();
 
     leave(counter(container));
     act(() => vi.advanceTimersByTime(150));
     // Back on it before it closed: still open.
     hover(counter(container));
     act(() => vi.advanceTimersByTime(400));
-    expect(container.querySelector('[data-claim-list]')).not.toBeNull();
+    expect(visibleList(container)).not.toBeNull();
 
     leave(counter(container));
     act(() => vi.advanceTimersByTime(300));
-    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(visibleList(container)).toBeNull();
   });
 
   it('opens and closes on a press, for touch and the keyboard', () => {
     const { container } = renderCounter([said('a', 1_000)]);
     const button = container.querySelector('[data-claim-count]') as HTMLElement;
     fireEvent.click(button);
-    expect(container.querySelector('[data-claim-list]')).not.toBeNull();
+    expect(visibleList(container)).not.toBeNull();
     expect(button.getAttribute('aria-expanded')).toBe('true');
     fireEvent.click(button);
+    expect(visibleList(container)).toBeNull();
+  });
+
+  it('finishes its exit, disables votes immediately, and reverses a close without remounting cards', () => {
+    const { container } = renderCounter([said('a', 1_000)]);
+    const button = container.querySelector('[data-claim-count]') as HTMLElement;
+    fireEvent.click(button);
+    const card = container.querySelector('[data-claim-list-card="a"]');
+    fireEvent.click(button);
+    expect(container.querySelector('[data-claim-list-presence="closed"]')?.hasAttribute('inert')).toBe(true);
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    act(() => vi.advanceTimersByTime(90));
+    fireEvent.click(button);
+    expect(container.querySelector('[data-claim-list-card="a"]')).toBe(card);
+    act(() => vi.advanceTimersByTime(200));
+    expect(visibleList(container)).not.toBeNull();
+    fireEvent.click(button);
+    act(() => vi.advanceTimersByTime(180));
     expect(container.querySelector('[data-claim-list]')).toBeNull();
   });
 
@@ -134,8 +155,8 @@ describe('DebateClaimCounter (GEO-3317)', () => {
       card.getAttribute('data-claim-list-card')
     );
     expect(cards).toEqual(['b', 'a']);
-    expect(container.querySelector('[data-claim-list]')?.textContent).not.toContain('Preston’s claims');
-    expect(container.querySelector('[data-claim-list]')?.textContent).not.toContain('See all');
+    expect(visibleList(container)?.textContent).not.toContain('Preston’s claims');
+    expect(visibleList(container)?.textContent).not.toContain('See all');
   });
 
   it('shows the share who agree only once a claim has votes', () => {
@@ -184,23 +205,23 @@ describe('DebateClaimCounter (GEO-3317)', () => {
 
     fireEvent.click(button);
     act(() => vi.advanceTimersByTime(500));
-    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(visibleList(container)).toBeNull();
 
     leave(counter(container));
     act(() => vi.advanceTimersByTime(300));
     hover(counter(container));
     act(() => vi.advanceTimersByTime(200));
-    expect(container.querySelector('[data-claim-list]')).not.toBeNull();
+    expect(visibleList(container)).not.toBeNull();
   });
 
   it('lets a mouse that clicked it open close it by leaving', () => {
     const { container } = renderCounter([said('a', 1_000)]);
     hover(counter(container));
     fireEvent.click(container.querySelector('[data-claim-count]') as HTMLElement);
-    expect(container.querySelector('[data-claim-list]')).not.toBeNull();
+    expect(visibleList(container)).not.toBeNull();
     leave(counter(container));
     act(() => vi.advanceTimersByTime(300));
-    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(visibleList(container)).toBeNull();
   });
 
   // Copilot, #2843: a keyboard user on a vote button lost their place when the pointer left and the
@@ -226,11 +247,11 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     fireEvent.focus(agree);
     leave(counter(container));
     act(() => vi.advanceTimersByTime(500));
-    expect(container.querySelector('[data-claim-list]')).not.toBeNull();
+    expect(visibleList(container)).not.toBeNull();
     expect(onActiveChange).toHaveBeenLastCalledWith(true);
 
     fireEvent.blur(agree, { relatedTarget: container.querySelector('[data-testid="elsewhere"]') });
-    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(visibleList(container)).toBeNull();
     expect(onActiveChange).toHaveBeenLastCalledWith(false);
   });
 
@@ -244,7 +265,7 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     fireEvent.pointerUp(agree);
     leave(counter(container));
     act(() => vi.advanceTimersByTime(300));
-    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(visibleList(container)).toBeNull();
   });
 
   // Copilot, #2843: content shown on hover must close with Escape, without moving the pointer.
@@ -258,7 +279,7 @@ describe('DebateClaimCounter (GEO-3317)', () => {
 
     fireEvent.keyDown(window, { key: 'Escape' });
     act(() => vi.advanceTimersByTime(500));
-    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(visibleList(container)).toBeNull();
     expect(document.activeElement).toBe(container.querySelector('[data-claim-count]'));
   });
 
@@ -314,7 +335,7 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     fireEvent.focus(container.querySelector('[aria-label="Agree"]') as HTMLElement);
     leave(counter(container));
     act(() => vi.advanceTimersByTime(500));
-    expect(container.querySelector('[data-claim-list]')).not.toBeNull();
+    expect(visibleList(container)).not.toBeNull();
   });
 
   // Copilot, #2843: leaving after Hide let go of the dismissal while the hover was still running out
@@ -324,11 +345,11 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     hover(counter(container));
     act(() => vi.advanceTimersByTime(200));
     fireEvent.click(container.querySelector('[data-claim-count]') as HTMLElement);
-    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(visibleList(container)).toBeNull();
 
     leave(counter(container));
-    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(visibleList(container)).toBeNull();
     act(() => vi.advanceTimersByTime(100));
-    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(visibleList(container)).toBeNull();
   });
 });

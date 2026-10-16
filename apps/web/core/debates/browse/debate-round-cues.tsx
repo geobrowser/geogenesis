@@ -4,14 +4,21 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { RoundCue } from '~/core/debates/round-cues';
+import { ROUND_CARD_MS, type RoundCue } from '~/core/debates/round-cues';
 
 import {
   PLAYBACK_ROUND_EYEBROW_CLASS,
   PLAYBACK_ROUND_HEADLINE_CLASS,
   PLAYBACK_OUTLINE_STYLE as roundCardTextShadow,
 } from './playback-typography';
-import { PLAYER_GLASS_CLASS, PLAYER_LABEL_FONT, PLAYER_TITLE_STYLE } from './player-overlay-styles';
+import {
+  PLAYER_ENTER_CLASS,
+  PLAYER_EXIT_CLASS,
+  PLAYER_GLASS_CLASS,
+  PLAYER_LABEL_FONT,
+  PLAYER_TITLE_STYLE,
+} from './player-overlay-styles';
+import { heldAt, usePlaybackAnimationClock } from './use-playback-animation-clock';
 
 /**
  * How wide the round's name is drawn, as a share of the player.
@@ -168,20 +175,29 @@ export function DebateRoundBadge({
 }
 
 /** The Open rounds opening: stacked outlined type, fading in place on the playhead. */
-export function DebateRoundBanner({ cue }: { cue: RoundCue | null }) {
+export function DebateRoundBanner({
+  cue,
+  playing = false,
+  clock,
+}: {
+  cue: RoundCue | null;
+  playing?: boolean;
+  clock?: { positionMs: () => number | null; originMs: number };
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  usePlaybackAnimationClock(ref, cue ? { elapsedMs: cue.ageMs ?? 0, playedMs: ROUND_CARD_MS } : null, playing, clock);
   if (!cue) return null;
   return (
     <div
       aria-hidden
+      ref={ref}
       data-round-banner={cue.label}
       className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] -translate-y-1/2 text-center"
-      style={{ opacity: cue.opacity }}
     >
-      <div
-        className="motion-safe:animate-[debatePlayerSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]"
-        style={{ animationDelay: `-${cue.ageMs ?? 0}ms`, animationPlayState: 'paused' }}
-      >
-        <PlayerRoundTitle round={cue.round} role={cue.role} />
+      <div data-round-banner-out className={PLAYER_EXIT_CLASS} style={heldAt(ROUND_CARD_MS - 300)}>
+        <div className={PLAYER_ENTER_CLASS} style={heldAt(0)}>
+          <PlayerRoundTitle round={cue.round} role={cue.role} />
+        </div>
       </div>
     </div>
   );

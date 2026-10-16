@@ -21,6 +21,7 @@ import { PlayerRoundTitle } from './debate-round-cues';
 import {
   PLAYER_ENTER_CLASS,
   PLAYER_EXIT_CLASS,
+  PLAYER_FADE_CLASS,
   PLAYER_LABEL_FONT,
   PLAYER_PICK_BASE_CLASS,
   PLAYER_PICK_CLASS,
@@ -29,6 +30,7 @@ import {
   PLAYER_TITLE_STYLE,
 } from './player-overlay-styles';
 import { STAMP_WORD } from './stamp-styles';
+import { heldAt, usePlaybackAnimationClock } from './use-playback-animation-clock';
 
 /** The announcement fades before the cut to the next speaker. */
 const BREAK_BANNER_OUT_MS = 300;
@@ -51,13 +53,6 @@ const TILE_CLASS: Record<ParticipantSlot, string> = {
   1: 'absolute inset-x-0 top-0 h-1/2',
   2: 'absolute inset-x-0 bottom-0 h-1/2',
 };
-
-/**
- * How far past the last playhead sample the animation may run on its own. The playhead arrives about
- * four times a second, from `timeupdate`; between samples the frame loop carries the time on, but
- * never further than this, so a stalled video does not leave its graphics running ahead of it.
- */
-const MAX_AHEAD_MS = 500;
 
 /** How long ahead of a cut its timer is set: the playhead arrives about four times a second. */
 const CUT_LOOKAHEAD_MS = 1_000;
@@ -118,90 +113,6 @@ export function useBreakCuts(
   }, [atMs, playheadMs, positionMs, seek, toMs]);
 }
 
-/** A gap between the drawn clock and the playhead wider than this is a jump (a scrub), not drift. */
-export const BREAK_CLOCK_SNAP_MS = 400;
-
-/** The share of the remaining drift taken in each frame: gone within a few frames, never a jump. */
-const BREAK_CLOCK_EASE = 0.1;
-
-/**
- * Where the break's drawn clock goes on the next frame, toward `targetMs`, the playhead read off its
- * last sample and carried on at real speed.
- *
- * The playhead arrives about four times a second and each sample can land a little behind or ahead
- * of where the frames had got to. Snapping to it made a 300 ms wipe step backwards and forwards: the
- * roll looked rough on some runs and smooth on others, depending on where the samples fell. So the
- * clock runs at real speed and takes the drift in a little at a time, and never moves backwards
- * while playing. Only a gap too wide to be drift, a scrub, is jumped.
- */
-export function advanceBreakClock(displayedMs: number, targetMs: number, frameMs: number, playedMs: number) {
-  const drift = targetMs - displayedMs;
-  if (Math.abs(drift) > BREAK_CLOCK_SNAP_MS) return Math.min(playedMs, Math.max(0, targetMs));
-  return Math.min(playedMs, displayedMs + Math.max(0, frameMs + drift * BREAK_CLOCK_EASE));
-}
-
-/**
- * Writes how far into the break the playhead is to `--break-t` on every frame, which is what the
- * held animations read (`heldAt`): smoothly while playing (`advanceBreakClock`), and exactly where
- * the playhead is while paused or on a break's first sample. That sample lands up to a quarter of a
- * second into the break, which is why nothing moves before `BREAK_SETTLE_MS`.
- */
-function useBreakClock(
-  ref: React.RefObject<HTMLDivElement | null>,
-  cue: Pick<BreakCue, 'elapsedMs' | 'playedMs'> | null,
-  playing: boolean
-) {
-  const sample = React.useRef({ elapsedMs: 0, at: 0 });
-  const displayed = React.useRef<number | null>(null);
-  const elapsedMs = cue?.elapsedMs ?? null;
-  const playedMs = cue?.playedMs ?? 0;
-
-  const write = React.useCallback(
-    (ms: number) => {
-      displayed.current = ms;
-      ref.current?.style.setProperty('--break-t', String(ms));
-    },
-    [ref]
-  );
-
-  React.useLayoutEffect(() => {
-    if (elapsedMs === null) {
-      displayed.current = null;
-      return;
-    }
-    sample.current = { elapsedMs, at: performance.now() };
-    if (!playing || displayed.current === null) write(elapsedMs);
-  }, [elapsedMs, playing, write]);
-
-  const shown = elapsedMs !== null;
-  React.useEffect(() => {
-    if (!shown || !playing) return;
-    let frame = 0;
-    let last = performance.now();
-    const tick = (now: number) => {
-      const { elapsedMs: sampled, at } = sample.current;
-      const target = sampled + Math.min(now - at, MAX_AHEAD_MS);
-      write(advanceBreakClock(displayed.current ?? target, target, now - last, playedMs));
-      last = now;
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [playedMs, playing, shown, write]);
-}
-
-/**
- * Holds a CSS animation at the playhead: `--break-t`, ms into the break, less `startMs`, the moment
- * the animation begins. The keyframes run as written, and a viewer who scrubs or pauses mid-break
- * finds the motion exactly where the video is.
- */
-function heldAt(startMs: number): React.CSSProperties {
-  return { animationDelay: `calc(${startMs}ms - var(--break-t, 0) * 1ms)`, animationPlayState: 'paused' };
-}
-
-/** Shown, without a fade, from where a held animation starts: the mockup's dim and note appear at once. */
-const APPEAR = 'animate-[fadeIn_1ms_linear_both]';
-
 /** Open rounds breaks: outlined announcements with glass picks on each debater's video. */
 export function DebateBreakOverlay({
   cue,
@@ -209,15 +120,17 @@ export function DebateBreakOverlay({
   firstSlot,
   roundTurns,
   playing,
+  clock,
 }: {
   cue: BreakCue | null;
   names: BreakNames;
   firstSlot: ParticipantSlot;
   roundTurns: TurnCount;
   playing: boolean;
+  clock?: { positionMs: () => number | null; originMs: number };
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
-  useBreakClock(ref, cue, playing);
+  usePlaybackAnimationClock(ref, cue, playing, clock);
   if (!cue) return null;
 
   const picks = cue.picks;
@@ -230,9 +143,23 @@ export function DebateBreakOverlay({
   return (
     <div ref={ref} aria-hidden data-debate-break={cue.kind} className="pointer-events-none absolute inset-0 z-[22]">
       {/* The dim comes in with the first graphic, not ahead of it: the question, or a lead-in's banner. */}
-      <div data-debate-dim className={cx('absolute inset-0 bg-black/42', APPEAR)} style={heldAt(BREAK_SETTLE_MS)} />
-      {picks && cue.elapsedMs < BREAK_SETTLE_MS + BREAK_QUESTION_MS && (
-        <div className="absolute inset-0 grid place-items-center px-4 text-center">
+      <div
+        data-debate-dim-out
+        className={cx('absolute inset-0', !wrap && PLAYER_EXIT_CLASS)}
+        style={wrap ? undefined : heldAt(Math.max(0, cue.playedMs - BREAK_BANNER_OUT_MS))}
+      >
+        <div
+          data-debate-dim
+          className={cx('absolute inset-0 bg-black/42', PLAYER_FADE_CLASS)}
+          style={heldAt(BREAK_SETTLE_MS)}
+        />
+      </div>
+      {picks && (
+        <div
+          data-debate-question-out
+          className={cx('absolute inset-0 grid place-items-center px-4 text-center', PLAYER_EXIT_CLASS)}
+          style={heldAt(BREAK_SETTLE_MS + BREAK_QUESTION_MS - BREAK_BANNER_OUT_MS)}
+        >
           <div
             data-debate-question
             className={cx(PLAYER_TITLE_CLASS, PLAYER_ENTER_CLASS, 'text-[8cqw]')}
@@ -244,11 +171,15 @@ export function DebateBreakOverlay({
       )}
 
       {picks &&
-        (wrap || cue.elapsedMs < bannerAtMs) &&
         SLOTS.map(slot => {
           const key = picks[slot] ?? 'none';
           return (
-            <div key={slot} className={cx(TILE_CLASS[slot], 'grid place-items-center')}>
+            <div
+              key={slot}
+              data-debate-pick-out={slot}
+              className={cx(TILE_CLASS[slot], 'grid place-items-center', !wrap && PLAYER_EXIT_CLASS)}
+              style={wrap ? undefined : heldAt(bannerAtMs - BREAK_BANNER_OUT_MS)}
+            >
               <span
                 data-debate-stamp={key}
                 className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS[key], PLAYER_ENTER_CLASS)}
@@ -309,20 +240,22 @@ export function DebateEarlyEndLabels({
   cue,
   names,
   playing,
+  clock,
 }: {
   cue: EarlyEndCue | null;
   names: BreakNames;
   playing: boolean;
+  clock?: { positionMs: () => number | null; originMs: number };
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
-  useBreakClock(ref, cue ? { elapsedMs: cue.ageMs, playedMs: cue.durationMs } : null, playing);
+  usePlaybackAnimationClock(ref, cue ? { elapsedMs: cue.ageMs, playedMs: cue.durationMs } : null, playing, clock);
   return (
     <div ref={ref} aria-hidden className="pointer-events-none absolute inset-0 z-[22]">
       <RoomExit>
         {cue && (
           // The debater who ended is dimmed under their stamp, as in the mockup.
           <div data-debate-early-end className={cx(TILE_CLASS[cue.endedSlot], 'grid place-items-center')}>
-            <div className="absolute inset-0 bg-black/42" />
+            <div className={cx('absolute inset-0 bg-black/42', PLAYER_FADE_CLASS)} style={heldAt(0)} />
             <span
               data-debate-stamp="ended"
               className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS.none, PLAYER_ENTER_CLASS, 'relative')}

@@ -21,6 +21,7 @@ import { useDebateClaimResponse } from './use-debate-claim-response';
 /** The pause on the video before the list opens, and after the pointer leaves before it closes. */
 const OPEN_AFTER_MS = 150;
 const CLOSE_AFTER_MS = 250;
+const LIST_EXIT_MS = 180;
 
 /**
  * One debater's claims in an Open rounds debate (GEO-3317): a count rather than each claim's text
@@ -77,6 +78,15 @@ export function DebateClaimCounter({
 
   const count = history.length;
   const open = !dismissed && (hovered || pinned || keyboardInside) && count > 0;
+  const [listPresent, setListPresent] = React.useState(false);
+  React.useEffect(() => {
+    if (open) {
+      setListPresent(true);
+      return;
+    }
+    const timer = setTimeout(() => setListPresent(false), LIST_EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [open]);
   const active = open || keyboardInside;
   React.useEffect(() => onActiveChange?.(active), [active, onActiveChange]);
 
@@ -156,15 +166,28 @@ export function DebateClaimCounter({
         if (!pointerOver) releaseDismissal();
       }}
     >
-      {open && (
-        <ClaimList
-          history={history}
-          name={name}
-          speaker={speaker}
-          rowsByClaimId={rowsByClaimId}
-          entitiesByClaimId={entitiesByClaimId}
-          onAnswered={onAnswered}
-        />
+      {(open || listPresent) && count > 0 && (
+        <div
+          data-claim-list-presence={open ? 'open' : 'closed'}
+          inert={!open}
+          aria-hidden={!open || undefined}
+          className={cx(
+            'transition-[opacity,translate] duration-180 ease-out motion-reduce:transition-none starting:opacity-0 motion-safe:starting:translate-y-[0.8cqw]',
+            open
+              ? 'opacity-100 motion-safe:translate-y-0'
+              : 'pointer-events-none opacity-0 motion-safe:translate-y-[0.8cqw]'
+          )}
+        >
+          <ClaimList
+            active={open}
+            history={history}
+            name={name}
+            speaker={speaker}
+            rowsByClaimId={rowsByClaimId}
+            entitiesByClaimId={entitiesByClaimId}
+            onAnswered={onAnswered}
+          />
+        </div>
       )}
       <span className="relative inline-flex">
         <button
@@ -206,6 +229,7 @@ function ClaimCount({ count }: { count: number }) {
 }
 
 function ClaimList({
+  active,
   history,
   name,
   speaker,
@@ -213,6 +237,7 @@ function ClaimList({
   entitiesByClaimId,
   onAnswered,
 }: {
+  active: boolean;
   history: StackedCard[];
   name: string;
   speaker: DebateParticipant | null;
@@ -242,6 +267,7 @@ function ClaimList({
       >
         {newestFirst.map(card => (
           <ClaimListCard
+            active={active}
             key={card.window.claim.id}
             card={card}
             name={name}
@@ -285,7 +311,11 @@ function paintTopFade(list: HTMLElement, fades: boolean) {
   }
 }
 
-function ClaimListCard(props: {
+function ClaimListCard({
+  active,
+  ...props
+}: {
+  active: boolean;
   card: StackedCard;
   name: string;
   speaker: DebateParticipant | null;
@@ -297,7 +327,11 @@ function ClaimListCard(props: {
   if (!claim.spaceId) return null;
   return (
     // The same surface as the live claim card it replaces, so votes stay comparable across the two.
-    <ActionSurface asChild value={{ component: 'debate_claim_ticker', target_id: claim.id, target_type: 'claim' }}>
+    <ActionSurface
+      asChild
+      trackImpression={active}
+      value={{ component: 'debate_claim_ticker', target_id: claim.id, target_type: 'claim' }}
+    >
       <ClaimListCardBody {...props} spaceId={claim.spaceId} />
     </ActionSurface>
   );

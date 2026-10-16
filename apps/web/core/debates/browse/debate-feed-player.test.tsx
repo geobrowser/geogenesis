@@ -1993,7 +1993,10 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
 
     mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 61.5, playbackBreaks });
     rerender(<DebateFeedPlayer debate={startedDebate} active />);
-    expect(container.querySelector('[data-debate-question]')).toBeNull();
+    const questionExit = container.querySelector('[data-debate-question-out]') as HTMLElement;
+    // The question completes its fade at 1100ms instead of unmounting on a coarse time sample.
+    expect(questionExit.style.animationDelay).toContain('800ms');
+    expect(questionExit.style.animationPlayState).toBe('paused');
     expect(stamps(container)).toEqual(['extend', 'extend']);
     // On the page ahead of its moment, held until the stamps have landed, so its roll-in plays whole.
     expect((container.querySelector('[data-debate-banner]') as HTMLElement).style.animationDelay).toContain('1850ms');
@@ -2033,7 +2036,10 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(banner?.querySelector('span')?.textContent).toBe('Round 2');
     expect(banner?.querySelector('[data-debate-banner-sub]')?.textContent).toMatch(/^\S+ opens$/);
     expect((banner as HTMLElement | null)?.style.fontSize).toBe('');
-    expect(stamps(container)).toEqual([]);
+    const pickExits = [...container.querySelectorAll<HTMLElement>('[data-debate-pick-out]')];
+    expect(pickExits).toHaveLength(2);
+    expect(pickExits[0].style.animationDelay).toContain('1550ms');
+    expect(pickExits[0].style.animationDelay).toBe(pickExits[1].style.animationDelay);
   });
 
   // The playhead's first sample in a break lands up to a quarter of a second in. Graphics mounted
@@ -2285,6 +2291,19 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
     expect(container.innerHTML).not.toContain('bg-purple');
   });
 
+  it('mounts the opening at frame zero and drives its entry and exit from one held clock', () => {
+    mocks.controller = at(0);
+    const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const banner = container.querySelector('[data-round-banner]') as HTMLElement;
+    expect(banner).not.toBeNull();
+    expect(banner.style.getPropertyValue('--break-t')).toBe('0');
+    const exit = container.querySelector('[data-round-banner-out]') as HTMLElement;
+    expect(exit.style.animationDelay).toContain('1500ms');
+    expect((exit.firstElementChild as HTMLElement).style.animationDelay).toContain('0ms');
+    expect(exit.style.animationPlayState).toBe('paused');
+    expect((exit.firstElementChild as HTMLElement).style.animationPlayState).toBe('paused');
+  });
+
   it('keeps the round card in a fixed-format debate', () => {
     mocks.controller = at(0.5);
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
@@ -2315,6 +2334,9 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
         expect(timer?.innerHTML).not.toMatch(/bg-red|animate-|swell|glow/);
         expect(timer?.getAttribute('style')).toBeNull();
         expect(timer?.querySelector('[data-turn-timer-rim]')?.getAttribute('style')).toContain('90deg');
+        expect(timer?.querySelector('[data-turn-timer-rim]')?.className.includes('transition-[--turn-timer-rim]')).toBe(
+          format === openRounds
+        );
         expect(container.querySelector('[data-round-badge]')?.getAttribute('style')).not.toContain('right:');
         unmount();
       }
