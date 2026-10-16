@@ -7,6 +7,7 @@ import { Text } from '~/design-system/text';
 
 import { CameraIcon, DebateTileToggleButton, MicrophoneIcon } from './debate-room-controls';
 import { DebateVideoTile } from './debate-video-tile';
+import { lobbyCaptureLive, releaseLobbyCapture } from './lobbies/step-out';
 import { type DebateMediaSession, preJoinMediaFailure, useOptionalDebateMediaSession } from './media-session';
 import {
   type DebateJoinState,
@@ -17,6 +18,14 @@ import {
 } from './request-join-state';
 
 type DebateMediaPermissions = { camera: DebateMediaPermission; microphone: DebateMediaPermission };
+
+/** Off for any kind a live lobby is capturing: opening a second one cuts the lobby's on iPhone Safari. */
+function withoutLobbyCaptures(state: DebateJoinState): DebateJoinState {
+  return {
+    micOn: state.micOn && !lobbyCaptureLive('audio'),
+    cameraOn: state.cameraOn && !lobbyCaptureLive('video'),
+  };
+}
 
 const UNKNOWN_PERMISSIONS: DebateMediaPermissions = { camera: 'unsupported', microphone: 'unsupported' };
 
@@ -72,7 +81,9 @@ function MediaPreview({
 }: Omit<DebateRequestMediaPreviewProps, 'fallback'> & { session: DebateMediaSession }) {
   const [permission, setPermission] = React.useState<DebateMediaPermissions | null>(null);
 
-  const [want, setWant] = React.useState<DebateJoinState>(initialJoinState ?? { micOn: false, cameraOn: false });
+  const [want, setWant] = React.useState<DebateJoinState>(() =>
+    withoutLobbyCaptures(initialJoinState ?? { micOn: false, cameraOn: false })
+  );
   const [missing, setMissing] = React.useState<{ mic: boolean; camera: boolean }>({ mic: false, camera: false });
   const [failure, setFailure] = React.useState<string | null>(null);
 
@@ -92,10 +103,12 @@ function MediaPreview({
       // Two ways a choice can already exist, and a default applies over neither: one arrived with
       // the card, and one was made here while this query was still out.
       if (initialJoinStateRef.current || chosenByViewer.current) return;
-      setWant({
-        micOn: mayAutoStartPreview(answer.microphone),
-        cameraOn: mayAutoStartPreview(answer.camera),
-      });
+      setWant(
+        withoutLobbyCaptures({
+          micOn: mayAutoStartPreview(answer.microphone),
+          cameraOn: mayAutoStartPreview(answer.camera),
+        })
+      );
     });
 
     return () => {
@@ -185,6 +198,8 @@ function MediaPreview({
     if (next.micOn !== undefined && micBlocked) return;
     if (next.cameraOn !== undefined && cameraBlocked) return;
     chosenByViewer.current = true;
+    if (next.micOn) releaseLobbyCapture('audio');
+    if (next.cameraOn) releaseLobbyCapture('video');
     setFailure(null);
     setWant(current => ({ ...current, ...next }));
   };

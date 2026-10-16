@@ -18,6 +18,7 @@ import cx from 'classnames';
 import {
   ConnectionState,
   DisconnectReason,
+  type LocalTrackPublication,
   MediaDeviceFailure,
   ParticipantEvent,
   type Room,
@@ -39,7 +40,7 @@ import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { lobbyErrorMessage } from './lobby-format';
 import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
-import { reportLobbyMic } from './step-out';
+import { registerLobbyCapture, reportLobbyMic } from './step-out';
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
 
@@ -357,7 +358,17 @@ function ConnectedVoice({
 
   // Autoplay can be blocked with no click before connecting (iOS); playback needs a user gesture.
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
+  const { localParticipant, isMicrophoneEnabled, microphoneTrack } = useLocalParticipant();
+
+  // A request card over the lobby releases this before opening its own mic.
+  const capturedMic = connected ? (microphoneTrack as LocalTrackPublication | undefined)?.track : undefined;
+  React.useEffect(() => {
+    if (!capturedMic) return;
+    return registerLobbyCapture('audio', () => {
+      onMicChoice(false);
+      void localParticipant.unpublishTrack(capturedMic, true).catch(() => undefined);
+    });
+  }, [capturedMic, localParticipant, onMicChoice]);
   const audible = connected && canPlayAudio;
   React.useEffect(() => {
     if (audible) onAudible?.();

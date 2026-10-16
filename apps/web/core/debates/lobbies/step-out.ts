@@ -16,6 +16,31 @@ export function registerLobbyStepOut(stepOut: () => Promise<void>) {
   };
 }
 
+export type LobbyCaptureKind = 'audio' | 'video';
+
+/** Devices this tab's lobby is capturing, each with a way to stop it. iPhone Safari keeps one capture per kind. */
+const lobbyCaptures = new Map<LobbyCaptureKind, () => void>();
+
+/** Set by the lobby's voice room while it holds a capture of `kind`; the returned function clears it. */
+export function registerLobbyCapture(kind: LobbyCaptureKind, release: () => void) {
+  lobbyCaptures.set(kind, release);
+  return () => {
+    if (lobbyCaptures.get(kind) === release) lobbyCaptures.delete(kind);
+  };
+}
+
+/** Whether the lobby holds a capture of `kind`, or of any kind when omitted. */
+export function lobbyCaptureLive(kind?: LobbyCaptureKind) {
+  return kind ? lobbyCaptures.has(kind) : lobbyCaptures.size > 0;
+}
+
+/** Stops the lobby's capture of `kind`, or every capture when omitted. */
+export function releaseLobbyCapture(kind?: LobbyCaptureKind) {
+  for (const [captured, release] of [...lobbyCaptures]) {
+    if (!kind || captured === kind) release();
+  }
+}
+
 /**
  * Every way into a debate goes through here: steps out of this tab's lobby first so the unmount's
  * leave does not take the viewer off its roster. Synchronous outside a lobby.

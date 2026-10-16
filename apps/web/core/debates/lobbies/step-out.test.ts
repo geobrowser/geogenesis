@@ -7,8 +7,11 @@ import {
   clearCarriedLobbyMic,
   debateEntryClick,
   forgetLobbyMic,
+  lobbyCaptureLive,
   readCarriedLobbyMic,
+  registerLobbyCapture,
   registerLobbyStepOut,
+  releaseLobbyCapture,
   reportLobbyMic,
   routeIntoDebate,
 } from './step-out';
@@ -34,6 +37,38 @@ function click(overrides: Partial<{ button: number; metaKey: boolean; defaultPre
     ...overrides,
   } as unknown as React.MouseEvent & { preventDefault: ReturnType<typeof vi.fn> };
 }
+
+describe('the lobby capture registry', () => {
+  it('tracks each kind and releases only the one asked for', () => {
+    const releaseMic = vi.fn();
+    const releaseCamera = vi.fn();
+    const clearMic = registerLobbyCapture('audio', releaseMic);
+    const clearCamera = registerLobbyCapture('video', releaseCamera);
+    expect(lobbyCaptureLive('audio')).toBe(true);
+    expect(lobbyCaptureLive()).toBe(true);
+
+    releaseLobbyCapture('audio');
+    expect(releaseMic).toHaveBeenCalledTimes(1);
+    expect(releaseCamera).not.toHaveBeenCalled();
+
+    releaseLobbyCapture();
+    expect(releaseCamera).toHaveBeenCalledTimes(1);
+
+    clearMic();
+    clearCamera();
+    expect(lobbyCaptureLive()).toBe(false);
+  });
+
+  it('keeps a newer registration when an older one clears', () => {
+    const clearOld = registerLobbyCapture('audio', vi.fn());
+    const clearNew = registerLobbyCapture('audio', vi.fn());
+
+    clearOld();
+    expect(lobbyCaptureLive('audio')).toBe(true);
+    clearNew();
+    expect(lobbyCaptureLive('audio')).toBe(false);
+  });
+});
 
 describe('routeIntoDebate', () => {
   it('navigates at once outside a lobby', () => {

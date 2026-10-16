@@ -9,7 +9,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyVoiceToken } from '../api';
 import type { MemberLobbyPageView } from './lobby-view';
-import { carryLobbyMic, clearCarriedLobbyMic, forgetLobbyMic, readCarriedLobbyMic } from './step-out';
+import {
+  carryLobbyMic,
+  clearCarriedLobbyMic,
+  forgetLobbyMic,
+  lobbyCaptureLive,
+  readCarriedLobbyMic,
+  releaseLobbyCapture,
+} from './step-out';
 
 const mocks = vi.hoisted(() => ({
   getDebateLobbyVoiceToken: vi.fn(),
@@ -20,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   startAudio: vi.fn(),
   isMicrophoneEnabled: false,
   setMicrophoneEnabled: vi.fn(async () => undefined),
+  unpublishTrack: vi.fn(async () => undefined),
+  microphoneTrack: undefined as { track: object } | undefined,
   participants: [] as { identity: string; isMicrophoneEnabled: boolean; isSpeaking: boolean }[],
   permissions: undefined as { canPublish: boolean } | undefined,
   /** Local participant listeners, by event name. */
@@ -53,6 +62,7 @@ async function emitRoom(states: string[], disconnectReason?: number) {
 
 const localParticipant = {
   setMicrophoneEnabled: mocks.setMicrophoneEnabled,
+  unpublishTrack: mocks.unpublishTrack,
   on: (event: string, listener: (...args: unknown[]) => void) => mocks.listeners.set(event, listener),
   off: (event: string) => mocks.listeners.delete(event),
 };
@@ -85,7 +95,11 @@ vi.mock('@livekit/components-react', () => ({
   useRoomContext: () => fakeRoom,
   useConnectionState: () => mocks.connectionState,
   useAudioPlayback: () => ({ canPlayAudio: mocks.canPlayAudio, startAudio: mocks.startAudio }),
-  useLocalParticipant: () => ({ localParticipant, isMicrophoneEnabled: mocks.isMicrophoneEnabled }),
+  useLocalParticipant: () => ({
+    localParticipant,
+    isMicrophoneEnabled: mocks.isMicrophoneEnabled,
+    microphoneTrack: mocks.microphoneTrack,
+  }),
   useLocalParticipantPermissions: () => mocks.permissions,
   useParticipants: () => mocks.participants,
 }));
@@ -161,6 +175,7 @@ beforeEach(() => {
   mocks.connectionState = ConnectionState.Connected;
   mocks.canPlayAudio = true;
   mocks.isMicrophoneEnabled = false;
+  mocks.microphoneTrack = undefined;
   mocks.participants = [];
   mocks.permissions = undefined;
   mocks.getDebateLobbyVoiceToken.mockResolvedValue(token());
@@ -194,6 +209,30 @@ describe('LobbyVoice', () => {
     expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
     // Kept for the next connect, so a reconnect does not undo the choice.
     expect(mocks.roomProps).toMatchObject({ audio: true });
+  });
+
+  it('registers its mic capture for a request card to release', async () => {
+    const track = {};
+    mocks.microphoneTrack = { track };
+    const view = renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(lobbyCaptureLive('audio')).toBe(true);
+
+    act(() => releaseLobbyCapture('audio'));
+
+    expect(mocks.unpublishTrack).toHaveBeenCalledWith(track, true);
+    expect(mocks.roomProps).toMatchObject({ audio: false });
+    view.unmount();
+    expect(lobbyCaptureLive('audio')).toBe(false);
+  });
+
+  it('registers no capture while disconnected', async () => {
+    mocks.microphoneTrack = { track: {} };
+    mocks.connectionState = ConnectionState.Connecting;
+    renderVoice();
+    await waitFor(() => expect(mocks.roomProps).not.toBeNull());
+
+    expect(lobbyCaptureLive('audio')).toBe(false);
   });
 
   it('gives a listener no mic', async () => {

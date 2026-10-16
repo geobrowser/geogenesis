@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { registerLobbyCapture } from './lobbies/step-out';
 import { DebateRequestMediaPreview } from './request-media-preview';
 
 const mocks = vi.hoisted(() => ({
@@ -86,7 +87,17 @@ beforeEach(() => {
   mocks.stopMedia.mockReset();
 });
 
-afterEach(cleanup);
+const lobbyCaptureCleanups: (() => void)[] = [];
+
+afterEach(() => {
+  cleanup();
+  lobbyCaptureCleanups.splice(0).forEach(clear => clear());
+});
+
+function lobbyCapturing(kind: 'audio' | 'video', release = vi.fn()) {
+  lobbyCaptureCleanups.push(registerLobbyCapture(kind, release));
+  return release;
+}
 
 function mount() {
   // Installed here rather than in `beforeEach`, which runs before a case has chosen its answer.
@@ -164,6 +175,54 @@ describe('DebateRequestMediaPreview', () => {
 
     await waitFor(() => expect(mocks.ensurePreview).toHaveBeenCalled());
     expect(await screen.findByText('Joining with mic and camera on')).toBeInTheDocument();
+  });
+
+  // iPhone Safari keeps one capture per kind, so opening the card's mic would cut a live lobby's.
+  it('leaves a device the lobby is capturing off on open', async () => {
+    mocks.permission = 'granted';
+    lobbyCapturing('audio');
+    mount();
+
+    expect(await screen.findByText('Joining muted')).toBeInTheDocument();
+    expect(mocks.ensurePreview).toHaveBeenCalledWith({ audio: false, video: true });
+    expect(mocks.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
+  });
+
+  it('opens nothing on open while the lobby captures both devices', async () => {
+    mocks.permission = 'granted';
+    lobbyCapturing('audio');
+    lobbyCapturing('video');
+    mount();
+
+    // Past the permission answer, which is what would have started the preview.
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(screen.getByText('Joining listening only')).toBeInTheDocument();
+    expect(mocks.ensurePreview).not.toHaveBeenCalled();
+  });
+
+  it('stops the lobby’s mic before opening the card’s', async () => {
+    mocks.permission = 'granted';
+    const order: string[] = [];
+    lobbyCapturing(
+      'audio',
+      vi.fn(() => order.push('release'))
+    );
+    lobbyCapturing(
+      'video',
+      vi.fn(() => order.push('release camera'))
+    );
+    mocks.ensurePreview.mockImplementation(async (options: { audio?: boolean }) => {
+      order.push(options.audio ? 'acquire mic' : 'acquire');
+      return [{ mediaStreamTrack: { kind: 'audio' } }];
+    });
+    mount();
+    await screen.findByText('Joining listening only');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn microphone on' }));
+
+    await waitFor(() => expect(order).toEqual(['release', 'acquire mic']));
   });
 
   it('does not touch the camera when permission has never been asked', async () => {
