@@ -28,7 +28,7 @@ export const systemDefaultAudioOutput: MediaDeviceOption = {
   label: 'System default',
 };
 
-type DebateMediaSession = {
+export type DebateMediaSession = {
   activeSessionKey: string | null;
   previewState: PreJoinMediaState;
   previewBusy: boolean;
@@ -58,6 +58,8 @@ type DebateMediaSession = {
     forceRestart?: boolean;
     audioInputId?: string;
     videoInputId?: string;
+    audio?: boolean;
+    video?: boolean;
   }) => Promise<LocalTrackLike[]>;
   changeAudioInput: (deviceId: string) => void;
   changeAudioOutput: (deviceId: string) => Promise<void>;
@@ -95,6 +97,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
   const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
+  const wantedKindsRef = React.useRef({ audio: true, video: true });
   const audioOutputSelectionPromiseRef = React.useRef<Promise<void> | null>(null);
   const selectedAudioInputIdRef = React.useRef('');
   const selectedAudioOutputIdRef = React.useRef(systemDefaultAudioOutput.deviceId);
@@ -120,6 +123,9 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     (sessionKey: string) => {
       if (activeSessionKeyRef.current === sessionKey) return;
       stopMedia();
+      // A new surface has chosen nothing yet. `promoteSession` deliberately leaves this alone: a
+      // hand-off keeps the choice the card made.
+      wantedKindsRef.current = { audio: true, video: true };
       audioOutputSelectionFailedRef.current = false;
       setAudioOutputError(null);
       activeSessionKeyRef.current = sessionKey;
@@ -208,6 +214,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         forceRestart?: boolean;
         audioInputId?: string;
         videoInputId?: string;
+        audio?: boolean;
+        video?: boolean;
       } = {}
     ) => {
       if (!activeSessionKeyRef.current) return [];
@@ -250,17 +258,21 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         if (!replacingReadyPreview) setPreviewStreamState(null);
         const audioInputId = options.audioInputId ?? selectedAudioInputIdRef.current;
         const videoInputId = options.videoInputId ?? selectedVideoInputIdRef.current;
+        const wantAudio = options.audio ?? wantedKindsRef.current.audio;
+        const wantVideo = options.video ?? wantedKindsRef.current.video;
+        wantedKindsRef.current = { audio: wantAudio, video: wantVideo };
         const tracks = (await livekit.createLocalTracks({
-          audio: audioInputId ? { deviceId: audioInputId } : true,
-          video: videoInputId ? { deviceId: videoInputId } : true,
+          audio: wantAudio ? (audioInputId ? { deviceId: audioInputId } : true) : false,
+          video: wantVideo ? (videoInputId ? { deviceId: videoInputId } : true) : false,
         })) as LocalTrackLike[];
         if (!isCurrent()) {
           stopTracks(tracks);
           return [];
         }
+
         if (
-          !tracks.some(track => track.mediaStreamTrack.kind === 'audio') ||
-          !tracks.some(track => track.mediaStreamTrack.kind === 'video')
+          (wantAudio && !tracks.some(track => track.mediaStreamTrack.kind === 'audio')) ||
+          (wantVideo && !tracks.some(track => track.mediaStreamTrack.kind === 'video'))
         ) {
           stopTracks(tracks);
           throw Object.assign(new Error('Required media tracks are unavailable.'), { name: 'NotFoundError' });
@@ -500,6 +512,13 @@ export function DebateMediaSessionBoundary({ children }: { children: React.React
   return <DebateMediaSessionProvider>{children}</DebateMediaSessionProvider>;
 }
 
+/**
+ * The session if there is one, rather than an error if there is not.
+ */
+export function useOptionalDebateMediaSession() {
+  return React.useContext(DebateMediaSessionContext);
+}
+
 export function useDebateMediaSession() {
   const session = React.useContext(DebateMediaSessionContext);
   if (!session) throw new Error('useDebateMediaSession must be used inside DebateMediaSessionProvider');
@@ -508,6 +527,18 @@ export function useDebateMediaSession() {
 
 export function debateMediaSessionKey(debateId: string) {
   return `debate:${debateId}`;
+}
+
+/**
+ * The session a request card owns, before any debate exists to own it.
+ * A profile challenge, which like a request has no debate id until it is accepted.
+ */
+export function debateChallengeMediaSessionKey(challengeId: string) {
+  return `debate-challenge:${challengeId}`;
+}
+
+export function debateRequestMediaSessionKey(requestId: string) {
+  return `debate-request:${requestId}`;
 }
 
 function retainOrPreferDefaultDevice(current: string, devices: MediaDeviceOption[]) {
@@ -528,7 +559,14 @@ function sameMediaDeviceOptions(current: MediaDeviceOption[], next: MediaDeviceO
   );
 }
 
-function preJoinMediaFailure(error: unknown): {
+/**
+ * Browser media errors in words a reader can act on.
+ *
+ * Exported because every surface that calls `ensurePreview` has to explain the same refusals, and
+ * `error.message` is the browser's own text — "Permission denied", or a sentence about user agents
+ * and platform contexts.
+ */
+export function preJoinMediaFailure(error: unknown): {
   state: Exclude<PreJoinMediaState, 'requesting' | 'ready'>;
   message: string;
 } {

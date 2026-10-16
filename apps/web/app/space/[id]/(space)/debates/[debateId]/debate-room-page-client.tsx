@@ -127,6 +127,7 @@ import {
   isStorageQuotaError,
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
+import { inheritedJoinState } from '~/core/debates/request-join-state';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { isDebateInThankYouPeriod } from '~/core/debates/thank-you-period';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
@@ -443,11 +444,43 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const rematchLeaveRequestedRef = React.useRef(false);
   const rematchLeavePublishedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
+
+  const inheritedTracks = mediaSession.localTracksRef.current;
+  /*
+   * Whether a card chose on this reader's behalf before the room opened. The session is already
+   * active under this room's key when one did — the ready prompt keys on the debate directly, and
+   * an accepted request is promoted onto it — and `beginSession` below is a no-op in that case.
+   *
+   * Read at first render, before that effect runs, because claiming the session is what erases the
+   * evidence.
+   */
+  const handedOverSession = mediaSession.activeSessionKey === mediaSessionKey;
+  /*
+   * The mic a lobby carried, for someone who stepped out of one to get here. Spent on read, and a
+   * microphone only — a lobby has no camera to carry.
+   *
+   * It refines the cold default rather than competing with a hand-off: a reader arrives one way or
+   * the other, and where both somehow applied, live tracks under this room's key are the stronger
+   * evidence than a flag remembered on the way in.
+   */
   const carriedMic = useCarriedLobbyMic();
-  const [audioMuted, setAudioMuted] = React.useState(carriedMic === false);
+  const inherited = React.useMemo(
+    () =>
+      handedOverSession
+        ? inheritedJoinState(
+            inheritedTracks.map(track => track.mediaStreamTrack.kind),
+            handedOverSession
+          )
+        : { audioMuted: carriedMic === false, videoEnabled: true },
+    // First render only: claiming the session is what erases the evidence of a hand-off.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const [audioMuted, setAudioMuted] = React.useState(inherited.audioMuted);
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
-  const [videoEnabled, setVideoEnabled] = React.useState(true);
+  const [videoEnabled, setVideoEnabled] = React.useState(inherited.videoEnabled);
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
   const [serverClockSettled, setServerClockSettled] = React.useState(false);
   const [noiseFilterStatus, setNoiseFilterStatus] = React.useState<DebateNoiseFilterStatus>('initializing');

@@ -5,6 +5,7 @@ import * as React from 'react';
 import type { DebateRequest, DebateRequestParty } from '../api';
 import { DebateRequestDialog, type DebateRequestDialogParticipant } from '../debate-request-dialog';
 import { requestOpenRounds } from '../format-details';
+import { debateRequestMediaSessionKey } from '../media-session';
 import { speakerLabel } from '../playback-utils';
 import { useAcceptDebateRequest, useBlockDebateUser, useDismissDebateRequest } from './hooks';
 import { SpaceChip } from './matchmaking-claim-card';
@@ -49,6 +50,8 @@ export function IncomingRequestPopup({
   return (
     <DebateRequestDialog
       claim={request.claim.claim}
+      media={{ kind: 'choose', sessionKey: debateRequestMediaSessionKey(request.id) }}
+      formatSummaryOnly
       participants={participants}
       currentUserId={currentUserId}
       formatId={request.turn_format_id}

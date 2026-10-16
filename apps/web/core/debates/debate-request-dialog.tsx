@@ -12,8 +12,16 @@ import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popov
 import type { DebateParticipantSummary, ParticipantSlot } from './api';
 import { DebateFormatDetails, type DebateFormatOpenRounds } from './format-details';
 import { DebateFormatSelector } from './format-selector';
-import type { DebateFormatId } from './formats';
+import {
+  type DebateFormatId,
+  debateFormatById,
+  defaultDebateFormatId,
+  isOpenRoundsFormatId,
+  openRoundsOpeningTurnDurationsMs,
+} from './formats';
 import { speakerLabel } from './playback-utils';
+import { describeFormatLine } from './request-join-state';
+import { DebateRequestMediaPreview } from './request-media-preview';
 import { useScrollLock } from './use-scroll-lock';
 
 export type DebateRequestDialogParticipant = DebateParticipantSummary & {
@@ -29,8 +37,16 @@ type DebateRequestDialogFormatSelector = {
   onChange: (formatId: DebateFormatId) => void;
 };
 
+export type DebateRequestDialogMedia =
+  | {
+      kind: 'choose';
+      sessionKey: string;
+    }
+  | { kind: 'already-live' };
+
 type DebateRequestDialogProps = {
   claim: string;
+  media: DebateRequestDialogMedia;
   participants: readonly DebateRequestDialogParticipant[];
   currentUserId: string;
   formatId: string | null | undefined;
@@ -58,10 +74,12 @@ type DebateRequestDialogProps = {
   formatAction?: { label: string; onClick: () => void };
   /** GEO-2430: overflow ("…") menu anchored to the participants card, e.g. to block a user. */
   overflowMenu?: React.ReactNode;
+  formatSummaryOnly?: boolean;
 };
 
 export function DebateRequestDialog({
   claim,
+  media,
   participants,
   currentUserId,
   formatId,
@@ -77,6 +95,7 @@ export function DebateRequestDialog({
   eyebrow,
   formatAction,
   overflowMenu,
+  formatSummaryOnly = false,
 }: DebateRequestDialogProps) {
   const titleId = React.useId();
   const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
@@ -91,12 +110,41 @@ export function DebateRequestDialog({
       ),
     [turnParticipants]
   );
+
+  const summaryFormat = debateFormatById(formatId || defaultDebateFormatId);
+
   const firstParticipant = positionParticipants[0];
   const secondParticipant = positionParticipants[1] ?? firstParticipant;
 
   useScrollLock();
 
+  const retain = React.useRef(false);
+  const accept = () => {
+    if (media.kind === 'choose') retain.current = true;
+    onAccept();
+  };
+
+  React.useEffect(() => {
+    if (error) retain.current = false;
+  }, [error]);
+
   if (!firstParticipant || !secondParticipant) return null;
+
+  const renderSide = (participant: DebateRequestDialogParticipant) => {
+    const isMe = participant.user_id === currentUserId;
+    if (media.kind !== 'choose' || !isMe) {
+      return <ParticipantSummary participant={participant} currentUserId={currentUserId} />;
+    }
+    return (
+      <DebateRequestMediaPreview
+        sessionKey={media.sessionKey}
+        avatarCid={participant.avatar_cid}
+        avatarValue={participant.profile_space_id}
+        retain={retain}
+        fallback={<ParticipantSummary participant={participant} currentUserId={currentUserId} />}
+      />
+    );
+  };
 
   return (
     <div
@@ -125,7 +173,7 @@ export function DebateRequestDialog({
                 <div className="absolute top-2 right-2">{overflowMenu}</div>
               </ElevatedPopoverPortalContext.Provider>
             ) : null}
-            <ParticipantSummary participant={firstParticipant} currentUserId={currentUserId} />
+            {renderSide(firstParticipant)}
             <div className="relative grid w-16 place-items-center">
               <span
                 aria-hidden="true"
@@ -135,7 +183,7 @@ export function DebateRequestDialog({
                 VS
               </span>
             </div>
-            <ParticipantSummary participant={secondParticipant} currentUserId={currentUserId} />
+            {renderSide(secondParticipant)}
           </div>
 
           <section className="mt-4 overflow-hidden rounded-lg border border-grey-02 bg-white">
@@ -166,12 +214,30 @@ export function DebateRequestDialog({
               )}
             </div>
             <div className="px-1 pb-1">
-              <DebateFormatDetails
-                formatId={formatId}
-                openRounds={openRounds}
-                participants={turnParticipants}
-                currentUserId={currentUserId}
-              />
+              {formatSummaryOnly ? (
+                <Text as="p" variant="footnote" color="grey-04" className="px-3 pb-2">
+                  {describeFormatLine({
+                    isOpenRounds: isOpenRoundsFormatId(formatId),
+                    label: isOpenRoundsFormatId(formatId) ? 'Open rounds' : (summaryFormat?.label ?? null),
+                    turnDurationsMs: isOpenRoundsFormatId(formatId)
+                      ? openRoundsOpeningTurnDurationsMs
+                      : (summaryFormat?.turnDurationsMs ?? []),
+                    openRounds: openRounds
+                      ? {
+                          maxRebuttalRounds: openRounds.max_rebuttal_rounds ?? 0,
+                          rebuttalTurnMs: openRounds.rebuttal_turn_ms ?? 0,
+                        }
+                      : null,
+                  })}
+                </Text>
+              ) : (
+                <DebateFormatDetails
+                  formatId={formatId}
+                  openRounds={openRounds}
+                  participants={turnParticipants}
+                  currentUserId={currentUserId}
+                />
+              )}
             </div>
           </section>
 
@@ -193,13 +259,13 @@ export function DebateRequestDialog({
               >
                 {rejectLabel}
               </button>
-              <button type="button" onClick={onAccept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+              <button type="button" onClick={accept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
                 {acceptLabel}
               </button>
             </div>
           ) : (
             <>
-              <button type="button" onClick={onAccept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+              <button type="button" onClick={accept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
                 {acceptLabel}
               </button>
               <button
