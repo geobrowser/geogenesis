@@ -53,6 +53,8 @@ vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberR
 const { FRESH_LIST_MAX_STALE_MS, fetchExploreFeed, warmSharedFreshList } = await import('./fetch-explore-feed');
 const { encodeExploreWindowCursor } = await import('./explore-window-cursor');
 const { setSharedFreshListStoreForTests } = await import('./fresh-slot/shared-fresh-list');
+const { setRecentFreshScopeStoreForTests } = await import('./fresh-slot/recent-fresh-scopes');
+const { resetRecordedScopesForTests } = await import('./fetch-explore-feed');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const browse = {
@@ -382,6 +384,96 @@ describe('a Fresh list shared between instances', () => {
     const served = await page(clock);
     expect(freshItems(served).length).toBeGreaterThan(0);
     expect(graph.freshCalls).toHaveLength(1);
+  });
+});
+
+// GEO-3308. A signed-in reader's scope holds their own spaces; it is recorded so the cron can warm it.
+describe('recording the scopes readers request', () => {
+  const OTHER = 'cccccccccccccccccccccccccccccccc';
+  const members: { member: string; scoreMs: number }[] = [];
+  const shared = new Map<string, string>();
+  const sharedKeys: string[] = [];
+  const signedIn = {
+    ...(browse as object),
+    memberOf: [{ id: OTHER, name: 'Mine', image: null }],
+  } as never;
+  const firstPage = (now: number) =>
+    fetchExploreFeed({
+      browse: signedIn,
+      sort: 'best',
+      time: 'all',
+      spaceFilterIds: null,
+      cursor: null,
+      memberOrEditorSpaceIds: [OTHER],
+      typeIds: [DEBATE_TYPE_ID, CLAIM_TYPE_ID],
+      freshSlot: { config: ON, revision: 1, now },
+    });
+
+  beforeEach(() => {
+    members.length = 0;
+    shared.clear();
+    sharedKeys.length = 0;
+    resetRecordedScopesForTests();
+    setRecentFreshScopeStoreForTests({
+      add: async (member, scoreMs) => {
+        members.push({ member, scoreMs });
+      },
+      newest: async () => [],
+      trim: async () => {},
+    });
+    setSharedFreshListStoreForTests({
+      read: async key => shared.get(key) ?? null,
+      write: async (key, value) => {
+        shared.set(key, value);
+        sharedKeys.push(key);
+      },
+    });
+    return () => {
+      setRecentFreshScopeStoreForTests(null);
+      setSharedFreshListStoreForTests(null);
+    };
+  });
+
+  it('records the scope inputs only, once per minute', async () => {
+    await firstPage(clock);
+    await vi.waitFor(() => expect(members).toHaveLength(1));
+    expect(JSON.parse(members[0]!.member)).toEqual({
+      spaceIds: [SPACE, OTHER].sort(),
+      typeIds: [DEBATE_TYPE_ID, CLAIM_TYPE_ID].sort(),
+      time: 'all',
+      requireName: null,
+      requireDebateTagOnClaims: null,
+      freshnessHours: ON.freshnessHours,
+    });
+    await firstPage(clock + 1_000);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(members).toHaveLength(1);
+  });
+
+  it('serves the page when recording fails', async () => {
+    setRecentFreshScopeStoreForTests({
+      add: async () => {
+        throw new Error('upstash down');
+      },
+      newest: async () => [],
+      trim: async () => {},
+    });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const served = await firstPage(clock);
+    expect(served.items.some(item => item.ranking?.slot === 'fresh')).toBe(true);
+    await vi.waitFor(() => expect(error).toHaveBeenCalled());
+    error.mockRestore();
+  });
+
+  it('warms under exactly the key the request path wrote, from the recorded inputs', async () => {
+    await firstPage(clock);
+    await vi.waitFor(() => expect(members).toHaveLength(1));
+    await vi.waitFor(() => expect(sharedKeys).toHaveLength(1));
+    const recorded = JSON.parse(members[0]!.member);
+
+    await warmSharedFreshList({ ...recorded, now: clock + 120_000 });
+    expect(sharedKeys).toHaveLength(2);
+    expect(sharedKeys[1]).toBe(sharedKeys[0]);
   });
 });
 
