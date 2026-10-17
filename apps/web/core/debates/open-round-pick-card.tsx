@@ -4,10 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { Check } from '~/design-system/icons/check';
-
 import type { OpenRoundPick } from './api';
-import { LABEL_FONT } from './browse/stamp-styles';
+import { ROOM_UI_FONT, ROOM_WHITE_GLASS_CLASS } from './debate-room-stamps';
 
 export type OpenRoundPickContext = {
   previousPick: OpenRoundPick | null;
@@ -35,7 +33,7 @@ type OpenRoundPickCardProps = {
 
 /**
  * Extend or End, after every Open rounds round but the cap (GEO-3178), as one dark panel on the seam
- * between the tiles in the stamps design (GEO-3315): the question and its countdown on one line, and
+ * between the tiles in the classic + glass design (GEO-3366): the question and its countdown on one line, and
  * the two choices under it. Sized in `cqw` of the tiles' grid.
  *
  * Picks are blind, so the card says nothing about the other debater's pick, not even whether they
@@ -88,17 +86,20 @@ export function OpenRoundPickCard({
     <section
       aria-labelledby={headingId}
       data-open-round-pick-card={roundIndex}
-      className="pointer-events-auto absolute top-1/2 left-1/2 z-40 grid w-[78%] -translate-x-1/2 -translate-y-1/2 gap-[2.4cqw] rounded-[6px] bg-[#141418] p-[3.4cqw] text-white shadow-[0_2cqw_6cqw_rgba(0,0,0,0.45)] motion-safe:animate-[fadeIn_150ms_linear_both]"
-      style={LABEL_FONT}
+      className={cx(
+        'pointer-events-auto absolute top-1/2 left-1/2 z-40 grid w-[78%] -translate-x-1/2 -translate-y-1/2 justify-items-center gap-[3cqw] rounded-[5cqw] bg-[rgba(30,30,34,0.55)] px-[3.4cqw] pt-[3.4cqw] pb-[3.8cqw] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16),0_2cqw_6cqw_rgba(0,0,0,0.3)] backdrop-blur-[18px] backdrop-saturate-[1.3]',
+        'motion-safe:animate-[fadeIn_250ms_linear_both]'
+      )}
+      style={ROOM_UI_FONT}
     >
-      <div className="flex items-center justify-between gap-[2cqw]">
-        <h2 id={headingId} className="text-[5.8cqw] leading-none font-medium tracking-[-0.01em]">
+      <div className="flex items-center gap-[2.4cqw]">
+        <h2 id={headingId} className="text-[7cqw] leading-[0.95] font-semibold tracking-[-0.02em]">
           Keep debating?
         </h2>
         <PickCountdown remainingSeconds={remainingSeconds} />
       </div>
 
-      <div role="group" aria-labelledby={headingId} className="grid grid-cols-2 gap-[2.2cqw]">
+      <div role="group" aria-labelledby={headingId} className="flex gap-[2.4cqw]">
         <PickChoice
           choice="extend"
           label="Extend"
@@ -132,8 +133,7 @@ export function OpenRoundPickCard({
 }
 
 /**
- * One choice, a solid button: Extend in purple, End in white. The picked one carries a check and an
- * outline, white round Extend and purple round End, and the other dims; either can still be tapped
+ * Two glass choices. The picked one turns white with a check, and the other dims; either can be tapped
  * until the window runs out.
  */
 function PickChoice({
@@ -157,22 +157,20 @@ function PickChoice({
     <button
       type="button"
       aria-pressed={selected}
+      aria-label={`${label} ${detail}`}
       disabled={disabled}
       onClick={() => onPick(choice)}
       className={cx(
-        'grid gap-[1.2cqw] rounded-[4px] px-[2.8cqw] py-[2.6cqw] text-left transition-[opacity,filter] duration-150 enabled:hover:brightness-108 disabled:cursor-default',
-        choice === 'extend' ? 'bg-purple text-white' : 'bg-white text-text',
-        selected && 'outline-[0.6cqw] outline-offset-[0.6cqw]',
-        selected && (choice === 'extend' ? 'outline-white' : 'outline-purple'),
-        selectedPick !== null && !selected && 'opacity-35',
+        'grid justify-items-center gap-[0.8cqw] rounded-full border-0 px-[4.4cqw] py-[2.2cqw] transition-[opacity,filter] duration-150 enabled:hover:brightness-108 disabled:cursor-default',
+        selected
+          ? [ROOM_WHITE_GLASS_CLASS, 'shadow-[0_0_0_0.5cqw_rgba(255,255,255,0.35)]']
+          : 'bg-black/66 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.3)]',
+        selectedPick !== null && !selected && 'opacity-40',
         disabled && selectedPick === null && 'opacity-50'
       )}
     >
-      <span className="inline-flex items-center gap-[1cqw] text-[4.8cqw] leading-none font-medium">
-        {selected && <Check />}
-        {label}
-      </span>
-      <span className="text-[2.8cqw] leading-none opacity-72">{detail}</span>
+      <span className="text-[4.6cqw] leading-none font-semibold">{selected ? `✓ ${label}` : label}</span>
+      <span className="text-[2.6cqw] leading-none font-normal opacity-75">{detail}</span>
     </button>
   );
 }
@@ -182,7 +180,7 @@ function PickCountdown({ remainingSeconds }: { remainingSeconds: number }) {
   const seconds = Math.max(0, remainingSeconds);
 
   return (
-    <span className="grid size-[8.4cqw] shrink-0 place-items-center rounded-full text-[3.6cqw] leading-none font-medium tabular-nums shadow-[inset_0_0_0_0.5cqw_rgba(255,255,255,0.85)]">
+    <span className="grid size-[7cqw] shrink-0 place-items-center rounded-full bg-black/50 text-[3cqw] leading-none font-medium shadow-[inset_0_0_0_0.5cqw_rgba(255,255,255,0.85)]">
       <span aria-hidden="true">{seconds}</span>
       <span className="sr-only">{seconds} seconds to pick</span>
     </span>

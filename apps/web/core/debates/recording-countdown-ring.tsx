@@ -119,19 +119,29 @@ export function RecordingCountdownRing({
       data-timer-progress={progress}
       data-turn-timer={buildUp ? stage.phase : undefined}
       className={cx('relative grid shrink-0 place-items-center', buildUp && TURN_TIMER_SCALE_CLASS)}
-      style={{ width: COUNTDOWN_SIZE, height: COUNTDOWN_SIZE, ...(buildUp ? { scale: stage.scale } : null) }}
+      style={{
+        width: buildUp ? '9cqw' : COUNTDOWN_SIZE,
+        height: buildUp ? '9cqw' : COUNTDOWN_SIZE,
+        ...(buildUp ? { scale: stage.scale } : null),
+      }}
     >
       <div
         // Its swell and glow restart each second of the last ten (`useRestartedEach`), without
         // remounting, so the rim keeps draining across the second. Reduced motion keeps the colour
         // and the draining rim, without the pulse or the glow.
         ref={faceRef}
-        className={cx(
-          'relative grid size-full place-items-center rounded-full',
-          turnTimerPulseClass(stage),
-          final && 'bg-red-01'
-        )}
-        style={counting ? ({ '--turn-timer-swell': stage.swell } as React.CSSProperties) : undefined}
+        className={cx('relative grid size-full place-items-center rounded-full', turnTimerPulseClass(stage))}
+        style={
+          counting
+            ? ({
+                '--turn-timer-swell': stage.swell,
+                backgroundColor: final ? COUNTDOWN_WARNING_COLOR : undefined,
+                backgroundImage: buildUp && !final ? 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.25))' : undefined,
+              } as React.CSSProperties)
+            : buildUp
+              ? { backgroundImage: 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.25))' }
+              : undefined
+        }
       >
         {final ? (
           <span
@@ -144,6 +154,20 @@ export function RecordingCountdownRing({
                 backgroundImage: 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.28) 0deg)',
                 maskImage: finalRimMask,
                 WebkitMaskImage: finalRimMask,
+              } as React.CSSProperties
+            }
+          />
+        ) : buildUp ? (
+          <span
+            aria-hidden="true"
+            data-turn-timer-track
+            className="absolute size-[calc(100%-4px)] rounded-full transition-[--turn-timer-rim] duration-500 ease-linear"
+            style={
+              {
+                '--turn-timer-rim': `${(1 - elapsedRatio) * 360}deg`,
+                backgroundImage: 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.3) 0deg)',
+                maskImage: turnTimerRimMask('3px'),
+                WebkitMaskImage: turnTimerRimMask('3px'),
               } as React.CSSProperties
             }
           />
@@ -192,8 +216,9 @@ export function RecordingCountdownRing({
           style={{
             color: numberColor,
             fontFamily: (final ? STAMP_FONT : LABEL_FONT).fontFamily,
-            fontSize: 22,
+            fontSize: buildUp ? '4cqw' : 22,
             fontWeight: final ? 700 : 500,
+            fontVariantNumeric: buildUp ? 'tabular-nums' : undefined,
             lineHeight: 1,
             transform: 'none',
           }}

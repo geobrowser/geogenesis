@@ -6115,7 +6115,7 @@ describe('DebateRoomPageClient', () => {
 
       // Round 2: Alice opens it, so Bob's muted indicator returns.
       rerenderAt(view, '20:02:12.400', revealRebutWithCountIn());
-      await waitFor(() => expectActiveDebateVideoTile('local'));
+      await waitFor(() => expectActiveDebateVideoTile('local', 'outline-white'));
       expectNoMutedIndicator('local');
       expectMutedIndicator('remote');
 
@@ -6276,20 +6276,20 @@ describe('DebateRoomPageClient', () => {
 
       rerenderAt(view, '20:02:05.700', openRoundsRevealRebut());
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'round'));
-      expect(result()?.textContent).toBe('Round 2 · RebuttalYou open');
+      expect(result()?.textContent).toBe('Round 2RebuttalYou open');
       expect(document.querySelector('[data-debate-round-indicator]')).toHaveAttribute(
         'data-debate-round-indicator',
         '1'
       );
-      // The stamps fade as the banner rolls in (GEO-3315), then are gone.
+      // The pick pills fade as the outlined announcement comes in, then are gone.
       await waitFor(() => expect(reveal('local')).toBeNull());
-      expect(chips('local')).toHaveAttribute('data-tile-chips', 'hidden');
-      expect(chips('remote')).toHaveAttribute('data-tile-chips', 'hidden');
+      expect(chips('local')).toHaveAttribute('data-tile-chips', 'visible');
+      expect(chips('remote')).toHaveAttribute('data-tile-chips', 'visible');
       expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
 
       // With no count-in from geo-chat, "Round 2" holds to the end of the window.
       rerenderAt(view, '20:02:06.900', openRoundsRevealRebut());
-      expect(result()?.textContent).toBe('Round 2 · RebuttalYou open');
+      expect(result()?.textContent).toBe('Round 2RebuttalYou open');
       expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
     });
 
@@ -6301,7 +6301,7 @@ describe('DebateRoomPageClient', () => {
       rerenderAt(view, '20:02:07.300', revealRebutWithCountIn());
       await waitFor(() => expect(within(debateVideoTile('local')).getByText('Your turn in')).toBeInTheDocument());
       expect(within(debateVideoTile('local')).getByText('5')).toBeInTheDocument();
-      // The banner rolls on out as the count-in comes in (GEO-3315).
+      // The round announcement fades out as the count-in comes in (GEO-3366).
       await waitFor(() => expect(result()).toBeNull());
       expect(chips('local')).toHaveAttribute('data-tile-chips', 'visible');
 
@@ -6319,7 +6319,7 @@ describe('DebateRoomPageClient', () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:09.000'));
       await renderLiveDebate(revealRebutWithCountIn());
 
-      await waitFor(() => expect(result()).toHaveTextContent('Round 2 · RebuttalAlice opens'));
+      await waitFor(() => expect(result()).toHaveTextContent('Round 2RebuttalAlice opens'));
       expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
     });
 
@@ -6509,12 +6509,12 @@ describe('DebateRoomPageClient', () => {
     });
   });
 
-  // GEO-3315: the room's moments in the published player's stamps design. Open rounds only.
-  describe('open rounds stamps (GEO-3315)', () => {
-    const stamp = (participant: 'local' | 'remote', kind: string) =>
-      debateVideoTile(participant).querySelector(`[data-room-stamp="${kind}"]`);
-    const banner = (participant: 'local' | 'remote', kind: string) =>
-      debateVideoTile(participant).querySelector(`[data-room-banner="${kind}"]`);
+  // GEO-3366: classic outlined type and glass pills, with the room's timer build-up.
+  describe('open rounds classic + glass (GEO-3366)', () => {
+    const pill = (participant: 'local' | 'remote', kind: string) =>
+      debateVideoTile(participant).querySelector(`[data-room-pill="${kind}"]`);
+    const phrase = (participant: 'local' | 'remote', kind: string) =>
+      debateVideoTile(participant).querySelector(`[data-room-phrase="${kind}"]`);
     const timer = (participant: 'local' | 'remote') => debateVideoTile(participant).querySelector('[data-turn-timer]');
     const lastWord = (participant: 'local' | 'remote') =>
       debateVideoTile(participant).querySelector('[data-open-round-last-word]');
@@ -6531,22 +6531,27 @@ describe('DebateRoomPageClient', () => {
       mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     });
 
-    it('lands a Go! stamp as your turn starts', async () => {
+    it('shows a white glass Go pill as your turn starts', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:00:00.500'));
       await renderLiveDebate(aliceOpening());
 
-      await waitFor(() => expect(stamp('local', 'go')).toHaveTextContent('Go!'));
+      await waitFor(() => expect(pill('local', 'go')).toHaveTextContent('Go'));
+      expect(pill('local', 'go')).toHaveClass('rounded-full', 'bg-white');
       expect(screen.queryByText('GO!')).not.toBeInTheDocument();
     });
 
-    it('counts you in to your opening with "You\'re up in" on a purple banner over a number stamp', async () => {
+    it('counts you in to your opening with "You\'re up in" in white outlined type above the number', async () => {
       joinAsBob();
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:00:56.500'));
       await renderLiveDebate(aliceOpening());
 
-      await waitFor(() => expect(banner('local', 'count-in')).toHaveTextContent("You're up in"));
-      expect(banner('local', 'count-in')).toHaveClass('bg-purple');
-      expect(stamp('local', 'count-in')).toHaveTextContent('4');
+      await waitFor(() => expect(phrase('local', 'count-in')).toHaveTextContent('You’re up in'));
+      expect(phrase('local', 'count-in')).toHaveClass('text-white', 'font-semibold');
+      expect((phrase('local', 'count-in') as HTMLElement).style.fontFamily).toContain('var(--font-calibre)');
+      expect((phrase('local', 'count-in') as HTMLElement).style.textShadow).toBe(
+        '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000'
+      );
+      expect(debateVideoTile('local').querySelector('[data-room-count-in]')).toHaveTextContent('4');
       expect(debateVideoTile('local').querySelector('[data-room-dim]')).toHaveAttribute('data-room-dim', 'on');
     });
 
@@ -6556,32 +6561,34 @@ describe('DebateRoomPageClient', () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:48.000'));
       await renderLiveDebate(openRoundsRoundOneSpeaking());
 
-      await waitFor(() => expect(banner('local', 'count-in')).toHaveTextContent('Your turn in'));
+      await waitFor(() => expect(phrase('local', 'count-in')).toHaveTextContent('Your turn in'));
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     });
 
-    it('builds the timer up from 10 s, then turns it and the outline red with "Wrap it up" for about 2 s', async () => {
+    it('builds the timer up from 10 s, then turns it and the outline red with "Wrap it up" through the final 5 s', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:44.000'));
       const view = await renderLiveDebate(openRoundsRoundOneSpeaking());
 
       // 8.2 s left: growing a step a second, not yet red.
       await waitFor(() => expect(timer('local')).toHaveAttribute('data-turn-timer', 'building'));
       expect(timer('local')).toHaveStyle({ scale: '1.12' });
-      expect(debateVideoTile('local')).toHaveClass('outline-purple');
-      expect(stamp('local', 'wrap-it-up')).toBeNull();
+      expect(debateVideoTile('local')).toHaveClass('outline-white');
+      expect(pill('local', 'wrap-it-up')).toBeNull();
 
-      // 4.7 s left: red at full size, its rim draining, and the stamp up.
+      // 4.7 s left: red at full size, its rim draining, and the pill up.
       rerenderAt(view, '20:02:47.500', openRoundsRoundOneSpeaking());
       await waitFor(() => expect(timer('local')).toHaveAttribute('data-turn-timer', 'final'));
       expect(timer('local')).toHaveStyle({ scale: '1.3' });
       expect(timer('local')?.querySelector('[data-turn-timer-rim]')).toBeInTheDocument();
-      expect(debateVideoTile('local')).toHaveClass('outline-red-01');
+      expect(debateVideoTile('local')).toHaveClass('outline-[#FF4A26]');
+      expect(debateVideoTile('local').querySelector('[data-room-speaker-outline]')).toHaveClass('border-[#FF4A26]');
       expect(debateVideoTile('local')).not.toHaveClass('outline-purple');
-      expect(stamp('local', 'wrap-it-up')).toHaveTextContent('Wrap it up');
+      expect(pill('local', 'wrap-it-up')).toHaveTextContent('Wrap it up');
+      expect(pill('local', 'wrap-it-up')).toHaveClass('rounded-full', 'bg-[#FF4A26]/90');
 
-      // 2.7 s left: the stamp has gone, the red timer stays.
+      // 2.7 s left: the pill stays with the red timer, as in the mockup.
       rerenderAt(view, '20:02:49.500', openRoundsRoundOneSpeaking());
-      await waitFor(() => expect(stamp('local', 'wrap-it-up')).toBeNull());
+      expect(pill('local', 'wrap-it-up')).toHaveTextContent('Wrap it up');
       expect(timer('local')).toHaveAttribute('data-turn-timer', 'final');
     });
 
@@ -6591,25 +6598,27 @@ describe('DebateRoomPageClient', () => {
       await renderLiveDebate(openRoundsRoundOneSpeaking());
 
       await waitFor(() => expect(timer('remote')).toHaveAttribute('data-turn-timer', 'final'));
-      expect(debateVideoTile('remote')).toHaveClass('outline-red-01');
+      expect(debateVideoTile('remote')).toHaveClass('outline-[#FF4A26]');
+      expect(debateVideoTile('remote').querySelector('[data-room-speaker-outline]')).toHaveClass('border-[#FF4A26]');
     });
 
-    it('stamps your tile "Turn ended" when you end early, and puts up the other debater\'s turn', async () => {
+    it('labels your tile "Turn ended" when you end early, and puts up the other debater\'s turn', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:20.000'));
       mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
       await renderLiveDebate(openRoundsRoundOneSpeaking());
 
       fireEvent.click(await screen.findByRole('button', { name: 'End turn' }));
 
-      await waitFor(() => expect(stamp('local', 'ended')).toHaveTextContent('Turn ended'));
+      await waitFor(() => expect(pill('local', 'ended')).toHaveTextContent('Turn ended'));
       expect(screen.queryByText('Ending turn…')).not.toBeInTheDocument();
-      expect(banner('remote', 'turn')).toHaveTextContent('Bob’s turn');
-      expect(banner('remote', 'turn')).toHaveClass('bg-purple');
+      expect(pill('remote', 'turn')).toHaveTextContent('Bob’s turn');
+      expect(pill('remote', 'turn')).toHaveClass('rounded-full', 'backdrop-blur-[14px]');
+      expect(pill('local', 'ended')).toHaveClass('border-dashed');
     });
 
-    // GEO-3347. geo-chat closes a round-ending yield the moment it accepts it, so a stamp there lasted
+    // GEO-3347. geo-chat closes a round-ending yield the moment it accepts it, so a pill there lasted
     // the request's round trip and then faded under the pick: a flicker.
-    it('does not stamp "Turn ended" when ending the round\'s last turn, which goes to the pick', async () => {
+    it('does not label "Turn ended" when ending the round\'s last turn, which goes to the pick', async () => {
       joinAsBob();
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:03:10.000'));
       mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
@@ -6624,7 +6633,7 @@ describe('DebateRoomPageClient', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'End turn' }));
 
       await waitFor(() => expectMutedIndicator('local'));
-      expect(stamp('local', 'ended')).toBeNull();
+      expect(pill('local', 'ended')).toBeNull();
       expect(debateVideoTile('local').querySelector('[data-room-dim]')).toHaveAttribute('data-room-dim', 'on');
     });
 
@@ -6638,8 +6647,8 @@ describe('DebateRoomPageClient', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'End turn' }));
 
       await waitFor(() => expectMutedIndicator('local'));
-      expect(stamp('local', 'ended')).toBeNull();
-      expect(banner('remote', 'turn')).toBeNull();
+      expect(pill('local', 'ended')).toBeNull();
+      expect(pill('remote', 'turn')).toBeNull();
     });
 
     it('fades the timer out as the muted microphone fades in when you end your turn', async () => {
@@ -6666,12 +6675,12 @@ describe('DebateRoomPageClient', () => {
       expect(debateVideoTile('remote').querySelector('[data-room-dim]')).toHaveAttribute('data-room-dim', 'on');
     });
 
-    it('steps the timer aside for the count-in, so the banner never half-covers it', async () => {
+    it('steps the timer aside for the count-in, so the phrase never half-covers it', async () => {
       // Preflight: Preston opens at 20:00:00 and is counted in over its last 5 s.
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('19:59:56.500'));
       await renderLiveDebate({ ...aliceOpening(), status: 'preflight', started_at: null });
 
-      await waitFor(() => expect(banner('local', 'count-in')).toHaveTextContent("You're up in"));
+      await waitFor(() => expect(phrase('local', 'count-in')).toHaveTextContent('You’re up in'));
       expect(debateVideoTile('local').querySelector('[aria-label^="Phase timer:"]')).not.toBeInTheDocument();
     });
 
@@ -6680,8 +6689,8 @@ describe('DebateRoomPageClient', () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:47.500'));
       await renderLiveDebate(openRoundsRoundOneSpeaking());
 
-      await waitFor(() => expect(stamp('remote', 'wrap-it-up')).toHaveTextContent('Wrap it up'));
-      expect(stamp('local', 'wrap-it-up')).toBeNull();
+      await waitFor(() => expect(pill('remote', 'wrap-it-up')).toHaveTextContent('Wrap it up'));
+      expect(pill('local', 'wrap-it-up')).toBeNull();
     });
 
     it('counts nobody in over the last word, which leads to the pick, even with the next round appended', async () => {
@@ -6701,7 +6710,7 @@ describe('DebateRoomPageClient', () => {
       await renderLiveDebate(appended);
 
       await waitFor(() => expect(lastWord('remote')).toBeInTheDocument());
-      expect(banner('local', 'count-in')).toBeNull();
+      expect(phrase('local', 'count-in')).toBeNull();
     });
 
     it("tags the speaker's corner with Last word", async () => {
@@ -6712,7 +6721,7 @@ describe('DebateRoomPageClient', () => {
       expect(lastWord('remote')?.closest('[data-tile-chips] > div:last-child')).toBeInTheDocument();
     });
 
-    // GEO-3315 drew thanking as a purple "Say thanks" banner over an end card with the round count.
+    // GEO-3315 drew thanking as a purple "Say thanks" phrase over an end card with the round count.
     // GEO-3301 removed the end card and hides the room between the last turn and the picker, so
     // neither is on screen once the reveal has gone.
     it('hides the room through thanking, with no end card or round count', async () => {
@@ -6984,9 +6993,13 @@ function expectDebateVideoTileInColor(participant: 'local' | 'remote') {
   expect(debateVideoTile(participant)).not.toHaveClass('grayscale');
 }
 
-function expectActiveDebateVideoTile(participant: 'local' | 'remote') {
+function expectActiveDebateVideoTile(participant: 'local' | 'remote', outline = 'outline-purple') {
   expect(debateVideoTile(participant)).toHaveAttribute('data-active-speaker', 'true');
-  expect(debateVideoTile(participant)).toHaveClass('outline-[3px]', 'outline-offset-0', 'outline-purple');
+  expect(debateVideoTile(participant)).toHaveClass(
+    'outline-[3px]',
+    outline === 'outline-purple' ? 'outline-offset-0' : '-outline-offset-3',
+    outline
+  );
 }
 
 function expectInactiveDebateVideoTile(participant: 'local' | 'remote') {

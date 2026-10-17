@@ -4,107 +4,148 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { BANNER_CLASS, BANNER_SUB_CLASS, LABEL_FONT, STAMP_CLASS, STAMP_FONT, TAG_CLASS } from './browse/stamp-styles';
+import { recordingFont, recordingOverlayTextShadow } from './recording-overlay-styles';
 
-/**
- * The recording room's moments in an Open rounds debate, in the stamps design the published player
- * uses (GEO-3315): stamps that land on a tile, and purple banners that roll across one. Every size
- * is in `cqw` of the tile, so the room draws them in the mockup's proportions at any width; the tile
- * and the tiles' grid are size containers for it.
- *
- * Fixed formats keep today's outlined phrases and never draw these.
- */
+export const ROOM_UI_FONT = recordingFont;
 
-/** A stamp over the middle of its box, landing from 1.3x as it appears. `delayMs` holds it back. */
-export function RoomStamp({
+/** Option 5, Debate room / Open rounds (GEO-3366). The export scales type by .78 and pills by .86. */
+export const ROOM_GLASS_CLASS = 'bg-black/66 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.24)]';
+export const ROOM_WHITE_GLASS_CLASS = 'bg-white text-[#111]';
+export const ROOM_END_TURN_CLASS =
+  'block rounded-full bg-black px-[3.2cqw] py-[2cqw] text-[3cqw] leading-none font-medium text-white transition hover:bg-black/85 disabled:cursor-default disabled:opacity-70';
+
+/** The export fades over 250 ms while settling from 1.06x, without moving across the tile. */
+export const ROOM_MOMENT_ENTER_CLASS =
+  'motion-safe:animate-[fadeIn_250ms_linear_both,roomMomentSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]';
+
+/** Open rounds keeps its white type, using the fixed-format room's face and outline weight. */
+export const ROOM_OUTLINED_STYLE = {
+  ...recordingFont,
+  ...recordingOverlayTextShadow,
+} as const;
+
+/** A glass pill that fades in with the reference's small settle, without moving across the tile. */
+export function RoomPill({
   children,
-  ink,
-  sizeCqw,
-  tilt,
+  tone = 'dark',
   delayMs = 0,
+  fadeInMs = 250,
+  fontWeight = 600,
   className,
   style,
   ...props
 }: React.ComponentPropsWithoutRef<'span'> & {
-  /** The text colour as a class, which the border takes too. A style's `color` can stand in for it. */
-  ink?: string;
-  sizeCqw: number;
-  tilt: string;
+  tone?: 'dark' | 'white' | 'red' | 'dashed';
   delayMs?: number;
+  fadeInMs?: number;
+  fontWeight?: 600 | 700;
 }) {
   return (
     <span
       {...props}
-      className={cx(STAMP_CLASS, 'motion-safe:animate-debate-stamp', ink, className)}
+      className={cx(
+        'inline-flex max-w-[92%] items-center rounded-full px-[4.644cqw] py-[2.064cqw] text-[4.816cqw] leading-none',
+        fontWeight === 700 ? 'font-bold' : 'font-semibold',
+        ROOM_MOMENT_ENTER_CLASS,
+        tone === 'white'
+          ? [ROOM_WHITE_GLASS_CLASS, 'shadow-[0_1cqw_3cqw_rgba(0,0,0,0.2)] backdrop-blur-[14px]']
+          : tone === 'red'
+            ? 'bg-[#FF4A26]/90 text-white backdrop-blur-[14px]'
+            : tone === 'dashed'
+              ? 'border-[0.5cqw] border-dashed border-white/60 bg-transparent text-white/80'
+              : 'bg-[rgba(36,36,40,0.48)] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur-[14px]',
+        className
+      )}
       style={{
-        ...STAMP_FONT,
-        fontSize: `${sizeCqw}cqw`,
-        transform: `rotate(${tilt})`,
-        animationDelay: delayMs ? `${delayMs}ms` : undefined,
+        ...ROOM_UI_FONT,
+        animationDelay: delayMs ? `${delayMs}ms, ${delayMs}ms` : undefined,
+        animationDuration: `${fadeInMs}ms, 250ms`,
         ...style,
       }}
     >
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }
 
-/** A stamp in the middle of its tile: the pick, "Go!", "Wrap it up", "Turn ended". */
-export function RoomTileStamp(props: React.ComponentProps<typeof RoomStamp>) {
+export function RoomTilePill(props: React.ComponentProps<typeof RoomPill>) {
   return (
     <div className="absolute inset-0 grid place-items-center">
-      <RoomStamp {...props} />
+      <RoomPill {...props} />
     </div>
   );
 }
 
-/** A purple banner rolling in across its box's full width, with an optional smaller second line. */
-export function RoomBanner({
+/** An outlined announcement and optional opener, fading in and out in place. */
+export function RoomPhrase({
   children,
+  eyebrow,
   sub,
   sizeCqw,
-  delayMs = 0,
+  fontWeight = 600,
   className,
   ...props
 }: React.ComponentPropsWithoutRef<'div'> & {
+  eyebrow?: React.ReactNode;
   sub?: React.ReactNode;
   sizeCqw: number;
-  delayMs?: number;
+  fontWeight?: 600 | 700;
 }) {
+  const card = eyebrow !== undefined || sub !== undefined;
   return (
     <div
       {...props}
-      className={cx(BANNER_CLASS, 'motion-safe:animate-debate-banner', className)}
-      style={{ ...LABEL_FONT, fontSize: `${sizeCqw}cqw`, animationDelay: delayMs ? `${delayMs}ms` : undefined }}
+      className={cx(
+        'mx-auto grid w-max max-w-[92%] justify-items-center text-center leading-[0.95] tracking-[-0.02em] text-white',
+        fontWeight === 700 ? 'font-bold' : 'font-semibold',
+        ROOM_MOMENT_ENTER_CLASS,
+        className
+      )}
+      style={{ ...ROOM_OUTLINED_STYLE, fontSize: card ? '16px' : `${sizeCqw}cqw` }}
     >
-      <span className="block truncate">{children}</span>
-      {sub && <span className={BANNER_SUB_CLASS}>{sub}</span>}
+      {eyebrow && (
+        <span className="text-[7.02cqw] leading-none font-semibold tracking-[-0.01em] text-white/88">{eyebrow}</span>
+      )}
+      <span
+        className={cx('block whitespace-nowrap', card && 'leading-[0.95] tracking-[-0.03em]')}
+        style={card ? { fontSize: `${sizeCqw}cqw` } : undefined}
+      >
+        {children}
+      </span>
+      {sub && (
+        <span className="mt-[1.6cqw] max-w-full truncate text-[3.744cqw] leading-none font-semibold tracking-normal">
+          {sub}
+        </span>
+      )}
     </div>
   );
 }
 
-/** A banner across the middle of its box: a tile, or the seam between the two. */
-export function RoomMiddleBanner(props: React.ComponentProps<typeof RoomBanner>) {
+export function RoomMiddlePhrase(props: React.ComponentProps<typeof RoomPhrase>) {
   return (
     <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
-      <RoomBanner {...props} />
+      <RoomPhrase {...props} />
     </div>
   );
 }
 
-/** A small purple label, "Last word" or a round count. */
+/** Small glass label for the last speaker or a round count. */
 export function RoomTag({ className, style, ...props }: React.ComponentPropsWithoutRef<'span'>) {
   return (
     <span
       {...props}
-      className={cx(TAG_CLASS, 'inline-flex items-center uppercase', className)}
-      style={{ ...LABEL_FONT, ...style }}
+      className={cx(
+        ROOM_GLASS_CLASS,
+        'inline-flex items-center rounded-full px-[2.2cqw] py-[1.1cqw] leading-none font-medium tracking-[0.04em] whitespace-nowrap',
+        className
+      )}
+      style={{ ...ROOM_UI_FONT, ...style }}
     />
   );
 }
 
 /**
- * The tile under a moment, dimmed as in the mockup so the stamp or banner reads over any picture.
+ * The tile under a moment, dimmed as in the mockup so the graphic reads over any picture.
  * Always there, and faded in and out, so one moment handing over to the next never flashes.
  */
 export function RoomDim({ on }: { on: boolean }) {
@@ -120,11 +161,11 @@ export function RoomDim({ on }: { on: boolean }) {
   );
 }
 
-/** How long a moment takes to leave: the banner's roll and the stamps' fade. */
+/** How long a moment takes to fade out. Playback also uses this duration for its banner exit. */
 export const ROOM_EXIT_MS = 300;
 
 const EXIT_CLASS = {
-  // A banner rolls on out the way it rolled in, as in the mockup.
+  // Legacy playback banners still roll; recording-room moments use the default fade.
   roll: 'motion-safe:animate-debate-banner-out',
   fade: 'motion-safe:animate-[fadeIn_300ms_linear_reverse_both]',
 } as const;

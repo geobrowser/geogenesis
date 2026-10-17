@@ -4,26 +4,23 @@ import cx from 'classnames';
 
 import { type OpenRoundsRoomPhase, openRoundNumber } from './open-rounds';
 
-/** Past five rebuttal rounds the pips halve, so round 10 still fits beside Leave on a 320px phone. */
-const compactAfterRounds = 5;
-
 type PipKind = 'opening' | 'round' | 'required' | 'next';
 
-/** The opening is drawn wider than every round after it. */
-function pipWidth(kind: PipKind, compact: boolean) {
-  if (kind === 'opening') return compact ? 'w-2.5' : 'w-5';
-  return compact ? 'w-1.5' : 'w-3';
-}
-
 /** One round's pip. `data-round-pip` is what tests read the pips by. */
-function RoundPip({ round, className }: { round: number | 'next'; className: string }) {
-  return <i data-round-pip={round} className={cx('shrink-0 rounded-full', className)} />;
+function RoundPip({ round, active, className }: { round: number | 'next'; active: boolean; className: string }) {
+  return (
+    <i
+      data-round-pip={round}
+      data-current-round={active || undefined}
+      className={cx('shrink-0 rounded-full', className)}
+    />
+  );
 }
 
 /** The pips' row: decoration beside text that already says the count, so hidden from readers. */
 function RoundPipRow({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <span aria-hidden="true" className={cx('flex min-w-0 items-center gap-[3px]', className)}>
+    <span aria-hidden="true" className={cx('flex min-w-0 items-center gap-[0.8cqw]', className)}>
       {children}
     </span>
   );
@@ -66,34 +63,29 @@ export function DebateRoundIndicator({
   const anotherPossible = !ended && roundIndex + requiredToCome < maxRounds;
   // A finished debate has no round running, so it highlights none.
   const currentRound = phase.phase === 'finished' ? null : roundIndex;
-  const compact = roundIndex + requiredToCome > compactAfterRounds;
 
   const pip = (kind: PipKind, round: number | 'next') => (
     <RoundPip
       key={round}
       round={round}
+      active={round === currentRound}
       className={cx(
-        pipWidth(kind, compact),
+        'w-[2.6cqw]',
         kind === 'next'
-          ? 'h-[7px] border-[1.5px] border-dashed border-grey-03'
+          ? 'h-[1.3cqw] border-[0.4cqw] border-dashed border-[#5e5e5b]'
           : kind === 'required'
-            ? 'h-1.5 bg-grey-03'
-            : cx('h-1.5', round === currentRound ? 'bg-purple ring-2 ring-purple/20' : 'bg-text')
+            ? 'h-[1.3cqw] bg-grey-03'
+            : 'h-[1.3cqw] bg-[#1c1c1c]'
       )}
     />
   );
 
   return (
-    <div data-debate-round-indicator={roundIndex} className="flex min-w-0 items-center gap-2">
-      <p className="text-metadataMedium whitespace-nowrap text-text">
+    <div data-debate-round-indicator={roundIndex} className="flex min-w-0 items-center gap-[2cqw]">
+      <p className="text-[3.6cqw] leading-none font-medium whitespace-nowrap text-[#1c1c1c]">
         <span aria-hidden="true">
           {roundIndex === 0 ? 'Opening' : `Round ${openRoundNumber(roundIndex)}`}
-          {roundIndex > 0 && (
-            <span className="font-normal text-grey-04">
-              {' '}
-              {roundIndex >= maxRounds ? '· last' : `of ${openRoundNumber(maxRounds)}`}
-            </span>
-          )}
+          {roundIndex > 0 && <span className="font-normal text-[#5e5e5b]"> {`of ${openRoundNumber(maxRounds)}`}</span>}
         </span>
         <span className="sr-only">
           {roundIndex === 0
