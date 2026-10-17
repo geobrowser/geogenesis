@@ -32,6 +32,7 @@ import {
 import { transcriptOnRecordings, turnOnRecordings } from './recording-clock';
 import type { TurnCount } from './round-cues';
 import { speakerStillUrl } from './speaker-still';
+import { type FullPlaybackVariant, recordingStreamVariant } from './stream-playback';
 
 type PlaybackUrls = {
   slot1: string | null;
@@ -144,7 +145,7 @@ const RECORDING_URL_REUSE_MS = 5 * 60_000;
 const MAX_RESIGN_RETRIES = 2;
 const RESIGN_RETRY_DELAY_MS = 2_000;
 
-type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingPlaybackVariant };
+type RecordingUrlRequest = { debateId: string; filename: string; variant?: FullPlaybackVariant };
 
 /**
  * Signs one recording, carrying `variant` only when one is wanted so the default request is
@@ -156,10 +157,23 @@ function signRecording(
   sign: (request: RecordingUrlRequest) => Promise<{ url: string }>,
   debateId: string,
   filename: string,
-  variant: RecordingPlaybackVariant | undefined,
-  renditionUrls: Set<string>
-) {
+  variant: FullPlaybackVariant | undefined,
+  renditionUrls: Set<string>,
+  stream?: StreamSigning
+): Promise<{ url: string }> {
   if (!variant) return sign({ debateId, filename });
+  // A Stream copy (behind `NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK`) falls back the same way, to
+  // whatever the slot would have played without it: on `stream_not_configured`, a copy that is not
+  // ready after all, or any other failure. See `isStreamUnavailableError` for the expected ones.
+  if (variant === 'stream') {
+    return sign({ debateId, filename, variant }).then(
+      result => {
+        stream?.streamUrls.add(result.url);
+        return result;
+      },
+      () => signRecording(sign, debateId, filename, stream?.fallback, renditionUrls)
+    );
+  }
   return sign({ debateId, filename, variant }).then(
     result => {
       renditionUrls.add(result.url);
@@ -168,6 +182,9 @@ function signRecording(
     () => sign({ debateId, filename })
   );
 }
+
+/** What a `stream` request needs beyond the rendition case: where to record a Stream URL, and what to ask for instead. */
+type StreamSigning = { streamUrls: Set<string>; fallback: RecordingPlaybackVariant | undefined };
 
 export function useDebatePlayback(
   debate: Debate,
@@ -186,6 +203,8 @@ export function useDebatePlayback(
    * faststart MP4 does not and should not pull its whole file for a card nobody is watching.
    */
   const renditionUrlsRef = React.useRef(new Set<string>());
+  /** The signed URLs that are a Cloudflare Stream HLS manifest, which the player attaches differently. */
+  const streamUrlsRef = React.useRef(new Set<string>());
   // Held URLs aged past the reuse window while released; the player renders no <video> until they
   // are re-signed, so a lapsed URL never reaches an element.
   const [urlsLapsed, setUrlsLapsed] = React.useState(false);
@@ -473,13 +492,30 @@ export function useDebatePlayback(
   // other.
   const slot1MobileContentType = slot1Recording?.mobile_content_type ?? null;
   const slot2MobileContentType = slot2Recording?.mobile_content_type ?? null;
-  const slot1Variant = React.useMemo(
+  const slot1Rendition = React.useMemo(
     () => recordingPlaybackVariant({ mobile_content_type: slot1MobileContentType }),
     [slot1MobileContentType]
   );
-  const slot2Variant = React.useMemo(
+  const slot2Rendition = React.useMemo(
     () => recordingPlaybackVariant({ mobile_content_type: slot2MobileContentType }),
     [slot2MobileContentType]
+  );
+  // Ahead of both, the recording's Cloudflare Stream copy, when `NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK`
+  // is on and geo-chat says it is ready; falling back to the choice above if it cannot be signed.
+  // With the flag off this is always `undefined` and the variants are exactly the ones above.
+  const slot1StreamReady = slot1Recording?.stream_ready === true;
+  const slot2StreamReady = slot2Recording?.stream_ready === true;
+  const slot1Variant: FullPlaybackVariant | undefined =
+    recordingStreamVariant({ stream_ready: slot1StreamReady }) ?? slot1Rendition;
+  const slot2Variant: FullPlaybackVariant | undefined =
+    recordingStreamVariant({ stream_ready: slot2StreamReady }) ?? slot2Rendition;
+  const slot1Stream = React.useMemo<StreamSigning>(
+    () => ({ streamUrls: streamUrlsRef.current, fallback: slot1Rendition }),
+    [slot1Rendition]
+  );
+  const slot2Stream = React.useMemo<StreamSigning>(
+    () => ({ streamUrls: streamUrlsRef.current, fallback: slot2Rendition }),
+    [slot2Rendition]
   );
 
   // How far each recording's own timeline sits from the debate-timeline origin, so the two
@@ -602,14 +638,16 @@ export function useDebatePlayback(
         debate.id,
         slot1RecordingFilename,
         slot1Variant,
-        renditionUrlsRef.current
+        renditionUrlsRef.current,
+        slot1Stream
       ),
       signRecording(
         recordingUrlsRef.current.lookup,
         debate.id,
         slot2RecordingFilename,
         slot2Variant,
-        renditionUrlsRef.current
+        renditionUrlsRef.current,
+        slot2Stream
       ),
     ])
       .then(([slot1Result, slot2Result]) => {
@@ -654,6 +692,8 @@ export function useDebatePlayback(
     slot2RecordingFilename,
     slot1Variant,
     slot2Variant,
+    slot1Stream,
+    slot2Stream,
   ]);
 
   // Nothing may outlive the card: a pending rejoin holds listeners on an element that is going
@@ -685,9 +725,14 @@ export function useDebatePlayback(
    * take the healthy tile down to "Loading…" and release a video the viewer is watching. Nothing
    * about a dead recording is a reason to interrupt the live one.
    */
+  /*
+   * `abandonStream`: the slot's Cloudflare Stream source died in hls.js, so sign what it would have
+   * played without Stream instead of the same manifest again.
+   */
   const refreshSlotUrl = React.useCallback(
-    async (slot: 1 | 2) => {
-      if (refreshedSlotsRef.current.has(slot)) return;
+    async (slot: 1 | 2, { abandonStream = false }: { abandonStream?: boolean } = {}) => {
+      // Abandoning Stream may follow an ordinary re-sign; it cannot repeat, as what it signs is not a stream.
+      if (refreshedSlotsRef.current.has(slot) && !abandonStream) return;
       const filename = slot === 1 ? slot1RecordingFilename : slot2RecordingFilename;
       if (!filename) return;
       refreshedSlotsRef.current.add(slot);
@@ -698,8 +743,9 @@ export function useDebatePlayback(
           recordingUrlsRef.current.refresh,
           debate.id,
           filename,
-          slot === 1 ? slot1Variant : slot2Variant,
-          renditionUrlsRef.current
+          abandonStream ? (slot === 1 ? slot1Rendition : slot2Rendition) : slot === 1 ? slot1Variant : slot2Variant,
+          renditionUrlsRef.current,
+          slot === 1 ? slot1Stream : slot2Stream
         );
         // Merged rather than replaced: the other slot's URL is in use and is not ours to touch.
         setUrls(current =>
@@ -711,7 +757,17 @@ export function useDebatePlayback(
         /* The tile has already shown what it shows when a recording cannot be revived. */
       }
     },
-    [debate.id, slot1RecordingFilename, slot2RecordingFilename, slot1Variant, slot2Variant]
+    [
+      debate.id,
+      slot1RecordingFilename,
+      slot2RecordingFilename,
+      slot1Variant,
+      slot2Variant,
+      slot1Rendition,
+      slot2Rendition,
+      slot1Stream,
+      slot2Stream,
+    ]
   );
 
   // While released, mark the held URLs lapsed once they reach the reuse window. Rechecked when the
@@ -745,14 +801,16 @@ export function useDebatePlayback(
         debate.id,
         slot1RecordingFilename,
         slot1Variant,
-        renditionUrlsRef.current
+        renditionUrlsRef.current,
+        slot1Stream
       ),
       signRecording(
         recordingUrlsRef.current.refresh,
         debate.id,
         slot2RecordingFilename,
         slot2Variant,
-        renditionUrlsRef.current
+        renditionUrlsRef.current,
+        slot2Stream
       ),
     ])
       .then(([slot1Result, slot2Result]) => {
@@ -787,6 +845,8 @@ export function useDebatePlayback(
     slot2RecordingFilename,
     slot1Variant,
     slot2Variant,
+    slot1Stream,
+    slot2Stream,
   ]);
 
   // Reaching the card (active or preloading) gives a re-sign that ran out of retries another go.
@@ -1589,6 +1649,11 @@ export function useDebatePlayback(
     renditions: {
       slot1: urls.slot1 != null && renditionUrlsRef.current.has(urls.slot1),
       slot2: urls.slot2 != null && renditionUrlsRef.current.has(urls.slot2),
+    },
+    /** Per slot: whether the URL in `urls` is a Cloudflare Stream HLS manifest (see `stream-playback.ts`). */
+    streams: {
+      slot1: urls.slot1 != null && streamUrlsRef.current.has(urls.slot1),
+      slot2: urls.slot2 != null && streamUrlsRef.current.has(urls.slot2),
     },
     // A debate that cannot be timed is never ready, so nothing autoplays it on a zero-length
     // timeline; `error` carries the reason to the card.
