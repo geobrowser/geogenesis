@@ -17,6 +17,7 @@ import {
   isMediaBlocked,
   mayAutoStartPreview,
 } from './request-join-state';
+import { RequestParticipantTile } from './request-participant-tile';
 
 type DebateMediaPermissions = { camera: DebateMediaPermission; microphone: DebateMediaPermission };
 
@@ -48,6 +49,8 @@ type DebateRequestMediaPreviewProps = {
   onJoinStateChange?: (state: DebateJoinState) => void;
   /** False for a card that leads into an audio-only claim picker: mic only, camera never opened. */
   camera?: boolean;
+  appearance?: 'compact' | 'tile';
+  formatSummary?: (state: DebateJoinState) => string;
   /** Lets a card place media status below its participant container. */
   renderLayout?: (preview: React.ReactNode, status: React.ReactNode) => React.ReactNode;
 };
@@ -76,6 +79,8 @@ function MediaPreview({
   onJoinStateChange,
   camera = true,
   renderLayout,
+  appearance = 'compact',
+  formatSummary,
   session,
 }: Omit<DebateRequestMediaPreviewProps, 'fallback'> & { session: DebateMediaSession }) {
   const [permission, setPermission] = React.useState<DebateMediaPermissions | null>(null);
@@ -233,12 +238,15 @@ function MediaPreview({
 
   const { summary, announcement } = camera ? describeJoinState({ micOn, cameraOn }) : describeMicOnlyJoinState(micOn);
 
+  const summaryText = formatSummary?.({ micOn, cameraOn }) ?? summary;
+
   const toggles = blocked ? null : (
     <div className="flex items-center justify-center gap-2">
       {!micBlocked && (
         <DebateTileToggleButton
           ariaLabel={micOn ? 'Turn microphone off' : 'Turn microphone on'}
-          compact
+          compact={appearance === 'compact'}
+          appearance={appearance === 'tile' ? 'overlay' : 'default'}
           enabled={micOn}
           onClick={() => toggle({ micOn: !micOn })}
         >
@@ -248,7 +256,8 @@ function MediaPreview({
       {camera && !cameraBlocked && (
         <DebateTileToggleButton
           ariaLabel={cameraOn ? 'Turn camera off' : 'Turn camera on'}
-          compact
+          compact={appearance === 'compact'}
+          appearance={appearance === 'tile' ? 'overlay' : 'default'}
           enabled={cameraOn}
           onClick={() => toggle({ cameraOn: !cameraOn })}
         >
@@ -258,22 +267,29 @@ function MediaPreview({
     </div>
   );
 
-  const preview = (
-    <>
-      {cameraOn ? (
-        <DebateVideoTile participantPosition={null} active={false} tileLabel="You" inactiveIndicatorId="local">
-          <video ref={videoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
-        </DebateVideoTile>
-      ) : (
-        <div className="grid place-items-center py-1">
-          <span className="h-5 w-5 overflow-hidden rounded-full">
-            <Avatar avatarUrl={avatarCid ?? undefined} value={avatarValue ?? undefined} alt="" size={20} />
-          </span>
-        </div>
-      )}
-      {toggles}
-    </>
-  );
+  const preview =
+    appearance === 'tile' ? (
+      <RequestParticipantTile label="You" local avatarCid={avatarCid} avatarValue={avatarValue} controls={toggles}>
+        {cameraOn ? (
+          <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" playsInline muted autoPlay />
+        ) : null}
+      </RequestParticipantTile>
+    ) : (
+      <>
+        {cameraOn ? (
+          <DebateVideoTile participantPosition={null} active={false} tileLabel="You" inactiveIndicatorId="local">
+            <video ref={videoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
+          </DebateVideoTile>
+        ) : (
+          <div className="grid place-items-center py-1">
+            <span className="h-5 w-5 overflow-hidden rounded-full">
+              <Avatar avatarUrl={avatarCid ?? undefined} value={avatarValue ?? undefined} alt="" size={20} />
+            </span>
+          </div>
+        )}
+        {toggles}
+      </>
+    );
 
   const status = (
     <>
@@ -307,8 +323,12 @@ function MediaPreview({
         </Text>
       ) : null}
 
-      <Text variant="footnote" color="grey-04">
-        {summary}
+      <Text
+        variant={appearance === 'tile' ? 'metadata' : 'footnote'}
+        color="grey-04"
+        className={appearance === 'tile' ? 'text-[14px] leading-5' : undefined}
+      >
+        {summaryText}
       </Text>
 
       <span aria-live="polite" className="sr-only">
@@ -318,7 +338,7 @@ function MediaPreview({
   );
 
   return renderLayout ? (
-    renderLayout(<div className="flex flex-col gap-2">{preview}</div>, status)
+    renderLayout(appearance === 'tile' ? preview : <div className="flex flex-col gap-2">{preview}</div>, status)
   ) : (
     <div className="flex flex-col gap-2">
       {preview}

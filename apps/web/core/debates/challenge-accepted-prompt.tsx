@@ -4,14 +4,15 @@ import * as React from 'react';
 
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
-import { Avatar } from '~/design-system/avatar';
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 import type { DebateRematchParticipant, DebateRematchSession } from './api';
 import { debateRematchMediaSessionKey } from './media-session';
 import { readRematchJoinIntent, rememberRematchJoinIntent } from './rematch-join-intent';
+import type { DebateJoinState } from './request-join-state';
 import { DebateRequestMediaPreview } from './request-media-preview';
+import { RequestParticipantTile } from './request-participant-tile';
 import { useScrollLock } from './use-scroll-lock';
 
 /**
@@ -33,6 +34,7 @@ export function ChallengeAcceptedPrompt({
   onDecline: () => void;
 }) {
   const titleId = React.useId();
+  const descriptionId = React.useId();
 
   const [initialJoinState] = React.useState(() => {
     const remembered = readRematchJoinIntent(session.id);
@@ -62,14 +64,18 @@ export function ChallengeAcceptedPrompt({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid w-[min(370px,100%)] gap-4 overflow-hidden rounded-lg bg-divider p-5 text-text shadow-card"
+        aria-describedby={descriptionId}
+        className="max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid w-[min(444px,100%)] gap-4 overflow-hidden rounded-lg bg-divider p-5 text-text shadow-card"
       >
-        <header className="min-w-0 text-center">
+        <header className="grid min-w-0 gap-1 text-center">
           <h2 id={titleId}>
-            <Text as="span" variant="metadata" color="text">
+            <Text as="span" variant="metadata" color="text" className="font-semibold">
               {participantName(other)} accepted your request
             </Text>
           </h2>
+          <p id={descriptionId} className="text-[14px] leading-5 text-grey-04">
+            Join a live room together and pick a claim to debate.
+          </p>
         </header>
 
         <DebateRequestMediaPreview
@@ -79,24 +85,29 @@ export function ChallengeAcceptedPrompt({
           initialJoinState={initialJoinState}
           onJoinStateChange={rememberChoice}
           camera={videoEnabled}
-          fallback={<RematchParticipant participant={you} label="You" />}
+          appearance="tile"
+          formatSummary={state => describeAcceptedJoin(state, participantName(other), videoEnabled)}
+          fallback={
+            <RequestParticipantTile label="You" local avatarCid={you.avatar_cid} avatarValue={you.profile_space_id} />
+          }
           renderLayout={(preview, status) => (
-            <>
-              <div className="grid min-h-24 grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg border border-grey-02 bg-white p-3">
+            <div className="grid gap-2">
+              <div className="relative grid grid-cols-2 items-center gap-2">
                 {preview}
-                <div className="relative grid w-7 place-items-center">
-                  <span
-                    aria-hidden="true"
-                    className="absolute top-1/2 left-1/2 h-18 w-px -translate-x-1/2 -translate-y-1/2 bg-divider"
-                  />
-                  <span className="relative grid h-7 w-7 place-items-center rounded-full border border-divider bg-white text-tag text-text">
-                    VS
-                  </span>
-                </div>
-                <RematchParticipant participant={other} label={participantName(other)} />
+                <RequestParticipantTile
+                  label={participantName(other)}
+                  avatarCid={other.avatar_cid}
+                  avatarValue={other.profile_space_id}
+                />
+                <span
+                  aria-hidden="true"
+                  className="absolute top-1/2 left-1/2 grid size-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-text text-tag text-white ring-3 ring-divider"
+                >
+                  VS
+                </span>
               </div>
-              {status && <div className="-my-2 grid gap-2 text-left">{status}</div>}
-            </>
+              {status && <div className="grid gap-1 text-center">{status}</div>}
+            </div>
           )}
         />
 
@@ -112,12 +123,17 @@ export function ChallengeAcceptedPrompt({
               type="button"
               onClick={onDecline}
               disabled={busy}
-              className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
+              className={`${DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME} h-11!`}
             >
               Decline
             </button>
-            <button type="button" onClick={onExplore} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
-              Explore claims
+            <button
+              type="button"
+              onClick={onExplore}
+              disabled={busy}
+              className={`${DIALOG_ACTION_BUTTON_CLASS_NAME} h-11!`}
+            >
+              Join room
             </button>
           </div>
         </footer>
@@ -126,22 +142,11 @@ export function ChallengeAcceptedPrompt({
   );
 }
 
-function RematchParticipant({ participant, label }: { participant: DebateRematchParticipant; label: string }) {
-  return (
-    <div className="grid min-w-0 justify-items-center gap-2 text-center">
-      <span className="h-5 w-5 overflow-hidden rounded-full">
-        <Avatar
-          avatarUrl={participant.avatar_cid}
-          value={participant.profile_space_id}
-          alt={participantName(participant)}
-          size={20}
-        />
-      </span>
-      <Text as="div" variant="metadata" color="text" className="max-w-full truncate">
-        {label}
-      </Text>
-    </div>
-  );
+function describeAcceptedJoin({ micOn, cameraOn }: DebateJoinState, otherName: string, videoEnabled: boolean) {
+  const mic = micOn ? 'with your mic on' : 'muted';
+  if (!videoEnabled) return `You’ll join ${mic}.`;
+  if (cameraOn) return `You’ll join ${mic}. ${otherName} will see your camera.`;
+  return micOn ? 'You’ll join with your mic on and your camera off.' : 'You’ll join muted, with your camera off.';
 }
 
 function participantName(participant: DebateRematchParticipant) {
