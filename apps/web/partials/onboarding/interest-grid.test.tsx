@@ -42,8 +42,8 @@ describe('InterestGrid', () => {
     const image = container.querySelector('img')!;
     expect(image).toHaveAttribute('loading', 'eager');
     expect(image).toHaveAttribute('fetchpriority', 'high');
-    expect(image).toHaveAttribute('width', '72');
-    // At 2x, 640px preserves over 144px vertically in the ~4:1 source covers.
+    expect(image).toHaveAttribute('width', '56');
+    // At 2x, 640px preserves enough vertical detail for the crop in the ~4:1 source covers.
     expect(image.getAttribute('srcset')).toMatch(/w=256.*1x.*w=640.*2x/);
     expect(preload).toHaveBeenCalledExactlyOnceWith(image.getAttribute('src'), {
       as: 'image',

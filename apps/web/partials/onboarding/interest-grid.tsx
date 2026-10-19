@@ -9,9 +9,9 @@ import { getImagePath, isOptimizableImageSrc, isRenderableImageSrc } from '~/cor
 
 import { NativeGeoImage } from '~/design-system/geo-image';
 
-const IMAGE_WIDTH = 72;
-// Featured spaces use wide covers (roughly 4:1). A 72px-wide resized cover leaves only
-// 18px of height to crop into a circle. Keep enough vertical detail for a sharp 2x crop.
+const IMAGE_WIDTH = 56;
+// Featured spaces use wide covers (roughly 4:1). A 56px-wide resized cover leaves only
+// 14px of height to crop into a circle. Keep enough vertical detail for a sharp 2x crop.
 const COVER_REQUEST_WIDTH = 256;
 
 /** Warm the exact 1x/2x thumbnails the grid uses, rather than downloading the original covers. */
@@ -35,7 +35,7 @@ export function InterestGrid({
   onToggle: (id: string) => void;
 }) {
   return (
-    <div className="mx-auto grid w-full max-w-[400px] grid-cols-4 items-start gap-x-3 gap-y-5 md:gap-x-2 md:gap-y-4">
+    <div className="mx-auto grid w-full grid-cols-4 items-start gap-x-2 gap-y-4">
       {spaces.map(space => {
         const selected = selectedIds.includes(space.id);
         const placeholder = <span className="text-xl text-grey-04">{space.name.slice(0, 1)}</span>;
@@ -45,11 +45,11 @@ export function InterestGrid({
             type="button"
             aria-pressed={selected}
             onClick={() => onToggle(space.id)}
-            className="group flex min-w-0 flex-col items-center gap-2 text-center focus-visible:outline-none md:gap-1.5"
+            className="group flex min-w-0 flex-col items-center gap-1.5 text-center focus-visible:outline-none"
           >
             <span
               aria-hidden="true"
-              className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-grey-01 group-focus-visible:ring-2 group-focus-visible:ring-ctaPrimary group-focus-visible:ring-offset-2 md:h-14 md:w-14"
+              className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-grey-01 group-focus-visible:ring-2 group-focus-visible:ring-ctaPrimary group-focus-visible:ring-offset-2"
             >
               <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full">
                 <NativeGeoImage

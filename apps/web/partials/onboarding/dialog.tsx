@@ -355,7 +355,11 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className={`pointer-events-auto relative z-100 my-auto flex h-[560px] max-h-[calc(100dvh-3rem)] min-h-[485px] w-full max-w-[528px] shrink-0 flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown ${effectiveStep === 'completed' ? 'justify-center px-8 py-10 md:px-6' : 'p-8 md:p-6'}`}
+      className={cx(
+        'pointer-events-auto relative z-100 my-auto flex max-h-[calc(100dvh-3rem)] min-h-[485px] w-full shrink-0 flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown',
+        effectiveStep === 'customize-feed' ? 'h-[560px] max-w-[528px] p-8 md:p-6' : 'h-[485px] max-w-[360px]',
+        effectiveStep === 'completed' ? 'justify-center px-6 py-10' : effectiveStep !== 'customize-feed' && 'p-6 pt-8'
+      )}
     >
       {children}
     </motion.div>
@@ -849,7 +853,7 @@ function StepInterestedIn({
           </Text>
         </div>
       ) : (
-        <div ref={scrollRef} className="my-5 min-h-0 flex-1 overflow-y-auto">
+        <div ref={scrollRef} className="my-4 min-h-0 flex-1 overflow-y-auto">
           <div ref={contentRef}>
             <InterestGrid spaces={featuredSpaces} selectedIds={selectedTopicIds} onToggle={handleSelectTopics} />
           </div>
