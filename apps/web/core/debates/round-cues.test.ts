@@ -25,6 +25,11 @@ describe('roundLabel', () => {
 });
 
 describe('roundCardAt', () => {
+  it('can mount Open rounds at zero opacity before the first playback sample advances', () => {
+    expect(roundCardAt(spans, TURNS, 0)).toBeNull();
+    expect(roundCardAt(spans, TURNS, 0, undefined, true)).toMatchObject({ opacity: 0, ageMs: 0 });
+  });
+
   it('hands the card the round and its name apart, and the badge the single line', () => {
     // Two surfaces with different room for the same fact: the card stacks them large, the badge
     // has one line beside a timer.

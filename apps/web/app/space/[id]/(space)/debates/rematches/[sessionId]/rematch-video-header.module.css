@@ -1,0 +1,265 @@
+/* Option A: full video cards in one stable layout above the claim list. */
+.pair {
+  position: relative;
+}
+
+.card {
+  min-width: 0;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.cardBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.video {
+  position: relative;
+  grid-column: 1 / -1;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  background: var(--color-grey-01);
+}
+
+.fallback {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+}
+
+.fallback > * {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.cardName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+  line-height: 28px;
+  font-weight: 600;
+}
+
+.cardState {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+
+.cardAction {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.opponentCard .cardState {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+
+.opponentCard .cardBody {
+  position: relative;
+}
+
+.opponentCard .cardAction {
+  grid-column: 3;
+}
+
+.videoName {
+  display: none;
+}
+
+/* The full-size phone tiles share a row, with the controls immediately below. */
+@media (max-width: 767px) {
+  .pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .vs {
+    /* Center on the actual video row, above both tiles, at any container width. */
+    position: relative;
+    z-index: 1;
+    grid-column: 1 / -1;
+    grid-row: 1;
+    place-self: center;
+    width: 28px;
+    height: 28px;
+    pointer-events: none;
+  }
+
+  .vs > span {
+    box-shadow: 0 0 0 3px white;
+  }
+
+  .youCard,
+  .youCard .cardBody {
+    display: contents;
+  }
+
+  .opponentCard {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+    aspect-ratio: 4 / 3;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .opponentCard .cardBody {
+    display: block;
+    height: 100%;
+  }
+
+  .video {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    border-radius: 8px;
+  }
+
+  .opponentCard .video {
+    height: 100%;
+    aspect-ratio: auto;
+  }
+
+  .youCard .video {
+    border-width: 1px;
+  }
+
+  .cardName,
+  .opponentCard .cardAction,
+  .opponentCard .cardState {
+    display: none;
+  }
+
+  .videoName {
+    display: inline-flex;
+  }
+
+  .youCard .cardState {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-right: 76px;
+  }
+
+  .youCard .cardAction {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    justify-self: end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pair * {
+    transition: none;
+    animation: none;
+  }
+}
+
+.mediaControls {
+  --control-height: 28px;
+  --toggle-width: 34px;
+  --settings-width: 22px;
+  height: var(--control-height);
+}
+
+.mediaControls [data-media-toggle] {
+  justify-content: center;
+  width: var(--toggle-width);
+  height: var(--control-height);
+  padding: 0;
+}
+
+.mediaControls [data-media-settings] {
+  width: var(--settings-width);
+  height: var(--control-height);
+}
+
+.mediaControls [data-media-group] {
+  height: var(--control-height);
+  margin-left: 6px;
+}
+
+@media (max-width: 767px) {
+  .mediaControls {
+    --control-height: 44px;
+    --toggle-width: 52px;
+    --settings-width: 32px;
+  }
+
+  .mediaControls [data-media-toggle] > svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* Keep the full-size slot in the document while its existing video docks in the corner. */
+.opponentCard.floatingActive,
+.video.floatingActive {
+  overflow: visible;
+}
+
+.floatingVideo,
+.floatingClose {
+  --floating-width: 240px;
+  --floating-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+}
+
+.floatingVideo {
+  position: fixed;
+  right: 16px;
+  bottom: var(--floating-bottom);
+  z-index: 30;
+  display: block;
+  width: var(--floating-width);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-width: 1px;
+  border-radius: 8px;
+  background: var(--color-text);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 18%);
+}
+
+.floatingName {
+  display: inline-flex;
+}
+
+.floatingClose {
+  position: fixed;
+  right: 20px;
+  bottom: calc(var(--floating-bottom) + var(--floating-width) * 0.5625 - 28px);
+  z-index: 31;
+  cursor: pointer;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(32 32 32 / 80%);
+  color: white;
+}
+
+@media (max-width: 767px) {
+  .floatingVideo,
+  .floatingClose {
+    --floating-width: 160px;
+  }
+}

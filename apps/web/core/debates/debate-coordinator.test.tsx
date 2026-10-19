@@ -600,7 +600,7 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).toHaveBeenCalled());
-    expect(screen.queryByRole('button', { name: 'Explore claims' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Join room' })).toBeNull();
   });
 
   it('still walks them in when nothing remembers the answer', async () => {
@@ -621,7 +621,7 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    await screen.findByRole('button', { name: 'Explore claims' });
+    await screen.findByRole('button', { name: 'Join room' });
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(mocks.push).not.toHaveBeenCalled();
   });
@@ -634,7 +634,7 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await new Promise(resolve => setTimeout(resolve, 50));
-    expect(screen.queryByRole('button', { name: 'Explore claims' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Join room' })).toBeNull();
   });
 
   it('asks the sender how to join instead of moving them', async () => {
@@ -725,7 +725,7 @@ describe('DebateCoordinator', () => {
       render(<DebateCoordinator />);
       await screen.findByText('Remote speaker accepted your request');
 
-      fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
       expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
       expect(mocks.push).not.toHaveBeenCalled();
@@ -748,14 +748,14 @@ describe('DebateCoordinator', () => {
 
     const view = render(<DebateCoordinator />);
     await screen.findByText('Remote speaker accepted your request');
-    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
     // A different challenge, accepted after the first was answered.
     mocks.activity = { ...first, rematch: { ...first.rematch!, id: 'rematch-2' } };
     view.rerender(<DebateCoordinator />);
 
     await screen.findByText('Remote speaker accepted your request');
-    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Join room' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Decline' })).toBeEnabled();
   });
 
@@ -766,7 +766,7 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
     await screen.findByText('Remote speaker accepted your request');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
 
     await waitFor(() =>
       expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
