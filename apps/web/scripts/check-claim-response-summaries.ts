@@ -1,9 +1,5 @@
-/**
- * Runs the app's claim response summary read on testnet over every answered claim in one space and
- * compares its totals with the graph's row count.
- *
- * Usage: bun scripts/check-claim-response-summaries.ts [spaceId] (default: the busiest space)
- */
+// Compares the app's claim response summary read with the graph's row count for one testnet space.
+// Usage: bun scripts/check-claim-response-summaries.ts [spaceId] (default: the busiest space)
 import { print } from 'graphql';
 
 import { claimResponseSummariesQuery } from '../core/io/query-fragments';
