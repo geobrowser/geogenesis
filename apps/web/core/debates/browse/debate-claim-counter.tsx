@@ -12,7 +12,7 @@ import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
-import { TargetSolid } from '~/design-system/icons/target-solid';
+import { Warning } from '~/design-system/icons/warning';
 
 import { ClaimIconButton } from './debate-claim-ticker';
 import { PLAYER_GLASS_CLASS, PLAYER_LABEL_FONT } from './player-overlay-styles';
@@ -207,10 +207,10 @@ export function DebateClaimCounter({
 }
 
 /**
- * The count beside the target icon, on the player's glass pill.
+ * The count beside the classic circled exclamation icon, on the player's glass pill.
  *
  * The icon sits inline on the number's baseline and drops by 0.17em, which puts its middle on the
- * middle of the digits (Geist's cap height) in every browser. Centring with flexbox centres the
+ * middle of the digits in every browser. Centring with flexbox centres the
  * digits' line box instead, whose descender space leaves them sitting high; trimming that box with
  * `text-box` is not supported everywhere. Measured off the rendered pixels in the design mockup.
  */
@@ -220,8 +220,8 @@ function ClaimCount({ count }: { count: number }) {
       className={cx(PLAYER_GLASS_CLASS, 'inline-block text-[2.6cqw] text-white tabular-nums')}
       style={PLAYER_LABEL_FONT}
     >
-      <span className="mr-[0.4em] inline-block align-[-0.17em]">
-        <TargetSolid />
+      <span aria-hidden className="mr-[0.4em] inline-block align-[-0.17em] [&>svg]:size-[1.05em]">
+        <Warning />
       </span>
       {count}
     </span>
