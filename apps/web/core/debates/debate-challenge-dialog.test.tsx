@@ -28,6 +28,7 @@ vi.mock('./media-session', () => ({
     previewError: null,
     previewStream: null,
     localTracksRef: { current: [] },
+    joinChoiceRef: { current: null },
     ensurePreview: media.ensurePreview,
     beginSession: media.beginSession,
     releaseSession: media.releaseSession,
@@ -159,7 +160,7 @@ describe('DebateChallengeDialog', () => {
     renderDialog({ onAccept });
 
     expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
-    expect(media.ensurePreview).toHaveBeenCalledWith({ audio: true, video: false });
+    await waitFor(() => expect(media.ensurePreview).toHaveBeenCalledWith({ audio: true, video: false }));
     expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));

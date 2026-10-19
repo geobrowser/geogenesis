@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
+import { DebateRoundBadge, DebateRoundCard, PlayerRoundTitle } from './debate-round-cues';
 
 /** What `roundCardAt` hands over: one line for the badge, the same fact in halves for the card. */
 const cue = (round: string, role: string | null, opacity = 1) => ({
@@ -102,6 +102,23 @@ describe('DebateRoundCard', () => {
 
     expect(card).toHaveAttribute('aria-hidden');
     expect([...card.classList]).toContain('pointer-events-none');
+  });
+});
+
+describe('PlayerRoundTitle', () => {
+  it.each(['Opening', null])('scales each %s announcement line outline like fixed-format playback', role => {
+    const fixed = render(<DebateRoundCard cue={cue('Round 1', role)} />);
+    const open = render(<PlayerRoundTitle round="Round 1" role={role} />);
+    const referenceLines = [...fixed.container.querySelectorAll('span')];
+    const lines = [...open.container.querySelectorAll('span')];
+
+    // Inherited text-shadow lengths resolve against the parent's font size. Each differently
+    // sized text line must own the em-based shadow, as it does in fixed-format playback.
+    expect(referenceLines[0].style.textShadow).toContain('0.035em');
+    referenceLines.forEach((reference, index) => {
+      expect(lines[index].style.textShadow).toBe(reference.style.textShadow);
+    });
+    expect(lines.at(-1)?.style.textShadow).toBe(referenceLines[0].style.textShadow);
   });
 });
 

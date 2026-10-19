@@ -14,7 +14,7 @@ import {
   spaceIdAtom,
   stepAtom,
   topicIdAtom,
-} from '~/partials/onboarding/dialog';
+} from '~/partials/onboarding/onboarding-atoms';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 

@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
    * which a phone keeps, so it defaults to one; the desktop pill rows have their own cases.
    */
   isPhone: true,
+  debateVideo: false,
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
   sourceDebateLoading: false,
   /** GEO-2870. geo-chat's extracted-claims payload for the source debate, and whether it is final. */
@@ -214,6 +215,8 @@ vi.mock('~/core/hooks/use-media-query', () => ({
   useMediaQuery: () => mocks.isPhone,
 }));
 
+vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.debateVideo }));
+
 vi.mock('~/core/analytics', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/analytics')>()),
   capture: mocks.capture,
@@ -295,7 +298,7 @@ vi.mock('~/core/debates/lobbies/lobby-return', async () => {
   const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
   return {
     // No lobby mic carried into these sessions (GEO-3336 has its own tests).
-    useCarriedLobbyMic: () => null,
+    useCarriedLobbyChoice: () => null,
     useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
   };
 });
@@ -943,6 +946,7 @@ function mutation(mutate = mocks.mutate) {
 
 beforeEach(() => {
   mocks.isPhone = true;
+  mocks.debateVideo = false;
   mocks.capture.mockClear();
   mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
   mocks.sourceDebateLoading = false;
@@ -1104,6 +1108,24 @@ afterEach(() => {
 });
 
 describe('DebateRematchPageClient', () => {
+  it('keeps the videos outside the sticky filters and scrolls without switching header layouts', async () => {
+    mocks.debateVideo = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    const participants = screen.getByRole('region', { name: 'Participants' });
+    const filters = screen.getByRole('group', { name: 'Claim picker filters' });
+    const scroller = document.querySelector('[data-rematch-scroll]')!;
+    const participantContent = participants.innerHTML;
+    expect(filters).toHaveClass('sticky');
+    expect(filters).not.toContainElement(participants);
+    expect(filters).toContainElement(screen.getByRole('textbox', { name: 'Search claims and topics' }));
+    scroller.scrollTop = 160;
+    fireEvent.scroll(scroller);
+    expect(participants.innerHTML).toBe(participantContent);
+    expect(scroller.scrollTop).toBe(160);
+    expect(screen.queryByRole('button', { name: 'Show full participant videos' })).toBeNull();
+  });
+
   it('does not leave a browsing rematch during the Strict Mode effect rehearsal', async () => {
     render(
       <StrictMode>
@@ -3891,14 +3913,16 @@ describe('DebateRematchPageClient', () => {
 
   // GEO-2992. The unmute control used to live in a 200px dock fixed to the bottom-right of the
   // viewport — outside the content column, and a scroll away from everything the viewer was reading.
-  // Its replacement has to be in the column, above the tabs, and pinned with them.
-  it('pins the pair header at the top of the content column', async () => {
+  // Keep it above the tabs in the reading order; the full cards now scroll naturally.
+  it('places the full pair header above the sticky claim filters', async () => {
+    mocks.debateVideo = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
     const header = screen.getByTestId('rematch-pair-header');
     const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
-    expect(header.closest('.sticky')).toBe(pinned);
+    expect(header.closest('.sticky')).toBeNull();
+    expect(pinned).not.toBeNull();
 
     // Inside the column, not floating over the viewport: the dock's `fixed` shell is gone.
     expect(header.closest('main')).not.toBeNull();
@@ -3908,6 +3932,16 @@ describe('DebateRematchPageClient', () => {
     // you can pick.
     const tabs = screen.getByRole('button', { name: 'Explore' });
     expect(header.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps the audio-only participant controls pinned with the filters when video is disabled', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
+    expect(pinned).not.toBeNull();
+    expect(screen.getByTestId('rematch-pair-header').closest('.sticky')).toBe(pinned);
+    expect(screen.getByRole('button', { name: 'Leave' }).closest('.sticky')).toBe(pinned);
   });
 
   // GEO-2863 promoted the hub's "My positions" out of Explore's source menu and into a tab of its
@@ -6633,6 +6667,18 @@ describe('desktop filter row', () => {
     expect(pill(/^Governance space/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+  });
+
+  it('uses the same filter pills on a phone in the video layout', async () => {
+    mocks.isPhone = true;
+    mocks.debateVideo = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(pillRow()).toBeInTheDocument());
+    expect(pill(/^Governance\s?\d/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Hide my positions' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pick a claim to debate' })).toBeInTheDocument();
   });
 
   it('lists every space before any topic, whatever the counts', async () => {

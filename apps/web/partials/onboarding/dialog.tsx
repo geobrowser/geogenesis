@@ -11,7 +11,6 @@ import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
 import { trackAuthOnboarding } from '~/core/auth-attempt';
@@ -57,19 +56,8 @@ import { Truncate } from '~/design-system/truncate';
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
-export const nameAtom = atomWithStorage<string>('onboardingName', '');
-export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
-export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
-export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
-
-/**
- * Topic picks from the 'interested-in' step. Onboarding no longer blocks on space
- * creation, so these are persisted for the background PendingPersonalSpaceRunner,
- * which applies them (membership proposals) once a real spaceId exists, then clears them.
- */
-export const selectedTopicIdsAtom = atomWithStorage<string[]>('onboardingSelectedTopics', []);
-
 type Step = OnboardingStep;
+
 
 const stepOrder: Partial<Record<Step, number>> = {
   start: 1,
@@ -81,9 +69,7 @@ const stepByOrder = Object.fromEntries(Object.entries(stepOrder).map(([step, ord
   Step
 >;
 
-// 'enter-profile' and 'create-space' linger in the type only to normalize
-// values persisted by an older version of the flow — see effectiveStep.
-export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
+import { avatarAtom, nameAtom, selectedTopicIdsAtom, stepAtom, topicIdAtom } from './onboarding-atoms';
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
 // How long the completion screen shows before we route the user onward. The

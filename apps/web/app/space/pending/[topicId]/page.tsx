@@ -19,7 +19,7 @@ import { Text } from '~/design-system/text';
 
 import { Editor } from '~/partials/editor/lazy-editor';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
-import { avatarAtom, nameAtom, spaceIdAtom } from '~/partials/onboarding/dialog';
+import { avatarAtom, nameAtom, spaceIdAtom } from '~/partials/onboarding/onboarding-atoms';
 
 /**
  * Optimistic personal-space page. The space doesn't exist on the indexer yet —
