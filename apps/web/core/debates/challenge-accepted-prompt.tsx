@@ -95,7 +95,7 @@ export function ChallengeAcceptedPrompt({
                 </div>
                 <RematchParticipant participant={other} label={participantName(other)} />
               </div>
-              {status && <div className="grid gap-2 text-center">{status}</div>}
+              {status && <div className="-my-2 grid gap-2 text-left">{status}</div>}
             </>
           )}
         />
