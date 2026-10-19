@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/debates/api';
+import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations, turnSpansFromSegments, turnStateFromSegments } from '~/core/debates/playback-utils';
 import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
@@ -114,7 +115,19 @@ vi.mock('./debate-claim-ticker', () => ({
       </button>
     );
   },
-  ClaimScrubberMarkers: () => null,
+  ClaimScrubberMarkers: ({ markers, onSeek }: { markers: ClaimMarker[]; onSeek: (ms: number) => void }) => (
+    <>
+      {markers.map(marker => (
+        <button
+          key={marker.id}
+          type="button"
+          aria-label={`Jump to: ${marker.text}`}
+          style={{ left: `${marker.fraction * 100}%` }}
+          onClick={() => onSeek(marker.seekMs)}
+        />
+      ))}
+    </>
+  ),
 }));
 
 // The Open rounds counter has its own suite; here it stands in so the player's wiring is what is
@@ -2360,6 +2373,117 @@ describe('turnTimerScale', () => {
     expect(turnTimerScale(6.2)).toBeCloseTo(1.24);
     expect(turnTimerScale(5.5)).toBeCloseTo(1.3);
     expect(turnTimerScale(3)).toBe(1.3);
+  });
+});
+
+describe('Open rounds edited progress bar', () => {
+  const openRounds = { ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
+  const playbackBreaks: DebatePlaybackController['playbackBreaks'] = {
+    breaks: [
+      { kind: 'lead_in', roundIndex: 0, nextRoundIndex: 1, decidingStartMs: 30_000, startMs: 30_000, endMs: 38_000 },
+      { kind: 'extend', roundIndex: 1, nextRoundIndex: 2, decidingStartMs: 70_000, startMs: 74_000, endMs: 82_000 },
+      {
+        kind: 'final_end',
+        roundIndex: 2,
+        nextRoundIndex: null,
+        decidingStartMs: 110_000,
+        startMs: 117_000,
+        endMs: 120_000,
+      },
+    ],
+    earlyEnds: [{ turnIndex: 4, nextTurnIndex: 5, startMs: 90_000, endMs: 93_000, endedSlot: 1, nextSlot: 2 }],
+    picks: [],
+  };
+  const at = (playheadSeconds: number, seekBoth = vi.fn()) =>
+    controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, playbackBreaks, seekBoth, playing: false });
+
+  it('keeps the thumb and fill continuous through every automatic edit and reaches the end', () => {
+    mocks.controller = at(31.2);
+    const { getByRole, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const slider = getByRole('slider', { name: 'Debate timeline' }) as HTMLInputElement;
+    const fill = slider.parentElement!.querySelector('span')!;
+    expect(Number(slider.max)).toBe(94.4);
+    for (const [before, after, expected] of [
+      [31.2, 36.8, 31.2],
+      [71.2, 80.8, 65.6],
+      [90, 93, 74.8],
+      [112.6, 120, 94.4],
+    ]) {
+      let previousWidth = '';
+      for (const seconds of [before, after]) {
+        mocks.controller = at(seconds);
+        rerender(<DebateFeedPlayer debate={openRounds} active />);
+        expect(Number(slider.value)).toBeCloseTo(expected);
+        if (previousWidth) expect(fill.style.width).toBe(previousWidth);
+        previousWidth = fill.style.width;
+      }
+    }
+    expect(fill.style.width).toBe('100%');
+  });
+
+  it('maps dragging and keyboard seeks back to the retained footage on either side of edits', () => {
+    const seek = vi.fn();
+    const controller = at(40, seek);
+    mocks.controller = controller;
+    const { getByRole } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const slider = getByRole('slider', { name: 'Debate timeline' });
+    fireEvent.pointerDown(slider);
+    expect(controller.beginScrub).toHaveBeenCalledOnce();
+    for (const [displaySeconds, sourceSeconds] of [
+      [31.15, 31.15],
+      [31.2, 36.8],
+      [40, 45.6],
+      [65.6, 80.8],
+      [94.4, 120],
+    ]) {
+      fireEvent.change(slider, { target: { value: String(displaySeconds) } });
+      expect(seek.mock.lastCall?.[0]).toBeCloseTo(sourceSeconds);
+    }
+    fireEvent.pointerUp(slider);
+    expect(controller.endScrub).toHaveBeenCalledOnce();
+    fireEvent.keyDown(slider, { key: 'ArrowLeft' });
+    fireEvent.change(slider, { target: { value: '40' } });
+    expect(seek.mock.lastCall?.[0]).toBeCloseTo(45.6);
+    fireEvent.keyUp(slider, { key: 'ArrowLeft' });
+    expect(controller.beginScrub).toHaveBeenCalledTimes(2);
+    expect(controller.endScrub).toHaveBeenCalledTimes(2);
+  });
+
+  it('positions claim markers on the edited track but seeks to their precise recording timestamps', () => {
+    const seek = vi.fn();
+    mocks.controller = at(85, seek);
+    mocks.ticker = {
+      ...emptyTicker(),
+      markers: [
+        {
+          id: 'claim-after-round-3',
+          text: 'An exact claim',
+          atMs: 85_000,
+          seekMs: 85_250,
+          fraction: 85 / 120,
+          count: 1,
+        },
+      ],
+    };
+    const { getByRole } = render(<DebateFeedPlayer debate={openRounds} active initialSeekSeconds={85.25} />);
+    const marker = getByRole('button', { name: 'Jump to: An exact claim' });
+    expect(parseFloat(marker.style.left)).toBeCloseTo((69.8 / 94.4) * 100);
+    // Incoming deep links and claim clicks both remain on the source clock.
+    expect(seek).toHaveBeenLastCalledWith(85.25);
+    seek.mockClear();
+    fireEvent.click(marker);
+    expect(seek).toHaveBeenCalledExactlyOnceWith(85.25);
+  });
+
+  it('retains the original track and seek positions for fixed-format debates', () => {
+    const seek = vi.fn();
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 85.25, seekBoth: seek });
+    const { getByRole } = render(<DebateFeedPlayer debate={debate} active />);
+    const slider = getByRole('slider', { name: 'Debate timeline' }) as HTMLInputElement;
+    expect(Number(slider.max)).toBe(120);
+    expect(Number(slider.value)).toBe(85.25);
+    fireEvent.change(slider, { target: { value: '40' } });
+    expect(seek).toHaveBeenCalledExactlyOnceWith(40);
   });
 });
 

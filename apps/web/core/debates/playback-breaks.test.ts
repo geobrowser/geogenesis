@@ -4,6 +4,7 @@ import type { Debate, DebateMediaTurnSegment } from './api';
 import { RENDERED_MEDIA } from './open-rounds-media-fixtures';
 import {
   BREAK_PLAYED_MS,
+  BREAK_SETTLE_MS,
   EARLY_END_HOLD_MS,
   NO_PLAYBACK_BREAKS,
   breakAnimationPositionMs,
@@ -118,6 +119,19 @@ describe('breakCueAt', () => {
 });
 
 describe('breakCuts', () => {
+  it('gives rounds 2 and 3 identical title durations despite their different raw break lengths', () => {
+    const durations = BREAKS.breaks.slice(0, 2).map(entry => {
+      const [cut] = breakCuts({ ...BREAKS, breaks: [entry], earlyEnds: [] });
+      const keptMs = entry.endMs - entry.decidingStartMs - (cut.toMs - cut.atMs);
+      const cue = breakCueAt([entry], [], entry.decidingStartMs)!;
+      return { keptMs, visibleTitleMs: cue.playedMs - BREAK_SETTLE_MS };
+    });
+    expect(durations).toEqual([
+      { keptMs: 2_400, visibleTitleMs: 2_100 },
+      { keptMs: 2_400, visibleTitleMs: 2_100 },
+    ]);
+  });
+
   it('edits round breaks under the held title, retaining silence for the blend and title exit', () => {
     expect(breakCuts(BREAKS)).toEqual([
       { atMs: 121_200, toMs: 126_800 },

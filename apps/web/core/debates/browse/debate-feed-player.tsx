@@ -24,7 +24,8 @@ import {
   earlyEndCueAt,
   silentAt,
 } from '~/core/debates/playback-breaks';
-import { type TurnState, clampSeconds, speakerLabel, turnStateFromSegments } from '~/core/debates/playback-utils';
+import { type PlaybackTimeline, playbackTimeline } from '~/core/debates/playback-timeline';
+import { type TurnState, speakerLabel, turnStateFromSegments } from '~/core/debates/playback-utils';
 import { turnTimerRimMask } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { ROUND_CARD_MS, roundBadgeAt, roundCardAt, roundParts } from '~/core/debates/round-cues';
@@ -412,6 +413,7 @@ export function DebateFeedPlayer({
     [playbackBreaks.breaks, playbackBreaks.picks, playheadMs, reducedOverlays]
   );
   const cuts = React.useMemo(() => breakCuts(playbackBreaks), [playbackBreaks]);
+  const scrubberTimeline = React.useMemo(() => playbackTimeline(cuts, timelineSeconds * 1000), [cuts, timelineSeconds]);
   const { slot1CanvasRef, slot2CanvasRef, seekAcrossCut } = useVideoCutTransition({
     slot1VideoRef,
     slot2VideoRef,
@@ -999,7 +1001,7 @@ export function DebateFeedPlayer({
               >
                 <FeedScrubber
                   currentTime={playheadSeconds}
-                  duration={timelineSeconds}
+                  timeline={scrubberTimeline}
                   markers={reducedOverlays ? [] : ticker.markers}
                   onSeek={seekBoth}
                   onScrubStart={beginScrub}
@@ -1917,21 +1919,30 @@ const isScrubKey = (key: string) =>
 
 function FeedScrubber({
   currentTime,
-  duration,
+  timeline,
   markers,
   onSeek,
   onScrubStart,
   onScrubEnd,
 }: {
   currentTime: number;
-  duration: number;
+  timeline: PlaybackTimeline;
   markers: ClaimMarker[];
   onSeek: (seconds: number) => void;
   onScrubStart: () => void;
   onScrubEnd: () => void;
 }) {
-  const bounded = clampSeconds(currentTime, duration);
+  const duration = timeline.durationMs / 1000;
+  const bounded = timeline.toPlaybackMs(currentTime * 1000) / 1000;
   const progress = duration > 0 ? (bounded / duration) * 100 : 0;
+  const displayedMarkers = React.useMemo(
+    () =>
+      markers.map(marker => ({
+        ...marker,
+        fraction: timeline.durationMs > 0 ? timeline.toPlaybackMs(marker.atMs) / timeline.durationMs : 0,
+      })),
+    [markers, timeline]
+  );
   return (
     <div className="relative flex h-5 items-center px-3 [--track-height:5px]">
       <div className="relative h-(--track-height) w-full overflow-hidden rounded-full bg-white/40">
@@ -1947,7 +1958,8 @@ function FeedScrubber({
           no longer the 2px hashes, though: they are up to 12px wide, clamped to the gap to the next
           claim — a mean 10% of the track, 44% on the densest debate in the corpus. See
           {@link MARKER_HIT_WIDTH_PX} for why that ceiling and not 24. */}
-      <ClaimScrubberMarkers markers={markers} onSeek={ms => onSeek(ms / 1000)} className="z-3" />
+      {/* Only placement uses the edited clock; claim clicks retain their precise source timestamps. */}
+      <ClaimScrubberMarkers markers={displayedMarkers} onSeek={ms => onSeek(ms / 1000)} className="z-3" />
       <span
         className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]"
         style={{ left: `calc(12px + ${progress}% * (100% - 24px) / 100%)` }}
@@ -1960,7 +1972,7 @@ function FeedScrubber({
         step="0.05"
         value={bounded}
         aria-label="Debate timeline"
-        onChange={event => onSeek(Number(event.currentTarget.value))}
+        onChange={event => onSeek(timeline.toSourceMs(Number(event.currentTarget.value) * 1000) / 1000)}
         // Pause playback for the duration of the drag so the play clock doesn't fight the
         // seek. onLostPointerCapture reliably fires when a range drag ends (the input
         // captures the pointer on pointerdown), even if the pointer leaves the thumb.
