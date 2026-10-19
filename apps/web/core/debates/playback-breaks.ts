@@ -18,8 +18,7 @@ import { isOpenRoundsDebate, openRoundsRequiredRebuttalRounds } from './open-rou
  * after a round, then the reveal and the opener's count-in, or a required round's lead-in, eight to
  * twelve seconds of people looking at their screens. So the player plays only the first couple of
  * seconds of each, silent (nobody holds a turn; both mics are open between rounds since #2838),
- * under the approved "stamps" graphic — "Keep debating?", each pick stamped onto its debater, then
- * a banner with the next round or "That's a wrap" — and then cuts to the next speaker, the graphic
+ * under a title with the next round or "That's a wrap", then cuts to the next speaker, the graphic
  * covering the jump (GEO-3277). The cue is a function of the playhead, like `round-cues.ts`, so a
  * viewer who scrubs in finds it where it would be.
  */
@@ -34,27 +33,21 @@ export const EARLY_END_HOLD_MS = 700;
  */
 export const BREAK_SETTLE_MS = 300;
 
-/** How long "Keep debating?" is up before the first pick is stamped. */
-export const BREAK_QUESTION_MS = 800;
-
-/** How long after the first stamp the second lands. */
+/** Recording room only: how long after the first stamp the second lands. */
 export const BREAK_STAMP_GAP_MS = 280;
-
-/** When the banner wipes in after a pick: both stamps landed and settled. */
-const BREAK_BANNER_AT_MS = BREAK_SETTLE_MS + BREAK_QUESTION_MS + 750;
 
 /**
  * How much of each break the player plays before cutting to what follows it: about two seconds,
- * close to the rendered video's own catch-ups (1.6 s, 2.4 s and 2 s), and long enough for each step
- * to read. The final End's holds "That's a wrap" a little longer, since nothing has to start after it.
+ * with the same title-only pacing for required and optional rounds. The final End holds
+ * "That's a wrap" a little longer, since nothing has to start after it.
  */
 export const BREAK_PLAYED_MS: Record<'lead_in' | 'extend' | 'final_end', number> = {
   lead_in: BREAK_SETTLE_MS + 2_100,
-  extend: BREAK_BANNER_AT_MS + 1_300,
-  final_end: BREAK_BANNER_AT_MS + 1_500,
+  extend: BREAK_SETTLE_MS + 2_100,
+  final_end: BREAK_SETTLE_MS + 2_300,
 };
 
-/** A debater as the break graphics name them: their first name, which keeps the banner's opener line short. */
+/** A debater's first name for the early-end next-speaker label. */
 export function breakFirstName(participant: Pick<DebateParticipant, 'display_name'> | null | undefined) {
   return firstName(participant?.display_name) ?? 'Debater';
 }
@@ -204,14 +197,9 @@ export function breakCueAt(
   };
 }
 
-/** When the banner rolls in: once both picks are stamped, or as the dim settles before a required round nobody picked for. */
-export function breakBannerAtMs(cue: Pick<BreakCue, 'picks'>) {
-  return cue.picks ? BREAK_BANNER_AT_MS : BREAK_SETTLE_MS;
-}
-
 /** Whether the banner is across the seam: from its roll-in until the cut to the next speaker. */
 export function breakBannerShown(cue: BreakCue | null) {
-  return cue !== null && cue.elapsedMs >= breakBannerAtMs(cue);
+  return cue !== null && cue.elapsedMs >= BREAK_SETTLE_MS;
 }
 
 /** How much of a break plays: its share, or all of it when it is shorter than that. */

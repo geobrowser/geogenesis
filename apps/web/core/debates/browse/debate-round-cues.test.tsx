@@ -108,7 +108,7 @@ describe('DebateRoundCard', () => {
 describe('PlayerRoundTitle', () => {
   it.each(['Opening', null])('scales each %s announcement line outline like fixed-format playback', role => {
     const fixed = render(<DebateRoundCard cue={cue('Round 1', role)} />);
-    const open = render(<PlayerRoundTitle round="Round 1" role={role} sub="Preston opens" />);
+    const open = render(<PlayerRoundTitle round="Round 1" role={role} />);
     const referenceLines = [...fixed.container.querySelectorAll('span')];
     const lines = [...open.container.querySelectorAll('span')];
 

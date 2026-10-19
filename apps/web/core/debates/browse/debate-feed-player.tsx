@@ -1061,8 +1061,6 @@ export function DebateFeedPlayer({
               cue={breakCue}
               sharedClock
               clock={{ positionMs: livePositionMs, originMs: playheadMs - (breakCue?.elapsedMs ?? 0) }}
-              names={breakNames}
-              firstSlot={debate.first_participant_slot}
               roundTurns={roundTurns}
               playing={playing}
             />

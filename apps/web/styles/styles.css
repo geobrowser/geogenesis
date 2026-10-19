@@ -529,16 +529,6 @@
   }
 }
 
-/* Votes gradually clear the picture as the next round or wrap announcement arrives. */
-@keyframes debatePlayerPickRecede {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
 @keyframes riseIn {
   from {
     opacity: 0;

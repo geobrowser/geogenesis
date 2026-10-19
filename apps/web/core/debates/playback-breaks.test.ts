@@ -88,8 +88,8 @@ describe('breakCueAt', () => {
     expect(cueAt(333_481)).toBeNull();
   });
 
-  // Round 2 (index 1) ended at 218 s; the player plays its first 2.35 s under the stamps, then cuts.
-  it('runs the stamps on the played stretch at the front of the break, with both picks', () => {
+  // Round 2 (index 1) ended at 218 s; the player shows its next-round title for 2.4 s, then cuts.
+  it('runs the title on the played stretch while retaining the saved picks as metadata', () => {
     expect(cueAt(218_500)).toEqual({
       kind: 'extend',
       elapsedMs: 500,
