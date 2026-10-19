@@ -414,6 +414,91 @@ describe('grouped paragraph claim timing', () => {
     expect(result.get('coffee')?.endMs).toBe(4000);
   });
 
+  it.each([', but ', ', and ', ', although ', ', while ', ', yet ', ', whereas ', ', ', ' but ', ' and ', ' because '])(
+    'does not borrow negation between compound clauses (%s)',
+    separator => {
+      const statements = [
+        claim('safety', 'Vaccination was not safe.', 0, 10_000),
+        claim('coffee', 'Coffee does not improve memory.', 0, 10_000),
+      ];
+      const original = published(statements);
+      const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), original, [
+        line(0, 1000, `Vaccination was safe${separator}coffee does not improve memory.`),
+      ]);
+      expect(result).toEqual(original);
+      const ordered = claimsInSpokenOrder(statements, result);
+      expect(claimHistory(backlogWindows(ordered), 9999)).toHaveLength(0);
+      expect(claimMarkers(ordered, 12_000).map(marker => [marker.atMs, marker.count])).toEqual([[10_000, 2]]);
+    }
+  );
+
+  it('keeps independent clause polarity when a comma and its continuation are in different segments', () => {
+    const statements = [
+      claim('safety', 'Vaccination was not safe.', 0, 10_000),
+      claim('coffee', 'Coffee does not improve memory.', 0, 10_000),
+    ];
+    const original = published(statements);
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), original, [
+      line(0, 1000, 'Vaccination was safe,'),
+      line(1000, 2000, 'but coffee does not improve memory.'),
+    ]);
+    expect(result.get('safety')).toEqual(original.get('safety'));
+    expect(result.get('coffee')?.endMs).toBe(2000);
+  });
+
+  it.each([
+    ['left bound', 'It was not', 1000],
+    ['never', 'It was never', 1000],
+    ['overlapping bound', 'It was not', 1500],
+    ['internal boundary', 'An unrelated statement. It was not', 1000],
+  ] as const)('retains negation context outside the published interval (%s)', (_label, prefix, prefixEnd) => {
+    const statements = [
+      claim('safety', 'Vaccination was safe.', 1000, 10_000),
+      claim('coffee', 'Coffee improves memory.', 1000, 10_000),
+    ];
+    const original = published(statements);
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), original, [
+      line(0, prefixEnd, prefix),
+      line(prefixEnd, 2000, 'safe for vaccination.'),
+      line(2000, 3000, 'Coffee improves memory.'),
+    ]);
+    expect(result.get('safety')).toEqual(original.get('safety'));
+    const ordered = claimsInSpokenOrder(statements, result);
+    expect(claimHistory(backlogWindows(ordered), 2999)).toHaveLength(0);
+    expect(claimHistory(backlogWindows(ordered), 9999)).toHaveLength(1);
+    expect(claimMarkers(ordered, 12_000).map(marker => marker.atMs)).toEqual([3000, 10_000]);
+  });
+
+  it('does not borrow negation outside the bounds to refine a negative claim within them', () => {
+    const statements = [
+      claim('safety', 'Vaccination was not safe.', 1000, 10_000),
+      claim('coffee', 'Coffee improves memory.', 1000, 10_000),
+    ];
+    const original = published(statements);
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), original, [
+      line(0, 1000, 'Vaccination was not safe.'),
+      line(1000, 2000, 'Vaccination was safe.'),
+      line(2000, 3000, 'Coffee improves memory.'),
+      line(10000, 11000, 'Vaccination was not safe.'),
+    ]);
+    expect(result.get('safety')).toEqual(original.get('safety'));
+    expect(result.get('coffee')?.endMs).toBe(3000);
+  });
+
+  it('does not carry another speaker’s unfinished negation into an in-bounds assertion', () => {
+    const statements = [
+      claim('safety', 'Vaccination was safe.', 1000, 10_000),
+      claim('coffee', 'Coffee improves memory.', 1000, 10_000),
+    ];
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), published(statements), [
+      { ...line(0, 1000, 'It was not'), participant_slot: 2 },
+      { ...line(1000, 2000, 'Vaccination was safe.'), participant_slot: 1 },
+      { ...line(2000, 3000, 'Coffee improves memory.'), participant_slot: 1 },
+    ]);
+    expect(result.get('safety')?.endMs).toBe(2000);
+    expect(result.get('coffee')?.endMs).toBe(3000);
+  });
+
   it('can refine an affirmative assertion in a separate sentence after a negated one', () => {
     const statements = [
       claim('safety', 'Vaccination was safe.', 0, 10_000),

@@ -10,30 +10,44 @@ function refinementWords(text: string): string[] {
   return /\bno\b/i.test(text) ? [...words, 'no'] : words;
 }
 
-/** Project complete statement polarity onto timed segments; mixed polarities stay ambiguous. */
-function segmentPolarities(lines: readonly DebateTranscriptSegment[]): Array<boolean | null> {
+// Coordinating/constrasting clauses can assert opposite things without starting a new sentence.
+const CLAUSE_BOUNDARY = /([.!?,;:]+|\b(?:and|but|or|yet|whereas|although|however|while|because|since)\b)/i;
+
+/** Project clause polarity onto timed segments; opposing assertions stay ambiguous. */
+function segmentPolarities(
+  lines: readonly DebateTranscriptSegment[],
+  relevantWords: ReadonlySet<string>
+): Array<boolean | null> {
   const polarities = lines.map(() => new Set<boolean>());
   const touched = new Set<number>();
-  let sentence = '';
-  const finishSentence = () => {
+  let clause = '';
+  const finishClause = () => {
     if (!touched.size) return;
-    const negated = refinementWords(sentence).some(word => NEGATIONS.has(word));
-    for (const index of touched) polarities[index].add(negated);
-    sentence = '';
+    const words = refinementWords(clause);
+    const negated = words.some(word => NEGATIONS.has(word));
+    // An attribution such as "according to the evidence" is not a new positive assertion.
+    // Keep every negation, but give unrelated non-asserting fragments no polarity vote.
+    if (negated || words.some(word => relevantWords.has(word))) {
+      for (const index of touched) polarities[index].add(negated);
+    }
+    clause = '';
     touched.clear();
   };
   for (const [index, line] of lines.entries()) {
-    for (const part of line.text.match(/[^.!?;:]+[.!?;:]*|[.!?;:]+/g) ?? []) {
-      // Ignore trailing quotes/punctuation after a completed sentence. A punctuation-only
-      // segment can still finish a sentence carried from the previous segment.
-      if (/[a-z0-9]/i.test(part) || sentence) {
-        sentence += ` ${part}`;
+    // Context may surround a published interval, but cannot come from another speaker.
+    if (index > 0 && lines[index - 1].participant_slot !== line.participant_slot) finishClause();
+    for (const part of line.text.split(CLAUSE_BOUNDARY)) {
+      if (CLAUSE_BOUNDARY.test(part)) {
+        // A punctuation-only segment can finish a clause from the preceding segment.
+        if (clause && /[.!?,;:]/.test(part)) touched.add(index);
+        finishClause();
+      } else if (/[a-z0-9]/i.test(part)) {
+        clause += ` ${part}`;
         touched.add(index);
       }
-      if (/[.!?;:]/.test(part)) finishSentence();
     }
   }
-  finishSentence();
+  finishClause();
   return polarities.map(values => (values.size === 1 ? values.has(true) : null));
 }
 
@@ -70,6 +84,9 @@ export function refineGroupedClaimTimings(
         frequency.set(word, (frequency.get(word) ?? 0) + 1);
       }
     }
+    // Read surrounding clause context before clipping candidate timestamps to published bounds.
+    const context = segmentPolarities(ordered, new Set(frequency.keys()));
+    const polarityBySegment = new Map(ordered.map((line, index) => [line, context[index]]));
     // Shared context such as "immigration policies" must not pull every statement to the same
     // later clause. Distinctive words such as "farms", "food prices" and "truckers" carry more weight.
     const weight = (word: string) => Math.log((group.length + 1) / (frequency.get(word) ?? 1));
@@ -83,11 +100,9 @@ export function refineGroupedClaimTimings(
       const available = new Set(lineWords.flat());
       const anchors = [...words].filter(word => frequency.get(word) === 1 && available.has(word));
       const negations = [...words].filter(word => NEGATIONS.has(word));
-      // Sentence boundaries can fall inside a segment or continue across several segments.
-      const polarities = segmentPolarities(lines);
       const negatedClaim = negations.length > 0;
       const matchesPolarity = (start: number, end: number) =>
-        polarities.slice(start, end + 1).every(negated => negated === negatedClaim);
+        lines.slice(start, end + 1).every(line => polarityBySegment.get(line) === negatedClaim);
       const total = sum(words);
       if (!total || anchors.length < 2) continue;
       let best: { start: number; end: number; score: number } | null = null;
