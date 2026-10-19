@@ -14,7 +14,7 @@ import type { Entity } from '~/core/types';
 import { Avatar } from '~/design-system/avatar';
 import { Warning } from '~/design-system/icons/warning';
 
-import { CLAIM_BACKLOG_CHIP_CLASS, ClaimIconButton } from './debate-claim-ticker';
+import { CLAIM_BACKLOG_CHIP_CLASS, ClaimIconButton, TickerClaimText } from './debate-claim-ticker';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 
 /** The pause on the video before the list opens, and after the pointer leaves before it closes. */
@@ -239,6 +239,16 @@ function ClaimList({
   }, [fades]);
   // On every layout of the list and on every scroll.
   React.useLayoutEffect(paint);
+  // Expanding a claim or resizing the player moves cards without rendering this parent. Follow
+  // each card's geometry so the top fade never keeps a stale slice over newly revealed text.
+  React.useEffect(() => {
+    const list = scrollRef.current;
+    if (!list || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(paint);
+    observer.observe(list);
+    for (const card of Array.from(list.children)) observer.observe(card);
+    return () => observer.disconnect();
+  }, [history, paint]);
 
   return (
     <div data-claim-list className="w-[76cqw]">
@@ -372,7 +382,8 @@ function ClaimListCardBody({
     // measures (and so reports an impression) through an `ActionSurfaceDiv` beneath it.
     <ActionSurfaceDiv
       data-claim-list-card={claim.id}
-      className="grid gap-[1.2cqw] rounded-[8px] bg-[#151515]/55 [mask-image:var(--claim-ramp,none)] p-[2.4cqw] text-left text-white backdrop-blur-[22px] [-webkit-mask-image:var(--claim-ramp,none)]"
+      onClick={event => event.stopPropagation()}
+      className="grid shrink-0 gap-[1.2cqw] rounded-[8px] bg-[#151515]/55 [mask-image:var(--claim-ramp,none)] p-[2.4cqw] text-left text-white backdrop-blur-[22px] [-webkit-mask-image:var(--claim-ramp,none)]"
     >
       <div
         data-claim-list-header
@@ -388,7 +399,7 @@ function ClaimListCardBody({
           {vote(false)}
         </span>
       </div>
-      <div className="line-clamp-2 text-[3.3cqw] leading-[1.25]">{claim.text}</div>
+      <TickerClaimText text={claim.text} tone="glass" textClassName="text-[3.3cqw] leading-[1.25]" />
     </ActionSurfaceDiv>
   );
 }

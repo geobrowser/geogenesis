@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from '@testing-library/react';
+import { act, fireEvent, render, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -36,7 +36,7 @@ const said = (id: string, saidMs: number, text = `Claim ${id}`): StackedCard => 
   opacity: 1,
 });
 
-const renderCounter = (history: StackedCard[]) =>
+const renderCounter = (history: StackedCard[], wrapper?: React.ComponentType<{ children: React.ReactNode }>) =>
   render(
     <DebateClaimCounter
       history={history}
@@ -55,7 +55,8 @@ const renderCounter = (history: StackedCard[]) =>
       rowsByClaimId={new Map()}
       entitiesByClaimId={new Map()}
       onAnswered={() => {}}
-    />
+    />,
+    { wrapper }
   );
 
 beforeEach(() => {
@@ -282,6 +283,20 @@ describe('DebateClaimCounter (GEO-3317)', () => {
   // Copilot, #2843: a mask on the scroll box is a backdrop root, so the cards' blur stopped seeing
   // the video. The fade is on the cards now, each with its own slice of it.
   it('fades the top of a long list card by card, never on the box that scrolls', () => {
+    const observers: { targets: Set<Element>; notify: () => void; disconnect: ReturnType<typeof vi.fn> }[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        targets = new Set<Element>();
+        disconnect = vi.fn();
+        constructor(notify: () => void) {
+          observers.push({ targets: this.targets, notify, disconnect: this.disconnect });
+        }
+        observe = (element: Element) => {
+          this.targets.add(element);
+        };
+      }
+    );
     const rects = new Map<string, number>([
       ['list', 100],
       ['c', 95],
@@ -300,7 +315,7 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     const height = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(40);
     const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300);
     try {
-      const { container } = renderCounter([said('a', 1_000), said('b', 2_000), said('c', 3_000)]);
+      const { container, unmount } = renderCounter([said('a', 1_000), said('b', 2_000), said('c', 3_000)]);
       fireEvent.click(container.querySelector('[data-claim-count]') as HTMLElement);
       const card = (id: string) => container.querySelector(`[data-claim-list-card="${id}"]`) as HTMLElement;
       const box = card('c').parentElement as HTMLElement;
@@ -310,10 +325,20 @@ describe('DebateClaimCounter (GEO-3317)', () => {
       // The card crossing the top edge carries the ramp; ones well below it carry none.
       expect(card('c').style.getPropertyValue('--claim-ramp')).toContain('linear-gradient');
       expect(card('a').style.getPropertyValue('--claim-ramp')).toBe('none');
+      // Expanding a child changes card positions without re-rendering ClaimList itself.
+      rects.set('c', 150);
+      rects.set('b', 95);
+      act(() => observers.filter(observer => observer.targets.has(card('c'))).forEach(observer => observer.notify()));
+      expect(card('c').style.getPropertyValue('--claim-ramp')).toBe('none');
+      expect(card('b').style.getPropertyValue('--claim-ramp')).toContain('linear-gradient');
+      const listObserver = observers.find(observer => observer.targets.has(box))!;
+      unmount();
+      expect(listObserver.disconnect).toHaveBeenCalledOnce();
     } finally {
       spy.mockRestore();
       height.mockRestore();
       width.mockRestore();
+      vi.unstubAllGlobals();
     }
   });
 
@@ -347,5 +372,82 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     expect(visibleList(container)).toBeNull();
     act(() => vi.advanceTimersByTime(100));
     expect(visibleList(container)).toBeNull();
+  });
+});
+
+describe('claim popup full text', () => {
+  const text =
+    'American workers would be unable to take jobs vacated by deported immigrants because the wages would not cover their living costs.';
+  beforeEach(() => {
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(100);
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(40);
+    mocks.respond.mockClear();
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('expands and collapses each claim independently, preserving the popup type and votes', () => {
+    const { container } = renderCounter([
+      said('a', 1000, text),
+      said('b', 2000, 'Another long claim to read in full.'),
+    ]);
+    fireEvent.click(container.querySelector('[data-claim-count]')!);
+    const cards = [...container.querySelectorAll<HTMLElement>('[data-claim-list-card]')];
+    const buttons = cards.map(card => within(card).getByTitle('Show the whole claim'));
+    const firstText = buttons[0].querySelector('span')!;
+    expect(firstText.classList.contains('line-clamp-2')).toBe(true);
+    expect(firstText.classList.contains('text-[3.3cqw]')).toBe(true);
+    fireEvent.click(buttons[0]);
+    expect(buttons[0].getAttribute('aria-expanded')).toBe('true');
+    expect(firstText.classList.contains('line-clamp-2')).toBe(false);
+    expect(buttons[1].getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(buttons[0]);
+    expect(buttons[0].getAttribute('aria-expanded')).toBe('false');
+    expect(firstText.classList.contains('line-clamp-2')).toBe(true);
+    expect(visibleList(container)).not.toBeNull();
+    expect(mocks.respond).not.toHaveBeenCalled();
+  });
+
+  it('does not toggle playback or expand the claim when its vote is pressed', () => {
+    const onPlayback = vi.fn();
+    const { container } = renderCounter([said('a', 1000, text)], ({ children }) => (
+      <div onClick={onPlayback}>{children}</div>
+    ));
+    fireEvent.click(container.querySelector('[data-claim-count]')!);
+    onPlayback.mockClear();
+    const card = container.querySelector<HTMLElement>('[data-claim-list-card]')!;
+    const expand = within(card).getByTitle('Show the whole claim');
+    fireEvent.click(expand);
+    expect(onPlayback).not.toHaveBeenCalled();
+    fireEvent.click(expand);
+    fireEvent.click(within(card).getByRole('button', { name: 'Agree' }));
+    expect(mocks.respond).toHaveBeenCalledWith(true);
+    expect(expand.getAttribute('aria-expanded')).toBe('false');
+    expect(onPlayback).not.toHaveBeenCalled();
+  });
+
+  it('resets expansion when the claim text changes', () => {
+    const { container, rerender } = renderCounter([said('a', 1000, text)]);
+    fireEvent.click(container.querySelector('[data-claim-count]')!);
+    fireEvent.click(within(container).getByTitle('Show the whole claim'));
+    rerender(
+      <DebateClaimCounter
+        history={[said('a', 1000, 'Corrected claim text.')]}
+        name="Preston"
+        rowsByClaimId={new Map()}
+        entitiesByClaimId={new Map()}
+        onAnswered={() => {}}
+      />
+    );
+    expect(within(container).getByTitle('Show the whole claim').getAttribute('aria-expanded')).toBe('false');
+    expect(container.textContent).toContain('Corrected claim text.');
+  });
+
+  it('leaves a claim that already fits as plain text', () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(40);
+    const { container } = renderCounter([said('a', 1000, 'Short claim.')]);
+    fireEvent.click(container.querySelector('[data-claim-count]')!);
+    const card = container.querySelector<HTMLElement>('[data-claim-list-card]')!;
+    expect(within(card).queryByTitle('Show the whole claim')).toBeNull();
+    expect(card.textContent).toContain('Short claim.');
   });
 });

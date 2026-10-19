@@ -431,9 +431,9 @@ function DebateClaimTickerCardBody({
 const TICKER_CLAMP_LINES = 2;
 
 /**
- * The claim itself, clamped to three lines, and expandable in place when there is more.
+ * The claim itself, clamped to two lines, and expandable in place when there is more.
  *
- * A claim runs to a sentence or two and three lines of a 209px card is often not all of it. The
+ * A claim runs to a sentence or two and two lines of a 209px card is often not all of it. The
  * alternative to expanding here is "go and find it in the panel", which means leaving the debate
  * to read a sentence that is on screen — so the text opens where it is, and closes again the same
  * way.
@@ -441,14 +441,17 @@ const TICKER_CLAMP_LINES = 2;
  * Only interactive when it is actually truncated. A button that visibly does nothing is worse than
  * no button, and most short claims fit.
  */
-function TickerClaimText({
+export function TickerClaimText({
   text,
   tone,
   smallPanel,
+  textClassName = 'text-[1rem] leading-[1.0625rem] tracking-[-0.16px]',
 }: {
   text: string;
   tone: ClaimCardTone;
   smallPanel?: ClaimCardSmallPanel;
+  /** The popup keeps its own type scale while sharing the same overflow and expansion behavior. */
+  textClassName?: string;
 }) {
   // In state rather than a ref: wrapping the text in a button below remounts this node, and the
   // measurement has to follow it. See `useLineClampOverflow`.
@@ -467,11 +470,11 @@ function TickerClaimText({
   const body = (
     <span
       ref={setTextElement}
-      // `line-clamp-3` and `block` both set `display`, and `block` wins — which silently turns the
+      // `line-clamp-2` and `block` both set `display`, and `block` wins — which silently turns the
       // clamp off, so the card grows to fit the whole claim and nothing ever reports as truncated.
       // The clamp already blockifies the box; only the expanded state needs `block` of its own.
       className={cx(
-        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px]',
+        textClassName,
         tone === 'glass' ? 'text-white' : 'text-text',
         expanded ? 'block' : 'line-clamp-2',
         // Container-query overrides, which `useLineClampOverflow` reads back off the computed style
