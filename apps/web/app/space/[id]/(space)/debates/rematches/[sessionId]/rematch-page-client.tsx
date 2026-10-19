@@ -2888,7 +2888,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               with no header. */}
           {/* One stack, so the publishing row sits the header's own 12px under the pair and its
               notices, and takes no space at all when there is nothing to draw. */}
-          <div className="mb-4 flex flex-col gap-3">
+          <div className="mb-4 flex flex-col gap-3 max-[767px]:mb-1">
             {session && currentUserId ? (
               <RematchVoiceHeader
                 session={session}

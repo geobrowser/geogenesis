@@ -96,11 +96,14 @@
   }
 
   .vs {
-    position: absolute;
-    top: 0;
-    left: 50%;
-    height: calc((100vw - 40px) * 3 / 8);
-    translate: -50% 0;
+    /* Center on the actual video row, above both tiles, at any container width. */
+    position: relative;
+    z-index: 1;
+    grid-column: 1 / -1;
+    grid-row: 1;
+    place-self: center;
+    width: 28px;
+    height: 28px;
     pointer-events: none;
   }
 
@@ -116,6 +119,8 @@
   .opponentCard {
     grid-column: 1;
     grid-row: 1;
+    min-height: 0;
+    aspect-ratio: 4 / 3;
     padding: 0;
     overflow: hidden;
   }
@@ -132,6 +137,11 @@
     height: auto;
     aspect-ratio: 4 / 3;
     border-radius: 8px;
+  }
+
+  .opponentCard .video {
+    height: 100%;
+    aspect-ratio: auto;
   }
 
   .youCard .video {
@@ -216,6 +226,11 @@
     --control-height: 44px;
     --toggle-width: 52px;
     --settings-width: 32px;
+  }
+
+  .mediaControls [data-media-toggle] > svg {
+    width: 16px;
+    height: 16px;
   }
 }
 
