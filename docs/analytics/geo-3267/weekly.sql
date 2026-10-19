@@ -64,7 +64,7 @@ excluded_accounts AS (
   SELECT outbound_share AS share_id, min(event_time) AS handed_off,
     argMin(tuple(JSONExtractString(props, 'method'), JSONExtractString(props, 'share_content_type'),
       JSONExtractString(props, 'share_content_id'), JSONExtractString(props, 'sharer_profile_space_id'),
-      JSONExtractString(props, 'sharer_role'), visitor, account), event_time) AS metadata
+      JSONExtractString(props, 'sharer_role'), visitor, account, session), event_time) AS metadata
   FROM events
   WHERE event_name = 'share_link_handoff' AND match(outbound_share, '^[a-f0-9]{32}$')
     AND outbound_share NOT IN (SELECT outbound_share FROM excluded_shares)
@@ -106,18 +106,22 @@ excluded_accounts AS (
     parts[2] AS content_type, parts[3] AS content_id, parts[4] AS share_id
   FROM session_landings l LEFT JOIN session_accounts a ON l.visitor = a.visitor AND l.session = a.session
 ), visits AS (
-  SELECT l.*, h.share_id != '' AND h.metadata.1 = l.channel
+  SELECT l.visitor AS visitor, l.session AS session, l.landed AS landed, l.channel AS channel,
+    h.share_id != '' AND h.metadata.1 = l.channel
       AND h.metadata.2 = l.content_type AND h.metadata.3 = l.content_id AS matched,
+    -- Preserve the handoff's known account; infer an anonymous sender only from one session account.
+    if(h.metadata.7 != '', h.metadata.7, if(length(s.accounts) = 1, s.accounts[1], '')) AS sender_account,
     if(matched AND match(h.metadata.4, '^[a-f0-9]{32}$'), h.metadata.4, '') AS sharer_profile,
     if(matched AND h.metadata.5 IN ('debater', 'other', 'anonymous', 'unknown'), h.metadata.5, 'unknown') AS sharer_role
   FROM parsed_landings l LEFT JOIN handoffs h ON l.share_id = h.share_id
+    LEFT JOIN session_accounts s ON h.metadata.6 = s.visitor AND h.metadata.8 = s.session
   WHERE medium = 'share' AND campaign = 'geo_share' AND channel IN ('copy_link', 'x', 'linkedin', 'reddit')
     AND length(content) <= 100 AND length(parts) = 4 AND parts[1] = 'v1'
     AND content_type IN ('debate', 'lobby', 'availability')
     AND match(content_id, '^[a-f0-9]{32}$') AND match(l.share_id, '^[a-f0-9]{32}$')
     AND l.share_id NOT IN (SELECT outbound_share FROM excluded_shares)
     AND NOT (matched AND ((h.metadata.6 != '' AND h.metadata.6 = l.visitor)
-      OR (h.metadata.7 != '' AND has(l.accounts, h.metadata.7))))
+      OR (sender_account != '' AND has(l.accounts, sender_account))))
 ), accounts AS (
   SELECT account, min(event_time) AS created,
     argMin(tuple(attempt, JSONExtractString(props, 'signup_context_source'),

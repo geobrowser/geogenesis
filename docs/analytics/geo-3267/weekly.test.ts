@@ -499,6 +499,156 @@ event(
   { auth_attempt_id: 'different-reader-attempt' }
 )
 
+// Sender identity can arrive after an anonymous handoff, even after the report ends.
+const senderIdentityCases = [
+  { lifecycle: 'signed_in', day: 12, recovery: 'session' },
+  { lifecycle: 'session_restored', day: 19, recovery: 'session' },
+  { lifecycle: 'auth_identity_linked', day: 12, recovery: 'attempt' },
+  { lifecycle: 'signed_up', day: 19, recovery: 'snapshot' },
+]
+for (const [
+  index,
+  { lifecycle, day, recovery },
+] of senderIdentityCases.entries()) {
+  const n = 30 + index
+  const visitor = `late-sender-${n}`
+  const session = `sender-session-${n}`
+  const account = `late-sender-account-${n}`
+  handoff(n, 12, visitor, {
+    method: 'linkedin',
+    sharer_role: 'anonymous',
+    sharer_profile_space_id: '',
+  })
+  landing(
+    n,
+    12,
+    9,
+    `sender-return-${n}`,
+    `sender-return-session-${n}`,
+    'linkedin'
+  )
+  event(
+    index === 0 ? 'signed_up' : 'signed_in',
+    12,
+    10,
+    `sender-return-${n}`,
+    `sender-return-session-${n}`,
+    account,
+    index === 0
+      ? {
+          signup_context_source: 'auth_start',
+          signup_anonymous_id: `sender-return-${n}`,
+          signup_session_id: `sender-return-session-${n}`,
+        }
+      : {}
+  )
+  const attribution =
+    recovery === 'attempt'
+      ? {
+          auth_attempt_id: `sender-attempt-${n}`,
+          action_anonymous_id: visitor,
+          action_session_id: session,
+        }
+      : recovery === 'snapshot'
+        ? {
+            signup_context_source: 'auth_start',
+            signup_anonymous_id: visitor,
+            signup_session_id: session,
+          }
+        : {}
+  if (recovery === 'attempt')
+    event('auth_attempt_started', 12, 8, visitor, session, '', attribution)
+  event(
+    lifecycle,
+    day,
+    11,
+    recovery === 'session' ? visitor : `sender-completion-${n}`,
+    recovery === 'session' ? session : `sender-completion-session-${n}`,
+    account,
+    attribution
+  )
+}
+// Ambiguous, unrelated-session, different-reader and absent identity evidence retain real visits.
+for (const [index, kind] of [
+  'ambiguous',
+  'unrelated-session',
+  'different-reader',
+  'unknown',
+  'known-handoff',
+].entries()) {
+  const n = 34 + index
+  const visitor = `sender-control-${n}`
+  const account = `sender-control-account-${n}`
+  handoff(
+    n,
+    12,
+    visitor,
+    {
+      method: 'linkedin',
+      sharer_role: 'anonymous',
+      sharer_profile_space_id: '',
+    },
+    kind === 'known-handoff' ? account : ''
+  )
+  landing(
+    n,
+    12,
+    9,
+    `reader-control-${n}`,
+    `reader-control-session-${n}`,
+    'linkedin'
+  )
+  event(
+    'signed_in',
+    12,
+    10,
+    `reader-control-${n}`,
+    `reader-control-session-${n}`,
+    kind === 'different-reader' ? `different-reader-account-${n}` : account
+  )
+  if (kind !== 'unknown') {
+    event(
+      'signed_in',
+      12,
+      11,
+      visitor,
+      kind === 'unrelated-session'
+        ? 'unrelated-sender-session'
+        : `sender-session-${n}`,
+      account
+    )
+  }
+  if (kind === 'ambiguous' || kind === 'known-handoff') {
+    event(
+      'session_restored',
+      12,
+      12,
+      visitor,
+      `sender-session-${n}`,
+      `switched-account-${n}`
+    )
+  }
+  if (kind === 'ambiguous') {
+    // Either arbitrary account choice must wrongly remove a real visit.
+    landing(
+      n,
+      12,
+      9,
+      `second-reader-${n}`,
+      `second-reader-session-${n}`,
+      'linkedin'
+    )
+    event(
+      'signed_in',
+      12,
+      10,
+      `second-reader-${n}`,
+      `second-reader-session-${n}`,
+      `switched-account-${n}`
+    )
+  }
+}
+
 const report = readFileSync(new URL('./weekly.sql', import.meta.url), 'utf8')
   .replaceAll('{start_date:Date}', "toDate('2026-10-12')")
   .replaceAll('{end_date:Date}', "toDate('2026-10-19')")
@@ -551,7 +701,18 @@ try {
   assert.equal(Number(channel('copy_link')?.visitors), 5)
   assert.equal(Number(channel('copy_link')?.new_accounts), 0)
   assert.equal(Number(channel('copy_link')?.link_handoffs), 8)
-  assert.equal(output.filter((row) => row.breakdown === 'channel').length, 3)
+  assert.equal(Number(channel('linkedin')?.visits), 5, JSON.stringify(output))
+  assert.equal(Number(channel('linkedin')?.visitors), 5)
+  assert.equal(Number(channel('linkedin')?.new_accounts), 0)
+  assert.equal(Number(channel('linkedin')?.link_handoffs), 9)
+  assert.equal(Number(channel('linkedin')?.matched_visits), 5)
+  assert.equal(Number(channel('linkedin')?.unmatched_visits), 0)
+  assert.equal(output.filter((row) => row.breakdown === 'channel').length, 4)
+  const anonymousSender = output.find(
+    (row) => row.channel === 'linkedin' && row.breakdown === 'sharer'
+  )
+  assert.equal(anonymousSender?.sharer_role, 'anonymous')
+  assert.equal(anonymousSender?.sharer_profile_space_id, '')
   assert.ok(
     output.some(
       (row) =>

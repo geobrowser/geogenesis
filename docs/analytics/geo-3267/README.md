@@ -37,6 +37,8 @@ The reporting dates bound metric occurrences, not the identity evidence used for
 
 Self-visit filtering also uses explicit initiating-auth links when sign-in completes in another tab or campaign. Account evidence from sign-in, sign-up, identity-link and recovered restore events joins only the recorded initiating visitor/session pair. A conflicting source pair or account leaves the link ambiguous; it cannot remove a visit as self-traffic or assign a conversion. Another session with the same anonymous ID does not inherit this identity inference.
 
+An anonymous sender can also be identified after the handoff, including after the reporting week. The comparison reuses the same session-account evidence for the handoff's exact visitor/session pair, and infers a sender account only when that session has one known account. An account recorded at handoff remains authoritative if the sender later switches accounts. Later identification affects self-visit filtering without rewriting the handoff's profile or role.
+
 Missing outbound events do not erase acquired visits/accounts, but their sharer stays unknown. Lost sign-up events or initiating joins cannot prove conversion. There is no visits/share ratio: dividing arrivals this week by shares this week would mix cohorts. Seven-day cohort reporting remains follow-up scope.
 
 ## Validation and rollout
