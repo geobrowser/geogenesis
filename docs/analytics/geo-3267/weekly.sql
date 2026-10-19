@@ -46,11 +46,11 @@ excluded_accounts AS (
   WHERE NOT excluded AND (visitor, session) NOT IN (SELECT visitor, session FROM excluded_sessions)
     AND (attempt = '' OR attempt NOT IN (SELECT attempt FROM excluded_attempts))
 ), auth_evidence AS (
-  SELECT *, arrayFilter(pair -> pair.1 != '' AND pair.2 != '', [
+  SELECT *, arrayDistinct(arrayFilter(pair -> pair.1 != '' AND pair.2 != '', [
     tuple(JSONExtractString(props, 'action_anonymous_id'), JSONExtractString(props, 'action_session_id')),
     if(JSONExtractString(props, 'signup_context_source') = 'auth_start',
       tuple(JSONExtractString(props, 'signup_anonymous_id'), JSONExtractString(props, 'signup_session_id')), tuple('', ''))
-  ]) AS initiating_pairs
+  ])) AS initiating_pairs
   FROM events
   WHERE event_name IN ('auth_attempt_started', 'auth_identity_linked', 'signed_up', 'signed_in', 'session_restored')
 ), auth_links AS (
@@ -85,7 +85,7 @@ excluded_accounts AS (
     -- Signup/restoration snapshots can survive without a delivered attempt event.
     SELECT initiating_pairs[1].1 AS visitor, initiating_pairs[1].2 AS session, account
     FROM auth_evidence WHERE attempt = '' AND account != '' AND event_name != 'auth_attempt_started'
-      AND length(arrayDistinct(initiating_pairs)) = 1
+      AND length(initiating_pairs) = 1
   )
   WHERE visitor != '' AND session != '' GROUP BY visitor, session
 ), session_landings AS (
@@ -124,16 +124,13 @@ excluded_accounts AS (
       OR (sender_account != '' AND has(l.accounts, sender_account))))
 ), accounts AS (
   SELECT account, min(event_time) AS created,
-    argMin(tuple(attempt, JSONExtractString(props, 'signup_context_source'),
-      JSONExtractString(props, 'signup_anonymous_id'), JSONExtractString(props, 'signup_session_id'),
-      JSONExtractString(props, 'action_anonymous_id'), JSONExtractString(props, 'action_session_id')), event_time) AS signup
-  FROM events WHERE event_name = 'signed_up' AND account != '' GROUP BY account
+    argMin(tuple(attempt, initiating_pairs), event_time) AS signup
+  FROM auth_evidence WHERE event_name = 'signed_up' AND account != '' GROUP BY account
 ), account_links AS (
   SELECT a.*, b.auth_started,
     multiIf(b.pairs > 1 OR length(b.identified_accounts) > 1, tuple('', ''),
       b.pairs = 1, b.initiating,
-      a.signup.5 != '' AND a.signup.6 != '', tuple(a.signup.5, a.signup.6),
-      a.signup.2 = 'auth_start', tuple(a.signup.3, a.signup.4), tuple('', '')) AS initiating
+      length(a.signup.2) = 1, a.signup.2[1], tuple('', '')) AS initiating
   FROM accounts a LEFT JOIN auth_links b ON a.signup.1 = b.attempt
 ), acquired_accounts AS (
   SELECT a.account, a.created, v.channel, v.sharer_profile, v.sharer_role

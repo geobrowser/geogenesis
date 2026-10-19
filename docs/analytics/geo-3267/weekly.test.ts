@@ -649,6 +649,73 @@ for (const [index, kind] of [
   }
 }
 
+// No-attempt conversions must apply the same pair validation as identity recovery.
+const fallbackCases = [
+  { kind: 'conflicting-visitor', credited: false },
+  { kind: 'conflicting-session', credited: false },
+  { kind: 'matching-pairs', credited: true },
+  { kind: 'action-only', credited: true },
+  { kind: 'signup-only', credited: true },
+  { kind: 'partial-action', credited: true },
+  { kind: 'partial-signup', credited: true },
+  { kind: 'completion-context', credited: true },
+  { kind: 'incomplete-pairs', credited: false },
+]
+for (const [index, { kind }] of fallbackCases.entries()) {
+  const n = 40 + index
+  const visitor = `fallback-${n}`
+  const session = `fallback-session-${n}`
+  const evidence: Record<string, string> = {
+    action_anonymous_id: visitor,
+    action_session_id: session,
+    signup_context_source: 'auth_start',
+    signup_anonymous_id: visitor,
+    signup_session_id: session,
+  }
+  if (kind === 'conflicting-visitor')
+    evidence.signup_anonymous_id = `other-${visitor}`
+  if (kind === 'conflicting-session')
+    evidence.signup_session_id = `other-${session}`
+  if (kind === 'action-only') delete evidence.signup_context_source
+  if (kind === 'signup-only') {
+    delete evidence.action_anonymous_id
+    delete evidence.action_session_id
+  }
+  if (kind === 'partial-action' || kind === 'incomplete-pairs')
+    delete evidence.action_session_id
+  if (kind === 'partial-signup' || kind === 'incomplete-pairs')
+    delete evidence.signup_anonymous_id
+  if (kind === 'completion-context') {
+    evidence.signup_context_source = 'completion'
+    evidence.signup_session_id = `completion-${session}`
+  }
+  handoff(n, 12, `fallback-sender-${n}`, {
+    method: 'reddit',
+    sharer_profile_space_id: share(1000 + index),
+  })
+  landing(n, 12, 9, visitor, session, 'reddit')
+  if (kind.startsWith('conflicting-')) {
+    // Both references acquired the share, so choosing either one must fail.
+    landing(
+      n,
+      12,
+      9,
+      evidence.signup_anonymous_id,
+      evidence.signup_session_id,
+      'reddit'
+    )
+  }
+  event(
+    'signed_up',
+    12,
+    10,
+    `fallback-completion-${n}`,
+    `fallback-completion-session-${n}`,
+    `fallback-account-${n}`,
+    evidence
+  )
+}
+
 const report = readFileSync(new URL('./weekly.sql', import.meta.url), 'utf8')
   .replaceAll('{start_date:Date}', "toDate('2026-10-12')")
   .replaceAll('{end_date:Date}', "toDate('2026-10-19')")
@@ -693,10 +760,24 @@ try {
   assert.equal(Number(channel('x')?.link_handoffs), 3)
   assert.equal(Number(channel('x')?.matched_visits), 3)
   assert.equal(Number(channel('x')?.unmatched_visits), 0)
-  assert.equal(Number(channel('reddit')?.visits), 1)
-  assert.equal(Number(channel('reddit')?.new_accounts), 2)
+  assert.equal(Number(channel('reddit')?.visits), 12)
+  assert.equal(Number(channel('reddit')?.new_accounts), 8)
   assert.equal(Number(channel('reddit')?.unmatched_visits), 1)
-  assert.equal(Number(channel('reddit')?.link_handoffs), 0)
+  assert.equal(Number(channel('reddit')?.link_handoffs), 9)
+  for (const [index, { kind, credited }] of fallbackCases.entries()) {
+    const row = output.find(
+      (row) =>
+        row.channel === 'reddit' &&
+        row.breakdown === 'sharer' &&
+        row.sharer_profile_space_id === share(1000 + index)
+    )
+    assert.equal(
+      Number(row?.visits),
+      kind.startsWith('conflicting-') ? 2 : 1,
+      kind
+    )
+    assert.equal(Number(row?.new_accounts), credited ? 1 : 0, kind)
+  }
   assert.equal(Number(channel('copy_link')?.visits), 5, JSON.stringify(output))
   assert.equal(Number(channel('copy_link')?.visitors), 5)
   assert.equal(Number(channel('copy_link')?.new_accounts), 0)
