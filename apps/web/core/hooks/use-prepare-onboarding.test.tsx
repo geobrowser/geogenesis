@@ -10,7 +10,7 @@ import {
   spaceIdAtom,
   stepAtom,
   topicIdAtom,
-} from '~/partials/onboarding/dialog';
+} from '~/partials/onboarding/onboarding-atoms';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
 import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';

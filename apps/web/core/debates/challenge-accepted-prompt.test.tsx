@@ -128,6 +128,31 @@ describe('ChallengeAcceptedPrompt', () => {
     expect(screen.getByText('Remote speaker accepted your request')).toBeInTheDocument();
   });
 
+  it('explains the join state as the microphone and camera are toggled', async () => {
+    rememberRematchJoinIntent('rematch-1', { micOn: false, cameraOn: false, source: 'card' });
+    const onExplore = vi.fn();
+    renderPrompt({ onExplore });
+
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(
+      'Join a live room together and pick a claim to debate.'
+    );
+    expect(screen.getByRole('region', { name: 'You' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Remote speaker' })).toBeInTheDocument();
+    expect(await screen.findByText('You’ll join muted, with your camera off.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+    expect(await screen.findByText('You’ll join muted. Remote speaker will see your camera.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Turn microphone on' }));
+    expect(
+      await screen.findByText('You’ll join with your mic on. Remote speaker will see your camera.')
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+    expect(await screen.findByText('You’ll join with your mic on and your camera off.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
+    expect(onExplore).toHaveBeenCalledOnce();
+  });
+
   it('offers the microphone and the camera', async () => {
     renderPrompt();
 
@@ -221,7 +246,7 @@ describe('ChallengeAcceptedPrompt', () => {
     rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: true, source: 'card' });
     renderPrompt();
 
-    expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
+    expect(await screen.findByText('You’ll join with your mic on.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
     await waitFor(() => expect(readRematchJoinIntent('rematch-1')).toStrictEqual({ micOn: true, source: 'card' }));
     expect(media.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ video: true }));
@@ -232,7 +257,9 @@ describe('ChallengeAcceptedPrompt', () => {
     rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: true, source: 'card' });
     renderPrompt();
 
-    expect(await screen.findByText('Joining with mic and camera on')).toBeInTheDocument();
+    expect(
+      await screen.findByText('You’ll join with your mic on. Remote speaker will see your camera.')
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
     await waitFor(() =>
       expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: true, source: 'card' })

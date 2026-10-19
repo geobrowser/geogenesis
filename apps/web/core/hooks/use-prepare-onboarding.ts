@@ -14,7 +14,7 @@ import {
   spaceIdAtom,
   stepAtom,
   topicIdAtom,
-} from '~/partials/onboarding/dialog';
+} from '~/partials/onboarding/onboarding-atoms';
 
 import { NO_HELD_FEED_TOPICS, feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';

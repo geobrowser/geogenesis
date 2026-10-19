@@ -38,7 +38,7 @@ import { Close } from '~/design-system/icons/close';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { avatarAtom } from '~/partials/onboarding/dialog';
+import { avatarAtom } from '~/partials/onboarding/onboarding-atoms';
 
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
 

@@ -25,7 +25,7 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/explore',
   useSearchParams: () => null,
 }));
-vi.mock('~/partials/onboarding/dialog', () => ({ stepAtom: {} }));
+vi.mock('~/partials/onboarding/onboarding-atoms', () => ({ stepAtom: {} }));
 vi.mock('~/atoms/post-onboarding-redirect', () => ({ postOnboardingRedirectAtom: {} }));
 vi.mock('~/atoms/ranking-compose-return', () => ({ rankingComposeReturnHrefAtom: {} }));
 vi.mock('~/core/state/pending-personal-space', () => ({ usePendingPersonalSpace: () => ({ isPending: false }) }));

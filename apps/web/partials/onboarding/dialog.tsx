@@ -11,7 +11,6 @@ import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
@@ -58,21 +57,10 @@ import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
 import { FeedTopicPicker, RECOMMENDED_FEED_TOPIC_COUNT } from './customize-feed';
+import { avatarAtom, nameAtom, selectedTopicIdsAtom, stepAtom, topicIdAtom } from './onboarding-atoms';
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
 import { feedTopicsAtom, heldTopicsFor } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
-
-export const nameAtom = atomWithStorage<string>('onboardingName', '');
-export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
-export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
-export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
-
-/**
- * Topic picks from the 'interested-in' step. Onboarding no longer blocks on space
- * creation, so these are persisted for the background PendingPersonalSpaceRunner,
- * which applies them (membership proposals) once a real spaceId exists, then clears them.
- */
-export const selectedTopicIdsAtom = atomWithStorage<string[]>('onboardingSelectedTopics', []);
 
 type Step = OnboardingStep;
 
@@ -86,10 +74,6 @@ const stepByOrder = Object.fromEntries(Object.entries(stepOrder).map(([step, ord
   number,
   Step
 >;
-
-// 'enter-profile' and 'create-space' linger in the type only to normalize
-// values persisted by an older version of the flow — see effectiveStep.
-export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
 // How long the completion screen shows before we route the user onward. The
