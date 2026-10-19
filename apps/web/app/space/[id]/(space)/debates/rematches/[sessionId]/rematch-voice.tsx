@@ -43,6 +43,7 @@ import {
 } from '~/core/debates/rematch-join-intent';
 import { resolveJoinChoice } from '~/core/debates/request-join-state';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
+import { TrackVideo } from '~/core/debates/track-video';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
@@ -76,8 +77,6 @@ function microphoneEnabledByDefault(session: DebateRematchSession) {
  * time to do that from the middle of a sentence.
  */
 const NUDGE_MS = 10_000;
-
-type TrackLike = { attach: (element: HTMLVideoElement) => void; detach: (element: HTMLVideoElement) => void };
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
 
@@ -963,7 +962,9 @@ function VoiceHeaderBody({
 
   const opponentCamera = opponentParticipant?.getTrackPublication(Track.Source.Camera);
   const localVideo =
-    videoEnabled && cameraTrack?.track && !cameraTrack.isMuted ? <TrackVideo track={cameraTrack.track} mirror /> : null;
+    videoEnabled && cameraTrack?.track && !cameraTrack.isMuted ? (
+      <TrackVideo track={cameraTrack.track} mirrored />
+    ) : null;
   const opponentVideo =
     videoEnabled && opponentCamera?.track && !opponentCamera.isMuted ? (
       <TrackVideo track={opponentCamera.track} />
@@ -1161,7 +1162,7 @@ function LocalAudioControls({
   const cameraSettings = useVoiceCameraSettings(room);
   const cameraPrimary = !cameraOn;
 
-  // Narrow screens drop the labels only in the video layout, where the camera pill shares the row.
+  // The video layout uses labeled icons so both media controls fit beside Leave on a phone.
   const videoLayout = useFeatureFlag('debateVideo');
   const labelAtWidth = videoLayout ? 'sr-only' : undefined;
   const [cameraPanelOpen, setCameraPanelOpen] = React.useState(false);
@@ -1323,24 +1324,6 @@ function LocalAudioControls({
         </span>
       )}
     </span>
-  );
-}
-
-function TrackVideo({ track, mirror = false }: { track: TrackLike | null | undefined; mirror?: boolean }) {
-  const ref = React.useRef<HTMLVideoElement | null>(null);
-
-  React.useEffect(() => {
-    const element = ref.current;
-    if (!element || !track) return;
-    track.attach(element);
-    return () => {
-      track.detach(element);
-    };
-  }, [track]);
-
-  if (!track) return null;
-  return (
-    <video ref={ref} className={cx('size-full object-cover', mirror && '-scale-x-100')} playsInline muted autoPlay />
   );
 }
 

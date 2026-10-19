@@ -3915,6 +3915,7 @@ describe('DebateRematchPageClient', () => {
   // viewport — outside the content column, and a scroll away from everything the viewer was reading.
   // Keep it above the tabs in the reading order; the full cards now scroll naturally.
   it('places the full pair header above the sticky claim filters', async () => {
+    mocks.debateVideo = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
@@ -3931,6 +3932,16 @@ describe('DebateRematchPageClient', () => {
     // you can pick.
     const tabs = screen.getByRole('button', { name: 'Explore' });
     expect(header.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps the audio-only participant controls pinned with the filters when video is disabled', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
+    expect(pinned).not.toBeNull();
+    expect(screen.getByTestId('rematch-pair-header').closest('.sticky')).toBe(pinned);
+    expect(screen.getByRole('button', { name: 'Leave' }).closest('.sticky')).toBe(pinned);
   });
 
   // GEO-2863 promoted the hub's "My positions" out of Explore's source menu and into a tab of its

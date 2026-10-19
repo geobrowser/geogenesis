@@ -521,8 +521,8 @@ describe('RematchVoiceHeader', () => {
       expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
       // The header is the page's header now, not the voice dock: two people are still in this
       // rematch, and the cards are how the page says who. There is just nothing to mute.
-      expect(screen.getByText('You')).toBeInTheDocument();
-      expect(screen.getByText('Salina')).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'You' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /microphone$/ })).toBeNull();
       unmount();
     }
@@ -542,7 +542,7 @@ describe('RematchVoiceHeader', () => {
       );
       await flushOwnership();
       expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
-      expect(screen.getByText('Salina')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toBeInTheDocument();
       // Not even a message: there is no voice to be unavailable, and saying so would invent a
       // problem on a picker that works exactly as it did before voice existed.
       expect(screen.queryByText(/Voice is unavailable/)).toBeNull();
@@ -565,8 +565,8 @@ describe('RematchVoiceHeader', () => {
     await flushOwnership();
     expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
     // The design keeps both names on screen throughout; only the opponent's chip changes.
-    expect(screen.getByText('You')).toBeInTheDocument();
-    expect(screen.getByText('Salina')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'You' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toBeInTheDocument();
     expect(screen.getByTitle('Waiting for Salina to join')).toBeInTheDocument();
     // Auto-join, but muted: the room connects to listen, not to publish.
     expect(mocks.livekitRoomProps[0]?.audio).toBe(false);
@@ -1981,7 +1981,7 @@ describe('RematchVoiceHeader', () => {
     expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
     expect(mocks.getUserMedia).not.toHaveBeenCalled();
     // The pair are still drawn; there is simply no voice to arm.
-    expect(screen.getByText('Salina')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toBeInTheDocument();
   });
 
   // The status is not the room. A rematch that ended while this page was still working through
@@ -2905,6 +2905,7 @@ describe('video in the header', () => {
 
   describe('floating opponent video', () => {
     let notify: (visible: boolean, bottom?: number) => void;
+    let notifyBatch: (states: { visible: boolean; bottom?: number }[]) => void;
     let observedAnchor: Element | null;
     let observedRoot: Element | Document | null | undefined;
     let disconnect = vi.fn<() => void>();
@@ -2918,17 +2919,19 @@ describe('video in the header', () => {
         class {
           constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
             observedRoot = options?.root;
-            notify = (visible, bottom = -1) =>
+            notifyBatch = states =>
               callback(
-                [
-                  {
-                    isIntersecting: visible,
-                    boundingClientRect: { bottom },
-                    rootBounds: { top: 0 },
-                  } as IntersectionObserverEntry,
-                ],
+                states.map(
+                  ({ visible, bottom = -1 }) =>
+                    ({
+                      isIntersecting: visible,
+                      boundingClientRect: { bottom },
+                      rootBounds: { top: 0 },
+                    }) as IntersectionObserverEntry
+                ),
                 this as unknown as IntersectionObserver
               );
+            notify = (visible, bottom) => notifyBatch([{ visible, bottom }]);
           }
           observe(element: Element) {
             observedAnchor = element;
@@ -2982,6 +2985,14 @@ describe('video in the header', () => {
       expect(mocks.opponentCameraPublication!.track.attach).toHaveBeenCalledOnce();
     });
 
+    it('uses the latest visibility change when the browser batches scroll transitions', async () => {
+      await renderPair();
+      act(() => notifyBatch([{ visible: false }, { visible: true }]));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      act(() => notifyBatch([{ visible: true }, { visible: false }]));
+      expect(screen.getByTestId('rematch-floating-opponent-video')).toBeInTheDocument();
+    });
+
     it('lets you dismiss it until you return to the main video', async () => {
       await renderPair();
       act(() => notify(false));
@@ -2991,9 +3002,26 @@ describe('video in the header', () => {
       expect(mocks.personProfileOpened).not.toHaveBeenCalled();
       act(() => notify(false));
       expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
-      act(() => notify(true));
-      act(() => notify(false));
+      act(() => notifyBatch([{ visible: true }, { visible: false }]));
       expect(screen.getByTestId('rematch-floating-opponent-video')).toBeInTheDocument();
+    });
+
+    it.each([0, 1])('restores focus to search only for keyboard dismissal (click detail %i)', async detail => {
+      const view = await renderPair();
+      view.rerender(
+        <div data-rematch-scroll>
+          <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+          <input data-rematch-search aria-label="Search claims" />
+        </div>
+      );
+      act(() => notify(false));
+      const close = screen.getByRole('button', { name: 'Hide floating video' });
+      close.focus();
+      fireEvent.click(close, { detail });
+      const search = screen.getByRole('textbox', { name: 'Search claims' });
+      if (detail === 0) expect(search).toHaveFocus();
+      else expect(search).not.toHaveFocus();
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
     });
 
     it('removes the floating video when the opponent turns their camera off', async () => {

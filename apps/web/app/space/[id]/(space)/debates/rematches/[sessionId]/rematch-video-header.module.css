@@ -65,11 +65,6 @@
   justify-content: flex-end;
 }
 
-.cardAction button {
-  height: 28px;
-  padding: 0 10px;
-}
-
 .opponentCard .cardState {
   position: absolute;
   top: 8px;
@@ -155,20 +150,7 @@
   }
 
   .videoName {
-    position: absolute;
-    bottom: 6px;
-    left: 6px;
     display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    max-width: calc(100% - 12px);
-    overflow: hidden;
-    border-radius: 999px;
-    background: rgb(255 255 255 / 85%);
-    padding: 0 7px;
-    font-size: 13px;
-    line-height: 20px;
-    white-space: nowrap;
   }
 
   .youCard .cardState {
@@ -182,11 +164,6 @@
     grid-row: 2;
     align-self: start;
     justify-self: end;
-  }
-
-  .cardAction button {
-    height: 44px;
-    padding: 0 16px;
   }
 }
 
@@ -234,12 +211,6 @@
   }
 }
 
-.videoName::after {
-  content: attr(data-name);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* Keep the full-size slot in the document while its existing video docks in the corner. */
 .opponentCard.floatingActive,
 .video.floatingActive {
@@ -268,21 +239,7 @@
 }
 
 .floatingName {
-  position: absolute;
-  bottom: 6px;
-  left: 6px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  max-width: calc(100% - 12px);
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 90%);
-  padding: 0 7px;
-  font-size: 13px;
-  line-height: 20px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  display: inline-flex;
 }
 
 .floatingClose {

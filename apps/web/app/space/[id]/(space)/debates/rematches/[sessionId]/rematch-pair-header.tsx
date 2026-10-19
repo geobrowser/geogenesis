@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
+import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Avatar } from '~/design-system/avatar';
@@ -356,6 +357,7 @@ function YouCard({
   return (
     <div
       data-testid="rematch-you-card"
+      role="group"
       aria-label="You"
       className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5', videoLayout && [styles.card, styles.youCard])}
     >
@@ -416,7 +418,6 @@ function OpponentCard({
   /** The header's live region, which also serves as this button's description. */
   describedBy: string;
   video?: React.ReactNode;
-  border?: string;
 }) {
   const videoLayout = useFeatureFlag('debateVideo');
   const talking = showMicState && state === 'talking';
@@ -481,7 +482,17 @@ function OpponentCard({
           type="button"
           aria-label="Hide floating video"
           title="Hide floating video"
-          onClick={dismiss}
+          onClick={event => {
+            // Keyboard dismissal must leave focus in the visible picker. Pointer dismissal
+            // should not focus the search box and open the phone's keyboard.
+            if (event.detail === 0) {
+              event.currentTarget
+                .closest('[data-rematch-scroll]')
+                ?.querySelector<HTMLInputElement>('[data-rematch-search]')
+                ?.focus({ preventScroll: true });
+            }
+            dismiss();
+          }}
           className={styles.floatingClose}
         >
           <CloseSmall />
@@ -500,11 +511,14 @@ function useFloatingOpponentVideo(anchorRef: React.RefObject<HTMLSpanElement | n
     const anchor = anchorRef.current;
     if (!enabled || !anchor || typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(
-      ([entry]) => {
+      entries => {
+        // Batched transitions are chronological; use the latest visibility state.
+        const entry = entries.at(-1);
         if (!entry) return;
         // Do not dock a video that starts below the viewport on a short screen.
         setOutside(!entry.isIntersecting && entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0));
-        if (entry.isIntersecting) setDismissed(false);
+        // Any visit to the full-size slot resets dismissal, even within a batch.
+        if (entries.some(change => change.isIntersecting)) setDismissed(false);
       },
       { root: anchor.closest('[data-rematch-scroll]'), threshold: 0 }
     );
@@ -557,18 +571,21 @@ function ParticipantAvatar({
             <Avatar avatarUrl={avatarUrl} value={value ?? name} size={videoLayout ? 56 : 32} alt="" />
           </span>
         )}
-        {floating ? (
-          <span aria-hidden className={styles.floatingName}>
+        {videoLayout ? (
+          <DebateTileChip
+            aria-hidden
+            className={cx(
+              tileChipSurface,
+              'absolute bottom-1.5 left-1.5 max-w-[calc(100%-12px)] text-text',
+              styles.videoName,
+              floating && styles.floatingName
+            )}
+          >
             {speaking ? <TalkingBars /> : null}
-            {name}
-          </span>
+            <span className="truncate">{name}</span>
+          </DebateTileChip>
         ) : null}
       </span>
-      {videoLayout ? (
-        <span aria-hidden data-name={name} className={styles.videoName}>
-          {speaking ? <TalkingBars /> : null}
-        </span>
-      ) : null}
     </span>
   );
 }
