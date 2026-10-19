@@ -133,6 +133,33 @@ describe('automatic video cut transition', () => {
     expect(canvases[0].animate).toHaveBeenCalledOnce();
   });
 
+  it('releases captured frames when a seek is a no-op and emits no completion event', () => {
+    const { cut, seek, canvases } = fixture();
+    seek.mockImplementation(() => {});
+    cut();
+    tick();
+    tick();
+    expect(canvases[0].animate).toHaveBeenCalledOnce();
+    expect(canvases[1].animate).toHaveBeenCalledOnce();
+  });
+
+  it('keeps both frames covered if another seek begins before the incoming frame can paint', () => {
+    const { cut, arrive, videos, canvases } = fixture();
+    cut();
+    arrive(0);
+    arrive(1);
+    tick();
+    Object.defineProperty(videos[1], 'seeking', { value: true });
+    tick();
+    expect(canvases[0].animate).not.toHaveBeenCalled();
+    expect(canvases.map(canvas => canvas.style.opacity)).toEqual(['1', '1']);
+    arrive(1);
+    tick();
+    tick();
+    expect(canvases[0].animate).toHaveBeenCalledOnce();
+    expect(canvases[1].animate).toHaveBeenCalledOnce();
+  });
+
   it('respects reduced motion while still protecting the seek from a blank frame', () => {
     reducedMotion = true;
     const { cut, arrive, canvases } = fixture();

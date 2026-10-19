@@ -41,6 +41,7 @@ export function useVideoCutTransition({
       let releasing = false;
       let frame = 0;
       const animations: Animation[] = [];
+      const canPaint = () => pair.every(({ video }) => !video.seeking && video.readyState >= 2);
       const clear = () => {
         if (disposed) return;
         disposed = true;
@@ -58,6 +59,12 @@ export function useVideoCutTransition({
       };
       const release = () => {
         if (disposed) return;
+        // A decoder or sync correction can start seeking again during the presentation frames.
+        // Keep both stills until readiness is reported again rather than uncovering one early.
+        if (!canPaint()) {
+          releasing = false;
+          return;
+        }
         if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || !pair[0].canvas.animate) {
           clear();
           return;
@@ -75,7 +82,7 @@ export function useVideoCutTransition({
         animations[0].onfinish = clear;
       };
       function ready() {
-        if (disposed || releasing || pair.some(({ video }) => video.seeking || video.readyState < 2)) return;
+        if (disposed || releasing || !canPaint()) return;
         releasing = true;
         // `seeked` can precede presentation of the new frame. Give both decoders a paint before
         // uncovering them; this also works when the viewer pauses during the edit.
@@ -113,6 +120,9 @@ export function useVideoCutTransition({
         clear();
       }
       seek(seconds);
+      // The playback controller skips a seek when a paused element is already at its target.
+      // In that case no `seeked` event follows, and the captured frames must still be released.
+      ready();
     },
     [enabled, seek, slot1VideoRef, slot2VideoRef]
   );

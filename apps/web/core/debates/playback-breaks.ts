@@ -28,9 +28,8 @@ import { isOpenRoundsDebate, openRoundsRequiredRebuttalRounds } from './open-rou
 export const EARLY_END_HOLD_MS = 700;
 
 /**
- * How long a break shows only its dim before anything moves. The player learns where the playhead is
- * about four times a second, so its first sample of a break lands up to a quarter of a second in;
- * motion that started at once lost its opening, which made the banner seem to appear and roll out.
+ * Wait before the dim and title enter together. The first playhead sample can land up to a quarter
+ * of a second into a break; waiting lets both mount before their shared entrance starts.
  */
 export const BREAK_SETTLE_MS = 300;
 
@@ -198,11 +197,6 @@ export function breakCueAt(
   };
 }
 
-/** Whether the banner is across the seam, including its hold across the mid-title edit. */
-export function breakBannerShown(cue: BreakCue | null) {
-  return cue !== null && cue.elapsedMs >= BREAK_SETTLE_MS;
-}
-
 /** How much of a break plays: its share, or all of it when it is shorter than that. */
 function playedLengthMs(entry: PlayerBreak) {
   return Math.min(BREAK_PLAYED_MS[entry.kind], entry.endMs - entry.decidingStartMs);
@@ -292,23 +286,6 @@ export function earlyEndCueAt(earlyEnds: readonly PlayerEarlyEnd[], playheadMs: 
     ageMs: playheadMs - current.startMs,
     durationMs: current.endMs + EARLY_END_HOLD_MS - current.startMs,
   };
-}
-
-/**
- * The debater with the last word: the speaker of a round's closing turn when a pick follows it, for
- * as long as that turn runs. In the design mockup the player tags them "Last word" (GEO-3277).
- * `segments` on the player's clock.
- */
-export function lastWordSlotAt(
-  breaks: PlaybackBreaks,
-  segments: readonly DebateMediaTurnSegment[],
-  playheadMs: number
-): ParticipantSlot | null {
-  const turn = segments.find(segment => playheadMs >= segment.output_start_ms && playheadMs < segment.output_end_ms);
-  if (!turn || turn.turn_index % 2 !== 1) return null;
-  const round = (turn.turn_index - 1) / 2;
-  const picked = breaks.breaks.some(entry => entry.kind !== 'lead_in' && entry.roundIndex === round);
-  return picked ? turn.participant_slot : null;
 }
 
 /**

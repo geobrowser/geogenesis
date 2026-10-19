@@ -83,28 +83,7 @@ export function DebateRoundCard({ cue }: { cue: RoundCue | null }) {
       // part-way through an animation that started when the element mounted.
       style={{ opacity: cue.opacity }}
     >
-      {/* The round takes the headline itself where the format names no role — a lone eyebrow over
-          the seam would read as a stray caption rather than as a card. */}
-      <span
-        className={cx('block', cue.role ? PLAYBACK_ROUND_EYEBROW_CLASS : PLAYBACK_ROUND_HEADLINE_CLASS)}
-        style={{
-          ...roundCardTextShadow,
-          fontSize: `${cue.role ? ROUND_CQW : NAME_CQW}cqw`,
-          // Set tight, the way display type wants to be: the default line box leaves a gap at this
-          // size that reads as two separate captions rather than as one card.
-          lineHeight: 1,
-        }}
-      >
-        {cue.round}
-      </span>
-      {cue.role && (
-        <span
-          className={cx('block', PLAYBACK_ROUND_HEADLINE_CLASS)}
-          style={{ ...roundCardTextShadow, fontSize: `${NAME_CQW}cqw`, lineHeight: 0.95 }}
-        >
-          {cue.role}
-        </span>
-      )}
+      <RoundTitleLines round={cue.round} role={cue.role} />
     </div>
   );
 }
@@ -207,23 +186,39 @@ export function DebateRoundBanner({
 export function PlayerRoundTitle({ round, role }: { round: string; role: string | null }) {
   return (
     <div className="mx-auto grid w-max max-w-[92%] justify-items-center text-center text-white">
-      {/* Apply the em-based outline to each sized line. Inheriting it from this wrapper would
-          freeze the shadow lengths at the wrapper's smaller font size. */}
+      <RoundTitleLines round={round} role={role} style={PLAYER_TITLE_STYLE} />
+    </div>
+  );
+}
+
+/** Shared lines keep both formats' sizes, weights and per-line em outlines identical. */
+function RoundTitleLines({
+  round,
+  role,
+  style = roundCardTextShadow,
+}: {
+  round: string;
+  role: string | null;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <>
+      {/* A round with no role takes the headline size itself. Apply the outline to each sized
+          line; inheriting em lengths from a smaller wrapper would make the stroke too thin. */}
       <span
-        className={
-          role
-            ? cx(PLAYBACK_ROUND_EYEBROW_CLASS, 'text-[9cqw] leading-none')
-            : cx(PLAYBACK_ROUND_HEADLINE_CLASS, 'text-[18cqw] leading-none')
-        }
-        style={PLAYER_TITLE_STYLE}
+        className={cx('block', role ? PLAYBACK_ROUND_EYEBROW_CLASS : PLAYBACK_ROUND_HEADLINE_CLASS)}
+        style={{ ...style, fontSize: `${role ? ROUND_CQW : NAME_CQW}cqw`, lineHeight: 1 }}
       >
         {round}
       </span>
       {role && (
-        <span className={cx(PLAYBACK_ROUND_HEADLINE_CLASS, 'text-[18cqw] leading-[0.95]')} style={PLAYER_TITLE_STYLE}>
+        <span
+          className={cx('block', PLAYBACK_ROUND_HEADLINE_CLASS)}
+          style={{ ...style, fontSize: `${NAME_CQW}cqw`, lineHeight: 0.95 }}
+        >
           {role}
         </span>
       )}
-    </div>
+    </>
   );
 }

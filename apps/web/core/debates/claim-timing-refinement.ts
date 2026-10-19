@@ -1,5 +1,5 @@
 import type { DebateTranscriptSegment } from './api';
-import { type ClaimTiming, LIVE_TIMING_CONFIDENCE, contentWords } from './claim-timing';
+import { type ClaimTiming, LIVE_TIMING_CONFIDENCE, MAX_CLAIM_WINDOW_SEGMENTS, contentWords } from './claim-timing';
 import type { TranscriptClaim } from './transcript-claims';
 
 /** Extraction can give several statements the end of their shared paragraph. */
@@ -52,7 +52,7 @@ export function refineGroupedClaimTimings(
       for (let start = 0; start < lines.length; start++) {
         const windowWords = new Set<string>();
         // Use the same six-segment limit as the fallback matcher, keeping matches local to a clause.
-        for (let end = start; end < Math.min(start + 6, lines.length); end++) {
+        for (let end = start; end < Math.min(start + MAX_CLAIM_WINDOW_SEGMENTS, lines.length); end++) {
           for (const word of contentWords(lines[end].text)) windowWords.add(word);
           const hits = [...words].filter(word => windowWords.has(word));
           // Cover every distinctive word the paragraph actually contains, including its predicate

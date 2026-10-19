@@ -13,7 +13,7 @@ export const PLAYER_PICK_CLASS = {
   end: 'bg-[rgba(36,36,40,0.48)] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur-[14px]',
   none: 'border-[0.5cqw] border-dashed border-white/60 text-white/80',
 } as const;
-/** One quiet settle across announcements and picks; reduced motion keeps only the fade. */
+/** One quiet settle across announcements and early-end labels; reduced motion keeps only the fade. */
 export const PLAYER_ENTER_CLASS =
   'animate-[fadeIn_250ms_linear_both] motion-safe:animate-[fadeIn_250ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.22,1,0.36,1)_both]';
 export const PLAYER_EXIT_MS = 300;

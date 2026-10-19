@@ -26,7 +26,7 @@ export function advanceBreakClock(displayedMs: number, targetMs: number, frameMs
 }
 
 /**
- * One frame clock for Open rounds announcements, picks and early-end labels. Read the media clock
+ * One frame clock for Open rounds announcements and early-end labels. Read the media clock
  * directly so buffering and seeking cannot leave the graphics running independently of the video.
  * If the element is temporarily unavailable, interpolate between samples with a bounded fallback.
  * The inherited --break-t property drives paused CSS animations without rendering React per frame.
