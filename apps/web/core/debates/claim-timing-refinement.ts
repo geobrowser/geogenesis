@@ -52,9 +52,24 @@ export function refineGroupedClaimTimings(
       if (!published || published.source !== 'published') continue;
       const lines = ordered.filter(line => line.start_ms >= published.startMs && line.end_ms <= published.endMs);
       const words = new Set(refinementWords(claim.text));
-      const available = new Set(lines.flatMap(line => refinementWords(line.text)));
+      const lineWords = lines.map(line => refinementWords(line.text));
+      const available = new Set(lineWords.flat());
       const anchors = [...words].filter(word => frequency.get(word) === 1 && available.has(word));
       const negations = [...words].filter(word => NEGATIONS.has(word));
+      // A transcript line may contain only the subject/predicate, with "not" on a previous
+      // line. Keep sentence context for every candidate, including any clause-completion lines.
+      const negatedSentences: boolean[] = [];
+      let sentenceStart = 0;
+      while (sentenceStart < lines.length) {
+        let end = sentenceStart;
+        while (end < lines.length - 1 && !/[.!?]/.test(lines[end].text)) end++;
+        const negated = lineWords.slice(sentenceStart, end + 1).some(words => words.some(word => NEGATIONS.has(word)));
+        for (let index = sentenceStart; index <= end; index++) negatedSentences[index] = negated;
+        sentenceStart = end + 1;
+      }
+      const negatedClaim = negations.length > 0;
+      const matchesPolarity = (start: number, end: number) =>
+        negatedSentences.slice(start, end + 1).every(negated => negated === negatedClaim);
       const total = sum(words);
       if (!total || anchors.length < 2) continue;
       let best: { start: number; end: number; score: number } | null = null;
@@ -62,11 +77,15 @@ export function refineGroupedClaimTimings(
         const windowWords = new Set<string>();
         // Use the same six-segment limit as the fallback matcher, keeping matches local to a clause.
         for (let end = start; end < Math.min(start + MAX_CLAIM_WINDOW_SEGMENTS, lines.length); end++) {
-          for (const word of refinementWords(lines[end].text)) windowWords.add(word);
+          for (const word of lineWords[end]) windowWords.add(word);
           const hits = [...words].filter(word => windowWords.has(word));
           // Cover every distinctive word the paragraph actually contains, including its predicate
           // and negation. A matching subject alone must not count a claim before the assertion.
-          if (!anchors.every(word => windowWords.has(word)) || !negations.every(word => windowWords.has(word)))
+          if (
+            !anchors.every(word => windowWords.has(word)) ||
+            !negations.every(word => windowWords.has(word)) ||
+            !matchesPolarity(start, end)
+          )
             continue;
           const matched = sum(hits);
           const recall = matched / total;
@@ -87,7 +106,8 @@ export function refineGroupedClaimTimings(
         return /[.!?,;:]/.test(text.slice(lastSignal));
       };
       while (end < Math.min(best.end + 3, lines.length - 1) && !clauseEnded(lines[end].text)) end++;
-      if (!clauseEnded(lines[end].text) || lines[end].end_ms >= published.endMs) continue;
+      if (!clauseEnded(lines[end].text) || lines[end].end_ms >= published.endMs || !matchesPolarity(best.start, end))
+        continue;
       refined.set(claim.id, {
         startMs: lines[best.start].start_ms,
         endMs: lines[end].end_ms,

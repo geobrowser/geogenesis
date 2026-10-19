@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 
 import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -2194,6 +2194,69 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
 
   // A stall to buffer stops the recording and not the wall clock. The cut waits for the recording to
   // reach it rather than jumping past the speaker's last words (Copilot, #2843).
+  it.each(['pointer', 'keyboard'] as const)(
+    'clears a slow cut on a no-op %s scrub before playback can resume',
+    input => {
+      vi.useFakeTimers();
+      try {
+        vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+          drawImage: vi.fn(),
+        } as unknown as CanvasRenderingContext2D);
+        const { container, rerender } = renderAt(61.1, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
+        const controller = mocks.controller as ReturnType<typeof controllerFixture>;
+        const videos = [...container.querySelectorAll('video')];
+        const animate = vi.fn();
+        for (const canvas of container.querySelectorAll('canvas')) canvas.animate = animate;
+        for (const video of videos) {
+          for (const [key, value] of Object.entries({
+            videoWidth: 640,
+            videoHeight: 480,
+            clientWidth: 480,
+            clientHeight: 289,
+            readyState: 2,
+            seeking: true,
+          })) {
+            Object.defineProperty(video, key, { value, configurable: true });
+          }
+        }
+        act(() => vi.advanceTimersByTime(100));
+        const canvases = [...container.querySelectorAll('canvas')];
+        expect(canvases.map(canvas => canvas.style.opacity)).toEqual(['1', '1']);
+        const hold = controller.holdForTransition.mock.results[0].value;
+        const thumb = within(container).getByRole('slider', { name: 'Debate timeline' });
+        if (input === 'pointer') fireEvent.pointerDown(thumb);
+        else fireEvent.keyDown(thumb, { key: 'Home' });
+        expect(controller.beginScrub).toHaveBeenCalledOnce();
+        // The real controller's state update on scrub start; the thumb never issues a seek.
+        controller.isScrubbing = true;
+        controller.playing = false;
+        rerender(<DebateFeedPlayer debate={startedDebate} active />);
+        expect(canvases.map(canvas => canvas.style.opacity)).toEqual(['0', '0']);
+        expect(hold.cancel).toHaveBeenCalledOnce();
+        if (input === 'pointer') fireEvent.pointerUp(thumb);
+        else fireEvent.keyUp(thumb, { key: 'Home' });
+        expect(controller.endScrub).toHaveBeenCalledOnce();
+        controller.isScrubbing = false;
+        controller.playing = true;
+        controller.playheadSeconds = 70.8;
+        rerender(<DebateFeedPlayer debate={startedDebate} active />);
+        act(() => {
+          videos.forEach(video => {
+            Object.defineProperty(video, 'seeking', { value: false });
+            video.dispatchEvent(new Event('seeked'));
+          });
+          vi.advanceTimersByTime(1000);
+        });
+        expect(animate).not.toHaveBeenCalled();
+        expect(hold.release).not.toHaveBeenCalled();
+        expect(controller.seekBoth).toHaveBeenCalledTimes(1);
+      } finally {
+        cleanup();
+        vi.useRealTimers();
+      }
+    }
+  );
+
   it('coordinates automatic captured-frame cuts with the playback controller hold', () => {
     vi.useFakeTimers();
     try {
@@ -2394,6 +2457,34 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(slot1.muted).toBe(false);
     expect(container.textContent).toContain('The round itself');
   });
+});
+
+it.each([false, true])('measures the visible end-card root after completion (Open rounds: %s)', async openRounds => {
+  const observed = new Set<Element>();
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      observe = (element: Element) => observed.add(element);
+      disconnect() {}
+    }
+  );
+  try {
+    const value = openRounds
+      ? ({ ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate)
+      : debate;
+    const controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.controller = controller;
+    const { container, rerender } = render(<DebateFeedPlayer debate={value} active />);
+    expect(container.querySelector('[data-testid="end-card"]')).toBeNull();
+    controller.playing = false;
+    controller.playbackEnded = true;
+    rerender(<DebateFeedPlayer debate={value} active />);
+    const card = within(container).getByTestId('end-card');
+    await waitFor(() => expect(observed.has(card)).toBe(true));
+  } finally {
+    cleanup();
+    vi.unstubAllGlobals();
+  }
 });
 
 describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, GEO-3316, GEO-3317)', () => {

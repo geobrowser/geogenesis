@@ -489,7 +489,7 @@ export function DebateFeedPlayer({
     slot2VideoRef,
     seek: seekBothRaw,
     holdForTransition,
-    enabled: stamped && active,
+    enabled: stamped && active && !isScrubbing,
     resetKey: `${animationSeekKey}:${slot1Src}:${slot2Src}`,
   });
   useBreakCuts(cuts, {
@@ -955,7 +955,8 @@ export function DebateFeedPlayer({
         // would get two of the three wrong.
         className={cx(
           'group @container relative flex flex-col overflow-hidden',
-          reducedOverlays ? 'rounded-lg' : 'rounded-xl'
+          reducedOverlays ? 'rounded-lg' : 'rounded-xl',
+          stamped && endCardShown && '[&_[data-debate-end-card]>section]:animate-[fadeIn_250ms_ease-out_both]'
         )}
       >
         <DebaterVideo
@@ -1247,20 +1248,13 @@ export function DebateFeedPlayer({
           trackImpression={endCardShown}
           value={{ component: 'debate_end_card', target_id: debate.id, target_type: 'debate' }}
         >
-          <div
-            className={cx(
-              'contents',
-              stamped && endCardShown && '[&>[data-debate-end-card]>section]:animate-[fadeIn_250ms_ease-out_both]'
-            )}
-          >
-            <MeasuredEndCard
-              debate={debate}
-              enabled={active && ready && !reducedOverlays}
-              shown={endCardShown}
-              onOpenClaims={onOpenClaims}
-              onReplay={replayFromEndCard}
-            />
-          </div>
+          <MeasuredEndCard
+            debate={debate}
+            enabled={active && ready && !reducedOverlays}
+            shown={endCardShown}
+            onOpenClaims={onOpenClaims}
+            onReplay={replayFromEndCard}
+          />
         </ActionSurface>
 
         {error && (

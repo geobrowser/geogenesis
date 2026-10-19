@@ -218,6 +218,84 @@ describe('grouped paragraph claim timing', () => {
     }
   );
 
+  it.each([
+    ['not', ['Vaccination was not safe.']],
+    ['contraction', ["Vaccination wasn't safe."]],
+    ['never', ['Vaccination was never safe.']],
+    ['no', ['Vaccination has no safety benefits.']],
+    ['without', ['Vaccination is without safety benefits.']],
+    ['split negation', ['It was not', 'safe for vaccination.']],
+    ['clause ending', ['Vaccination was safe', 'was not what the study found.']],
+  ])('does not refine an affirmative claim to a negated assertion (%s)', (_label, assertion) => {
+    const statements = [
+      claim(
+        'safety',
+        ['no', 'without'].includes(_label) ? 'Vaccination has safety benefits.' : 'Vaccination was safe.',
+        0,
+        10_000
+      ),
+      claim('coffee', 'Coffee improves memory.', 0, 10_000),
+    ];
+    const lines = [
+      ...assertion.map((text, index) => line(index * 1000, (index + 1) * 1000, text)),
+      line(3000, 4000, 'Coffee improves memory.'),
+    ];
+    const original = published(statements);
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), original, lines);
+    expect(result.get('safety')).toEqual(original.get('safety'));
+    const ordered = claimsInSpokenOrder(statements, result);
+    const windows = backlogWindows(ordered);
+    expect(windows.map(window => window.startMs)).toEqual([4000, 10_000]);
+    expect(claimHistory(windows, 3999)).toHaveLength(0);
+    expect(claimHistory(windows, 4000)).toHaveLength(1);
+    expect(claimHistory(windows, 9999)).toHaveLength(1);
+    expect(claimMarkers(ordered, 12_000).map(marker => marker.atMs)).toEqual([4000, 10_000]);
+  });
+
+  it('does not borrow negation from another sentence to support a negative claim', () => {
+    const statements = [
+      claim('safety', 'Vaccination was not safe.', 0, 10_000),
+      claim('coffee', 'Coffee does not improve memory.', 0, 10_000),
+    ];
+    const original = published(statements);
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), original, [
+      line(0, 1000, 'Vaccination was safe.'),
+      line(1000, 2000, 'Coffee does not improve memory.'),
+    ]);
+    expect(result.get('safety')).toEqual(original.get('safety'));
+    expect(result.get('coffee')?.endMs).toBe(2000);
+  });
+
+  it('keeps published bounds if clause completion crosses into an opposite assertion', () => {
+    const statements = [
+      claim('safety', 'Vaccination was not safe.', 0, 10_000),
+      claim('coffee', 'Coffee does not improve memory.', 0, 10_000),
+    ];
+    const original = published(statements);
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), original, [
+      line(0, 1000, 'Vaccination was not safe. Then vaccination'),
+      line(1000, 2000, 'was safe.'),
+      line(2000, 3000, 'Coffee does not improve memory.'),
+    ]);
+    expect(result.get('safety')).toEqual(original.get('safety'));
+    expect(result.get('coffee')?.endMs).toBe(3000);
+  });
+
+  it('can refine an affirmative assertion in a separate sentence after a negated one', () => {
+    const statements = [
+      claim('safety', 'Vaccination was safe.', 0, 10_000),
+      claim('coffee', 'Coffee improves memory.', 0, 10_000),
+    ];
+    const lines = [
+      line(0, 1000, 'Vaccination was not safe.'),
+      line(1000, 2000, 'Coffee improves memory.'),
+      line(2000, 3000, 'Vaccination was safe.'),
+    ];
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), published(statements), lines);
+    expect(result.get('safety')?.endMs).toBe(3000);
+    expect(result.get('coffee')?.endMs).toBe(2000);
+  });
+
   it('keeps a compound assertion until its predicate is spoken after the matching subject', () => {
     const statements = [
       claim(
