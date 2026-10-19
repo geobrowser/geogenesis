@@ -12,6 +12,9 @@ import { Avatar } from '~/design-system/avatar';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
+import styles from './rematch-video-header.module.css';
+import { RematchPickerHeaderContext } from './rematch-picker-sticky-header';
+
 /**
  * The "You VS them" header for the rematch claim picker (GEO-2992).
  *
@@ -129,16 +132,20 @@ export function RematchPairHeader({
    * The label itself stays fixed. Folding the state into it would rename the control every time the
    * other person mutes, and a control whose name moves is harder to use than one that is quiet.
    */
+  const videoLayout = useFeatureFlag('debateVideo');
   const opponentStatusId = React.useId();
   const opponentStatus = voice.kind === 'live' ? opponentMicLabel(voice.opponentState, opponentName) : '';
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Them, then the badge, then you — the home side of a scoreboard, and the side a reader's
-          eye lands on last. Three tracks on desktop, stacked on a phone: two 150px cards side by
-          side at 375px leave no room for a labelled pill, and a labelled pill is the entire point
-          of this change. */}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2 mobile:grid-cols-1">
+      {/* Option A keeps the videos side by side, with the phone's controls in their own row.
+          The audio-only layout retains its stacked participant cards. */}
+      <div
+        className={cx(
+          'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2',
+          videoLayout ? styles.pair : 'mobile:grid-cols-1'
+        )}
+      >
         <OpponentCard
           video={opponentVideo}
           opponent={opponent}
@@ -178,14 +185,28 @@ function toastAnnouncement(toast: PairHeaderToast, opponentName: string) {
 }
 
 function VsBadge() {
+  const videoLayout = useFeatureFlag('debateVideo');
+  const header = React.useContext(RematchPickerHeaderContext);
   return (
-    <div className="flex items-center justify-center">
-      <span
-        aria-hidden
-        className="grid size-7 place-items-center rounded-full bg-text text-tag tracking-[0.04em] text-white"
-      >
-        VS
-      </span>
+    <div className={cx('flex items-center justify-center', videoLayout && styles.vs)}>
+      {header?.compact ? (
+        <button
+          type="button"
+          aria-label="Show full participant videos"
+          aria-expanded={false}
+          onClick={header.expand}
+          className="grid size-7 place-items-center rounded-full bg-text text-tag tracking-[0.04em] text-white"
+        >
+          <span aria-hidden>VS</span>
+        </button>
+      ) : (
+        <span
+          aria-hidden
+          className="grid size-7 place-items-center rounded-full bg-text text-tag tracking-[0.04em] text-white"
+        >
+          VS
+        </span>
+      )}
     </div>
   );
 }
@@ -237,8 +258,19 @@ function PairCardBody({
   /** The corner: Leave on your side, View profile on theirs. */
   action?: React.ReactNode;
 }) {
-  // The video layout (larger tiles) only with debateVideo; master's layout otherwise.
   const videoLayout = useFeatureFlag('debateVideo');
+  if (videoLayout) {
+    return (
+      <div className={styles.cardBody}>
+        {avatar}
+        <span title={nameTitle} className={styles.cardName}>
+          {name}
+        </span>
+        <div className={styles.cardState}>{state}</div>
+        {action ? <div className={styles.cardAction}>{action}</div> : null}
+      </div>
+    );
+  }
   return (
     <>
       <div className="flex w-full items-center gap-2.5">
@@ -249,11 +281,7 @@ function PairCardBody({
           </span>
           {state}
         </div>
-        {action ? (
-          <div className={cx('flex shrink-0 items-center', videoLayout && 'max-sm:self-center self-start')}>
-            {action}
-          </div>
-        ) : null}
+        {action ? <div className="flex shrink-0 items-center">{action}</div> : null}
       </div>
     </>
   );
@@ -270,6 +298,7 @@ function YouCard({
   opponentName: string;
   leaveAction?: React.ReactNode;
 }) {
+  const videoLayout = useFeatureFlag('debateVideo');
   const live = voice.kind === 'live';
   const muted = live && voice.muted;
   const failed = live && Boolean(voice.micFailureMessage);
@@ -339,13 +368,18 @@ function YouCard({
     ) : null;
 
   return (
-    <div data-testid="rematch-you-card" className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5')}>
+    <div
+      data-testid="rematch-you-card"
+      aria-label="You"
+      className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5', videoLayout && [styles.card, styles.youCard])}
+    >
       <PairCardBody
         avatar={
           <ParticipantAvatar
             avatarUrl={local?.avatarCid ?? null}
             value={local?.profileSpaceId}
             name="You"
+            border={border}
             speaking={speaking}
             video={live ? voice.localVideo : null}
           />
@@ -396,7 +430,9 @@ function OpponentCard({
   /** The header's live region, which also serves as this button's description. */
   describedBy: string;
   video?: React.ReactNode;
+  border?: string;
 }) {
+  const videoLayout = useFeatureFlag('debateVideo');
   const talking = showMicState && state === 'talking';
 
   // Base and hover in one expression, because a hover variant outranks a plain utility on
@@ -412,6 +448,7 @@ function OpponentCard({
           avatarUrl={opponent.avatarCid}
           value={opponent.profileSpaceId}
           name={name}
+          border={border}
           speaking={talking}
           video={video}
         />
@@ -437,7 +474,12 @@ function OpponentCard({
       onClick={onOpen}
       aria-label={`Open ${name}’s personal space`}
       aria-describedby={describedBy}
-      className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5 text-left transition-colors')}
+      className={cx(
+        CARD_SURFACE,
+        border,
+        'flex flex-col gap-2.5 text-left transition-colors',
+        videoLayout && [styles.card, styles.opponentCard]
+      )}
     >
       {body}
     </button>
@@ -450,12 +492,14 @@ function ParticipantAvatar({
   name,
   speaking,
   video,
+  border,
 }: {
   avatarUrl: string | null;
   value?: string;
   name: string;
   speaking: boolean;
   video?: React.ReactNode;
+  border?: string;
 }) {
   const videoLayout = useFeatureFlag('debateVideo');
   return (
@@ -464,12 +508,21 @@ function ParticipantAvatar({
     <span
       data-testid="pair-avatar"
       className={cx(
-        'inline-flex shrink-0 overflow-hidden rounded-full',
-        videoLayout ? 'size-14 bg-grey-01' : 'size-8',
+        'inline-flex shrink-0 overflow-hidden',
+        videoLayout ? [styles.video, border] : 'size-8 rounded-full',
         speaking && 'ring-2 ring-successTertiary'
       )}
     >
-      {video ?? <Avatar avatarUrl={avatarUrl} value={value ?? name} size={videoLayout ? 56 : 32} alt="" />}
+      {video ?? (
+        <span className={videoLayout ? styles.fallback : 'contents'}>
+          <Avatar avatarUrl={avatarUrl} value={value ?? name} size={videoLayout ? 56 : 32} alt="" />
+        </span>
+      )}
+      {videoLayout ? (
+        <span aria-hidden data-name={name} className={styles.videoName}>
+          {speaking ? <TalkingBars /> : null}
+        </span>
+      ) : null}
     </span>
   );
 }

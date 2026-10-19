@@ -118,6 +118,7 @@ import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
@@ -130,6 +131,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
+import { RematchPickerStickyHeader } from './rematch-picker-sticky-header';
 import { RematchPublishCard } from './rematch-publish-card';
 import { RematchRequestCard } from './rematch-request-card';
 import { RematchVoiceHeader } from './rematch-voice';
@@ -2568,6 +2570,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * the calendar does, because two rows of pills would push the first claim off a phone's screen.
    */
   const isPhone = useIsPhoneLayout();
+  const videoLayout = useFeatureFlag('debateVideo');
   const setTopicPicked = (topicId: string) => setTopicIds(current => toggleId(current, topicId));
 
   /**
@@ -2672,7 +2675,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       <HideAgreedSwitch analyticsSurface="rematch" checked={hideAgreed} onChange={setHideAgreed} />
     ) : null;
 
-  const desktopListSwitch = !isPhone && !searchOnly ? listSwitch : null;
+  const desktopListSwitch = (!isPhone || videoLayout) && !searchOnly ? listSwitch : null;
 
   // Only where a curator has made a page for this pairing. Without one there is a single option, and
   // a menu of one is a control that cannot do anything.
@@ -2859,13 +2862,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // scrollable. Anything wider than the viewport — the tab strip, on a phone — panned the whole
     // screen sideways instead of scrolling itself.
     <div data-rematch-scroll className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
-      <main className="mx-auto min-h-dvh w-full max-w-[820px] px-5 pt-8 pb-8 mobile:px-8">
+      <main className="mx-auto min-h-dvh w-full max-w-[820px] px-5 pt-8 pb-8 mobile:px-4 mobile:pt-4">
         {/* Pinned together, tabs included. The list pages forever, so both the tab strip and the
             controls under it were a full scroll away by the time the viewer wanted either — and
             pinning the filters alone would have left them floating over a tab strip scrolling
             past behind them. Bleeds to the layer's edges so the page passes under it rather than
             beside it, and `-mt-8` lets it sit flush at the top once stuck. */}
-        <div className="sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 mobile:-mx-8 mobile:px-8">
+        <RematchPickerStickyHeader>
           {/* The display name only: `remoteName` falls back to a raw id, which reads badly in
               "Waiting for …", and the pill has its own fallback. */}
           {roomPresence && (
@@ -2874,7 +2877,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               opponentName={remoteParticipant?.display_name || undefined}
             />
           )}
-          <h1 className="sr-only">Rematch {remoteName}</h1>
+          <h1 className="sr-only">Pick a claim to debate</h1>
           {/* GEO-2992: the pair, at the top of the column the viewer is already reading. This is
               where the unmute control lives now — the 200px dock it replaced was pinned to the
               bottom-right corner of the viewport, outside the column, and people were not finding
@@ -2943,7 +2946,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               <RematchRequestCard request={outboundRequest} participants={participants} currentUserId={currentUserId} />
             ) : null}
 
-            {searchOnly ? null : isPhone ? (
+            {searchOnly ? null : isPhone && !videoLayout ? (
               <SpaceTopicFilters
                 analyticsSurface="rematch"
                 spaceIds={spaceIds}
@@ -2999,7 +3002,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               }}
             />
           </div>
-        </div>
+        </RematchPickerStickyHeader>
 
         {/* A request error belongs on the card it was sent from; this line is the fallback for when
             that card is no longer drawn — a tab swap, a search, a filter. Losing the message because

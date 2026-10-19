@@ -1,0 +1,358 @@
+/* Option A: the media stay mounted while the same cards fold into a sticky strip. */
+.pair {
+  position: relative;
+}
+
+.card {
+  min-width: 0;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.cardBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.video {
+  position: relative;
+  grid-column: 1 / -1;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+  background: var(--color-grey-01);
+}
+
+.fallback {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+}
+
+.fallback > * {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.cardName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+  line-height: 28px;
+  font-weight: 600;
+}
+
+.cardState {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+
+.cardAction {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.cardAction button {
+  height: 28px;
+  padding: 0 10px;
+}
+
+.opponentCard .cardState {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+
+.opponentCard .cardBody {
+  position: relative;
+}
+
+.opponentCard .cardAction {
+  grid-column: 3;
+}
+
+.videoName {
+  display: none;
+}
+
+.compact .video {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  width: 112px;
+  height: 63px;
+}
+
+.compact .cardBody {
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 0;
+}
+
+.compact .cardName {
+  grid-column: 2 / -1;
+}
+
+.compact .cardState {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.compact .cardAction {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.compact .opponentCard .cardState {
+  position: static;
+}
+
+.compact .opponentCard .cardAction {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+/* The full-size phone tiles share a row, with the controls immediately below. */
+@media (max-width: 767px) {
+  .pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .vs {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    height: calc((100vw - 40px) * 3 / 8);
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  .vs > :is(span, button) {
+    box-shadow: 0 0 0 3px white;
+  }
+
+  .youCard,
+  .youCard .cardBody {
+    display: contents;
+  }
+
+  .opponentCard {
+    grid-column: 1;
+    grid-row: 1;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .opponentCard .cardBody {
+    display: block;
+    height: 100%;
+  }
+
+  .video,
+  .compact .video {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
+    border-radius: 8px;
+  }
+
+  .youCard .video {
+    border-width: 1px;
+  }
+
+  .cardName,
+  .opponentCard .cardAction,
+  .opponentCard .cardState {
+    display: none;
+  }
+
+  .videoName {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    max-width: calc(100% - 12px);
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 85%);
+    padding: 0 7px;
+    font-size: 13px;
+    line-height: 20px;
+    white-space: nowrap;
+  }
+
+  .youCard .cardState,
+  .compact .youCard .cardState {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    padding-right: 76px;
+  }
+
+  .youCard .cardAction,
+  .compact .youCard .cardAction {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    justify-self: end;
+  }
+
+  .cardAction button {
+    height: 44px;
+    padding: 0 16px;
+  }
+
+  .compact .pair {
+    grid-template-columns: 64px 22px 64px minmax(0, 1fr);
+    align-items: center;
+    gap: 4px;
+  }
+
+  .compact .vs {
+    pointer-events: auto;
+    position: static;
+    grid-column: 2;
+    grid-row: 1;
+    height: auto;
+    transform: none;
+  }
+
+  .compact .vs > :is(span, button) {
+    width: 22px;
+    height: 22px;
+    font-size: 9px;
+    box-shadow: none;
+  }
+
+  .compact .video {
+    grid-column: 3;
+    width: 64px;
+    height: 48px;
+  }
+
+  .compact .opponentCard .video {
+    width: 100%;
+  }
+
+  .compact .videoName {
+    display: none;
+  }
+
+  .compact .youCard .cardState {
+    grid-column: 4;
+    grid-row: 1;
+    padding: 0;
+    justify-content: flex-end;
+  }
+
+  .compact .youCard .cardAction {
+    grid-column: 4;
+    grid-row: 2;
+  }
+
+  .compact .cardAction button {
+    height: 28px;
+    padding: 0 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pair * {
+    transition: none;
+    animation: none;
+  }
+}
+
+.mediaControls {
+  --control-height: 28px;
+  --toggle-width: 34px;
+  --settings-width: 22px;
+  height: var(--control-height);
+}
+
+.mediaControls [data-media-toggle] {
+  justify-content: center;
+  width: var(--toggle-width);
+  height: var(--control-height);
+  padding: 0;
+}
+
+.mediaControls [data-media-settings] {
+  width: var(--settings-width);
+  height: var(--control-height);
+}
+
+.mediaControls [data-media-group] {
+  height: var(--control-height);
+  margin-left: 6px;
+}
+
+@media (max-width: 767px) {
+  .mediaControls {
+    --control-height: 44px;
+    --toggle-width: 52px;
+    --settings-width: 32px;
+  }
+
+  .compact .mediaControls {
+    --control-height: 40px;
+    --toggle-width: 36px;
+    --settings-width: 22px;
+  }
+
+  .compact .youCard .cardState {
+    padding-right: 60px;
+  }
+
+  .compact .youCard .cardAction {
+    grid-row: 1;
+    align-self: center;
+  }
+}
+
+@media (max-width: 359px) {
+  .compact .pair {
+    grid-template-columns: 48px 18px 48px minmax(0, 1fr);
+  }
+
+  .compact .video {
+    width: 48px;
+    height: 40px;
+  }
+
+  .compact .mediaControls {
+    --toggle-width: 28px;
+    --settings-width: 18px;
+  }
+
+  .compact .youCard .cardState {
+    padding-right: 56px;
+  }
+}
+
+.videoName::after {
+  content: attr(data-name);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compact .opponentCard .cardName {
+  grid-column: 2;
+}

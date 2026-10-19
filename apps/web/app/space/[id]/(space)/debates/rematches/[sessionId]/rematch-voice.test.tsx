@@ -27,6 +27,7 @@ import {
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { PAIR_PILL } from './rematch-pair-header';
+import { RematchPickerStickyHeader } from './rematch-picker-sticky-header';
 import { RematchVoiceHeader } from './rematch-voice';
 
 const mocks = vi.hoisted(() => ({
@@ -350,7 +351,9 @@ async function flushOwnership() {
  * chip), so the ring is the previous sibling of that column rather than of the name itself.
  */
 function avatarFor(name: string) {
-  return screen.getByText(name).closest('div')?.previousElementSibling;
+  return screen
+    .getByTestId(name === 'You' ? 'rematch-you-card' : 'rematch-opponent-card')
+    .querySelector('[data-testid="pair-avatar"]');
 }
 
 function setVisibility(state: DocumentVisibilityState) {
@@ -1756,74 +1759,30 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByTitle('Salina is talking')).toHaveTextContent('Talking');
   });
 
-  /** The identity row's three tracks: avatar, the name-and-state column, the corner action. */
-  function cardTracks(card: HTMLElement) {
-    return Array.from((card.firstElementChild as HTMLElement).children) as HTMLElement[];
-  }
-
-  it('pins the corner action to the top of a desktop card and centres it on a phone', async () => {
+  it('keeps the media controls and leave in your card and the profile action in theirs', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
+    const leave = vi.fn();
     render(
       <RematchVoiceHeader
         session={makeSession('browsing')}
         currentUserId="me"
-        leaveAction={<button type="button">Leave debate</button>}
-      />
-    );
-    await flushOwnership();
-
-    const corner = screen.getByRole('button', { name: 'Leave debate' }).parentElement;
-
-    expect(corner?.className).toContain('self-start');
-    expect(corner?.className).toContain('max-sm:self-center');
-  });
-
-  // The two cards sit side by side, so a difference in either one is a difference you read across
-  // the pair. The mute pill had drifted out to the card's left edge while the opponent's chip
-  // stayed indented under their name — invisible in either card alone, impossible to miss between
-  // them. Both are laid out by one component now, and this is what says so.
-  it('lays both cards out the same way, avatar then name over state then the corner action', async () => {
-    mocks.remoteParticipants = [remoteOpponent()];
-    mocks.opponentMicPublication = { isMuted: true };
-    render(
-      <RematchVoiceHeader
-        session={makeSession('browsing')}
-        currentUserId="me"
-        leaveAction={<button type="button">Leave debate</button>}
+        leaveAction={
+          <button type="button" onClick={leave}>
+            Leave debate
+          </button>
+        }
       />
     );
     await flushOwnership();
 
     const you = screen.getByTestId('rematch-you-card');
     const them = screen.getByTestId('rematch-opponent-card');
-
-    // Them, the badge, then you: the home side of a scoreboard, and where a reader's eye lands
-    // last. Order is not decoration here — the cards are identical, so position is the only thing
-    // saying which of them is you.
     expect(them.compareDocumentPosition(you) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(Array.from(them.parentElement!.children).map(child => child.textContent)).toEqual([
-      expect.stringContaining('Salina'),
-      'VS',
-      expect.stringContaining('You'),
-    ]);
-
-    const [youAvatar, youColumn, youAction] = cardTracks(you);
-    const [themAvatar, themColumn, themAction] = cardTracks(them);
-
-    expect(youAvatar.className).toBe(themAvatar.className);
-    expect(youColumn.className).toBe(themColumn.className);
-    expect(youAction.className).toBe(themAction.className);
-
-    // The state belongs to the name, not to the card: the pill is indented past the avatar exactly
-    // as far as the chip is.
-    expect(youColumn).toContainElement(within(you).getByText('You'));
-    expect(youColumn).toContainElement(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ }));
-    expect(themColumn).toContainElement(within(them).getByText('Salina'));
-    expect(themColumn).toContainElement(screen.getByTitle('Salina is muted'));
-
-    // And the corners hold each person's own secondary action, so they line up across the badge.
-    expect(youAction).toContainElement(screen.getByRole('button', { name: 'Leave debate' }));
-    expect(themAction).toHaveTextContent('View profile');
+    expect(within(you).getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeInTheDocument();
+    expect(within(them).queryByRole('button')).toBeNull();
+    expect(them).toHaveAccessibleName('Open Salina’s personal space');
+    fireEvent.click(within(you).getByRole('button', { name: 'Leave debate' }));
+    expect(leave).toHaveBeenCalledOnce();
   });
 
   // Your control and their chip sit at the same height in mirrored cards, so anything they do not
@@ -2766,7 +2725,7 @@ describe('choosing a camera', () => {
     expect(await screen.findByRole('button', { name: 'Turn camera off' })).toHaveTextContent('Camera off');
   });
 
-  it('drops both labels at the same width, not one of them', async () => {
+  it('keeps icon-only media controls labelled for assistive technology', async () => {
     withCameraAllowed();
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
@@ -2774,7 +2733,7 @@ describe('choosing a camera', () => {
     const micLabel = within(screen.getByRole('button', { name: /microphone/i })).getByText(/^(Mute|Unmute)$/);
     const cameraLabel = await screen.findByText('Camera on');
 
-    expect(micLabel.className).toContain('max-[400px]:hidden');
+    expect(micLabel).toHaveClass('sr-only');
     expect(cameraLabel.className).toBe(micLabel.className);
   });
 
@@ -2918,6 +2877,35 @@ describe('video in the header', () => {
     expect(document.querySelector('video')).toBeNull();
   });
 
+  it('keeps both camera tracks attached while folding and expanding the header', async () => {
+    mocks.localCameraTrack = cameraTrack();
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentCameraPublication = cameraTrack();
+    render(
+      <div data-rematch-scroll data-testid="picker-scroll">
+        <RematchPickerStickyHeader>
+          <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+        </RematchPickerStickyHeader>
+      </div>
+    );
+    await flushOwnership();
+    const localTrack = mocks.localCameraTrack!.track;
+    const remoteTrack = mocks.opponentCameraPublication!.track;
+    const videos = [...document.querySelectorAll('video')];
+    expect(localTrack.attach).toHaveBeenCalledOnce();
+    expect(remoteTrack.attach).toHaveBeenCalledOnce();
+    const scroller = screen.getByTestId('picker-scroll');
+    scroller.scrollTop = 150;
+    fireEvent.scroll(scroller);
+    fireEvent.click(screen.getByRole('button', { name: 'Show full participant videos' }));
+    expect(scroller.scrollTop).toBe(0);
+    expect([...document.querySelectorAll('video')]).toEqual(videos);
+    expect(localTrack.attach).toHaveBeenCalledOnce();
+    expect(remoteTrack.attach).toHaveBeenCalledOnce();
+    expect(localTrack.detach).not.toHaveBeenCalled();
+    expect(remoteTrack.detach).not.toHaveBeenCalled();
+  });
+
   it('hands the track back when the header goes away', async () => {
     mocks.localCameraTrack = cameraTrack();
     const view = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
@@ -2948,10 +2936,7 @@ describe('video in the header', () => {
   });
 
   it('keeps the slot the same size with a camera and without', async () => {
-    const slotSizes = () =>
-      [...document.querySelectorAll('[class*="rounded-full"]')]
-        .map(node => /size-\d+/.exec(node.className)?.[0])
-        .filter(Boolean);
+    const slotSizes = () => screen.getAllByTestId('pair-avatar').map(node => node.className);
 
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
@@ -2963,7 +2948,7 @@ describe('video in the header', () => {
     await flushOwnership();
 
     expect(slotSizes()).toEqual(withoutCamera);
-    expect(withoutCamera).toContain('size-14');
+    expect(withoutCamera).toHaveLength(2);
   });
 });
 

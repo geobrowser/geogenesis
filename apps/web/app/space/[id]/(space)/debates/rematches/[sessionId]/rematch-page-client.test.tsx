@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
    * which a phone keeps, so it defaults to one; the desktop pill rows have their own cases.
    */
   isPhone: true,
+  debateVideo: false,
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
   sourceDebateLoading: false,
   /** GEO-2870. geo-chat's extracted-claims payload for the source debate, and whether it is final. */
@@ -213,6 +214,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('~/core/hooks/use-media-query', () => ({
   useMediaQuery: () => mocks.isPhone,
 }));
+
+vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.debateVideo }));
 
 vi.mock('~/core/analytics', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/analytics')>()),
@@ -943,6 +946,7 @@ function mutation(mutate = mocks.mutate) {
 
 beforeEach(() => {
   mocks.isPhone = true;
+  mocks.debateVideo = false;
   mocks.capture.mockClear();
   mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
   mocks.sourceDebateLoading = false;
@@ -6633,6 +6637,18 @@ describe('desktop filter row', () => {
     expect(pill(/^Governance space/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+  });
+
+  it('uses the same filter pills on a phone in the video layout', async () => {
+    mocks.isPhone = true;
+    mocks.debateVideo = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(pillRow()).toBeInTheDocument());
+    expect(pill(/^Governance\s?\d/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Hide my positions' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pick a claim to debate' })).toBeInTheDocument();
   });
 
   it('lists every space before any topic, whatever the counts', async () => {

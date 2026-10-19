@@ -58,6 +58,8 @@ import {
   RematchPairHeader,
 } from './rematch-pair-header';
 
+import styles from './rematch-video-header.module.css';
+
 // A pair arriving from a recorded debate was already speaking with the microphone open, so the
 // debate-again room preserves that live conversation. A profile challenge has no preceding call or
 // user gesture that opened the microphone; it continues to join listen-only until the user unmutes.
@@ -961,7 +963,7 @@ function VoiceHeaderBody({
 
   const opponentCamera = opponentParticipant?.getTrackPublication(Track.Source.Camera);
   const localVideo =
-    videoEnabled && cameraTrack?.track && !cameraTrack.isMuted ? <TrackVideo track={cameraTrack.track} /> : null;
+    videoEnabled && cameraTrack?.track && !cameraTrack.isMuted ? <TrackVideo track={cameraTrack.track} mirror /> : null;
   const opponentVideo =
     videoEnabled && opponentCamera?.track && !opponentCamera.isMuted ? (
       <TrackVideo track={opponentCamera.track} />
@@ -1160,7 +1162,8 @@ function LocalAudioControls({
   const cameraPrimary = !cameraOn;
 
   // Narrow screens drop the labels only in the video layout, where the camera pill shares the row.
-  const labelAtWidth = useFeatureFlag('debateVideo') ? 'max-[400px]:hidden' : undefined;
+  const videoLayout = useFeatureFlag('debateVideo');
+  const labelAtWidth = videoLayout ? 'sr-only' : undefined;
   const [cameraPanelOpen, setCameraPanelOpen] = React.useState(false);
   const cameraTriggerRef = React.useRef<HTMLButtonElement | null>(null);
 
@@ -1185,6 +1188,7 @@ function LocalAudioControls({
     <button
       ref={cameraTriggerRef}
       type="button"
+      data-media-settings
       aria-label="Camera settings"
       title="Camera settings"
       aria-expanded={cameraPanelOpen}
@@ -1220,6 +1224,7 @@ function LocalAudioControls({
     <button
       ref={triggerRef}
       type="button"
+      data-media-settings
       aria-label="Audio settings"
       title="Audio settings"
       aria-expanded={open}
@@ -1240,8 +1245,9 @@ function LocalAudioControls({
   );
 
   return (
-    <span className="flex h-6 shrink-0 items-center">
+    <span className={cx('flex h-6 shrink-0 items-center', videoLayout && styles.mediaControls)}>
       <button
+        data-media-toggle
         type="button"
         // Both derived from `muted`, like the glyph and the disabled state. Deriving the label from
         // `isMicrophoneEnabled` instead lets a failed microphone announce "Mute microphone" while
@@ -1295,9 +1301,10 @@ function LocalAudioControls({
         </DesktopSettingsPopover>
       )}
       {cameraAllowed && (
-        <span className="ml-1 flex h-6 shrink-0 items-center">
+        <span data-media-group className="ml-1 flex h-6 shrink-0 items-center">
           <button
             type="button"
+            data-media-toggle
             aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
             title={cameraOn ? 'Turn camera off' : 'Turn camera on'}
             onClick={onToggleCamera}
@@ -1319,7 +1326,7 @@ function LocalAudioControls({
   );
 }
 
-function TrackVideo({ track }: { track: TrackLike | null | undefined }) {
+function TrackVideo({ track, mirror = false }: { track: TrackLike | null | undefined; mirror?: boolean }) {
   const ref = React.useRef<HTMLVideoElement | null>(null);
 
   React.useEffect(() => {
@@ -1332,7 +1339,9 @@ function TrackVideo({ track }: { track: TrackLike | null | undefined }) {
   }, [track]);
 
   if (!track) return null;
-  return <video ref={ref} className="size-full object-cover" playsInline muted autoPlay />;
+  return (
+    <video ref={ref} className={cx('size-full object-cover', mirror && '-scale-x-100')} playsInline muted autoPlay />
+  );
 }
 
 function DesktopSettingsPopover({
