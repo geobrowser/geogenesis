@@ -74,7 +74,7 @@ export function FeedTopicPicker({
         />
       </label>
 
-      <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
+      <div role="region" aria-label="Topics" className="mt-4 min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-wrap content-start items-start justify-center gap-1">
           {pills.map(topic => (
             <TopicPill
@@ -106,22 +106,22 @@ export function FeedTopicPicker({
           <Text as="p" variant="body" className="py-6 text-center text-[16px] leading-5 font-normal text-grey-04">
             {hasQuery ? 'No topics match that search.' : 'Search for topics you want to follow.'}
           </Text>
-        ) : (
-          !hasQuery &&
-          hasMore && (
-            <div className="flex justify-center pt-3 pb-1">
-              <button
-                type="button"
-                onClick={() => fetchMore()}
-                disabled={isFetchingMore}
-                className="text-smallButton text-grey-04 transition-colors hover:text-text"
-              >
-                {isFetchingMore ? <Dots /> : 'Show more topics'}
-              </button>
-            </div>
-          )
-        )}
+        ) : null}
       </div>
+
+      {!hasQuery && !isBusy && !nothingListed && hasMore && (
+        <div className="flex shrink-0 justify-center pt-3 pb-1">
+          <button
+            type="button"
+            onClick={() => fetchMore()}
+            disabled={isFetchingMore}
+            aria-label={isFetchingMore ? 'Loading more topics' : undefined}
+            className="text-smallButton text-grey-04 transition-colors hover:text-text"
+          >
+            {isFetchingMore ? <Dots /> : 'Show more topics'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
