@@ -39,9 +39,9 @@ type Props = {
   onFilterMenuOpenChange?: (open: boolean) => void;
 };
 
-// The REST /search endpoint rejects more than ten `type_ids` with a 400 (see core/io/queries.ts),
-// which surfaces as empty results. Cap how many types can be selected at once.
-const MAX_SEARCH_TYPE_FILTERS = 10;
+// The REST /search endpoint rejects more than ten `type_ids` or `tag_ids` with a 400 (see
+// core/io/queries.ts), which surfaces as empty results. Cap how many of each can be selected.
+const MAX_SEARCH_FILTER_IDS = 10;
 
 function shieldNavigationKeys(event: React.KeyboardEvent) {
   if (['Enter', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
@@ -324,7 +324,7 @@ function TypeFilter({
           ) : null}
           {rows.map(type => {
             const isSelected = selected.has(type.id);
-            const atLimit = !isSelected && typeIds.length >= MAX_SEARCH_TYPE_FILTERS;
+            const atLimit = !isSelected && typeIds.length >= MAX_SEARCH_FILTER_IDS;
             return (
               <OptionRow
                 key={type.id}
@@ -517,15 +517,18 @@ function TagFilter({
             <>
               {results.map(result => {
                 const alreadySelected = selectedIds.has(result.id);
+                // Keep selected tags removable via their chips above; only block adding an eleventh.
+                const atLimit = !alreadySelected && tags.length >= MAX_SEARCH_FILTER_IDS;
+                const disabled = alreadySelected || atLimit;
                 return (
                   <li key={result.id} className="border-b border-divider last:border-none">
                     <button
                       type="button"
-                      disabled={alreadySelected}
+                      disabled={disabled}
                       onClick={() => choose({ id: result.id, name: result.name })}
                       className={cx(
                         'flex w-full flex-col items-start gap-1 px-3 py-2 text-left transition-colors',
-                        alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'hover:bg-grey-01'
+                        disabled ? 'cursor-not-allowed bg-grey-01' : 'hover:bg-grey-01'
                       )}
                     >
                       <span className="max-w-full truncate text-footnoteMedium text-text">
