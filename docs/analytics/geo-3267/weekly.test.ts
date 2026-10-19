@@ -223,6 +223,74 @@ event(
   { auth_attempt_id: 'prior-week-attempt' }
 )
 
+// Identity evidence after the report boundary must still clean historical metrics.
+for (const lifecycle of ['signed_in', 'session_restored'] as const) {
+  const visitor = `boundary-${lifecycle}`
+  const session = `${visitor}-session`
+  landing(2, 18, 23, visitor, session)
+  event(lifecycle, 19, 1, visitor, session, 'team-account')
+}
+landing(2, 18, 23, 'boundary-auth-start', 'boundary-auth-session')
+event(
+  'auth_attempt_started',
+  18,
+  23,
+  'boundary-auth-start',
+  'boundary-auth-session',
+  '',
+  {
+    auth_attempt_id: 'boundary-team-attempt',
+    action_anonymous_id: 'boundary-auth-start',
+    action_session_id: 'boundary-auth-session',
+  }
+)
+event(
+  'auth_identity_linked',
+  19,
+  1,
+  'boundary-new-tab',
+  'boundary-new-session',
+  'team-account',
+  {
+    auth_attempt_id: 'boundary-team-attempt',
+    action_anonymous_id: 'boundary-auth-start',
+    action_session_id: 'boundary-auth-session',
+  }
+)
+handoff(11, 18, 'boundary-team-sender', { method: 'linkedin' })
+event(
+  'signed_in',
+  19,
+  1,
+  'boundary-team-sender',
+  'sender-session-11',
+  'team-account'
+)
+landing(
+  11,
+  18,
+  23,
+  'boundary-outside-recipient',
+  'boundary-outside-session',
+  'linkedin'
+)
+// Reading later evidence must not add later handoffs, visits or conversions to the week.
+handoff(12, 19, 'future-sender', { method: 'linkedin' })
+landing(12, 19, 10, 'future-visitor', 'future-session', 'linkedin')
+event(
+  'signed_up',
+  19,
+  11,
+  'future-visitor',
+  'future-session',
+  'future-account',
+  {
+    signup_context_source: 'auth_start',
+    signup_anonymous_id: 'future-visitor',
+    signup_session_id: 'future-session',
+  }
+)
+
 const report = readFileSync(new URL('./weekly.sql', import.meta.url), 'utf8')
   .replaceAll('{start_date:Date}', "toDate('2026-10-12')")
   .replaceAll('{end_date:Date}', "toDate('2026-10-19')")

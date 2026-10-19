@@ -16,7 +16,9 @@ excluded_accounts AS (
     JSONExtractBool(props, 'is_internal') OR JSONExtractBool(props, 'is_test')
       OR JSONExtractBool(props, 'is_automated') OR account IN (SELECT account FROM excluded_accounts) AS excluded
   FROM analytics.events_canonical
-  WHERE app = 'genesis' AND environment = 'production' AND event_time < report_end
+  -- Identity evidence may arrive after the reporting week. Window the metrics below,
+  -- rather than hiding later sign-in/restore evidence from historical exclusions.
+  WHERE app = 'genesis' AND environment = 'production'
     AND event_name IN ('page_viewed', 'share_link_handoff', 'auth_attempt_started', 'auth_identity_linked', 'signed_up', 'signed_in', 'session_restored')
 ), excluded_attempts AS (
   SELECT DISTINCT attempt FROM raw WHERE excluded AND attempt != ''
