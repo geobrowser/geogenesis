@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
@@ -447,7 +447,7 @@ function TagFilter({
   alsoSearchSpaceIds: string[] | undefined;
 }) {
   const { query, onQueryChange, results, isLoading, isEmpty, hasNextPage, fetchNextPage, isFetchingNextPage } =
-    useSearch({ includeNonCanonical, alsoSearchSpaceIds });
+    useSearch({ filterByTypes: [ContentIds.TAG_TYPE], includeNonCanonical, alsoSearchSpaceIds });
   const selectedIds = React.useMemo(() => new Set(tags.map(tag => tag.id)), [tags]);
   const resultsRef = React.useRef<HTMLUListElement | null>(null);
 
