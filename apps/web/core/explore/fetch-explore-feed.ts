@@ -71,6 +71,7 @@ import { type FreshMergedRow, mergeFreshSlot } from './fresh-slot/merge-fresh-sl
 import { recordRecentFreshScope } from './fresh-slot/recent-fresh-scopes';
 import { readSharedFreshList, writeSharedFreshList } from './fresh-slot/shared-fresh-list';
 import { leadWithPlayableDebate } from './lead-with-playable-debate';
+import { resolveStillUrl } from './resolve-still-redirect';
 import { hideSeenInPage } from './seen-demotion/hide-seen';
 import type { SeenDemotionPageConfig } from './seen-demotion/seen-demotion-config';
 
@@ -1426,6 +1427,7 @@ export async function fetchExploreFeed(args: {
   // With seen demotion on, the browser opens the page on the newest playable debate, not always the
   // one the lead check put first; a first visit sees that one first, so it gets the stills.
   if (leadIds !== null) leadPosters = postersOfFirstVisitLead(marked, reserved, stills) ?? leadPosters;
+  leadPosters = await withDirectStills(leadPosters);
   const slice = withLeadPosters(marked, leadPosters);
   const reserveRows = withLeadPosters(reserved, leadPosters);
 
@@ -1595,7 +1597,7 @@ async function serveForYouPage(args: {
       isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
       isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal, stills),
     });
-    page = withLeadPosters(page, postersOfLead(page, stills));
+    page = withLeadPosters(page, await withDirectStills(postersOfLead(page, stills)));
   }
 
   return {
@@ -1678,6 +1680,18 @@ function postersOfFirstVisitLead(
   }).items;
   const posters = lead ? stills.get(normId(lead.entityId)) : undefined;
   return lead && posters ? { entityId: normId(lead.entityId), posters } : null;
+}
+
+/**
+ * The lead's stills as the browser should load them: the presigned storage URLs the durable routes
+ * redirect to, so the largest paint skips that hop. Both resolve at once, each bounded, and a still
+ * that cannot be resolved keeps its durable URL.
+ */
+async function withDirectStills(lead: LeadPosters | null): Promise<LeadPosters | null> {
+  if (!lead) return lead;
+  const direct = (src: string | null) => (src ? resolveStillUrl(src) : Promise.resolve(src));
+  const [slot1, slot2] = await Promise.all([direct(lead.posters.slot1), direct(lead.posters.slot2)]);
+  return { ...lead, posters: { slot1, slot2 } };
 }
 
 function withLeadPosters<T extends ExploreFeedRow>(rows: T[], lead: LeadPosters | null): T[] {

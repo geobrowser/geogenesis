@@ -15,6 +15,7 @@ import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-act
 import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
+import { fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
@@ -439,6 +440,7 @@ export function DebateExploreFeedCard({
             // that same window unmounts this subtree instead of retaining two paused videos forever.
             <DebateCardVideos
               debate={readyDebate}
+              stills={item.debatePosters}
               active={active && playbackAllowed && !coveredBySheet}
               upNext={upNext && !active && !coveredBySheet}
               releaseMedia={releaseMedia}
@@ -446,7 +448,7 @@ export function DebateExploreFeedCard({
               onOpenClaims={openClaims}
             />
           ) : item.debatePosters ? (
-            <DebatePosterSkeleton posters={item.debatePosters} compact={compactChrome} />
+            <DebatePosterSkeleton debateId={debateId} posters={item.debatePosters} compact={compactChrome} />
           ) : (
             <DebateVideoSkeleton />
           )}
@@ -501,6 +503,7 @@ export function DebateExploreFeedCard({
 // there is no reason to re-run the whole subtree for a flag it does not read.)
 const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
+  stills,
   active,
   upNext,
   releaseMedia,
@@ -508,6 +511,7 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   onOpenClaims,
 }: {
   debate: Debate;
+  stills: ExploreFeedItem['debatePosters'];
   active: boolean;
   upNext: boolean;
   releaseMedia: boolean;
@@ -517,6 +521,7 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   return (
     <DebateFeedPlayer
       debate={debate}
+      stills={stills}
       active={active}
       preload
       buffer={upNext}
@@ -535,9 +540,11 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
  * grey, as the player does.
  */
 function DebatePosterSkeleton({
+  debateId,
   posters,
   compact,
 }: {
+  debateId: string;
   posters: NonNullable<ExploreFeedItem['debatePosters']>;
   compact: boolean;
 }) {
@@ -548,6 +555,8 @@ function DebatePosterSkeleton({
           {src ? (
             <img
               src={src}
+              // The feed may hand over a presigned storage URL; a lapsed one falls back to the durable route.
+              onError={fallBackToDurableStill(speakerStillContentUrl(debateId, index === 0 ? 1 : 2))}
               alt=""
               data-debate-poster=""
               draggable={false}
