@@ -57,6 +57,22 @@ describe('net review changes', () => {
     expect(getNetRelations([deletedRelation], new Map())).toEqual([deletedRelation]);
   });
 
+  it.each(['values', 'relations'])('retains deletions outside incomplete %s baselines', kind => {
+    const deletedValue = value({ isDeleted: true });
+    const deletedRelation = relation({ isDeleted: true });
+    const partial = new Map([
+      ['profile', { values: [], relations: [], valuesComplete: false, relationsComplete: false }],
+    ]);
+    if (kind === 'values') expect(getNetValues([deletedValue], partial)).toEqual([deletedValue]);
+    else expect(getNetRelations([deletedRelation], partial)).toEqual([deletedRelation]);
+  });
+
+  it('retains relation deletions when the remote total proves the baseline is partial', () => {
+    const deleted = relation({ isDeleted: true });
+    const partial = new Map([['profile', { values: [], relations: [], relationsTotalCount: 1001 }]]);
+    expect(getNetRelations([deleted], partial)).toEqual([deleted]);
+  });
+
   it('retains actual additions, changes, and deletions of remote data', () => {
     const synced = baseline([value({ isLocal: false })], [relation({ isLocal: false })]);
     const changed = value({ value: 'Bob' });

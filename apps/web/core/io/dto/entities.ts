@@ -3,6 +3,7 @@ import { Entity } from '~/core/types';
 import { name as nameFromValues, spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
+import { ENTITY_LIST_LIMIT } from '../entity-list-limit';
 import { RemoteEntity } from '../schema';
 import { ValueDto } from './values';
 
@@ -48,5 +49,11 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
     // Carried through because `relations` above is filtered: `hasRelationTarget` drops dangling
     // ones, so its length cannot tell a truncated page from a short one.
     relationsTotalCount: remoteEntity.relations?.totalCount,
+    valuesComplete: remoteEntity.valuesList.length < ENTITY_LIST_LIMIT,
+    relationsComplete:
+      relationsOut.length === remoteEntity.relationsList.length &&
+      (remoteEntity.relations?.totalCount !== undefined
+        ? remoteEntity.relationsList.length >= remoteEntity.relations.totalCount
+        : remoteEntity.relationsList.length < ENTITY_LIST_LIMIT),
   };
 }

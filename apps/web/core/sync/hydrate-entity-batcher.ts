@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 
+import { ENTITY_LIST_LIMIT } from '../io/entity-list-limit';
 import type { Entity } from '../types';
 import { E } from './orm';
 import { GeoStore } from './store';
@@ -36,7 +37,7 @@ import { GeoEventStream } from './stream';
  * dangling one decodes to 999 and would read as complete. The count comes straight from the
  * server's own total and is not filtered.
  */
-const BATCH_RELATIONS_CAP = 1000;
+const BATCH_RELATIONS_CAP = ENTITY_LIST_LIMIT;
 
 type Waiter = {
   resolve: (entity: Entity | null) => void;

@@ -146,7 +146,10 @@ function writeSyncedBaselines(entities: Entity[], absentIds: string[] = []) {
       relations: entity.relations.filter(relation => !relation.isLocal),
     });
   }
-  for (const id of absentIds) syncedEntities.set(id, null);
+  for (const id of absentIds) {
+    // Confirmation may have awaited a request while a newer hydration supplied the entity.
+    if (!syncedEntities.has(id)) syncedEntities.set(id, null);
+  }
   // Empty baselines carry information even when there are no operations to hydrate.
   syncedEntitiesVersion.set(version => version + 1);
 }
@@ -264,6 +267,7 @@ export class GeoStore {
 
   private pendingSyncEntities: Entity[] = [];
   private syncScheduled = false;
+  private materializedEntities = new Set<string>();
 
   constructor(stream: GeoEventStream) {
     this.stream = stream;
@@ -416,6 +420,7 @@ export class GeoStore {
     if (typeof window === 'undefined') {
       if (syncedEntities.size > SERVER_SEED_LIMIT) {
         syncedEntities.clear();
+        this.materializedEntities.clear();
         syncedEntitiesVersion.set(version => version + 1);
         reactiveValues.set([]);
         reactiveRelations.set([]);
@@ -425,7 +430,9 @@ export class GeoStore {
       return;
     }
 
-    const missing = entities.filter(entity => !syncedEntities.get(entity.id));
+    const missing = entities.filter(
+      entity => !syncedEntities.get(entity.id) || !this.materializedEntities.has(entity.id)
+    );
     if (missing.length > 0) this.hydrateWith(missing);
   }
 
@@ -439,6 +446,8 @@ export class GeoStore {
   }
 
   private hydrateReactiveState(entities: Entity[]) {
+    // Baseline knowledge can arrive without materialized entities (e.g. a filtered read).
+    for (const entity of entities) this.materializedEntities.add(entity.id);
     const newValues = entities.flatMap(e => e.values);
     const newRelations = entities.flatMap(e => e.relations);
 

@@ -109,6 +109,33 @@ describe('useNetChanges', () => {
     expect(result.current).toEqual({ values: [value], relations: [relation], spaceIds: ['personal'] });
   });
 
+  it.each(['values', 'relations'] as const)(
+    'keeps a space reviewable when its only deletion is outside partial %s',
+    kind => {
+      const deletedValue = { ...value, isDeleted: true };
+      const deletedRelation = { ...relation, isDeleted: true };
+      if (kind === 'values') reactiveValues.set([deletedValue]);
+      else reactiveRelations.set([deletedRelation]);
+      const { result } = renderHook(useNetChanges);
+      const baseline = {
+        id: 'profile',
+        name: null,
+        description: null,
+        types: [],
+        spaces: ['personal'],
+        values: [],
+        relations: [],
+      };
+
+      act(() => store.hydrateWith([{ ...baseline, valuesComplete: false, relationsComplete: false }]));
+      expect(result.current.spaceIds).toEqual(['personal']);
+      expect(result.current[kind]).toEqual([kind === 'values' ? deletedValue : deletedRelation]);
+
+      act(() => store.hydrateWith([{ ...baseline, valuesComplete: true, relationsComplete: true }]));
+      expect(result.current.spaceIds).toEqual([]);
+    }
+  );
+
   it('removes canceled creations when sync supplies an empty remote baseline', async () => {
     const deletedValue = { ...value, isDeleted: true };
     const deletedRelation = { ...relation, isDeleted: true };

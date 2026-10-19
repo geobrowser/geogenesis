@@ -296,6 +296,9 @@ export type Entity = {
    * filtered, so a truncated page and a short one are indistinguishable from it alone.
    */
   relationsTotalCount?: number;
+  /** False when the incoming list was capped or decoding omitted records. */
+  valuesComplete?: boolean;
+  relationsComplete?: boolean;
 };
 
 export type EntityWithSchema = Entity & { schema: Property[] };

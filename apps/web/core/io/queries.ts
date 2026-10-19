@@ -475,7 +475,12 @@ export function getEntity(entityId: string, spaceId?: string, signal?: AbortCont
       pageInfo = nextPage.pageInfo;
     }
 
-    return EntityDecoder.decode({ ...entity, relationsList: relationNodes });
+    const decoded = EntityDecoder.decode({ ...entity, relationsList: relationNodes });
+    if (decoded) {
+      // A drained connection is complete even when it contains at least one full list page.
+      decoded.relationsComplete = !pageInfo.hasNextPage && decoded.relations.length === relationNodes.length;
+    }
+    return decoded;
   });
 }
 

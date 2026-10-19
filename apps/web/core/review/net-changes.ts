@@ -1,6 +1,9 @@
 import type { Entity, Relation, Value } from '~/core/types';
 
-type SyncedEntities = ReadonlyMap<string, Pick<Entity, 'values' | 'relations'> | null>;
+type SyncedEntities = ReadonlyMap<
+  string,
+  Pick<Entity, 'values' | 'relations' | 'valuesComplete' | 'relationsComplete' | 'relationsTotalCount'> | null
+>;
 
 /**
  * Filter values to only include net changes compared to the remote/synced state.
@@ -16,7 +19,10 @@ export function getNetValues(localValues: Value[], syncedEntities: SyncedEntitie
       // Persisted deletions can be restored before their remote entity is hydrated.
       // Only discard a deletion when a known baseline proves it was created locally.
       if (!remoteEntity) return !syncedEntities.has(v.entity.id);
-      return remoteEntity.values.some(remote => remote.id === v.id && !remote.isLocal);
+      return (
+        remoteEntity.valuesComplete === false ||
+        remoteEntity.values.some(remote => remote.id === v.id && !remote.isLocal)
+      );
     }
 
     // If the value is unchanged from the remote version, skip it
@@ -56,7 +62,12 @@ export function getNetRelations(localRelations: Relation[], syncedEntities: Sync
       // An absent cache entry is unknown, not proof that the relation never existed.
       if (!remoteEntity) return !syncedEntities.has(r.fromEntity.id);
       const remoteRelation = remoteEntity.relations.find(remote => remote.id === r.id && !remote.isLocal);
-      if (!remoteRelation) return false;
+      if (!remoteRelation) {
+        return (
+          remoteEntity.relationsComplete === false ||
+          (remoteEntity.relationsTotalCount ?? 0) > remoteEntity.relations.length
+        );
+      }
 
       // If an active local relation restores the same (fromEntity, type, toEntity, space, toSpace)
       // as the deleted remote relation, both cancel out — net-zero
