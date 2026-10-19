@@ -300,6 +300,7 @@ export function EntityFeed({
   const moreFiltersRevealed = showMoreFilters && moreFiltersOpen;
   const typeFilterVisible = showTypeFilter || moreFiltersRevealed;
   const spaceFilterVisible = moreFiltersRevealed && lockedSpaceId == null;
+  const topicFilterVisible = showTopicFilter && (!showMoreFilters || moreFiltersRevealed);
   const typeSelectionTouchedRef = React.useRef(false);
   const contextualTypeDefaultAppliedRef = React.useRef(false);
   // A locked space is the whole filter; otherwise whatever the revealed space menu has ticked, and
@@ -376,10 +377,10 @@ export function EntityFeed({
   );
   const exploreTopicFacet = useExploreTopicFacet({
     spaceIds: facetSpaceIds,
-    typeIds,
+    typeIds: typeIds ?? initialTypeIds,
     time: requestedTime ?? 'all',
     topicIds: selectedTopicIds,
-    enabled: showTopicFilter && !topicFacetEndpoint,
+    enabled: topicFilterVisible && !topicFacetEndpoint && facetSpaceIds.length > 0,
   });
 
   const topicFacets = useQuery({
@@ -438,11 +439,10 @@ export function EntityFeed({
     setSelectedTopicIds(current => keepSelectableTopics(current, topicFacets.data.topics, true));
   }, [topicFacetEndpoint, topicFacets.data, topicFacets.error, topicFacets.isPlaceholderData]);
   React.useEffect(() => {
-    if (!showTopicFilter || topicFacetEndpoint) return;
+    if (!topicFilterVisible || topicFacetEndpoint) return;
     setSelectedTopicIds(current => keepSelectableTopics(current, exploreTopicFacet.topics, exploreTopicFacet.settled));
-  }, [showTopicFilter, topicFacetEndpoint, exploreTopicFacet.topics, exploreTopicFacet.settled]);
+  }, [topicFilterVisible, topicFacetEndpoint, exploreTopicFacet.topics, exploreTopicFacet.settled]);
 
-  const topicFilterVisible = showTopicFilter || availableTopicOptions.length > 0;
   const showFilterRow = showSortFilter || timeRangeApplies || typeFilterVisible || topicFilterVisible;
 
   const toggleMoreFilters = React.useCallback(() => {
@@ -451,6 +451,7 @@ export function EntityFeed({
     if (moreFiltersOpen) {
       setSelectedTypeIds([...initialTypeIds]);
       setSelectedSpaceIds([]);
+      setSelectedTopicIds([]);
     }
     setMoreFiltersOpen(!moreFiltersOpen);
   }, [initialTypeIds, moreFiltersOpen, setMoreFiltersOpen]);

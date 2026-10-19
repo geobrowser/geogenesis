@@ -8,13 +8,12 @@ import * as React from 'react';
 import * as Effect from 'effect/Effect';
 import { parse } from 'graphql';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
-import { type RelationFacetCount, decodeRelationFacet, relationFacetDocument } from '~/core/io/relation-facet';
+import { type RelationFacetCount, decodeRelationFacet, relationFacetByFilterDocument } from '~/core/io/relation-facet';
 import { normId } from '~/core/utils/norm-id';
 
-import { type ExploreTime, buildExploreFeedFilter } from './explore-feed-filter';
+import { type ExploreTime, buildExploreTopicFacetFilter } from './explore-feed-filter';
 
 // Display cap only; the filter is unaffected. A picked topic is ANDed into this facet's own
 // population, so its count equals the population size and it always sorts to the top — the
@@ -65,17 +64,8 @@ export function useExploreTopicFacet(args: {
   const typeKey = typeIds ? [...typeIds].join(',') : null;
   const topicKey = topicIds.join(',');
 
-  const fromEntity = React.useMemo(
-    () =>
-      buildExploreFeedFilter({
-        spaceIds,
-        time,
-        typeIds,
-        topicIds,
-        requireName: true,
-        requireDebateTagOnClaims,
-        includeEntityScopeInFilter: true,
-      }),
+  const facetFilter = React.useMemo(
+    () => buildExploreTopicFacetFilter({ spaceIds, time, typeIds, topicIds, requireDebateTagOnClaims }),
     [spaceKey, typeKey, time, topicKey, requireDebateTagOnClaims]
   );
 
@@ -85,9 +75,9 @@ export function useExploreTopicFacet(args: {
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
-          query: relationFacetDocument,
+          query: relationFacetByFilterDocument,
           decoder: decodeRelationFacet,
-          variables: { typeId: TOPICS_PROPERTY_ID, toEntityId: null, fromEntity, groupBy: ['TO_ENTITY_ID'] },
+          variables: { filter: facetFilter, groupBy: ['TO_ENTITY_ID'] },
           signal,
         })
       ),
