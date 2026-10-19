@@ -39,6 +39,7 @@ import {
   decodeActiveResponseDirection,
   entityResponseQueryVariables,
 } from '~/core/responses/entity-response';
+import type { CursorPage } from '~/core/sync/collect-cursor-pages';
 import { INTERESTED_VOTE_KIND } from '~/core/topics/interested';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
@@ -1569,19 +1570,22 @@ export type ClaimResponseSummaryRow = {
 export function getClaimResponseSummaryPage(
   filter: UserVoteFilter,
   first: number,
-  offset: number,
+  after: string | undefined,
   signal?: AbortController['signal']
 ) {
   return graphql({
     query: claimResponseSummariesQuery,
-    decoder: data =>
-      (data.userVotes ?? []).map((vote): ClaimResponseSummaryRow => ({
+    decoder: (data): CursorPage<ClaimResponseSummaryRow> => ({
+      items: (data.userVotesConnection?.nodes ?? []).map(vote => ({
         userId: String(vote.userId),
         objectId: String(vote.objectId),
         voteType: vote.voteType,
         voteKind: vote.voteKind,
       })),
-    variables: { filter, first, offset },
+      endCursor: data.userVotesConnection?.pageInfo.endCursor ?? null,
+      hasNextPage: data.userVotesConnection?.pageInfo.hasNextPage ?? false,
+    }),
+    variables: { filter, first, after },
     signal,
   });
 }
