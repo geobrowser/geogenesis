@@ -11,6 +11,10 @@ function refinementWords(text: string): string[] {
 }
 
 // Coordinating/constrasting clauses can assert opposite things without starting a new sentence.
+// A new explicit subject and auxiliary can end shared scope after a soft separator.
+// Everything else remains uncertain rather than guessing whether a noun list is a new assertion.
+const EXPLICIT_ASSERTION =
+  /^\s*(?:so\s+|now\s+|then\s+)?(?:i|we|you|they|he|she|it|there|this|that|these|those)\b(?:['’](?:ve|re|s|d|ll)\b|\s+(?:am|is|are|was|were|have|has|had|do|does|did|can|could|will|would|should|may|might|must)\b)/i;
 const CLAUSE_BOUNDARY = /([.!?,;:]+|\b(?:and|but|or|yet|whereas|although|however|while|because|since)\b)/i;
 
 /** Project clause polarity onto timed segments; opposing assertions stay ambiguous. */
@@ -21,26 +25,38 @@ function segmentPolarities(
   const polarities = lines.map(() => new Set<boolean>());
   const touched = new Set<number>();
   let clause = '';
+  let sharedNegation = false;
   const finishClause = () => {
     if (!touched.size) return;
     const words = refinementWords(clause);
     const negated = words.some(word => NEGATIONS.has(word));
+    const uncertain = sharedNegation && !negated && !EXPLICIT_ASSERTION.test(clause);
     // An attribution such as "according to the evidence" is not a new positive assertion.
     // Keep every negation, but give unrelated non-asserting fragments no polarity vote.
     if (negated || words.some(word => relevantWords.has(word))) {
-      for (const index of touched) polarities[index].add(negated);
+      for (const index of touched) {
+        polarities[index].add(negated);
+        // A following list item can share the earlier denial, but does not prove a new negative
+        // assertion either. Mark both possibilities so neither polarity can refine through it.
+        if (uncertain) polarities[index].add(true);
+      }
     }
+    sharedNegation = negated || uncertain;
     clause = '';
     touched.clear();
   };
   for (const [index, line] of lines.entries()) {
     // Context may surround a published interval, but cannot come from another speaker.
-    if (index > 0 && lines[index - 1].participant_slot !== line.participant_slot) finishClause();
+    if (index > 0 && lines[index - 1].participant_slot !== line.participant_slot) {
+      finishClause();
+      sharedNegation = false;
+    }
     for (const part of line.text.split(CLAUSE_BOUNDARY)) {
       if (CLAUSE_BOUNDARY.test(part)) {
         // A punctuation-only segment can finish a clause from the preceding segment.
         if (clause && /[.!?,;:]/.test(part)) touched.add(index);
         finishClause();
+        if (!/^(?:,+|and|or)$/i.test(part)) sharedNegation = false;
       } else if (/[a-z0-9]/i.test(part)) {
         clause += ` ${part}`;
         touched.add(index);

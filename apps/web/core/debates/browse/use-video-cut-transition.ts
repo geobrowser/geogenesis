@@ -42,6 +42,8 @@ export function useVideoCutTransition({
       let disposed = false;
       let releasing = false;
       let frame = 0;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const hidden = () => document.visibilityState === 'hidden';
       const animations: Animation[] = [];
       let hold: ReturnType<NonNullable<typeof holdForTransition>> | undefined;
       const canPaint = () => pair.every(({ video }) => !video.seeking && video.readyState >= 2);
@@ -50,10 +52,13 @@ export function useVideoCutTransition({
         disposed = true;
         hold?.cancel();
         cancelAnimationFrame(frame);
+        clearTimeout(timer);
+        document.removeEventListener('visibilitychange', visibilityChanged);
         for (const animation of animations) animation.cancel();
         for (const { video, canvas } of pair) {
           video.removeEventListener('seeked', ready);
           video.removeEventListener('loadeddata', ready);
+          video.removeEventListener('canplay', ready);
           video.removeEventListener('error', clear);
           video.removeEventListener('emptied', clear);
           canvas.style.opacity = '0';
@@ -72,7 +77,7 @@ export function useVideoCutTransition({
         }
         hold?.release();
         hold = undefined;
-        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || !pair[0].canvas.animate) {
+        if (hidden() || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || !pair[0].canvas.animate) {
           clear();
           return;
         }
@@ -91,13 +96,21 @@ export function useVideoCutTransition({
       function ready() {
         if (disposed || releasing) return;
         cancelAnimationFrame(frame);
+        clearTimeout(timer);
         // Decoders may recover with only `canplay`, or without another completion event.
         // Keep one cancellable check alive until both incoming frames are available.
         if (!canPaint()) {
-          frame = requestAnimationFrame(ready);
+          if (hidden()) timer = setTimeout(ready, 50);
+          else frame = requestAnimationFrame(ready);
           return;
         }
         releasing = true;
+        // Hidden tabs suspend presentation frames. Resume coordinated playback as soon as both
+        // decoders are ready, and discard stills rather than waiting for an invisible blend.
+        if (hidden()) {
+          release();
+          return;
+        }
         // `seeked` can precede presentation of the new frame. Give both decoders a paint before
         // uncovering them; this also works when the viewer pauses during the edit.
         frame = requestAnimationFrame(() => {
@@ -105,7 +118,21 @@ export function useVideoCutTransition({
         });
       }
 
+      function visibilityChanged() {
+        if (disposed) return;
+        cancelAnimationFrame(frame);
+        clearTimeout(timer);
+        if (animations.length) {
+          // Playback was already released; an offscreen fade need not finish on presentation frames.
+          clear();
+          return;
+        }
+        releasing = false;
+        ready();
+      }
+
       clearRef.current = clear;
+      document.addEventListener('visibilitychange', visibilityChanged);
       try {
         for (const { video, canvas } of pair) {
           if (!video.videoWidth || !video.videoHeight || !video.clientWidth || !video.clientHeight) {
@@ -126,6 +153,7 @@ export function useVideoCutTransition({
           canvas.style.opacity = '1';
           video.addEventListener('seeked', ready);
           video.addEventListener('loadeddata', ready);
+          video.addEventListener('canplay', ready);
           video.addEventListener('error', clear);
           video.addEventListener('emptied', clear);
         }

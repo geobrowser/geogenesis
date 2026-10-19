@@ -13,6 +13,8 @@ beforeEach(() => {
   nextFrame = 0;
   reducedMotion = false;
   draw.mockReset();
+  vi.useFakeTimers();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     frames.set(++nextFrame, callback);
     return nextFrame;
@@ -24,6 +26,7 @@ beforeEach(() => {
   } as unknown as CanvasRenderingContext2D);
 });
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -218,6 +221,64 @@ describe('automatic video cut transition', () => {
     expect(frames.size).toBe(1);
     rerender({ resetKey: 'source-replaced' });
     expect(frames.size).toBe(0);
+  });
+
+  it('releases a hidden-tab cut when both decoders arrive without any presentation frames', () => {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const { cut, arrive, hold, canvases } = fixture();
+    cut();
+    arrive(0);
+    expect(hold.release).not.toHaveBeenCalled();
+    arrive(1);
+    expect(hold.release).toHaveBeenCalledOnce();
+    expect(canvases.map(canvas => canvas.style.opacity)).toEqual(['0', '0']);
+    expect(frames.size).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(['waiting', 'presenting', 'blending'])('clears an existing %s cut when the tab becomes hidden', phase => {
+    const { cut, arrive, hold, canvases, videos } = fixture();
+    cut();
+    if (phase !== 'waiting') {
+      arrive(0);
+      arrive(1);
+      tick();
+      if (phase === 'blending') tick();
+    }
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    if (phase === 'waiting') {
+      expect(hold.release).not.toHaveBeenCalled();
+      // Neither decoder sends another completion event; hidden readiness must still be checked.
+      videos.forEach(video => Object.defineProperty(video, 'seeking', { value: false }));
+      act(() => vi.advanceTimersByTime(100));
+      expect(hold.release).toHaveBeenCalledOnce();
+      expect(canvases.map(canvas => canvas.style.opacity)).toEqual(['0', '0']);
+      expect(frames.size).toBe(0);
+    } else {
+      expect(hold.release).toHaveBeenCalledOnce();
+      expect(canvases.map(canvas => canvas.style.opacity)).toEqual(['0', '0']);
+      expect(frames.size).toBe(0);
+    }
+  });
+
+  it('polls hidden readiness and cancels all pending checks on reset', () => {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const { cut, videos, hold, rerender, unmount } = fixture();
+    cut();
+    videos.forEach(video => Object.defineProperty(video, 'seeking', { value: false }));
+    act(() => vi.advanceTimersByTime(100));
+    expect(hold.release).toHaveBeenCalledOnce();
+    cut();
+    rerender({ resetKey: 'manual-seek' });
+    videos.forEach(video => Object.defineProperty(video, 'seeking', { value: false }));
+    act(() => vi.advanceTimersByTime(100));
+    expect(hold.release).toHaveBeenCalledOnce();
+    expect(hold.cancel).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+    cut();
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('respects reduced motion while still protecting the seek from a blank frame', () => {

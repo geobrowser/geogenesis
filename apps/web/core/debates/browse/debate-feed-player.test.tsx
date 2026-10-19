@@ -3081,6 +3081,60 @@ describe('Open rounds in-app player: announcement visibility', () => {
     expect(container.querySelector('[data-round-badge]')).not.toBeNull();
   });
 
+  it.each([
+    '[data-debate-slot="1"] [data-debater-row] button',
+    '[data-debate-slot="1"] [data-claim-corner] button',
+    '[data-debate-slot="2"] [data-debater-row] button',
+    '[data-debate-slot="2"] [data-claim-corner] button',
+  ])('moves focus from %s before hiding and restores it during the shared fade-in', selector => {
+    const frame = mediaFrames(60050);
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 60.05,
+      playbackBreaks: breakAtSixty('extend'),
+    });
+    const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const original = container.querySelector<HTMLElement>(selector)!;
+    const persistent = original
+      .closest('[data-debate-slot]')!
+      .querySelector<HTMLElement>('[aria-label="Pause or play"]')!;
+    const focus = persistent.focus.bind(persistent);
+    vi.spyOn(persistent, 'focus').mockImplementation(options => {
+      expect(original.closest('[inert]')).toBeNull();
+      focus(options);
+    });
+    act(() => original.focus());
+    expect(document.activeElement).toBe(original);
+    frame(60300);
+    expect(document.activeElement).toBe(persistent);
+    expectFurniture(container, true);
+    frame(72000 - 150);
+    expect(document.activeElement).toBe(original);
+  });
+
+  it('does not restore announcement focus after the viewer chooses another control, even if they return', () => {
+    const frame = mediaFrames(60050);
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 60.05,
+      playbackBreaks: breakAtSixty('extend'),
+    });
+    const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const original = container.querySelector<HTMLElement>('[data-debater-row] button')!;
+    const persistent = container.querySelectorAll<HTMLElement>('[aria-label="Pause or play"]');
+    act(() => original.focus());
+    frame(60300);
+    expect(document.activeElement).toBe(persistent[0]);
+    act(() => {
+      persistent[1].focus();
+      persistent[0].focus();
+    });
+    frame(71850);
+    expect(document.activeElement).toBe(persistent[0]);
+  });
+
   it('puts play and pause feedback above the popup without dismissing a paused announcement', () => {
     const controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 0.5 });
     mocks.controller = controller;

@@ -56,6 +56,7 @@ import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-r
 import { type DebatePreviewClips, debatePreviewClips, feedFullPlaybackStartedAtom } from './feed-full-playback';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { PLAYER_EXIT_MS, PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
+import { useAnnouncementFocus } from './use-announcement-focus';
 import { useDebateEndCard } from './use-debate-end-card';
 import { useDebatePreviewClips, usePreviewPairSync } from './use-debate-preview-clips';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
@@ -517,6 +518,7 @@ export function DebateFeedPlayer({
   type AnnouncementPhase = 'clear' | 'covered' | 'returning';
   const [announcementPhase, setAnnouncementPhase] = React.useState<AnnouncementPhase>('clear');
   const announcementShown = announcementPhase === 'covered';
+  const preserveAnnouncementFocus = useAnnouncementFocus(measurement.elementRef, announcementShown);
   const announcementPhaseRef = React.useRef<AnnouncementPhase>('clear');
   const completedBreaksRef = React.useRef<{ key: string; active: PlayerBreak | null; done: Set<number> }>({
     key: animationSeekKey,
@@ -591,6 +593,7 @@ export function DebateFeedPlayer({
       }
       const next: AnnouncementPhase = opacity === 0 ? 'covered' : returning ? 'returning' : 'clear';
       if (next === announcementPhaseRef.current) return;
+      if (next === 'covered') preserveAnnouncementFocus();
       announcementPhaseRef.current = next;
       // Only phase boundaries render React. Commit those inside the same frame that advances the
       // CSS clock, so furniture cannot precede the fade or reappear on a stale timeupdate sample.
@@ -612,6 +615,7 @@ export function DebateFeedPlayer({
       reducedOverlays,
       roundCard,
       stamped,
+      preserveAnnouncementFocus,
     ]
   );
   usePlaybackAnimationClock(

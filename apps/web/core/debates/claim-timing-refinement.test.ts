@@ -499,6 +499,37 @@ describe('grouped paragraph claim timing', () => {
     expect(result.get('coffee')?.endMs).toBe(3000);
   });
 
+  it.each(['or', 'and', ','])('does not turn a coordinated denial into an affirmation (%s)', separator => {
+    const statements = [
+      claim('permits', 'Steel factories have permits.', 1000, 10000),
+      claim('coffee', 'Coffee improves memory.', 1000, 10000),
+    ];
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), published(statements), [
+      line(0, 1000, `There are no subsidies for wheat farms ${separator}`),
+      line(1000, 2000, 'permits for steel factories.'),
+      line(2000, 3000, 'Coffee improves memory.'),
+      line(3000, 4000, 'Steel factories have permits.'),
+    ]);
+    expect(result.get('permits')?.endMs).toBe(4000);
+    expect(result.get('coffee')?.endMs).toBe(3000);
+  });
+
+  it.each(['not', 'never', 'without'])('keeps shared %s scope across multiple coordinated fragments', negation => {
+    const statements = [
+      claim('permits', 'Steel factories have permits.', 1000, 10000),
+      claim('coffee', 'Coffee improves memory.', 1000, 10000),
+    ];
+    const original = published(statements);
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), original, [
+      line(0, 1000, `There were ${negation} subsidies for wheat farms,`),
+      line(1000, 2000, 'tax relief for miners or'),
+      line(2000, 3000, 'permits for steel factories.'),
+      line(3000, 4000, 'Coffee improves memory.'),
+    ]);
+    expect(result.get('permits')).toEqual(original.get('permits'));
+    expect(result.get('coffee')?.endMs).toBe(4000);
+  });
+
   it('can refine an affirmative assertion in a separate sentence after a negated one', () => {
     const statements = [
       claim('safety', 'Vaccination was safe.', 0, 10_000),
