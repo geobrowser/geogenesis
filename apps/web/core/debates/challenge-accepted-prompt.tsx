@@ -59,13 +59,13 @@ export function ChallengeAcceptedPrompt({
   if (!you || !other) return null;
 
   return (
-    <div className="max-sm:items-end max-sm:p-0 fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm">
+    <div className="fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm mobile:items-end mobile:p-0">
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        className="max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid w-[min(444px,100%)] gap-4 overflow-hidden rounded-lg bg-divider p-5 text-text shadow-card"
+        className="grid max-h-[calc(100dvh-2rem)] w-[min(444px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg bg-divider p-5 text-text shadow-card mobile:max-h-[calc(100dvh-1rem)] mobile:rounded-b-none mobile:border-b-0 mobile:px-4 mobile:py-5"
       >
         <header className="grid min-w-0 gap-1 text-center">
           <h2 id={titleId}>
@@ -78,44 +78,46 @@ export function ChallengeAcceptedPrompt({
           </p>
         </header>
 
-        <DebateRequestMediaPreview
-          sessionKey={debateRematchMediaSessionKey(session.id)}
-          avatarCid={you.avatar_cid}
-          avatarValue={you.profile_space_id}
-          initialJoinState={initialJoinState}
-          onJoinStateChange={rememberChoice}
-          camera={videoEnabled}
-          appearance="tile"
-          formatSummary={state => describeAcceptedJoin(state, participantName(other), videoEnabled)}
-          fallback={
-            <RequestParticipantTile label="You" local avatarCid={you.avatar_cid} avatarValue={you.profile_space_id} />
-          }
-          renderLayout={(preview, status) => (
-            <div className="grid gap-2">
-              <div className="relative grid grid-cols-2 items-center gap-2">
-                {preview}
-                <RequestParticipantTile
-                  label={participantName(other)}
-                  avatarCid={other.avatar_cid}
-                  avatarValue={other.profile_space_id}
-                />
-                <span
-                  aria-hidden="true"
-                  className="absolute top-1/2 left-1/2 grid size-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-text text-tag text-white ring-3 ring-divider"
-                >
-                  VS
-                </span>
+        <div className="grid min-h-0 gap-4 overflow-y-auto">
+          <DebateRequestMediaPreview
+            sessionKey={debateRematchMediaSessionKey(session.id)}
+            avatarCid={you.avatar_cid}
+            avatarValue={you.profile_space_id}
+            initialJoinState={initialJoinState}
+            onJoinStateChange={rememberChoice}
+            camera={videoEnabled}
+            appearance="tile"
+            formatSummary={state => describeAcceptedJoin(state, participantName(other), videoEnabled)}
+            fallback={
+              <RequestParticipantTile label="You" local avatarCid={you.avatar_cid} avatarValue={you.profile_space_id} />
+            }
+            renderLayout={(preview, status) => (
+              <div className="grid gap-2">
+                <div className="relative grid grid-cols-2 items-center gap-2">
+                  {preview}
+                  <RequestParticipantTile
+                    label={participantName(other)}
+                    avatarCid={other.avatar_cid}
+                    avatarValue={other.profile_space_id}
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-1/2 left-1/2 grid size-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-text text-tag text-white ring-3 ring-divider"
+                  >
+                    VS
+                  </span>
+                </div>
+                {status && <div className="grid gap-1 text-center">{status}</div>}
               </div>
-              {status && <div className="grid gap-1 text-center">{status}</div>}
-            </div>
-          )}
-        />
+            )}
+          />
 
-        {error && (
-          <Text as="p" variant="body" color="red-01">
-            {error}
-          </Text>
-        )}
+          {error && (
+            <Text as="p" variant="body" color="red-01">
+              {error}
+            </Text>
+          )}
+        </div>
 
         <footer className="grid gap-5">
           <div className="grid grid-cols-2 gap-2">

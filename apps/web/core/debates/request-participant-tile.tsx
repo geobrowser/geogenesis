@@ -4,6 +4,8 @@ import cx from 'classnames';
 
 import { Avatar } from '~/design-system/avatar';
 
+import { DebateTileChip, tileChipSurface } from './debate-video-tile';
+
 /** A participant in the accepted-request preview, with controls over the local picture. */
 export function RequestParticipantTile({
   label,
@@ -35,9 +37,9 @@ export function RequestParticipantTile({
           </span>
         </div>
       )}
-      <span className="absolute top-1.5 left-1.5 max-w-[calc(100%-12px)] truncate rounded-full bg-grey-01/90 px-2 py-1 text-[12px] leading-none text-text">
-        {label}
-      </span>
+      <DebateTileChip className={cx(tileChipSurface, 'absolute top-1.5 left-1.5 max-w-[calc(100%-12px)] text-text')}>
+        <span className="truncate">{label}</span>
+      </DebateTileChip>
       {controls && <div className="absolute inset-x-2 bottom-2 flex justify-center">{controls}</div>}
     </section>
   );

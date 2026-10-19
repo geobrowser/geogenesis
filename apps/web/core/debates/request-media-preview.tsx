@@ -267,18 +267,26 @@ function MediaPreview({
     </div>
   );
 
+  const cameraPreview = cameraOn ? (
+    <video
+      ref={videoRef}
+      className="absolute inset-0 h-full w-full bg-grey-01 object-cover"
+      playsInline
+      muted
+      autoPlay
+    />
+  ) : null;
+
   const preview =
     appearance === 'tile' ? (
       <RequestParticipantTile label="You" local avatarCid={avatarCid} avatarValue={avatarValue} controls={toggles}>
-        {cameraOn ? (
-          <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" playsInline muted autoPlay />
-        ) : null}
+        {cameraPreview}
       </RequestParticipantTile>
     ) : (
       <>
-        {cameraOn ? (
+        {cameraPreview ? (
           <DebateVideoTile participantPosition={null} active={false} tileLabel="You" inactiveIndicatorId="local">
-            <video ref={videoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
+            {cameraPreview}
           </DebateVideoTile>
         ) : (
           <div className="grid place-items-center py-1">
