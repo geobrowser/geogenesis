@@ -58,6 +58,7 @@ import { Truncate } from '~/design-system/truncate';
 import { FeedTopicPicker, RECOMMENDED_FEED_TOPIC_COUNT } from './customize-feed';
 import { avatarAtom, nameAtom, selectedTopicIdsAtom, stepAtom, topicIdAtom } from './onboarding-atoms';
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
+import { useContentBelow } from './use-content-below';
 import { feedTopicsAtom, heldTopicsFor } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
@@ -352,7 +353,7 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className={`pointer-events-auto relative z-100 my-auto flex h-[485px] w-full max-w-[360px] shrink-0 flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown ${effectiveStep === 'completed' ? 'justify-center px-6 py-10' : 'p-6 pt-8'}`}
+      className={`pointer-events-auto relative z-100 my-auto flex h-[710px] max-h-[calc(100dvh-3rem)] min-h-[485px] w-full max-w-[528px] shrink-0 flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown ${effectiveStep === 'completed' ? 'justify-center px-8 py-10 md:px-6' : 'p-8 md:p-6'}`}
     >
       {children}
     </motion.div>
@@ -815,6 +816,9 @@ function StepInterestedIn({
   const isLoading = status === 'loading';
   const isError = status === 'error';
   const hasPicks = selectedTopicIds.length > 0;
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const hasContentBelow = useContentBelow(scrollRef, contentRef, status === 'loaded');
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -843,8 +847,8 @@ function StepInterestedIn({
           </Text>
         </div>
       ) : (
-        <div className="my-5 min-h-0 flex-1 overflow-y-auto">
-          <div className="flex flex-wrap content-start gap-2">
+        <div ref={scrollRef} className="my-5 min-h-0 flex-1 overflow-y-auto">
+          <div ref={contentRef} className="flex flex-wrap content-start justify-center gap-2">
             {featuredSpaces.map(space => {
               const isSelected = selectedTopicIds.includes(space.id);
               return (
@@ -871,7 +875,7 @@ function StepInterestedIn({
           </div>
         </div>
       )}
-      <div className="shrink-0 border-t border-grey-02 pt-4">
+      <div className={cx('shrink-0 border-t pt-4', hasContentBelow ? 'border-grey-02' : 'border-transparent')}>
         {isError ? (
           <button type="button" onClick={onRetry} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
             Try again
