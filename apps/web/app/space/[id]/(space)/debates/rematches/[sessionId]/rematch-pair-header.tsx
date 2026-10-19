@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { motion } from 'framer-motion';
 
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
@@ -140,7 +141,8 @@ export function RematchPairHeader({
     <div className="flex flex-col gap-3">
       {/* Option A keeps the videos side by side, with the phone's controls in their own row.
           The audio-only layout retains its stacked participant cards. */}
-      <div
+      <motion.div
+        layout={videoLayout}
         className={cx(
           'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2',
           videoLayout ? styles.pair : 'mobile:grid-cols-1'
@@ -157,7 +159,7 @@ export function RematchPairHeader({
         />
         <VsBadge />
         <YouCard local={local} voice={voice} opponentName={opponentName} leaveAction={leaveAction} />
-      </div>
+      </motion.div>
 
       {/* The spoken half of the nudges: a region that is always mounted and only changes text. A
           live region inserted with its content already in it is dropped by VoiceOver often enough
@@ -188,7 +190,10 @@ function VsBadge() {
   const videoLayout = useFeatureFlag('debateVideo');
   const header = React.useContext(RematchPickerHeaderContext);
   return (
-    <div className={cx('flex items-center justify-center', videoLayout && styles.vs)}>
+    <motion.div
+      layout={videoLayout ? 'position' : false}
+      className={cx('flex items-center justify-center', videoLayout && styles.vs)}
+    >
       {header?.compact ? (
         <button
           type="button"
@@ -207,7 +212,7 @@ function VsBadge() {
           VS
         </span>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -261,14 +266,20 @@ function PairCardBody({
   const videoLayout = useFeatureFlag('debateVideo');
   if (videoLayout) {
     return (
-      <div className={styles.cardBody}>
+      <motion.div layout className={styles.cardBody}>
         {avatar}
-        <span title={nameTitle} className={styles.cardName}>
+        <motion.span layout="position" title={nameTitle} className={styles.cardName}>
           {name}
-        </span>
-        <div className={styles.cardState}>{state}</div>
-        {action ? <div className={styles.cardAction}>{action}</div> : null}
-      </div>
+        </motion.span>
+        <motion.div layout="position" className={styles.cardState}>
+          {state}
+        </motion.div>
+        {action ? (
+          <motion.div layout="position" className={styles.cardAction}>
+            {action}
+          </motion.div>
+        ) : null}
+      </motion.div>
     );
   }
   return (
@@ -368,7 +379,8 @@ function YouCard({
     ) : null;
 
   return (
-    <div
+    <motion.div
+      layout={videoLayout}
       data-testid="rematch-you-card"
       aria-label="You"
       className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5', videoLayout && [styles.card, styles.youCard])}
@@ -409,7 +421,7 @@ function YouCard({
         }
         action={leaveAction}
       />
-    </div>
+    </motion.div>
   );
 }
 
@@ -468,7 +480,8 @@ function OpponentCard({
   );
 
   return (
-    <button
+    <motion.button
+      layout={videoLayout}
       type="button"
       data-testid="rematch-opponent-card"
       onClick={onOpen}
@@ -482,7 +495,7 @@ function OpponentCard({
       )}
     >
       {body}
-    </button>
+    </motion.button>
   );
 }
 
@@ -505,7 +518,8 @@ function ParticipantAvatar({
   return (
     // The size lives on the wrapper, not on `<Avatar>`: its `size` prop only reaches the generated
     // fallback, while a real avatar renders `h-full w-full` and takes whatever box it is given.
-    <span
+    <motion.span
+      layout={videoLayout}
       data-testid="pair-avatar"
       className={cx(
         'inline-flex shrink-0 overflow-hidden',
@@ -523,7 +537,7 @@ function ParticipantAvatar({
           {speaking ? <TalkingBars /> : null}
         </span>
       ) : null}
-    </span>
+    </motion.span>
   );
 }
 

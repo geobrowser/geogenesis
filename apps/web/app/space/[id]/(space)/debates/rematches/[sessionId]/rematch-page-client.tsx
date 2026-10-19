@@ -2923,85 +2923,91 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               />
             ) : null}
           </div>
-          <header className="mb-4">
-            <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate rematch" className="gap-6">
-              {pickerTabs.map(spec => (
-                <TabButton
-                  key={spec.id}
-                  label={spec.label}
-                  count={spec.count}
-                  active={activeTab === spec.id}
-                  onClick={() => setTab(spec.id)}
-                />
-              ))}
-            </ScrollableTabRow>
-          </header>
+          <motion.div layout="position">
+            <header className="mb-4">
+              <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate rematch" className="gap-6">
+                {pickerTabs.map(spec => (
+                  <TabButton
+                    key={spec.id}
+                    label={spec.label}
+                    count={spec.count}
+                    active={activeTab === spec.id}
+                    onClick={() => setTab(spec.id)}
+                  />
+                ))}
+              </ScrollableTabRow>
+            </header>
 
-          <div className="flex flex-col gap-3">
-            {/* Pinned above the filters and the search box, where the hub's claims tab keeps it —
+            <div className="flex flex-col gap-3">
+              {/* Pinned above the filters and the search box, where the hub's claims tab keeps it —
                 and inside the sticky block rather than over it, because two stickies would both
                 claim `top-0` and overlap. A request sent from here otherwise left no trace on the
                 surface that sent it: the claim card looks exactly as it did before. */}
-            {outboundRequest && currentUserId ? (
-              <RematchRequestCard request={outboundRequest} participants={participants} currentUserId={currentUserId} />
-            ) : null}
+              {outboundRequest && currentUserId ? (
+                <RematchRequestCard
+                  request={outboundRequest}
+                  participants={participants}
+                  currentUserId={currentUserId}
+                />
+              ) : null}
 
-            {searchOnly ? null : isPhone && !videoLayout ? (
-              <SpaceTopicFilters
-                analyticsSurface="rematch"
-                spaceIds={spaceIds}
-                onSpaceToggle={onSpaceToggle}
-                onSpacesClear={onSpacesClear}
-                topicIds={topicIds}
-                onTopicToggle={setTopicPicked}
-                onTopicsClear={() => setTopicIds([])}
-                facetSpaces={facetSpaces}
-                facetTopics={facetTopics}
-                countsPending={filterCountsPending}
-                trailing={listSwitch}
-                leading={sourceMenu}
+              {searchOnly ? null : isPhone && !videoLayout ? (
+                <SpaceTopicFilters
+                  analyticsSurface="rematch"
+                  spaceIds={spaceIds}
+                  onSpaceToggle={onSpaceToggle}
+                  onSpacesClear={onSpacesClear}
+                  topicIds={topicIds}
+                  onTopicToggle={setTopicPicked}
+                  onTopicsClear={() => setTopicIds([])}
+                  facetSpaces={facetSpaces}
+                  facetTopics={facetTopics}
+                  countsPending={filterCountsPending}
+                  trailing={listSwitch}
+                  leading={sourceMenu}
+                />
+              ) : (
+                // GEO-3223: on a desktop the two menus become one row of pills, so the spaces and
+                // topics are on screen to be picked rather than behind "Any space" and "Any topic".
+                // The source menu keeps a row of its own beneath it; the list's switch moves under
+                // the search box.
+                <div className="flex flex-col gap-2">
+                  {pillOptions.length > 0 ? (
+                    <FacetFilterPills
+                      analyticsSurface="rematch"
+                      options={pillOptions}
+                      pickedIds={pickedFilterIds}
+                      onToggle={option =>
+                        option.kind === 'space' ? onSpaceToggle(option.id) : setTopicPicked(option.id)
+                      }
+                      onClear={() => {
+                        onSpacesClear();
+                        setTopicIds([]);
+                      }}
+                      countsPending={filterCountsPending}
+                    />
+                  ) : null}
+                  {sourceMenu ? <div className="flex flex-wrap items-center gap-2">{sourceMenu}</div> : null}
+                </div>
+              )}
+              <Input
+                withSearchIcon
+                value={search}
+                onChange={event => setSearch(event.currentTarget.value)}
+                placeholder={searchOnly ? 'Search claims' : 'Search claims and topics'}
+                aria-label={searchOnly ? 'Search claims' : 'Search claims and topics'}
               />
-            ) : (
-              // GEO-3223: on a desktop the two menus become one row of pills, so the spaces and
-              // topics are on screen to be picked rather than behind "Any space" and "Any topic".
-              // The source menu keeps a row of its own beneath it; the list's switch moves under
-              // the search box.
-              <div className="flex flex-col gap-2">
-                {pillOptions.length > 0 ? (
-                  <FacetFilterPills
-                    analyticsSurface="rematch"
-                    options={pillOptions}
-                    pickedIds={pickedFilterIds}
-                    onToggle={option =>
-                      option.kind === 'space' ? onSpaceToggle(option.id) : setTopicPicked(option.id)
-                    }
-                    onClear={() => {
-                      onSpacesClear();
-                      setTopicIds([]);
-                    }}
-                    countsPending={filterCountsPending}
-                  />
-                ) : null}
-                {sourceMenu ? <div className="flex flex-wrap items-center gap-2">{sourceMenu}</div> : null}
-              </div>
-            )}
-            <Input
-              withSearchIcon
-              value={search}
-              onChange={event => setSearch(event.currentTarget.value)}
-              placeholder={searchOnly ? 'Search claims' : 'Search claims and topics'}
-              aria-label={searchOnly ? 'Search claims' : 'Search claims and topics'}
-            />
-            <TopicSearchSuggestions
-              analyticsSurface="rematch"
-              query={search}
-              topics={suggestedTopics}
-              onPick={topicId => {
-                setTopicIds(current => (current.includes(topicId) ? current : [...current, topicId]));
-                setSearch('');
-              }}
-            />
-          </div>
+              <TopicSearchSuggestions
+                analyticsSurface="rematch"
+                query={search}
+                topics={suggestedTopics}
+                onPick={topicId => {
+                  setTopicIds(current => (current.includes(topicId) ? current : [...current, topicId]));
+                  setSearch('');
+                }}
+              />
+            </div>
+          </motion.div>
         </RematchPickerStickyHeader>
 
         {/* A request error belongs on the card it was sent from; this line is the fallback for when

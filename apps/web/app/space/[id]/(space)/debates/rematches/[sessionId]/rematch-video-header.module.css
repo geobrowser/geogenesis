@@ -137,7 +137,7 @@
     top: 0;
     left: 50%;
     height: calc((100vw - 40px) * 3 / 8);
-    transform: translateX(-50%);
+    translate: -50% 0;
     pointer-events: none;
   }
 
@@ -231,7 +231,7 @@
     grid-column: 2;
     grid-row: 1;
     height: auto;
-    transform: none;
+    translate: none;
   }
 
   .compact .vs > :is(span, button) {
