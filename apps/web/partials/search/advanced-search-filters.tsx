@@ -39,6 +39,10 @@ type Props = {
   onFilterMenuOpenChange?: (open: boolean) => void;
 };
 
+// The REST /search endpoint rejects more than ten `type_ids` with a 400 (see core/io/queries.ts),
+// which surfaces as empty results. Cap how many types can be selected at once.
+const MAX_SEARCH_TYPE_FILTERS = 10;
+
 function shieldNavigationKeys(event: React.KeyboardEvent) {
   if (['Enter', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) {
     event.stopPropagation();
@@ -320,8 +324,14 @@ function TypeFilter({
           ) : null}
           {rows.map(type => {
             const isSelected = selected.has(type.id);
+            const atLimit = !isSelected && typeIds.length >= MAX_SEARCH_TYPE_FILTERS;
             return (
-              <OptionRow key={type.id} selected={isSelected} onClick={() => onToggleType(type.id)}>
+              <OptionRow
+                key={type.id}
+                selected={isSelected}
+                disabled={atLimit}
+                onClick={() => onToggleType(type.id)}
+              >
                 <CheckboxVisual checked={isSelected} />
                 <span className="min-w-0 flex-1 truncate text-text">{type.name ?? type.id}</span>
               </OptionRow>
