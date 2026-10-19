@@ -16,10 +16,11 @@ import { isOpenRoundsDebate, openRoundsRequiredRebuttalRounds } from './open-rou
  *
  * The player plays the raw recordings, where every break runs at its real length: the pick window
  * after a round, then the reveal and the opener's count-in, or a required round's lead-in, eight to
- * twelve seconds of people looking at their screens. So the player plays only the first couple of
- * seconds of each, silent (nobody holds a turn; both mics are open between rounds since #2838),
- * under a title with the next round or "That's a wrap", then cuts to the next speaker, the graphic
- * covering the jump (GEO-3277). The cue is a function of the playhead, like `round-cues.ts`, so a
+ * twelve seconds of people looking at their screens. The player keeps a couple of seconds around
+ * an edit in the middle of the round title's hold, silent (nobody holds a turn; both mics are open
+ * between rounds since #2838). The frame blend finishes under the title before it fades into the
+ * next speaker; a final "That's a wrap" holds through the end-card handoff (GEO-3277).
+ * The cue is a function of the playhead, like `round-cues.ts`, so a
  * viewer who scrubs in finds it where it would be.
  */
 
@@ -37,7 +38,7 @@ export const BREAK_SETTLE_MS = 300;
 export const BREAK_STAMP_GAP_MS = 280;
 
 /**
- * How much of each break the player plays before cutting to what follows it: about two seconds,
+ * How much of each break the player keeps around its edit: about two seconds,
  * with the same title-only pacing for required and optional rounds. The final End holds
  * "That's a wrap" a little longer, since nothing has to start after it.
  */
@@ -169,9 +170,9 @@ export type BreakPicks = Record<ParticipantSlot, OpenRoundPick | null>;
 
 export type BreakCue = {
   kind: PlayerBreak['kind'];
-  /** How far into the played stretch the playhead is; past it, only a scrub or a pause, it holds at the end. */
+  /** Progress through the kept footage; the omitted middle holds at the cut's progress on a scrub. */
   elapsedMs: number;
-  /** The played stretch: how long the graphic runs before the player cuts. */
+  /** Total kept duration, including the footage on both sides of a mid-title cut. */
   playedMs: number;
   /** Each debater's pick for the round that ended; `null` for a lead-in, where nobody picked. */
   picks: BreakPicks | null;
@@ -190,14 +191,14 @@ export function breakCueAt(
   const playedMs = playedLengthMs(current);
   return {
     kind: current.kind,
-    elapsedMs: Math.min(playheadMs - current.decidingStartMs, playedMs),
+    elapsedMs: breakElapsedMs(current, playheadMs),
     playedMs,
     picks: current.kind === 'lead_in' ? null : finalPicks(picks, current.roundIndex),
     nextRoundIndex: current.nextRoundIndex,
   };
 }
 
-/** Whether the banner is across the seam: from its roll-in until the cut to the next speaker. */
+/** Whether the banner is across the seam, including its hold across the mid-title edit. */
 export function breakBannerShown(cue: BreakCue | null) {
   return cue !== null && cue.elapsedMs >= BREAK_SETTLE_MS;
 }
@@ -207,21 +208,43 @@ function playedLengthMs(entry: PlayerBreak) {
   return Math.min(BREAK_PLAYED_MS[entry.kind], entry.endMs - entry.decidingStartMs);
 }
 
+function cutForBreak(entry: PlayerBreak): BreakCut {
+  const playedMs = playedLengthMs(entry);
+  // Keep half the announcement on either side of the edit. The incoming frame is still in the
+  // silent count-in, so the blend finishes under the held title without hiding any spoken words.
+  // A final wrap has no incoming round and keeps its existing end-card handoff.
+  const beforeMs = entry.kind === 'final_end' ? playedMs : playedMs / 2;
+  return { atMs: entry.decidingStartMs + beforeMs, toMs: entry.endMs - (playedMs - beforeMs) };
+}
+
+function breakElapsedMs(entry: PlayerBreak, playheadMs: number) {
+  const cut = cutForBreak(entry);
+  const skippedMs = Math.max(0, Math.min(playheadMs - cut.atMs, cut.toMs - cut.atMs));
+  return Math.min(playedLengthMs(entry), playheadMs - entry.decidingStartMs - skippedMs);
+}
+
+/** The announcement's media clock, continuous across the automatic edit in the middle of its hold. */
+export function breakAnimationPositionMs(breaks: readonly PlayerBreak[], playheadMs: number) {
+  const current = breaks.find(entry => playheadMs >= entry.decidingStartMs && playheadMs < entry.endMs);
+  return current ? current.decidingStartMs + breakElapsedMs(current, playheadMs) : playheadMs;
+}
+
 export type BreakCut = {
-  /** When to cut: the end of the played stretch at the front of the break, or of an early end's quiet. */
+  /** When to cut: midway through a round title's hold, or at an early end's quiet. */
   atMs: number;
-  /** Where to: the next turn, or the end of the debate after the final End. */
+  /** Where to: the silent tail before the next turn, or the end after the final End. */
   toMs: number;
 };
 
 /**
- * Every cut the player makes, in order. A break plays its first couple of seconds under its graphic
- * and cuts to what follows it; an early end's quiet, from the last word of the turn that ended to
+ * Every cut the player makes, in order. Round breaks retain the front and tail of the silence,
+ * cutting midway through the announcement so the frame blend finishes before its exit. An early
+ * end's quiet, from the last word of the turn that ended to
  * the next speaker's first, is cut straight away, as the rendered video cuts it.
  */
 export function breakCuts(breaks: PlaybackBreaks): BreakCut[] {
   return [
-    ...breaks.breaks.map(entry => ({ atMs: entry.decidingStartMs + playedLengthMs(entry), toMs: entry.endMs })),
+    ...breaks.breaks.map(cutForBreak),
     ...breaks.earlyEnds.map(entry => ({ atMs: entry.startMs, toMs: entry.endMs })),
   ]
     .filter(cut => cut.toMs > cut.atMs)

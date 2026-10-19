@@ -1919,7 +1919,7 @@ describe('the pair becomes watchable together (GEO-2965)', () => {
 describe('open rounds breaks in published playback (GEO-3277)', () => {
   // On the player's clock: Round 1 (index) ends at 60 s, they pick until 64 s, then 8 s of reveal and
   // count-in before Round 2 (index) starts at 72 s. The player shows a round title from 60.3 s,
-  // crossfades back to its furniture over 62.1–62.4 s, then cuts to 72 s.
+  // cuts from 61.2 to 70.8 s under that title, then crossfades back to furniture over 71.7–72 s.
   const extendBreak = {
     kind: 'extend' as const,
     roundIndex: 0,
@@ -2043,12 +2043,12 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(banner.style.animationDelay).toContain('300ms');
   });
 
-  it('fades the announcement out in place before the cut', () => {
-    const { container } = renderAt(62.5, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
+  it('fades the announcement out in place after the mid-title cut', () => {
+    const { container } = renderAt(71.85, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
     const out = container.querySelector('[data-debate-banner-out]') as HTMLElement;
     expect(out.className).toContain('fadeIn_300ms_linear_reverse_both');
     expect(out.className).not.toContain('banner-out');
-    // The cut is 2.4 s in; the fade out takes the 0.3 s before it.
+    // The title exits over the final 0.3 s of its kept 2.4 s, after the frame blend.
     expect(out.style.animationDelay).toContain('2100ms');
     expect(out.style.animationPlayState).toBe('paused');
   });
@@ -2082,17 +2082,17 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     return { resume: () => (held = false) };
   };
 
-  it('cuts to the next round after the first couple of seconds of a break, and not while paused', () => {
+  it('cuts under the held title to silent footage before the next round, and not while paused', () => {
     vi.useFakeTimers();
     try {
       const seekBoth = vi.fn();
-      // The title-only cut is 2.4 s in, at 62.4 s.
-      renderAt(61.55, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
-      recordingAt(61.55);
+      // The cut is 1.2 s in, at 61.2 s, and retains 1.2 s before the speaker starts.
+      renderAt(60.35, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
+      recordingAt(60.35);
       vi.advanceTimersByTime(800);
       expect(seekBoth).not.toHaveBeenCalled();
       vi.advanceTimersByTime(100);
-      expect(seekBoth).toHaveBeenCalledWith(72);
+      expect(seekBoth).toHaveBeenCalledWith(70.8);
 
       cleanup();
       const pausedSeek = vi.fn();
@@ -2110,14 +2110,14 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     vi.useFakeTimers();
     try {
       const seekBoth = vi.fn();
-      renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
-      const recording = recordingAt(62.3, { stalled: true });
+      renderAt(61.1, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
+      const recording = recordingAt(61.1, { stalled: true });
       vi.advanceTimersByTime(2_000);
       expect(seekBoth).not.toHaveBeenCalled();
 
       recording.resume();
       vi.advanceTimersByTime(900);
-      expect(seekBoth).toHaveBeenCalledWith(72);
+      expect(seekBoth).toHaveBeenCalledWith(70.8);
     } finally {
       vi.useRealTimers();
     }
@@ -2129,7 +2129,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     vi.useFakeTimers();
     try {
       const seekBoth = vi.fn();
-      renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
+      renderAt(61.1, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
       mocks.livePosition = () => 75_000;
       vi.advanceTimersByTime(2_000);
       expect(seekBoth).not.toHaveBeenCalled();
@@ -2524,17 +2524,50 @@ describe('Open rounds in-app player: announcement visibility', () => {
     }
   });
 
-  it.each(['lead_in', 'extend'] as const)('crossfades furniture with the %s title before its round cut', kind => {
-    const frame = mediaFrames(62_100);
+  it.each(['lead_in', 'extend'] as const)('holds the %s title continuously across the video seek and blend', kind => {
+    const frame = mediaFrames(61_200);
     const playbackBreaks = breakAtSixty(kind);
-    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 62.1, playbackBreaks });
+    const at = (playheadSeconds: number, playing = true) =>
+      controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, playing, playbackBreaks });
+    mocks.controller = at(61.2);
+    const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const player = container.querySelector<HTMLElement>('[data-debate-ready]')!;
+    const banner = container.querySelector('[data-debate-banner]');
+    expect(player.style.getPropertyValue('--break-t')).toBe('1200');
+    expectFurniture(container, true);
+    // The automatic seek changes the raw clock by 9.6 s, but cannot advance the title's phase.
+    frame(70_800);
+    expect(player.style.getPropertyValue('--break-t')).toBe('1200');
+    expectFurniture(container, true);
+    mocks.controller = at(70.8);
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    expect(container.querySelector('[data-debate-banner]')).toBe(banner);
+    frame(70_800); // decoding/buffering holds the announcement, too.
+    expect(player.style.getPropertyValue('--break-t')).toBe('1200');
+    frame(71_200); // the 400ms video blend is complete, with 500ms left before the title's exit.
+    expect(player.style.getPropertyValue('--break-t')).toBe('1600');
+    expectFurniture(container, true);
+    mocks.controller = at(71.2, false);
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    expect(player.style.getPropertyValue('--break-t')).toBe('1600');
+    mocks.controller = at(71.2);
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    frame(71_700, () => expectFurniture(container, true));
+    frame(71_850, () => expectFurniture(container, false, 0.5));
+    frame(72_000, () => expectFurniture(container, false));
+  });
+
+  it.each(['lead_in', 'extend'] as const)('crossfades furniture with the %s title after its round cut', kind => {
+    const frame = mediaFrames(71_700);
+    const playbackBreaks = breakAtSixty(kind);
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 71.7, playbackBreaks });
     const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
     expectFurniture(container, true);
-    const exitAt = 62_100;
+    const exitAt = 71_700;
     const fadeEnd = exitAt + 300;
     frame(exitAt, () => expectFurniture(container, true));
     const out = container.querySelector('[data-debate-banner-out]') as HTMLElement;
-    expect(out.style.animationDelay).toContain(`${exitAt - 60_000}ms`);
+    expect(out.style.animationDelay).toContain('2100ms');
     frame(exitAt + 150, () => expectFurniture(container, false, 0.5));
     // Buffering and small backwards reads keep the title and furniture in the same phase.
     frame(exitAt + 150, () => expectFurniture(container, false, 0.5));
@@ -2570,16 +2603,16 @@ describe('Open rounds in-app player: announcement visibility', () => {
     seekBack(62.9);
     rerender(<DebateFeedPlayer debate={openRounds} active />);
     fireEvent.change(container.querySelector('input[type="range"]') as HTMLInputElement, {
-      target: { value: '61.5' },
+      target: { value: '60.9' },
     });
     expect((container.querySelector('[data-debate-ready]') as HTMLElement).style.getPropertyValue('--break-t')).toBe(
-      '1500'
+      '900'
     );
     expectFurniture(container, true);
   });
 
-  it.each([1, 2] as const)('fades in the incoming timer on slot %s and keeps its round label through the cut', slot => {
-    const frame = mediaFrames(62_000);
+  it.each([1, 2] as const)('fades in the incoming timer on slot %s after the cut and keeps it into the round', slot => {
+    const frame = mediaFrames(71_600);
     const playbackBreaks = breakAtSixty('extend');
     const turnSegments: DebateMediaTurnSegment[] = [
       { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 30_000, duration_ms: 30_000 },
@@ -2598,10 +2631,10 @@ describe('Open rounds in-app player: announcement visibility', () => {
       turnSpans: turnSpansFromSegments(turnSegments),
       turnState: turnStateFromSegments(turnSegments, playheadSeconds),
     });
-    mocks.controller = at(62);
+    mocks.controller = at(71.6);
     const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
     expect(container.querySelector('[data-turn-timer]')).toBeNull();
-    frame(62_250, () => expectFurniture(container, false, 0.5));
+    frame(71_850, () => expectFurniture(container, false, 0.5));
     const tile = container.querySelector(`[data-debate-slot="${slot}"]`)!;
     const timer = tile.querySelector<HTMLElement>('[data-turn-timer]')!;
     const badge = tile.querySelector<HTMLElement>('[data-round-badge]')!;

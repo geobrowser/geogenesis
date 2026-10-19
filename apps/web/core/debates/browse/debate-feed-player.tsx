@@ -16,6 +16,7 @@ import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import {
   BREAK_SETTLE_MS,
   type PlayerBreak,
+  breakAnimationPositionMs,
   breakAnnouncesRound,
   breakCueAt,
   breakCuts,
@@ -458,10 +459,17 @@ export function DebateFeedPlayer({
     return last ? last.decidingStartMs + BREAK_SETTLE_MS : null;
   }, [playbackBreaks.breaks]);
   const announcementOriginMs = currentBreak?.decidingStartMs ?? Math.round(playheadMs - (roundCard?.ageMs ?? 0));
+  const announcementPositionMs = React.useCallback(() => {
+    const positionMs = livePositionMs();
+    return positionMs === null ? null : breakAnimationPositionMs(playbackBreaks.breaks, positionMs);
+  }, [livePositionMs, playbackBreaks.breaks]);
   const syncAnnouncement = React.useCallback(
     (elapsedMs: number | null, fromFrame: boolean) => {
-      const positionMs = livePositionMs() ?? (elapsedMs === null ? playheadMs : announcementOriginMs + elapsedMs);
-      const drawnPositionMs = elapsedMs === null ? positionMs : announcementOriginMs + elapsedMs;
+      const positionMs = livePositionMs() ?? playheadMs;
+      const drawnPositionMs =
+        elapsedMs === null
+          ? breakAnimationPositionMs(playbackBreaks.breaks, positionMs)
+          : announcementOriginMs + elapsedMs;
       if (completedBreaksRef.current.key !== animationSeekKey) {
         completedBreaksRef.current = { key: animationSeekKey, active: null, done: new Set() };
       }
@@ -527,6 +535,7 @@ export function DebateFeedPlayer({
       livePositionMs,
       measurement.elementRef,
       playheadMs,
+      playbackBreaks.breaks,
       reducedOverlays,
       roundCard,
       stamped,
@@ -538,7 +547,7 @@ export function DebateFeedPlayer({
       ? (breakCue ?? (roundCard ? { elapsedMs: roundCard.ageMs ?? 0, playedMs: ROUND_CARD_MS } : null))
       : null,
     playing,
-    { positionMs: livePositionMs, originMs: announcementOriginMs, resetKey: animationSeekKey },
+    { positionMs: announcementPositionMs, originMs: announcementOriginMs, resetKey: animationSeekKey },
     syncAnnouncement
   );
   // During a break's exit there is no live turn yet. Prepare the incoming timer and label so

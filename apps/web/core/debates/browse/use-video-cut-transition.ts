@@ -1,6 +1,7 @@
 import * as React from 'react';
 
-const CUT_FADE_MS = 250;
+// Finish comfortably inside the round title's held middle, before its 300ms exit starts.
+const CUT_FADE_MS = 400;
 
 /** Cover an automatic edit with the outgoing frames until both incoming recordings can paint. */
 export function useVideoCutTransition({
@@ -65,7 +66,7 @@ export function useVideoCutTransition({
           animations.push(
             canvas.animate([{ opacity: 1 }, { opacity: 0 }], {
               duration: CUT_FADE_MS,
-              easing: 'ease-out',
+              easing: 'ease-in-out',
               fill: 'forwards',
             })
           );

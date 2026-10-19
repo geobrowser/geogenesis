@@ -107,8 +107,8 @@ describe('automatic video cut transition', () => {
     tick();
     for (const canvas of canvases) {
       expect(canvas.animate).toHaveBeenCalledWith([{ opacity: 1 }, { opacity: 0 }], {
-        duration: 250,
-        easing: 'ease-out',
+        duration: 400,
+        easing: 'ease-in-out',
         fill: 'forwards',
       });
     }

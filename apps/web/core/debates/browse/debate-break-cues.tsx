@@ -128,7 +128,7 @@ export function DebateBreakOverlay({
       </div>
       <div
         data-debate-banner-out
-        // The wrap holds; a next-round announcement fades before the cut.
+        // The wrap holds; a next-round announcement fades after the mid-title frame blend.
         className={cx('absolute inset-x-0 top-1/2 -translate-y-1/2', !wrap && PLAYER_EXIT_CLASS)}
         style={wrap ? undefined : heldAt(cue.playedMs - PLAYER_EXIT_MS)}
       >
