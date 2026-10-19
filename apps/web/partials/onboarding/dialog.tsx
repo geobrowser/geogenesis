@@ -355,7 +355,7 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className={`pointer-events-auto relative z-100 my-auto flex h-[710px] max-h-[calc(100dvh-3rem)] min-h-[485px] w-full max-w-[528px] shrink-0 flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown ${effectiveStep === 'completed' ? 'justify-center px-8 py-10 md:px-6' : 'p-8 md:p-6'}`}
+      className={`pointer-events-auto relative z-100 my-auto flex h-[560px] max-h-[calc(100dvh-3rem)] min-h-[485px] w-full max-w-[528px] shrink-0 flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown ${effectiveStep === 'completed' ? 'justify-center px-8 py-10 md:px-6' : 'p-8 md:p-6'}`}
     >
       {children}
     </motion.div>
@@ -539,7 +539,7 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
   };
 
   return (
-    <div className="flex h-full flex-col justify-between">
+    <div className="flex min-h-0 flex-1 flex-col">
       <StepContents childKey="welcome">
         <div className="w-full">
           <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
@@ -554,7 +554,7 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
           </Text>
         </div>
       </StepContents>
-      <div className="mt-[58px] flex grow flex-col items-center justify-start">
+      <div className="my-6 flex flex-col items-center md:my-3">
         <div className="group relative h-20 w-20">
           {avatar ? (
             <OnboardingAvatarPreview avatar={avatar} />
@@ -587,7 +587,7 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
           type="file"
           className="hidden"
         />
-        <div className="mt-6 flex w-full flex-col items-center justify-center gap-3">
+        <div className="mt-6 flex w-full flex-col items-center justify-center gap-3 md:mt-4">
           <input
             value={name}
             onChange={event => {
@@ -600,8 +600,8 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
           />
         </div>
       </div>
-      <div className="relative">
-        <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
+      <div className="mt-auto shrink-0 space-y-4">
+        <div className="flex justify-center">
           <Text as="p" variant="footnote" className="text-center text-grey-04">
             All content is public and shared onchain.
             <br />

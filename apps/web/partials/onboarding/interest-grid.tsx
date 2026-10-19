@@ -49,10 +49,7 @@ export function InterestGrid({
           >
             <span
               aria-hidden="true"
-              className={cx(
-                'flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-full border p-1.5 transition-colors group-focus-visible:ring-2 group-focus-visible:ring-ctaPrimary group-focus-visible:ring-offset-2 md:h-14 md:w-14 md:p-1',
-                selected ? 'border-ctaPrimary bg-ctaTertiary' : 'border-grey-02 bg-grey-01 group-hover:border-grey-04'
-              )}
+              className="relative flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-grey-01 group-focus-visible:ring-2 group-focus-visible:ring-ctaPrimary group-focus-visible:ring-offset-2 md:h-14 md:w-14"
             >
               <span className="flex h-full w-full items-center justify-center overflow-hidden rounded-full">
                 <NativeGeoImage
@@ -68,6 +65,12 @@ export function InterestGrid({
                   fallback={placeholder}
                 />
               </span>
+              <span
+                className={cx(
+                  'pointer-events-none absolute inset-0 rounded-full transition-colors',
+                  selected ? 'bg-ctaPrimary/15 ring-2 ring-ctaPrimary ring-inset' : 'group-hover:bg-text/5'
+                )}
+              />
             </span>
             <span className="min-h-8 w-full text-[13px] leading-4 font-medium break-words">{space.name}</span>
           </button>
