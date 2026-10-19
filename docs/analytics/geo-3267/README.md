@@ -6,9 +6,15 @@ Each link carries `utm_source=<method>`, `utm_medium=share`, `utm_campaign=geo_s
 
 The random share ID joins an arrival to `share_link_handoff`. The sharer's profile ID appears only on that outbound event, never as an additional tracking tag. An availability link identifies the calendar owner in its path/content ID; the person copying it may be someone else. Unmatched arrivals still count with unknown sharer identity.
 
-The debate X composer uses X's `twitter-text` parser for weighted text counting, including Unicode, emoji and embedded URLs. It reserves the destination link's 23-character weight plus its separator and keeps the tagline when shortening the claim. Text is normalized to NFC and shortened only at grapheme boundaries. Other share channels keep their existing text formatting.
+The debate X composer uses X's `twitter-text` parser for weighted text counting, including Unicode, emoji and embedded URLs. It reserves the destination link's 23-character weight plus its separator and keeps the tagline when shortening the claim. Text is normalized to NFC and shortened only at grapheme boundaries. LinkedIn keeps its existing 700-character caption allowance independently of the destination URL. The debate dialog loads on demand from both feed entry points, keeping the parser behind that boundary. Loading finishes before the composer button is available, so `window.open` stays synchronous with its click.
+
+The profile trait is read only when the existing analytics context explicitly reports `is_identified: true`. False means anonymous; unavailable context means unknown, with no profile trait read. This uses the existing runtime enablement and identity-revision guard: a completed clipboard write cannot send a stale actor after logout/account switching. The anonymous browser ID still accompanies identified events, as it does elsewhere in the runtime, so auth/session evidence can be joined. No profile lookup or extra identification occurs on the sharing path.
+
+`composer_requested` means the app attempted to open a composer, not that a popup opened or a post was published. With `noopener,noreferrer`, a successful `window.open` may return `null`; that return value cannot distinguish a blocked popup. The canonical action keeps its outcome unknown. Lobby copy controls intentionally generate a fresh share UUID per successful handoff and display the exact copied URL; the lobby destination stays the same.
 
 ## Weekly report
+
+Use ClickHouse 26.3 or newer with `enable_materialized_cte` (tested against production 26.6.1.2326 and embedded 26.9.2.1). The report caches shared intermediate results within its SELECT, including the projected event fields, to avoid repeatedly scanning warehouse history or retaining unrelated JSON. These are query-local caches; the query creates no persistent objects.
 
 Run `weekly.sql` against the existing analytics warehouse with Date parameters `start_date` (inclusive) and `end_date` (exclusive). Dates and Monday-start weeks use UTC. For example:
 
@@ -31,7 +37,7 @@ Events, acquired sessions, auth links, and accounts are deduplicated before aggr
 
 The report joins account creation through existing GEO-3071 attempt IDs and initiating anonymous/session IDs, including recovered auth flows. Another tab or campaign at completion cannot replace that starting session. Ambiguous pairs stay uncredited, including callbacks without an attempt ID: action and auth-start snapshot references must identify exactly one distinct complete pair. Matching references count as one pair; incomplete references and signup snapshots from completion do not compete with valid initiating evidence. Sign-ins, session restores, and newsletter submissions are not new accounts. A later direct session does not inherit share credit. An acquired visit may occur the week before its account creation.
 
-Team/test/automated events, their known sessions/attempts/shared links, and labeled accounts are excluded. Identifiable self-visits are excluded by comparing the sender's anonymous/account identity with the acquired session. Anonymous self-visits across devices cannot be recognized.
+Team/test/automated events, their known sessions/attempts/shared links, and labeled accounts are excluded. Label reads use `FINAL` so the latest version of a removed label takes effect before filtering. Identifiable self-visits are excluded by comparing the sender's anonymous/account identity with the acquired session. Anonymous self-visits across devices cannot be recognized.
 
 Exclusions also follow a later sign-in/session restore and the initiating auth IDs recovered in another tab. A team sender's earlier anonymous handoff is excluded with its session, so its arrivals cannot reappear as unmatched growth.
 
@@ -45,7 +51,12 @@ Missing outbound events do not erase acquired visits/accounts, but their sharer 
 
 ## Validation and rollout
 
-Register and deploy the collector contract from [analytics PR #114](https://github.com/geobrowser/analytics/pull/114) before releasing the Genesis producer. The browser bundle is built upstream and vendored unchanged using `bun run scripts/analytics/vendor.mjs /path/to/analytics`; generated event names and integrity hashes must match it.
+Release in this order:
+
+1. Merge [analytics PR #114](https://github.com/geobrowser/analytics/pull/114), then deploy its generated registry to the Rust collector. The Vercel analytics-dashboard preview is a separate deployment and does not establish collector readiness.
+2. Confirm a canary `share_link_handoff` passes the deployed collector's validation and persists with its share ID and actor fields. The native `analytics-core` test `share_link_handoffs_validate_for_anonymous_and_identified_senders` proves acceptance of both sender forms by the proposed registry; it is not proof of the deployed collector version.
+3. Only then release [Genesis PR #2910](https://github.com/geobrowser/geogenesis/pull/2910). The browser bundle is built upstream and vendored unchanged using `bun run scripts/analytics/vendor.mjs /path/to/analytics`; generated names and integrity hashes must match it.
+4. Check desktop/phone clipboard and social composers, then a new-account flow. Inspect matching share IDs and one account conversion, and rerun the report after snapshot publication.
 
 Run the SQL against isolated synthetic ClickHouse tables:
 
@@ -55,6 +66,34 @@ CLICKHOUSE_BINARY=/path/to/clickhouse bun run docs/analytics/geo-3267/weekly.tes
 CHDB_PYTHON=/path/to/python-with-chdb bun run docs/analytics/geo-3267/weekly.test.ts
 ```
 
-The fixtures cover duplicate handoffs/sign-ups, repeated views, two shares of the same content, prior-week acquisition, new-tab auth completion, campaign changes, missing outbound events, direct returns, ambiguous auth links, and self/team/test exclusions. Vitest tests execute the exact vendored runtime and verify actual collector serialization alongside the share controls.
+`.github/workflows/share-link-report.yml` runs this fixture on report changes, using Python 3.12 and pinned `chdb==4.4.0`. It needs no production credentials. The fixture covers duplicate handoffs/sign-ups, repeated views, two shares of the same content, prior-week acquisition, new-tab auth completion, campaign changes, missing outbound events, direct returns, ambiguous auth links, and self/team/test exclusions. A native execution-plan assertion bounds warehouse source reads to one per input. Removing the event cache fails that assertion. A removed-label fixture also fails without `FINAL`.
 
-Production acceptance still needs desktop/phone clipboard and social-composer checks plus a new-account flow. Inspect collector rows for matching share IDs and a single account conversion, and run the weekly query after deployment. Local fixtures verify query behavior; they do not establish production delivery.
+`fixture-schema.sql` projects the exact production types consumed from `events_canonical`: DateTime64(3, 'UTC'), LowCardinality event/app/environment, nullable identity strings and string properties. It omits unused columns and replaces the production canonical view with a MergeTree fixture for deterministic source-scan checks. The labels fixture preserves the full upstream definition and ReplacingMergeTree version/key behavior; production uses SharedReplacingMergeTree. Background fixture merges are disabled so the label-version regression cannot pass accidentally after a merge. The definitions are pinned to upstream migrations, and the read-only check below prints the live types and table engines to expose drift.
+
+Vitest tests execute the exact vendored runtime and verify actual collector serialization alongside the share controls. Component and isolated bundle tests protect the deferred dialog boundary; that bundle test is scoped to the sharing sources and is not a measurement of the entire Next.js Explore chunk.
+
+## Read-only warehouse check
+
+Use the existing warehouse connection, with credentials in the existing env file. Bun's env-file parser handles quoted values; do not echo credentials or put them in the URL.
+
+```sh
+CLICKHOUSE_URL=https://your-existing-clickhouse-host:8443 \
+  bun --env-file=/absolute/path/to/existing.env run \
+  docs/analytics/geo-3267/warehouse-check.ts 2026-10-12 2026-10-19
+```
+
+The helper reads `CLICKHOUSE_UN` / `CLICKHOUSE_PW`, enforces read-only queries, and bounds execution to 60 seconds, two threads and 2 GiB, with external aggregation above 128 MiB. It checks `max(published_at)` in `input_generations` first, then prints the consumed schema, engines, elapsed report time and rows. It does not require `system.query_log`, the `format()` table function, or explicit temporary tables. `events_canonical` is a published snapshot, roughly an hour behind raw delivery; use `events_raw` for acceptance evidence in the last hour. A completed-week report uses canonical data, with later identity evidence only as fresh as the recorded publication time.
+
+Production check on 2026-10-19, for `[2026-10-12, 2026-10-19)` UTC:
+
+```json
+{
+  "checked_at": "2026-10-19 22:38:00",
+  "published_at": "2026-10-19 21:53:30.794",
+  "clickhouse_version": "26.6.1.2326",
+  "report_elapsed_ms": 46565,
+  "rows": []
+}
+```
+
+The report completed in 46.6 seconds, within the 60-second bound. All consumed column types matched the fixture; production engines were View and SharedReplacingMergeTree. An empty result means no qualifying rows for that week, not proven end-to-end delivery. The initial unoptimized report timed out; shared-input caching and field projection let the production query complete. The collector deployment and post-release device/new-account checks above remain release gates.

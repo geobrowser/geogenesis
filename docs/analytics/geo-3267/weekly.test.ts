@@ -716,17 +716,32 @@ for (const [index, { kind }] of fallbackCases.entries()) {
   )
 }
 
+// A label removed in the latest table version must not exclude a real visitor.
+handoff(50, 12, 'allowed-label-sender', { method: 'linkedin' })
+landing(50, 12, 9, 'allowed-label-reader', 'allowed-label-session', 'linkedin')
+event(
+  'signed_in',
+  12,
+  10,
+  'allowed-label-reader',
+  'allowed-label-session',
+  'allowed-label-account'
+)
+
 const report = readFileSync(new URL('./weekly.sql', import.meta.url), 'utf8')
   .replaceAll('{start_date:Date}', "toDate('2026-10-12')")
   .replaceAll('{end_date:Date}', "toDate('2026-10-19')")
   .trim()
   .replace(/;$/, '')
 const sql = `
-CREATE DATABASE analytics;
-CREATE TABLE analytics.privy_account_labels (privy_user_id Nullable(String), user_id Nullable(String), active Bool, exclude_from_metrics Bool) ENGINE = Memory;
-INSERT INTO analytics.privy_account_labels VALUES ('team-account', NULL, true, true);
-CREATE TABLE analytics.events_canonical (event_time DateTime('UTC'), event_name String, anonymous_id Nullable(String), session_id Nullable(String), privy_user_id Nullable(String), properties_json String, user_id Nullable(String) DEFAULT NULL, app String DEFAULT 'genesis', environment String DEFAULT 'production') ENGINE = Memory;
+${readFileSync(new URL('./fixture-schema.sql', import.meta.url), 'utf8')}
+INSERT INTO analytics.privy_account_labels (source_account_id, label_id, privy_user_id, active, updated_at) VALUES
+  ('team', 'internal', 'team-account', true, '2026-10-11 00:00:00'),
+  ('allowed', 'internal', 'allowed-label-account', true, '2026-10-11 00:00:00');
+INSERT INTO analytics.privy_account_labels (source_account_id, label_id, privy_user_id, active, updated_at) VALUES
+  ('allowed', 'internal', 'allowed-label-account', false, '2026-10-12 00:00:00');
 INSERT INTO analytics.events_canonical (event_time, event_name, anonymous_id, session_id, privy_user_id, properties_json) VALUES ${rows.join(',')};
+EXPLAIN json=1 ${report} FORMAT JSONEachRow;
 ${report} FORMAT JSONEachRow;
 `
 const directory = mkdtempSync(join(tmpdir(), 'geo-3267-weekly-'))
@@ -752,6 +767,25 @@ try {
     .split('\n')
     .filter(Boolean)
     .map((line) => JSON.parse(line))
+  // Both warehouse inputs should be read once. Inlined CTE reuse previously
+  // expanded this fixture to 19 source scans; the report timed out in production.
+  const explain = output.find((row) => typeof row.explain === 'string')
+  assert.ok(explain, 'Missing ClickHouse execution plan')
+  let sourceReads = 0
+  function countSourceReads(value: unknown) {
+    if (Array.isArray(value)) value.forEach(countSourceReads)
+    else if (value && typeof value === 'object') {
+      const node = value as Record<string, unknown>
+      if (node['Node Type'] === 'ReadFromMergeTree') sourceReads++
+      Object.values(node).forEach(countSourceReads)
+    }
+  }
+  countSourceReads(JSON.parse(explain.explain))
+  assert.equal(
+    sourceReads,
+    2,
+    'Report must read each warehouse source only once'
+  )
   const channel = (name: string) =>
     output.find((row) => row.channel === name && row.breakdown === 'channel')
   assert.equal(Number(channel('x')?.visits), 3, JSON.stringify(output))
@@ -782,11 +816,11 @@ try {
   assert.equal(Number(channel('copy_link')?.visitors), 5)
   assert.equal(Number(channel('copy_link')?.new_accounts), 0)
   assert.equal(Number(channel('copy_link')?.link_handoffs), 8)
-  assert.equal(Number(channel('linkedin')?.visits), 5, JSON.stringify(output))
-  assert.equal(Number(channel('linkedin')?.visitors), 5)
+  assert.equal(Number(channel('linkedin')?.visits), 6, JSON.stringify(output))
+  assert.equal(Number(channel('linkedin')?.visitors), 6)
   assert.equal(Number(channel('linkedin')?.new_accounts), 0)
-  assert.equal(Number(channel('linkedin')?.link_handoffs), 9)
-  assert.equal(Number(channel('linkedin')?.matched_visits), 5)
+  assert.equal(Number(channel('linkedin')?.link_handoffs), 10)
+  assert.equal(Number(channel('linkedin')?.matched_visits), 6)
   assert.equal(Number(channel('linkedin')?.unmatched_visits), 0)
   assert.equal(output.filter((row) => row.breakdown === 'channel').length, 4)
   const anonymousSender = output.find(
