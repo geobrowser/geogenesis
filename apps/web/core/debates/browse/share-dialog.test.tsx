@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import * as React from 'react';
 
+import { parseTweet } from 'twitter-text';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
@@ -134,6 +135,48 @@ it.each([
   expect(text.length + 1 + 23).toBeLessThanOrEqual(280);
   if (claim.length < 100) expect(text).toBe(`${claim}. Watch the debate on Geo!`);
   else expect(text).toContain('…');
+  expect(handoffs()).toHaveLength(1);
+  expect(handoffs()[0][1].share_id).toBe(parseShareLink(destination.searchParams)!.share_id);
+});
+
+it.each([
+  ['mixed scripts', `${'a'.repeat(120)}${'中'.repeat(100)}`],
+  ['CJK', '中'.repeat(200)],
+  ['surrogate pairs', '🚀'.repeat(180)],
+  ['joined emoji', '👨‍👩‍👧‍👦'.repeat(80)],
+  ['combining marks', 'cafe\u0301 '.repeat(65)],
+  ['grapheme boundary', `${'a'.repeat(227)}${'कि'.repeat(40)}`],
+  ['short multilingual text', `${'a'.repeat(120)}${'中'.repeat(30)}`],
+  ['an embedded URL', `https://example.com/${'long-path/'.repeat(35)} ${'中'.repeat(100)}`],
+])('keeps the X composer within its weighted limit for %s', (_label, claim) => {
+  const open = vi.spyOn(window, 'open').mockReturnValue(null);
+  mount({ ...realDebate, claim: { ...realDebate.claim, claim } }, '33333333-3333-4333-8333-333333333333');
+  fireEvent.click(screen.getByRole('button', { name: 'Share on X' }));
+  const composer = new URL(open.mock.calls[0][0] as string);
+  const text = composer.searchParams.get('text')!;
+  const destination = new URL(composer.searchParams.get('url')!);
+  // The test origin is localhost; use the public origin for X's URL recognizer.
+  const publicDestination = new URL(`${destination.pathname}${destination.search}`, 'https://geobrowser.io').href;
+  expect(parseTweet(`${text}\n${publicDestination}`).weightedLength).toBeLessThanOrEqual(280);
+  expect(text).toMatch(/\. Watch the debate on Geo!$/);
+  const prefix = text.slice(0, -'. Watch the debate on Geo!'.length).replace(/…$/, '');
+  const normalizedClaim = claim.trim().normalize('NFC');
+  expect(normalizedClaim.startsWith(prefix)).toBe(true);
+  const boundaries = [...new Intl.Segmenter().segment(normalizedClaim)].map(
+    ({ index, segment }) => index + segment.length
+  );
+  expect(boundaries).toContain(prefix.length);
+  if (parseTweet(`${normalizedClaim}. Watch the debate on Geo!\n${publicDestination}`).weightedLength <= 280) {
+    expect(text).toBe(`${normalizedClaim}. Watch the debate on Geo!`);
+  }
+  if (['mixed scripts', 'CJK', 'surrogate pairs', 'grapheme boundary'].includes(_label)) {
+    const next = [...new Intl.Segmenter().segment(normalizedClaim)].find(
+      ({ index }) => index === prefix.length
+    )!.segment;
+    expect(
+      parseTweet(`${prefix}${next}…. Watch the debate on Geo!\n${publicDestination}`).weightedLength
+    ).toBeGreaterThan(280);
+  }
   expect(handoffs()).toHaveLength(1);
   expect(handoffs()[0][1].share_id).toBe(parseShareLink(destination.searchParams)!.share_id);
 });

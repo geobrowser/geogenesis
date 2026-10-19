@@ -6,6 +6,8 @@ Each link carries `utm_source=<method>`, `utm_medium=share`, `utm_campaign=geo_s
 
 The random share ID joins an arrival to `share_link_handoff`. The sharer's profile ID appears only on that outbound event, never as an additional tracking tag. An availability link identifies the calendar owner in its path/content ID; the person copying it may be someone else. Unmatched arrivals still count with unknown sharer identity.
 
+The debate X composer uses X's `twitter-text` parser for weighted text counting, including Unicode, emoji and embedded URLs. It reserves the destination link's 23-character weight plus its separator and keeps the tagline when shortening the claim. Text is normalized to NFC and shortened only at grapheme boundaries. Other share channels keep their existing text formatting.
+
 ## Weekly report
 
 Run `weekly.sql` against the existing analytics warehouse with Date parameters `start_date` (inclusive) and `end_date` (exclusive). Dates and Monday-start weeks use UTC. For example:
