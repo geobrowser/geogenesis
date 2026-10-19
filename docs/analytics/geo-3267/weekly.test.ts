@@ -115,6 +115,55 @@ event(
   'session-labeled',
   'team-account'
 )
+// Identification may arrive after the anonymous page view, without another page view.
+landing(2, 12, 10, 'restored-team', 'restored-team-session')
+event(
+  'session_restored',
+  12,
+  11,
+  'restored-team',
+  'restored-team-session',
+  'team-account'
+)
+// A team sender's earlier anonymous share must not become "unmatched" acquisition.
+handoff(10, 12, 'late-team-sender')
+event(
+  'signed_in',
+  12,
+  9,
+  'late-team-sender',
+  'sender-session-10',
+  'team-account'
+)
+landing(10, 12, 10, 'outside-recipient', 'outside-recipient-session')
+// Account completion in a different tab still excludes its initiating team session.
+landing(2, 12, 10, 'team-auth-start', 'team-auth-session')
+event(
+  'auth_attempt_started',
+  12,
+  11,
+  'team-auth-start',
+  'team-auth-session',
+  '',
+  {
+    auth_attempt_id: 'team-attempt',
+    action_anonymous_id: 'team-auth-start',
+    action_session_id: 'team-auth-session',
+  }
+)
+event(
+  'auth_identity_linked',
+  12,
+  12,
+  'team-new-tab',
+  'team-new-session',
+  'team-account',
+  {
+    auth_attempt_id: 'team-attempt',
+    action_anonymous_id: 'team-auth-start',
+    action_session_id: 'team-auth-session',
+  }
+)
 handoff(7)
 landing(7, 12, 10, 'ambiguous', 'ambiguous-session')
 event('auth_attempt_started', 12, 11, 'ambiguous', 'ambiguous-session', '', {

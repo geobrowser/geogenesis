@@ -31,6 +31,8 @@ The report joins account creation through existing GEO-3071 attempt IDs and init
 
 Team/test/automated events, their known sessions/attempts/shared links, and labeled accounts are excluded. Identifiable self-visits are excluded by comparing the sender's anonymous/account identity with the acquired session. Anonymous self-visits across devices cannot be recognized.
 
+Exclusions also follow a later sign-in/session restore and the initiating auth IDs recovered in another tab. A team sender's earlier anonymous handoff is excluded with its session, so its arrivals cannot reappear as unmatched growth.
+
 Missing outbound events do not erase acquired visits/accounts, but their sharer stays unknown. Lost sign-up events or initiating joins cannot prove conversion. There is no visits/share ratio: dividing arrivals this week by shares this week would mix cohorts. Seven-day cohort reporting remains follow-up scope.
 
 ## Validation and rollout

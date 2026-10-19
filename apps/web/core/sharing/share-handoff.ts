@@ -11,18 +11,16 @@ type ShareActionContext = ActionContext & { space_id?: string };
 function sharer(participants?: readonly string[]) {
   try {
     const context = readAnalyticsContext();
+    if (context.is_identified === false) return { sharer_role: 'anonymous' };
     const identity = isAnalyticsEnabled ? analyticsRuntime()?.getIdentity?.() : undefined;
     const profile = shareUuid(identity?.personal_space_id);
+    const participantIds = participants?.map(shareUuid);
+    let role: 'debater' | 'other' | 'unknown' = 'unknown';
+    if (profile && participantIds?.includes(profile)) role = 'debater';
+    else if (profile && participantIds?.length && participantIds.every(id => id !== null)) role = 'other';
     return {
       ...(profile ? { sharer_profile_space_id: profile } : {}),
-      sharer_role:
-        context.is_identified === false
-          ? 'anonymous'
-          : profile && participants
-            ? participants.some(id => shareUuid(id) === profile)
-              ? 'debater'
-              : 'other'
-            : 'unknown',
+      sharer_role: role,
     };
   } catch {
     return { sharer_role: 'unknown' };

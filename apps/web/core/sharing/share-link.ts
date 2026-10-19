@@ -1,4 +1,5 @@
 import { uuidToHex } from '~/core/id/normalize';
+import { isValidId } from '~/core/utils/space-url';
 
 export const SHARE_METHODS = ['copy_link', 'x', 'linkedin', 'reddit'] as const;
 export const SHARE_CONTENT_TYPES = ['debate', 'lobby', 'availability'] as const;
@@ -13,8 +14,7 @@ export type ShareAttribution = {
 export type ShareLink = { url: string; attribution: ShareAttribution | null };
 
 export function shareUuid(value: unknown): string | null {
-  if (typeof value !== 'string' || !/^(?:[a-f\d]{32}|[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12})$/i.test(value))
-    return null;
+  if (typeof value !== 'string' || !isValidId(value)) return null;
   return uuidToHex(value);
 }
 

@@ -13,7 +13,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { pushMarketingEvent } from '~/core/marketing-events';
 import { copyShareLink, observeShareLinkHandoff } from '~/core/sharing/share-handoff';
-import { type ShareLink, createShareLink } from '~/core/sharing/share-link';
+import { type ShareMethod as LinkShareMethod, type ShareLink, createShareLink } from '~/core/sharing/share-link';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
@@ -36,7 +36,7 @@ type Props = {
   openerRef: React.RefObject<HTMLElement | null>;
 };
 
-type ShareMethod = 'reddit' | 'x' | 'linkedin' | 'copy_link' | 'download';
+type ShareMethod = LinkShareMethod | 'download';
 
 const SHARE_TAGLINE = 'Watch the debate on Geo!';
 
@@ -65,7 +65,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     if (open) pushMarketingEvent('geo_share_open', { debate_id: debate.id, space_id: spaceId });
   }, [open, debate.id, spaceId]);
 
-  const shareLink = (method: Exclude<ShareMethod, 'download'>) =>
+  const shareLink = (method: LinkShareMethod) =>
     createShareLink(
       `${window.location.origin}${NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))}`,
       'debate',

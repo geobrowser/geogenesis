@@ -101,6 +101,33 @@ describe('link handoffs', () => {
     expect(mocks.capture).not.toHaveBeenCalled();
   });
 
+  it.each([{ participants: [] }, { participants: ['invalid-profile'] }, { participants: [target, 'invalid-profile'] }])(
+    'keeps an incomplete participant comparison unknown: %j',
+    ({ participants }) => {
+      window.lytics = {
+        getContext: () => ({ is_identified: true }),
+        getIdentity: () => ({ personal_space_id: profile }),
+      };
+      observeShareLinkHandoff(
+        createShareLink('https://geobrowser.io/explore', 'debate', target, 'x'),
+        context,
+        participants
+      )('composer_requested');
+      expect(mocks.capture.mock.calls[0][1].sharer_role).toBe('unknown');
+    }
+  );
+
+  it('does not attach stale profile traits when the context is anonymous', () => {
+    const identity = vi.fn(() => ({ personal_space_id: profile }));
+    window.lytics = { getContext: () => ({ is_identified: false }), getIdentity: identity };
+    observeShareLinkHandoff(createShareLink('https://geobrowser.io/explore', 'debate', target, 'x'), context, [
+      profile,
+    ])('composer_requested');
+    expect(mocks.capture.mock.calls[0][1]).toMatchObject({ sharer_role: 'anonymous' });
+    expect(mocks.capture.mock.calls[0][1]).not.toHaveProperty('sharer_profile_space_id');
+    expect(identity).not.toHaveBeenCalled();
+  });
+
   it('does not turn a collector failure into a clipboard failure', async () => {
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,

@@ -17,13 +17,28 @@ excluded_accounts AS (
       OR JSONExtractBool(props, 'is_automated') OR account IN (SELECT account FROM excluded_accounts) AS excluded
   FROM analytics.events_canonical
   WHERE app = 'genesis' AND environment = 'production' AND event_time < report_end
-    AND event_name IN ('page_viewed', 'share_link_handoff', 'auth_attempt_started', 'auth_identity_linked', 'signed_up')
-), excluded_sessions AS (
-  SELECT DISTINCT visitor, session FROM raw WHERE excluded AND visitor != '' AND session != ''
+    AND event_name IN ('page_viewed', 'share_link_handoff', 'auth_attempt_started', 'auth_identity_linked', 'signed_up', 'signed_in', 'session_restored')
 ), excluded_attempts AS (
   SELECT DISTINCT attempt FROM raw WHERE excluded AND attempt != ''
+), excluded_sessions AS (
+  -- A team identity can arrive after the landing or in a different completion tab.
+  -- Apply it to both the observed session and the stored initiating auth session.
+  SELECT DISTINCT pair.1 AS visitor, pair.2 AS session
+  FROM (
+    SELECT arrayJoin([
+      tuple(visitor, session),
+      tuple(JSONExtractString(props, 'action_anonymous_id'), JSONExtractString(props, 'action_session_id')),
+      if(JSONExtractString(props, 'signup_context_source') = 'auth_start',
+        tuple(JSONExtractString(props, 'signup_anonymous_id'), JSONExtractString(props, 'signup_session_id')), tuple('', ''))
+    ]) AS pair
+    FROM raw WHERE excluded OR (attempt != '' AND attempt IN (SELECT attempt FROM excluded_attempts))
+  )
+  WHERE pair.1 != '' AND pair.2 != ''
 ), excluded_shares AS (
-  SELECT DISTINCT outbound_share FROM raw WHERE excluded AND outbound_share != ''
+  SELECT DISTINCT outbound_share FROM raw
+  WHERE outbound_share != '' AND (excluded
+    OR (visitor, session) IN (SELECT visitor, session FROM excluded_sessions)
+    OR (attempt != '' AND attempt IN (SELECT attempt FROM excluded_attempts)))
 ), events AS (
   SELECT * FROM raw
   WHERE NOT excluded AND (visitor, session) NOT IN (SELECT visitor, session FROM excluded_sessions)
