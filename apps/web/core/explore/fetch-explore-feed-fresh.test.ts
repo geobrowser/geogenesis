@@ -351,7 +351,7 @@ describe('a Fresh list shared between instances', () => {
         now,
       });
 
-    it('shares this minute\'s list before it returns', async () => {
+    it("shares this minute's list before it returns", async () => {
       await warm(clock);
       expect(writes).toHaveLength(1);
       expect(JSON.parse(writes[0]!.value).asOfMs).toBe(minute(clock));
@@ -514,12 +514,13 @@ describe('when the fresh slot is off or does not apply', () => {
 // GEO-3234. The browser may replace a lead its visitor has seen only with a debate the server
 // verified, so Best marks them, and only while seen demotion is on.
 describe('playable lead marks', () => {
-  async function firstPage(markPlayableLeads: boolean) {
+  async function firstPage(markPlayableLeads: boolean, stills: string[] = []) {
     const playable = new Set([bestIds[3], bestIds[6]]);
     vi.stubGlobal('fetch', async (url: string) => {
       const debateId = url.split('/debates/')[1]?.split('/')[0]?.replace(/-/g, '');
       const ok = playable.has(debateId);
-      return new Response(JSON.stringify({ artifacts: ok ? [{ kind: 'final_video' }] : [] }), { status: 200 });
+      const artifacts = ok ? [{ kind: 'final_video' }, ...stills.map(kind => ({ kind }))] : [];
+      return new Response(JSON.stringify({ artifacts }), { status: 200 });
     });
     try {
       return await fetchExploreFeed({
@@ -548,5 +549,33 @@ describe('playable lead marks', () => {
     const page = await firstPage(false);
     expect(page.items[0]?.entityId).toBe(bestIds[3]);
     expect(page.items.some(item => 'playableLead' in item)).toBe(false);
+  });
+
+  // GEO-3280. The browser opens a first visit on the newest verified debate, so its stills are the
+  // ones the page paints first.
+  const STILLS = ['speaker_still_slot_1', 'speaker_still_slot_2'];
+  const postered = (page: { items: { entityId: string; debatePosters?: unknown }[] }) =>
+    page.items.filter(item => item.debatePosters).map(item => item.entityId);
+
+  it('hands the stills to the newest verified debate, the one a first visit opens on', async () => {
+    graph.best[6] = { ...(graph.best[6] as object), createdAt: '1790000000' } as never;
+    const page = await firstPage(true, STILLS);
+    expect(page.items[0]?.entityId).toBe(bestIds[3]);
+    expect(postered(page)).toEqual([bestIds[6]]);
+    expect(page.items.find(item => item.entityId === bestIds[6])?.debatePosters).toEqual({
+      slot1: expect.stringMatching(new RegExp(`/debates/${bestIds[6]}/media/artifacts/speaker_still_slot_1/content$`)),
+      slot2: expect.stringMatching(new RegExp(`/debates/${bestIds[6]}/media/artifacts/speaker_still_slot_2/content$`)),
+    });
+  });
+
+  it('keeps the stills on the lead when it is the newest', async () => {
+    const page = await firstPage(true, STILLS);
+    expect(postered(page)).toEqual([bestIds[3]]);
+  });
+
+  it('keeps the stills on the lead while seen demotion is off', async () => {
+    graph.best[6] = { ...(graph.best[6] as object), createdAt: '1790000000' } as never;
+    const page = await firstPage(false, STILLS);
+    expect(postered(page)).toEqual([bestIds[3]]);
   });
 });

@@ -45,6 +45,24 @@ export function recordingHasPreview(
 }
 
 /**
+ * Whether both debaters' full recordings play from Stream, with the flag on.
+ *
+ * A held feed card with this autoplays while it is the active card, and goes back to its clips
+ * when it is not. A debate with either debater still on the raw recording keeps the tap: those
+ * files are around 90 MB each, buffered whole-ish ahead of the playhead, which is what the hold
+ * exists to keep off a page nobody has asked to watch.
+ */
+export function debateStreamsFully(
+  recordings: ReadonlyArray<Pick<DebateRecording, 'participant_slot' | 'stream_ready'>> | null | undefined,
+  { enabled = DEBATE_STREAM_PLAYBACK_ENABLED }: { enabled?: boolean } = {}
+): boolean {
+  if (!enabled) return false;
+  return ([1, 2] as const).every(slot =>
+    recordings?.some(recording => recording.participant_slot === slot && recording.stream_ready === true)
+  );
+}
+
+/**
  * The refusals that mean "this variant is not available", as opposed to a network failure.
  *
  * Callers fall back on any failure — a Stream copy is an optimisation, never a reason to show a
@@ -62,6 +80,9 @@ export function isStreamUnavailableError(error: unknown): boolean {
 }
 
 const HLS_MIME = 'application/vnd.apple.mpegurl';
+
+/** How far ahead of the playhead hls.js may buffer, in seconds. See `attachStreamSource`. */
+export const HLS_MAX_BUFFER_SECONDS = 30;
 
 /**
  * Whether this browser plays HLS itself: Safari, and every browser on iOS, which are WebKit.
@@ -105,6 +126,11 @@ export function loadHls(): Promise<HlsModule> {
  *
  * `autoStartLoad: false` is the HLS spelling of `preload="metadata"`: hls.js otherwise ignores
  * `preload` and buffers 30 seconds of a card nobody has reached. The first `play` starts it.
+ *
+ * Buffering is capped at `HLS_MAX_BUFFER_SECONDS` ahead. hls.js's own target is the larger of 30
+ * seconds and 60 MB at the current bitrate, so a 720p rendition of a few Mbit/s asks for around
+ * four minutes: measured in Firefox, ~100 MB in the first 17 seconds of the feed, with both playing
+ * slots and the paused next card each 190–265 seconds ahead.
  */
 export function attachStreamSource(
   video: HTMLVideoElement,
@@ -143,7 +169,7 @@ export function attachStreamSource(
         video.setAttribute('src', url);
         return;
       }
-      hls = new Hls({ autoStartLoad: started });
+      hls = new Hls({ autoStartLoad: started, maxMaxBufferLength: HLS_MAX_BUFFER_SECONDS });
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) onFatalError?.();
       });

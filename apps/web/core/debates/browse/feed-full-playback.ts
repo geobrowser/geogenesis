@@ -13,6 +13,11 @@ import type { Debate } from '~/core/debates/api';
  * the video). After that first tap the feed plays as it always did, so moving to the next debate
  * still starts it and the card after it still buffers.
  *
+ * With Stream on, a debate whose debaters both have a Stream copy is not held while it is the
+ * active card: it autoplays muted from adaptive HLS, which buffers seconds ahead rather than whole
+ * files (about 20 MB a minute for the pair, measured on a preview deploy), and is held again once
+ * the viewer moves off it.
+ *
  * `NEXT_PUBLIC_DEBATE_FEED_FULL_AUTOPLAY=1` turns the hold off and restores the old autoplay
  * without a code change, in case holding turns out worse than the bytes it saves.
  */
