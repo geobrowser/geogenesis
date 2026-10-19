@@ -270,13 +270,15 @@ export class SyncEngine {
       return { merged: [], remote: [] };
     }
 
+    const remote = uniqueEntityIds.map(id => entities[id]).filter((e): e is Entity => e !== undefined);
+    // Confirmation can wait on the network. Merge only afterward so a discard during
+    // that wait cannot be captured in the entities we hydrate back into the store.
+    const confirmedAbsentEntityIds = await confirmAbsentPendingEntities(uniqueEntityIds, remote);
+
     const merged = uniqueEntityIds
       .map(e => E.merge({ id: e, store: this.store, mergeWith: entities[e] }))
       .filter((e): e is Entity => e !== null);
 
-    const remote = uniqueEntityIds.map(id => entities[id]).filter((e): e is Entity => e !== undefined);
-
-    const confirmedAbsentEntityIds = await confirmAbsentPendingEntities(uniqueEntityIds, remote);
     return { merged, remote, ...(confirmedAbsentEntityIds.length ? { confirmedAbsentEntityIds } : {}) };
   }
 }

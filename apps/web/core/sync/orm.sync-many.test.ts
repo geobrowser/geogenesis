@@ -11,7 +11,7 @@ import {
   getEntitiesOrderedByPropertyConnection,
   getEntityNames,
 } from '../io/queries';
-import type { Entity, Value } from '../types';
+import type { Entity, Relation, Value } from '../types';
 import { E } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues, syncedEntities } from './store';
 import { GeoEventStream } from './stream';
@@ -71,6 +71,7 @@ describe('E.syncMany pagination', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getEntityNames).mockReturnValue(Effect.succeed([]));
     reactiveValues.set([]);
     reactiveRelations.set([]);
     syncedEntities.clear();
@@ -88,6 +89,63 @@ describe('E.syncMany pagination', () => {
     expect(result.merged).toEqual([]);
     expect(result.confirmedAbsentEntityIds).toEqual(['missing']);
   });
+
+  it.each(['value', 'relation'])(
+    'does not return a discarded %s after awaiting another ID’s absence confirmation',
+    async kind => {
+      const missing = {
+        ...makeNameValue('missing', 'Missing'),
+        isDeleted: true,
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      const discardedValue = {
+        ...makeNameValue('edited', 'Edited'),
+        id: 'discarded-value',
+        spaceId: 'discard-space',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      const discardedRelation: Relation = {
+        id: 'discarded-relation',
+        entityId: 'relation-entity',
+        fromEntity: { id: 'edited', name: 'Edited' },
+        toEntity: { id: 'target', name: 'Target', value: '' },
+        type: { id: 'type', name: 'Type' },
+        renderableType: 'RELATION',
+        spaceId: 'discard-space',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      reactiveValues.set(kind === 'value' ? [missing, discardedValue] : [missing]);
+      if (kind === 'relation') reactiveRelations.set([discardedRelation]);
+      let finish!: () => void;
+      vi.mocked(getEntityNames).mockReturnValue(
+        Effect.promise(
+          () =>
+            new Promise(resolve => {
+              finish = () => resolve([]);
+            })
+        )
+      );
+      vi.mocked(getBatchEntities).mockReturnValue(
+        Effect.succeed([{ ...makeEntity('edited', 'Remote'), values: [], relations: [] }])
+      );
+
+      const pending = E.syncMany({ store, cache, where: { id: { in: ['missing', 'edited'] } }, first: 2 });
+      await vi.waitFor(() => expect(getEntityNames).toHaveBeenCalled());
+      store.clearLocalChangesForSpace('discard-space');
+      finish();
+      const result = await pending;
+      store.hydrateWith(result.merged);
+      expect(result.merged.flatMap(entity => entity.values).some(value => value.id === discardedValue.id)).toBe(false);
+      expect(
+        result.merged.flatMap(entity => entity.relations).some(relation => relation.id === discardedRelation.id)
+      ).toBe(false);
+      expect(reactiveValues.get().some(value => value.id === discardedValue.id)).toBe(false);
+      expect(reactiveRelations.get().some(relation => relation.id === discardedRelation.id)).toBe(false);
+    }
+  );
 
   it('returns only the requested page when entities from other pages are in the local store (GEO-2181)', async () => {
     // Simulate page 1 having been viewed: its entities are synced into the store.

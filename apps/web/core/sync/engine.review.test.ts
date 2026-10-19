@@ -66,6 +66,59 @@ afterEach(() => {
 });
 
 describe('sync of canceled edits', () => {
+  it.each(['value', 'relation'])(
+    'does not restore a discarded %s while another entity awaits absence confirmation',
+    async kind => {
+      let finish!: () => void;
+      queries.names.mockReturnValue(
+        Effect.promise(
+          () =>
+            new Promise(resolve => {
+              finish = () => resolve([]);
+            })
+        )
+      );
+      const discardedValue = {
+        ...deletedValue,
+        id: 'discarded-value',
+        entity: { id: 'edited', name: 'Edited' },
+        spaceId: 'discard-space',
+        isDeleted: false,
+      };
+      const discardedRelation = {
+        ...deletedRelation,
+        id: 'discarded-relation',
+        fromEntity: { id: 'edited', name: 'Edited' },
+        spaceId: 'discard-space',
+        isDeleted: false,
+      };
+      if (kind === 'value') reactiveValues.set([deletedValue, discardedValue]);
+      else reactiveRelations.set([deletedRelation, discardedRelation]);
+      queries.batch.mockReturnValue(
+        Effect.succeed([
+          {
+            id: 'edited',
+            name: 'Edited',
+            description: null,
+            types: [],
+            spaces: ['discard-space'],
+            values: [],
+            relations: [],
+          },
+        ])
+      );
+
+      stream.emit({ type: GeoEventStream.HYDRATE, entities: ['new-entity', 'edited'] });
+      await vi.advanceTimersByTimeAsync(200);
+      expect(queries.names).toHaveBeenCalled();
+      store.clearLocalChangesForSpace('discard-space');
+      finish();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(reactiveValues.get().some(value => value.id === discardedValue.id)).toBe(false);
+      expect(reactiveRelations.get().some(relation => relation.id === discardedRelation.id)).toBe(false);
+    }
+  );
+
   it.each(['values', 'relations', 'both'])(
     'records confirmed absence for %s even when no merged entity survives',
     async kind => {

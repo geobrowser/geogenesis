@@ -7,7 +7,7 @@ import { ENTITY_LIST_LIMIT } from '../entity-list-limit';
 import { RemoteEntity } from '../schema';
 import { ValueDto } from './values';
 
-export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
+export function EntityDtoLive(remoteEntity: RemoteEntity, spaceId?: string): Entity {
   const relationsOut = remoteEntity.relationsList.filter(hasRelationTarget).map(r => RelationDtoLive(r));
   const values = remoteEntity.valuesList.map(v => ValueDto(remoteEntity, v));
 
@@ -49,10 +49,12 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
     // Carried through because `relations` above is filtered: `hasRelationTarget` drops dangling
     // ones, so its length cannot tell a truncated page from a short one.
     relationsTotalCount: remoteEntity.relations?.totalCount,
+    ...(spaceId ? { queriedSpaceId: spaceId } : {}),
     valuesComplete: remoteEntity.valuesList.length < ENTITY_LIST_LIMIT,
     relationsComplete:
       relationsOut.length === remoteEntity.relationsList.length &&
-      (remoteEntity.relations?.totalCount !== undefined
+      // The count projection is unscoped, so it cannot measure a filtered list's completeness.
+      (!spaceId && remoteEntity.relations?.totalCount !== undefined
         ? remoteEntity.relationsList.length >= remoteEntity.relations.totalCount
         : remoteEntity.relationsList.length < ENTITY_LIST_LIMIT),
   };

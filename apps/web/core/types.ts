@@ -296,7 +296,9 @@ export type Entity = {
    * filtered, so a truncated page and a short one are indistinguishable from it alone.
    */
   relationsTotalCount?: number;
-  /** False when the incoming list was capped or decoding omitted records. */
+  /** Space covered by the incoming lists; omitted for an unscoped response. */
+  queriedSpaceId?: string;
+  /** False when the list within queriedSpaceId was capped or decoding omitted records. */
   valuesComplete?: boolean;
   relationsComplete?: boolean;
 };

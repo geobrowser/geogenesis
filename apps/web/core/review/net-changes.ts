@@ -1,9 +1,7 @@
-import type { Entity, Relation, Value } from '~/core/types';
+import { type EntityBaseline, hasCompleteEntityList } from '~/core/io/entity-coverage';
+import type { Relation, Value } from '~/core/types';
 
-type SyncedEntities = ReadonlyMap<
-  string,
-  Pick<Entity, 'values' | 'relations' | 'valuesComplete' | 'relationsComplete' | 'relationsTotalCount'> | null
->;
+type SyncedEntities = ReadonlyMap<string, EntityBaseline | null>;
 
 /**
  * Filter values to only include net changes compared to the remote/synced state.
@@ -20,7 +18,7 @@ export function getNetValues(localValues: Value[], syncedEntities: SyncedEntitie
       // Only discard a deletion when a known baseline proves it was created locally.
       if (!remoteEntity) return !syncedEntities.has(v.entity.id);
       return (
-        remoteEntity.valuesComplete === false ||
+        !hasCompleteEntityList(remoteEntity, 'values', v.spaceId) ||
         remoteEntity.values.some(remote => remote.id === v.id && !remote.isLocal)
       );
     }
@@ -63,10 +61,7 @@ export function getNetRelations(localRelations: Relation[], syncedEntities: Sync
       if (!remoteEntity) return !syncedEntities.has(r.fromEntity.id);
       const remoteRelation = remoteEntity.relations.find(remote => remote.id === r.id && !remote.isLocal);
       if (!remoteRelation) {
-        return (
-          remoteEntity.relationsComplete === false ||
-          (remoteEntity.relationsTotalCount ?? 0) > remoteEntity.relations.length
-        );
+        return !hasCompleteEntityList(remoteEntity, 'relations', r.spaceId);
       }
 
       // If an active local relation restores the same (fromEntity, type, toEntity, space, toSpace)

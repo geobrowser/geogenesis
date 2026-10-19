@@ -442,12 +442,14 @@ export class E {
 
       const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
+      // Read local operations after the last network wait, including absence confirmation.
+      const absentIds = await confirmAbsentPendingEntities(requestIds, remoteEntities);
+
       const entities = entityIds.map(entityId => {
         return this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) });
       });
 
       const nonNullEntities = entities.filter((e): e is Entity => e !== null);
-      const absentIds = await confirmAbsentPendingEntities(requestIds, remoteEntities);
       const confirmedAbsence = absentIds.length ? { confirmedAbsentEntityIds: absentIds } : {};
 
       const hasAdditionalFilters = Object.keys(where).some(key => key !== 'id');
