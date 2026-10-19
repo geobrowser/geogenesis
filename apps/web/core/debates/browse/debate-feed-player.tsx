@@ -34,7 +34,12 @@ import {
 } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
-import { type AttachedStream, attachStreamSource, canPlayNativeHls } from '~/core/debates/stream-playback';
+import {
+  type AttachedStream,
+  attachStreamSource,
+  canPlayNativeHls,
+  debateStreamsFully,
+} from '~/core/debates/stream-playback';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { markDebateWatched } from '~/core/debates/watched-debates';
@@ -146,7 +151,8 @@ type DebateFeedPlayerProps = {
    * <video> for them: it shows the stills and a Play control, and neither autoplays nor buffers.
    * The first tap on any held card lifts the hold for every player in the tab — except a card
    * with Stream preview clips (`NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK`), which stays on its clips
-   * until it is tapped itself.
+   * until it is tapped itself, or plays on its own while it is the active card if both debaters
+   * have a Stream copy (`debateStreamsFully`).
    */
   holdFullPlayback?: boolean;
   /** Clips to loop on a held card in place of the stills. Defaults to `debatePreviewClips`. */
@@ -180,9 +186,16 @@ export function DebateFeedPlayer({
    */
   const [startedDebateId, setStartedDebateId] = React.useState<string | null>(null);
   const cardStarted = startedDebateId === debate.id;
+  /*
+   * A card whose debaters both play from Stream starts itself while it is the active card, muted,
+   * as the feed did before the hold: adaptive HLS buffers seconds ahead, not the raw recordings'
+   * tens of MB. Derived, not remembered, so leaving the card holds it again — its HLS detaches and
+   * stops fetching, and it goes back to its clips. A tap still keeps a card started.
+   */
+  const autoStarted = active && debateStreamsFully(debate.recordings);
   // Signed only while this card is held and near the viewport; nothing at all with the flag off.
   const preview = useDebatePreviewClips(debate, holdFullPlayback && !cardStarted && (active || preload));
-  const held = holdFullPlayback && (preview.available ? !cardStarted : !fullPlaybackStarted);
+  const held = holdFullPlayback && (preview.available ? !(cardStarted || autoStarted) : !fullPlaybackStarted);
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
