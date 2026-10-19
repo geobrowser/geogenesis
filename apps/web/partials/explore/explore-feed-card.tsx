@@ -111,7 +111,17 @@ function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyP
  * the debate can't actually be watched. Everything else renders one of the bodies below.
  */
 export function ExploreFeedCard(props: ExploreFeedCardProps) {
-  if (props.deferUntilNearViewport) return <DeferredExploreFeedCard {...props} />;
+  const { ref, nearViewport } = useNearViewport();
+  // Latched: a card that has rendered in full never goes back to a placeholder. Its index can move
+  // past the eager cutoff after it mounts (seen cards hidden once the seen store loads, a refetched
+  // first page), and dropping a live card — a debate mid-playback — for a placeholder would restart it.
+  const [rendered, setRendered] = React.useState(() => !props.deferUntilNearViewport);
+  const showCard = rendered || nearViewport || !props.deferUntilNearViewport;
+  if (showCard && !rendered) setRendered(true);
+
+  if (!showCard) {
+    return <ExploreFeedCardPlaceholder ref={ref} types={props.item.types} />;
+  }
 
   return (
     <ExploreCardSurface
@@ -126,33 +136,33 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
 }
 
 /**
- * A card that mounts once it is near the viewport, and stays mounted after.
+ * Stands in for a card held back by `deferUntilNearViewport` until it comes near the viewport.
  *
  * Explore draws two pages of cards — forty-odd — as soon as the feed loads, and on a phone only the
  * first two are on screen. Each one is a stack of hooks: the response state, the position control,
  * the Join offer with its sign-in and queue, the comment count, a viewport observer. Rendering all of
  * them, and subscribing all their queries, was most of the main-thread time between the feed
- * arriving and the page answering a tap. A card held back here costs one observer until it is
- * within `useNearViewport`'s margin (800px), which is far enough ahead that a reader scrolling at
- * any normal speed never sees the placeholder.
+ * arriving and the page answering a tap. A card held back costs one observer until it is within
+ * `useNearViewport`'s margin (800px), which is far enough ahead that a reader scrolling at any
+ * normal speed never sees the placeholder.
  *
  * The placeholder is roughly the card's height — a debate's player or a one-line claim — so the
  * feed's infinite-scroll sentinel stays about as far down as before and the page does not fetch
  * further ahead than it used to. It is not exact; a card that mounts below the fold can change the
  * page's height there without moving anything on screen.
  */
-function DeferredExploreFeedCard(props: ExploreFeedCardProps) {
-  const { ref, nearViewport } = useNearViewport();
-  if (nearViewport) return <ExploreFeedCard {...props} deferUntilNearViewport={false} />;
-
+function ExploreFeedCardPlaceholder({
+  ref,
+  types,
+}: {
+  ref: (element: HTMLDivElement | null) => void;
+  types: ExploreFeedItem['types'];
+}) {
   return (
     <div
       ref={ref}
       data-testid="explore-feed-card-placeholder"
-      className={cx(
-        EXPLORE_CARD_CLASS,
-        isDebateEntity(props.item.types) ? 'min-h-[600px] lg:min-h-[820px]' : 'min-h-[140px]'
-      )}
+      className={cx(EXPLORE_CARD_CLASS, isDebateEntity(types) ? 'min-h-[600px] lg:min-h-[820px]' : 'min-h-[140px]')}
     />
   );
 }

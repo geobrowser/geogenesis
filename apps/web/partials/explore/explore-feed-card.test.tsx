@@ -443,4 +443,39 @@ describe('ExploreFeedCard deferred until near the viewport', () => {
     expect(screen.getByText('A claim')).toBeInTheDocument();
     expect(screen.queryByTestId('explore-feed-card-placeholder')).toBeNull();
   });
+
+  it('keeps a card that has rendered in full when it is later marked deferred (its index moved down)', () => {
+    stubObserver();
+    const { rerender } = render(<ExploreFeedCard item={item} />);
+    const card = screen.getByText('A claim');
+
+    rerender(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    expect(screen.queryByTestId('explore-feed-card-placeholder')).toBeNull();
+    expect(screen.getByText('A claim')).toBe(card);
+  });
+
+  it('keeps a card that came near the viewport when the defer flag flips back and forth', () => {
+    stubObserver();
+    const { rerender } = render(<ExploreFeedCard item={item} deferUntilNearViewport />);
+    bringNear(screen.getByTestId('explore-feed-card-placeholder'));
+    const card = screen.getByText('A claim');
+
+    rerender(<ExploreFeedCard item={item} />);
+    rerender(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    expect(screen.queryByTestId('explore-feed-card-placeholder')).toBeNull();
+    expect(screen.getByText('A claim')).toBe(card);
+  });
+
+  it('renders a held-back card in full once it is no longer deferred (its index moved up)', () => {
+    stubObserver();
+    const { rerender } = render(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    rerender(<ExploreFeedCard item={item} />);
+    rerender(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    expect(screen.getByText('A claim')).toBeInTheDocument();
+    expect(screen.queryByTestId('explore-feed-card-placeholder')).toBeNull();
+  });
 });
