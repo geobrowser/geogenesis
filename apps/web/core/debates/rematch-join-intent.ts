@@ -1,10 +1,14 @@
 'use client';
 
-export type DebateRematchJoinIntent = {
-  micOn: boolean;
-  /** Unset when no camera was offered: the next screen uses its own default. */
-  cameraOn?: boolean;
-};
+import type { DebateJoinChoice } from './request-join-state';
+
+/**
+ * Where the mic in a remembered intent was chosen: a request card, the ready room ("Debate again")
+ * or a toggle in the picker. `null` is the picker recording a default nobody chose.
+ */
+export type DebateJoinChoiceSource = 'card' | 'room' | 'picker';
+
+export type DebateRematchJoinIntent = DebateJoinChoice & { source: DebateJoinChoiceSource | null };
 
 const joinIntentBySessionId = new Map<string, DebateRematchJoinIntent>();
 
@@ -21,6 +25,11 @@ export function rememberRematchJoinIntent(sessionId: string, state: DebateRematc
     if (!oldest.done) joinIntentBySessionId.delete(oldest.value);
   }
   joinIntentBySessionId.set(sessionId, state);
+}
+
+/** Whether someone chose the mic in a remembered intent, rather than the picker echoing its default. */
+export function isChosenJoinIntent(intent: DebateRematchJoinIntent | null): intent is DebateRematchJoinIntent {
+  return intent !== null && intent.source !== null;
 }
 
 /**

@@ -102,10 +102,10 @@ vi.mock('~/partials/hints/edit-mode-toggle-tip', () => ({
   EditModeToggleTip: () => null,
   useEditModeToggleTip: () => ({ open: false, dismiss: vi.fn(), isActive: false }),
 }));
-vi.mock('~/partials/create-space/create-space-dialog', () => ({
+vi.mock('~/partials/create-space/create-space-state', () => ({
   useOpenCreateSpaceDialog: () => mocks.openCreateSpaceDialog,
 }));
-vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));
+vi.mock('~/partials/onboarding/onboarding-atoms', () => ({ avatarAtom: {} }));
 // The real dialog pulls in the whole publish chain (which needs an unmocked
 // jotai). The navbar's job is only to mount it, so assert on that.
 vi.mock('~/partials/profile/edit-profile-dialog', () => ({

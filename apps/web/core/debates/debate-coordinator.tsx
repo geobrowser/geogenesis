@@ -561,7 +561,7 @@ export function DebateCoordinator() {
             acceptChallenge.mutate(promptedChallenge.id, {
               onSuccess: result => {
                 if (!result.session) return;
-                rememberRematchJoinIntent(result.session.id, chosen);
+                rememberRematchJoinIntent(result.session.id, { ...chosen, source: 'card' });
               },
             });
           }}

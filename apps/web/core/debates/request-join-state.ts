@@ -77,25 +77,25 @@ export function formatTotalSpeakingTime(totalMs: number): string {
   return seconds === 0 ? `${minutes} min` : `${minutes} min ${seconds}s`;
 }
 
+/** A join choice carried between screens; `cameraOn` is unset where no camera was offered. */
+export type DebateJoinChoice = {
+  micOn: boolean;
+  cameraOn?: boolean;
+};
+
 /**
- * How a room should start, read from the devices it inherited.
+ * How a screen starts, per device: the person's choice (a card, the picker or the room they came
+ * from), then what the lobby they stepped out of carried, then the screen's own default.
  */
-export function inheritedJoinState(
-  kinds: readonly string[],
-  /**
-   * Whether a card handed this room its devices — true when the session was already open under the
-   * room's own key before the room claimed it.
-   *
-   * It is the only thing that tells the two meanings of "no tracks" apart. A card that chose to
-   * join listening only holds nothing, and so does a room nobody passed through a card to reach;
-   * without this, choosing "listening only" arrived unmuted with the camera on, which is the one
-   * outcome the choice exists to prevent.
-   */
-  handedOver = false
-): { audioMuted: boolean; videoEnabled: boolean } {
-  if (kinds.length === 0)
-    return handedOver ? { audioMuted: true, videoEnabled: false } : { audioMuted: false, videoEnabled: true };
-  return { audioMuted: !kinds.includes('audio'), videoEnabled: kinds.includes('video') };
+export function resolveJoinChoice(
+  chosen: DebateJoinChoice | null,
+  lobby: DebateJoinChoice | null,
+  fallback: DebateJoinState
+): DebateJoinState {
+  return {
+    micOn: chosen?.micOn ?? lobby?.micOn ?? fallback.micOn,
+    cameraOn: chosen?.cameraOn ?? lobby?.cameraOn ?? fallback.cameraOn,
+  };
 }
 
 /**

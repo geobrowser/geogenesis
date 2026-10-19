@@ -8,7 +8,7 @@ import { ID } from '~/core/id';
 import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
 
-import { useOpenCreateSpaceDialog } from '../create-space/create-space-dialog';
+import { useOpenCreateSpaceDialog } from '../create-space/create-space-state';
 
 /** Shared navigation for the desktop create dropdown and mobile profile menu. */
 export function useCreateEntityActions(spaceId: string | null | undefined) {

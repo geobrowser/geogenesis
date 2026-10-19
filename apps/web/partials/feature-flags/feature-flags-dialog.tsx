@@ -13,10 +13,10 @@ import { Checkbox } from '~/design-system/checkbox';
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
 
-export function FeatureFlagsDialog() {
+export function FeatureFlagsDialog({ defaultShortcutOpen = false }: { defaultShortcutOpen?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [shortcutOpen, setShortcutOpen] = React.useState(false);
+  const [shortcutOpen, setShortcutOpen] = React.useState(defaultShortcutOpen);
   const { flags, setFeatureFlag } = useFeatureFlags();
   const routeOpen = pathname === '/feature-flags';
   const open = shortcutOpen || routeOpen;

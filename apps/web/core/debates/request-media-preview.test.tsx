@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
   previewState: 'idle' as string,
   previewStream: null as unknown,
   previewError: null as string | null,
-  lobbyDeferredKindsRef: { current: { audio: false, video: false } },
+  joinChoiceRef: { current: null as unknown },
   /** What `ensurePreview` hands back — the per-device truth the card reads. */
   tracks: [] as { mediaStreamTrack: { kind: string } }[],
 }));
@@ -39,7 +39,7 @@ vi.mock('./media-session', async importOriginal => ({
     previewError: mocks.previewError,
     previewStream: mocks.previewStream,
     localTracksRef: { current: mocks.tracks },
-    lobbyDeferredKindsRef: mocks.lobbyDeferredKindsRef,
+    joinChoiceRef: mocks.joinChoiceRef,
     ensurePreview: mocks.ensurePreview,
     beginSession: mocks.beginSession,
     releaseSession: mocks.releaseSession,
@@ -47,7 +47,8 @@ vi.mock('./media-session', async importOriginal => ({
   }),
 }));
 
-vi.mock('./debate-video-tile', () => ({
+vi.mock('./debate-video-tile', async importOriginal => ({
+  ...(await importOriginal<typeof import('./debate-video-tile')>()),
   DebateVideoTile: ({ children, tileControls }: { children: React.ReactNode; tileControls: React.ReactNode }) => (
     <div data-testid="tile">
       {tileControls}
@@ -64,7 +65,7 @@ beforeEach(() => {
   mocks.cameraPermission = null;
   mocks.micPermission = null;
   mocks.previewState = 'idle';
-  mocks.lobbyDeferredKindsRef.current = { audio: false, video: false };
+  mocks.joinChoiceRef.current = null;
   mocks.previewStream = null;
   mocks.previewError = null;
   mocks.tracks = [{ mediaStreamTrack: { kind: 'audio' } }, { mediaStreamTrack: { kind: 'video' } }];
@@ -192,7 +193,8 @@ describe('DebateRequestMediaPreview', () => {
     expect(onJoinStateChange).toHaveBeenLastCalledWith({ micOn: true, cameraOn: true });
     expect(mocks.ensurePreview).toHaveBeenCalledWith({ audio: false, video: true });
     expect(mocks.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
-    expect(mocks.lobbyDeferredKindsRef.current).toEqual({ audio: true, video: false });
+    // What the room it is handed to starts with, the lobby's mic included.
+    expect(mocks.joinChoiceRef.current).toEqual({ micOn: true, cameraOn: true });
   });
 
   it('shows a muted lobby mic as muted', async () => {
@@ -258,7 +260,7 @@ describe('DebateRequestMediaPreview', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Turn microphone on' }));
 
     await waitFor(() => expect(order).toEqual(['release', 'acquire mic']));
-    expect(mocks.lobbyDeferredKindsRef.current).toEqual({ audio: false, video: true });
+    await waitFor(() => expect(mocks.joinChoiceRef.current).toEqual({ micOn: true, cameraOn: false }));
   });
 
   it('takes the mic off the lobby’s hands when it is turned off here', async () => {
@@ -272,7 +274,7 @@ describe('DebateRequestMediaPreview', () => {
 
     expect(await screen.findByText('Joining muted')).toBeInTheDocument();
     expect(release).not.toHaveBeenCalled();
-    expect(mocks.lobbyDeferredKindsRef.current).toEqual({ audio: false, video: false });
+    expect(mocks.joinChoiceRef.current).toEqual({ micOn: false, cameraOn: true });
   });
 
   // A lobby that connects after the card opened its mic gets it back.
@@ -297,6 +299,8 @@ describe('DebateRequestMediaPreview', () => {
     expect(mocks.ensurePreview).toHaveBeenCalledWith({ audio: true, video: false });
     expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
     expect(onJoinStateChange).toHaveBeenLastCalledWith({ micOn: true, cameraOn: false });
+    // No camera choice to hand on, so the room keeps its own default for it.
+    expect(mocks.joinChoiceRef.current).toEqual({ micOn: true });
   });
 
   it.each([
@@ -391,11 +395,11 @@ describe('DebateRequestMediaPreview', () => {
 });
 
 describe('the picture survives the camera being switched off and on', () => {
-  it('attaches the stream to a preview element that was remounted', async () => {
+  it.each(['compact', 'tile'] as const)('reattaches the stream after the camera is toggled (%s)', async appearance => {
     const stream = { id: 'live-stream' };
     mocks.previewStream = stream;
     mocks.permission = 'granted';
-    mount();
+    mount({ appearance });
     await screen.findByText('Joining with mic and camera on');
     expect(document.querySelector('video')).not.toBeNull();
 
@@ -669,12 +673,12 @@ describe('a device that is not there', () => {
     expect(await screen.findByText('Joining listening only')).toBeInTheDocument();
   });
 
-  it('routes a refusal to the blocked copy rather than a bare failure line', async () => {
+  it.each(['compact', 'tile'] as const)('explains a media refusal without promising devices (%s)', async appearance => {
     mocks.permission = 'prompt';
     mocks.ensurePreview
       .mockReset()
       .mockRejectedValue(Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' }));
-    mount();
+    mount({ appearance });
     await screen.findByText('Joining listening only');
     mocks.permission = 'denied';
 
