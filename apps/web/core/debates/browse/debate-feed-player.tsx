@@ -189,10 +189,12 @@ export function DebateFeedPlayer({
   /*
    * A card whose debaters both play from Stream starts itself while it is the active card, muted,
    * as the feed did before the hold: adaptive HLS buffers seconds ahead, not the raw recordings'
-   * tens of MB. Derived, not remembered, so leaving the card holds it again — its HLS detaches and
-   * stops fetching, and it goes back to its clips. A tap still keeps a card started.
+   * tens of MB. The next card (`buffer`) attaches too, paused, so its opening seconds are loaded
+   * by the time it is reached and it starts without a beat on its clips. Derived, not remembered,
+   * so a card that is neither is held again — its HLS detaches and stops fetching, and it goes
+   * back to its clips. A tap still keeps a card started.
    */
-  const autoStarted = active && debateStreamsFully(debate.recordings);
+  const autoStarted = (active || buffer) && debateStreamsFully(debate.recordings);
   // Signed only while this card is held and near the viewport; nothing at all with the flag off.
   const preview = useDebatePreviewClips(debate, holdFullPlayback && !cardStarted && (active || preload));
   const held = holdFullPlayback && (preview.available ? !(cardStarted || autoStarted) : !fullPlaybackStarted);
@@ -837,7 +839,8 @@ export function DebateFeedPlayer({
           videoRef={slot1VideoRef}
           // The next card's raw WebM has to be buffered to arrive playable on every engine. A feed
           // rendition is a fast-start MP4 that plays from its header, so it waits to be reached.
-          buffer={active || (buffer && !renditions.slot1 && !streams?.slot1)}
+          // A Stream slot loads its opening segments, which is what lets it start on arrival.
+          buffer={active || (buffer && !renditions.slot1)}
           stream={streams?.slot1 ?? false}
           onStreamFailed={() => void refreshSlotUrl(1, { abandonStream: true })}
           previewClip={previewNear ? clips.slot1 : null}
@@ -918,7 +921,7 @@ export function DebateFeedPlayer({
           poster={slot2Poster}
           posterEager={active || preload}
           videoRef={slot2VideoRef}
-          buffer={active || (buffer && !renditions.slot2 && !streams?.slot2)}
+          buffer={active || (buffer && !renditions.slot2)}
           stream={streams?.slot2 ?? false}
           onStreamFailed={() => void refreshSlotUrl(2, { abandonStream: true })}
           previewClip={previewNear ? clips.slot2 : null}
@@ -1545,7 +1548,12 @@ function DebaterVideo({
             // without pulling a multi-megabyte file down for a card nobody has reached yet — the
             // feed keeps several of these mounted at once. `auto` for the active card and the one
             // after it, which are about to play (`buffered`), and for any element `rebuild` raised.
-            preload={buffered ? 'auto' : 'metadata'}
+            // Never `auto` on a native-HLS Stream source: on iOS 27 a seek made under `auto` before
+            // playback (the pair's preposition) never completes. The element plays on, but
+            // `currentTime` stays at the seek target and `timeupdate` stops, which freezes the
+            // captions and the turn clock. iOS loads nothing ahead for a paused manifest under
+            // either value, so `metadata` costs nothing there.
+            preload={buffered && !(stream && nativeHls) ? 'auto' : 'metadata'}
             src={hlsManaged ? undefined : src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
             muted={muted}
