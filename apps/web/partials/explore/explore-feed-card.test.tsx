@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -365,4 +365,82 @@ it('lets explicit card list and position override the enclosing gallery', () => 
   );
   fireEvent.click(screen.getByText('Record action'));
   expect(attribute).toHaveBeenCalledWith(expect.objectContaining({ list_id: 'ranking_entries', item_position: 2 }));
+});
+
+describe('ExploreFeedCard deferred until near the viewport', () => {
+  type Watched = { callback: IntersectionObserverCallback; element: Element | null; observer: IntersectionObserver };
+  let watched: Watched[] = [];
+
+  function stubObserver() {
+    watched = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class implements Partial<IntersectionObserver> {
+        private readonly record: Watched;
+        constructor(callback: IntersectionObserverCallback) {
+          this.record = { callback, element: null, observer: this as unknown as IntersectionObserver };
+          watched.push(this.record);
+        }
+        observe(element: Element) {
+          this.record.element = element;
+        }
+        unobserve() {}
+        disconnect() {
+          this.record.element = null;
+        }
+        takeRecords() {
+          return [];
+        }
+      }
+    );
+  }
+
+  function bringNear(element: Element) {
+    const record = watched.find(w => w.element === element);
+    if (!record) throw new Error('placeholder is not observed');
+    act(() =>
+      record.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], record.observer)
+    );
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('draws a placeholder, not the card, until the card comes near the viewport', () => {
+    stubObserver();
+    render(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    const placeholder = screen.getByTestId('explore-feed-card-placeholder');
+    expect(screen.queryByText('A claim')).toBeNull();
+
+    bringNear(placeholder);
+
+    expect(screen.getByText('A claim')).toBeInTheDocument();
+    expect(screen.queryByTestId('explore-feed-card-placeholder')).toBeNull();
+  });
+
+  it('holds a debate at roughly its player height, so the feed below does not move up', () => {
+    stubObserver();
+    const debateItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }],
+    };
+    render(<ExploreFeedCard item={debateItem} deferUntilNearViewport />);
+
+    expect(screen.getByTestId('explore-feed-card-placeholder')).toHaveClass('min-h-[600px]');
+  });
+
+  it('renders the card straight away when nothing can say it is near (no IntersectionObserver)', () => {
+    vi.stubGlobal('IntersectionObserver', undefined);
+    render(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    expect(screen.getByText('A claim')).toBeInTheDocument();
+  });
+
+  it('renders the card on the first pass when not deferred', () => {
+    stubObserver();
+    render(<ExploreFeedCard item={item} />);
+
+    expect(screen.getByText('A claim')).toBeInTheDocument();
+    expect(screen.queryByTestId('explore-feed-card-placeholder')).toBeNull();
+  });
 });

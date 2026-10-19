@@ -2,12 +2,15 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import { CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { normId } from '~/core/utils/norm-id';
 
@@ -54,6 +57,12 @@ type ExploreFeedCardProps = {
   onDebatePlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
   /** Profile-only owner action shown beside the debate's full-screen control. */
   debateEndSlot?: React.ReactNode;
+  /**
+   * Hold the card back until it comes near the viewport, drawing a placeholder of about its height
+   * until then. For a long list whose lower cards nobody has scrolled to yet — see
+   * `DeferredExploreFeedCard`.
+   */
+  deferUntilNearViewport?: boolean;
 };
 
 const COMMUNITY_CALL_EVENT_TYPE = normId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
@@ -102,6 +111,8 @@ function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyP
  * the debate can't actually be watched. Everything else renders one of the bodies below.
  */
 export function ExploreFeedCard(props: ExploreFeedCardProps) {
+  if (props.deferUntilNearViewport) return <DeferredExploreFeedCard {...props} />;
+
   return (
     <ExploreCardSurface
       item={props.item}
@@ -111,6 +122,38 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
     >
       <ExploreFeedCardBody {...props} />
     </ExploreCardSurface>
+  );
+}
+
+/**
+ * A card that mounts once it is near the viewport, and stays mounted after.
+ *
+ * Explore draws two pages of cards — forty-odd — as soon as the feed loads, and on a phone only the
+ * first two are on screen. Each one is a stack of hooks: the response state, the position control,
+ * the Join offer with its sign-in and queue, the comment count, a viewport observer. Rendering all of
+ * them, and subscribing all their queries, was most of the main-thread time between the feed
+ * arriving and the page answering a tap. A card held back here costs one observer until it is
+ * within `useNearViewport`'s margin (800px), which is far enough ahead that a reader scrolling at
+ * any normal speed never sees the placeholder.
+ *
+ * The placeholder is roughly the card's height — a debate's player or a one-line claim — so the
+ * feed's infinite-scroll sentinel stays about as far down as before and the page does not fetch
+ * further ahead than it used to. It is not exact; a card that mounts below the fold can change the
+ * page's height there without moving anything on screen.
+ */
+function DeferredExploreFeedCard(props: ExploreFeedCardProps) {
+  const { ref, nearViewport } = useNearViewport();
+  if (nearViewport) return <ExploreFeedCard {...props} deferUntilNearViewport={false} />;
+
+  return (
+    <div
+      ref={ref}
+      data-testid="explore-feed-card-placeholder"
+      className={cx(
+        EXPLORE_CARD_CLASS,
+        isDebateEntity(props.item.types) ? 'min-h-[600px] lg:min-h-[820px]' : 'min-h-[140px]'
+      )}
+    />
   );
 }
 
