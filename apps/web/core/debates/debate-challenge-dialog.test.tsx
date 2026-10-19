@@ -28,6 +28,7 @@ vi.mock('./media-session', () => ({
     previewError: null,
     previewStream: null,
     localTracksRef: { current: [] },
+    joinChoiceRef: { current: null },
     ensurePreview: media.ensurePreview,
     beginSession: media.beginSession,
     releaseSession: media.releaseSession,

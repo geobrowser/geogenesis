@@ -11,10 +11,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
 import {
-  carryLobbyMic,
-  clearCarriedLobbyMic,
-  forgetLobbyMic,
-  readCarriedLobbyMic,
+  carryLobbyJoinChoice,
+  clearCarriedLobbyChoice,
+  forgetLobbyDevices,
+  readCarriedLobbyChoice,
+  reportLobbyCamera,
   reportLobbyMic,
 } from '~/core/debates/lobbies/step-out';
 import {
@@ -421,8 +422,8 @@ function callToken(sources: string[]) {
 /** What stepping out of a lobby whose mic is `on` leaves behind. */
 function stepOutOfLobbyWithMic(on: boolean) {
   reportLobbyMic(on);
-  carryLobbyMic();
-  forgetLobbyMic();
+  carryLobbyJoinChoice();
+  forgetLobbyDevices();
 }
 
 beforeEach(() => {
@@ -507,7 +508,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   // A carry no picker mounted to spend must not reach the next test.
-  clearCarriedLobbyMic();
+  clearCarriedLobbyChoice();
 });
 
 describe('RematchVoiceHeader', () => {
@@ -611,7 +612,7 @@ describe('RematchVoiceHeader', () => {
   // records its own choice. The card is the later, more direct answer.
   it('joins with the card’s muted mic over a live mic carried from the lobby', async () => {
     stepOutOfLobbyWithMic(true);
-    rememberRematchJoinIntent('session-1', { micOn: false, cameraOn: false });
+    rememberRematchJoinIntent('session-1', { micOn: false, cameraOn: false, source: 'card' });
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
@@ -619,8 +620,8 @@ describe('RematchVoiceHeader', () => {
 
     // The ready room reads the picker's recorded answer, and finds no lobby mic left to outrank it.
     carryJoinIntentIntoDebate('session-1', 'debate-1');
-    expect(readRematchJoinIntent('debate-1')).toEqual({ micOn: false, cameraOn: false });
-    expect(readCarriedLobbyMic()).toBeNull();
+    expect(readRematchJoinIntent('debate-1')).toEqual({ micOn: false, cameraOn: false, source: 'card' });
+    expect(readCarriedLobbyChoice()).toBeNull();
   });
 
   it('resets the microphone default when the route moves between rematch sessions', async () => {
@@ -719,7 +720,7 @@ describe('RematchVoiceHeader', () => {
 
   it('names the camera’s own problem', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (
@@ -735,7 +736,7 @@ describe('RematchVoiceHeader', () => {
 
   it('drops the camera’s message when it is tried again', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (
@@ -752,7 +753,7 @@ describe('RematchVoiceHeader', () => {
 
   it('leaves the microphone alone when the camera is the device that failed', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (
@@ -2539,6 +2540,56 @@ describe('the mic inside a debate room', () => {
     expect(mocks.setMicrophoneEnabled).not.toHaveBeenCalledWith(true);
   });
 
+  // The remembered intent carries where the mute came from, so a remount does not read it as an echo.
+  it('keeps a mute chosen here through a remount when the opponent arrives', async () => {
+    const first = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+    await flushOwnership();
+    fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+    await waitFor(() => expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(false));
+    first.unmount();
+    mocks.setMicrophoneEnabled.mockClear();
+
+    const view = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+    await flushOwnership();
+    view.rerender(
+      <DebateRoomProvider roomId="room-1" presence={presence(true)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(lastAudio()).toBe(false);
+    expect(mocks.setMicrophoneEnabled).not.toHaveBeenCalledWith(true);
+  });
+
+  // "Debate again" from the ready room records the debate's mic; the picker keeps it.
+  it('keeps the mic the debate left off when the opponent arrives', async () => {
+    rememberRematchJoinIntent('session-1', { micOn: false, cameraOn: false, source: 'room' });
+    const view = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+    await flushOwnership();
+    view.rerender(
+      <DebateRoomProvider roomId="room-1" presence={presence(true)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(lastAudio()).toBe(false);
+    expect(mocks.setMicrophoneEnabled).not.toHaveBeenCalledWith(true);
+  });
+
   // GEO-3336. A mute carried from the lobby is a choice too, just as one made while waiting is.
   it('leaves a mute carried from the lobby alone when the opponent arrives', async () => {
     stepOutOfLobbyWithMic(false);
@@ -2600,9 +2651,23 @@ describe('the camera', () => {
     await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(false));
   });
 
+  it('joins with the camera the viewer had on in the lobby they just left', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    reportLobbyMic(true);
+    reportLobbyCamera(true);
+    carryLobbyJoinChoice();
+    forgetLobbyDevices();
+
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenCalledWith(true));
+    expect(await screen.findByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+  });
+
   it('joins with the camera the chosen state asked for', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
 
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
@@ -2620,7 +2685,7 @@ describe('the camera', () => {
    */
   it('remembers a camera switched off here, not the one the card chose', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
 
     const view = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
@@ -2639,7 +2704,7 @@ describe('the camera', () => {
 
   it('remembers a mic muted here, off a challenge', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: false });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: false, source: 'card' });
 
     const view = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
@@ -2658,7 +2723,7 @@ describe('the camera', () => {
 
   it('leaves the camera off when only the microphone was chosen', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: false });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: false, source: 'card' });
 
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
@@ -2757,7 +2822,7 @@ describe('choosing a camera', () => {
 
 describe('a camera this call will not carry', () => {
   it('says so rather than dropping the choice in silence', async () => {
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
 
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone']) };
 
@@ -2780,7 +2845,7 @@ describe('a camera this call will not carry', () => {
   });
 
   it('says nothing when the call allows the camera', async () => {
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
 
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
@@ -2934,7 +2999,7 @@ describe('with debateVideo off', () => {
 
   it('offers no camera and publishes none, even where the token and a choice allow one', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
@@ -2947,14 +3012,14 @@ describe('with debateVideo off', () => {
 
   it('carries no camera choice into the debate', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
-    await waitFor(() => expect(readRematchJoinIntent('session-1')).toStrictEqual({ micOn: true }));
+    await waitFor(() => expect(readRematchJoinIntent('session-1')).toStrictEqual({ micOn: true, source: 'card' }));
     // What the ready room reads: the mic, and no camera choice to override its default.
     carryJoinIntentIntoDebate('session-1', 'debate-9');
-    expect(readRematchJoinIntent('debate-9')).toStrictEqual({ micOn: true });
+    expect(readRematchJoinIntent('debate-9')).toStrictEqual({ micOn: true, source: 'card' });
   });
 
   it('keeps master’s layout: small avatars and a Mute label at every width', async () => {
@@ -2988,11 +3053,11 @@ describe('debateVideo through hydration', () => {
   it('keeps a remembered camera and turns it on once the flag reads on', async () => {
     mocks.hydrating = true;
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenCalledWith(true));
-    expect(readRematchJoinIntent('session-1')).toEqual({ micOn: true, cameraOn: true });
+    expect(readRematchJoinIntent('session-1')).toEqual({ micOn: true, cameraOn: true, source: 'card' });
   });
 });

@@ -4,6 +4,8 @@ import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
 
 import * as React from 'react';
 
+import type { DebateJoinChoice } from './request-join-state';
+
 export type MediaDeviceOption = {
   deviceId: string;
   groupId: string;
@@ -49,14 +51,16 @@ export type DebateMediaSession = {
   selectedVideoInputIdRef: React.MutableRefObject<string>;
   audioOutputSupportedRef: React.MutableRefObject<boolean>;
   audioOutputSelectionPromiseRef: React.MutableRefObject<Promise<void> | null>;
-  /** Kinds the card left to a live lobby rather than choosing; kept through `promoteSession`. */
-  lobbyDeferredKindsRef: React.MutableRefObject<{ audio: boolean; video: boolean }>;
+  /**
+   * What the card holding this session shows the person joining with, for the room it is handed to.
+   * Kept through `promoteSession`, cleared by `beginSession`.
+   */
+  joinChoiceRef: React.MutableRefObject<DebateJoinChoice | null>;
   beginSession: (sessionKey: string) => void;
   promoteSession: (fromSessionKey: string, toSessionKey: string) => void;
   releaseSession: (sessionKey: string) => void;
   stopMedia: () => void;
   setPreviewStream: (stream: MediaStream | null) => void;
-  pendingPreview: () => Promise<LocalTrackLike[]> | null;
   ensurePreview: (options?: {
     forceRestart?: boolean;
     audioInputId?: string;
@@ -100,7 +104,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
   const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
-  const lobbyDeferredKindsRef = React.useRef({ audio: false, video: false });
+  const joinChoiceRef = React.useRef<DebateJoinChoice | null>(null);
   /** What the in-flight acquisition asked for, so a call wanting something else is not handed it. */
   const localPreviewWantRef = React.useRef<{ audio: boolean; video: boolean } | null>(null);
   /**
@@ -142,7 +146,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       // A new surface has chosen nothing yet. `promoteSession` deliberately leaves this alone: a
       // hand-off keeps the choice the card made.
       wantedKindsRef.current = { audio: true, video: true };
-      lobbyDeferredKindsRef.current = { audio: false, video: false };
+      joinChoiceRef.current = null;
       audioOutputSelectionFailedRef.current = false;
       setAudioOutputError(null);
       activeSessionKeyRef.current = sessionKey;
@@ -224,8 +228,6 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
 
     return { audioInputId: nextAudioInputId, videoInputId: nextVideoInputId };
   }, []);
-
-  const pendingPreview = React.useCallback(() => localPreviewPromiseRef.current, []);
 
   const ensurePreview = React.useCallback(
     async (
@@ -537,13 +539,12 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       selectedVideoInputIdRef,
       audioOutputSupportedRef,
       audioOutputSelectionPromiseRef,
-      lobbyDeferredKindsRef,
+      joinChoiceRef,
       beginSession,
       promoteSession,
       releaseSession,
       stopMedia,
       setPreviewStream,
-      pendingPreview,
       ensurePreview,
       changeAudioInput,
       changeAudioOutput,
@@ -561,7 +562,6 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       changeAudioOutput,
       changeVideoInput,
       ensurePreview,
-      pendingPreview,
       reportAudioOutputFailure,
       previewBusy,
       previewError,
