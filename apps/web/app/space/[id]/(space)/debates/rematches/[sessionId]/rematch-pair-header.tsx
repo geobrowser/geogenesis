@@ -420,6 +420,9 @@ function OpponentCard({
 }) {
   const videoLayout = useFeatureFlag('debateVideo');
   const talking = showMicState && state === 'talking';
+  const videoAnchorRef = React.useRef<HTMLSpanElement>(null);
+  const { outside, dismissed, dismiss } = useFloatingOpponentVideo(videoAnchorRef, videoLayout);
+  const floating = videoLayout && showMicState && Boolean(video) && outside && !dismissed;
 
   // Base and hover in one expression, because a hover variant outranks a plain utility on
   // specificity whichever order they are written in. An unconditional `hover:border-grey-03`
@@ -431,6 +434,8 @@ function OpponentCard({
     <PairCardBody
       avatar={
         <ParticipantAvatar
+          anchorRef={videoAnchorRef}
+          floating={floating}
           avatarUrl={opponent.avatarCid}
           value={opponent.profileSpaceId}
           name={name}
@@ -454,22 +459,60 @@ function OpponentCard({
   );
 
   return (
-    <button
-      type="button"
-      data-testid="rematch-opponent-card"
-      onClick={onOpen}
-      aria-label={`Open ${name}’s personal space`}
-      aria-describedby={describedBy}
-      className={cx(
-        CARD_SURFACE,
-        border,
-        'flex flex-col gap-2.5 text-left transition-colors',
-        videoLayout && [styles.card, styles.opponentCard]
-      )}
-    >
-      {body}
-    </button>
+    <>
+      <button
+        type="button"
+        data-testid="rematch-opponent-card"
+        onClick={onOpen}
+        aria-label={`Open ${name}’s personal space`}
+        aria-describedby={describedBy}
+        className={cx(
+          CARD_SURFACE,
+          border,
+          'flex flex-col gap-2.5 text-left transition-colors',
+          videoLayout && [styles.card, styles.opponentCard],
+          floating && styles.floatingActive
+        )}
+      >
+        {body}
+      </button>
+      {floating ? (
+        <button
+          type="button"
+          aria-label="Hide floating video"
+          title="Hide floating video"
+          onClick={dismiss}
+          className={styles.floatingClose}
+        >
+          <CloseSmall />
+        </button>
+      ) : null}
+    </>
   );
+}
+
+/** Observe the unchanged video slot, so docking the video cannot change the visibility signal. */
+function useFloatingOpponentVideo(anchorRef: React.RefObject<HTMLSpanElement | null>, enabled: boolean) {
+  const [outside, setOutside] = React.useState(false);
+  const [dismissed, setDismissed] = React.useState(false);
+
+  React.useEffect(() => {
+    const anchor = anchorRef.current;
+    if (!enabled || !anchor || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry) return;
+        // Do not dock a video that starts below the viewport on a short screen.
+        setOutside(!entry.isIntersecting && entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0));
+        if (entry.isIntersecting) setDismissed(false);
+      },
+      { root: anchor.closest('[data-rematch-scroll]'), threshold: 0 }
+    );
+    observer.observe(anchor);
+    return () => observer.disconnect();
+  }, [anchorRef, enabled]);
+
+  return { outside, dismissed, dismiss: () => setDismissed(true) };
 }
 
 function ParticipantAvatar({
@@ -479,6 +522,8 @@ function ParticipantAvatar({
   speaking,
   video,
   border,
+  anchorRef,
+  floating = false,
 }: {
   avatarUrl: string | null;
   value?: string;
@@ -486,24 +531,39 @@ function ParticipantAvatar({
   speaking: boolean;
   video?: React.ReactNode;
   border?: string;
+  anchorRef?: React.Ref<HTMLSpanElement>;
+  floating?: boolean;
 }) {
   const videoLayout = useFeatureFlag('debateVideo');
   return (
     // The size lives on the wrapper, not on `<Avatar>`: its `size` prop only reaches the generated
     // fallback, while a real avatar renders `h-full w-full` and takes whatever box it is given.
     <span
+      ref={anchorRef}
       data-testid="pair-avatar"
       className={cx(
         'inline-flex shrink-0 overflow-hidden',
         videoLayout ? [styles.video, border] : 'size-8 rounded-full',
-        speaking && 'ring-2 ring-successTertiary'
+        speaking && 'ring-2 ring-successTertiary',
+        floating && styles.floatingActive
       )}
     >
-      {video ?? (
-        <span className={videoLayout ? styles.fallback : 'contents'}>
-          <Avatar avatarUrl={avatarUrl} value={value ?? name} size={videoLayout ? 56 : 32} alt="" />
-        </span>
-      )}
+      <span
+        className={floating ? cx(styles.floatingVideo, border) : 'contents'}
+        data-testid={floating ? 'rematch-floating-opponent-video' : undefined}
+      >
+        {video ?? (
+          <span className={videoLayout ? styles.fallback : 'contents'}>
+            <Avatar avatarUrl={avatarUrl} value={value ?? name} size={videoLayout ? 56 : 32} alt="" />
+          </span>
+        )}
+        {floating ? (
+          <span aria-hidden className={styles.floatingName}>
+            {speaking ? <TalkingBars /> : null}
+            {name}
+          </span>
+        ) : null}
+      </span>
       {videoLayout ? (
         <span aria-hidden data-name={name} className={styles.videoName}>
           {speaking ? <TalkingBars /> : null}

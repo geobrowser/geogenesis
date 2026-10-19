@@ -224,3 +224,70 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Keep the full-size slot in the document while its existing video docks in the corner. */
+.opponentCard.floatingActive,
+.video.floatingActive {
+  overflow: visible;
+}
+
+.floatingVideo,
+.floatingClose {
+  --floating-width: 240px;
+  --floating-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+}
+
+.floatingVideo {
+  position: fixed;
+  right: 16px;
+  bottom: var(--floating-bottom);
+  z-index: 30;
+  display: block;
+  width: var(--floating-width);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-width: 1px;
+  border-radius: 8px;
+  background: var(--color-text);
+  box-shadow: 0 4px 20px rgb(0 0 0 / 18%);
+}
+
+.floatingName {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 90%);
+  padding: 0 7px;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.floatingClose {
+  position: fixed;
+  right: 20px;
+  bottom: calc(var(--floating-bottom) + var(--floating-width) * 0.5625 - 28px);
+  z-index: 31;
+  cursor: pointer;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(32 32 32 / 80%);
+  color: white;
+}
+
+@media (max-width: 767px) {
+  .floatingVideo,
+  .floatingClose {
+    --floating-width: 160px;
+  }
+}

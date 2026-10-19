@@ -2903,6 +2903,133 @@ describe('video in the header', () => {
     expect(remoteTrack.detach).not.toHaveBeenCalled();
   });
 
+  describe('floating opponent video', () => {
+    let notify: (visible: boolean, bottom?: number) => void;
+    let observedAnchor: Element | null;
+    let observedRoot: Element | Document | null | undefined;
+    let disconnect = vi.fn<() => void>();
+
+    beforeEach(() => {
+      observedAnchor = null;
+      disconnect = vi.fn<() => void>();
+      notify = () => {};
+      vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+          constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+            observedRoot = options?.root;
+            notify = (visible, bottom = -1) =>
+              callback(
+                [
+                  {
+                    isIntersecting: visible,
+                    boundingClientRect: { bottom },
+                    rootBounds: { top: 0 },
+                  } as IntersectionObserverEntry,
+                ],
+                this as unknown as IntersectionObserver
+              );
+          }
+          observe(element: Element) {
+            observedAnchor = element;
+          }
+          disconnect() {
+            disconnect();
+          }
+        }
+      );
+    });
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    async function renderPair() {
+      mocks.remoteParticipants = [remoteOpponent()];
+      mocks.opponentCameraPublication = cameraTrack();
+      mocks.localCameraTrack = cameraTrack();
+      const view = render(
+        <div data-rematch-scroll data-testid="picker-scroll">
+          <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+        </div>
+      );
+      await flushOwnership();
+      return view;
+    }
+
+    it('docks the same video only after its full-size slot scrolls above the picker', async () => {
+      await renderPair();
+      const card = screen.getByTestId('rematch-opponent-card');
+      const video = card.querySelector('video');
+      const anchor = observedAnchor;
+      const localVideo = screen.getByTestId('rematch-you-card').querySelector('video');
+      expect(observedRoot).toBe(screen.getByTestId('picker-scroll'));
+      expect(card).toContainElement(anchor as HTMLElement);
+      act(() => notify(true));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      // A video below the viewport is not a video the user has scrolled past.
+      act(() => notify(false, 600));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      act(() => notify(false));
+      const floating = screen.getByTestId('rematch-floating-opponent-video');
+      expect(floating).toContainElement(video);
+      expect(floating).not.toContainElement(localVideo);
+      expect(observedAnchor).toBe(anchor);
+      expect(mocks.opponentCameraPublication!.track.attach).toHaveBeenCalledOnce();
+      expect(mocks.opponentCameraPublication!.track.detach).not.toHaveBeenCalled();
+      expect(mocks.localCameraTrack!.track.attach).toHaveBeenCalledOnce();
+      act(() => notify(true));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      expect(card.querySelector('video')).toBe(video);
+      expect(mocks.opponentCameraPublication!.track.attach).toHaveBeenCalledOnce();
+    });
+
+    it('lets you dismiss it until you return to the main video', async () => {
+      await renderPair();
+      act(() => notify(false));
+      fireEvent.click(screen.getByRole('button', { name: 'Hide floating video' }));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      expect(mocks.opponentCameraPublication!.track.detach).not.toHaveBeenCalled();
+      expect(mocks.personProfileOpened).not.toHaveBeenCalled();
+      act(() => notify(false));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      act(() => notify(true));
+      act(() => notify(false));
+      expect(screen.getByTestId('rematch-floating-opponent-video')).toBeInTheDocument();
+    });
+
+    it('removes the floating video when the opponent turns their camera off', async () => {
+      const view = await renderPair();
+      act(() => notify(false));
+      expect(screen.getByTestId('rematch-floating-opponent-video')).toBeInTheDocument();
+      mocks.opponentCameraPublication = { ...mocks.opponentCameraPublication!, isMuted: true };
+      view.rerender(
+        <div data-rematch-scroll>
+          <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+        </div>
+      );
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Hide floating video' })).toBeNull();
+      expect(within(screen.getByTestId('rematch-opponent-card')).getByTestId('avatar')).toBeInTheDocument();
+    });
+
+    it('does not offer a floating video with the video feature disabled', async () => {
+      mocks.debateVideo = false;
+      await renderPair();
+      expect(observedAnchor).toBeNull();
+      expect(document.querySelector('video')).toBeNull();
+    });
+
+    it('disconnects its visibility observer and releases the same video on exit', async () => {
+      const view = await renderPair();
+      act(() => notify(false));
+      const remoteTrack = mocks.opponentCameraPublication!.track;
+      disconnect.mockClear();
+      view.unmount();
+      expect(disconnect).toHaveBeenCalledOnce();
+      expect(remoteTrack.detach).toHaveBeenCalledOnce();
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+    });
+  });
+
   it('hands the track back when the header goes away', async () => {
     mocks.localCameraTrack = cameraTrack();
     const view = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
