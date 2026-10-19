@@ -349,13 +349,6 @@ type ModalCardProps = {
   effectiveStep: Step;
 };
 
-// The topic step is a wall of pills, so it gets a wider, taller card than the rest of the flow.
-const cardSize = (step: Step) => {
-  if (step === 'completed') return 'h-[245px] max-w-[360px] px-6 py-10';
-  if (step === 'customize-feed') return 'h-[560px] max-h-[calc(100dvh-3rem)] min-h-[420px] max-w-[480px] p-6 pt-8';
-  return 'h-[485px] max-w-[360px] p-6 pt-8';
-};
-
 const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
   return (
     <motion.div
@@ -364,7 +357,7 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className={`pointer-events-auto relative z-100 my-auto flex shrink-0 ${cardSize(effectiveStep)} w-full flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown`}
+      className={`pointer-events-auto relative z-100 my-auto flex h-[485px] w-full max-w-[360px] shrink-0 flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown ${effectiveStep === 'completed' ? 'justify-center px-6 py-10' : 'p-6 pt-8'}`}
     >
       {children}
     </motion.div>
