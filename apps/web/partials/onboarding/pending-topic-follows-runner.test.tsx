@@ -15,6 +15,7 @@ import { type HeldFeedTopics, feedTopicsAtom } from '~/atoms/onboarding-feed-top
 const mocks = vi.hoisted(() => ({
   personalSpaceId: 'space-1' as string | null,
   isRegistered: true,
+  needsProfile: false,
   address: '0xA',
   followedLoading: false,
   follow: vi.fn(),
@@ -25,7 +26,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isRegistered: mocks.isRegistered }),
+  usePersonalSpaceId: () => ({
+    personalSpaceId: mocks.personalSpaceId,
+    isRegistered: mocks.isRegistered,
+    needsProfile: mocks.needsProfile,
+  }),
 }));
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({
@@ -73,6 +78,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   mocks.personalSpaceId = 'space-1';
   mocks.isRegistered = true;
+  mocks.needsProfile = false;
   mocks.address = '0xA';
   mocks.followedLoading = false;
   mocks.follow.mockReset();
@@ -158,6 +164,24 @@ describe('PendingTopicFollowsRunner', () => {
 
     expect(mocks.getSpace).not.toHaveBeenCalled();
     expect(mocks.follow).not.toHaveBeenCalled();
+  });
+
+  it('does not follow draft picks while a registered account still needs its profile', async () => {
+    mocks.needsProfile = true;
+    const store = mount();
+
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(mocks.follow).not.toHaveBeenCalled();
+    expect(store.get(feedTopicsAtom)).toEqual(held);
+
+    mocks.needsProfile = false;
+    mocks.follow.mockResolvedValue(true);
+    act(() => store.set(feedTopicsAtom, { ...held }));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(mocks.follow).toHaveBeenCalledWith(picks);
+    expect(store.get(feedTopicsAtom)).toEqual(none);
   });
 
   it('keeps picks when the Interested read fails, then retries', async () => {
@@ -299,6 +323,40 @@ describe('PendingTopicFollowsRunner', () => {
 
     expect(mocks.follow).toHaveBeenCalledWith(picks);
     expect(store.get(feedTopicsAtom)).toEqual(none);
+  });
+
+  it('retries an unexpected lock failure without discarding picks', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const request = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('lock unavailable'))
+      .mockImplementation((_name, _options, run) => run({}));
+    vi.stubGlobal('navigator', { ...navigator, locks: { request } });
+    mocks.follow.mockResolvedValue(true);
+    const store = mount();
+
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(mocks.follow).not.toHaveBeenCalled();
+    expect(store.get(feedTopicsAtom)).toEqual(held);
+
+    await act(() => vi.advanceTimersByTimeAsync(3_000));
+    expect(mocks.follow).toHaveBeenCalledWith(picks);
+    expect(store.get(feedTopicsAtom)).toEqual(none);
+    error.mockRestore();
+  });
+
+  it('does not submit if the account needs profile setup again during the readiness read', async () => {
+    let finish!: (rows: unknown[]) => void;
+    mocks.fetchFollowed.mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
+    const store = mount();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    mocks.needsProfile = true;
+    act(() => store.set(feedTopicsAtom, { ...held }));
+    await act(async () => finish([]));
+
+    expect(mocks.follow).not.toHaveBeenCalled();
+    expect(store.get(feedTopicsAtom)).toEqual(held);
   });
 
   // A tab can see another wallet's picks before it sees the wallet switch; they are not its to delete.

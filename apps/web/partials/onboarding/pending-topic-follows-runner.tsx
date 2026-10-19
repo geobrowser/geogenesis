@@ -122,7 +122,7 @@ export function PendingTopicFollowsRunner() {
     .sort()
     .join(',');
   const pending = useAtomValue(pendingPersonalSpaceAtom);
-  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const { personalSpaceId, isRegistered, needsProfile } = usePersonalSpaceId();
   const { isLoading: isLoadingFollowed } = useFollowedTopics();
   const { follow } = useFollowTopics();
   const queryClient = useQueryClient();
@@ -131,8 +131,8 @@ export function PendingTopicFollowsRunner() {
   const runningRef = React.useRef(false);
   // Retry state for one account at a time.
   const budgetRef = React.useRef(newBudget(address));
-  const contextRef = React.useRef({ address, personalSpaceId, isRegistered, pending });
-  contextRef.current = { address, personalSpaceId, isRegistered, pending };
+  const contextRef = React.useRef({ address, personalSpaceId, isRegistered, needsProfile, pending });
+  contextRef.current = { address, personalSpaceId, isRegistered, needsProfile, pending };
   // At most one scheduled pass: a pass started by a dependency change replaces the pending one.
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mountedRef = React.useRef(false);
@@ -145,7 +145,10 @@ export function PendingTopicFollowsRunner() {
   }, []);
 
   React.useEffect(() => {
-    if (!address || !personalSpaceId || !isRegistered || pending || isLoadingFollowed || !picksKey) return;
+    // Registered accounts with a missing profile also onboard. Their picks are drafts until setup
+    // finishes; publishing here would remove a selection while they are still choosing it.
+    if (!address || !personalSpaceId || !isRegistered || needsProfile || pending || isLoadingFollowed || !picksKey)
+      return;
     if (budgetRef.current.owner !== address) budgetRef.current = newBudget(address);
     if (runningRef.current) return;
     runningRef.current = true;
@@ -167,6 +170,7 @@ export function PendingTopicFollowsRunner() {
               contextRef.current.address === owner &&
               contextRef.current.personalSpaceId === personalSpaceId &&
               contextRef.current.isRegistered &&
+              !contextRef.current.needsProfile &&
               !contextRef.current.pending,
             // Past the cap a pass only checks whether an earlier publish landed.
             mayPublish: budget.publishFailures < MAX_PUBLISH_FAILURES,
@@ -180,6 +184,10 @@ export function PendingTopicFollowsRunner() {
             write: setHeld,
           })
         );
+      } catch (error) {
+        // Lock/readiness failures must not strand held picks or leave an unhandled rejection.
+        console.error('[onboarding] topic follow attempt failed:', error);
+        outcome = 'unindexed';
       } finally {
         runningRef.current = false;
         const delay = nextDelay(outcome, budget, contextRef.current.address !== owner, owner);
@@ -193,6 +201,7 @@ export function PendingTopicFollowsRunner() {
     address,
     personalSpaceId,
     isRegistered,
+    needsProfile,
     pending,
     isLoadingFollowed,
     picksKey,

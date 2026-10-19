@@ -369,38 +369,23 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
 const STEPS_WITH_HEADER = ['start', 'interested-in', 'customize-feed', 'existing-entity-match'] as const;
 type StepWithHeader = (typeof STEPS_WITH_HEADER)[number];
 
-type DotConfig = { width: 'w-4' | 'w-8'; active: boolean };
-
-const DOT_CONFIGS: Record<StepWithHeader, DotConfig[]> = {
-  start: [
-    { width: 'w-8', active: true },
-    { width: 'w-4', active: false },
-    { width: 'w-4', active: false },
-  ],
-  'interested-in': [
-    { width: 'w-4', active: true },
-    { width: 'w-8', active: true },
-    { width: 'w-4', active: false },
-  ],
-  'customize-feed': [
-    { width: 'w-4', active: true },
-    { width: 'w-4', active: true },
-    { width: 'w-8', active: true },
-  ],
-  'existing-entity-match': [
-    { width: 'w-8', active: true },
-    { width: 'w-4', active: false },
-    { width: 'w-4', active: false },
-  ],
+const StepDots = ({ step }: { step: StepWithHeader }) => {
+  const currentOrder = stepOrder[step] ?? 1;
+  return (
+    <div className="flex w-full items-center justify-center gap-[7px]">
+      {Object.values(stepOrder).map(order => (
+        <span
+          key={order}
+          className={cx(
+            'h-[5px] rounded-[50px]',
+            order === currentOrder ? 'w-8' : 'w-4',
+            order <= currentOrder ? 'bg-text' : 'bg-grey-02'
+          )}
+        />
+      ))}
+    </div>
+  );
 };
-
-const StepDots = ({ step }: { step: StepWithHeader }) => (
-  <div className="flex w-full items-center justify-center gap-[7px]">
-    {DOT_CONFIGS[step].map((dot, i) => (
-      <span key={i} className={`h-[5px] rounded-[50px] ${dot?.width} ${dot?.active ? 'bg-[#2A2B2E]' : 'bg-grey-02'}`} />
-    ))}
-  </div>
-);
 
 // `step` is the normalized effectiveStep, so a legacy value persisted by an
 // older version of the flow still renders the header for the step it maps to.
@@ -476,6 +461,25 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
   );
 };
 
+type StepIntroProps = {
+  childKey: string;
+  title: string;
+  description: string;
+};
+
+const StepIntro = ({ childKey, title, description }: StepIntroProps) => {
+  return (
+    <StepContents childKey={childKey}>
+      <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
+        {title}
+      </Text>
+      <Text as="p" variant="body" className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04">
+        {description}
+      </Text>
+    </StepContents>
+  );
+};
+
 type StepOnboardingProps = {
   onProfileContinue: (exactMatches: SearchResult[]) => void;
 };
@@ -544,20 +548,7 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <StepContents childKey="welcome">
-        <div className="w-full">
-          <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
-            Welcome to Geo 👋
-          </Text>
-          <Text
-            as="p"
-            variant="body"
-            className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
-          >
-            What should we call you?
-          </Text>
-        </div>
-      </StepContents>
+      <StepIntro childKey="welcome" title="Welcome to Geo 👋" description="What should we call you?" />
       <div className="my-6 flex flex-col items-center md:my-3">
         <div className="group relative h-20 w-20">
           {avatar ? (
@@ -828,20 +819,11 @@ function StepInterestedIn({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <StepContents childKey="interested-in">
-        <div className="w-full">
-          <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
-            Choose your interests
-          </Text>
-          <Text
-            as="p"
-            variant="body"
-            className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
-          >
-            Choose spaces to join and discover topics you care about
-          </Text>
-        </div>
-      </StepContents>
+      <StepIntro
+        childKey="interested-in"
+        title="Choose your interests"
+        description="Choose spaces to join and discover topics you care about"
+      />
       {isLoading ? (
         <div className="flex min-h-0 flex-1 items-center justify-center py-6">
           <Dots />
@@ -901,20 +883,11 @@ function StepCustomizeFeed({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <StepContents childKey="customize-feed">
-        <div className="w-full">
-          <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
-            Customize your feed
-          </Text>
-          <Text
-            as="p"
-            variant="body"
-            className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
-          >
-            Every topic you follow helps personalize your feed
-          </Text>
-        </div>
-      </StepContents>
+      <StepIntro
+        childKey="customize-feed"
+        title="Customize your feed"
+        description="Every topic you follow helps personalize your feed"
+      />
       <FeedTopicPicker
         spaceIds={spaceIds}
         isPreparing={isPreparing}

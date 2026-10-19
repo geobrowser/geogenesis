@@ -16,13 +16,28 @@ export const feedTopicsAtom = atomWithStorage<HeldFeedTopics>(FEED_TOPICS_STORAG
   getOnInit: true,
 });
 
+function isTopicOption(value: unknown): value is TopicOption {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const topic = value as Partial<TopicOption>;
+  return (
+    typeof topic.id === 'string' &&
+    topic.id.trim().length > 0 &&
+    typeof topic.name === 'string' &&
+    topic.name.trim().length > 0
+  );
+}
+
 /** The held record if `address` chose it, else null: a wallet can switch without a logout. */
 export function heldRecordFor(held: unknown, address: string | null | undefined): HeldFeedTopics | null {
   if (!address || !held || typeof held !== 'object' || Array.isArray(held)) return null;
   const record = held as Partial<HeldFeedTopics>;
   if (typeof record.address !== 'string' || record.address.toLowerCase() !== address.toLowerCase()) return null;
-  if (!Array.isArray(record.topics)) return null;
-  return { address: record.address, topics: record.topics, submittedAt: record.submittedAt };
+  if (!Array.isArray(record.topics) || !record.topics.every(isTopicOption)) return null;
+  const submittedAt =
+    typeof record.submittedAt === 'number' && Number.isFinite(record.submittedAt) && record.submittedAt > 0
+      ? record.submittedAt
+      : undefined;
+  return { address: record.address, topics: record.topics, submittedAt };
 }
 
 export function heldTopicsFor(held: unknown, address: string | null | undefined): TopicOption[] {
