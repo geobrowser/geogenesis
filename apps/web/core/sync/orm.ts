@@ -604,7 +604,10 @@ export class E {
     });
     const remoteEntities = page.results;
 
-    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
+    const localWhere: WhereCondition = tagIds?.length
+      ? { ...where, relations: [...(where.relations ?? []), { toEntity: { id: { in: tagIds } } }] }
+      : where;
+    const localEntities = new EntityQuery(store.getEntities()).where(localWhere).execute();
 
     // Preserve remote (API relevance) ordering; append local-only entities at the end
     const remoteIds = remoteEntities.map(e => e.id);
