@@ -277,6 +277,7 @@ function TypeFilter({
     enabled: true,
     includeNonCanonical,
     alsoSearchSpaceIds,
+    replaceScopeWithAlsoSearchSpaceIds: true,
   });
 
   const selected = React.useMemo(() => new Set(typeIds), [typeIds]);
@@ -458,7 +459,12 @@ function TagFilter({
   alsoSearchSpaceIds: string[] | undefined;
 }) {
   const { query, onQueryChange, results, isLoading, isEmpty, hasNextPage, fetchNextPage, isFetchingNextPage } =
-    useSearch({ filterByTypes: [ContentIds.TAG_TYPE], includeNonCanonical, alsoSearchSpaceIds });
+    useSearch({
+      filterByTypes: [ContentIds.TAG_TYPE],
+      includeNonCanonical,
+      alsoSearchSpaceIds,
+      replaceScopeWithAlsoSearchSpaceIds: true,
+    });
   const selectedIds = React.useMemo(() => new Set(tags.map(tag => tag.id)), [tags]);
   const resultsRef = React.useRef<HTMLUListElement | null>(null);
 

@@ -84,6 +84,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     enabled: open,
     includeNonCanonical,
     alsoSearchSpaceIds,
+    replaceScopeWithAlsoSearchSpaceIds: true,
     analyticsSurface: 'global',
     filterByTypes: filterTypeIds.length > 0 ? filterTypeIds : undefined,
     filterByTags: filterTags.length > 0 ? filterTags.map(tag => tag.id) : undefined,
