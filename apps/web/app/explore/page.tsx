@@ -21,15 +21,19 @@ import { ExploreSidePanelContainer } from '~/partials/explore/explore-side-panel
 const SIGNED_IN_BEST_FEED_PRELOAD_HREF = '/api/explore/feed?sort=best';
 
 /**
- * The lead card's stills, preloaded from the document for a signed-out reader (GEO-3280). Renders
- * nothing; it sits behind its own boundary so its bounded read streams in after the shell and never
- * holds it. The hrefs are the card's own `src`s, so the `<img>`s take the preloaded responses.
+ * The lead card's stills, preloaded from the document for a signed-out reader (GEO-3280). It sits
+ * behind its own boundary so its bounded read streams in after the shell and never holds it. The
+ * hrefs are the card's own `src`s, so the `<img>`s take the preloaded responses.
+ *
+ * Elements rather than `preload()`: a hint from a boundary that resolves after the shell reaches
+ * the browser only in the RSC payload, which nothing reads until the bundle has booted. A `<link>`
+ * is written into the HTML, where the preload scanner sees it as soon as it arrives.
  */
 async function LeadPosterPreload() {
-  const [first, ...rest] = await readLeadPosterUrls();
-  if (first) preload(first, { as: 'image', fetchPriority: 'high' });
-  for (const href of rest) preload(href, { as: 'image' });
-  return null;
+  const hrefs = await readLeadPosterUrls();
+  return hrefs.map((href, index) => (
+    <link key={href} rel="preload" as="image" href={href} fetchPriority={index === 0 ? 'high' : 'auto'} />
+  ));
 }
 
 export default async function ExploreRoutePage() {
