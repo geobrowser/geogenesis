@@ -195,6 +195,31 @@ export function DebateExploreFeedCard({
     return () => observer.disconnect();
   }, [container]);
 
+  /*
+   * Whether this card is the one the viewer is scrolling towards: its top in the lower three
+   * quarters of the screen or within one screen below it, and not yet active. The player loads such a card's
+   * opening seconds (its `buffer`) so it starts the moment it is reached instead of on its clips.
+   * Ahead only — a card the viewer has scrolled past is not coming back on its own.
+   *
+   * Its own observer, on a root extended one screen down, with enough thresholds to notice a card
+   * leaving through the top as well as one arriving from below.
+   */
+  const [upNext, setUpNext] = React.useState(false);
+  React.useEffect(() => {
+    if (!container) return;
+    const observer = new IntersectionObserver(
+      entries => {
+        for (const entry of entries) {
+          const viewportHeight = entry.rootBounds?.height ?? window.innerHeight;
+          setUpNext(entry.isIntersecting && entry.boundingClientRect.top > viewportHeight / 4);
+        }
+      },
+      { rootMargin: '0px 0px 100% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] }
+    );
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [container]);
+
   // A veto, not a replacement: where a surface holds playback to one debate —
   // a row of cards, all of them fully on screen at once — this says whether it
   // is this one's turn. A card that is allowed but scrolled away still stops,
@@ -208,7 +233,8 @@ export function DebateExploreFeedCard({
   // the next one starts at once.
   const coveredBySheet = useCoveredByMobileSheet();
   const isMobileLayout = useIsMobileLayout();
-  const releaseMedia = coveredBySheet || (isMobileLayout && !onScreen);
+  // The card up next keeps its media too, so what it has loaded is there when it arrives.
+  const releaseMedia = coveredBySheet || (isMobileLayout && !onScreen && !upNext);
 
   const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
@@ -414,6 +440,7 @@ export function DebateExploreFeedCard({
             <DebateCardVideos
               debate={readyDebate}
               active={active && playbackAllowed && !coveredBySheet}
+              upNext={upNext && !active && !coveredBySheet}
               releaseMedia={releaseMedia}
               reducedOverlays={compactChrome}
               onOpenClaims={openClaims}
@@ -475,12 +502,14 @@ export function DebateExploreFeedCard({
 const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
   active,
+  upNext,
   releaseMedia,
   reducedOverlays,
   onOpenClaims,
 }: {
   debate: Debate;
   active: boolean;
+  upNext: boolean;
   releaseMedia: boolean;
   reducedOverlays: boolean;
   onOpenClaims: () => void;
@@ -490,6 +519,7 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
       debate={debate}
       active={active}
       preload
+      buffer={upNext}
       releaseMedia={releaseMedia}
       holdFullPlayback={DEBATE_FEED_HOLDS_FULL_PLAYBACK}
       reducedOverlays={reducedOverlays}
