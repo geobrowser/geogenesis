@@ -354,7 +354,7 @@ export function DebateVideoTile({
                       ROOM_MOMENT_ENTER_CLASS
                     )}
                     data-room-count-in
-                    style={{ ...ROOM_OUTLINED_STYLE, animationDuration: '200ms, 250ms' }}
+                    style={ROOM_OUTLINED_STYLE}
                   >
                     {upcomingSeconds}
                   </span>
@@ -365,7 +365,7 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {showGo && (
-              <RoomTilePill data-room-pill="go" tone="white" fadeInMs={200} fontWeight={700}>
+              <RoomTilePill data-room-pill="go" tone="white" fontWeight={700}>
                 Go
               </RoomTilePill>
             )}

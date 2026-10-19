@@ -6549,7 +6549,7 @@ describe('DebateRoomPageClient', () => {
       expect(phrase('local', 'count-in')).toHaveClass('text-white', 'font-semibold');
       expect((phrase('local', 'count-in') as HTMLElement).style.fontFamily).toContain('var(--font-calibre)');
       expect((phrase('local', 'count-in') as HTMLElement).style.textShadow).toBe(
-        '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000'
+        '-0.035em -0.035em 0 #000, 0 -0.035em 0 #000, 0.035em -0.035em 0 #000, 0.035em 0 0 #000, 0.035em 0.035em 0 #000, 0 0.035em 0 #000, -0.035em 0.035em 0 #000, -0.035em 0 0 #000, 0 0.05em 0.16em rgba(0,0,0,0.55)'
       );
       expect(debateVideoTile('local').querySelector('[data-room-count-in]')).toHaveTextContent('4');
       expect(debateVideoTile('local').querySelector('[data-room-dim]')).toHaveAttribute('data-room-dim', 'on');
@@ -6662,7 +6662,7 @@ describe('DebateRoomPageClient', () => {
       await waitFor(() => expectMutedIndicator('local'));
       expect(timer('local')?.closest('[data-room-leaving]')).not.toBeNull();
       const indicator = debateVideoTile('local').querySelector('[data-muted-indicator="true"]');
-      expect(indicator?.parentElement).toHaveClass('motion-safe:animate-[fadeIn_300ms_linear_both]');
+      expect(indicator?.parentElement).toHaveClass('animate-[fadeIn_250ms_ease-out_both]');
       await waitFor(() => expect(timer('local')).toBeNull());
     });
 
