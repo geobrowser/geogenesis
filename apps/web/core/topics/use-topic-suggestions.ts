@@ -8,7 +8,7 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
-import { TOPIC_TYPE_ID } from '~/core/constants';
+import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
@@ -20,8 +20,8 @@ const TOPIC_SEARCH_LIMIT = 20;
 
 // Ranked, deduped topics for a set of spaces (gaia#982). An empty `spaceIds` returns [].
 const TOPIC_SUGGESTIONS_SOURCE = /* GraphQL */ `
-  query TopicSuggestionsForSpaces($spaceIds: [UUID], $first: Int, $offset: Int) {
-    topicSuggestionsForSpaces(spaceIds: $spaceIds, first: $first, offset: $offset) {
+  query TopicSuggestionsForSpaces($spaceIds: [UUID], $first: Int, $offset: Int, $filter: EntityFilter!) {
+    topicSuggestionsForSpaces(spaceIds: $spaceIds, first: $first, offset: $offset, filter: $filter) {
       id
       name
     }
@@ -60,24 +60,69 @@ export function decodeTopicSearch(data: { search?: TopicRow[] | null }): TopicOp
   return decodeTopics(data.search);
 }
 
-/** Suggested topics for `spaceIds`, in rank order. `fetchMore` appends the next page. */
+type SuggestionCursor = { tier: 'curated' | 'remaining'; offset: number };
+type SuggestionPage = { topics: TopicOption[]; next: SuggestionCursor | null };
+
+/** Each tier keeps Gaia's ranking. Filters run on the server, before its first/offset pagination. */
+async function fetchSuggestionPage(
+  spaceIds: string[],
+  start: SuggestionCursor,
+  signal: AbortSignal
+): Promise<SuggestionPage> {
+  const topics: TopicOption[] = [];
+  let cursor = start;
+
+  while (topics.length < TOPIC_SUGGESTIONS_PAGE_SIZE) {
+    const first = TOPIC_SUGGESTIONS_PAGE_SIZE - topics.length;
+    const batch = await Effect.runPromise(
+      graphql({
+        query: topicSuggestionsDocument,
+        decoder: (data: { topicSuggestionsForSpaces?: TopicRow[] | null }) => ({
+          topics: decodeTopicSuggestions(data),
+          // Invalid/unnamed rows still consume API offsets, but must not end a tier early.
+          rawCount: data.topicSuggestionsForSpaces?.length ?? 0,
+        }),
+        variables: {
+          spaceIds,
+          first,
+          offset: cursor.offset,
+          filter: {
+            relations: {
+              [cursor.tier === 'curated' ? 'some' : 'none']: {
+                typeId: { is: TAG_PROPERTY_ID },
+                toEntityId: { is: CURATED_TOPIC_TAG_ID },
+              },
+            },
+          },
+        },
+        signal,
+      })
+    );
+    topics.push(...batch.topics);
+
+    if (batch.rawCount === first) {
+      cursor = { ...cursor, offset: cursor.offset + batch.rawCount };
+    } else if (cursor.tier === 'curated') {
+      // Curated tags are used across spaces, just as on topic pages. Once exhausted, fill the
+      // rest of this page with untagged topics, then continue that tier on the next Show more.
+      cursor = { tier: 'remaining', offset: 0 };
+    } else {
+      return { topics, next: null };
+    }
+  }
+
+  return { topics, next: cursor };
+}
+
+/** Curated topics first, then remaining topics; each tier preserves the existing space ranking. */
 export function useTopicSuggestions(spaceIds: string[]) {
   const ids = React.useMemo(() => [...new Set(spaceIds.filter(Boolean).map(uuidToHex))].sort(), [spaceIds]);
 
   const query = useInfiniteQuery({
-    queryKey: ['topic-suggestions-for-spaces', ids],
-    queryFn: ({ pageParam, signal }) =>
-      Effect.runPromise(
-        graphql({
-          query: topicSuggestionsDocument,
-          decoder: decodeTopicSuggestions,
-          variables: { spaceIds: ids, first: TOPIC_SUGGESTIONS_PAGE_SIZE, offset: pageParam },
-          signal,
-        })
-      ),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage, pages) =>
-      lastPage.length < TOPIC_SUGGESTIONS_PAGE_SIZE ? undefined : pages.length * TOPIC_SUGGESTIONS_PAGE_SIZE,
+    queryKey: ['topic-suggestions-for-spaces', 'curated-first', ids],
+    queryFn: ({ pageParam, signal }) => fetchSuggestionPage(ids, pageParam, signal),
+    initialPageParam: { tier: 'curated', offset: 0 } as SuggestionCursor,
+    getNextPageParam: lastPage => lastPage.next ?? undefined,
     enabled: ids.length > 0,
     staleTime: 5 * 60_000,
   });
@@ -85,7 +130,9 @@ export function useTopicSuggestions(spaceIds: string[]) {
   // Pages are offsets into a list that is rebuilt hourly, so a topic can recur across pages.
   const suggestions = React.useMemo(() => {
     const byId = new Map<string, TopicOption>();
-    for (const topic of (query.data?.pages ?? []).flat()) if (!byId.has(topic.id)) byId.set(topic.id, topic);
+    for (const page of query.data?.pages ?? []) {
+      for (const topic of page.topics) if (!byId.has(topic.id)) byId.set(topic.id, topic);
+    }
     return [...byId.values()];
   }, [query.data]);
 
