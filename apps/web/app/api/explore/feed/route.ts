@@ -13,9 +13,11 @@ import {
   resolveForYouViewer,
 } from '~/core/explore/for-you/resolve-for-you-viewer';
 import { readServingFreshSlotState } from '~/core/explore/fresh-slot/fresh-slot-store';
+import { readLastGoodPublicFeed, rememberPublicFeedPage } from '~/core/explore/last-good-public-feed';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
 import { seenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 import { normId } from '~/core/utils/norm-id';
+import { runAfterResponse } from '~/core/utils/run-after-response';
 
 /** Enough for any real follow list; the query string stays under ~7 KB. */
 const MAX_FOLLOWED_TOPIC_IDS = 200;
@@ -44,7 +46,18 @@ function feedInterleavingEnabled(): boolean {
  * lives at its own URL (`public=1`) and the server treats that URL as anonymous whatever cookies or
  * tokens arrive; the personalized URL is never given these headers.
  */
-const PUBLIC_FEED_CACHE_CONTROL = 'public, s-maxage=30, stale-while-revalidate=60';
+const PUBLIC_FEED_CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=600, stale-if-error=86400';
+
+/**
+ * The most a reader waits on this route. gaia answers a healthy feed in well under this; past it,
+ * it is shedding or timing out, and the client's own retries on top of an uncapped wait held readers
+ * for 60–106s on 2026-10-16. Past it the reader gets the last good public page if their request is
+ * one it can stand in for, and a 503 otherwise, which `EntityFeed` retries.
+ *
+ * The work itself is not cancelled — `fetchExploreFeed` takes no signal — so it runs on behind the
+ * response until its own queries settle; only the reader stops waiting on it.
+ */
+export const FEED_TIME_BUDGET_MS = 20_000;
 
 /** Only exactly `?sort=best&public=1` is cached, so arbitrary query strings cannot fill the cache. */
 function isCacheablePublicFirstPage(searchParams: URLSearchParams): boolean {
@@ -54,8 +67,64 @@ function isCacheablePublicFirstPage(searchParams: URLSearchParams): boolean {
   );
 }
 
+/**
+ * Whether the last good public page may answer this request when the feed cannot be built: the
+ * public first page itself, and the signed-in first page of Best with nothing narrowed. For the
+ * second it is a degraded answer — Best as a signed-out reader sees it — but one that leaks nothing,
+ * and a reader who has filtered or scrolled is never handed a page that ignores it.
+ */
+function lastGoodMayStandIn(searchParams: URLSearchParams): boolean {
+  if (isCacheablePublicFirstPage(searchParams)) return true;
+  const keys = [...searchParams.keys()];
+  return keys.length === 1 && keys[0] === 'sort' && searchParams.get('sort') === 'best';
+}
+
+/** The last good public page if it may stand in for this request, otherwise the 503. */
+async function lastGoodOrUnavailable(searchParams: URLSearchParams) {
+  if (lastGoodMayStandIn(searchParams)) {
+    const kept = await readLastGoodPublicFeed<Record<string, unknown>>();
+    if (kept) {
+      return NextResponse.json(kept.body, {
+        headers: {
+          // Never kept anywhere: the next request should try for a fresh page.
+          'cache-control': 'private, no-store',
+          'x-feed-stale-age': String(Math.round((Date.now() - kept.asOfMs) / 1000)),
+        },
+      });
+    }
+  }
+  return feedUnavailableResponse();
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let overBudget = false;
+  const work = buildFeedResponse(request, searchParams);
+  // Settles after the reader has their answer only when the budget won; say so rather than drop it.
+  work.catch(e => {
+    if (overBudget) console.error('explore feed, after its time budget', e);
+  });
+  try {
+    const response = await Promise.race([
+      work,
+      new Promise<null>(resolve => {
+        timer = setTimeout(() => resolve(null), FEED_TIME_BUDGET_MS);
+      }),
+    ]);
+    if (response) return response;
+    overBudget = true;
+    console.error(`explore feed: no page within ${FEED_TIME_BUDGET_MS}ms`);
+  } catch (e) {
+    console.error('explore feed', e);
+  } finally {
+    clearTimeout(timer);
+  }
+  return lastGoodOrUnavailable(searchParams);
+}
+
+/** Builds the page, or throws when it cannot; `GET` decides what a failure answers. */
+async function buildFeedResponse(request: Request, searchParams: URLSearchParams): Promise<NextResponse> {
   const pageSort = parseExplorePageSort(searchParams.get('sort'));
   const sort: ExploreSort = pageSort === 'for-you' ? 'best' : pageSort;
   const time = parseExploreTime(searchParams.get('time'));
@@ -113,53 +182,49 @@ export async function GET(request: Request) {
   // knobs, identical for every visitor, so nothing per-visitor reaches this response or its caches.
   const seenDemotion = seenDemotionPageConfig(freshState?.config.seenDemotion);
 
-  try {
-    const result = await fetchExploreFeed({
-      browse,
-      sort,
-      time,
-      spaceFilterIds: spaceFilter,
-      cursor: windowCursor,
-      walletAddress,
-      memberOrEditorSpaceIds,
-      typeIds,
-      ...EXPLORE_FEED_POLICY,
-      forYouTopicIds,
-      reorderWindow:
-        viewerId !== null
-          ? createPersonalizedWindowReorder({
-              userId: viewerId,
-              requested: pageSort === 'for-you' ? 'for-you' : 'best',
-              asOf,
-              interleavingEnabled: interleaving,
-            })
-          : undefined,
-      freshSlot: freshState ? { config: freshState.config, revision: freshState.revision } : undefined,
-      markPlayableLeads: seenDemotion !== null,
-    });
-    // Every card names the version that put it there, so engagement can be credited to it.
-    const feed = result.feed;
-    const items = feed
-      ? result.items.map(item => (item.ranking ? item : { ...item, ranking: { version: feed.version } }))
-      : result.items;
-    // Plain Best only: For you and an interleaving experiment are left alone, as with the fresh slot.
-    const seenApplies = seenDemotion !== null && feed?.name === 'best' && !personalized;
-    const { reserve, ...rest } = result;
-    const body = {
-      ...rest,
-      ...(seenApplies ? { seenDemotion, ...(reserve ? { reserve } : {}) } : {}),
-      items,
-      nextCursor: personalized ? encodePersonalizedCursor(asOf, result.nextCursor) : result.nextCursor,
-    };
-    // A personalized page belongs to one person: never let any cache between here and them keep it.
-    if (personalized) return NextResponse.json(body, { headers: { 'cache-control': 'private, no-store' } });
-    // An empty page is never kept: it is as likely a dependency hiccup as a truth.
-    if (anonymous && isCacheablePublicFirstPage(searchParams) && items.length > 0) {
-      return NextResponse.json(body, { headers: { 'cache-control': PUBLIC_FEED_CACHE_CONTROL } });
-    }
-    return NextResponse.json(body);
-  } catch (e) {
-    console.error('explore feed', e);
-    return feedUnavailableResponse();
+  const result = await fetchExploreFeed({
+    browse,
+    sort,
+    time,
+    spaceFilterIds: spaceFilter,
+    cursor: windowCursor,
+    walletAddress,
+    memberOrEditorSpaceIds,
+    typeIds,
+    ...EXPLORE_FEED_POLICY,
+    forYouTopicIds,
+    reorderWindow:
+      viewerId !== null
+        ? createPersonalizedWindowReorder({
+            userId: viewerId,
+            requested: pageSort === 'for-you' ? 'for-you' : 'best',
+            asOf,
+            interleavingEnabled: interleaving,
+          })
+        : undefined,
+    freshSlot: freshState ? { config: freshState.config, revision: freshState.revision } : undefined,
+    markPlayableLeads: seenDemotion !== null,
+  });
+  // Every card names the version that put it there, so engagement can be credited to it.
+  const feed = result.feed;
+  const items = feed
+    ? result.items.map(item => (item.ranking ? item : { ...item, ranking: { version: feed.version } }))
+    : result.items;
+  // Plain Best only: For you and an interleaving experiment are left alone, as with the fresh slot.
+  const seenApplies = seenDemotion !== null && feed?.name === 'best' && !personalized;
+  const { reserve, ...rest } = result;
+  const body = {
+    ...rest,
+    ...(seenApplies ? { seenDemotion, ...(reserve ? { reserve } : {}) } : {}),
+    items,
+    nextCursor: personalized ? encodePersonalizedCursor(asOf, result.nextCursor) : result.nextCursor,
+  };
+  // A personalized page belongs to one person: never let any cache between here and them keep it.
+  if (personalized) return NextResponse.json(body, { headers: { 'cache-control': 'private, no-store' } });
+  // An empty page is never kept: it is as likely a dependency hiccup as a truth.
+  if (anonymous && isCacheablePublicFirstPage(searchParams) && items.length > 0) {
+    runAfterResponse(() => rememberPublicFeedPage(body));
+    return NextResponse.json(body, { headers: { 'cache-control': PUBLIC_FEED_CACHE_CONTROL } });
   }
+  return NextResponse.json(body);
 }

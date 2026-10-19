@@ -56,7 +56,7 @@ import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { Row } from '~/core/types';
 
-import { stepAtom } from '~/partials/onboarding/dialog';
+import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeReturnHrefAtom } from '~/atoms/ranking-compose-return';

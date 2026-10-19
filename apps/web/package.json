@@ -91,6 +91,7 @@
     "framer-motion": "^12.42.0",
     "graphql": "^16.14.2",
     "graphql-request": "^7.4.0",
+    "hls.js": "^1.6.13",
     "immer": "^11.1.8",
     "intl-messageformat": "^11.2.9",
     "jotai": "^2.20.2",

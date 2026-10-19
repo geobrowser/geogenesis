@@ -41,7 +41,7 @@ import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { SearchResult } from '~/core/types';
 import { useRankingOpportunity } from '~/core/use-ranking-opportunity';
 
-import { stepAtom } from '~/partials/onboarding/dialog';
+import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';

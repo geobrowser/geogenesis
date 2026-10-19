@@ -30,7 +30,7 @@ vi.mock('~/core/debates/api', () => ({ resetGeoChatSession: mocks.resetGeoChatSe
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
 vi.mock('~/core/state/editable-store', () => ({ useEditable: () => ({ setEditable: mocks.setEditable }) }));
 vi.mock('~/core/state/pending-personal-space', () => ({ pendingPersonalSpaceAtom: {} }));
-vi.mock('~/partials/onboarding/dialog', () => ({
+vi.mock('~/partials/onboarding/onboarding-atoms', () => ({
   avatarAtom: {},
   nameAtom: {},
   selectedTopicIdsAtom: {},

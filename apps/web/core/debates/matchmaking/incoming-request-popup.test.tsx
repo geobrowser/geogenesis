@@ -28,6 +28,7 @@ vi.mock('../media-session', async importOriginal => ({
     previewState: 'idle',
     previewError: null,
     localTracksRef: { current: [] },
+    joinChoiceRef: { current: null },
   }),
 }));
 
