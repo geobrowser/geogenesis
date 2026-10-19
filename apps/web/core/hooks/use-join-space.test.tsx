@@ -16,9 +16,11 @@ const mocks = vi.hoisted(() => ({
   smartAccount: null as unknown,
   personalSpace: { personalSpaceId: null as string | null, isRegistered: false, isLoading: false },
   accountSetupPending: false,
+  authResolving: false,
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
+vi.mock('~/core/hooks/use-auth-resolving', () => ({ useAuthResolving: () => mocks.authResolving }));
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: mocks.smartAccount }) }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => mocks.personalSpace }));
 vi.mock('~/core/state/pending-personal-space', () => ({
@@ -47,6 +49,7 @@ beforeEach(() => {
   mocks.smartAccount = null;
   mocks.personalSpace = { personalSpaceId: null, isRegistered: false, isLoading: false };
   mocks.accountSetupPending = false;
+  mocks.authResolving = false;
 });
 
 describe('useJoinSpace', () => {
@@ -130,5 +133,59 @@ describe('useJoinSpace', () => {
     expect(result.current.optimisticRequested).toBe(true);
     expect(mocks.promptSignIn).not.toHaveBeenCalled();
     expect(mocks.requestToBeMember).not.toHaveBeenCalled();
+  });
+
+  it('queues the request but holds the prompt while sign-in is still resolving', () => {
+    mocks.authResolving = true;
+    const { result } = renderJoin();
+
+    act(() => result.current.join());
+
+    expect(queued()).toHaveLength(1);
+    expect(mocks.promptSignIn).not.toHaveBeenCalled();
+    expect(result.current.optimisticRequested).toBe(true);
+  });
+
+  it('never prompts when the press turns out to have been made by a signed-in viewer', () => {
+    mocks.authResolving = true;
+    const { result, rerender } = renderJoin();
+
+    act(() => result.current.join());
+
+    mocks.authResolving = false;
+    mocks.smartAccount = { account: { address: '0xabc' } };
+    act(() => rerender());
+
+    expect(mocks.promptSignIn).not.toHaveBeenCalled();
+    expect(queued()).toHaveLength(1);
+  });
+
+  it('prompts a beat later when the press turns out to have been made signed out', () => {
+    mocks.authResolving = true;
+    const { result, rerender } = renderJoin();
+
+    act(() => result.current.join());
+    expect(mocks.promptSignIn).not.toHaveBeenCalled();
+
+    mocks.authResolving = false;
+    act(() => rerender());
+
+    expect(mocks.promptSignIn).toHaveBeenCalledTimes(1);
+    act(() => mocks.promptSignIn.mock.calls[0]![1].onCancel());
+    expect(queued()).toHaveLength(0);
+  });
+
+  it('prompts only once, however many renders follow', () => {
+    mocks.authResolving = true;
+    const { result, rerender } = renderJoin();
+
+    act(() => result.current.join());
+
+    mocks.authResolving = false;
+    act(() => rerender());
+    act(() => rerender());
+    act(() => rerender());
+
+    expect(mocks.promptSignIn).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
@@ -121,15 +121,21 @@ describe('a vote from a signed-out visitor', () => {
     expect(screen.getByText('1')).toBeInTheDocument();
   });
 
-  // Copilot on #2785: before Privy has restored a session, signed out is not known yet.
-  it('drops a press while a session is still being restored', () => {
+  it('holds a press while a session is still being restored, then keeps it once signed out is known', async () => {
     mocks.authReady = false;
-    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, { wrapper });
+    const view = render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, {
+      wrapper,
+    });
 
     fireEvent.click(upvote());
 
     expect(readLocalVotes().votes).toEqual([]);
     expect(queued()).toHaveLength(0);
+
+    mocks.authReady = true;
+    view.rerender(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />);
+
+    await waitFor(() => expect(readLocalVotes().votes).toHaveLength(1));
   });
 
   it('switches and takes back, like the arrows do signed in', () => {

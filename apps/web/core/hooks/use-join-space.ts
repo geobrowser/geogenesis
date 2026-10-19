@@ -1,5 +1,8 @@
 'use client';
 
+import * as React from 'react';
+
+import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
@@ -20,6 +23,9 @@ type UseJoinSpaceArgs = {
  * - Signed out: queue the request and open Privy. `PendingActionsRunner` submits it once the new
  *   account has a personal space; a dismissed sign-in withdraws it.
  * - Signed in, personal space still registering: queue the request the same way.
+ * - Sign-in still resolving: queue the request, and wait to find out whether to ask for an account.
+ *   `!smartAccount` reads as signed out for that moment, so prompting on it asked a signed-in
+ *   viewer to sign in.
  *
  * Queued at the press either way, into the app-level queue rather than anything this button owns:
  * the button can unmount while the viewer signs up, and the request has to outlive it. The
@@ -53,6 +59,8 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
   const optimisticRequested = queuedJoin.isQueued;
 
   const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
+  const authResolving = useAuthResolving();
+  const [promptWhenResolved, setPromptWhenResolved] = React.useState(false);
 
   const join = () => {
     if (canRequestLive) {
@@ -61,11 +69,27 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
     }
     if (!smartAccount) {
       queuedJoin.queue();
+      if (authResolving) {
+        setPromptWhenResolved(true);
+        return;
+      }
       promptSignIn(undefined, { onCancel: queuedJoin.cancel });
       return;
     }
     if (isAccountSetupPending || isPersonalSpaceLoading) queuedJoin.queue();
   };
+
+  const promptSignInRef = React.useRef(promptSignIn);
+  React.useEffect(() => {
+    promptSignInRef.current = promptSignIn;
+  });
+
+  React.useEffect(() => {
+    if (!promptWhenResolved || authResolving) return;
+    setPromptWhenResolved(false);
+    if (smartAccount) return;
+    promptSignInRef.current(undefined, { onCancel: queuedJoin.cancel });
+  }, [promptWhenResolved, authResolving, smartAccount, queuedJoin.cancel]);
 
   return { join, status, optimisticRequested };
 }
