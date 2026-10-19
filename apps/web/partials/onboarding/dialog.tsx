@@ -41,7 +41,6 @@ import {
   SquareButton,
 } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
-import { FallbackImage } from '~/design-system/fallback-image';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Camera } from '~/design-system/icons/camera';
 import { CheckedCircleCheckedSmall } from '~/design-system/icons/check-circle-checked-small';
@@ -56,6 +55,7 @@ import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
 import { FeedTopicPicker, RECOMMENDED_FEED_TOPIC_COUNT } from './customize-feed';
+import { InterestGrid, preloadInterestImages } from './interest-grid';
 import { avatarAtom, nameAtom, selectedTopicIdsAtom, stepAtom, topicIdAtom } from './onboarding-atoms';
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
 import { useContentBelow } from './use-content-below';
@@ -169,6 +169,7 @@ export const OnboardingDialog = () => {
     setFeaturedStatus('loading');
     fetchBrowseSidebarData(undefined)
       .then(data => {
+        preloadInterestImages(data.featured);
         setFeaturedSpaces(data.featured);
         setFeaturedStatus(data.featuredError ? 'error' : 'loaded');
       })
@@ -179,11 +180,12 @@ export const OnboardingDialog = () => {
       });
   }, []);
 
+  // Start during profile setup so the choices and their thumbnails are ready for the next step.
   // 'customize-feed' also needs them: with no space picks, suggestions come from every featured space.
   useEffect(() => {
-    if (step !== 'interested-in' && step !== 'customize-feed') return;
+    if (!isOnboardingVisible) return;
     loadFeaturedSpaces();
-  }, [step, loadFeaturedSpaces]);
+  }, [isOnboardingVisible, loadFeaturedSpaces]);
 
   const lastTrackedStep = useRef<string | null>(null);
   useEffect(() => {
@@ -848,30 +850,8 @@ function StepInterestedIn({
         </div>
       ) : (
         <div ref={scrollRef} className="my-5 min-h-0 flex-1 overflow-y-auto">
-          <div ref={contentRef} className="flex flex-wrap content-start justify-center gap-2">
-            {featuredSpaces.map(space => {
-              const isSelected = selectedTopicIds.includes(space.id);
-              return (
-                <button
-                  key={space.id}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => handleSelectTopics(space.id)}
-                  className={cx(
-                    'flex max-w-full items-center gap-2 rounded-full border px-3 py-2 text-left text-metadata transition-colors focus-visible:outline-2 focus-visible:outline-text',
-                    isSelected ? 'border-text bg-grey-02' : 'border-grey-02 hover:bg-grey-01'
-                  )}
-                >
-                  <span
-                    aria-hidden="true"
-                    className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full bg-grey-01"
-                  >
-                    <FallbackImage value={space.image ?? ''} sizes="16px" className="object-cover" />
-                  </span>
-                  <span className="min-w-0 break-words">{space.name}</span>
-                </button>
-              );
-            })}
+          <div ref={contentRef}>
+            <InterestGrid spaces={featuredSpaces} selectedIds={selectedTopicIds} onToggle={handleSelectTopics} />
           </div>
         </div>
       )}
