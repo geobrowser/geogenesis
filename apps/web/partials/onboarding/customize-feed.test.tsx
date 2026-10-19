@@ -46,7 +46,6 @@ function Picker({
   onRetryPrepare?: () => void;
 }) {
   const [selected, setSelected] = React.useState(initialSelected);
-  const [searchOpen, setSearchOpen] = React.useState(false);
   return (
     <FeedTopicPicker
       spaceIds={[]}
@@ -55,15 +54,12 @@ function Picker({
         onChange(topics);
         setSelected(topics);
       }}
-      searchOpen={searchOpen}
-      onSearchOpenChange={setSearchOpen}
       {...props}
     />
   );
 }
 
 function search(query: string) {
-  fireEvent.click(screen.getByRole('button', { name: 'Search topics' }));
   fireEvent.change(screen.getByRole('textbox', { name: 'Search topics' }), { target: { value: query } });
 }
 
@@ -101,17 +97,17 @@ describe('FeedTopicPicker', () => {
     expect(mocks.fetchMore).not.toHaveBeenCalled();
   });
 
-  it('opens a focused search view instead of filtering the suggestion pills', () => {
-    mocks.suggestions = [{ id: 'btc', name: 'Bitcoin' }];
+  it('shows matching topic pills inline and hides pagination during search', () => {
+    mocks.suggestions = [{ id: 'health', name: 'Health' }];
+    mocks.search.results = [{ id: 'btc', name: 'Bitcoin' }];
     mocks.hasMore = true;
     render(<Picker />);
     search('crypto');
 
-    expect(screen.getByRole('textbox', { name: 'Search topics' })).toHaveFocus();
-    expect(screen.queryByRole('button', { name: 'Bitcoin' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bitcoin' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Health' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Show more topics' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
   });
 
   it("won't pick a hit from the previous query while the next one loads", () => {
@@ -124,50 +120,10 @@ describe('FeedTopicPicker', () => {
     fireEvent.click(stale);
 
     expect(stale).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it('commits multiple search picks together with Add and preserves existing picks', () => {
-    const existing = { id: 'health', name: 'Health' };
-    const topics = [
-      { id: 'btc', name: 'Bitcoin' },
-      { id: 'eth', name: 'Ethereum' },
-    ];
-    mocks.search.results = topics;
-    const onChange = vi.fn();
-    render(<Picker initialSelected={[existing]} onChange={onChange} />);
-    search('crypto');
-
-    expect(screen.queryByRole('button', { name: 'Health' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Bitcoin' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Ethereum' }));
-    expect(onChange).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
-
-    expect(onChange).toHaveBeenCalledOnce();
-    expect(onChange).toHaveBeenCalledWith([existing, ...topics]);
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Bitcoin' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Ethereum' })).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  it('Cancel discards draft picks and restores focus to the search control', () => {
-    mocks.search.results = [{ id: 'btc', name: 'Bitcoin' }];
-    const onChange = vi.fn();
-    render(<Picker onChange={onChange} />);
-    search('crypto');
-    fireEvent.click(screen.getByRole('button', { name: 'Bitcoin' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-
-    expect(onChange).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Search topics' })).toHaveFocus();
-    fireEvent.click(screen.getByRole('button', { name: 'Search topics' }));
-    expect(screen.getByRole('button', { name: 'Bitcoin' })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
-  });
-
-  it('keeps draft picks while searching for another topic', () => {
+  it('applies search picks immediately and keeps them after clearing the search', () => {
     const bitcoin = { id: 'btc', name: 'Bitcoin' };
     const ethereum = { id: 'eth', name: 'Ethereum' };
     mocks.search.results = [bitcoin];
@@ -175,26 +131,31 @@ describe('FeedTopicPicker', () => {
     render(<Picker onChange={onChange} />);
     search('bitcoin');
     fireEvent.click(screen.getByRole('button', { name: 'Bitcoin' }));
+    expect(onChange).toHaveBeenLastCalledWith([bitcoin]);
 
     mocks.search.results = [ethereum];
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'ethereum' } });
-    expect(screen.queryByRole('button', { name: 'Bitcoin' })).not.toBeInTheDocument();
+    search('ethereum');
     fireEvent.click(screen.getByRole('button', { name: 'Ethereum' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear topic search' }));
 
-    expect(onChange).toHaveBeenCalledWith([bitcoin, ethereum]);
+    expect(onChange).toHaveBeenLastCalledWith([bitcoin, ethereum]);
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(screen.getByRole('textbox')).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Bitcoin' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Ethereum' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('Escape cancels the search without changing picks', () => {
-    mocks.search.results = [{ id: 'btc', name: 'Bitcoin' }];
+  it('Escape clears the query while preserving selected topics', () => {
+    const topic = { id: 'btc', name: 'Bitcoin' };
+    mocks.search.results = [topic];
     const onChange = vi.fn();
-    render(<Picker onChange={onChange} />);
-    search('crypto');
-    fireEvent.click(screen.getByRole('button', { name: 'Bitcoin' }));
+    render(<Picker initialSelected={[topic]} onChange={onChange} />);
+    search('bitcoin');
     fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
 
     expect(onChange).not.toHaveBeenCalled();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Bitcoin' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('uses the known topic id when a search result has the same name', () => {
@@ -204,7 +165,6 @@ describe('FeedTopicPicker', () => {
     render(<Picker onChange={onChange} />);
     search('bitcoin');
     fireEvent.click(screen.getByRole('button', { name: 'Bitcoin' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     expect(onChange).toHaveBeenCalledWith(mocks.suggestions);
   });

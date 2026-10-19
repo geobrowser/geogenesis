@@ -44,7 +44,6 @@ import { Dots } from '~/design-system/dots';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Camera } from '~/design-system/icons/camera';
-import { Check } from '~/design-system/icons/check';
 import { CheckedCircleCheckedSmall } from '~/design-system/icons/check-circle-checked-small';
 import { CheckedCircleUncheckedSmall } from '~/design-system/icons/check-circle-unchecked-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -293,9 +292,7 @@ export const OnboardingDialog = () => {
         >
           <Title className="sr-only">Set up your Geo account</Title>
           <ModalCard childKey="card" effectiveStep={effectiveStep}>
-            {effectiveStep !== 'customize-feed' && (
-              <StepHeader step={effectiveStep} onClearEntityMatches={() => setEntityMatchCandidates([])} />
-            )}
+            <StepHeader step={effectiveStep} onClearEntityMatches={() => setEntityMatchCandidates([])} />
             {effectiveStep === 'start' && <StepWelcome onProfileContinue={onProfileContinue} />}
             {effectiveStep === 'existing-entity-match' && (
               <StepExistingEntityMatch
@@ -400,15 +397,7 @@ const StepDots = ({ step }: { step: StepWithHeader }) => (
 
 // `step` is the normalized effectiveStep, so a legacy value persisted by an
 // older version of the flow still renders the header for the step it maps to.
-const StepHeader = ({
-  step,
-  onClearEntityMatches,
-  onBack,
-}: {
-  step: Step;
-  onClearEntityMatches?: () => void;
-  onBack?: () => void;
-}) => {
+const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityMatches: () => void }) => {
   const setStep = useSetAtom(stepAtom);
   const topicId = useAtomValue(topicIdAtom);
   // Cleanup runs via the app-root useGeoLogoutCleanup; this only triggers it.
@@ -419,12 +408,8 @@ const StepHeader = ({
   const showBack = step === 'existing-entity-match' || (stepOrder[step] ?? 0) > 1;
 
   const handleBack = () => {
-    if (onBack) {
-      onBack();
-      return;
-    }
     if (step === 'existing-entity-match') {
-      onClearEntityMatches?.();
+      onClearEntityMatches();
       setStep('start');
       return;
     }
@@ -441,7 +426,7 @@ const StepHeader = ({
       {showBack && (
         <div className="absolute left-0 rotate-180">
           <SquareButton
-            aria-label={onBack ? 'Back to topics' : 'Previous step'}
+            aria-label="Previous step"
             icon={<RightArrowLongSmall />}
             onClick={handleBack}
             className="border-none! bg-transparent!"
@@ -859,7 +844,7 @@ function StepInterestedIn({
         </div>
       ) : (
         <div className="my-5 min-h-0 flex-1 overflow-y-auto">
-          <div className="grid grid-cols-3 gap-x-3 gap-y-4">
+          <div className="flex flex-wrap content-start gap-2">
             {featuredSpaces.map(space => {
               const isSelected = selectedTopicIds.includes(space.id);
               return (
@@ -868,28 +853,18 @@ function StepInterestedIn({
                   type="button"
                   aria-pressed={isSelected}
                   onClick={() => handleSelectTopics(space.id)}
-                  className="flex min-w-0 flex-col items-center gap-2 rounded-md px-1 py-1 text-center focus-visible:outline-2 focus-visible:outline-text"
+                  className={cx(
+                    'flex max-w-full items-center gap-2 rounded-full border px-3 py-2 text-left text-metadata transition-colors focus-visible:outline-2 focus-visible:outline-text',
+                    isSelected ? 'border-text bg-grey-02' : 'border-grey-02 hover:bg-grey-01'
+                  )}
                 >
                   <span
                     aria-hidden="true"
-                    className={cx(
-                      'relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full border text-lg',
-                      isSelected ? 'border-text bg-grey-02' : 'border-grey-02 bg-grey-01'
-                    )}
+                    className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full bg-grey-01"
                   >
-                    <span className="text-grey-04">{space.name.slice(0, 1)}</span>
-                    {space.image && (
-                      <span className="absolute inset-2 overflow-hidden rounded-full">
-                        <FallbackImage value={space.image} sizes="40px" className="object-cover" />
-                      </span>
-                    )}
-                    {isSelected && (
-                      <span className="absolute -right-1 -bottom-1 rounded-full bg-text p-1 text-white ring-2 ring-white">
-                        <Check />
-                      </span>
-                    )}
+                    <FallbackImage value={space.image ?? ''} sizes="16px" className="object-cover" />
                   </span>
-                  <span className="text-metadata leading-4 break-words">{space.name}</span>
+                  <span className="min-w-0 break-words">{space.name}</span>
                 </button>
               );
             })}
@@ -933,29 +908,25 @@ function StepCustomizeFeed({
   onChange: (topics: TopicOption[]) => void;
   onCompleteOnboard: () => void;
 }) {
-  const [searchOpen, setSearchOpen] = React.useState(false);
   const hasPicks = selected.length > 0;
   const needsMore = selected.length < RECOMMENDED_FEED_TOPIC_COUNT;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <StepHeader step="customize-feed" onBack={searchOpen ? () => setSearchOpen(false) : undefined} />
-      {!searchOpen && (
-        <StepContents childKey="customize-feed">
-          <div className="w-full">
-            <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
-              Customize your feed
-            </Text>
-            <Text
-              as="p"
-              variant="body"
-              className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
-            >
-              Every topic you follow helps personalize your feed
-            </Text>
-          </div>
-        </StepContents>
-      )}
+      <StepContents childKey="customize-feed">
+        <div className="w-full">
+          <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
+            Customize your feed
+          </Text>
+          <Text
+            as="p"
+            variant="body"
+            className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
+          >
+            Every topic you follow helps personalize your feed
+          </Text>
+        </div>
+      </StepContents>
       <FeedTopicPicker
         spaceIds={spaceIds}
         isPreparing={isPreparing}
@@ -963,26 +934,22 @@ function StepCustomizeFeed({
         onRetryPrepare={onRetryPrepare}
         selected={selected}
         onChange={onChange}
-        searchOpen={searchOpen}
-        onSearchOpenChange={setSearchOpen}
-        className={cx('flex-1', !searchOpen && 'mt-6')}
+        className="mt-6 flex-1"
       />
-      {!searchOpen && (
-        <div className="mt-4 shrink-0 border-t border-grey-02 pt-4">
-          <Text as="p" variant="footnote" className="pb-2 text-center text-grey-04">
-            {needsMore
-              ? `Pick ${RECOMMENDED_FEED_TOPIC_COUNT} or more for a better feed`
-              : `${selected.length} topics selected`}
-          </Text>
-          <button
-            type="button"
-            onClick={onCompleteOnboard}
-            className={hasPicks ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
-          >
-            {hasPicks ? 'Create profile' : 'Skip for now'}
-          </button>
-        </div>
-      )}
+      <div className="mt-4 shrink-0 border-t border-grey-02 pt-4">
+        <Text as="p" variant="footnote" className="pb-2 text-center text-grey-04">
+          {needsMore
+            ? `Pick ${RECOMMENDED_FEED_TOPIC_COUNT} or more for a better feed`
+            : `${selected.length} topics selected`}
+        </Text>
+        <button
+          type="button"
+          onClick={onCompleteOnboard}
+          className={hasPicks ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
+        >
+          {hasPicks ? 'Create profile' : 'Skip for now'}
+        </button>
+      </div>
     </div>
   );
 }
