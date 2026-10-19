@@ -47,7 +47,8 @@ vi.mock('./media-session', async importOriginal => ({
   }),
 }));
 
-vi.mock('./debate-video-tile', () => ({
+vi.mock('./debate-video-tile', async importOriginal => ({
+  ...(await importOriginal<typeof import('./debate-video-tile')>()),
   DebateVideoTile: ({ children, tileControls }: { children: React.ReactNode; tileControls: React.ReactNode }) => (
     <div data-testid="tile">
       {tileControls}
@@ -394,11 +395,11 @@ describe('DebateRequestMediaPreview', () => {
 });
 
 describe('the picture survives the camera being switched off and on', () => {
-  it('attaches the stream to a preview element that was remounted', async () => {
+  it.each(['compact', 'tile'] as const)('reattaches the stream after the camera is toggled (%s)', async appearance => {
     const stream = { id: 'live-stream' };
     mocks.previewStream = stream;
     mocks.permission = 'granted';
-    mount();
+    mount({ appearance });
     await screen.findByText('Joining with mic and camera on');
     expect(document.querySelector('video')).not.toBeNull();
 
@@ -672,12 +673,12 @@ describe('a device that is not there', () => {
     expect(await screen.findByText('Joining listening only')).toBeInTheDocument();
   });
 
-  it('routes a refusal to the blocked copy rather than a bare failure line', async () => {
+  it.each(['compact', 'tile'] as const)('explains a media refusal without promising devices (%s)', async appearance => {
     mocks.permission = 'prompt';
     mocks.ensurePreview
       .mockReset()
       .mockRejectedValue(Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' }));
-    mount();
+    mount({ appearance });
     await screen.findByText('Joining listening only');
     mocks.permission = 'denied';
 
