@@ -1108,6 +1108,24 @@ afterEach(() => {
 });
 
 describe('DebateRematchPageClient', () => {
+  it('keeps the videos outside the sticky filters and scrolls without switching header layouts', async () => {
+    mocks.debateVideo = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    const participants = screen.getByRole('region', { name: 'Participants' });
+    const filters = screen.getByRole('group', { name: 'Claim picker filters' });
+    const scroller = document.querySelector('[data-rematch-scroll]')!;
+    const participantContent = participants.innerHTML;
+    expect(filters).toHaveClass('sticky');
+    expect(filters).not.toContainElement(participants);
+    expect(filters).toContainElement(screen.getByRole('textbox', { name: 'Search claims and topics' }));
+    scroller.scrollTop = 160;
+    fireEvent.scroll(scroller);
+    expect(participants.innerHTML).toBe(participantContent);
+    expect(scroller.scrollTop).toBe(160);
+    expect(screen.queryByRole('button', { name: 'Show full participant videos' })).toBeNull();
+  });
+
   it('does not leave a browsing rematch during the Strict Mode effect rehearsal', async () => {
     render(
       <StrictMode>
@@ -3895,14 +3913,15 @@ describe('DebateRematchPageClient', () => {
 
   // GEO-2992. The unmute control used to live in a 200px dock fixed to the bottom-right of the
   // viewport — outside the content column, and a scroll away from everything the viewer was reading.
-  // Its replacement has to be in the column, above the tabs, and pinned with them.
-  it('pins the pair header at the top of the content column', async () => {
+  // Keep it above the tabs in the reading order; the full cards now scroll naturally.
+  it('places the full pair header above the sticky claim filters', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
     const header = screen.getByTestId('rematch-pair-header');
     const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
-    expect(header.closest('.sticky')).toBe(pinned);
+    expect(header.closest('.sticky')).toBeNull();
+    expect(pinned).not.toBeNull();
 
     // Inside the column, not floating over the viewport: the dock's `fixed` shell is gone.
     expect(header.closest('main')).not.toBeNull();

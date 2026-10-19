@@ -3,7 +3,6 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import { motion } from 'framer-motion';
 
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
@@ -14,7 +13,6 @@ import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
 import styles from './rematch-video-header.module.css';
-import { RematchPickerHeaderContext } from './rematch-picker-sticky-header';
 
 /**
  * The "You VS them" header for the rematch claim picker (GEO-2992).
@@ -141,8 +139,7 @@ export function RematchPairHeader({
     <div className="flex flex-col gap-3">
       {/* Option A keeps the videos side by side, with the phone's controls in their own row.
           The audio-only layout retains its stacked participant cards. */}
-      <motion.div
-        layout={videoLayout}
+      <div
         className={cx(
           'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2',
           videoLayout ? styles.pair : 'mobile:grid-cols-1'
@@ -159,7 +156,7 @@ export function RematchPairHeader({
         />
         <VsBadge />
         <YouCard local={local} voice={voice} opponentName={opponentName} leaveAction={leaveAction} />
-      </motion.div>
+      </div>
 
       {/* The spoken half of the nudges: a region that is always mounted and only changes text. A
           live region inserted with its content already in it is dropped by VoiceOver often enough
@@ -188,31 +185,15 @@ function toastAnnouncement(toast: PairHeaderToast, opponentName: string) {
 
 function VsBadge() {
   const videoLayout = useFeatureFlag('debateVideo');
-  const header = React.useContext(RematchPickerHeaderContext);
   return (
-    <motion.div
-      layout={videoLayout ? 'position' : false}
-      className={cx('flex items-center justify-center', videoLayout && styles.vs)}
-    >
-      {header?.compact ? (
-        <button
-          type="button"
-          aria-label="Show full participant videos"
-          aria-expanded={false}
-          onClick={header.expand}
-          className="grid size-7 place-items-center rounded-full bg-text text-tag tracking-[0.04em] text-white"
-        >
-          <span aria-hidden>VS</span>
-        </button>
-      ) : (
-        <span
-          aria-hidden
-          className="grid size-7 place-items-center rounded-full bg-text text-tag tracking-[0.04em] text-white"
-        >
-          VS
-        </span>
-      )}
-    </motion.div>
+    <div className={cx('flex items-center justify-center', videoLayout && styles.vs)}>
+      <span
+        aria-hidden
+        className="grid size-7 place-items-center rounded-full bg-text text-tag tracking-[0.04em] text-white"
+      >
+        VS
+      </span>
+    </div>
   );
 }
 
@@ -266,20 +247,14 @@ function PairCardBody({
   const videoLayout = useFeatureFlag('debateVideo');
   if (videoLayout) {
     return (
-      <motion.div layout className={styles.cardBody}>
+      <div className={styles.cardBody}>
         {avatar}
-        <motion.span layout="position" title={nameTitle} className={styles.cardName}>
+        <span title={nameTitle} className={styles.cardName}>
           {name}
-        </motion.span>
-        <motion.div layout="position" className={styles.cardState}>
-          {state}
-        </motion.div>
-        {action ? (
-          <motion.div layout="position" className={styles.cardAction}>
-            {action}
-          </motion.div>
-        ) : null}
-      </motion.div>
+        </span>
+        <div className={styles.cardState}>{state}</div>
+        {action ? <div className={styles.cardAction}>{action}</div> : null}
+      </div>
     );
   }
   return (
@@ -379,8 +354,7 @@ function YouCard({
     ) : null;
 
   return (
-    <motion.div
-      layout={videoLayout}
+    <div
       data-testid="rematch-you-card"
       aria-label="You"
       className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5', videoLayout && [styles.card, styles.youCard])}
@@ -421,7 +395,7 @@ function YouCard({
         }
         action={leaveAction}
       />
-    </motion.div>
+    </div>
   );
 }
 
@@ -480,8 +454,7 @@ function OpponentCard({
   );
 
   return (
-    <motion.button
-      layout={videoLayout}
+    <button
       type="button"
       data-testid="rematch-opponent-card"
       onClick={onOpen}
@@ -495,7 +468,7 @@ function OpponentCard({
       )}
     >
       {body}
-    </motion.button>
+    </button>
   );
 }
 
@@ -518,8 +491,7 @@ function ParticipantAvatar({
   return (
     // The size lives on the wrapper, not on `<Avatar>`: its `size` prop only reaches the generated
     // fallback, while a real avatar renders `h-full w-full` and takes whatever box it is given.
-    <motion.span
-      layout={videoLayout}
+    <span
       data-testid="pair-avatar"
       className={cx(
         'inline-flex shrink-0 overflow-hidden',
@@ -537,7 +509,7 @@ function ParticipantAvatar({
           {speaking ? <TalkingBars /> : null}
         </span>
       ) : null}
-    </motion.span>
+    </span>
   );
 }
 
@@ -623,8 +595,7 @@ function UnmuteNotice({ opponentName, onUnmute, onDismiss }: PairHeaderNotice & 
 /**
  * The nudges, in the header rather than over the corner dock that no longer exists.
  *
- * Both live inside the sticky block, so a viewer who has scrolled a page of claims still sees them
- * next to the button they are about.
+ * Both live under the participant cards, next to the button they are about.
  */
 function VoiceToast({ toast, opponentName }: { toast: PairHeaderToast; opponentName: string }) {
   const name = firstName(opponentName);

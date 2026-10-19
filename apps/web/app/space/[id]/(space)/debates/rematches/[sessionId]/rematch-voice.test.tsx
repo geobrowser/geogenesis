@@ -27,7 +27,6 @@ import {
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { PAIR_PILL } from './rematch-pair-header';
-import { RematchPickerStickyHeader } from './rematch-picker-sticky-header';
 import { RematchVoiceHeader } from './rematch-voice';
 
 const mocks = vi.hoisted(() => ({
@@ -2877,15 +2876,13 @@ describe('video in the header', () => {
     expect(document.querySelector('video')).toBeNull();
   });
 
-  it('keeps both camera tracks attached while folding and expanding the header', async () => {
+  it('scrolls without reformatting the videos or replacing their attached tracks', async () => {
     mocks.localCameraTrack = cameraTrack();
     mocks.remoteParticipants = [remoteOpponent()];
     mocks.opponentCameraPublication = cameraTrack();
     render(
       <div data-rematch-scroll data-testid="picker-scroll">
-        <RematchPickerStickyHeader>
-          <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
-        </RematchPickerStickyHeader>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
       </div>
     );
     await flushOwnership();
@@ -2897,8 +2894,8 @@ describe('video in the header', () => {
     const scroller = screen.getByTestId('picker-scroll');
     scroller.scrollTop = 150;
     fireEvent.scroll(scroller);
-    fireEvent.click(screen.getByRole('button', { name: 'Show full participant videos' }));
-    expect(scroller.scrollTop).toBe(0);
+    expect(screen.queryByRole('button', { name: 'Show full participant videos' })).toBeNull();
+    expect(scroller.scrollTop).toBe(150);
     expect([...document.querySelectorAll('video')]).toEqual(videos);
     expect(localTrack.attach).toHaveBeenCalledOnce();
     expect(remoteTrack.attach).toHaveBeenCalledOnce();

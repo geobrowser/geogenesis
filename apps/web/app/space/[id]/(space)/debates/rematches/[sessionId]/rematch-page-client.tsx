@@ -131,7 +131,6 @@ import { Skeleton } from '~/design-system/skeleton';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
-import { RematchPickerStickyHeader } from './rematch-picker-sticky-header';
 import { RematchPublishCard } from './rematch-publish-card';
 import { RematchRequestCard } from './rematch-request-card';
 import { RematchVoiceHeader } from './rematch-voice';
@@ -2863,12 +2862,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // screen sideways instead of scrolling itself.
     <div data-rematch-scroll className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
       <main className="mx-auto min-h-dvh w-full max-w-[820px] px-5 pt-8 pb-8 mobile:px-4 mobile:pt-4">
-        {/* Pinned together, tabs included. The list pages forever, so both the tab strip and the
-            controls under it were a full scroll away by the time the viewer wanted either — and
-            pinning the filters alone would have left them floating over a tab strip scrolling
-            past behind them. Bleeds to the layer's edges so the page passes under it rather than
-            beside it, and `-mt-8` lets it sit flush at the top once stuck. */}
-        <RematchPickerStickyHeader>
+        {/* The full video cards scroll with the page. Keeping one layout avoids a reformat
+            or animation at a scroll threshold. Tabs and filters remain sticky below them. */}
+        <section aria-label="Participants" data-testid="rematch-participant-header">
           {/* The display name only: `remoteName` falls back to a raw id, which reads badly in
               "Waiting for …", and the pill has its own fallback. */}
           {roomPresence && (
@@ -2881,8 +2877,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           {/* GEO-2992: the pair, at the top of the column the viewer is already reading. This is
               where the unmute control lives now — the 200px dock it replaced was pinned to the
               bottom-right corner of the viewport, outside the column, and people were not finding
-              it. Inside the sticky block on purpose: the claim list pages forever, and a control
-              that scrolls away has the dock's problem in a different place. */}
+              it. */}
           {/* Leave rides in the header rather than at the end of the tab row: it belongs to you,
               so it sits in your card, opposite "View profile" on theirs. That leaves the tab strip
               the full width it was sharing.
@@ -2910,9 +2905,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               <div className="flex justify-end">{leaveButton}</div>
             )}
             {/* GEO-3301. The pair arrive straight from the debate, so the recording it left behind
-                comes with them: under the pair, inside the sticky block so the way to withdraw it
-                stays on screen while the list scrolls. A session from a profile challenge has no
-                debate. */}
+                comes with them under the pair. A session from a profile challenge has no debate. */}
             {sourceDebateQuery.data && currentUserId ? (
               <RematchPublishCard
                 // Per debate: a dismissal belongs to the one it was about, not the next session's.
@@ -2923,92 +2916,92 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               />
             ) : null}
           </div>
-          <motion.div layout="position">
-            <header className="mb-4">
-              <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate rematch" className="gap-6">
-                {pickerTabs.map(spec => (
-                  <TabButton
-                    key={spec.id}
-                    label={spec.label}
-                    count={spec.count}
-                    active={activeTab === spec.id}
-                    onClick={() => setTab(spec.id)}
-                  />
-                ))}
-              </ScrollableTabRow>
-            </header>
+        </section>
+        <div
+          role="group"
+          aria-label="Claim picker filters"
+          className="sticky top-0 z-20 -mx-5 bg-white px-5 pt-3 pb-3 mobile:-mx-4 mobile:px-4"
+        >
+          <header className="mb-4">
+            <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate rematch" className="gap-6">
+              {pickerTabs.map(spec => (
+                <TabButton
+                  key={spec.id}
+                  label={spec.label}
+                  count={spec.count}
+                  active={activeTab === spec.id}
+                  onClick={() => setTab(spec.id)}
+                />
+              ))}
+            </ScrollableTabRow>
+          </header>
 
-            <div className="flex flex-col gap-3">
-              {/* Pinned above the filters and the search box, where the hub's claims tab keeps it —
+          <div className="flex flex-col gap-3">
+            {/* Pinned above the filters and the search box, where the hub's claims tab keeps it —
                 and inside the sticky block rather than over it, because two stickies would both
                 claim `top-0` and overlap. A request sent from here otherwise left no trace on the
                 surface that sent it: the claim card looks exactly as it did before. */}
-              {outboundRequest && currentUserId ? (
-                <RematchRequestCard
-                  request={outboundRequest}
-                  participants={participants}
-                  currentUserId={currentUserId}
-                />
-              ) : null}
+            {outboundRequest && currentUserId ? (
+              <RematchRequestCard request={outboundRequest} participants={participants} currentUserId={currentUserId} />
+            ) : null}
 
-              {searchOnly ? null : isPhone && !videoLayout ? (
-                <SpaceTopicFilters
-                  analyticsSurface="rematch"
-                  spaceIds={spaceIds}
-                  onSpaceToggle={onSpaceToggle}
-                  onSpacesClear={onSpacesClear}
-                  topicIds={topicIds}
-                  onTopicToggle={setTopicPicked}
-                  onTopicsClear={() => setTopicIds([])}
-                  facetSpaces={facetSpaces}
-                  facetTopics={facetTopics}
-                  countsPending={filterCountsPending}
-                  trailing={listSwitch}
-                  leading={sourceMenu}
-                />
-              ) : (
-                // GEO-3223: on a desktop the two menus become one row of pills, so the spaces and
-                // topics are on screen to be picked rather than behind "Any space" and "Any topic".
-                // The source menu keeps a row of its own beneath it; the list's switch moves under
-                // the search box.
-                <div className="flex flex-col gap-2">
-                  {pillOptions.length > 0 ? (
-                    <FacetFilterPills
-                      analyticsSurface="rematch"
-                      options={pillOptions}
-                      pickedIds={pickedFilterIds}
-                      onToggle={option =>
-                        option.kind === 'space' ? onSpaceToggle(option.id) : setTopicPicked(option.id)
-                      }
-                      onClear={() => {
-                        onSpacesClear();
-                        setTopicIds([]);
-                      }}
-                      countsPending={filterCountsPending}
-                    />
-                  ) : null}
-                  {sourceMenu ? <div className="flex flex-wrap items-center gap-2">{sourceMenu}</div> : null}
-                </div>
-              )}
-              <Input
-                withSearchIcon
-                value={search}
-                onChange={event => setSearch(event.currentTarget.value)}
-                placeholder={searchOnly ? 'Search claims' : 'Search claims and topics'}
-                aria-label={searchOnly ? 'Search claims' : 'Search claims and topics'}
-              />
-              <TopicSearchSuggestions
+            {searchOnly ? null : isPhone && !videoLayout ? (
+              <SpaceTopicFilters
                 analyticsSurface="rematch"
-                query={search}
-                topics={suggestedTopics}
-                onPick={topicId => {
-                  setTopicIds(current => (current.includes(topicId) ? current : [...current, topicId]));
-                  setSearch('');
-                }}
+                spaceIds={spaceIds}
+                onSpaceToggle={onSpaceToggle}
+                onSpacesClear={onSpacesClear}
+                topicIds={topicIds}
+                onTopicToggle={setTopicPicked}
+                onTopicsClear={() => setTopicIds([])}
+                facetSpaces={facetSpaces}
+                facetTopics={facetTopics}
+                countsPending={filterCountsPending}
+                trailing={listSwitch}
+                leading={sourceMenu}
               />
-            </div>
-          </motion.div>
-        </RematchPickerStickyHeader>
+            ) : (
+              // GEO-3223: on a desktop the two menus become one row of pills, so the spaces and
+              // topics are on screen to be picked rather than behind "Any space" and "Any topic".
+              // The source menu keeps a row of its own beneath it; the list's switch moves under
+              // the search box.
+              <div className="flex flex-col gap-2">
+                {pillOptions.length > 0 ? (
+                  <FacetFilterPills
+                    analyticsSurface="rematch"
+                    options={pillOptions}
+                    pickedIds={pickedFilterIds}
+                    onToggle={option =>
+                      option.kind === 'space' ? onSpaceToggle(option.id) : setTopicPicked(option.id)
+                    }
+                    onClear={() => {
+                      onSpacesClear();
+                      setTopicIds([]);
+                    }}
+                    countsPending={filterCountsPending}
+                  />
+                ) : null}
+                {sourceMenu ? <div className="flex flex-wrap items-center gap-2">{sourceMenu}</div> : null}
+              </div>
+            )}
+            <Input
+              withSearchIcon
+              value={search}
+              onChange={event => setSearch(event.currentTarget.value)}
+              placeholder={searchOnly ? 'Search claims' : 'Search claims and topics'}
+              aria-label={searchOnly ? 'Search claims' : 'Search claims and topics'}
+            />
+            <TopicSearchSuggestions
+              analyticsSurface="rematch"
+              query={search}
+              topics={suggestedTopics}
+              onPick={topicId => {
+                setTopicIds(current => (current.includes(topicId) ? current : [...current, topicId]));
+                setSearch('');
+              }}
+            />
+          </div>
+        </div>
 
         {/* A request error belongs on the card it was sent from; this line is the fallback for when
             that card is no longer drawn — a tab swap, a search, a filter. Losing the message because
