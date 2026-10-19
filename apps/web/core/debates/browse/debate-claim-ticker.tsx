@@ -431,9 +431,9 @@ function DebateClaimTickerCardBody({
 const TICKER_CLAMP_LINES = 2;
 
 /**
- * The claim itself, clamped to three lines, and expandable in place when there is more.
+ * The claim itself, clamped to two lines, and expandable in place when there is more.
  *
- * A claim runs to a sentence or two and three lines of a 209px card is often not all of it. The
+ * A claim runs to a sentence or two and two lines of a 209px card is often not all of it. The
  * alternative to expanding here is "go and find it in the panel", which means leaving the debate
  * to read a sentence that is on screen — so the text opens where it is, and closes again the same
  * way.
@@ -441,14 +441,17 @@ const TICKER_CLAMP_LINES = 2;
  * Only interactive when it is actually truncated. A button that visibly does nothing is worse than
  * no button, and most short claims fit.
  */
-function TickerClaimText({
+export function TickerClaimText({
   text,
   tone,
   smallPanel,
+  textClassName = 'text-[1rem] leading-[1.0625rem] tracking-[-0.16px]',
 }: {
   text: string;
   tone: ClaimCardTone;
   smallPanel?: ClaimCardSmallPanel;
+  /** The popup keeps its own type scale while sharing the same overflow and expansion behavior. */
+  textClassName?: string;
 }) {
   // In state rather than a ref: wrapping the text in a button below remounts this node, and the
   // measurement has to follow it. See `useLineClampOverflow`.
@@ -467,11 +470,11 @@ function TickerClaimText({
   const body = (
     <span
       ref={setTextElement}
-      // `line-clamp-3` and `block` both set `display`, and `block` wins — which silently turns the
+      // `line-clamp-2` and `block` both set `display`, and `block` wins — which silently turns the
       // clamp off, so the card grows to fit the whole claim and nothing ever reports as truncated.
       // The clamp already blockifies the box; only the expanded state needs `block` of its own.
       className={cx(
-        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px]',
+        textClassName,
         tone === 'glass' ? 'text-white' : 'text-text',
         expanded ? 'block' : 'line-clamp-2',
         // Container-query overrides, which `useLineClampOverflow` reads back off the computed style
@@ -778,6 +781,10 @@ export function DebateClaimTickerStack({
   );
 }
 
+/** The existing fixed-format chip's type and glass surface, shared with Open rounds counters. */
+export const CLAIM_BACKLOG_CHIP_CLASS =
+  'flex shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-[44px] transition-colors hover:bg-[#151515]/50';
+
 /**
  * The way into the backlog where there is no pointer to open it with.
  *
@@ -802,9 +809,8 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
         onClick();
       }}
       /**
-       * 20px tall, which is the debater's avatar across the band from it — the two read as one row
-       * when they match and as a mistake when they do not. The tap target is kept at ~36px by an
-       * `::after` that reaches past the box without taking any layout.
+       * Height follows the content with 6px above and below it, so the 16px icon has breathing
+       * room in both formats. An `::after` extends the tap target without taking any layout.
        *
        * On a pointer device it is present but out of the way, not absent. It used to be `hidden`,
        * which took it out of the tab order too — and since the corner draws nothing at all when no
@@ -818,10 +824,13 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
        * and the sibling scroll box next to it sets `auto`. One class makes the intent local.
        *
        * Hidden by position rather than by `sr-only`: that utility also zeroes padding and height,
-       * and Tailwind emits its `not-sr-only` counterpart *after* `px-2` and `h-5`, so restoring the
+       * and Tailwind emits its `not-sr-only` counterpart *after* padding utilities, so restoring the
        * chip would have stripped its own shape. Checked, not assumed.
        */
-      className="pointer-events-none absolute flex h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white opacity-0 backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50 focus-visible:pointer-events-auto focus-visible:relative focus-visible:opacity-100 no-hover:pointer-events-auto no-hover:relative no-hover:opacity-100"
+      className={cx(
+        CLAIM_BACKLOG_CHIP_CLASS,
+        "pointer-events-none absolute opacity-0 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] focus-visible:pointer-events-auto focus-visible:relative focus-visible:opacity-100 no-hover:pointer-events-auto no-hover:relative no-hover:opacity-100"
+      )}
     >
       <InfoSmall color="white" />
       <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
@@ -993,6 +1002,7 @@ function TickerClaimHeader({
  *
  * `column` is the Open rounds claim list's vote column (GEO-3317): a round 24px target sized to the
  * player, with a solid glyph that reads at that size, coloured once the reader takes a side.
+ * `header` pairs outlined thumbs above the claim, as the classic + glass design shows.
  */
 export function ClaimIconButton({
   responseKind,
@@ -1013,7 +1023,7 @@ export function ClaimIconButton({
   title: string;
   onClick?: () => void;
   tone: ClaimCardTone;
-  layout?: 'inline' | 'column';
+  layout?: 'inline' | 'column' | 'header';
 }) {
   const glass = tone === 'glass';
   const column = layout === 'column';
@@ -1043,17 +1053,38 @@ export function ClaimIconButton({
         column
           ? // 6cqw, overlapping the column's gaps, and never under 24px.
             '-my-[1cqw] size-[6cqw] min-h-6 min-w-6 rounded-full [&>svg]:size-[3.6cqw]'
-          : '-my-0.5 size-5 rounded-sm md:-my-1.5 md:size-7',
+          : layout === 'header'
+            ? '-my-[1.5cqw] size-[6cqw] min-h-6 min-w-6 rounded-full [&>svg]:size-[3cqw]'
+            : '-my-0.5 size-5 rounded-sm md:-my-1.5 md:size-7',
         // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
         // reader has actually taken a side.
         selected
-          ? cx(glass ? 'bg-white/15' : 'bg-divider', position ? 'text-green' : 'text-red-01')
+          ? cx(
+              layout === 'header' ? 'hover:bg-white/15' : glass ? 'bg-white/15' : 'bg-divider',
+              position ? 'text-green' : layout === 'header' ? 'text-[#ff4a26]' : 'text-red-01'
+            )
           : glass
-            ? 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
+            ? layout === 'header'
+              ? 'text-white/65 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/65'
+              : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
             : 'text-grey-04 hover:bg-divider hover:text-text disabled:hover:bg-transparent disabled:hover:text-grey-04'
       )}
     >
-      <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected || column} />
+      {layout === 'header' ? (
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+          aria-hidden
+          style={position ? undefined : { transform: 'scaleY(-1)' }}
+        >
+          <path d="M5 7.5V14H2.5V7.5H5Zm0 0 2.6-5c.9 0 1.6.8 1.4 1.7L8.6 6h4.1c.9 0 1.5.8 1.3 1.6l-1.2 5.2c-.2.7-.8 1.2-1.5 1.2H5" />
+        </svg>
+      ) : (
+        <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected || column} />
+      )}
     </button>
   );
 }
