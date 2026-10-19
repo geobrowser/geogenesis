@@ -65,6 +65,11 @@ const VIA_PARAM = 'via';
  */
 export type ReadableParams = Pick<URLSearchParams, 'get' | 'toString'> | null | undefined;
 
+/** True when the URL asks for any deep-linked overlay at all. */
+export function requestsAnyModal(params: ReadableParams): boolean {
+  return params?.get(MODAL_PARAM) != null;
+}
+
 /** True when the URL is asking for this particular overlay. */
 export function requestsModal(params: ReadableParams, modal: ModalDeepLink): boolean {
   return params?.get(MODAL_PARAM) === modal;

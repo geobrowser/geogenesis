@@ -92,12 +92,16 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
     DebateFeedPlayer: ({
       debate,
       active,
+      buffer,
       releaseMedia,
+      holdFullPlayback,
       reducedOverlays,
     }: {
       debate: Debate;
       active: boolean;
+      buffer?: boolean;
       releaseMedia?: boolean;
+      holdFullPlayback?: boolean;
       reducedOverlays?: boolean;
     }) => (
       <>
@@ -107,6 +111,8 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
           data-debate={debate.id}
           data-active={active}
           data-release-media={releaseMedia ? 'true' : 'false'}
+          data-buffer={buffer ? 'true' : 'false'}
+          data-hold-full-playback={holdFullPlayback ? 'true' : 'false'}
           data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
           onClick={mocks.playerToggle}
         />
@@ -272,7 +278,15 @@ function intersectAll(ratio: number) {
     for (const record of observers) {
       for (const element of record.elements) {
         record.callback(
-          [{ target: element, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry],
+          [
+            {
+              target: element,
+              isIntersecting: ratio > 0,
+              intersectionRatio: ratio,
+              boundingClientRect: { top: 0 },
+              rootBounds: null,
+            } as unknown as IntersectionObserverEntry,
+          ],
           record.instance
         );
       }
@@ -289,7 +303,37 @@ function intersectOnScreen(ratio: number) {
     for (const record of observers.filter(candidate => !candidate.options?.rootMargin)) {
       for (const element of record.elements) {
         record.callback(
-          [{ target: element, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry],
+          [
+            {
+              target: element,
+              isIntersecting: ratio > 0,
+              intersectionRatio: ratio,
+              boundingClientRect: { top: 0 },
+              rootBounds: null,
+            } as unknown as IntersectionObserverEntry,
+          ],
+          record.instance
+        );
+      }
+    }
+  });
+}
+
+/** Only the up-next observer: the card at `top` px from the top of an 800px-high screen. */
+function intersectUpNext(top: number | null) {
+  act(() => {
+    for (const record of observers.filter(candidate => candidate.options?.rootMargin === '0px 0px 100% 0px')) {
+      for (const element of record.elements) {
+        record.callback(
+          [
+            {
+              target: element,
+              isIntersecting: top !== null,
+              intersectionRatio: top === null ? 0 : 1,
+              boundingClientRect: { top: top ?? 0 },
+              rootBounds: { height: 800 },
+            } as unknown as IntersectionObserverEntry,
+          ],
           record.instance
         );
       }
@@ -434,6 +478,16 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
   });
 
+  // The lead card used to stream both full recordings on arrival: 76.5 MB of an idle visit's 84 MB.
+  it('holds the full recordings until the viewer starts one', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+    intersectAll(0.7);
+
+    expect(screen.getByTestId('player').getAttribute('data-hold-full-playback')).toBe('true');
+  });
+
   describe('releasing media nobody can see', () => {
     function renderOnScreen() {
       mocks.debateQuery = { data: watchableDebate(), isError: false };
@@ -502,6 +556,30 @@ describe('DebateExploreFeedCard', () => {
 
       intersectOnScreen(0.2);
       expect(releaseMedia()).toBe('false');
+    });
+
+    it('on a phone, keeps the card up next loaded and asks it to buffer, until it is passed', () => {
+      mocks.isMobileLayout = true;
+      renderOnScreen();
+      const player = () => screen.getByTestId('player');
+
+      // Scrolled back so this card sits just below the screen: it is the one coming next.
+      intersectOnScreen(0);
+      intersectUpNext(900);
+      expect(player().getAttribute('data-release-media')).toBe('false');
+      expect(player().getAttribute('data-buffer')).toBe('true');
+
+      // Reached: active, so the player's own autoplay takes over from the buffer.
+      intersectOnScreen(0.7);
+      intersectUpNext(100);
+      expect(player().getAttribute('data-active')).toBe('true');
+      expect(player().getAttribute('data-buffer')).toBe('false');
+
+      // Scrolled past, out through the top: neither up next nor kept on a phone.
+      intersectOnScreen(0);
+      intersectUpNext(null);
+      expect(player().getAttribute('data-buffer')).toBe('false');
+      expect(player().getAttribute('data-release-media')).toBe('true');
     });
 
     it('keeps an off-screen card loaded on desktop, where the look-ahead keeps the next card instant', () => {

@@ -98,6 +98,7 @@ vi.mock('./debate-feed-player', async () => {
       preload,
       buffer,
       releaseMedia,
+      holdFullPlayback,
       onPlaybackState,
     }: {
       debate: Debate;
@@ -105,6 +106,7 @@ vi.mock('./debate-feed-player', async () => {
       preload?: boolean;
       buffer?: boolean;
       releaseMedia?: boolean;
+      holdFullPlayback?: boolean;
       onPlaybackState?: (state: typeof mocks.playerState) => void;
     }) => {
       const state = JSON.stringify(mocks.playerState);
@@ -116,6 +118,7 @@ vi.mock('./debate-feed-player', async () => {
           data-preload={preload ? 'true' : 'false'}
           data-buffer={buffer ? 'true' : 'false'}
           data-release-media={releaseMedia ? 'true' : 'false'}
+          data-hold-full-playback={holdFullPlayback ? 'true' : 'false'}
         />
       );
     },
@@ -897,6 +900,32 @@ describe('DebatesBrowseFeed ordering', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     expect(screen.queryByRole('heading', { name: 'Debates are useful' })).not.toBeInTheDocument();
+  });
+});
+
+describe('DebatesBrowseFeed — holding full recordings until the viewer starts one', () => {
+  const held = (id: string) => screen.getByTestId(`player-${id}`).getAttribute('data-hold-full-playback');
+
+  beforeEach(() => {
+    mocks.debates = [
+      completedDebate('debate-1', 'First claim', '2026-07-02T00:01:10.000Z'),
+      completedDebate('debate-2', 'Second claim', '2026-07-02T00:02:10.000Z'),
+    ];
+  });
+
+  it('holds every card in the feed', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(held('debate-1')).toBe('true');
+    expect(held('debate-2')).toBe('true');
+  });
+
+  // A link to one debate is the viewer asking for that debate, so it plays as it always has.
+  it('plays the debate a link opened, and holds the rest of the feed', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
+
+    expect(held('debate-2')).toBe('false');
+    expect(held('debate-1')).toBe('true');
   });
 });
 

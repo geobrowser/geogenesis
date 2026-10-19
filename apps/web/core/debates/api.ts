@@ -4,8 +4,8 @@ import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
 import { getGeoChatApiBaseUrl } from './geo-chat-public-base-url';
-import type { RecordingPlaybackVariant } from './mobile-rendition';
 import type { DebateExtractedClaimsResponse } from './server/extracted-claims';
+import type { RecordingUrlVariant } from './stream-playback';
 
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
@@ -99,10 +99,20 @@ export type DebateRecording = {
   framerate: number | null;
   video_bits_per_second: number | null;
   /**
-   * MIME type of the recording's 720p H.264 mobile rendition (GEO-3118), or null/absent until
+   * MIME type of the recording's feed rendition (GEO-3118) — 480p-capped H.264, played on every
+   * device that can play it, though the variant is still called `mobile` — or null/absent until
    * geo-chat has written one. Sign it with `getRecordingUrl(..., { variant: 'mobile' })`.
    */
   mobile_content_type?: string | null;
+  /**
+   * Whether geo-chat has this recording's Cloudflare Stream HLS copy. Absent from a server that
+   * predates Stream. Sign it with `variant: 'stream'`. See `stream-playback.ts`.
+   */
+  stream_ready?: boolean;
+  /** Whether geo-chat has this recording's 4-second preview clip. Sign it with `variant: 'preview'`. */
+  preview_ready?: boolean;
+  /** Where the preview clip starts in this recording, in whole seconds; absent until it is cut. */
+  preview_start_seconds?: number | null;
 };
 
 export type DebateMediaJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -3484,14 +3494,26 @@ export async function abortLocalRecordingMultipart(
   });
 }
 
+/**
+ * A signed recording URL. `url` is always the one to play: the file itself, the feed rendition,
+ * the preview clip's MP4, or (for `stream`) the HLS manifest. `expires_at` (RFC 3339) comes with
+ * Stream URLs, which outlive the 15-minute presigns by hours; the others leave it out.
+ */
+export type RecordingUrlResponse = {
+  url: string;
+  hls_url?: string;
+  dash_url?: string;
+  expires_at?: string;
+};
+
 export async function getRecordingUrl(
   debateId: string,
   filename: string,
   getPrivyIdentityToken?: GetPrivyIdentityToken,
   accountKey?: string | null,
-  variant?: RecordingPlaybackVariant
+  variant?: RecordingUrlVariant
 ) {
-  return geoChatRequest<{ url: string }>(`/debates/${debateId}/recordings/url`, {
+  return geoChatRequest<RecordingUrlResponse>(`/debates/${debateId}/recordings/url`, {
     method: 'POST',
     // `variant` only when asked for, so every other request is byte-for-byte what it was.
     body: variant ? { filename, variant } : { filename },
