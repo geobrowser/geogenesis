@@ -45,6 +45,24 @@ export function recordingHasPreview(
 }
 
 /**
+ * Whether both debaters' full recordings play from Stream, with the flag on.
+ *
+ * A held feed card with this autoplays while it is the active card, and goes back to its clips
+ * when it is not. A debate with either debater still on the raw recording keeps the tap: those
+ * files are around 90 MB each, buffered whole-ish ahead of the playhead, which is what the hold
+ * exists to keep off a page nobody has asked to watch.
+ */
+export function debateStreamsFully(
+  recordings: ReadonlyArray<Pick<DebateRecording, 'participant_slot' | 'stream_ready'>> | null | undefined,
+  { enabled = DEBATE_STREAM_PLAYBACK_ENABLED }: { enabled?: boolean } = {}
+): boolean {
+  if (!enabled) return false;
+  return ([1, 2] as const).every(slot =>
+    recordings?.some(recording => recording.participant_slot === slot && recording.stream_ready === true)
+  );
+}
+
+/**
  * The refusals that mean "this variant is not available", as opposed to a network failure.
  *
  * Callers fall back on any failure — a Stream copy is an optimisation, never a reason to show a

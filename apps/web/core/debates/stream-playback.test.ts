@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GeoChatRequestError } from './api';
 import {
   attachStreamSource,
+  debateStreamsFully,
   isStreamUnavailableError,
   previewPairOffsetSeconds,
   recordingHasPreview,
@@ -69,6 +70,17 @@ describe('the flag and per-slot readiness', () => {
     expect(recordingStreamVariant(null, { enabled: true })).toBeUndefined();
     expect(recordingHasPreview({ preview_ready: true }, { enabled: true })).toBe(true);
     expect(recordingHasPreview({}, { enabled: true })).toBe(false);
+  });
+
+  it('streams a debate fully only when both debaters have a Stream copy, with the flag on', () => {
+    const ready = (slot: 1 | 2, stream_ready?: boolean) => ({ participant_slot: slot, stream_ready });
+    expect(debateStreamsFully([ready(1, true), ready(2, true)], { enabled: true })).toBe(true);
+    expect(debateStreamsFully([ready(1, true), ready(2, true)], { enabled: false })).toBe(false);
+    // The one-sided debate: slot 1 is a raw local.mp4 that never reached Stream.
+    expect(debateStreamsFully([ready(1, false), ready(2, true)], { enabled: true })).toBe(false);
+    expect(debateStreamsFully([ready(2, true)], { enabled: true })).toBe(false);
+    expect(debateStreamsFully([ready(1, true), ready(2)], { enabled: true })).toBe(false);
+    expect(debateStreamsFully(undefined, { enabled: true })).toBe(false);
   });
 
   it('names the refusals that mean the variant is unavailable', () => {

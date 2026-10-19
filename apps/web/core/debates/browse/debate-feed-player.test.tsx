@@ -63,6 +63,13 @@ vi.mock('./use-debate-preview-clips', async importOriginal => {
   };
 });
 
+// Whether a debate plays from Stream for both debaters, which is what lets a held card autoplay.
+const streamMocks = vi.hoisted(() => ({ streamsFully: false }));
+vi.mock('~/core/debates/stream-playback', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/debates/stream-playback')>();
+  return { ...actual, debateStreamsFully: () => streamMocks.streamsFully };
+});
+
 // hls.js, for a stream slot in a browser without native HLS (jsdom has none).
 const hlsMocks = vi.hoisted(() => {
   const instances: Array<{ loadSource: ReturnType<typeof vi.fn>; attachMedia: ReturnType<typeof vi.fn> }> = [];
@@ -2582,9 +2589,11 @@ describe('holding the full recordings until the viewer asks (feed bandwidth)', (
 describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK)', () => {
   beforeEach(() => {
     getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+    streamMocks.streamsFully = false;
   });
   afterEach(() => {
     getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+    streamMocks.streamsFully = false;
   });
 
   const stills = { slot1: 'https://cdn.test/still-1.jpg', slot2: 'https://cdn.test/still-2.jpg' };
@@ -2708,5 +2717,61 @@ describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREA
     const controller = mocks.controller as DebatePlaybackController;
     expect(controller.setMutedByUser).not.toHaveBeenCalled();
     expect(Array.from(container.querySelectorAll('video')).every(video => video.muted)).toBe(true);
+  });
+
+  describe('autoplaying the on-screen card when both debaters play from Stream', () => {
+    const fullSrcs = (container: HTMLElement) =>
+      Array.from(container.querySelectorAll('video:not([data-debate-preview-clip])')).map(video =>
+        video.getAttribute('src')
+      );
+
+    it('attaches the full recordings, muted, on the active card without a tap', () => {
+      streamMocks.streamsFully = true;
+      withPreview(bothClips);
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+      const { container } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+      expect(container.querySelectorAll('video[data-debate-preview-clip]')).toHaveLength(0);
+      expect(fullSrcs(container)).toEqual(['https://cdn.test/slot1.webm', 'https://cdn.test/slot2.webm']);
+      expect(mocks.mediaAttached.at(-1)).toBe(true);
+      expect(container.querySelector('[data-debate-full-playback-held="false"]')).toBeTruthy();
+      expect(Array.from(container.querySelectorAll('video')).every(video => video.muted)).toBe(true);
+      // Starting it is not a tap: the tab-wide hold stays where it was for cards without clips.
+      expect(getDefaultStore().get(feedFullPlaybackStartedAtom)).toBe(false);
+    });
+
+    it('holds it again, back on its clips, once it is no longer the active card', () => {
+      streamMocks.streamsFully = true;
+      withPreview(bothClips);
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+      const { container, rerender } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+      expect(mocks.mediaAttached.at(-1)).toBe(true);
+
+      rerender(<DebateFeedPlayer debate={debate} active={false} preload holdFullPlayback />);
+      expect(mocks.mediaAttached.at(-1)).toBe(false);
+      expect(fullSrcs(container)).toEqual([]);
+      expect(clipSrcs(container)).toEqual([bothClips.slot1, bothClips.slot2]);
+      expect(container.querySelector('[data-debate-full-playback-held="true"]')).toBeTruthy();
+    });
+
+    it('does not start a nearby card that is not the active one', () => {
+      streamMocks.streamsFully = true;
+      withPreview(bothClips);
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+      const { container } = render(<DebateFeedPlayer debate={debate} active={false} preload holdFullPlayback />);
+
+      expect(mocks.mediaAttached.at(-1)).toBe(false);
+      expect(fullSrcs(container)).toEqual([]);
+    });
+
+    it('keeps the tap on a card where either debater is still on the raw recording', () => {
+      withPreview(bothClips);
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+      const { container, getByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+      expect(mocks.mediaAttached.at(-1)).toBe(false);
+      expect(fullSrcs(container)).toEqual([]);
+      expect(getByRole('button', { name: 'Play debate' })).toBeTruthy();
+    });
   });
 });
