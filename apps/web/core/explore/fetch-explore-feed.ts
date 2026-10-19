@@ -71,6 +71,7 @@ import { type FreshMergedRow, mergeFreshSlot } from './fresh-slot/merge-fresh-sl
 import { recordRecentFreshScope } from './fresh-slot/recent-fresh-scopes';
 import { readSharedFreshList, writeSharedFreshList } from './fresh-slot/shared-fresh-list';
 import { leadWithPlayableDebate } from './lead-with-playable-debate';
+import { hideSeenInPage } from './seen-demotion/hide-seen';
 import type { SeenDemotionPageConfig } from './seen-demotion/seen-demotion-config';
 
 /**
@@ -1386,9 +1387,9 @@ export async function fetchExploreFeed(args: {
   //
   // GEO-3234: `playableLeads` is filled by the check's callback, hence a holder, not a `let`.
   const playableLeads: { ids: Set<string> | null } = { ids: null };
+  const stills = new Map<string, DebatePosters>();
   let leadPosters: LeadPosters | null = null;
   if (args.leadWithPlayableDebate && args.sort === 'best' && windowAfter === null) {
-    const stills = new Map<string, DebatePosters>();
     const led = await leadWithPlayableDebate(window.rows, {
       isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
       isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal, stills),
@@ -1413,7 +1414,20 @@ export async function fetchExploreFeed(args: {
     leadIds !== null && window.feed?.name === 'best'
       ? served.map(row => (leadIds.has(normId(row.entityId)) ? { ...row, playableLead: true } : row))
       : served;
+  // GEO-3234. The rest of this window, capped at a page, for the browser to fill from. Never a fresh
+  // card: those hold their own positions.
+  const reserved =
+    args.markPlayableLeads && window.feed?.name === 'best'
+      ? ordered
+          .slice(windowOffset + served.length, windowOffset + served.length + pageSize)
+          .filter(row => row.ranking?.slot !== 'fresh')
+          .map(row => (leadIds?.has(normId(row.entityId)) ? { ...row, playableLead: true } : row))
+      : [];
+  // With seen demotion on, the browser opens the page on the newest playable debate, not always the
+  // one the lead check put first; a first visit sees that one first, so it gets the stills.
+  if (leadIds !== null) leadPosters = postersOfFirstVisitLead(marked, reserved, stills) ?? leadPosters;
   const slice = withLeadPosters(marked, leadPosters);
+  const reserveRows = withLeadPosters(reserved, leadPosters);
 
   const nextWindowCursor = scanBudgetSpent
     ? null
@@ -1438,15 +1452,6 @@ export async function fetchExploreFeed(args: {
       : nextWindowCursor;
   const feed: FeedDescriptor | undefined = merged ? { name: 'best', version: freshVersion } : window.feed;
 
-  // GEO-3234. The rest of this window, capped at a page, for the browser to fill from. Never a fresh
-  // card: those hold their own positions.
-  const reserveRows =
-    args.markPlayableLeads && window.feed?.name === 'best'
-      ? ordered
-          .slice(windowOffset + slice.length, windowOffset + slice.length + pageSize)
-          .filter(row => row.ranking?.slot !== 'fresh')
-          .map(row => (leadIds?.has(normId(row.entityId)) ? { ...row, playableLead: true } : row))
-      : [];
   const withMeta = await attachMeta([...slice, ...reserveRows]);
 
   return {
@@ -1642,6 +1647,35 @@ type LeadPosters = { entityId: string; posters: DebatePosters };
  */
 function postersOfLead(led: readonly ExploreFeedRow[], stills: Map<string, DebatePosters>): LeadPosters | null {
   const lead = led[0];
+  const posters = lead ? stills.get(normId(lead.entityId)) : undefined;
+  return lead && posters ? { entityId: normId(lead.entityId), posters } : null;
+}
+
+/**
+ * The stills of the debate a visitor with nothing seen is shown first. `hideSeenInPage` with an
+ * empty history picks it exactly as the browser will: the newest playable debate on offer, which
+ * may be lower on the page or in the reserve. Null when the page has no verified lead.
+ */
+function postersOfFirstVisitLead(
+  items: readonly ExploreFeedRow[],
+  reserve: readonly ExploreFeedRow[],
+  stills: Map<string, DebatePosters>
+): LeadPosters | null {
+  const hasLead = items[0]?.playableLead === true && items[0].ranking?.slot !== 'fresh';
+  if (!hasLead) return null;
+  const [lead] = hideSeenInPage({
+    items,
+    reserve,
+    shown: new Set(),
+    idOf: row => row.entityId,
+    isSeen: () => false,
+    typeOf: exploreItemTypeKey,
+    isPinned: row => row.ranking?.slot === 'fresh',
+    isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
+    hasLead,
+    canLead: row => row.playableLead === true,
+    createdAtSec: row => row.createdAtSec,
+  }).items;
   const posters = lead ? stills.get(normId(lead.entityId)) : undefined;
   return lead && posters ? { entityId: normId(lead.entityId), posters } : null;
 }
