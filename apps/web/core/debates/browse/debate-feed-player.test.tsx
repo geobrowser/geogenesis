@@ -64,10 +64,15 @@ vi.mock('./use-debate-preview-clips', async importOriginal => {
 });
 
 // Whether a debate plays from Stream for both debaters, which is what lets a held card autoplay.
-const streamMocks = vi.hoisted(() => ({ streamsFully: false }));
+// And whether the browser plays HLS itself (Safari, iOS), which jsdom never does.
+const streamMocks = vi.hoisted(() => ({ streamsFully: false, nativeHls: false }));
 vi.mock('~/core/debates/stream-playback', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/debates/stream-playback')>();
-  return { ...actual, debateStreamsFully: () => streamMocks.streamsFully };
+  return {
+    ...actual,
+    debateStreamsFully: () => streamMocks.streamsFully,
+    canPlayNativeHls: () => streamMocks.nativeHls,
+  };
 });
 
 // hls.js, for a stream slot in a browser without native HLS (jsdom has none).
@@ -2590,10 +2595,12 @@ describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREA
   beforeEach(() => {
     getDefaultStore().set(feedFullPlaybackStartedAtom, false);
     streamMocks.streamsFully = false;
+    streamMocks.nativeHls = false;
   });
   afterEach(() => {
     getDefaultStore().set(feedFullPlaybackStartedAtom, false);
     streamMocks.streamsFully = false;
+    streamMocks.nativeHls = false;
   });
 
   const stills = { slot1: 'https://cdn.test/still-1.jpg', slot2: 'https://cdn.test/still-2.jpg' };
@@ -2705,6 +2712,25 @@ describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREA
     await vi.waitFor(() => expect(hlsMocks.instances).toHaveLength(1));
     expect(hlsMocks.instances[0].loadSource).toHaveBeenCalledWith('https://stream.test/v1/manifest/video.m3u8');
     expect(hlsMocks.instances[0].attachMedia).toHaveBeenCalledWith(slot1);
+  });
+
+  it('keeps a native-HLS stream slot at metadata on the active card, where iOS strands a seek made under auto', () => {
+    streamMocks.nativeHls = true;
+    mocks.controller = {
+      ...controllerFixture({
+        mutedByUser: true,
+        turnSlot: 1,
+        urls: { slot1: 'https://stream.test/v1/manifest/video.m3u8', slot2: 'https://cdn.test/slot2.webm' },
+      }),
+      streams: { slot1: true, slot2: false },
+    };
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+    expect(slot1.getAttribute('src')).toBe('https://stream.test/v1/manifest/video.m3u8');
+    expect(slot1.getAttribute('preload')).toBe('metadata');
+    // A raw recording is still buffered: the stranded seek is native HLS only.
+    expect(slot2.getAttribute('preload')).toBe('auto');
   });
 
   it('starts muted after the tap, as today: unmuting is the viewer’s own tap', () => {

@@ -1548,7 +1548,12 @@ function DebaterVideo({
             // without pulling a multi-megabyte file down for a card nobody has reached yet — the
             // feed keeps several of these mounted at once. `auto` for the active card and the one
             // after it, which are about to play (`buffered`), and for any element `rebuild` raised.
-            preload={buffered ? 'auto' : 'metadata'}
+            // Never `auto` on a native-HLS Stream source: on iOS 27 a seek made under `auto` before
+            // playback (the pair's preposition) never completes. The element plays on, but
+            // `currentTime` stays at the seek target and `timeupdate` stops, which freezes the
+            // captions and the turn clock. iOS loads nothing ahead for a paused manifest under
+            // either value, so `metadata` costs nothing there.
+            preload={buffered && !(stream && nativeHls) ? 'auto' : 'metadata'}
             src={hlsManaged ? undefined : src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
             muted={muted}
