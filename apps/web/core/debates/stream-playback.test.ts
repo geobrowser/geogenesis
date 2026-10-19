@@ -6,6 +6,7 @@ import { GeoChatRequestError } from './api';
 import {
   attachStreamSource,
   debateStreamsFully,
+  HLS_MAX_BUFFER_SECONDS,
   isStreamUnavailableError,
   previewPairOffsetSeconds,
   recordingHasPreview,
@@ -14,7 +15,7 @@ import {
 
 const hls = vi.hoisted(() => {
   const instances: Array<{
-    config: { autoStartLoad?: boolean };
+    config: { autoStartLoad?: boolean; maxMaxBufferLength?: number };
     loadSource: ReturnType<typeof vi.fn>;
     attachMedia: ReturnType<typeof vi.fn>;
     startLoad: ReturnType<typeof vi.fn>;
@@ -24,13 +25,13 @@ const hls = vi.hoisted(() => {
   class FakeHls {
     static isSupported = vi.fn(() => true);
     static Events = { ERROR: 'hlsError' };
-    config: { autoStartLoad?: boolean };
+    config: { autoStartLoad?: boolean; maxMaxBufferLength?: number };
     loadSource = vi.fn();
     attachMedia = vi.fn();
     startLoad = vi.fn();
     destroy = vi.fn();
     handlers = new Map<string, (event: string, data: { fatal: boolean }) => void>();
-    constructor(config: { autoStartLoad?: boolean }) {
+    constructor(config: { autoStartLoad?: boolean; maxMaxBufferLength?: number }) {
       this.config = config;
       instances.push(this);
     }
@@ -153,6 +154,15 @@ describe('attaching a Stream source', () => {
     expect(hls.instances[0].config.autoStartLoad).toBe(false);
     video.dispatchEvent(new Event('play'));
     expect(hls.instances[0].startLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it('caps the buffer at 30 seconds, where hls.js would otherwise fill 60 MB per element', async () => {
+    const video = document.createElement('video');
+    attachStreamSource(video, MANIFEST, { nativeHls: false });
+    await vi.waitFor(() => expect(hls.instances).toHaveLength(1));
+
+    expect(hls.instances[0].config.maxMaxBufferLength).toBe(HLS_MAX_BUFFER_SECONDS);
+    expect(HLS_MAX_BUFFER_SECONDS).toBe(30);
   });
 
   it('reports a fatal hls.js error once, and destroys the instance when released', async () => {

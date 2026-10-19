@@ -81,6 +81,9 @@ export function isStreamUnavailableError(error: unknown): boolean {
 
 const HLS_MIME = 'application/vnd.apple.mpegurl';
 
+/** How far ahead of the playhead hls.js may buffer, in seconds. See `attachStreamSource`. */
+export const HLS_MAX_BUFFER_SECONDS = 30;
+
 /**
  * Whether this browser plays HLS itself: Safari, and every browser on iOS, which are WebKit.
  *
@@ -123,6 +126,11 @@ export function loadHls(): Promise<HlsModule> {
  *
  * `autoStartLoad: false` is the HLS spelling of `preload="metadata"`: hls.js otherwise ignores
  * `preload` and buffers 30 seconds of a card nobody has reached. The first `play` starts it.
+ *
+ * Buffering is capped at `HLS_MAX_BUFFER_SECONDS` ahead. hls.js's own target is the larger of 30
+ * seconds and 60 MB at the current bitrate, so a 720p rendition of a few Mbit/s asks for around
+ * four minutes: measured in Firefox, ~100 MB in the first 17 seconds of the feed, with both playing
+ * slots and the paused next card each 190–265 seconds ahead.
  */
 export function attachStreamSource(
   video: HTMLVideoElement,
@@ -161,7 +169,7 @@ export function attachStreamSource(
         video.setAttribute('src', url);
         return;
       }
-      hls = new Hls({ autoStartLoad: started });
+      hls = new Hls({ autoStartLoad: started, maxMaxBufferLength: HLS_MAX_BUFFER_SECONDS });
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) onFatalError?.();
       });
