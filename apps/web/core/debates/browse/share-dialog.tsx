@@ -42,6 +42,8 @@ const SHARE_TAGLINE = 'Watch the debate on Geo!';
 
 const REDDIT_TITLE_MAX = 300;
 const X_TWEET_MAX = 280;
+// X wraps links with t.co, regardless of the original URL length.
+const X_URL_WEIGHT = 23;
 const LINKEDIN_TEXT_MAX = 700;
 
 /**
@@ -125,7 +127,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   const onX = () => {
     const link = shareLink('x');
     const url = link.url;
-    const text = shareMessage(X_TWEET_MAX - url.length - 1);
+    const text = shareMessage(X_TWEET_MAX - X_URL_WEIGHT - 1);
     handoffShare(
       'x',
       () =>

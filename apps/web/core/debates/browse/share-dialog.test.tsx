@@ -32,13 +32,13 @@ const cases = [
   ['Download debate video', 'download'],
 ] as const;
 const completed = () => mocks.capture.mock.calls.filter(([event]) => event === 'action_completed');
-function mount(data = debate) {
+function mount(data = debate, spaceId = 'space') {
   render(
     <DebateShareDialog
       open
       onOpenChange={vi.fn()}
       debate={data}
-      spaceId="space"
+      spaceId={spaceId}
       openerRef={React.createRef<HTMLButtonElement>()}
     />
   );
@@ -114,6 +114,29 @@ const realDebate = {
   participants: [{ profile_space_id: '22222222222242228222222222222222' }],
 } as Debate;
 const handoffs = () => mocks.capture.mock.calls.filter(([name]) => name === 'share_link_handoff');
+
+it.each([
+  'Sharing knowledge helps people make better decisions together',
+  'Sharing knowledge helps people make better decisions together. '.repeat(8),
+])('budgets X composer text using the shortened link weight for UUID destinations: %s', claim => {
+  const open = vi.spyOn(window, 'open').mockReturnValue(null);
+  mount({ ...realDebate, claim: { ...realDebate.claim, claim } }, '33333333-3333-4333-8333-333333333333');
+  fireEvent.click(screen.getByRole('button', { name: 'Share on X' }));
+
+  const composer = new URL(open.mock.calls[0][0] as string);
+  const destination = new URL(composer.searchParams.get('url')!);
+  const text = composer.searchParams.get('text')!;
+  expect(destination.href.length).toBeGreaterThan(240);
+  expect(parseShareLink(destination.searchParams)).toMatchObject({ method: 'x', share_content_id: realDebate.id });
+  expect(destination.pathname).toContain('33333333-3333-4333-8333-333333333333');
+  expect(text).toContain('Sharing knowledge helps people make better decisions together');
+  expect(text).toMatch(/\. Watch the debate on Geo!$/);
+  expect(text.length + 1 + 23).toBeLessThanOrEqual(280);
+  if (claim.length < 100) expect(text).toBe(`${claim}. Watch the debate on Geo!`);
+  else expect(text).toContain('…');
+  expect(handoffs()).toHaveLength(1);
+  expect(handoffs()[0][1].share_id).toBe(parseShareLink(destination.searchParams)!.share_id);
+});
 
 it.each(cases.slice(0, 3))('correlates the tagged %s destination with its synchronous handoff', (label, method) => {
   let recordsAtOpen = -1;
