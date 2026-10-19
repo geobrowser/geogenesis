@@ -25,8 +25,14 @@ function event(
     `(${quote(`2026-10-${day.toString().padStart(2, '0')} ${hour.toString().padStart(2, '0')}:00:00`)}, ${quote(name)}, ${quote(visitor)}, ${quote(session)}, ${quote(account)}, ${quote(JSON.stringify(props))})`
   )
 }
-function handoff(n: number, day = 12, visitor = `sender-${n}`, extra = {}) {
-  event('share_link_handoff', day, 8, visitor, `sender-session-${n}`, '', {
+function handoff(
+  n: number,
+  day = 12,
+  visitor = `sender-${n}`,
+  extra = {},
+  account = ''
+) {
+  event('share_link_handoff', day, 8, visitor, `sender-session-${n}`, account, {
     share_id: share(n),
     share_content_type: 'debate',
     share_content_id: target,
@@ -291,6 +297,208 @@ event(
   }
 )
 
+// Each explicit initiating-auth path must recognize a sender returning in another tab.
+const recoveredIdentityCases = [
+  { lifecycle: 'auth_identity_linked', viaAttempt: true },
+  { lifecycle: 'signed_in', viaAttempt: true },
+  { lifecycle: 'signed_up', viaAttempt: false },
+  { lifecycle: 'session_restored', viaAttempt: false },
+]
+for (const [
+  index,
+  { lifecycle, viaAttempt },
+] of recoveredIdentityCases.entries()) {
+  const n = 20 + index
+  const visitor = `self-phone-${n}`
+  const session = `self-phone-session-${n}`
+  const account = `self-account-${n}`
+  handoff(n, 12, `self-desktop-${n}`, { method: 'copy_link' }, account)
+  landing(n, 12, 9, visitor, session, 'copy_link')
+  const attribution = viaAttempt
+    ? {
+        auth_attempt_id: `self-attempt-${n}`,
+        action_anonymous_id: visitor,
+        action_session_id: session,
+      }
+    : {
+        signup_context_source: 'auth_start',
+        signup_anonymous_id: visitor,
+        signup_session_id: session,
+      }
+  if (viaAttempt)
+    event('auth_attempt_started', 12, 10, visitor, session, '', attribution)
+  event(
+    lifecycle,
+    12,
+    11,
+    `completion-tab-${n}`,
+    `completion-session-${n}`,
+    account,
+    attribution
+  )
+}
+// Reusing an anonymous ID does not prove identity in a different session.
+landing(20, 12, 12, 'self-phone-20', 'unlinked-session', 'copy_link')
+// Conflicting source pairs or authenticated accounts must not invent self-visit proof.
+handoff(
+  24,
+  12,
+  'ambiguous-self-desktop',
+  { method: 'copy_link' },
+  'ambiguous-self-account'
+)
+for (const suffix of ['a', 'b']) {
+  landing(
+    24,
+    12,
+    9,
+    `ambiguous-self-${suffix}`,
+    `ambiguous-self-session-${suffix}`,
+    'copy_link'
+  )
+  event(
+    'auth_attempt_started',
+    12,
+    10,
+    `ambiguous-self-${suffix}`,
+    `ambiguous-self-session-${suffix}`,
+    '',
+    {
+      auth_attempt_id: 'ambiguous-self-attempt',
+      action_anonymous_id: `ambiguous-self-${suffix}`,
+      action_session_id: `ambiguous-self-session-${suffix}`,
+    }
+  )
+}
+event(
+  'auth_identity_linked',
+  12,
+  11,
+  'ambiguous-self-completion',
+  'ambiguous-self-completion-session',
+  'ambiguous-self-account',
+  { auth_attempt_id: 'ambiguous-self-attempt' }
+)
+handoff(
+  25,
+  12,
+  'conflicting-account-desktop',
+  { method: 'copy_link' },
+  'conflicting-account-owner'
+)
+landing(
+  25,
+  12,
+  9,
+  'conflicting-account-phone',
+  'conflicting-account-phone-session',
+  'copy_link'
+)
+event(
+  'auth_attempt_started',
+  12,
+  10,
+  'conflicting-account-phone',
+  'conflicting-account-phone-session',
+  '',
+  {
+    auth_attempt_id: 'conflicting-account-attempt',
+    action_anonymous_id: 'conflicting-account-phone',
+    action_session_id: 'conflicting-account-phone-session',
+  }
+)
+for (const account of ['conflicting-account-owner', 'another-account']) {
+  event(
+    'auth_identity_linked',
+    12,
+    11,
+    'conflicting-account-completion',
+    'conflicting-account-completion-session',
+    account,
+    { auth_attempt_id: 'conflicting-account-attempt' }
+  )
+}
+event(
+  'signed_up',
+  12,
+  12,
+  'conflicting-account-completion',
+  'conflicting-account-completion-session',
+  'conflicting-account-owner',
+  {
+    auth_attempt_id: 'conflicting-account-attempt',
+  }
+)
+// Recovery after the cutoff excludes the earlier self-visit, not the real handoff.
+handoff(
+  26,
+  18,
+  'late-self-desktop',
+  { method: 'copy_link' },
+  'late-self-account'
+)
+landing(26, 18, 23, 'late-self-phone', 'late-self-phone-session', 'copy_link')
+event(
+  'auth_attempt_started',
+  18,
+  23,
+  'late-self-phone',
+  'late-self-phone-session',
+  '',
+  {
+    auth_attempt_id: 'late-self-attempt',
+    action_anonymous_id: 'late-self-phone',
+    action_session_id: 'late-self-phone-session',
+  }
+)
+event(
+  'auth_identity_linked',
+  19,
+  1,
+  'late-self-completion',
+  'late-self-completion-session',
+  'late-self-account',
+  { auth_attempt_id: 'late-self-attempt' }
+)
+// A proven different account is still a legitimate acquired visit.
+handoff(
+  27,
+  12,
+  'other-owner-desktop',
+  { method: 'copy_link' },
+  'other-owner-account'
+)
+landing(
+  27,
+  12,
+  9,
+  'different-reader-phone',
+  'different-reader-session',
+  'copy_link'
+)
+event(
+  'auth_attempt_started',
+  12,
+  10,
+  'different-reader-phone',
+  'different-reader-session',
+  '',
+  {
+    auth_attempt_id: 'different-reader-attempt',
+    action_anonymous_id: 'different-reader-phone',
+    action_session_id: 'different-reader-session',
+  }
+)
+event(
+  'auth_identity_linked',
+  12,
+  11,
+  'different-reader-completion',
+  'different-reader-completion-session',
+  'different-reader-account',
+  { auth_attempt_id: 'different-reader-attempt' }
+)
+
 const report = readFileSync(new URL('./weekly.sql', import.meta.url), 'utf8')
   .replaceAll('{start_date:Date}', "toDate('2026-10-12')")
   .replaceAll('{end_date:Date}', "toDate('2026-10-19')")
@@ -339,7 +547,11 @@ try {
   assert.equal(Number(channel('reddit')?.new_accounts), 2)
   assert.equal(Number(channel('reddit')?.unmatched_visits), 1)
   assert.equal(Number(channel('reddit')?.link_handoffs), 0)
-  assert.equal(output.filter((row) => row.breakdown === 'channel').length, 2)
+  assert.equal(Number(channel('copy_link')?.visits), 5, JSON.stringify(output))
+  assert.equal(Number(channel('copy_link')?.visitors), 5)
+  assert.equal(Number(channel('copy_link')?.new_accounts), 0)
+  assert.equal(Number(channel('copy_link')?.link_handoffs), 8)
+  assert.equal(output.filter((row) => row.breakdown === 'channel').length, 3)
   assert.ok(
     output.some(
       (row) =>

@@ -35,6 +35,8 @@ Exclusions also follow a later sign-in/session restore and the initiating auth I
 
 The reporting dates bound metric occurrences, not the identity evidence used for exclusions. Rerunning an earlier week can therefore remove team/self traffic identified after that week ended. Later handoffs, visits and account creation do not enter the earlier week's metrics.
 
+Self-visit filtering also uses explicit initiating-auth links when sign-in completes in another tab or campaign. Account evidence from sign-in, sign-up, identity-link and recovered restore events joins only the recorded initiating visitor/session pair. A conflicting source pair or account leaves the link ambiguous; it cannot remove a visit as self-traffic or assign a conversion. Another session with the same anonymous ID does not inherit this identity inference.
+
 Missing outbound events do not erase acquired visits/accounts, but their sharer stays unknown. Lost sign-up events or initiating joins cannot prove conversion. There is no visits/share ratio: dividing arrivals this week by shares this week would mix cohorts. Seven-day cohort reporting remains follow-up scope.
 
 ## Validation and rollout

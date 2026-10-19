@@ -45,6 +45,21 @@ excluded_accounts AS (
   SELECT * FROM raw
   WHERE NOT excluded AND (visitor, session) NOT IN (SELECT visitor, session FROM excluded_sessions)
     AND (attempt = '' OR attempt NOT IN (SELECT attempt FROM excluded_attempts))
+), auth_evidence AS (
+  SELECT *, arrayFilter(pair -> pair.1 != '' AND pair.2 != '', [
+    tuple(JSONExtractString(props, 'action_anonymous_id'), JSONExtractString(props, 'action_session_id')),
+    if(JSONExtractString(props, 'signup_context_source') = 'auth_start',
+      tuple(JSONExtractString(props, 'signup_anonymous_id'), JSONExtractString(props, 'signup_session_id')), tuple('', ''))
+  ]) AS initiating_pairs
+  FROM events
+  WHERE event_name IN ('auth_attempt_started', 'auth_identity_linked', 'signed_up', 'signed_in', 'session_restored')
+), auth_links AS (
+  SELECT attempt, min(event_time) AS auth_started,
+    arrayDistinct(arrayFlatten(groupArray(initiating_pairs))) AS source_pairs,
+    source_pairs[1] AS initiating, length(source_pairs) AS pairs,
+    groupUniqArrayIf(account, account != '' AND event_name != 'auth_attempt_started') AS identified_accounts
+  FROM auth_evidence WHERE attempt != ''
+  GROUP BY attempt
 ), handoffs AS (
   SELECT outbound_share AS share_id, min(event_time) AS handed_off,
     argMin(tuple(JSONExtractString(props, 'method'), JSONExtractString(props, 'share_content_type'),
@@ -58,24 +73,38 @@ excluded_accounts AS (
     AND JSONExtractString(props, 'share_content_type') IN ('debate', 'lobby', 'availability')
     AND match(JSONExtractString(props, 'share_content_id'), '^[a-f0-9]{32}$')
   GROUP BY share_id
+), session_accounts AS (
+  SELECT visitor, session, groupUniqArray(account) AS accounts
+  FROM (
+    SELECT visitor, session, account FROM events WHERE account != ''
+    UNION ALL
+    -- Recover only one explicit source pair and one authenticated account per attempt.
+    SELECT initiating.1 AS visitor, initiating.2 AS session, identified_accounts[1] AS account
+    FROM auth_links WHERE pairs = 1 AND length(identified_accounts) = 1
+    UNION ALL
+    -- Signup/restoration snapshots can survive without a delivered attempt event.
+    SELECT initiating_pairs[1].1 AS visitor, initiating_pairs[1].2 AS session, account
+    FROM auth_evidence WHERE attempt = '' AND account != '' AND event_name != 'auth_attempt_started'
+      AND length(arrayDistinct(initiating_pairs)) = 1
+  )
+  WHERE visitor != '' AND session != '' GROUP BY visitor, session
 ), session_landings AS (
   SELECT visitor, session, min(event_time) AS landed,
     -- These fields are fixed for the session even after navigation removes the URL tags.
     argMin(tuple(JSONExtractString(props, 'landing_page_url'), JSONExtractString(props, 'utm_source'),
       JSONExtractString(props, 'utm_medium'), JSONExtractString(props, 'utm_campaign'),
-      JSONExtractString(props, 'utm_content')), event_time) AS landing,
-    groupUniqArrayIf(account, account != '') AS accounts
+      JSONExtractString(props, 'utm_content')), event_time) AS landing
   FROM events WHERE visitor != '' AND session != ''
   GROUP BY visitor, session
 ), parsed_landings AS (
-  SELECT *,
+  SELECT l.*, a.accounts,
     if(landing.1 != '', extractURLParameter(landing.1, 'utm_source'), landing.2) AS channel,
     if(landing.1 != '', extractURLParameter(landing.1, 'utm_medium'), landing.3) AS medium,
     if(landing.1 != '', extractURLParameter(landing.1, 'utm_campaign'), landing.4) AS campaign,
     decodeURLComponent(if(landing.1 != '', extractURLParameter(landing.1, 'utm_content'), landing.5)) AS content,
     splitByChar(':', content) AS parts,
     parts[2] AS content_type, parts[3] AS content_id, parts[4] AS share_id
-  FROM session_landings
+  FROM session_landings l LEFT JOIN session_accounts a ON l.visitor = a.visitor AND l.session = a.session
 ), visits AS (
   SELECT l.*, h.share_id != '' AND h.metadata.1 = l.channel
       AND h.metadata.2 = l.content_type AND h.metadata.3 = l.content_id AS matched,
@@ -89,15 +118,6 @@ excluded_accounts AS (
     AND l.share_id NOT IN (SELECT outbound_share FROM excluded_shares)
     AND NOT (matched AND ((h.metadata.6 != '' AND h.metadata.6 = l.visitor)
       OR (h.metadata.7 != '' AND has(l.accounts, h.metadata.7))))
-), auth_links AS (
-  SELECT attempt, min(event_time) AS auth_started,
-    argMinIf(tuple(JSONExtractString(props, 'action_anonymous_id'), JSONExtractString(props, 'action_session_id')),
-      event_time, JSONExtractString(props, 'action_anonymous_id') != '' AND JSONExtractString(props, 'action_session_id') != '') AS initiating,
-    uniqExactIf(tuple(JSONExtractString(props, 'action_anonymous_id'), JSONExtractString(props, 'action_session_id')),
-      JSONExtractString(props, 'action_anonymous_id') != '' AND JSONExtractString(props, 'action_session_id') != '') AS pairs
-  FROM events
-  WHERE event_name IN ('auth_attempt_started', 'auth_identity_linked') AND attempt != ''
-  GROUP BY attempt
 ), accounts AS (
   SELECT account, min(event_time) AS created,
     argMin(tuple(attempt, JSONExtractString(props, 'signup_context_source'),
@@ -106,8 +126,8 @@ excluded_accounts AS (
   FROM events WHERE event_name = 'signed_up' AND account != '' GROUP BY account
 ), account_links AS (
   SELECT a.*, b.auth_started,
-    multiIf(b.pairs = 1, b.initiating,
-      b.pairs > 1, tuple('', ''),
+    multiIf(b.pairs > 1 OR length(b.identified_accounts) > 1, tuple('', ''),
+      b.pairs = 1, b.initiating,
       a.signup.5 != '' AND a.signup.6 != '', tuple(a.signup.5, a.signup.6),
       a.signup.2 = 'auth_start', tuple(a.signup.3, a.signup.4), tuple('', '')) AS initiating
   FROM accounts a LEFT JOIN auth_links b ON a.signup.1 = b.attempt
