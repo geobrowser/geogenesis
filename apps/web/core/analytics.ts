@@ -32,6 +32,7 @@ type AnalyticsIdentity = string | number | AnalyticsProperties;
 
 type GeoAnalyticsRuntime = {
   getContext?: () => AnalyticsProperties;
+  getIdentity?: () => AnalyticsProperties | null;
   measurementContextRevision?: () => number;
   reconcileAnonymousIdentity?: () => void;
   bindIdentity?: (accessToken: string) => Promise<boolean>;
@@ -134,7 +135,7 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-57eb31cbb455.js';
+const analyticsScriptSrc = '/geo-analytics-c02f3ad6907c.js';
 
 /**
  * Amplitude autocapture, as `true` would enable it, minus "[Amplitude] Viewport Content Updated".
@@ -285,7 +286,7 @@ function loadAnalyticsScript() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-V+sxy7RVYf4GqdINSdi2aJLgykgQW9+QIhc/tLQDXKw=';
+  script.integrity = 'sha256-wC861pB8F/h7HsFnzoUiPMCUt02vF6DfhHzfNBPzGhY=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;

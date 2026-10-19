@@ -22,6 +22,8 @@ import { runObservedAction } from '~/core/analytics-operations';
  * same person; a reschedule sends them "proposed a different time" and keeps one request.
  */
 import { DEEP_LINK_MODALS, toModal } from '~/core/deep-links/modal-deep-link';
+import { copyShareLink } from '~/core/sharing/share-handoff';
+import { createShareLink } from '~/core/sharing/share-link';
 import { NavUtils } from '~/core/utils/utils';
 
 export const AVAILABILITY_MODAL = DEEP_LINK_MODALS.availability;
@@ -87,5 +89,6 @@ export function availabilityLinkUrl(profileSpaceId: string, origin = window.loca
 
 /** What both copy controls do; each confirms in its own way. Rejects if the clipboard refuses. */
 export function copyAvailabilityLink(profileSpaceId: string, context: ActionContext): Promise<void> {
-  return runObservedAction('share', context, () => navigator.clipboard.writeText(availabilityLinkUrl(profileSpaceId)));
+  const link = createShareLink(availabilityLinkUrl(profileSpaceId), 'availability', profileSpaceId, 'copy_link');
+  return runObservedAction('share', context, () => copyShareLink(link, context));
 }
