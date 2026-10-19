@@ -32,7 +32,6 @@ import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { TopicOption } from '~/core/topics/use-topic-suggestions';
 import type { SearchResult } from '~/core/types';
 import { devLog } from '~/core/utils/dev-log';
-import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateEntityId } from '~/core/utils/utils';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
@@ -45,6 +44,7 @@ import { Dots } from '~/design-system/dots';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Camera } from '~/design-system/icons/camera';
+import { Check } from '~/design-system/icons/check';
 import { CheckedCircleCheckedSmall } from '~/design-system/icons/check-circle-checked-small';
 import { CheckedCircleUncheckedSmall } from '~/design-system/icons/check-circle-unchecked-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -257,12 +257,8 @@ export const OnboardingDialog = () => {
     setSelectedTopicIds(prev => (prev.includes(id) ? prev.filter(spaceId => spaceId !== id) : [...prev, id]));
   };
 
-  const handleToggleFeedTopic = (topic: TopicOption) => {
-    const id = normId(topic.id);
-    const next = feedTopics.some(t => normId(t.id) === id)
-      ? feedTopics.filter(t => normId(t.id) !== id)
-      : [...feedTopics, topic];
-    setHeldFeedTopics({ address, topics: next });
+  const handleSelectFeedTopics = (topics: TopicOption[]) => {
+    setHeldFeedTopics({ address, topics });
   };
 
   // `stepAtom` is persisted via atomWithStorage, but entityMatchCandidates
@@ -297,7 +293,9 @@ export const OnboardingDialog = () => {
         >
           <Title className="sr-only">Set up your Geo account</Title>
           <ModalCard childKey="card" effectiveStep={effectiveStep}>
-            <StepHeader step={effectiveStep} onClearEntityMatches={() => setEntityMatchCandidates([])} />
+            {effectiveStep !== 'customize-feed' && (
+              <StepHeader step={effectiveStep} onClearEntityMatches={() => setEntityMatchCandidates([])} />
+            )}
             {effectiveStep === 'start' && <StepWelcome onProfileContinue={onProfileContinue} />}
             {effectiveStep === 'existing-entity-match' && (
               <StepExistingEntityMatch
@@ -331,7 +329,7 @@ export const OnboardingDialog = () => {
                 failedToPrepare={selectedTopicIds.length === 0 && featuredStatus === 'error'}
                 onRetryPrepare={loadFeaturedSpaces}
                 selected={feedTopics}
-                onToggle={handleToggleFeedTopic}
+                onChange={handleSelectFeedTopics}
                 onCompleteOnboard={onCompleteOnboard}
               />
             )}
@@ -402,7 +400,15 @@ const StepDots = ({ step }: { step: StepWithHeader }) => (
 
 // `step` is the normalized effectiveStep, so a legacy value persisted by an
 // older version of the flow still renders the header for the step it maps to.
-const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityMatches: () => void }) => {
+const StepHeader = ({
+  step,
+  onClearEntityMatches,
+  onBack,
+}: {
+  step: Step;
+  onClearEntityMatches?: () => void;
+  onBack?: () => void;
+}) => {
   const setStep = useSetAtom(stepAtom);
   const topicId = useAtomValue(topicIdAtom);
   // Cleanup runs via the app-root useGeoLogoutCleanup; this only triggers it.
@@ -413,8 +419,12 @@ const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityM
   const showBack = step === 'existing-entity-match' || (stepOrder[step] ?? 0) > 1;
 
   const handleBack = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
     if (step === 'existing-entity-match') {
-      onClearEntityMatches();
+      onClearEntityMatches?.();
       setStep('start');
       return;
     }
@@ -427,10 +437,15 @@ const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityM
   };
 
   return (
-    <div className="relative z-20 mb-6 flex h-4 w-full items-center justify-center">
+    <div className="relative z-20 mb-6 flex h-4 w-full shrink-0 items-center justify-center">
       {showBack && (
         <div className="absolute left-0 rotate-180">
-          <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="border-none! bg-transparent!" />
+          <SquareButton
+            aria-label={onBack ? 'Back to topics' : 'Previous step'}
+            icon={<RightArrowLongSmall />}
+            onClick={handleBack}
+            className="border-none! bg-transparent!"
+          />
         </div>
       )}
       <StepDots step={step as StepWithHeader} />
@@ -817,80 +832,86 @@ function StepInterestedIn({
   const hasPicks = selectedTopicIds.length > 0;
 
   return (
-    <div className="flex h-full flex-col justify-between">
+    <div className="flex min-h-0 flex-1 flex-col">
       <StepContents childKey="interested-in">
         <div className="w-full">
           <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
-            What are you interested in?
+            Choose your interests
           </Text>
           <Text
             as="p"
             variant="body"
             className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
           >
-            Select the first spaces you want to join
+            Choose spaces to join and discover topics you care about
           </Text>
         </div>
       </StepContents>
       {isLoading ? (
-        <div className="flex h-full items-center justify-center pt-[32px]">
+        <div className="flex min-h-0 flex-1 items-center justify-center py-6">
           <Dots />
         </div>
       ) : isError ? (
-        <div className="flex h-full flex-col items-center justify-center gap-2 pt-[32px] text-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
           <Text as="p" variant="body" className="text-[16px] leading-5 font-normal text-grey-04">
             We couldn&apos;t load spaces to join. Check your connection and try again.
           </Text>
         </div>
       ) : (
-        <div className="flex h-full flex-wrap content-start items-start justify-center gap-1 pt-[32px]">
-          {featuredSpaces.map(featuredSpace => {
-            return (
-              <div
-                key={`interested-topic-${featuredSpace.id}`}
-                role="button"
-                // It already said `role="button"`, which promises a control that can be focused and
-                // activated from a keyboard. Without a tabIndex it could not be reached, and without
-                // a key handler Enter and Space did nothing. `aria-pressed` because it is a toggle.
-                tabIndex={0}
-                aria-pressed={selectedTopicIds.includes(featuredSpace.id)}
-                onKeyDown={event => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    handleSelectTopics(featuredSpace.id);
-                  }
-                }}
-                onClick={() => handleSelectTopics(featuredSpace.id)}
-                className={`flex cursor-pointer items-center justify-start rounded-[40px] border px-4 py-3 ${selectedTopicIds.includes(featuredSpace.id) ? 'border-[#2A2B2E]' : 'border-grey-02'}`}
-              >
-                <div className="relative mr-[10px] h-4 w-4">
-                  <FallbackImage
-                    value={featuredSpace.image ?? ''}
-                    sizes="16px"
-                    className="max-h-4 max-w-4 rounded-full bg-red-01"
-                  />
-                </div>
-
-                <span className="text-[16px] leading-[10px] font-normal text-[#2A2B2E]">{featuredSpace.name}</span>
-              </div>
-            );
-          })}
+        <div className="my-5 min-h-0 flex-1 overflow-y-auto">
+          <div className="grid grid-cols-3 gap-x-3 gap-y-4">
+            {featuredSpaces.map(space => {
+              const isSelected = selectedTopicIds.includes(space.id);
+              return (
+                <button
+                  key={space.id}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => handleSelectTopics(space.id)}
+                  className="flex min-w-0 flex-col items-center gap-2 rounded-md px-1 py-1 text-center focus-visible:outline-2 focus-visible:outline-text"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cx(
+                      'relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full border text-lg',
+                      isSelected ? 'border-text bg-grey-02' : 'border-grey-02 bg-grey-01'
+                    )}
+                  >
+                    <span className="text-grey-04">{space.name.slice(0, 1)}</span>
+                    {space.image && (
+                      <span className="absolute inset-2 overflow-hidden rounded-full">
+                        <FallbackImage value={space.image} sizes="40px" className="object-cover" />
+                      </span>
+                    )}
+                    {isSelected && (
+                      <span className="absolute -right-1 -bottom-1 rounded-full bg-text p-1 text-white ring-2 ring-white">
+                        <Check />
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-metadata leading-4 break-words">{space.name}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
-      {isError ? (
-        <button type="button" onClick={onRetry} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
-          Try again
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={onContinue}
-          disabled={isLoading}
-          className={hasPicks ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
-        >
-          {hasPicks ? 'Continue' : 'Skip for now'}
-        </button>
-      )}
+      <div className="shrink-0 border-t border-grey-02 pt-4">
+        {isError ? (
+          <button type="button" onClick={onRetry} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+            Try again
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onContinue}
+            disabled={isLoading}
+            className={hasPicks ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
+          >
+            {hasPicks ? 'Continue' : 'Skip for now'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -901,7 +922,7 @@ function StepCustomizeFeed({
   failedToPrepare,
   onRetryPrepare,
   selected,
-  onToggle,
+  onChange,
   onCompleteOnboard,
 }: {
   spaceIds: string[];
@@ -909,51 +930,59 @@ function StepCustomizeFeed({
   failedToPrepare: boolean;
   onRetryPrepare: () => void;
   selected: TopicOption[];
-  onToggle: (topic: TopicOption) => void;
+  onChange: (topics: TopicOption[]) => void;
   onCompleteOnboard: () => void;
 }) {
+  const [searchOpen, setSearchOpen] = React.useState(false);
   const hasPicks = selected.length > 0;
   const needsMore = selected.length < RECOMMENDED_FEED_TOPIC_COUNT;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <StepContents childKey="customize-feed">
-        <div className="w-full">
-          <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
-            Customize your feed
-          </Text>
-          <Text
-            as="p"
-            variant="body"
-            className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
-          >
-            Follow topics to see debates and posts about them
-          </Text>
-        </div>
-      </StepContents>
+      <StepHeader step="customize-feed" onBack={searchOpen ? () => setSearchOpen(false) : undefined} />
+      {!searchOpen && (
+        <StepContents childKey="customize-feed">
+          <div className="w-full">
+            <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
+              Customize your feed
+            </Text>
+            <Text
+              as="p"
+              variant="body"
+              className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
+            >
+              Every topic you follow helps personalize your feed
+            </Text>
+          </div>
+        </StepContents>
+      )}
       <FeedTopicPicker
         spaceIds={spaceIds}
         isPreparing={isPreparing}
         failedToPrepare={failedToPrepare}
         onRetryPrepare={onRetryPrepare}
         selected={selected}
-        onToggle={onToggle}
-        className="mt-6 flex-1"
+        onChange={onChange}
+        searchOpen={searchOpen}
+        onSearchOpenChange={setSearchOpen}
+        className={cx('flex-1', !searchOpen && 'mt-6')}
       />
-      <div className="shrink-0 pt-4">
-        <Text as="p" variant="footnote" className="pb-2 text-center text-grey-04">
-          {needsMore
-            ? `Pick ${RECOMMENDED_FEED_TOPIC_COUNT} or more for a better feed`
-            : `${selected.length} topics selected`}
-        </Text>
-        <button
-          type="button"
-          onClick={onCompleteOnboard}
-          className={hasPicks ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
-        >
-          {hasPicks ? 'Create profile' : 'Skip for now'}
-        </button>
-      </div>
+      {!searchOpen && (
+        <div className="mt-4 shrink-0 border-t border-grey-02 pt-4">
+          <Text as="p" variant="footnote" className="pb-2 text-center text-grey-04">
+            {needsMore
+              ? `Pick ${RECOMMENDED_FEED_TOPIC_COUNT} or more for a better feed`
+              : `${selected.length} topics selected`}
+          </Text>
+          <button
+            type="button"
+            onClick={onCompleteOnboard}
+            className={hasPicks ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
+          >
+            {hasPicks ? 'Create profile' : 'Skip for now'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
