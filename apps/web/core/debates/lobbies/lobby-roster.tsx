@@ -1,7 +1,5 @@
 'use client';
 
-import type { TrackReference } from '@livekit/components-react';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -14,6 +12,7 @@ import { Text } from '~/design-system/text';
 import { type DebateLobbyClaims, type DebateLobbyMember, dashlessId } from '../api';
 import { MicrophoneIcon } from '../debate-room-controls';
 import { sameId } from '../rooms/room-presence';
+import { TrackVideo } from '../track-video';
 import { LobbyDebatePairs } from './lobby-debate-pairs';
 import { LobbyDisagreementsTrigger } from './lobby-disagreements';
 import {
@@ -183,7 +182,7 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
             )}
           >
             {camera ? (
-              <TileVideo camera={camera} mirrored={isSelf} />
+              <TrackVideo track={camera.publication.track} mirrored={isSelf} data-testid="lobby-speaker-video" />
             ) : (
               <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={56} />
             )}
@@ -208,30 +207,6 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
         </Text>
       ) : null}
     </div>
-  );
-}
-
-/** A speaker's camera in their avatar's place. Attached so LiveKit sizes and pauses it with the tile. */
-function TileVideo({ camera, mirrored }: { camera: TrackReference; mirrored: boolean }) {
-  const ref = React.useRef<HTMLVideoElement | null>(null);
-  const track = camera.publication.track;
-  React.useEffect(() => {
-    const element = ref.current;
-    if (!element || !track) return;
-    track.attach(element);
-    return () => {
-      track.detach(element);
-    };
-  }, [track]);
-  return (
-    <video
-      ref={ref}
-      data-testid="lobby-speaker-video"
-      className={cx('size-full object-cover', mirrored && '-scale-x-100')}
-      playsInline
-      muted
-      autoPlay
-    />
   );
 }
 
