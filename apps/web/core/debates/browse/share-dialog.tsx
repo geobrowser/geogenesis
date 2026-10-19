@@ -144,7 +144,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
       'linkedin',
       () =>
         openComposer(
-          `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareMessage(LINKEDIN_TEXT_MAX - link.url.length - 1)}\n${link.url}`)}`
+          `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareMessage(LINKEDIN_TEXT_MAX)}\n${link.url}`)}`
         ),
       link
     );

@@ -116,6 +116,18 @@ const realDebate = {
 } as Debate;
 const handoffs = () => mocks.capture.mock.calls.filter(([name]) => name === 'share_link_handoff');
 
+it('preserves the LinkedIn caption allowance independently of the tracked destination length', () => {
+  const open = vi.spyOn(window, 'open').mockReturnValue(null);
+  const claim = 'A'.repeat(600);
+  mount({ ...realDebate, claim: { ...realDebate.claim, claim } }, '33333333-3333-4333-8333-333333333333');
+  fireEvent.click(screen.getByRole('button', { name: 'Share on LinkedIn' }));
+  const text = new URL(open.mock.calls[0][0] as string).searchParams.get('text')!;
+  const [caption, destination] = text.split('\n');
+  expect(caption).toBe(`${claim}. Watch the debate on Geo!`);
+  expect(parseShareLink(new URL(destination).searchParams)).toMatchObject({ method: 'linkedin' });
+  expect(handoffs()[0][1].share_id).toBe(parseShareLink(new URL(destination).searchParams)!.share_id);
+});
+
 it.each([
   'Sharing knowledge helps people make better decisions together',
   'Sharing knowledge helps people make better decisions together. '.repeat(8),

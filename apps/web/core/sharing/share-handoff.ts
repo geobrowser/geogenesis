@@ -11,7 +11,9 @@ type ShareActionContext = ActionContext & { space_id?: string };
 function sharer(participants?: readonly string[]) {
   try {
     const context = readAnalyticsContext();
-    if (context.is_identified === false) return { sharer_role: 'anonymous' };
+    if (context.is_identified !== true) {
+      return { sharer_role: context.is_identified === false ? 'anonymous' : 'unknown' };
+    }
     const identity = isAnalyticsEnabled ? analyticsRuntime()?.getIdentity?.() : undefined;
     const profile = shareUuid(identity?.personal_space_id);
     const participantIds = participants?.map(shareUuid);

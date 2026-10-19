@@ -10,7 +10,7 @@ import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
-import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
+import { DebateShareDialog } from '~/core/debates/browse/lazy-share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';

@@ -140,4 +140,21 @@ describe('link handoffs', () => {
       copyShareLink(createShareLink('https://geobrowser.io/explore', 'lobby', target, 'copy_link'), context)
     ).resolves.toBeUndefined();
   });
+
+  it.each(['missing', 'throwing'] as const)('does not read profile traits when identity context is %s', state => {
+    const identity = vi.fn(() => ({ personal_space_id: profile }));
+    window.lytics = {
+      getContext: () => {
+        if (state === 'throwing') throw new Error('context unavailable');
+        return {};
+      },
+      getIdentity: identity,
+    };
+    observeShareLinkHandoff(createShareLink('https://geobrowser.io/explore', 'debate', target, 'x'), context, [
+      profile,
+    ])('composer_requested');
+    expect(mocks.capture.mock.calls[0][1]).toMatchObject({ sharer_role: 'unknown' });
+    expect(mocks.capture.mock.calls[0][1]).not.toHaveProperty('sharer_profile_space_id');
+    expect(identity).not.toHaveBeenCalled();
+  });
 });
