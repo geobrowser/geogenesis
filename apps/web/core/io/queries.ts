@@ -122,7 +122,10 @@ export function batchEntityIds(ids: readonly string[], size = ENTITY_ID_BATCH_SI
 function getBatchEntitiesPage(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   return graphql({
     query: entitiesBatchQuery,
-    decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
+    decoder: data =>
+      data.entities
+        ?.map(entity => EntityDecoder.decodeInSpace(entity, spaceId))
+        .filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } }, spaceId },
     signal,
   });
@@ -243,10 +246,10 @@ type EntitiesConnectionShape = {
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
 } | null;
 
-function decodeEntitiesConnectionPage(connection: EntitiesConnectionShape): EntitiesPage {
+function decodeEntitiesConnectionPage(connection: EntitiesConnectionShape, spaceId?: string): EntitiesPage {
   const entities =
     connection?.nodes
-      ?.map((n: unknown) => EntityDecoder.decode(n))
+      ?.map((n: unknown) => EntityDecoder.decodeInSpace(n, spaceId))
       .filter((e: Entity | null): e is Entity => e !== null) ?? [];
   return {
     entities,
@@ -294,7 +297,7 @@ export function getAllEntities(
       graphql({
         query: allEntitiesConnectionDocument,
         decoder: (data: { entitiesConnection?: EntitiesConnectionShape }) =>
-          decodeEntitiesConnectionPage(data.entitiesConnection ?? null),
+          decodeEntitiesConnectionPage(data.entitiesConnection ?? null, topLevelSpaceId),
         variables: { ...variablesBase, limit: pageLimit, after: pageAfter, offset: pageOffset },
         signal,
       });
@@ -419,7 +422,7 @@ export function getEntitiesOrderedByPropertyConnection(
   return graphql({
     query: entitiesOrderedByPropertyConnectionDocument,
     decoder: (data: { entitiesOrderedByPropertyConnection?: EntitiesConnectionShape }) =>
-      decodeEntitiesConnectionPage(data.entitiesOrderedByPropertyConnection ?? null),
+      decodeEntitiesConnectionPage(data.entitiesOrderedByPropertyConnection ?? null, topLevelSpaceId),
     variables: {
       propertyId,
       sortDirection,
@@ -475,7 +478,12 @@ export function getEntity(entityId: string, spaceId?: string, signal?: AbortCont
       pageInfo = nextPage.pageInfo;
     }
 
-    return EntityDecoder.decode({ ...entity, relationsList: relationNodes });
+    const decoded = EntityDecoder.decodeInSpace({ ...entity, relationsList: relationNodes }, spaceId);
+    if (decoded) {
+      // A drained connection is complete even when it contains at least one full list page.
+      decoded.relationsComplete = !pageInfo.hasNextPage && decoded.relations.length === relationNodes.length;
+    }
+    return decoded;
   });
 }
 
@@ -483,7 +491,7 @@ export function getRelation(entityId: string, spaceId?: string, signal?: AbortCo
   return graphql({
     query: relationEntityQuery,
     decoder: data => {
-      return data.relation?.entity ? EntityDecoder.decode(data.relation.entity) : null;
+      return data.relation?.entity ? EntityDecoder.decodeInSpace(data.relation.entity, spaceId) : null;
     },
     variables: { id: entityId, spaceId },
     signal,
@@ -594,7 +602,7 @@ export function getEntityPage(entityId: string, spaceId?: string, signal?: Abort
     decoder: data =>
       data.entity
         ? {
-            entity: EntityDecoder.decode(data.entity),
+            entity: EntityDecoder.decodeInSpace(data.entity, spaceId),
             relations: data.relations?.map(r => RelationDecoder.decode(r)).filter(r => r !== null) ?? [],
           }
         : null,
