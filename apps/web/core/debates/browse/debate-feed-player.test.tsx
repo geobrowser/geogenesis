@@ -2395,16 +2395,19 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
     expect(container.querySelector('[data-round-banner]')).toBeNull();
   });
 
-  it('labels the round beside the timer in sentence case on glass', () => {
+  it('labels the round beside the timer with the same existing style in both formats', () => {
     mocks.controller = at(12);
     const open = render(<DebateFeedPlayer debate={openRounds} active />).container;
     const tag = open.querySelector('[data-round-badge] [data-round-tag]');
-    expect(tag?.className).toContain('backdrop-blur');
     expect(tag?.className).not.toContain('uppercase');
     expect(tag?.textContent).toBe('Round 1 · Opening');
 
     mocks.controller = at(12);
     const fixed = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect(open.querySelector('[data-round-badge]')?.className).toBe(
+      fixed.querySelector('[data-round-badge]')?.className
+    );
+    expect(tag?.className).toBe(fixed.querySelector('[data-round-badge] [aria-hidden]')?.className);
     expect(fixed.querySelector('[data-round-badge] [data-round-tag]')).toBeNull();
   });
 

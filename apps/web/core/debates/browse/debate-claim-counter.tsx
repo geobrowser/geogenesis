@@ -14,8 +14,7 @@ import type { Entity } from '~/core/types';
 import { Avatar } from '~/design-system/avatar';
 import { Warning } from '~/design-system/icons/warning';
 
-import { ClaimIconButton } from './debate-claim-ticker';
-import { PLAYER_GLASS_CLASS, PLAYER_LABEL_FONT } from './player-overlay-styles';
+import { CLAIM_BACKLOG_CHIP_CLASS, ClaimIconButton } from './debate-claim-ticker';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 
 /** The pause on the video before the list opens, and after the pointer leaves before it closes. */
@@ -36,8 +35,8 @@ const LIST_EXIT_MS = 180;
  *
  * The video keeps playing throughout. With nothing said yet, there is no list to open.
  *
- * Sizes, timings and curves are the design mockup's, sizes as shares of the player's width (`cqw`),
- * so the corner keeps its proportions from a feed card to fullscreen.
+ * The list keeps the mockup's proportions in `cqw`; the counter shares the existing fixed-format
+ * claims chip's typography, size and glass surface.
  */
 export function DebateClaimCounter({
   history,
@@ -206,24 +205,14 @@ export function DebateClaimCounter({
   );
 }
 
-/**
- * The count beside the classic circled exclamation icon, on the player's glass pill.
- *
- * The icon sits inline on the number's baseline and drops by 0.17em, which puts its middle on the
- * middle of the digits in every browser. Centring with flexbox centres the
- * digits' line box instead, whose descender space leaves them sitting high; trimming that box with
- * `text-box` is not supported everywhere. Measured off the rendered pixels in the design mockup.
- */
+/** The existing fixed-format claims chip, with the requested circled exclamation and live count. */
 function ClaimCount({ count }: { count: number }) {
   return (
-    <span
-      className={cx(PLAYER_GLASS_CLASS, 'inline-block text-[2.6cqw] text-white tabular-nums')}
-      style={PLAYER_LABEL_FONT}
-    >
-      <span aria-hidden className="mr-[0.4em] inline-block align-[-0.17em] [&>svg]:size-[1.05em]">
+    <span className={CLAIM_BACKLOG_CHIP_CLASS}>
+      <span aria-hidden className="shrink-0">
         <Warning />
       </span>
-      {count}
+      <span className="tabular-nums">{count}</span>
     </span>
   );
 }

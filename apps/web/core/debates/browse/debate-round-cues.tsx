@@ -16,8 +16,6 @@ import {
   PLAYER_EXIT_CLASS,
   PLAYER_EXIT_MS,
   PLAYER_FURNITURE_OPACITY,
-  PLAYER_GLASS_CLASS,
-  PLAYER_LABEL_FONT,
   PLAYER_TITLE_STYLE,
 } from './player-overlay-styles';
 import { heldAt, usePlaybackAnimationClock } from './use-playback-animation-clock';
@@ -144,7 +142,7 @@ export function DebateRoundBadge({
   rightPx,
 }: {
   cue: RoundCue | null;
-  /** Use the Open rounds player's glass treatment. */
+  /** Synchronize Open rounds visibility with the shared announcement fade. */
   stamped?: boolean;
   /** Optional distance from the tile's right edge. */
   rightPx?: number;
@@ -154,25 +152,15 @@ export function DebateRoundBadge({
   return (
     <div
       data-round-badge={cue.label}
-      className={cx(
-        'pointer-events-none absolute top-3 right-13 z-10 flex h-8 max-w-[calc(100%-6rem)] items-center leading-none font-medium text-white transition-[right] duration-300',
-        !stamped && 'rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem]'
-      )}
+      className="pointer-events-none absolute top-3 right-13 z-10 flex h-8 max-w-[calc(100%-6rem)] items-center rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem] leading-none font-medium text-white transition-[right] duration-300"
       style={{
         opacity: stamped ? PLAYER_FURNITURE_OPACITY : cue.opacity,
         ...(rightPx !== undefined && { right: rightPx }),
       }}
     >
       <span className="sr-only">{cue.role ? `${cue.round}, ${cue.role}` : cue.round}</span>
-      {/* Truncating rather than wrapping: the badge is one line beside a 32px circle, and a second
-          line would push it off the top of the tile. Open rounds' tag is the mockup's: sized to the
-          player, centred against the timer. */}
-      <span
-        aria-hidden
-        data-round-tag={stamped || undefined}
-        className={cx('truncate', stamped && cx(PLAYER_GLASS_CLASS, 'text-[3cqw]'))}
-        style={stamped ? PLAYER_LABEL_FONT : undefined}
-      >
+      {/* Both formats use the existing label beside the 32px timer, truncating to one line. */}
+      <span aria-hidden data-round-tag={stamped || undefined} className="truncate">
         {cue.label}
       </span>
     </div>

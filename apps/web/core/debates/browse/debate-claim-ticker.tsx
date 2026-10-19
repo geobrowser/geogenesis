@@ -778,6 +778,10 @@ export function DebateClaimTickerStack({
   );
 }
 
+/** The existing fixed-format chip's type and glass surface, shared with Open rounds counters. */
+export const CLAIM_BACKLOG_CHIP_CLASS =
+  'flex h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-[44px] transition-colors hover:bg-[#151515]/50';
+
 /**
  * The way into the backlog where there is no pointer to open it with.
  *
@@ -821,7 +825,10 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
        * and Tailwind emits its `not-sr-only` counterpart *after* `px-2` and `h-5`, so restoring the
        * chip would have stripped its own shape. Checked, not assumed.
        */
-      className="pointer-events-none absolute flex h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white opacity-0 backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50 focus-visible:pointer-events-auto focus-visible:relative focus-visible:opacity-100 no-hover:pointer-events-auto no-hover:relative no-hover:opacity-100"
+      className={cx(
+        CLAIM_BACKLOG_CHIP_CLASS,
+        "pointer-events-none absolute opacity-0 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] focus-visible:pointer-events-auto focus-visible:relative focus-visible:opacity-100 no-hover:pointer-events-auto no-hover:relative no-hover:opacity-100"
+      )}
     >
       <InfoSmall color="white" />
       <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
