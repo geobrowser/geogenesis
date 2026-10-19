@@ -232,6 +232,7 @@ function OptionRow({
     <li className="border-b border-divider last:border-none">
       <button
         type="button"
+        aria-pressed={selected}
         onPointerDown={event => event.preventDefault()}
         onClick={onClick}
         disabled={disabled}
