@@ -2371,8 +2371,10 @@ describe('automatic cut playback hold', () => {
     let hold!: ReturnType<typeof result.current.holdForTransition>;
     act(() => {
       hold = result.current.holdForTransition();
-      result.current.seekBoth(41.2);
+      result.current.seekBoth(41.2, { preserveTransitionHold: true });
     });
+    // No resume may even start before decoder readiness releases this automatic hold.
+    expect(pair.map(video => video.plays)).toEqual([1, 1]);
     // Simulate two seconds of media time: the faster decoder must not speak behind an opaque canvas.
     for (const video of pair) if (!video.paused) video.currentTime += 2;
     act(() => result.current.onPlaybackTick());
@@ -2392,6 +2394,54 @@ describe('automatic cut playback hold', () => {
     expect(pair.map(video => video.plays)).toEqual([2, 2]);
     act(() => hold.release());
     expect(pair.map(video => video.plays)).toEqual([2, 2]);
+  });
+
+  it('keeps playing after a manual seek interrupts a cut hold', async () => {
+    const { result, pair } = await mounted();
+    let hold!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      hold = result.current.holdForTransition();
+    });
+    await act(async () => {
+      result.current.seekBoth(25);
+      // The player's seek generation changes and disposes the outgoing cut after this seek.
+      hold.cancel();
+      pair.forEach(video => video.settlePlay());
+    });
+    await waitFor(() => expect(pair.map(video => video.paused)).toEqual([false, false]));
+    expect(result.current.playing).toBe(true);
+    expect(result.current.userPaused).toBe(false);
+    expect(pair.map(video => video.currentTime)).toEqual([25, 25]);
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+    act(() => {
+      hold.release();
+      hold.cancel();
+    });
+    expect(result.current.playing).toBe(true);
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+  });
+
+  it('keeps a user-paused manual seek paused and retires its old hold', async () => {
+    const { result, pair } = await mounted();
+    let hold!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      hold = result.current.holdForTransition();
+      result.current.togglePlayback();
+    });
+    act(() => {
+      result.current.seekBoth(25);
+      hold.cancel();
+      hold.release();
+    });
+    expect(pair.map(video => video.paused)).toEqual([true, true]);
+    expect(result.current.userPaused).toBe(true);
+    expect(pair.map(video => video.currentTime)).toEqual([25, 25]);
+    await act(async () => {
+      const resume = result.current.resumeBoth();
+      pair.forEach(video => video.settlePlay());
+      await resume;
+    });
+    expect(pair.map(video => video.paused)).toEqual([false, false]);
   });
 
   it('keeps a viewer pause and defers a viewer resume until the pair is ready', async () => {

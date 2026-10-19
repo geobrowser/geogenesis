@@ -485,10 +485,14 @@ export function DebateFeedPlayer({
   );
   const cuts = React.useMemo(() => breakCuts(playbackBreaks), [playbackBreaks]);
   const scrubberTimeline = React.useMemo(() => playbackTimeline(cuts, timelineSeconds * 1000), [cuts, timelineSeconds]);
+  const seekForAutomaticCut = React.useCallback(
+    (seconds: number) => seekBothRaw(seconds, { preserveTransitionHold: true }),
+    [seekBothRaw]
+  );
   const { slot1CanvasRef, slot2CanvasRef, seekAcrossCut } = useVideoCutTransition({
     slot1VideoRef,
     slot2VideoRef,
-    seek: seekBothRaw,
+    seek: seekForAutomaticCut,
     holdForTransition,
     enabled: stamped && active && !isScrubbing,
     resetKey: `${animationSeekKey}:${slot1Src}:${slot2Src}`,
@@ -517,7 +521,7 @@ export function DebateFeedPlayer({
   const endCardShown = showReplay && !reducedOverlays;
   type AnnouncementPhase = 'clear' | 'covered' | 'returning';
   const [announcementPhase, setAnnouncementPhase] = React.useState<AnnouncementPhase>('clear');
-  const announcementShown = announcementPhase === 'covered';
+  const announcementShown = stamped && announcementPhase === 'covered';
   const preserveAnnouncementFocus = useAnnouncementFocus(measurement.elementRef, announcementShown);
   const announcementPhaseRef = React.useRef<AnnouncementPhase>('clear');
   const completedBreaksRef = React.useRef<{ key: string; active: PlayerBreak | null; done: Set<number> }>({
@@ -624,13 +628,15 @@ export function DebateFeedPlayer({
       ? (breakCue ?? (roundCard ? { elapsedMs: roundCard.ageMs ?? 0, playedMs: ROUND_CARD_MS } : null))
       : null,
     playing,
-    { positionMs: announcementPositionMs, originMs: announcementOriginMs, resetKey: animationSeekKey },
-    syncAnnouncement
+    stamped
+      ? { positionMs: announcementPositionMs, originMs: announcementOriginMs, resetKey: animationSeekKey }
+      : undefined,
+    stamped ? syncAnnouncement : undefined
   );
   // During a break's exit there is no live turn yet. Prepare the incoming timer and label so
   // they join the same crossfade rather than appearing abruptly after the automatic seek.
   const incomingSpan =
-    announcementPhase === 'returning' && currentBreak && breakCue?.nextRoundIndex != null
+    stamped && announcementPhase === 'returning' && currentBreak && breakCue?.nextRoundIndex != null
       ? turnSpans.find(span => Math.floor(span.index / 2) === breakCue.nextRoundIndex)
       : null;
   const incomingState =

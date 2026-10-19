@@ -45,7 +45,6 @@ export function DebateClaimCounter({
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
-  onActiveChange,
 }: {
   /** What this debater has claimed so far, oldest first. */
   history: StackedCard[];
@@ -55,8 +54,6 @@ export function DebateClaimCounter({
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string, position: boolean | null) => void;
-  /** Whether the list is open or a keyboard is inside it, so the player keeps the corner visible. */
-  onActiveChange?: (active: boolean) => void;
 }) {
   const [pointerOver, setPointerOver] = React.useState(false);
   const [hovered, setHovered] = React.useState(false);
@@ -86,8 +83,6 @@ export function DebateClaimCounter({
     const timer = setTimeout(() => setListPresent(false), LIST_EXIT_MS);
     return () => clearTimeout(timer);
   }, [open]);
-  const active = open || keyboardInside;
-  React.useEffect(() => onActiveChange?.(active), [active, onActiveChange]);
 
   // Escape closes the list wherever focus is, as content shown on hover must be dismissible without
   // moving the pointer or focus (WCAG 1.4.13). It stays closed until both have left, like Hide. A

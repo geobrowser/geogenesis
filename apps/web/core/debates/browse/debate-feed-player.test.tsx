@@ -201,22 +201,8 @@ vi.mock('./debate-claim-ticker', () => ({
 // The Open rounds counter has its own suite; here it stands in so the player's wiring is what is
 // under test: which corner each format draws, and what it is handed.
 vi.mock('./debate-claim-counter', () => ({
-  DebateClaimCounter: ({
-    history,
-    name,
-    onActiveChange,
-  }: {
-    history: unknown[];
-    name: string;
-    onActiveChange?: (active: boolean) => void;
-  }) => (
-    <button
-      type="button"
-      data-testid="claim-counter"
-      data-count={history.length}
-      data-name={name}
-      onClick={() => onActiveChange?.(true)}
-    />
+  DebateClaimCounter: ({ history, name }: { history: unknown[]; name: string }) => (
+    <button type="button" data-testid="claim-counter" data-count={history.length} data-name={name} />
   ),
 }));
 
@@ -2180,7 +2166,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       vi.advanceTimersByTime(800);
       expect(seekBoth).not.toHaveBeenCalled();
       vi.advanceTimersByTime(100);
-      expect(seekBoth).toHaveBeenCalledWith(70.8);
+      expect(seekBoth).toHaveBeenCalledWith(70.8, { preserveTransitionHold: true });
 
       cleanup();
       const pausedSeek = vi.fn();
@@ -2278,7 +2264,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
         }
       }
       act(() => vi.advanceTimersByTime(100));
-      expect(controller.seekBoth).toHaveBeenCalledWith(70.8);
+      expect(controller.seekBoth).toHaveBeenCalledWith(70.8, { preserveTransitionHold: true });
       expect(controller.holdForTransition).toHaveBeenCalledOnce();
       const hold = controller.holdForTransition.mock.results[0].value;
       expect(hold.release).not.toHaveBeenCalled();
@@ -2302,7 +2288,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
 
       recording.resume();
       vi.advanceTimersByTime(900);
-      expect(seekBoth).toHaveBeenCalledWith(70.8);
+      expect(seekBoth).toHaveBeenCalledWith(70.8, { preserveTransitionHold: true });
     } finally {
       vi.useRealTimers();
     }
@@ -2687,6 +2673,21 @@ describe('Open rounds edited progress bar', () => {
     expect(Number(slider.value)).toBe(85.25);
     fireEvent.change(slider, { target: { value: '40' } });
     expect(seek).toHaveBeenCalledExactlyOnceWith(40);
+  });
+});
+
+describe('fixed-format announcement clock', () => {
+  it('does not read the announcement media clock on fixed-format playhead samples', () => {
+    const position = vi.fn(() => 12000);
+    mocks.livePosition = position;
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 });
+    const { rerender } = render(<DebateFeedPlayer debate={debate} active />);
+    position.mockClear();
+    for (const playheadSeconds of [12.25, 12.5, 12.75]) {
+      mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds });
+      rerender(<DebateFeedPlayer debate={debate} active />);
+    }
+    expect(position).not.toHaveBeenCalled();
   });
 });
 
@@ -3133,6 +3134,17 @@ describe('Open rounds in-app player: announcement visibility', () => {
     });
     frame(71850);
     expect(document.activeElement).toBe(persistent[0]);
+  });
+
+  it('does not carry a covered Open rounds announcement into a fixed-format card', () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 0.5 });
+    const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
+    expect(furniture(container).every(element => element.hasAttribute('inert'))).toBe(true);
+    rerender(<DebateFeedPlayer debate={debate} active />);
+    for (const element of furniture(container)) {
+      expect(element.hasAttribute('inert')).toBe(false);
+      expect(element.style.visibility).toBe('');
+    }
   });
 
   it('puts play and pause feedback above the popup without dismissing a paused announcement', () => {

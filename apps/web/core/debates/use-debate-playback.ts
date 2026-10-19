@@ -1491,16 +1491,25 @@ export function useDebatePlayback(
   );
 
   const seekBoth = React.useCallback(
-    (seconds: number) => {
+    (seconds: number, { preserveTransitionHold = false }: { preserveTransitionHold?: boolean } = {}) => {
       const nextTime = clampSeconds(seconds, timelineSeconds);
+      // Automatic cuts seek under their captured frames. A manual seek owns the playhead instead:
+      // retire that hold before the player's seek generation disposes it, preserving pause intent.
+      const interruptedHold = preserveTransitionHold ? null : transitionHoldRef.current;
+      if (interruptedHold) transitionHoldRef.current = null;
       needsPrepositionRef.current = false;
       pendingSeekSecondsRef.current = nextTime;
       if (seekVideosTo(nextTime)) pendingSeekSecondsRef.current = null;
       setPlayheadSeconds(nextTime);
       setTurnState(turnStateAt(nextTime));
       window.requestAnimationFrame(updateTurnState);
+      if (interruptedHold) {
+        if (interruptedHold.resume && nextTime < timelineSeconds - PLAYBACK_END_EPSILON_SECONDS) {
+          void resumeBoth(nextTime);
+        } else setPlaying(false);
+      }
     },
-    [seekVideosTo, timelineSeconds, turnStateAt, updateTurnState]
+    [resumeBoth, seekVideosTo, timelineSeconds, turnStateAt, updateTurnState]
   );
 
   const ready = Boolean(urls.slot1 && urls.slot2);

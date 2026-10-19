@@ -37,6 +37,12 @@ const EMPTY_TIMINGS = new Map<string, ClaimTiming>();
  * Deliberately a hook over `DebateTranscriptClaims` rather than a wrapper around
  * `useDebateTranscriptClaims`: the panel, the feed badge and the player each already hold the
  * claims, and re-fetching them per surface is what the shared query key exists to avoid.
+ *
+ * Shared-offset refinement can also request the transcript for fully published claims. Consumers
+ * are the live ticker/counter/scrubber and end-card carousel (via useDrawableDebateClaims), the
+ * debate claims panel, and an expanded debate branch in activity rows. These use the same cached
+ * JSON transcript query; independent published offsets still do not request it. Grouped timings
+ * wait for transcript/media success or error, then retain published bounds when refinement fails.
  */
 export function useClaimTimings(
   debateId: string | null,

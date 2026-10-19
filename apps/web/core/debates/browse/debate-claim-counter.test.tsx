@@ -227,7 +227,6 @@ describe('DebateClaimCounter (GEO-3317)', () => {
   // Copilot, #2843: a keyboard user on a vote button lost their place when the pointer left and the
   // list closed under them.
   it('stays open while the keyboard is inside it, and closes once focus leaves', () => {
-    const onActiveChange = vi.fn();
     const { container } = render(
       <div>
         <DebateClaimCounter
@@ -236,7 +235,6 @@ describe('DebateClaimCounter (GEO-3317)', () => {
           rowsByClaimId={new Map()}
           entitiesByClaimId={new Map()}
           onAnswered={() => {}}
-          onActiveChange={onActiveChange}
         />
         <button type="button" data-testid="elsewhere" />
       </div>
@@ -248,11 +246,9 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     leave(counter(container));
     act(() => vi.advanceTimersByTime(500));
     expect(visibleList(container)).not.toBeNull();
-    expect(onActiveChange).toHaveBeenLastCalledWith(true);
 
     fireEvent.blur(agree, { relatedTarget: container.querySelector('[data-testid="elsewhere"]') });
     expect(visibleList(container)).toBeNull();
-    expect(onActiveChange).toHaveBeenLastCalledWith(false);
   });
 
   it('does not hold open for focus a mouse press gave it', () => {
