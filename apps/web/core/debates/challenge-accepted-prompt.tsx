@@ -72,27 +72,33 @@ export function ChallengeAcceptedPrompt({
           </h2>
         </header>
 
-        <div className="grid min-h-24 grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg border border-grey-02 bg-white p-3">
-          <DebateRequestMediaPreview
-            sessionKey={debateRematchMediaSessionKey(session.id)}
-            avatarCid={you.avatar_cid}
-            avatarValue={you.profile_space_id}
-            initialJoinState={initialJoinState}
-            onJoinStateChange={rememberChoice}
-            camera={videoEnabled}
-            fallback={<RematchParticipant participant={you} label="You" />}
-          />
-          <div className="relative grid w-7 place-items-center">
-            <span
-              aria-hidden="true"
-              className="absolute top-1/2 left-1/2 h-18 w-px -translate-x-1/2 -translate-y-1/2 bg-divider"
-            />
-            <span className="relative grid h-7 w-7 place-items-center rounded-full border border-divider bg-white text-tag text-text">
-              VS
-            </span>
-          </div>
-          <RematchParticipant participant={other} label={participantName(other)} />
-        </div>
+        <DebateRequestMediaPreview
+          sessionKey={debateRematchMediaSessionKey(session.id)}
+          avatarCid={you.avatar_cid}
+          avatarValue={you.profile_space_id}
+          initialJoinState={initialJoinState}
+          onJoinStateChange={rememberChoice}
+          camera={videoEnabled}
+          fallback={<RematchParticipant participant={you} label="You" />}
+          renderLayout={(preview, status) => (
+            <>
+              <div className="grid min-h-24 grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg border border-grey-02 bg-white p-3">
+                {preview}
+                <div className="relative grid w-7 place-items-center">
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-1/2 left-1/2 h-18 w-px -translate-x-1/2 -translate-y-1/2 bg-divider"
+                  />
+                  <span className="relative grid h-7 w-7 place-items-center rounded-full border border-divider bg-white text-tag text-text">
+                    VS
+                  </span>
+                </div>
+                <RematchParticipant participant={other} label={participantName(other)} />
+              </div>
+              {status && <div className="grid gap-2 text-center">{status}</div>}
+            </>
+          )}
+        />
 
         {error && (
           <Text as="p" variant="body" color="red-01">

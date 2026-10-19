@@ -48,6 +48,8 @@ type DebateRequestMediaPreviewProps = {
   onJoinStateChange?: (state: DebateJoinState) => void;
   /** False for a card that leads into an audio-only claim picker: mic only, camera never opened. */
   camera?: boolean;
+  /** Lets a card place media status below its participant container. */
+  renderLayout?: (preview: React.ReactNode, status: React.ReactNode) => React.ReactNode;
 };
 
 /**
@@ -61,7 +63,7 @@ type DebateRequestMediaPreviewProps = {
  */
 export function DebateRequestMediaPreview({ fallback, ...props }: DebateRequestMediaPreviewProps) {
   const session = useOptionalDebateMediaSession();
-  if (!session) return <>{fallback ?? null}</>;
+  if (!session) return <>{props.renderLayout ? props.renderLayout(fallback ?? null, null) : (fallback ?? null)}</>;
   return <MediaPreview {...props} session={session} />;
 }
 
@@ -73,6 +75,7 @@ function MediaPreview({
   initialJoinState = null,
   onJoinStateChange,
   camera = true,
+  renderLayout,
   session,
 }: Omit<DebateRequestMediaPreviewProps, 'fallback'> & { session: DebateMediaSession }) {
   const [permission, setPermission] = React.useState<DebateMediaPermissions | null>(null);
@@ -255,8 +258,8 @@ function MediaPreview({
     </div>
   );
 
-  return (
-    <div className="flex flex-col gap-2">
+  const preview = (
+    <>
       {cameraOn ? (
         <DebateVideoTile participantPosition={null} active={false} tileLabel="You" inactiveIndicatorId="local">
           <video ref={videoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
@@ -269,7 +272,11 @@ function MediaPreview({
         </div>
       )}
       {toggles}
+    </>
+  );
 
+  const status = (
+    <>
       {blocked ? (
         <Text variant="footnote" color="grey-04">
           Camera and mic are blocked for this site. Allow them in your browser&apos;s address bar to turn them on.
@@ -307,6 +314,15 @@ function MediaPreview({
       <span aria-live="polite" className="sr-only">
         {announcement}
       </span>
+    </>
+  );
+
+  return renderLayout ? (
+    renderLayout(<div className="flex flex-col gap-2">{preview}</div>, status)
+  ) : (
+    <div className="flex flex-col gap-2">
+      {preview}
+      {status}
     </div>
   );
 }
