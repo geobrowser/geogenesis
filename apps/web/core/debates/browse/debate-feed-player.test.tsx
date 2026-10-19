@@ -317,6 +317,7 @@ function controllerFixture(overrides: {
     togglePlayback: vi.fn(),
     playFromStart: vi.fn(),
     resumeBoth: vi.fn(),
+    holdForTransition: vi.fn(() => ({ release: vi.fn(), cancel: vi.fn() })),
     suspend: vi.fn(),
     seekBoth: overrides.seekBoth ?? vi.fn(),
     livePositionMs: () => mocks.livePosition?.() ?? null,
@@ -2193,6 +2194,40 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
 
   // A stall to buffer stops the recording and not the wall clock. The cut waits for the recording to
   // reach it rather than jumping past the speaker's last words (Copilot, #2843).
+  it('coordinates automatic captured-frame cuts with the playback controller hold', () => {
+    vi.useFakeTimers();
+    try {
+      vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+        drawImage: vi.fn(),
+      } as unknown as CanvasRenderingContext2D);
+      const { container, unmount } = renderAt(61.1, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
+      const controller = mocks.controller as ReturnType<typeof controllerFixture>;
+      for (const video of container.querySelectorAll('video')) {
+        for (const [key, value] of Object.entries({
+          videoWidth: 640,
+          videoHeight: 480,
+          clientWidth: 480,
+          clientHeight: 289,
+          readyState: 2,
+          seeking: true,
+        })) {
+          Object.defineProperty(video, key, { value, configurable: true });
+        }
+      }
+      act(() => vi.advanceTimersByTime(100));
+      expect(controller.seekBoth).toHaveBeenCalledWith(70.8);
+      expect(controller.holdForTransition).toHaveBeenCalledOnce();
+      const hold = controller.holdForTransition.mock.results[0].value;
+      expect(hold.release).not.toHaveBeenCalled();
+      unmount();
+      expect(hold.cancel).toHaveBeenCalledOnce();
+      expect(hold.release).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it('holds a cut while the recording has stalled short of it, and makes it once the recording gets there', () => {
     vi.useFakeTimers();
     try {

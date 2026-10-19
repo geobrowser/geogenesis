@@ -240,6 +240,8 @@ export function useDebatePlayback(
   const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const slot2VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
+  // An automatic cut holds physical playback without changing the viewer's play/pause intent.
+  const transitionHoldRef = React.useRef<{ resume: boolean } | null>(null);
   /**
    * The pair still needs moving to where playback will start (GEO-2965).
    *
@@ -625,6 +627,7 @@ export function useDebatePlayback(
      * different `src`, and `debateGenerationRef` for the refusal write, which deliberately runs
      * above that check and would re-latch the tap control on a debate nothing has asked about yet.
      */
+    transitionHoldRef.current = null;
     resumeGenerationRef.current++;
     debateGenerationRef.current++;
     // And so does any rebuild still waiting on an element that is about to hold a different
@@ -698,7 +701,13 @@ export function useDebatePlayback(
 
   // Nothing may outlive the card: a pending rejoin holds listeners on an element that is going
   // away, and a count that nothing would ever decrement.
-  React.useEffect(() => cancelRecoveries, [cancelRecoveries]);
+  React.useEffect(
+    () => () => {
+      transitionHoldRef.current = null;
+      cancelRecoveries();
+    },
+    [cancelRecoveries]
+  );
 
   /**
    * Which slots have already been handed a freshly signed URL (GEO-2985).
@@ -912,6 +921,10 @@ export function useDebatePlayback(
       // A deliberate position is where playback will start from, so it is the preposition too.
       needsPrepositionRef.current = false;
     }
+
+    // The incoming cut position is already published by seekBoth. Do not correct, advance or
+    // interpret this deliberately paused pair until both decoders can present it.
+    if (transitionHoldRef.current) return;
 
     // See `needsPrepositionRef`. Only for a pair nothing has started or moved yet, and only once
     // both know their shape: before `HAVE_METADATA` a seek has nothing to land on.
@@ -1161,6 +1174,7 @@ export function useDebatePlayback(
   }, [offsets, seekVideosTo, timelineSeconds, turnStateAt]);
 
   const pauseBoth = React.useCallback(() => {
+    if (transitionHoldRef.current) transitionHoldRef.current.resume = false;
     // Supersede any resume still confirming, so it cannot un-pause the viewer.
     resumeGenerationRef.current++;
     for (const video of videos()) video.pause();
@@ -1171,6 +1185,12 @@ export function useDebatePlayback(
 
   const resumeBoth = React.useCallback(
     async (fromSeconds?: number) => {
+      if (transitionHoldRef.current) {
+        transitionHoldRef.current.resume = true;
+        setPlaying(true);
+        setUserPaused(false);
+        return;
+      }
       const primaryVideo = slot1VideoRef.current;
       const secondaryVideo = slot2VideoRef.current;
       if (!primaryVideo || !secondaryVideo) return;
@@ -1318,7 +1338,40 @@ export function useDebatePlayback(
     [offsets, seekVideosTo, setMutedByUser, timelineSeconds]
   );
 
+  const holdForTransition = React.useCallback(() => {
+    const hold = {
+      resume:
+        transitionHoldRef.current?.resume ??
+        (playing || resumesInFlightRef.current > 0 || videos().some(video => !video.paused)),
+    };
+    transitionHoldRef.current = hold;
+    // Retire a resume still confirming before pausing, just as suspend and scrub do.
+    resumeGenerationRef.current++;
+    for (const video of videos()) video.pause();
+    return {
+      release: () => {
+        if (transitionHoldRef.current !== hold) return;
+        transitionHoldRef.current = null;
+        const position = pairPlayhead(
+          slot1VideoRef.current,
+          slot2VideoRef.current,
+          offsets,
+          lastRunningPlayheadRef.current
+        ).seconds;
+        if (hold.resume && position < timelineSeconds - PLAYBACK_END_EPSILON_SECONDS) void resumeBoth();
+        else setPlaying(false);
+      },
+      cancel: () => {
+        if (transitionHoldRef.current !== hold) return;
+        transitionHoldRef.current = null;
+        // Source changes, errors and leaving the card return ownership to normal autoplay.
+        setPlaying(false);
+      },
+    };
+  }, [offsets, playing, resumeBoth, timelineSeconds, videos]);
+
   const playFromStart = React.useCallback(async () => {
+    transitionHoldRef.current = null;
     const primaryVideo = slot1VideoRef.current;
     const secondaryVideo = slot2VideoRef.current;
     if (!primaryVideo || !secondaryVideo) return;
@@ -1589,6 +1642,7 @@ export function useDebatePlayback(
   // Autoplay control for the feed: when a debate scrolls out of view we pause it
   // silently (without flipping userPaused, so it can auto-resume when back in view).
   const suspend = React.useCallback(() => {
+    transitionHoldRef.current = null;
     // The card left the viewport; a resume still confirming is stale by definition.
     resumeGenerationRef.current++;
     for (const video of videos()) video.pause();
@@ -1606,6 +1660,7 @@ export function useDebatePlayback(
     // overwrite it with the now-paused `playing` value.
     if (isScrubbingRef.current) return;
     isScrubbingRef.current = true;
+    transitionHoldRef.current = null;
     // The drag owns the playhead now; don't let a pending resume fight it.
     resumeGenerationRef.current++;
     wasPlayingBeforeScrubRef.current = playing;
@@ -1684,6 +1739,7 @@ export function useDebatePlayback(
     togglePlayback,
     playFromStart,
     resumeBoth,
+    holdForTransition,
     suspend,
     seekBoth,
     beginScrub,

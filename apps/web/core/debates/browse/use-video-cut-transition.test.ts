@@ -54,6 +54,8 @@ function fixture(enabled = true) {
     canvas.animate = vi.fn(() => animations[index] as unknown as Animation);
   });
   const videoRefs = videos.map(current => ({ current }));
+  const hold = { release: vi.fn(), cancel: vi.fn() };
+  const holdForTransition = vi.fn(() => hold);
   const seek = vi.fn(() => videos.forEach(video => Object.defineProperty(video, 'seeking', { value: true })));
   const hook = renderHook(
     ({ resetKey }) =>
@@ -61,6 +63,7 @@ function fixture(enabled = true) {
         slot1VideoRef: videoRefs[0],
         slot2VideoRef: videoRefs[1],
         seek,
+        holdForTransition,
         enabled,
         resetKey,
       }),
@@ -79,6 +82,8 @@ function fixture(enabled = true) {
     canvases,
     animations,
     seek,
+    hold,
+    holdForTransition,
     arrive,
     cut: () => act(() => hook.result.current.seekAcrossCut(72)),
   };
@@ -115,6 +120,25 @@ describe('automatic video cut transition', () => {
     act(() => animations[0].onfinish?.());
     expect(canvases.map(canvas => canvas.style.opacity)).toEqual(['0', '0']);
     expect(canvases.map(canvas => canvas.width)).toEqual([0, 0]);
+  });
+
+  it('holds playback before the seek and releases it only when both incoming frames can paint', () => {
+    const { cut, seek, arrive, hold, holdForTransition, rerender } = fixture();
+    cut();
+    expect(holdForTransition.mock.invocationCallOrder[0]).toBeLessThan(seek.mock.invocationCallOrder[0]);
+    arrive(0);
+    tick();
+    tick();
+    expect(hold.release).not.toHaveBeenCalled();
+    arrive(1);
+    tick();
+    expect(hold.release).not.toHaveBeenCalled();
+    tick();
+    expect(hold.release).toHaveBeenCalledOnce();
+    cut();
+    rerender({ resetKey: 'inactive-or-new-source' });
+    expect(hold.cancel).toHaveBeenCalledOnce();
+    expect(hold.release).toHaveBeenCalledOnce();
   });
 
   it('waits for a current frame if seeked arrives while the decoder still has only metadata', () => {
@@ -160,6 +184,42 @@ describe('automatic video cut transition', () => {
     expect(canvases[1].animate).toHaveBeenCalledOnce();
   });
 
+  it.each(['canplay', 'no event'])('recovers after readiness is lost between presentation frames (%s)', event => {
+    const { cut, arrive, videos, canvases } = fixture();
+    cut();
+    arrive(0);
+    arrive(1);
+    tick();
+    Object.defineProperty(videos[1], 'readyState', { value: 1 });
+    tick();
+    tick();
+    expect(canvases[0].animate).not.toHaveBeenCalled();
+    Object.defineProperty(videos[1], 'readyState', { value: 2 });
+    if (event === 'canplay') act(() => videos[1].dispatchEvent(new Event('canplay')));
+    tick();
+    tick();
+    tick();
+    expect(canvases[0].animate).toHaveBeenCalledOnce();
+    expect(canvases[1].animate).toHaveBeenCalledOnce();
+  });
+
+  it('polls an initial seek without completion events and cancels that poll on reset', () => {
+    const { cut, videos, canvases, rerender } = fixture();
+    cut();
+    tick();
+    expect(frames.size).toBe(1);
+    videos.forEach(video => Object.defineProperty(video, 'seeking', { value: false }));
+    tick();
+    tick();
+    tick();
+    expect(canvases[0].animate).toHaveBeenCalledOnce();
+    cut();
+    tick();
+    expect(frames.size).toBe(1);
+    rerender({ resetKey: 'source-replaced' });
+    expect(frames.size).toBe(0);
+  });
+
   it('respects reduced motion while still protecting the seek from a blank frame', () => {
     reducedMotion = true;
     const { cut, arrive, canvases } = fixture();
@@ -203,10 +263,11 @@ describe('automatic video cut transition', () => {
   });
 
   it('falls back to a normal cut when either frame cannot be captured', () => {
-    const { cut, videos, canvases, seek } = fixture();
+    const { cut, videos, canvases, seek, holdForTransition } = fixture();
     Object.defineProperty(videos[1], 'videoWidth', { value: 0 });
     cut();
     expect(seek).toHaveBeenCalledOnce();
+    expect(holdForTransition).not.toHaveBeenCalled();
     expect(canvases.map(canvas => canvas.style.opacity)).toEqual(['0', '0']);
   });
 

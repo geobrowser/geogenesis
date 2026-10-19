@@ -143,6 +143,81 @@ describe('grouped paragraph claim timing', () => {
     expect(refined.get('coffee')?.endMs).toBe(3_000);
   });
 
+  it.each([
+    [
+      'not',
+      'Vaccination was not safe.',
+      'Coffee does not improve memory.',
+      'Vaccination was safe.',
+      'Coffee improves memory.',
+      'Vaccination was not safe, according to the detailed research evidence.',
+      'Coffee does not improve memory, according to the detailed research evidence.',
+    ],
+    [
+      'never',
+      'Vaccination was never safe.',
+      'Coffee never improves memory.',
+      'Vaccination was safe.',
+      'Coffee improves memory.',
+      'Vaccination was never safe, according to the detailed research evidence.',
+      'Coffee never improves memory, according to the detailed research evidence.',
+    ],
+    [
+      'without',
+      'Wheat farms operate without subsidies.',
+      'Steel factories operate without permits.',
+      'Wheat farms operate with subsidies.',
+      'Steel factories operate with permits.',
+      'Wheat farms operate without subsidies, according to the detailed research evidence.',
+      'Steel factories operate without permits, according to the detailed research evidence.',
+    ],
+    [
+      'no',
+      'Vaccination has no safety benefits.',
+      'Coffee has no memory benefits.',
+      'Vaccination has safety benefits.',
+      'Coffee has memory benefits.',
+      'Vaccination has no safety benefits, according to the detailed research evidence.',
+      'Coffee has no memory benefits, according to the detailed research evidence.',
+    ],
+    [
+      'contractions',
+      "Vaccination wasn't safe.",
+      "Coffee doesn't improve memory.",
+      'Vaccination was safe.',
+      'Coffee improves memory.',
+      'Vaccination was not safe, according to the detailed research evidence.',
+      'Coffee does not improve memory, according to the detailed research evidence.',
+    ],
+  ])(
+    'preserves shared negation (%s) in counter, backlog and marker timing',
+    (_negation, first, second, affirmative1, affirmative2, negative1, negative2) => {
+      const statements = [claim('first', first, 0, 10_000), claim('second', second, 0, 10_000)];
+      const lines = [
+        line(0, 1000, affirmative1),
+        line(1000, 2000, negative1),
+        line(2000, 3000, affirmative2),
+        line(3000, 4000, negative2),
+      ];
+      const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), published(statements), lines);
+      const ordered = claimsInSpokenOrder(statements, result);
+      const windows = backlogWindows(ordered);
+      expect(windows.map(window => window.startMs)).toEqual([2000, 4000]);
+      expect(claimHistory(windows, 1999)).toHaveLength(0);
+      expect(claimHistory(windows, 2000)).toHaveLength(1);
+      expect(claimHistory(windows, 3999)).toHaveLength(1);
+      expect(claimHistory(windows, 4000)).toHaveLength(2);
+      expect(claimMarkers(ordered, 10_000).map(marker => marker.atMs)).toEqual([2000, 4000]);
+      const original = published(statements);
+      expect(
+        refineGroupedClaimTimings(groupedPublishedClaims(statements), original, [
+          line(0, 1000, affirmative1),
+          line(2000, 3000, affirmative2),
+        ])
+      ).toEqual(original);
+    }
+  );
+
   it('keeps a compound assertion until its predicate is spoken after the matching subject', () => {
     const statements = [
       claim(

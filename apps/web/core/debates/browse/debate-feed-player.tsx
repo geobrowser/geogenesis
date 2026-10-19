@@ -238,6 +238,7 @@ export function DebateFeedPlayer({
     togglePlayback: togglePlaybackRaw,
     playFromStart: playFromStartRaw,
     resumeBoth,
+    holdForTransition,
     suspend,
     seekBoth: seekBothRaw,
     livePositionMs,
@@ -487,6 +488,7 @@ export function DebateFeedPlayer({
     slot1VideoRef,
     slot2VideoRef,
     seek: seekBothRaw,
+    holdForTransition,
     enabled: stamped && active,
     resetKey: `${animationSeekKey}:${slot1Src}:${slot2Src}`,
   });

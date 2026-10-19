@@ -2,6 +2,14 @@ import type { DebateTranscriptSegment } from './api';
 import { type ClaimTiming, LIVE_TIMING_CONFIDENCE, MAX_CLAIM_WINDOW_SEGMENTS, contentWords } from './claim-timing';
 import type { TranscriptClaim } from './transcript-claims';
 
+// Negation changes the assertion even when it is shared by every claim in a paragraph.
+const NEGATIONS = new Set(['not', 'no', 'never', 'neither', 'nothing', 'nobody', 'none', 'nowhere', 'without']);
+function refinementWords(text: string): string[] {
+  const words = contentWords(text);
+  // The general matcher drops two-letter words. Keep "no" locally for this refinement.
+  return /\bno\b/i.test(text) ? [...words, 'no'] : words;
+}
+
 /** Extraction can give several statements the end of their shared paragraph. */
 export function groupedPublishedClaims(claims: readonly TranscriptClaim[]): TranscriptClaim[][] {
   const groups = new Map<string, TranscriptClaim[]>();
@@ -31,7 +39,7 @@ export function refineGroupedClaimTimings(
   for (const group of groups) {
     const frequency = new Map<string, number>();
     for (const claim of group) {
-      for (const word of new Set(contentWords(claim.text))) {
+      for (const word of new Set(refinementWords(claim.text))) {
         frequency.set(word, (frequency.get(word) ?? 0) + 1);
       }
     }
@@ -43,9 +51,10 @@ export function refineGroupedClaimTimings(
       const published = timings.get(claim.id);
       if (!published || published.source !== 'published') continue;
       const lines = ordered.filter(line => line.start_ms >= published.startMs && line.end_ms <= published.endMs);
-      const words = new Set(contentWords(claim.text));
-      const available = new Set(lines.flatMap(line => contentWords(line.text)));
+      const words = new Set(refinementWords(claim.text));
+      const available = new Set(lines.flatMap(line => refinementWords(line.text)));
       const anchors = [...words].filter(word => frequency.get(word) === 1 && available.has(word));
+      const negations = [...words].filter(word => NEGATIONS.has(word));
       const total = sum(words);
       if (!total || anchors.length < 2) continue;
       let best: { start: number; end: number; score: number } | null = null;
@@ -53,11 +62,12 @@ export function refineGroupedClaimTimings(
         const windowWords = new Set<string>();
         // Use the same six-segment limit as the fallback matcher, keeping matches local to a clause.
         for (let end = start; end < Math.min(start + MAX_CLAIM_WINDOW_SEGMENTS, lines.length); end++) {
-          for (const word of contentWords(lines[end].text)) windowWords.add(word);
+          for (const word of refinementWords(lines[end].text)) windowWords.add(word);
           const hits = [...words].filter(word => windowWords.has(word));
           // Cover every distinctive word the paragraph actually contains, including its predicate
           // and negation. A matching subject alone must not count a claim before the assertion.
-          if (!anchors.every(word => windowWords.has(word))) continue;
+          if (!anchors.every(word => windowWords.has(word)) || !negations.every(word => windowWords.has(word)))
+            continue;
           const matched = sum(hits);
           const recall = matched / total;
           const precision = matched / sum(windowWords);
@@ -72,7 +82,7 @@ export function refineGroupedClaimTimings(
       const clauseEnded = (text: string) => {
         let lastSignal = 0;
         for (const token of text.matchAll(/[a-z0-9’‘']+/gi)) {
-          if (contentWords(token[0]).some(word => words.has(word))) lastSignal = token.index + token[0].length;
+          if (refinementWords(token[0]).some(word => words.has(word))) lastSignal = token.index + token[0].length;
         }
         return /[.!?,;:]/.test(text.slice(lastSignal));
       };

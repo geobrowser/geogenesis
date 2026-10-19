@@ -8,12 +8,14 @@ export function useVideoCutTransition({
   slot1VideoRef,
   slot2VideoRef,
   seek,
+  holdForTransition,
   enabled,
   resetKey,
 }: {
   slot1VideoRef: React.RefObject<HTMLVideoElement | null>;
   slot2VideoRef: React.RefObject<HTMLVideoElement | null>;
   seek: (seconds: number) => void;
+  holdForTransition?: () => { release: () => void; cancel: () => void };
   enabled: boolean;
   resetKey: string;
 }) {
@@ -41,10 +43,12 @@ export function useVideoCutTransition({
       let releasing = false;
       let frame = 0;
       const animations: Animation[] = [];
+      let hold: ReturnType<NonNullable<typeof holdForTransition>> | undefined;
       const canPaint = () => pair.every(({ video }) => !video.seeking && video.readyState >= 2);
       const clear = () => {
         if (disposed) return;
         disposed = true;
+        hold?.cancel();
         cancelAnimationFrame(frame);
         for (const animation of animations) animation.cancel();
         for (const { video, canvas } of pair) {
@@ -63,8 +67,11 @@ export function useVideoCutTransition({
         // Keep both stills until readiness is reported again rather than uncovering one early.
         if (!canPaint()) {
           releasing = false;
+          ready();
           return;
         }
+        hold?.release();
+        hold = undefined;
         if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || !pair[0].canvas.animate) {
           clear();
           return;
@@ -82,7 +89,14 @@ export function useVideoCutTransition({
         animations[0].onfinish = clear;
       };
       function ready() {
-        if (disposed || releasing || !canPaint()) return;
+        if (disposed || releasing) return;
+        cancelAnimationFrame(frame);
+        // Decoders may recover with only `canplay`, or without another completion event.
+        // Keep one cancellable check alive until both incoming frames are available.
+        if (!canPaint()) {
+          frame = requestAnimationFrame(ready);
+          return;
+        }
         releasing = true;
         // `seeked` can precede presentation of the new frame. Give both decoders a paint before
         // uncovering them; this also works when the viewer pauses during the edit.
@@ -119,12 +133,13 @@ export function useVideoCutTransition({
         // A decoder without a capturable frame should still make its normal cut.
         clear();
       }
+      if (!disposed) hold = holdForTransition?.();
       seek(seconds);
       // The playback controller skips a seek when a paused element is already at its target.
       // In that case no `seeked` event follows, and the captured frames must still be released.
       ready();
     },
-    [enabled, seek, slot1VideoRef, slot2VideoRef]
+    [enabled, holdForTransition, seek, slot1VideoRef, slot2VideoRef]
   );
 
   return { slot1CanvasRef, slot2CanvasRef, seekAcrossCut };
