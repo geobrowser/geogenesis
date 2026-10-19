@@ -281,6 +281,139 @@ describe('grouped paragraph claim timing', () => {
     expect(result.get('coffee')?.endMs).toBe(3000);
   });
 
+  it.each([
+    [
+      'period',
+      'Vaccination was not safe.',
+      'Coffee does not improve memory.',
+      ['Vaccination was safe. Coffee does not improve memory.'],
+    ],
+    [
+      'reverse order',
+      'Vaccination was not safe.',
+      'Coffee does not improve memory.',
+      ['Coffee does not improve memory. Vaccination was safe.'],
+    ],
+    [
+      'exclamation',
+      'Vaccination was not safe.',
+      'Coffee does not improve memory.',
+      ['Vaccination was safe! Coffee does not improve memory.'],
+    ],
+    [
+      'question',
+      'Vaccination was not safe.',
+      'Coffee does not improve memory.',
+      ['Vaccination was safe? Coffee does not improve memory.'],
+    ],
+    [
+      'semicolon',
+      'Vaccination was not safe.',
+      'Coffee does not improve memory.',
+      ['Vaccination was safe; Coffee does not improve memory.'],
+    ],
+    [
+      'colon',
+      'Vaccination was not safe.',
+      'Coffee does not improve memory.',
+      ['Vaccination was safe: Coffee does not improve memory.'],
+    ],
+    [
+      'contraction',
+      'Vaccination was not safe.',
+      'Coffee does not improve memory.',
+      ["Vaccination was safe. Coffee doesn't improve memory."],
+    ],
+    [
+      'no',
+      'Vaccination has no safety benefits.',
+      'Coffee has no memory benefits.',
+      ['Vaccination has safety benefits. Coffee has no memory benefits.'],
+    ],
+    [
+      'without',
+      'Wheat farms operate without subsidies.',
+      'Steel factories operate without permits.',
+      ['Wheat farms operate with subsidies. Steel factories operate without permits.'],
+    ],
+    [
+      'continued sentence',
+      'Vaccination was not safe.',
+      'Coffee improves memory.',
+      ['It was not', 'safe for vaccination. Coffee improves memory.'],
+    ],
+  ] as const)('keeps published timing when a segment mixes sentence polarities (%s)', (_label, first, second, text) => {
+    const statements = [claim('first', first, 0, 10_000), claim('second', second, 0, 10_000)];
+    const original = published(statements);
+    const lines = text.map((text, index) => line(index * 1000, (index + 1) * 1000, text));
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), original, lines);
+    expect(result).toEqual(original);
+    const ordered = claimsInSpokenOrder(statements, result);
+    const windows = backlogWindows(ordered);
+    expect(claimHistory(windows, 9999)).toHaveLength(0);
+    expect(claimHistory(windows, 10_000)).toHaveLength(2);
+    expect(claimMarkers(ordered, 12_000).map(marker => [marker.atMs, marker.count])).toEqual([[10_000, 2]]);
+  });
+
+  it('carries the final sentence polarity past an earlier sentence boundary within a segment', () => {
+    const statements = [
+      claim('safety', 'Vaccination was safe.', 0, 10_000),
+      claim('coffee', 'Coffee improves memory.', 0, 10_000),
+    ];
+    const original = published(statements);
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), original, [
+      line(0, 1000, 'The coffee comment was a distraction. It was not'),
+      line(1000, 2000, 'safe for vaccination.'),
+      line(2000, 3000, 'Coffee improves memory.'),
+    ]);
+    expect(result.get('safety')).toEqual(original.get('safety'));
+    expect(result.get('coffee')?.endMs).toBe(3000);
+  });
+
+  it.each([false, true])('still refines multiple sentences of one polarity (negated: %s)', negative => {
+    const statements = [
+      claim('safety', negative ? 'Vaccination was not safe.' : 'Vaccination was safe.', 0, 10_000),
+      claim('coffee', negative ? 'Coffee does not improve memory.' : 'Coffee improves memory.', 0, 10_000),
+    ];
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), published(statements), [
+      line(0, 1000, `“${statements.map(claim => claim.text).join(' ')}”`),
+    ]);
+    expect([...result.values()].map(timing => [timing.endMs, timing.source])).toEqual([
+      [1000, 'segment'],
+      [1000, 'segment'],
+    ]);
+  });
+
+  it('rejects a mixed segment added while completing an otherwise consistent negative match', () => {
+    const statements = [
+      claim('safety', 'Vaccination was not safe.', 0, 10_000),
+      claim('coffee', 'Coffee does not improve memory.', 0, 10_000),
+    ];
+    const original = published(statements);
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), original, [
+      line(0, 1000, 'Vaccination was not safe. Then vaccination was not'),
+      line(1000, 2000, 'safe. Coffee improves memory.'),
+      line(2000, 3000, 'Coffee does not improve memory.'),
+    ]);
+    expect(result.get('safety')).toEqual(original.get('safety'));
+    expect(result.get('coffee')?.endMs).toBe(3000);
+  });
+
+  it('keeps polarity when punctuation finishes a sentence in its own segment', () => {
+    const statements = [
+      claim('safety', 'Vaccination was not safe.', 0, 10_000),
+      claim('coffee', 'Coffee improves memory.', 0, 10_000),
+    ];
+    const result = refineGroupedClaimTimings(groupedPublishedClaims(statements), published(statements), [
+      line(0, 1000, 'Vaccination was not'),
+      line(1000, 2000, 'safe'),
+      line(2000, 3000, '.'),
+      line(3000, 4000, 'Coffee improves memory.'),
+    ]);
+    expect(result.get('safety')?.endMs).toBe(3000);
+    expect(result.get('coffee')?.endMs).toBe(4000);
+  });
+
   it('can refine an affirmative assertion in a separate sentence after a negated one', () => {
     const statements = [
       claim('safety', 'Vaccination was safe.', 0, 10_000),

@@ -10,6 +10,33 @@ function refinementWords(text: string): string[] {
   return /\bno\b/i.test(text) ? [...words, 'no'] : words;
 }
 
+/** Project complete statement polarity onto timed segments; mixed polarities stay ambiguous. */
+function segmentPolarities(lines: readonly DebateTranscriptSegment[]): Array<boolean | null> {
+  const polarities = lines.map(() => new Set<boolean>());
+  const touched = new Set<number>();
+  let sentence = '';
+  const finishSentence = () => {
+    if (!touched.size) return;
+    const negated = refinementWords(sentence).some(word => NEGATIONS.has(word));
+    for (const index of touched) polarities[index].add(negated);
+    sentence = '';
+    touched.clear();
+  };
+  for (const [index, line] of lines.entries()) {
+    for (const part of line.text.match(/[^.!?;:]+[.!?;:]*|[.!?;:]+/g) ?? []) {
+      // Ignore trailing quotes/punctuation after a completed sentence. A punctuation-only
+      // segment can still finish a sentence carried from the previous segment.
+      if (/[a-z0-9]/i.test(part) || sentence) {
+        sentence += ` ${part}`;
+        touched.add(index);
+      }
+      if (/[.!?;:]/.test(part)) finishSentence();
+    }
+  }
+  finishSentence();
+  return polarities.map(values => (values.size === 1 ? values.has(true) : null));
+}
+
 /** Extraction can give several statements the end of their shared paragraph. */
 export function groupedPublishedClaims(claims: readonly TranscriptClaim[]): TranscriptClaim[][] {
   const groups = new Map<string, TranscriptClaim[]>();
@@ -56,20 +83,11 @@ export function refineGroupedClaimTimings(
       const available = new Set(lineWords.flat());
       const anchors = [...words].filter(word => frequency.get(word) === 1 && available.has(word));
       const negations = [...words].filter(word => NEGATIONS.has(word));
-      // A transcript line may contain only the subject/predicate, with "not" on a previous
-      // line. Keep sentence context for every candidate, including any clause-completion lines.
-      const negatedSentences: boolean[] = [];
-      let sentenceStart = 0;
-      while (sentenceStart < lines.length) {
-        let end = sentenceStart;
-        while (end < lines.length - 1 && !/[.!?]/.test(lines[end].text)) end++;
-        const negated = lineWords.slice(sentenceStart, end + 1).some(words => words.some(word => NEGATIONS.has(word)));
-        for (let index = sentenceStart; index <= end; index++) negatedSentences[index] = negated;
-        sentenceStart = end + 1;
-      }
+      // Sentence boundaries can fall inside a segment or continue across several segments.
+      const polarities = segmentPolarities(lines);
       const negatedClaim = negations.length > 0;
       const matchesPolarity = (start: number, end: number) =>
-        negatedSentences.slice(start, end + 1).every(negated => negated === negatedClaim);
+        polarities.slice(start, end + 1).every(negated => negated === negatedClaim);
       const total = sum(words);
       if (!total || anchors.length < 2) continue;
       let best: { start: number; end: number; score: number } | null = null;
