@@ -1,13 +1,8 @@
 /**
- * Runs the app's claim response summary read against testnet for every answered claim in one space,
- * and compares its totals with the rows the graph holds.
+ * Runs the app's claim response summary read on testnet over every answered claim in one space and
+ * compares its totals with the graph's row count.
  *
- * The batch is the worst case for that space: a real caller (the debate end card) asks for a
- * debate's claims, a subset. The graph rejects offsets past 1000, so a read that pages by offset
- * fails here once the space holds more than 2,000 matching rows.
- *
- * Usage: bun scripts/check-claim-response-summaries.ts [spaceId]
- * With no space, picks the one with the most active stance responses.
+ * Usage: bun scripts/check-claim-response-summaries.ts [spaceId] (default: the busiest space)
  */
 import { print } from 'graphql';
 

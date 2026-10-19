@@ -36,10 +36,7 @@ function operationName(query: DocumentNode) {
   return print(query).match(/query (\w+)/)?.[1];
 }
 
-/**
- * The graph as it behaves: offsets past 1000 are rejected, and `entities` without `first` returns
- * at most 100 rows. Answers both the old offset-paged backlinks list and the cursor connection.
- */
+/** Mirrors the graph's limits: offset at most 1000, and `entities` without `first` returns 100 rows. */
 function fakeGraph(backlinkSourceIds: string[]) {
   graphqlMock.mockImplementation(({ query, decoder, variables }) => {
     const name = operationName(query);
