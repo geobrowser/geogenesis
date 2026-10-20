@@ -672,9 +672,12 @@ export function useDebateSchedule() {
     queryFn: () => getDebateSchedule(getPrivyIdentityToken, accountKey),
   });
 
+  // Stable across renders and unchanged refetches: the editor tells edits apart by reference.
+  const blocks = React.useMemo(() => (query.data ? fromPayload(query.data.schedule) : undefined), [query.data]);
+
   return {
     ...query,
-    blocks: query.data ? fromPayload(query.data.schedule) : undefined,
+    blocks,
     /** Whether they have ever saved one, which several surfaces gate on. */
     isSet: query.data?.is_set ?? false,
   };
