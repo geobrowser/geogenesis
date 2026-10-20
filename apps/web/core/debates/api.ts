@@ -1212,7 +1212,7 @@ export async function replaceDebateSchedule(
 
 /** Why a connected calendar last failed to sync. */
 export type CalendarConnectionError =
-  'invalid_grant' | 'scope_missing' | 'google_unavailable' | 'rate_limited' | 'unknown';
+  'invalid_grant' | 'scope_missing' | 'provider_unavailable' | 'rate_limited' | 'unknown';
 
 export type GoogleCalendarConnection = {
   account_email: string | null;

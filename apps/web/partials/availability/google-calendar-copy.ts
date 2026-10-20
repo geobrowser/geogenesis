@@ -7,7 +7,7 @@ export function connectionErrorCopy(code: CalendarConnectionError | null) {
       return 'Geo no longer has access to your Google Calendar. Reconnect to keep blocking busy times.';
     case 'scope_missing':
       return 'Geo can’t see when you’re busy. Reconnect and allow access to your free/busy times.';
-    case 'google_unavailable':
+    case 'provider_unavailable':
       return 'Google Calendar didn’t respond. We’ll keep trying.';
     case 'rate_limited':
       return 'Google Calendar asked us to slow down. We’ll keep trying.';
