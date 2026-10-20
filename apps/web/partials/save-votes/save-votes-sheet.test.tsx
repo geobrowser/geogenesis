@@ -333,6 +333,22 @@ describe('SaveVotesSheet from the navbar', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent('Enter the code we sent to sam@hey.com');
   });
 
+  it('shows a second row of votes before the "+N"', () => {
+    ['a', 'b', 'c', 'd', 'e', 'f'].forEach(id => vote(id, `Claim ${id}`));
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+    act(() => openSaveVotesPrompt('navbar'));
+
+    const chips = screen.getByRole('list', { name: 'Your votes' });
+    expect(Array.from(chips.children).map(chip => chip.textContent)).toEqual([
+      'Agree:Claim f',
+      'Agree:Claim e',
+      'Agree:Claim d',
+      'Agree:Claim c',
+      '+2',
+    ]);
+  });
+
   it('closes on Escape and keeps the votes, like the corner card', () => {
     openFromNavbar();
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });

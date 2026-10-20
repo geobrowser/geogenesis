@@ -207,7 +207,7 @@ export function SaveVotesSheet() {
                 <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, returnVisit)}</p>
               </>
             )}
-            <VoteChips votes={votes} className={lobbyName ? 'mt-1.5' : undefined} />
+            <VoteChips votes={votes} limit={centered ? 4 : 2} className={lobbyName ? 'mt-1.5' : undefined} />
 
             <div className={FORM_STACK_CLASS}>
               <input
@@ -295,12 +295,15 @@ function chipLabel(vote: LocalVote) {
 const CHIP_CLASS =
   'flex items-center rounded-full border border-grey-02 bg-grey-01 px-2 py-[3px] text-[12px] leading-[14px] text-text';
 
-/** Up to two of the visitor's votes, then how many more: a reminder of what closing this leaves behind. */
-function VoteChips({ votes, className }: { votes: LocalVote[]; className?: string }) {
+/**
+ * The visitor's latest votes, then how many more: a reminder of what closing this leaves behind. One
+ * row of two in the corner card; the centred dialog has room for a second row before the "+N".
+ */
+function VoteChips({ votes, limit, className }: { votes: LocalVote[]; limit: number; className?: string }) {
   const shown = [...votes]
     .reverse()
     .filter(vote => vote.title)
-    .slice(0, 2);
+    .slice(0, limit);
   const more = votes.length - shown.length;
   if (shown.length === 0) return null;
   return (
@@ -308,7 +311,9 @@ function VoteChips({ votes, className }: { votes: LocalVote[]; className?: strin
       {shown.map(vote => (
         <li
           key={`${vote.entityId}:${vote.spaceId}:${vote.responseKind}`}
-          className={cx(CHIP_CLASS, 'max-w-[132px] gap-1')}
+          // Two to a row either way; in the centred dialog a touch narrower, so the "+N" closes the
+          // second row instead of wrapping onto a third.
+          className={cx(CHIP_CLASS, limit > 2 ? 'max-w-[128px]' : 'max-w-[132px]', 'gap-1')}
         >
           <span aria-hidden className="shrink-0">
             <ResponsePositionIcon responseKind={vote.responseKind} position={vote.direction === 'positive'} selected />
