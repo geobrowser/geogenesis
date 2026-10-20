@@ -10,7 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
-import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
+import {
+  clearDebateReturnDestination,
+  rememberDebateReturnDestination,
+  rememberLobbyReturnDestination,
+} from '~/core/debates/debate-return-navigation';
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
@@ -295,11 +299,15 @@ vi.mock('./rematch-publish-card', () => ({
 
 // The server-first return lives in lobby-return's own tests; here this tab's record decides.
 vi.mock('~/core/debates/lobbies/lobby-return', async () => {
-  const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
+  const { consumeDebateReturnDestination, peekDebateReturnDestination } =
+    await import('~/core/debates/debate-return-navigation');
   return {
     // No lobby mic carried into these sessions (GEO-3336 has its own tests).
     useCarriedLobbyChoice: () => null,
-    useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
+    useDebateReturnNavigation: () => ({
+      consume: consumeDebateReturnDestination,
+      returnsToLobby: Boolean(peekDebateReturnDestination()?.startsWith('/debate/')),
+    }),
   };
 });
 
@@ -1215,8 +1223,12 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('returns a debate-again session to the page that opened the flow', async () => {
-    rememberDebateReturnDestination('/space/my-space?tab=activity#latest');
+  it.each([
+    ['Leave', '/space/my-space?tab=activity#latest'],
+    ['Back to lobby', '/debate/lobby-1'],
+  ])('labels the picker exit %s and returns to %s', async (label, destination) => {
+    if (label === 'Back to lobby') rememberLobbyReturnDestination('lobby-1');
+    else rememberDebateReturnDestination(destination);
     const endedSession = session({ status: 'ended' });
     mocks.leaveMutate.mockImplementation(
       (_input: undefined, options: { onSuccess?: (ended: DebateRematchSession) => void }) => {
@@ -1225,9 +1237,9 @@ describe('DebateRematchPageClient', () => {
     );
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+    fireEvent.click(screen.getByRole('button', { name: label }));
 
-    expect(mocks.replace).toHaveBeenCalledWith('/space/my-space?tab=activity#latest');
+    expect(mocks.replace).toHaveBeenCalledWith(destination);
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
@@ -6016,6 +6028,17 @@ describe('inside a debate room', () => {
       {children}
     </DebateRoomProvider>
   );
+
+  it('keeps Leave when the room exits to Explore despite a stored lobby', () => {
+    rememberLobbyReturnDestination('lobby-1');
+    render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    expect(screen.queryByRole('button', { name: 'Back to lobby' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/explore');
+    expect(mocks.leaveMutate).not.toHaveBeenCalled();
+  });
 
   // geo-chat expires a `browsing` session after 90s of either party being offline, which is what
   // waiting for someone looks like. Acting on it threw the waiting person out of the room.

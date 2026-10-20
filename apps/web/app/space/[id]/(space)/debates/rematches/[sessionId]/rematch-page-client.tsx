@@ -53,7 +53,7 @@ import {
   useNotInterestedClaimIds,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
-import { useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
+import { useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
@@ -288,7 +288,7 @@ const ROOM_REJOIN_RETRY_MS = 15_000;
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
-  const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
+  const { consume: consumeDebateReturnDestination, returnsToLobby } = useDebateReturnNavigation();
   // The room owns this session rather than the other way round, so two of the page's exits change
   // shape inside one: see the terminal-status effect and `leave` below.
   const inDebateRoom = useInDebateRoom();
@@ -2848,7 +2848,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       disabled={leaveSession.isPending}
       className={cx(PILL_BUTTON_SECONDARY_CLASS_NAME, videoLayout && 'max-[767px]:h-11')}
     >
-      Leave
+      {returnsToLobby && !inDebateRoom ? 'Back to lobby' : 'Leave'}
     </SmallButton>
   );
 

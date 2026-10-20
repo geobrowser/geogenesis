@@ -33,7 +33,7 @@ import {
 import { DebateRecordingStatusPill } from '~/core/debates/debate-recording-status-pill';
 import {
   CameraIcon,
-  LeaveIcon,
+  DebateLeaveButton,
   MicrophoneIcon,
   RecordingCircleButton,
   SpeakerIcon,
@@ -79,7 +79,7 @@ import {
   useMarkDebateReady,
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
-import { useCarriedLobbyChoice, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
+import { useCarriedLobbyChoice, useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
@@ -357,7 +357,7 @@ export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClient
 
 function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const router = useRouter();
-  const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
+  const { consume: consumeDebateReturnDestination, returnsToLobby } = useDebateReturnNavigation();
   const mediaSession = useDebateMediaSession();
   const mediaSessionKey = debateMediaSessionKey(debateId);
   const {
@@ -3089,6 +3089,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onTakeOverConnection={takeOverConnection}
             readyBusy={markReady.isPending}
             onReady={markLocalReady}
+            returnsToLobby={returnsToLobby}
             onLeave={leave}
             leaveDisabled={abortDebate.isPending}
           />
@@ -3172,6 +3173,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
+                returnsToLobby={returnsToLobby}
                 onLeave={leave}
                 leaveDisabled={abortDebate.isPending || recordingModalRoomState === 'saving'}
               />
@@ -3214,6 +3216,7 @@ function DebateRecordingModal({
   canRetryConnection,
   onRetryConnection,
   onLeave,
+  returnsToLobby,
   leaveDisabled,
 }: {
   debate: Debate;
@@ -3249,6 +3252,7 @@ function DebateRecordingModal({
   canRetryConnection: boolean;
   onRetryConnection: () => void;
   onLeave: () => void;
+  returnsToLobby: boolean;
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
@@ -3566,15 +3570,13 @@ function DebateRecordingModal({
               requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
             />
           )}
-          <RecordingCircleButton
-            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
+          <DebateLeaveButton
+            returnsToLobby={returnsToLobby}
+            saving={roomState === 'saving'}
             onClick={onLeave}
             disabled={leaveDisabled}
             className="ml-auto shrink-0"
-          >
-            <LeaveIcon />
-          </RecordingCircleButton>
+          />
         </div>
 
         {/* A size container, so the Open rounds panel and banners over the tiles size with them. */}
@@ -3643,6 +3645,7 @@ function DebateRecordingModal({
           waitingForOpponent={rematchSession !== null && !remoteConsented}
           // The only way out while the room is hidden; a lobby it returns to joins on arrival.
           onLeave={onLeave}
+          returnsToLobby={returnsToLobby}
           leaveDisabled={leaveDisabled}
         />
       )}
@@ -3939,11 +3942,13 @@ function DebateHandoffNotice({
   opponentName,
   waitingForOpponent,
   onLeave,
+  returnsToLobby,
   leaveDisabled,
 }: {
   opponentName: string;
   waitingForOpponent: boolean;
   onLeave: () => void;
+  returnsToLobby: boolean;
   leaveDisabled: boolean;
 }) {
   return (
@@ -3958,7 +3963,7 @@ function DebateHandoffNotice({
               onClick={onLeave}
               disabled={leaveDisabled}
             >
-              Leave
+              {returnsToLobby ? 'Back to lobby' : 'Leave'}
             </SmallButton>
           }
         >
