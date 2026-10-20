@@ -165,6 +165,12 @@ export const debateQueryKeys = {
     calendar
       ? (['debates', 'account', accountKey, 'schedulable-people', days, limit, 'calendar', spaces.join(',')] as const)
       : (['debates', 'account', accountKey, 'schedulable-people', days, limit] as const),
+  calendarConnections: (accountKey: string | null) => ['debates', 'account', accountKey, 'calendar'] as const,
+  /** Prefix-matchable, so a calendar change can drop every window at once. */
+  calendarBusyRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'calendar-busy'] as const,
+  calendarBusy: (accountKey: string | null, from: string, to: string) =>
+    ['debates', 'account', accountKey, 'calendar-busy', from, to] as const,
+  peerScheduleRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'peer-schedule'] as const,
   /** Keyed on the viewer as well as the peer: the answer is the pair, not the person. */
   peerSchedule: (accountKey: string | null, peerUserId: string, days: number) =>
     ['debates', 'account', accountKey, 'peer-schedule', peerUserId, days] as const,
