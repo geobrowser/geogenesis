@@ -237,6 +237,35 @@ describe('nextVideoGrid', () => {
     expect(grid.shown).toEqual(['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's11']);
   });
 
+  it('keeps a camera that came on while their chip was held, and swaps them once the hold ends', () => {
+    let grid = step(
+      EMPTY_VIDEO_GRID,
+      room(4, () => ({ camera: false }))
+    );
+    expect(grid.shown).toEqual(['s0', 's1', 's2']);
+    // s3's camera comes on while their chip has focus: they stay in the row.
+    grid = step(
+      grid,
+      room(4, index => ({ camera: index === 3, held: index === 3 }))
+    );
+    expect(grid.shown).toEqual(['s0', 's1', 's2']);
+    // Focus leaves: the camera still counts as coming on.
+    grid = step(
+      grid,
+      room(4, index => ({ camera: index === 3 }))
+    );
+    expect(grid.shown).toEqual(['s0', 's1', 's3']);
+  });
+
+  it('drops talkers before the viewer or a host for a smaller cap', () => {
+    // A host at s0, talkers at s1 to s10, the viewer at s11.
+    const speakers = (talking: boolean) =>
+      room(12, index => ({ pinned: index === 0 || index === 11, speaking: talking && index > 0 && index < 11 }));
+    let grid = step(EMPTY_VIDEO_GRID, speakers(false), 12);
+    grid = step(grid, speakers(true), 9);
+    expect(grid.shown).toEqual(['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's11']);
+  });
+
   it('fills a gap with someone who is not held', () => {
     let grid = step(EMPTY_VIDEO_GRID, room(5));
     grid = step(

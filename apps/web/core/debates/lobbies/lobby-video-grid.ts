@@ -68,13 +68,14 @@ export function nextVideoGrid(prev: VideoGridState, speakers: VideoGridSpeaker[]
   const hadCamera = new Set(prev.cameras);
   const cameraCameOn = new Set(camerasNow.filter(id => !hadCamera.has(id)));
 
-  return {
-    shown: placeTiles(prev.shown, speakers, spokeAt, cameraCameOn, cap),
-    speaking: speakingNow,
-    tick,
-    spokeAt,
-    cameras: camerasNow,
-  };
+  const shown = placeTiles(prev.shown, speakers, spokeAt, cameraCameOn, cap);
+  // A camera that came on for someone held in the row could not move them; leave it unseen, so it
+  // still counts as coming on once the hold ends rather than being used up while they were held.
+  const onGrid = new Set(shown);
+  const held = new Set(speakers.filter(speaker => speaker.held).map(speaker => speaker.id));
+  const pending = (id: string) => cameraCameOn.has(id) && held.has(id) && !onGrid.has(id);
+
+  return { shown, speaking: speakingNow, tick, spokeAt, cameras: camerasNow.filter(id => !pending(id)) };
 }
 
 function placeTiles(
@@ -92,7 +93,8 @@ function placeTiles(
   // Every tile where it was; someone who left leaves a gap (null) to fill in place.
   const slots: (string | null)[] = prevShown.map(id => (byId.has(id) ? id : null));
   // A smaller cap (desktop to phone): gaps go first, then, from the end, tiles that could give theirs
-  // up anyway. A held, hosting or talking tile stays; last of all, anyone not held.
+  // up anyway. A held, hosting or talking tile stays; past that, talkers before the viewer and hosts,
+  // and last of all anyone not held.
   const trim = (droppable: (id: string) => boolean) => {
     for (let index = slots.length - 1; index >= 0 && slots.length > cap; index--) {
       const id = slots[index];
@@ -104,6 +106,7 @@ function placeTiles(
     const speaker = byId.get(id)!;
     return !speaker.held && !speaker.pinned && !speaker.speaking;
   });
+  trim(id => !byId.get(id)!.held && !byId.get(id)!.pinned);
   trim(id => !byId.get(id)!.held);
   const onGrid = new Set(slots.filter((id): id is string => id !== null));
   const notShown = speakers.filter(speaker => !onGrid.has(speaker.id));
