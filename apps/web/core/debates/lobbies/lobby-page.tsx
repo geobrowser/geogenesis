@@ -70,7 +70,7 @@ import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queue
 import { LobbyAnalyticsScope } from './lobby-room-analytics';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { LobbyPeople } from './lobby-roster';
-import { LobbySlot, LobbySlotsProvider, useLobbySlotTargets } from './lobby-slots';
+import { LobbyShowPeopleContext, LobbySlot, LobbySlotsProvider, useLobbySlotTargets } from './lobby-slots';
 import {
   FindDebateLink,
   LOBBY_STATE_COPY,
@@ -538,6 +538,7 @@ function LobbyRoom({
   const queuedRequest = useLobbyQueuedRequest();
   const slots = useLobbySlotTargets();
   const [tab, setTab] = React.useState<LobbyPhoneTab>('people');
+  const showPeople = React.useCallback(() => setTab('people'), []);
   // The guest room, a sibling of the member room so the handover can drop it mid-call.
   const [guestVoiceStates, setGuestVoiceStates] = React.useState<LobbyVoiceStates>(NO_LOBBY_VOICE);
   const guestVoice =
@@ -596,7 +597,10 @@ function LobbyRoom({
   // The empty-room block stands in for an empty roster's own line.
   const people =
     alone && lobby.members.length === 0 ? null : (
-      <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={ownAvailable} disagreements={disagreements} />
+      // A phone's speaker strip on Claims (GEO-3399) taps back to People.
+      <LobbyShowPeopleContext.Provider value={tabbed ? showPeople : null}>
+        <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={ownAvailable} disagreements={disagreements} />
+      </LobbyShowPeopleContext.Provider>
     );
   const availability = guest ? null : <HubHeaderControls analyticsSurface="lobby" />;
   const handControl =
@@ -705,6 +709,8 @@ function LobbyRoom({
                 columnScroll
               )}
             >
+              {/* The roster's speaker thumbnails (GEO-3399), drawn here so they stay in view on Claims. */}
+              {tabbed ? <div ref={slots.speakerStripRef} className="empty:hidden" /> : null}
               <HubScrollSelectorProvider value={columns ? HUB_SCROLL_SELECTOR : undefined}>
                 <LobbyClaimsArea lobby={lobby} />
               </HubScrollSelectorProvider>
