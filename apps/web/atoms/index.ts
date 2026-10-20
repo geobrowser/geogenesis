@@ -1,7 +1,8 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
-import type { ActionContext } from '~/core/action-context';
+import type { ActionContext, ActionScope } from '~/core/action-context';
+import type { Debate } from '~/core/debates/api';
 import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
@@ -115,12 +116,19 @@ export type EntityCommentsPanelTarget = {
 
 export const entityCommentsPanelAtom = atom<EntityCommentsPanelTarget | null>(null);
 
-/** The debate whose claims panel the explore feed has open, or `null`. */
-export const exploreDebateClaimsPanelAtom = atom<string | null>(null);
-
 /**
- * Which panel the full-screen debate feed has open, and the debater its claims list opens at.
+ * The debate whose claims panel an explore card has open, or `null`. Drawn by an app-level host, not
+ * the card: a card inside the entity side panel unmounts when opening this closes that panel.
  */
+export type ExploreDebateClaimsPanelTarget = {
+  debateId: string;
+  debate: Debate;
+  /** The opening card's analytics scope, so the panel keeps attributing to it. */
+  scope: ActionScope;
+};
+
+export const exploreDebateClaimsPanelAtom = atom<ExploreDebateClaimsPanelTarget | null>(null);
+
 /** Which panel the full-screen debate feed has open, or `null`. */
 export const debateFeedPanelAtom = atom<'claims' | 'comments' | null>(null);
 
@@ -149,10 +157,13 @@ export const openEntityCommentsPanelAtom = atom(null, (_get, set, target: Entity
   if (target) set(clearEntityPanelsExceptAtom, 'comments');
 });
 
-export const openExploreDebateClaimsPanelAtom = atom(null, (_get, set, debateId: string | null) => {
-  set(exploreDebateClaimsPanelAtom, debateId);
-  if (debateId) set(clearEntityPanelsExceptAtom, 'exploreDebateClaims');
-});
+export const openExploreDebateClaimsPanelAtom = atom(
+  null,
+  (_get, set, target: ExploreDebateClaimsPanelTarget | null) => {
+    set(exploreDebateClaimsPanelAtom, target);
+    if (target) set(clearEntityPanelsExceptAtom, 'exploreDebateClaims');
+  }
+);
 
 export const openDebateFeedPanelAtom = atom(null, (_get, set, panel: 'claims' | 'comments' | null) => {
   set(debateFeedPanelAtom, panel);

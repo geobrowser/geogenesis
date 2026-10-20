@@ -27,7 +27,6 @@ import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
-import { EntityPanelSlotReset } from '~/core/state/entity-panel-slot-reset';
 import { useLocalVotes } from '~/core/state/local-votes';
 import { pendingCreatedSpaceAtom } from '~/core/state/pending-created-space';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
@@ -56,6 +55,7 @@ import { createSpaceDialogOpenAtom } from '~/partials/create-space/create-space-
 import { stepAtom as onboardingStepAtom } from '~/partials/onboarding/onboarding-atoms';
 import {
   entitySidePanelWantsEditAtom,
+  exploreDebateClaimsPanelAtom,
   rankingFullscreenActiveAtom,
   rankingFullscreenFocusTargetAtom,
 } from '~/atoms';
@@ -72,6 +72,13 @@ const EntitySidePanel = dynamic(
 );
 const EntityCommentsPanelHost = dynamic(
   () => import('~/partials/comments/entity-comments-panel-host').then(m => ({ default: m.EntityCommentsPanelHost })),
+  { ssr: false }
+);
+const ExploreDebateClaimsPanelHost = dynamic(
+  () =>
+    import('~/partials/explore/explore-debate-claims-panel-host').then(m => ({
+      default: m.ExploreDebateClaimsPanelHost,
+    })),
   { ssr: false }
 );
 const FeatureFlagsDialog = dynamic(
@@ -156,6 +163,11 @@ function EntitySidePanelGate() {
 function EntityCommentsPanelGate() {
   const { commentsTarget } = useEntityCommentsPanel();
   return useSticky(commentsTarget !== null) ? <EntityCommentsPanelHost /> : null;
+}
+
+function ExploreDebateClaimsPanelGate() {
+  const target = useAtomValue(exploreDebateClaimsPanelAtom);
+  return useSticky(target !== null) ? <ExploreDebateClaimsPanelHost /> : null;
 }
 
 // Opens from /feature-flags or Cmd/Ctrl+Shift+F. The listener lives in the dialog once it is loaded;
@@ -319,7 +331,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <EntitySidePanelGate />
         <PlaybackDiagnostics />
         <EntityCommentsPanelGate />
-        <EntityPanelSlotReset />
+        <ExploreDebateClaimsPanelGate />
         {/* Client-side rendered due to `window.localStorage` usage */}
         <ClientOnly>
           {/* Suspense: onboarding preparation reads `useSearchParams`. */}

@@ -3,11 +3,10 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useSetAtom } from 'jotai';
 
-import { ActionSurfaceArticle } from '~/core/action-context-provider';
+import { ActionSurfaceArticle, useActionScope } from '~/core/action-context-provider';
 import type { Debate } from '~/core/debates/api';
-import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
@@ -31,7 +30,7 @@ import { FullscreenLink } from '~/design-system/fullscreen-link';
 
 import { DebateExploreMetaRow } from './debate-explore-meta-row';
 import { ExploreCardTitle } from './explore-card-title';
-import { exploreDebateClaimsPanelAtom, openExploreDebateClaimsPanelAtom } from '~/atoms';
+import { openExploreDebateClaimsPanelAtom } from '~/atoms';
 
 /** Visible fraction at which a card takes over playback, and the one it must fall back to
  * before it gives it up. Strictly between them the card keeps whatever state it had. */
@@ -334,22 +333,19 @@ export function DebateExploreFeedCard({
     return () => onPlaybackAvailabilityChange(debateId, false);
   }, [debateId, mediaMounted, onPlaybackAvailabilityChange]);
 
-  /*
-   * Which control opens what is still the card's to render — the bar is shared with the full-screen
-   * feed and stays presentational — but *whether* this card's claims panel is open is not the card's
-   * to own.
-   *
-   * It was `useState` here, which gave every card in the feed its own flag. Several cards sit inside
-   * the 800px media look-ahead band at once, so several can show a Claims button, and each could open
-   * a panel: the same fixed overlay at the same edge, so the second covered the first exactly and
-   * only closing it revealed that two were open. Held in one atom naming the debate, the feed has
-   * one panel and opening another debate's replaces it.
-   */
-  const openClaimsDebateId = useAtomValue(exploreDebateClaimsPanelAtom);
+  // The panel is drawn by `ExploreDebateClaimsPanelHost`, so the app has one of it and a card that
+  // unmounts (paging, or sitting inside the entity side panel this replaces) doesn't take it along.
+  // A ref: the merged scope is a fresh object each render.
+  const scope = useActionScope();
+  const scopeRef = React.useRef(scope);
+  React.useEffect(() => {
+    scopeRef.current = scope;
+  });
   const setClaimsPanel = useSetAtom(openExploreDebateClaimsPanelAtom);
-  const claimsOpen = openClaimsDebateId === debateId;
   // Stable, because `DebateCardVideos` is memoized and a fresh function each render would undo it.
-  const openClaims = React.useCallback(() => setClaimsPanel(debateId), [debateId, setClaimsPanel]);
+  const openClaims = React.useCallback(() => {
+    if (readyDebate) setClaimsPanel({ debateId, debate: readyDebate, scope: scopeRef.current });
+  }, [debateId, readyDebate, setClaimsPanel]);
   const share = useDebateShareAction();
   const { commentsTarget, openComments } = useEntityCommentsPanel();
   // Nulls read as "not enabled", which is how the count stands down with the media above. Shares a
@@ -485,22 +481,13 @@ export function DebateExploreFeedCard({
           claims panel loads its own claims, so it does not go empty when the card's count stands
           down beside it. */}
       {readyDebate ? (
-        <>
-          <DebateShareDialog
-            open={share.open}
-            onOpenChange={share.onOpenChange}
-            debate={readyDebate}
-            spaceId={item.spaceId}
-            openerRef={share.openerRef}
-          />
-          {/* A right-hand overlay rather than the feed's side rail, since the explore feed has no
-              rail to put it in. The panel itself is the same component. */}
-          {claimsOpen ? (
-            <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
-              <DebateClaimsPanel debate={readyDebate} onClose={() => setClaimsPanel(null)} />
-            </div>
-          ) : null}
-        </>
+        <DebateShareDialog
+          open={share.open}
+          onOpenChange={share.onOpenChange}
+          debate={readyDebate}
+          spaceId={item.spaceId}
+          openerRef={share.openerRef}
+        />
       ) : null}
     </ActionSurfaceArticle>
   );
