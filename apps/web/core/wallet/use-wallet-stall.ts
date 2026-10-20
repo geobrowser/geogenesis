@@ -1,11 +1,11 @@
 'use client';
 
-import { retryEmbeddedWalletSetup, useWallets } from '@geogenesis/auth';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { capture } from '~/core/analytics';
+import { retryEmbeddedWalletSetup, useWallets } from '~/core/wallet/auth-hooks';
 
 import {
   RECONNECT_WINDOW_MS,

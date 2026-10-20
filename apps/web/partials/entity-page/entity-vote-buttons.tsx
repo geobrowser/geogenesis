@@ -1,6 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -49,6 +48,7 @@ import { Profile } from '~/core/types';
 import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { Avatar } from '~/design-system/avatar';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
