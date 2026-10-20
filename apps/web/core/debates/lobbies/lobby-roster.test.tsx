@@ -504,6 +504,26 @@ describe('LobbyPeople video grid (GEO-3399)', () => {
     expect(within(screen.getByTestId('lobby-more-speakers')).getByRole('button', { name: 'S12' })).toHaveFocus();
   });
 
+  it('drops the hold on someone whose focused tile went away, so they can take a tile when back', () => {
+    const view = lobby(room(14));
+    const without = lobby(room(14).filter(entry => entry.user_id !== 'S11'));
+    const { rerender } = render(gridPeople(view));
+    act(() =>
+      within(screen.getByRole('group', { name: 'S11' }))
+        .getByRole('button', { name: 'S11' })
+        .focus()
+    );
+
+    // S11 leaves with focus on their tile; S12 fills the gap, so S11 comes back to the row.
+    rerender(gridPeople(without));
+    rerender(gridPeople(view));
+    expect(within(screen.getByTestId('lobby-more-speakers')).getByRole('button', { name: 'S11' })).not.toHaveFocus();
+
+    // Nothing holds them now: talking brings them onto the grid.
+    rerender(gridPeople(view, { speaking: ['S11'] }));
+    expect(tileNames()).toContain('S11');
+  });
+
   it('draws a phone’s speaker strip into the Claims slot, and a tap there shows People', () => {
     mocks.phone = true;
     const target = document.createElement('div');

@@ -569,6 +569,10 @@ function SpeakerVideoGrid({
         return next;
       }),
   });
+  // A tile that unmounts (its person left, or became a listener) never reports a blur, so a hold
+  // on someone no longer speaking is dropped here; otherwise they would come back unmovable.
+  const speakerIds = new Set(speakers.map(member => member.user_id));
+  if ([...held].some(id => !speakerIds.has(id))) setHeld(new Set([...held].filter(id => speakerIds.has(id))));
   const inputs: VideoGridSpeaker[] = people.map(({ member, props, voice }) => ({
     id: member.user_id,
     pinned: props.isSelf || isHosting(member),
