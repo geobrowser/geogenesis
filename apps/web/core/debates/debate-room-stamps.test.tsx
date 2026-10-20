@@ -13,15 +13,15 @@ afterEach(() => {
 describe('RoomExit (GEO-3315)', () => {
   it('keeps a moment up while it leaves, then lets it go', () => {
     vi.useFakeTimers();
-    const view = render(<RoomExit exit="roll">{<span>Round 2</span>}</RoomExit>);
+    const view = render(<RoomExit>{<span>Round 2</span>}</RoomExit>);
     const moment = screen.getByText('Round 2');
     expect(moment.parentElement).not.toHaveAttribute('data-room-leaving');
 
-    view.rerender(<RoomExit exit="roll">{null}</RoomExit>);
+    view.rerender(<RoomExit>{null}</RoomExit>);
     // The same element, not a fresh one, so its entrance does not replay on the way out.
     expect(screen.getByText('Round 2')).toBe(moment);
     expect(moment.parentElement).toHaveAttribute('data-room-leaving', 'true');
-    expect(moment.parentElement).toHaveClass('motion-safe:animate-debate-banner-out', 'motion-reduce:hidden');
+    expect(moment.parentElement).toHaveClass('animate-[fadeIn_300ms_linear_reverse_both]');
 
     act(() => {
       vi.advanceTimersByTime(ROOM_EXIT_MS);
@@ -62,6 +62,56 @@ describe('RoomExit (GEO-3315)', () => {
   it('renders nothing when there is nothing to show', () => {
     const { container } = render(<RoomExit>{null}</RoomExit>);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('keeps a crossfade layer mounted through empty states and interrupted fades', () => {
+    vi.useFakeTimers();
+    const view = render(
+      <RoomExit crossfade layout="inline">
+        {null}
+      </RoomExit>
+    );
+    const layer = view.container.firstElementChild;
+    expect(layer).toHaveStyle({ opacity: 0 });
+
+    view.rerender(
+      <RoomExit crossfade layout="inline">
+        <span>Timer</span>
+      </RoomExit>
+    );
+    const timer = screen.getByText('Timer');
+    expect(timer.parentElement).toBe(layer);
+    expect(layer).toHaveStyle({ opacity: 1 });
+
+    view.rerender(
+      <RoomExit crossfade layout="inline">
+        {null}
+      </RoomExit>
+    );
+    expect(screen.getByText('Timer')).toBe(timer);
+    expect(layer).toHaveStyle({ opacity: 0 });
+    expect(layer).toHaveAttribute('inert');
+
+    act(() => vi.advanceTimersByTime(100));
+    view.rerender(
+      <RoomExit crossfade layout="inline">
+        <span>Timer</span>
+      </RoomExit>
+    );
+    expect(screen.getByText('Timer')).toBe(timer);
+    expect(layer).toHaveStyle({ opacity: 1 });
+    expect(layer).not.toHaveAttribute('inert');
+    expect(layer).toHaveClass('transition-opacity', 'duration-300', 'ease-linear');
+    expect(layer?.className).not.toContain('animate-');
+
+    view.rerender(
+      <RoomExit crossfade layout="inline">
+        {null}
+      </RoomExit>
+    );
+    act(() => vi.advanceTimersByTime(ROOM_EXIT_MS));
+    expect(screen.queryByText('Timer')).not.toBeInTheDocument();
+    expect(view.container.firstElementChild).toBe(layer);
   });
 });
 

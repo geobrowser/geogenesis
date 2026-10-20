@@ -46,15 +46,31 @@ export function DebateLeaveButton({
   onClick,
   disabled,
   className,
+  appearance = 'default',
 }: {
   returnsToLobby?: boolean;
   saving?: boolean;
   onClick: () => void;
   disabled?: boolean;
   className?: string;
+  appearance?: 'default' | 'text';
 }) {
   const label = returnsToLobby ? 'Back to lobby' : 'Leave debate';
   const accessibleLabel = saving ? 'Saving local recording' : label;
+  if (appearance === 'text') {
+    return (
+      <button
+        type="button"
+        aria-label={accessibleLabel}
+        title={accessibleLabel}
+        onClick={onClick}
+        disabled={disabled || saving}
+        className={cx('text-[3.6cqw] leading-none font-medium text-[#5e5e5b] disabled:opacity-50', className)}
+      >
+        {returnsToLobby ? label : 'Leave'}
+      </button>
+    );
+  }
   return (
     <RecordingCircleButton
       ariaLabel={accessibleLabel}
@@ -151,7 +167,13 @@ export function MicrophoneIcon({ muted }: { muted: boolean }) {
   );
 }
 
-export function MutedMicrophoneIndicator() {
+export function MutedMicrophoneIndicator({
+  openRounds = false,
+  backdrop = true,
+}: {
+  openRounds?: boolean;
+  backdrop?: boolean;
+}) {
   const gradientId = React.useId();
 
   return (
@@ -163,12 +185,12 @@ export function MutedMicrophoneIndicator() {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
       data-muted-indicator="true"
-      className="size-[51px]"
+      className={openRounds ? 'size-[9cqw]' : 'size-[51px]'}
     >
       <path
         d="M0 25.5C0 11.4167 11.4167 0 25.5 0C39.5833 0 51 11.4167 51 25.5C51 39.5833 39.5833 51 25.5 51C11.4167 51 0 39.5833 0 25.5Z"
         fill={`url(#${gradientId})`}
-        fillOpacity="0.5"
+        fillOpacity={backdrop ? '0.5' : '0'}
       />
       <rect x="22" y="18" width="7" height="12.5" rx="3.5" stroke="white" />
       <path
