@@ -43,6 +43,7 @@ import {
 } from '~/core/debates/rematch-join-intent';
 import { resolveJoinChoice } from '~/core/debates/request-join-state';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
+import { TrackVideo } from '~/core/debates/track-video';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
@@ -57,6 +58,8 @@ import {
   type PairMicState,
   RematchPairHeader,
 } from './rematch-pair-header';
+
+import styles from './rematch-video-header.module.css';
 
 // A pair arriving from a recorded debate was already speaking with the microphone open, so the
 // debate-again room preserves that live conversation. A profile challenge has no preceding call or
@@ -74,8 +77,6 @@ function microphoneEnabledByDefault(session: DebateRematchSession) {
  * time to do that from the middle of a sentence.
  */
 const NUDGE_MS = 10_000;
-
-type TrackLike = { attach: (element: HTMLVideoElement) => void; detach: (element: HTMLVideoElement) => void };
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
 
@@ -961,7 +962,9 @@ function VoiceHeaderBody({
 
   const opponentCamera = opponentParticipant?.getTrackPublication(Track.Source.Camera);
   const localVideo =
-    videoEnabled && cameraTrack?.track && !cameraTrack.isMuted ? <TrackVideo track={cameraTrack.track} /> : null;
+    videoEnabled && cameraTrack?.track && !cameraTrack.isMuted ? (
+      <TrackVideo track={cameraTrack.track} mirrored />
+    ) : null;
   const opponentVideo =
     videoEnabled && opponentCamera?.track && !opponentCamera.isMuted ? (
       <TrackVideo track={opponentCamera.track} />
@@ -1159,8 +1162,9 @@ function LocalAudioControls({
   const cameraSettings = useVoiceCameraSettings(room);
   const cameraPrimary = !cameraOn;
 
-  // Narrow screens drop the labels only in the video layout, where the camera pill shares the row.
-  const labelAtWidth = useFeatureFlag('debateVideo') ? 'max-[400px]:hidden' : undefined;
+  // The video layout uses labeled icons so both media controls fit beside Leave on a phone.
+  const videoLayout = useFeatureFlag('debateVideo');
+  const labelAtWidth = videoLayout ? 'sr-only' : undefined;
   const [cameraPanelOpen, setCameraPanelOpen] = React.useState(false);
   const cameraTriggerRef = React.useRef<HTMLButtonElement | null>(null);
 
@@ -1185,6 +1189,7 @@ function LocalAudioControls({
     <button
       ref={cameraTriggerRef}
       type="button"
+      data-media-settings
       aria-label="Camera settings"
       title="Camera settings"
       aria-expanded={cameraPanelOpen}
@@ -1220,6 +1225,7 @@ function LocalAudioControls({
     <button
       ref={triggerRef}
       type="button"
+      data-media-settings
       aria-label="Audio settings"
       title="Audio settings"
       aria-expanded={open}
@@ -1240,8 +1246,9 @@ function LocalAudioControls({
   );
 
   return (
-    <span className="flex h-6 shrink-0 items-center">
+    <span className={cx('flex h-6 shrink-0 items-center', videoLayout && styles.mediaControls)}>
       <button
+        data-media-toggle
         type="button"
         // Both derived from `muted`, like the glyph and the disabled state. Deriving the label from
         // `isMicrophoneEnabled` instead lets a failed microphone announce "Mute microphone" while
@@ -1295,9 +1302,10 @@ function LocalAudioControls({
         </DesktopSettingsPopover>
       )}
       {cameraAllowed && (
-        <span className="ml-1 flex h-6 shrink-0 items-center">
+        <span data-media-group className="ml-1 flex h-6 shrink-0 items-center">
           <button
             type="button"
+            data-media-toggle
             aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
             title={cameraOn ? 'Turn camera off' : 'Turn camera on'}
             onClick={onToggleCamera}
@@ -1317,22 +1325,6 @@ function LocalAudioControls({
       )}
     </span>
   );
-}
-
-function TrackVideo({ track }: { track: TrackLike | null | undefined }) {
-  const ref = React.useRef<HTMLVideoElement | null>(null);
-
-  React.useEffect(() => {
-    const element = ref.current;
-    if (!element || !track) return;
-    track.attach(element);
-    return () => {
-      track.detach(element);
-    };
-  }, [track]);
-
-  if (!track) return null;
-  return <video ref={ref} className="size-full object-cover" playsInline muted autoPlay />;
 }
 
 function DesktopSettingsPopover({

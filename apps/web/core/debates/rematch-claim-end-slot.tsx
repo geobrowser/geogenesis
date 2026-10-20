@@ -30,11 +30,7 @@ export function RematchClaimEndSlot({
 }) {
   const { sessionId, session, currentUserId, opponentPresent, canPublishDebateIn, createRequest } = context;
   const claimIds = React.useMemo(() => [claimId], [claimId]);
-  const {
-    spacesById,
-    isLoading: isSpaceLoading,
-    isPlaceholderData: isSpacePlaceholder,
-  } = useSpacesByIds([spaceId], enabled);
+  const { spacesById, isLoading: isSpaceLoading } = useSpacesByIds([spaceId], enabled);
   const space = [...spacesById].find(([id]) => idEquals(id, spaceId))?.[1];
   const { data } = useDebateRematchClaims(sessionId, claimIds, enabled);
   const indexing = useEntityResponseIndexingSnapshot({ entityId: claimId, spaceId, responseKind: CLAIM_RESPONSE_KIND });
@@ -71,7 +67,6 @@ export function RematchClaimEndSlot({
     !session.participants.some(person => idEquals(person.user_id, currentUserId)) ||
     !row ||
     isSpaceLoading ||
-    isSpacePlaceholder ||
     !space ||
     !isDebatePublishableSpace(space) ||
     !canPublishDebateIn(spaceId) ||

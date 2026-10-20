@@ -103,6 +103,10 @@ export const metadata: Metadata = {
   robots: 'follow, index',
 };
 
+// The marketing tags (GTM forwarding to Meta) load on the production deployment only, so preview
+// builds and local runs never send test sessions as conversions.
+const loadTagManager = process.env.VERCEL_ENV === 'production';
+
 export default function RootLayout({
   // Layouts must accept a children prop.
   // This will be populated with nested layouts or pages
@@ -119,19 +123,25 @@ export default function RootLayout({
           the head so the preload scanner fetches gtm.js immediately. Order between them is free:
           gtm.js processes whatever is already queued in dataLayer.
         */}
-        <script async src="/gtm-init.js" />
-        <script id="google-tag-manager" async src="https://www.googletagmanager.com/gtm.js?id=GTM-KJQ3T7W9" />
+        {loadTagManager ? (
+          <>
+            <script async src="/gtm-init.js" />
+            <script id="google-tag-manager" async src="https://www.googletagmanager.com/gtm.js?id=GTM-KJQ3T7W9" />
+          </>
+        ) : null}
       </head>
       <body>
-        <noscript>
-          <iframe
-            src="https://www.googletagmanager.com/ns.html?id=GTM-KJQ3T7W9"
-            height="0"
-            width="0"
-            style={{ display: 'none', visibility: 'hidden' }}
-            title="Google Tag Manager"
-          />
-        </noscript>
+        {loadTagManager ? (
+          <noscript>
+            <iframe
+              src="https://www.googletagmanager.com/ns.html?id=GTM-KJQ3T7W9"
+              height="0"
+              width="0"
+              style={{ display: 'none', visibility: 'hidden' }}
+              title="Google Tag Manager"
+            />
+          </noscript>
+        ) : null}
         <div className="relative">
           <Providers>
             <App>{children}</App>

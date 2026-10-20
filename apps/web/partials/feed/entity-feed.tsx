@@ -31,6 +31,14 @@ import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
 
+/**
+ * Cards drawn in full on the first render, whatever the viewport. The rest wait until they are near
+ * it (see `ExploreFeedCard`'s `deferUntilNearViewport`). Enough to fill a desktop screen without
+ * waiting on the observer, so the cards a reader sees first — and the lead card's poster, which is
+ * the page's largest paint — never pass through a placeholder.
+ */
+const EAGER_CARD_COUNT = 4;
+
 function LoadingSkeleton() {
   return (
     <div className="space-y-4 rounded-lg border border-grey-02 p-4">
@@ -739,6 +747,7 @@ export function EntityFeed({
               hideJoinButton={lockedSpaceId != null}
               titleOpensSidePanel={titleOpensSidePanel}
               claimCardVariant={claimCardVariant}
+              deferUntilNearViewport={index >= EAGER_CARD_COUNT}
             />
           ))
         )}

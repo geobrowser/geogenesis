@@ -33,7 +33,7 @@ const mocks = vi.hoisted(() => ({
   heldReads: new Map<string, Promise<string | null>>(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, user: { id: mocks.accountId } }),
 }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({}) }));

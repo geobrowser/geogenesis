@@ -48,6 +48,7 @@ export async function SpaceMembers({ spaceId }: Props) {
   const popoverContent = (
     <SpaceMembersContent
       spaceId={spaceId}
+      spaceName={space.entity.name ?? undefined}
       isPublicSpace={isPublicSpace}
       isMember={isMember}
       isEditor={isEditor}
@@ -82,7 +83,13 @@ export async function SpaceMembers({ spaceId }: Props) {
     <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
       <SpaceMembersPopover trigger={chip} content={popoverContent} />
 
-      {isPublicSpace ? <SpaceMembersJoinButton spaceId={spaceId} memberRequest={memberRequest} /> : null}
+      {isPublicSpace ? (
+        <SpaceMembersJoinButton
+          spaceId={spaceId}
+          spaceName={space.entity.name ?? undefined}
+          memberRequest={memberRequest}
+        />
+      ) : null}
     </div>
   );
 }

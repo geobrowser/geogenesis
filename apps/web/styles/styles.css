@@ -101,8 +101,6 @@
      room's moments: each pick stamped onto its debater, then the banner saying what the picks
      mean. Each rests on its last frame, so with reduced motion the element is simply in place. */
   --animate-debate-stamp: debateStampScale 216ms cubic-bezier(0.33, 1, 0.68, 1) both, fadeIn 90ms linear both;
-  /* Hidden until it starts, then down from 2x at full opacity. */
-  --animate-debate-slam: debateSlam 500ms linear both, fadeIn 1ms linear both;
   --animate-debate-banner: debateBanner 300ms cubic-bezier(0.33, 1, 0.68, 1) both;
   --animate-debate-banner-out: debateBannerOut 300ms cubic-bezier(0.33, 1, 0.68, 1) both;
 
@@ -384,19 +382,6 @@
   }
 }
 
-/* "Keep debating?" in the mockup: down from 2x, a touch past its size at 300 ms, settled by 500 ms. */
-@keyframes debateSlam {
-  0% {
-    scale: 2;
-  }
-  60% {
-    scale: 0.94;
-  }
-  100% {
-    scale: 1;
-  }
-}
-
 @keyframes debateBanner {
   from {
     clip-path: inset(0 100% 0 0);
@@ -416,96 +401,35 @@
   }
 }
 
-/* An Open rounds round banner that is not part of a break (the opening): rolls in over its first
-   300 ms, holds, and rolls on out over its last 300 ms. Run over 1800 ms, the round card's length. */
-@keyframes debateBannerInOut {
-  0% {
-    clip-path: inset(0 100% 0 0);
-    animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
-  }
-  16.7% {
-    clip-path: inset(0 0 0 0);
-  }
-  83.3% {
-    clip-path: inset(0 0 0 0);
-    animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
-  }
-  100% {
-    clip-path: inset(0 0 0 100%);
-  }
-}
-
-/* "+1 claim" coming out of the claim counter, three motions on three nested layers, as in the
-   mockup: it rises its own height plus a gap over 500 ms, grows from half size over 350 ms (both
-   ease-out cubic), and shows by 88 ms and fades from 800 ms to 1100 ms. */
-@keyframes claimPlusRise {
-  from {
-    translate: 0 0;
-  }
-  to {
-    translate: 0 calc(-100% - 1.4cqw);
-  }
-}
-
-@keyframes claimPlusGrow {
-  from {
-    scale: 0.55;
-  }
-  to {
-    scale: 1;
-  }
-}
-
-@keyframes claimPlusFade {
-  0% {
-    opacity: 0;
-  }
-  8% {
-    opacity: 1;
-  }
-  72.7% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-/* The counter's bump as the +1 leaves it: a half sine up to 1.22x and back over 450 ms. */
-@keyframes claimCounterBump {
-  0% {
-    scale: 1;
-    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
-  }
-  50% {
-    scale: 1.22;
-    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
-  }
-  100% {
-    scale: 1;
-  }
-}
-
 /* The turn timer's once-a-second swell, a half sine over its first 350 ms, on top of its stepped
    size: +0.08x of its size while it grows (10 s to 5 s), +0.05x once it is red. */
+@property --turn-timer-pulse-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* Let a clicked End turn settle from the current pulse instead of snapping its swell to 1. */
+@property --turn-timer-swell {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
+/* A half sine, matching the mockup's pulse rather than easing separately into each half. */
 @keyframes turnTimerPulse {
-  0% {
-    scale: 1;
-    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  from {
+    --turn-timer-pulse-angle: 0deg;
   }
-  50% {
-    scale: var(--turn-timer-swell, 1.0615);
-    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
-  }
-  100% {
-    scale: 1;
+  to {
+    --turn-timer-pulse-angle: 180deg;
   }
 }
 
 /* The red glow each of the last five seconds lands with, fading over the second. */
 @keyframes turnTimerGlow {
   from {
-    filter: drop-shadow(0 0 0.6rem color-mix(in srgb, var(--color-red-01) 75%, transparent));
+    filter: drop-shadow(0 0 9.6px rgba(255, 74, 38, 0.75));
   }
   to {
     filter: drop-shadow(0 0 0 transparent);
@@ -518,6 +442,15 @@
   syntax: '<angle>';
   inherits: false;
   initial-value: 360deg;
+}
+
+@keyframes roomPillSettle {
+  from {
+    scale: 1.06;
+  }
+  to {
+    scale: 1;
+  }
 }
 
 @keyframes fadeIn {
@@ -914,4 +847,14 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
   /* Ensure popovers appear above fixed overlays (e.g. power tools z-50) */
   z-index: 60 !important;
   width: var(--radix-popper-anchor-width);
+}
+
+/* Open rounds playback: a small settle in place, with no wipe or travelling exit. */
+@keyframes debatePlayerSettle {
+  from {
+    scale: 1.025;
+  }
+  to {
+    scale: 1;
+  }
 }

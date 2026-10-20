@@ -8,6 +8,10 @@ import cx from 'classnames';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { copyShareLink } from '~/core/sharing/share-handoff';
+import { createShareLink } from '~/core/sharing/share-link';
+
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
 import { Input } from '~/design-system/input';
@@ -70,6 +74,8 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
   const [claimLists, setClaimLists] = React.useState<PickedClaimList[]>([]);
   const [formError, setFormError] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
+  const [shareId, setShareId] = React.useState(() => crypto.randomUUID());
+  const getShareContext = useActionContext('share_dialog', 'lobby', create.data?.lobby_id ?? '', { overlay: 'modal' });
 
   useScrollLock();
 
@@ -84,7 +90,10 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   const created = create.data ?? null;
-  const link = created ? lobbyShareUrl(created.lobby_id) : null;
+  const share = created
+    ? createShareLink(lobbyShareUrl(created.lobby_id), 'lobby', created.lobby_id, 'copy_link', shareId)
+    : null;
+  const link = share?.url ?? null;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -98,9 +107,11 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
   };
 
   const copy = async () => {
-    if (!link) return;
+    if (!share) return;
+    // Consume the displayed ID synchronously, including repeated presses while the clipboard waits.
+    setShareId(crypto.randomUUID());
     try {
-      await navigator.clipboard.writeText(link);
+      await copyShareLink(share, getShareContext());
       setCopied(true);
     } catch {
       setCopied(false);

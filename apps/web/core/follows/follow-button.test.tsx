@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => ({
   readsKind: null as string | null,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated }),
 }));
 vi.mock('~/core/topics/use-follow-topics', () => ({

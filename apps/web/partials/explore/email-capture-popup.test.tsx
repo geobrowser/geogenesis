@@ -43,7 +43,7 @@ vi.mock('~/core/analytics', () => ({
   capture: mocks.capture,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
   useLoginWithEmail: (args?: unknown) => {
     mocks.useGeoLoginWithEmail();

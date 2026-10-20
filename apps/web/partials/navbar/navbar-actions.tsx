@@ -1,6 +1,5 @@
 'use client';
 
-import { useLogout, usePrivy } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
@@ -22,6 +21,7 @@ import { useEditable } from '~/core/state/editable-store';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
+import { useLogout, usePrivy } from '~/core/wallet/auth-hooks';
 import { useWalletStall } from '~/core/wallet/use-wallet-stall';
 import { navbarAccountState } from '~/core/wallet/wallet-stall';
 

@@ -1,8 +1,7 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 /**
  * Whether the viewer is not yet known to be signed out: Privy still starting, or signed in with

@@ -48,7 +48,7 @@ const mocks = vi.hoisted(() => ({
   } as Record<string, unknown> | null,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   useLogout: () => ({ logout: mocks.logout }),
   usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: mocks.privyUser }),
 }));

@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   responseSpaceId: null as string | null,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated }),
   useGeoLogin: () => ({ login: vi.fn() }),
 }));

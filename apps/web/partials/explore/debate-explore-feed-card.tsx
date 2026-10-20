@@ -3,18 +3,19 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useSetAtom } from 'jotai';
 
-import { ActionSurfaceArticle } from '~/core/action-context-provider';
+import { ActionSurfaceArticle, useActionScope } from '~/core/action-context-provider';
 import type { Debate } from '~/core/debates/api';
-import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
-import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
+import { DebateShareDialog } from '~/core/debates/browse/lazy-share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
+import { fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
@@ -29,6 +30,7 @@ import { FullscreenLink } from '~/design-system/fullscreen-link';
 
 import { DebateExploreMetaRow } from './debate-explore-meta-row';
 import { ExploreCardTitle } from './explore-card-title';
+import { openExploreDebateClaimsPanelAtom } from '~/atoms';
 
 /** Visible fraction at which a card takes over playback, and the one it must fall back to
  * before it gives it up. Strictly between them the card keeps whatever state it had. */
@@ -331,13 +333,19 @@ export function DebateExploreFeedCard({
     return () => onPlaybackAvailabilityChange(debateId, false);
   }, [debateId, mediaMounted, onPlaybackAvailabilityChange]);
 
-  // The interaction state lives on the card rather than inside the bar: the bar is shared with the
-  // full-screen feed and stays presentational, so what a control opens — the claims overlay, the
-  // share dialog, the app's comments panel — is the card's to own and to render once. Same
-  // arrangement, same reason, as `DebateFeedItem` on the full-screen feed.
-  const [claimsOpen, setClaimsOpen] = React.useState(false);
+  // The panel is drawn by `ExploreDebateClaimsPanelHost`, so the app has one of it and a card that
+  // unmounts (paging, or sitting inside the entity side panel this replaces) doesn't take it along.
+  // A ref: the merged scope is a fresh object each render.
+  const scope = useActionScope();
+  const scopeRef = React.useRef(scope);
+  React.useEffect(() => {
+    scopeRef.current = scope;
+  });
+  const setClaimsPanel = useSetAtom(openExploreDebateClaimsPanelAtom);
   // Stable, because `DebateCardVideos` is memoized and a fresh function each render would undo it.
-  const openClaims = React.useCallback(() => setClaimsOpen(true), []);
+  const openClaims = React.useCallback(() => {
+    if (readyDebate) setClaimsPanel({ debateId, debate: readyDebate, scope: scopeRef.current });
+  }, [debateId, readyDebate, setClaimsPanel]);
   const share = useDebateShareAction();
   const { commentsTarget, openComments } = useEntityCommentsPanel();
   // Nulls read as "not enabled", which is how the count stands down with the media above. Shares a
@@ -382,6 +390,8 @@ export function DebateExploreFeedCard({
     onClaims: mediaMounted ? () => openClaims() : undefined,
     onShare: mediaMounted ? share.onOpen : undefined,
     shareOpen: share.open,
+    // The feed pre-mounts cards far below the fold; their vote counts load as they approach.
+    nearViewport,
   };
 
   return (
@@ -439,6 +449,7 @@ export function DebateExploreFeedCard({
             // that same window unmounts this subtree instead of retaining two paused videos forever.
             <DebateCardVideos
               debate={readyDebate}
+              stills={item.debatePosters}
               active={active && playbackAllowed && !coveredBySheet}
               upNext={upNext && !active && !coveredBySheet}
               releaseMedia={releaseMedia}
@@ -446,7 +457,7 @@ export function DebateExploreFeedCard({
               onOpenClaims={openClaims}
             />
           ) : item.debatePosters ? (
-            <DebatePosterSkeleton posters={item.debatePosters} compact={compactChrome} />
+            <DebatePosterSkeleton debateId={debateId} posters={item.debatePosters} compact={compactChrome} />
           ) : (
             <DebateVideoSkeleton />
           )}
@@ -472,22 +483,13 @@ export function DebateExploreFeedCard({
           claims panel loads its own claims, so it does not go empty when the card's count stands
           down beside it. */}
       {readyDebate ? (
-        <>
-          <DebateShareDialog
-            open={share.open}
-            onOpenChange={share.onOpenChange}
-            debate={readyDebate}
-            spaceId={item.spaceId}
-            openerRef={share.openerRef}
-          />
-          {/* A right-hand overlay rather than the feed's side rail, since the explore feed has no
-              rail to put it in. The panel itself is the same component. */}
-          {claimsOpen ? (
-            <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
-              <DebateClaimsPanel debate={readyDebate} onClose={() => setClaimsOpen(false)} />
-            </div>
-          ) : null}
-        </>
+        <DebateShareDialog
+          open={share.open}
+          onOpenChange={share.onOpenChange}
+          debate={readyDebate}
+          spaceId={item.spaceId}
+          openerRef={share.openerRef}
+        />
       ) : null}
     </ActionSurfaceArticle>
   );
@@ -501,6 +503,7 @@ export function DebateExploreFeedCard({
 // there is no reason to re-run the whole subtree for a flag it does not read.)
 const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
+  stills,
   active,
   upNext,
   releaseMedia,
@@ -508,6 +511,7 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   onOpenClaims,
 }: {
   debate: Debate;
+  stills: ExploreFeedItem['debatePosters'];
   active: boolean;
   upNext: boolean;
   releaseMedia: boolean;
@@ -517,6 +521,7 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   return (
     <DebateFeedPlayer
       debate={debate}
+      stills={stills}
       active={active}
       preload
       buffer={upNext}
@@ -535,9 +540,11 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
  * grey, as the player does.
  */
 function DebatePosterSkeleton({
+  debateId,
   posters,
   compact,
 }: {
+  debateId: string;
   posters: NonNullable<ExploreFeedItem['debatePosters']>;
   compact: boolean;
 }) {
@@ -548,6 +555,8 @@ function DebatePosterSkeleton({
           {src ? (
             <img
               src={src}
+              // The feed may hand over a presigned storage URL; a lapsed one falls back to the durable route.
+              onError={fallBackToDurableStill(speakerStillContentUrl(debateId, index === 0 ? 1 : 2))}
               alt=""
               data-debate-poster=""
               draggable={false}

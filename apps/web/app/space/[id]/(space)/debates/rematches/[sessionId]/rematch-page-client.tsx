@@ -53,7 +53,7 @@ import {
   useNotInterestedClaimIds,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
-import { useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
+import { useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
@@ -118,6 +118,7 @@ import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
@@ -287,7 +288,7 @@ const ROOM_REJOIN_RETRY_MS = 15_000;
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
-  const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
+  const { consume: consumeDebateReturnDestination, returnsToLobby } = useDebateReturnNavigation();
   // The room owns this session rather than the other way round, so two of the page's exits change
   // shape inside one: see the terminal-status effect and `leave` below.
   const inDebateRoom = useInDebateRoom();
@@ -1031,25 +1032,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     for (const space of taggedSpaceFacet.spaces) ids.add(space.id);
     return [...ids];
   }, [catalogEntities, taggedSpaceFacet.spaces]);
-  const {
-    spacesById: candidateSpaces,
-    isLoading: candidateSpacesPending,
-    isPlaceholderData: candidateSpacesHeldOver,
-  } = useSpacesByIds(candidateSpaceIds);
+  const { spacesById: candidateSpaces, isLoading: candidateSpacesPending } = useSpacesByIds(candidateSpaceIds);
   const spaceTypePublishable = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
   /**
    * Whether {@link canPublishDebateIn} can be trusted yet.
    *
    * An unresolved type reads as publishable — deliberately, so a slow lookup doesn't empty the
    * picker — so while this is true the predicate admits spaces it will go on to reject, a personal
-   * space among them. Held-over counts: `useSpacesByIds` answers from the previous id set rather
-   * than blanking, and it knows nothing about an id it was never asked for.
+   * space among them. `useSpacesByIds` reports loading while any candidate id is unresolved.
    *
    * Named here rather than at the reader, because this is the lookup that decides it. The picker
    * has a second `useSpacesByIds` for the allowlist, whose pending state `scope.pending` carries;
    * they are different questions about different ids and neither covers the other.
    */
-  const publishabilityPending = candidateSpacesPending || candidateSpacesHeldOver;
+  const publishabilityPending = candidateSpacesPending;
   const canPublishDebateIn = React.useCallback(
     (spaceId: string | null | undefined) =>
       isSpaceDebatePublishable(spaceId, publishableSpaceIds) && spaceTypePublishable(spaceId),
@@ -2568,6 +2564,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * the calendar does, because two rows of pills would push the first claim off a phone's screen.
    */
   const isPhone = useIsPhoneLayout();
+  const videoLayout = useFeatureFlag('debateVideo');
   const setTopicPicked = (topicId: string) => setTopicIds(current => toggleId(current, topicId));
 
   /**
@@ -2672,7 +2669,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       <HideAgreedSwitch analyticsSurface="rematch" checked={hideAgreed} onChange={setHideAgreed} />
     ) : null;
 
-  const desktopListSwitch = !isPhone && !searchOnly ? listSwitch : null;
+  const desktopListSwitch = (!isPhone || videoLayout) && !searchOnly ? listSwitch : null;
 
   // Only where a curator has made a page for this pairing. Without one there is a single option, and
   // a menu of one is a control that cannot do anything.
@@ -2844,9 +2841,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       type="button"
       onClick={leave}
       disabled={leaveSession.isPending}
-      className={PILL_BUTTON_SECONDARY_CLASS_NAME}
+      className={cx(PILL_BUTTON_SECONDARY_CLASS_NAME, videoLayout && 'max-[767px]:h-11')}
     >
-      Leave
+      {returnsToLobby && !inDebateRoom ? 'Back to lobby' : 'Leave'}
     </SmallButton>
   );
 
@@ -2859,28 +2856,35 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // scrollable. Anything wider than the viewport — the tab strip, on a phone — panned the whole
     // screen sideways instead of scrolling itself.
     <div data-rematch-scroll className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
-      <main className="mx-auto min-h-dvh w-full max-w-[820px] px-5 pt-8 pb-8 mobile:px-8">
-        {/* Pinned together, tabs included. The list pages forever, so both the tab strip and the
-            controls under it were a full scroll away by the time the viewer wanted either — and
-            pinning the filters alone would have left them floating over a tab strip scrolling
-            past behind them. Bleeds to the layer's edges so the page passes under it rather than
-            beside it, and `-mt-8` lets it sit flush at the top once stuck. */}
-        <div className="sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 mobile:-mx-8 mobile:px-8">
-          {/* The display name only: `remoteName` falls back to a raw id, which reads badly in
+      <main
+        className={cx(
+          'mx-auto min-h-dvh w-full max-w-[820px] px-5 pt-8 pb-8',
+          videoLayout ? 'mobile:px-4 mobile:pt-4' : 'mobile:px-8'
+        )}
+      >
+        <div
+          className={
+            videoLayout ? 'contents' : 'sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 mobile:-mx-8 mobile:px-8'
+          }
+        >
+          {/* The full video cards scroll with the page. Keeping one layout avoids a reformat
+            or animation at a scroll threshold. Tabs and filters remain sticky below them.
+            Audio-only rooms keep their controls and filters pinned together. */}
+          <section aria-label="Participants" data-testid="rematch-participant-header">
+            {/* The display name only: `remoteName` falls back to a raw id, which reads badly in
               "Waiting for …", and the pill has its own fallback. */}
-          {roomPresence && (
-            <DebateRoomPresenceIndicator
-              presence={roomPresence}
-              opponentName={remoteParticipant?.display_name || undefined}
-            />
-          )}
-          <h1 className="sr-only">Rematch {remoteName}</h1>
-          {/* GEO-2992: the pair, at the top of the column the viewer is already reading. This is
+            {roomPresence && (
+              <DebateRoomPresenceIndicator
+                presence={roomPresence}
+                opponentName={remoteParticipant?.display_name || undefined}
+              />
+            )}
+            <h1 className="sr-only">Pick a claim to debate</h1>
+            {/* GEO-2992: the pair, at the top of the column the viewer is already reading. This is
               where the unmute control lives now — the 200px dock it replaced was pinned to the
               bottom-right corner of the viewport, outside the column, and people were not finding
-              it. Inside the sticky block on purpose: the claim list pages forever, and a control
-              that scrolls away has the dock's problem in a different place. */}
-          {/* Leave rides in the header rather than at the end of the tab row: it belongs to you,
+              it. */}
+            {/* Leave rides in the header rather than at the end of the tab row: it belongs to you,
               so it sits in your card, opposite "View profile" on theirs. That leaves the tab strip
               the full width it was sharing.
 
@@ -2888,116 +2892,128 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               this button is the only way off it. Signed out, mid identity exchange, or on a failed
               session lookup there is no pair to draw — and a picker with no exit is worse than one
               with no header. */}
-          {/* One stack, so the publishing row sits the header's own 12px under the pair and its
+            {/* One stack, so the publishing row sits the header's own 12px under the pair and its
               notices, and takes no space at all when there is nothing to draw. */}
-          <div className="mb-4 flex flex-col gap-3">
-            {session && currentUserId ? (
-              <RematchVoiceHeader
-                session={session}
-                currentUserId={currentUserId}
-                leaveAction={leaveButton}
-                // `isSuccess` as well as `isPending`: the session is ended the moment the mutation
-                // answers, and the redirect lands a beat later. That gap is the whole window in
-                // which the controls used to vanish. `sessionEnded` covers the same window when it
-                // was the other person who left, which reaches this page as a status change with no
-                // mutation of ours behind it.
-                exiting={leaveSession.isPending || leaveSession.isSuccess || sessionEnded}
-              />
-            ) : (
-              <div className="flex justify-end">{leaveButton}</div>
-            )}
-            {/* GEO-3301. The pair arrive straight from the debate, so the recording it left behind
-                comes with them: under the pair, inside the sticky block so the way to withdraw it
-                stays on screen while the list scrolls. A session from a profile challenge has no
-                debate. */}
-            {sourceDebateQuery.data && currentUserId ? (
-              <RematchPublishCard
-                // Per debate: a dismissal belongs to the one it was about, not the next session's.
-                key={sourceDebateQuery.data.id}
-                debate={sourceDebateQuery.data}
-                currentUserId={currentUserId}
-                opponentName={remoteFirstName}
-              />
-            ) : null}
-          </div>
-          <header className="mb-4">
-            <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate rematch" className="gap-6">
-              {pickerTabs.map(spec => (
-                <TabButton
-                  key={spec.id}
-                  label={spec.label}
-                  count={spec.count}
-                  active={activeTab === spec.id}
-                  onClick={() => setTab(spec.id)}
+            <div className={cx('mb-4 flex flex-col gap-3', videoLayout && 'max-[767px]:mb-1')}>
+              {session && currentUserId ? (
+                <RematchVoiceHeader
+                  session={session}
+                  currentUserId={currentUserId}
+                  leaveAction={leaveButton}
+                  // `isSuccess` as well as `isPending`: the session is ended the moment the mutation
+                  // answers, and the redirect lands a beat later. That gap is the whole window in
+                  // which the controls used to vanish. `sessionEnded` covers the same window when it
+                  // was the other person who left, which reaches this page as a status change with no
+                  // mutation of ours behind it.
+                  exiting={leaveSession.isPending || leaveSession.isSuccess || sessionEnded}
                 />
-              ))}
-            </ScrollableTabRow>
-          </header>
+              ) : (
+                <div className="flex justify-end">{leaveButton}</div>
+              )}
+              {/* GEO-3301. The pair arrive straight from the debate, so the recording it left behind
+                comes with them under the pair. A session from a profile challenge has no debate. */}
+              {sourceDebateQuery.data && currentUserId ? (
+                <RematchPublishCard
+                  // Per debate: a dismissal belongs to the one it was about, not the next session's.
+                  key={sourceDebateQuery.data.id}
+                  debate={sourceDebateQuery.data}
+                  currentUserId={currentUserId}
+                  opponentName={remoteFirstName}
+                />
+              ) : null}
+            </div>
+          </section>
+          <div
+            role="group"
+            aria-label="Claim picker filters"
+            className={
+              videoLayout ? 'sticky top-0 z-20 -mx-5 bg-white px-5 pt-3 pb-3 mobile:-mx-4 mobile:px-4' : undefined
+            }
+          >
+            <header className="mb-4">
+              <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate rematch" className="gap-6">
+                {pickerTabs.map(spec => (
+                  <TabButton
+                    key={spec.id}
+                    label={spec.label}
+                    count={spec.count}
+                    active={activeTab === spec.id}
+                    onClick={() => setTab(spec.id)}
+                  />
+                ))}
+              </ScrollableTabRow>
+            </header>
 
-          <div className="flex flex-col gap-3">
-            {/* Pinned above the filters and the search box, where the hub's claims tab keeps it —
+            <div className="flex flex-col gap-3">
+              {/* Pinned above the filters and the search box, where the hub's claims tab keeps it —
                 and inside the sticky block rather than over it, because two stickies would both
                 claim `top-0` and overlap. A request sent from here otherwise left no trace on the
                 surface that sent it: the claim card looks exactly as it did before. */}
-            {outboundRequest && currentUserId ? (
-              <RematchRequestCard request={outboundRequest} participants={participants} currentUserId={currentUserId} />
-            ) : null}
+              {outboundRequest && currentUserId ? (
+                <RematchRequestCard
+                  request={outboundRequest}
+                  participants={participants}
+                  currentUserId={currentUserId}
+                />
+              ) : null}
 
-            {searchOnly ? null : isPhone ? (
-              <SpaceTopicFilters
-                analyticsSurface="rematch"
-                spaceIds={spaceIds}
-                onSpaceToggle={onSpaceToggle}
-                onSpacesClear={onSpacesClear}
-                topicIds={topicIds}
-                onTopicToggle={setTopicPicked}
-                onTopicsClear={() => setTopicIds([])}
-                facetSpaces={facetSpaces}
-                facetTopics={facetTopics}
-                countsPending={filterCountsPending}
-                trailing={listSwitch}
-                leading={sourceMenu}
+              {searchOnly ? null : isPhone && !videoLayout ? (
+                <SpaceTopicFilters
+                  analyticsSurface="rematch"
+                  spaceIds={spaceIds}
+                  onSpaceToggle={onSpaceToggle}
+                  onSpacesClear={onSpacesClear}
+                  topicIds={topicIds}
+                  onTopicToggle={setTopicPicked}
+                  onTopicsClear={() => setTopicIds([])}
+                  facetSpaces={facetSpaces}
+                  facetTopics={facetTopics}
+                  countsPending={filterCountsPending}
+                  trailing={listSwitch}
+                  leading={sourceMenu}
+                />
+              ) : (
+                // GEO-3223: on a desktop the two menus become one row of pills, so the spaces and
+                // topics are on screen to be picked rather than behind "Any space" and "Any topic".
+                // The source menu keeps a row of its own beneath it; the list's switch moves under
+                // the search box.
+                <div className="flex flex-col gap-2">
+                  {pillOptions.length > 0 ? (
+                    <FacetFilterPills
+                      analyticsSurface="rematch"
+                      options={pillOptions}
+                      pickedIds={pickedFilterIds}
+                      onToggle={option =>
+                        option.kind === 'space' ? onSpaceToggle(option.id) : setTopicPicked(option.id)
+                      }
+                      onClear={() => {
+                        onSpacesClear();
+                        setTopicIds([]);
+                      }}
+                      countsPending={filterCountsPending}
+                    />
+                  ) : null}
+                  {sourceMenu ? <div className="flex flex-wrap items-center gap-2">{sourceMenu}</div> : null}
+                </div>
+              )}
+              <Input
+                data-rematch-search
+                withSearchIcon
+                value={search}
+                onChange={event => setSearch(event.currentTarget.value)}
+                placeholder={searchOnly ? 'Search claims' : 'Search claims and topics'}
+                aria-label={searchOnly ? 'Search claims' : 'Search claims and topics'}
               />
-            ) : (
-              // GEO-3223: on a desktop the two menus become one row of pills, so the spaces and
-              // topics are on screen to be picked rather than behind "Any space" and "Any topic".
-              // The source menu keeps a row of its own beneath it; the list's switch moves under
-              // the search box.
-              <div className="flex flex-col gap-2">
-                {pillOptions.length > 0 ? (
-                  <FacetFilterPills
-                    analyticsSurface="rematch"
-                    options={pillOptions}
-                    pickedIds={pickedFilterIds}
-                    onToggle={option =>
-                      option.kind === 'space' ? onSpaceToggle(option.id) : setTopicPicked(option.id)
-                    }
-                    onClear={() => {
-                      onSpacesClear();
-                      setTopicIds([]);
-                    }}
-                    countsPending={filterCountsPending}
-                  />
-                ) : null}
-                {sourceMenu ? <div className="flex flex-wrap items-center gap-2">{sourceMenu}</div> : null}
-              </div>
-            )}
-            <Input
-              withSearchIcon
-              value={search}
-              onChange={event => setSearch(event.currentTarget.value)}
-              placeholder={searchOnly ? 'Search claims' : 'Search claims and topics'}
-              aria-label={searchOnly ? 'Search claims' : 'Search claims and topics'}
-            />
-            <TopicSearchSuggestions
-              analyticsSurface="rematch"
-              query={search}
-              topics={suggestedTopics}
-              onPick={topicId => {
-                setTopicIds(current => (current.includes(topicId) ? current : [...current, topicId]));
-                setSearch('');
-              }}
-            />
+              <TopicSearchSuggestions
+                analyticsSurface="rematch"
+                query={search}
+                topics={suggestedTopics}
+                onPick={topicId => {
+                  setTopicIds(current => (current.includes(topicId) ? current : [...current, topicId]));
+                  setSearch('');
+                }}
+              />
+            </div>
           </div>
         </div>
 
