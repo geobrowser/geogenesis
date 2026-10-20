@@ -538,7 +538,6 @@ function LobbyRoom({
   const queuedRequest = useLobbyQueuedRequest();
   const slots = useLobbySlotTargets();
   const [tab, setTab] = React.useState<LobbyPhoneTab>('people');
-  const showPeople = React.useCallback(() => setTab('people'), []);
   // The guest room, a sibling of the member room so the handover can drop it mid-call.
   const [guestVoiceStates, setGuestVoiceStates] = React.useState<LobbyVoiceStates>(NO_LOBBY_VOICE);
   const guestVoice =
@@ -590,6 +589,13 @@ function LobbyRoom({
   const claimsMark = useClaimsTabMark(highlights, !phone || tab === 'claims', lobby.claim_lists);
   const tabbed = phone && showClaims;
   const tabIds = useTabIds();
+  // From the speaker strip on Claims (GEO-3399). The strip's button is about to be hidden with the
+  // Claims panel, so focus goes to the People tab rather than being dropped on the page.
+  const peopleTabId = tabIds.people.tab;
+  const showPeople = React.useCallback(() => {
+    setTab('people');
+    document.getElementById(peopleTabId)?.focus();
+  }, [peopleTabId]);
   const onPeopleTab = !phone || !showClaims || tab === 'people';
   const onClaimsTab = !phone || tab === 'claims';
   const alone = showClaims && isAlone(lobby, guest ? null : currentUserId, guest, guestVoice !== null);

@@ -556,11 +556,25 @@ function SpeakerVideoGrid({
     props: personProps(member),
     voice: speakerVoice(states, member),
   }));
+  // Whose tile or chip has focus, including a menu opened from it: React focus events bubble out of
+  // portals, so a menu's own focus still reads as inside its tile. They stay put until it leaves.
+  const [held, setHeld] = React.useState<ReadonlySet<string>>(() => new Set());
+  const holdFocus = (id: string) => ({
+    onFocus: () => setHeld(current => (current.has(id) ? current : new Set(current).add(id))),
+    onBlur: () =>
+      setHeld(current => {
+        if (!current.has(id)) return current;
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      }),
+  });
   const inputs: VideoGridSpeaker[] = people.map(({ member, props, voice }) => ({
     id: member.user_id,
     pinned: props.isSelf || isHosting(member),
     speaking: voice.speaking,
     camera: Boolean(voice.camera),
+    held: held.has(member.user_id),
   }));
 
   // The previous pick, fed back in: a render that changes nothing returns an equal state and stops.
@@ -591,7 +605,7 @@ function SpeakerVideoGrid({
         )}
       >
         {tiles.map(({ member, props, voice }) => (
-          <li key={member.user_id} className="min-w-0">
+          <li key={member.user_id} className="min-w-0" {...holdFocus(member.user_id)}>
             <SpeakerTile {...props} voice={voice} grid={{ compact }} />
           </li>
         ))}
@@ -603,7 +617,7 @@ function SpeakerVideoGrid({
           </h3>
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {overflow.map(({ member, props, voice }) => (
-              <li key={member.user_id} className="min-w-0">
+              <li key={member.user_id} className="min-w-0" {...holdFocus(member.user_id)}>
                 <ListenerChip {...props} voice={voice} data-testid="lobby-more-speaker" />
               </li>
             ))}

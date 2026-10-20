@@ -95,7 +95,7 @@ describe('nextVideoGrid', () => {
     expect(grid.shown).toEqual(['s0', 's1', 's2']);
   });
 
-  it('fills a tile someone left by the same priority, without moving the others', () => {
+  it('fills a tile someone left in place, by the same priority, without moving the others', () => {
     const speakers = [speaker('a'), speaker('b'), speaker('c'), speaker('off', { camera: false }), speaker('on')];
     let grid = step(EMPTY_VIDEO_GRID, speakers);
     expect(grid.shown).toEqual(['a', 'b', 'c']);
@@ -103,7 +103,60 @@ describe('nextVideoGrid', () => {
       grid,
       speakers.filter(entry => entry.id !== 'b')
     );
-    expect(grid.shown).toEqual(['a', 'c', 'on']);
+    expect(grid.shown).toEqual(['a', 'on', 'c']);
+  });
+
+  it('keeps every tile in place when someone near the front leaves a big room', () => {
+    let grid = step(EMPTY_VIDEO_GRID, room(8), 6);
+    expect(grid.shown).toEqual(['s0', 's1', 's2', 's3', 's4', 's5']);
+    grid = step(
+      grid,
+      room(8).filter(entry => entry.id !== 's0'),
+      6
+    );
+    expect(grid.shown).toEqual(['s6', 's1', 's2', 's3', 's4', 's5']);
+  });
+
+  it('keeps the tiles where they are when the room drops back under the cap', () => {
+    // s3 talked its way onto s2's tile; once s1 leaves, everyone fits again. s3 keeps its place
+    // ahead of s2 rather than the grid re-sorting into roster order.
+    let grid = step(EMPTY_VIDEO_GRID, room(4));
+    grid = step(
+      grid,
+      room(4, index => ({ speaking: index === 3 }))
+    );
+    expect(grid.shown).toEqual(['s0', 's1', 's3']);
+    grid = step(
+      grid,
+      room(4).filter(entry => entry.id !== 's1')
+    );
+    expect(grid.shown).toEqual(['s0', 's3', 's2']);
+  });
+
+  it('never moves someone held: their tile is not taken, and their chip does not jump to the grid', () => {
+    let grid = step(EMPTY_VIDEO_GRID, room(4));
+    // s2 would be quiet longest and give up their tile, but their menu is open.
+    grid = step(
+      grid,
+      room(4, index => ({ speaking: index === 3, held: index === 2 }))
+    );
+    expect(grid.shown).toEqual(['s0', 's3', 's2']);
+
+    // s1 is in the row with their chip focused: talking does not pull them onto the grid.
+    grid = step(
+      grid,
+      room(4, index => ({ speaking: index === 1, held: index === 1 }))
+    );
+    expect(grid.shown).toEqual(['s0', 's3', 's2']);
+  });
+
+  it('fills a gap with someone who is not held', () => {
+    let grid = step(EMPTY_VIDEO_GRID, room(5));
+    grid = step(
+      grid,
+      room(5, index => ({ held: index === 3 })).filter(entry => entry.id !== 's1')
+    );
+    expect(grid.shown).toEqual(['s0', 's4', 's2']);
   });
 
   it('settles: the same speakers give an equal state, so re-rendering does not loop', () => {

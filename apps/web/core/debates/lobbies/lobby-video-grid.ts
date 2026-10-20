@@ -1,11 +1,15 @@
 /**
  * Which speakers get a video tile once lobby video is on (GEO-3399), and where.
  *
- * Up to the cap, everyone gets a tile in roster order. Past it, the grid holds `cap` tiles and the
- * rest wait in the "More speakers" row. Who gets a tile: the viewer and hosts always, then whoever is
- * talking, then cameras on, then cameras off. Once someone has a tile it stays in the same place:
- * when a person in the row starts talking they take the tile of whoever on the grid has been quiet
- * longest, and nobody else moves. A grid that reshuffles on every voice is unreadable.
+ * Up to the cap, everyone gets a tile: a fresh grid in roster order, newcomers after. Past it, the
+ * grid holds `cap` tiles and the rest wait in the "More speakers" row. Who gets a tile: the viewer
+ * and hosts always, then whoever is talking, then cameras on, then cameras off.
+ *
+ * Once someone has a tile it stays in the same place. Someone in the row who starts talking takes
+ * the tile of whoever on the grid has been quiet longest; someone leaving leaves a gap that is filled
+ * in place. Nobody else moves, and nobody being held (their tile or chip has focus, or a menu open
+ * from it) moves at all. A grid that reshuffles on every voice is unreadable, and a tile taken out
+ * from under a menu takes the menu with it.
  *
  * Pure, so the page can keep the previous result in state and feed it back in; the same inputs give
  * the same state, so re-rendering never churns it.
@@ -20,6 +24,8 @@ export type VideoGridSpeaker = {
   pinned: boolean;
   speaking: boolean;
   camera: boolean;
+  /** Focus is on their tile or chip, or in a menu opened from it: they stay where they are. */
+  held?: boolean;
 };
 
 export type VideoGridState = {
@@ -38,7 +44,6 @@ export const EMPTY_VIDEO_GRID: VideoGridState = { shown: [], speaking: [], tick:
 export function nextVideoGrid(prev: VideoGridState, speakers: VideoGridSpeaker[], cap: number): VideoGridState {
   const ids = speakers.map(speaker => speaker.id);
   const present = new Set(ids);
-  const byId = new Map(speakers.map(speaker => [speaker.id, speaker]));
 
   // Who started or stopped speaking since last time gets the next tick.
   const speakingNow = speakers.filter(speaker => speaker.speaking).map(speaker => speaker.id);
@@ -55,26 +60,31 @@ export function nextVideoGrid(prev: VideoGridState, speakers: VideoGridSpeaker[]
     if (at !== undefined) spokeAt[id] = at;
   }
 
-  const shown = ids.length <= cap ? ids : pickTiles(prev.shown, speakers, byId, spokeAt, cap);
-  return { shown, speaking: speakingNow, tick, spokeAt };
+  return { shown: placeTiles(prev.shown, speakers, spokeAt, cap), speaking: speakingNow, tick, spokeAt };
 }
 
-function pickTiles(
+function placeTiles(
   prevShown: string[],
   speakers: VideoGridSpeaker[],
-  byId: Map<string, VideoGridSpeaker>,
   spokeAt: Record<string, number>,
   cap: number
 ): string[] {
+  const byId = new Map(speakers.map(speaker => [speaker.id, speaker]));
   const order = new Map(speakers.map((speaker, index) => [speaker.id, index]));
-  const kept = prevShown.filter(id => byId.has(id));
-
   const byPriority = (a: VideoGridSpeaker, b: VideoGridSpeaker) =>
     rank(a) - rank(b) || order.get(a.id)! - order.get(b.id)!;
 
-  // First time over the cap (a fresh page, or a 13th speaker arriving with nobody shown yet): pick
-  // by priority, then lay the picks out in roster order so the grid reads like the roster.
-  if (kept.length === 0) {
+  // Every tile where it was; someone who left leaves a gap (null) to fill in place.
+  const slots: (string | null)[] = prevShown.slice(0, cap).map(id => (byId.has(id) ? id : null));
+  const onGrid = new Set(slots.filter((id): id is string => id !== null));
+  const notShown = speakers.filter(speaker => !onGrid.has(speaker.id));
+
+  // Room for everyone: gaps close up, newcomers go after, in roster order.
+  if (speakers.length <= cap) return [...onGrid, ...notShown.map(speaker => speaker.id)];
+
+  // First time over the cap (a fresh page with a full room): pick by priority, then lay the picks out
+  // in roster order so the grid reads like the roster.
+  if (onGrid.size === 0) {
     return [...speakers]
       .sort(byPriority)
       .slice(0, cap)
@@ -82,14 +92,17 @@ function pickTiles(
       .sort((a, b) => order.get(a)! - order.get(b)!);
   }
 
-  const tiles = kept.slice(0, cap);
-  const onGrid = new Set(tiles);
-  // Who can give a tile up: not pinned, not talking. Quiet longest first; among equals, a camera
-  // that is off before one that is on, then the later in the roster.
+  const movable = (id: string) => !byId.get(id)!.held;
+  // Who can give a tile up: not pinned, not talking, not held. Quiet longest first; among equals, a
+  // camera that is off before one that is on, then the later in the roster.
   const evictable = () =>
-    tiles
+    slots
       .map((id, index) => ({ id, index }))
-      .filter(({ id }) => !byId.get(id)!.pinned && !byId.get(id)!.speaking)
+      .filter((slot): slot is { id: string; index: number } => {
+        if (slot.id === null) return false;
+        const speaker = byId.get(slot.id)!;
+        return !speaker.pinned && !speaker.speaking && movable(slot.id);
+      })
       .sort(
         (a, b) =>
           (spokeAt[a.id] ?? -1) - (spokeAt[b.id] ?? -1) ||
@@ -99,28 +112,29 @@ function pickTiles(
 
   const claim = (id: string) => {
     if (onGrid.has(id)) return;
-    if (tiles.length < cap) {
-      tiles.push(id);
+    const gap = slots.indexOf(null);
+    if (gap !== -1) {
+      slots[gap] = id;
+    } else if (slots.length < cap) {
+      slots.push(id);
     } else {
       const out = evictable()[0];
       if (!out) return;
       onGrid.delete(out.id);
-      tiles[out.index] = id;
+      slots[out.index] = id;
     }
     onGrid.add(id);
   };
 
   for (const speaker of speakers) if (speaker.pinned) claim(speaker.id);
-  for (const speaker of speakers) if (speaker.speaking) claim(speaker.id);
-
-  // Free tiles (someone left) fill by the same priority, without moving anyone already shown.
-  const waiting = speakers.filter(speaker => !onGrid.has(speaker.id)).sort(byPriority);
-  for (const speaker of waiting) {
-    if (tiles.length >= cap) break;
-    tiles.push(speaker.id);
-    onGrid.add(speaker.id);
+  // A held chip stays a chip, even once they talk.
+  for (const speaker of speakers) if (speaker.speaking && movable(speaker.id)) claim(speaker.id);
+  // Gaps, and room left by a smaller grid before, fill by the same priority.
+  for (const speaker of [...notShown].sort(byPriority)) {
+    if (!slots.includes(null) && slots.length >= cap) break;
+    if (movable(speaker.id)) claim(speaker.id);
   }
-  return tiles;
+  return slots.filter((id): id is string => id !== null);
 }
 
 function rank(speaker: VideoGridSpeaker) {

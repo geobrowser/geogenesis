@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -481,6 +481,27 @@ describe('LobbyPeople video grid (GEO-3399)', () => {
     const changed = after.flatMap((name, index) => (name === before[index] ? [] : [index]));
     expect(changed).toHaveLength(1);
     expect(after[0]).toBe('Adam (you)');
+  });
+
+  it('leaves a focused tile in place when a talker needs one, and a focused chip in the row', () => {
+    const view = lobby(room(14));
+    const { rerender } = render(gridPeople(view));
+    // S11 would be first to go: quiet, and the latest in the roster. Its menu button has focus.
+    act(() =>
+      within(screen.getByRole('group', { name: 'S11' }))
+        .getByRole('button', { name: 'S11' })
+        .focus()
+    );
+
+    rerender(gridPeople(view, { speaking: ['S13'] }));
+    expect(tileNames()).toEqual(expect.arrayContaining(['S11', 'S13']));
+    expect(tileNames()).not.toContain('S10');
+
+    // Focus on S12's chip in the row: talking does not pull the chip out from under it.
+    act(() => within(screen.getByTestId('lobby-more-speakers')).getByRole('button', { name: 'S12' }).focus());
+    rerender(gridPeople(view, { speaking: ['S13', 'S12'] }));
+    expect(tileNames()).not.toContain('S12');
+    expect(within(screen.getByTestId('lobby-more-speakers')).getByRole('button', { name: 'S12' })).toHaveFocus();
   });
 
   it('draws a phone’s speaker strip into the Claims slot, and a tap there shows People', () => {
