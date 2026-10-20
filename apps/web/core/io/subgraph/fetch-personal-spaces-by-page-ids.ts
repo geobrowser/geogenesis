@@ -64,10 +64,68 @@ export async function fetchPersonalSpacesByPageIds(pageIds: string[]): Promise<M
     (batch, first) => `query { spaces(filter: { id: { in: ${batch} } }, first: ${first}) { id type page { id } } }`,
     (result: SpacesResult) => result.spaces
   );
+  const candidatesByPageId = new Map<string, string[]>();
   for (const space of spaces) {
     if (space.type !== 'PERSONAL' || !space.page) continue;
     const pageId = normId(space.page.id);
-    if (ids.includes(pageId)) byPageId.set(pageId, normId(space.id));
+    if (!ids.includes(pageId)) continue;
+    candidatesByPageId.set(pageId, [...(candidatesByPageId.get(pageId) ?? []), normId(space.id)]);
+  }
+
+  // Someone can front more than one personal space — a second wallet that set up a space for the
+  // same person (GEO-3395). Their positions and record live in whichever space they actually use,
+  // so the main one is picked by activity rather than by the order the API listed them.
+  // Validated before being written into the query, which takes them inline.
+  const contested = [...new Set([...candidatesByPageId.values()].filter(c => c.length > 1).flat())].filter(id =>
+    IdUtils.isValid(id)
+  );
+  // A failed read still answers: the id tie-break below picks the same space every time.
+  const activity =
+    contested.length > 0
+      ? await fetchSpaceActivity(contested).catch(() => new Map<string, SpaceActivity>())
+      : new Map<string, SpaceActivity>();
+  for (const [pageId, candidates] of candidatesByPageId) {
+    byPageId.set(pageId, candidates.length === 1 ? candidates[0] : mainSpace(candidates, activity));
   }
   return byPageId;
+}
+
+type SpaceActivity = { votes: number; content: number };
+type CountsResult = Record<
+  string,
+  | { totalCount: number }
+  | { valuesConnection: { totalCount: number }; relationsConnection: { totalCount: number } }
+  | null
+>;
+
+/** Votes cast as each space, and the values and relations in it, for the few spaces in contention. */
+async function fetchSpaceActivity(spaceIds: string[]): Promise<Map<string, SpaceActivity>> {
+  const selections = spaceIds
+    .map(
+      (id, index) => `
+    v${index}: userVotesConnection(first: 0, filter: { userId: { is: "${id}" } }) { totalCount }
+    s${index}: space(id: "${id}") { valuesConnection(first: 0) { totalCount } relationsConnection(first: 0) { totalCount } }`
+    )
+    .join('');
+  const result = await run<CountsResult>(`query {${selections}\n}`);
+  const activity = new Map<string, SpaceActivity>();
+  spaceIds.forEach((id, index) => {
+    const votes = result[`v${index}`] as { totalCount: number } | null;
+    const space = result[`s${index}`] as Extract<CountsResult[string], { valuesConnection: unknown }> | null;
+    activity.set(id, {
+      votes: votes?.totalCount ?? 0,
+      content: (space?.valuesConnection.totalCount ?? 0) + (space?.relationsConnection.totalCount ?? 0),
+    });
+  });
+  return activity;
+}
+
+/** Most votes, then most content; the id breaks a full tie so the answer is the same on every read. */
+function mainSpace(candidates: string[], activity: Map<string, SpaceActivity>): string {
+  const none: SpaceActivity = { votes: 0, content: 0 };
+  return [...candidates].sort((a, b) => {
+    const left = activity.get(a) ?? none;
+    const right = activity.get(b) ?? none;
+    return right.votes - left.votes || right.content - left.content || (a < b ? -1 : a > b ? 1 : 0);
+  })[0];
 }
