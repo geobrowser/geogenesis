@@ -45,10 +45,11 @@ export const Z_LAYERS = {
   bottomSheetBackdrop: 10008,
   bottomSheet: 10009,
 
-  // The save-votes prompt when the navbar's "Save N votes" opens it centred (GEO-3400). A modal the
-  // visitor asked for, so it takes the same top layer; it never opens over a bottom sheet.
-  saveVotesDialogBackdrop: 10008,
-  saveVotesDialog: 10009,
+  // The save-votes prompt when the navbar's "Save N votes" opens it centred (GEO-3400). Above the
+  // status bar, toasts and chat launcher; it shares the schedule dialog's pair, which needs an
+  // account, so the two never meet. Below the bottom sheet, which stays on top of everything.
+  saveVotesDialogBackdrop: 10006,
+  saveVotesDialog: 10007,
 } as const;
 
 export const Z_LAYER_CLASS = {
@@ -68,6 +69,6 @@ export const Z_LAYER_CLASS = {
   scheduleDialog: 'z-[10007]',
   bottomSheetBackdrop: 'z-[10008]',
   bottomSheet: 'z-[10009]',
-  saveVotesDialogBackdrop: 'z-[10008]',
-  saveVotesDialog: 'z-[10009]',
+  saveVotesDialogBackdrop: 'z-[10006]',
+  saveVotesDialog: 'z-[10007]',
 } as const;
