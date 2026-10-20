@@ -822,6 +822,11 @@ export async function fetchExploreFeed(args: {
   spaceFilterIds: string[] | null;
   cursor: string | null;
   walletAddress?: string | null;
+  /**
+   * The wallet's member space, when the caller has already resolved it (`null` for none), so the
+   * pending-request check does not look it up again on every page. Omitted, it is looked up.
+   */
+  viewerMemberSpaceId?: string | null;
   memberOrEditorSpaceIds: string[];
   /** Restrict surfaced entities to these type IDs (via `filter.typeIds.overlaps`). Omit for no type filter. */
   typeIds?: readonly string[];
@@ -914,8 +919,10 @@ export async function fetchExploreFeed(args: {
     if (pendingTargets.length === 0) return out;
 
     try {
-      const profile = await Effect.runPromise(fetchProfile(wallet));
-      const memberSpaceId = profile?.spaceId;
+      const memberSpaceId =
+        args.viewerMemberSpaceId !== undefined
+          ? args.viewerMemberSpaceId
+          : (await Effect.runPromise(fetchProfile(wallet)))?.spaceId;
       if (!memberSpaceId) return out;
 
       const pendingMap = new Map<string, boolean>();
