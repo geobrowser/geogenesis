@@ -9,7 +9,6 @@ import { useAtomValue } from 'jotai';
 
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
-import { useSaveVotesSignIn } from '~/core/hooks/use-save-votes-sign-in';
 import { isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
 import { captureSaveVotesImpression, saveVotesSignInProperties } from '~/core/save-votes-analytics';
@@ -79,7 +78,6 @@ export function SaveVotesSheet() {
   const count = votes.length;
   const isChatOpen = useAtomValue(isChatOpenAtom);
   const prepareOnboarding = usePrepareOnboarding();
-  const saveSignIn = useSaveVotesSignIn();
 
   const [email, setEmail] = React.useState('');
   const [invalid, setInvalid] = React.useState(false);
@@ -152,11 +150,6 @@ export function SaveVotesSheet() {
     beginPrivyAuth(saveVotesSignInProperties('email', count, reason ?? undefined));
     prepareOnboarding();
     setCodeEmail(trimmed);
-  };
-
-  const otherWays = () => {
-    void saveSignIn('other_sign_in', count, reason ?? undefined);
-    closeSaveVotesPrompt();
   };
 
   if (!open) return null;
@@ -241,14 +234,6 @@ export function SaveVotesSheet() {
                 That does not look like an email address.
               </p>
             ) : null}
-
-            <button
-              type="button"
-              onClick={otherWays}
-              className="mt-[10px] text-[13px] text-grey-04 transition-colors hover:text-text"
-            >
-              Other ways to sign in
-            </button>
           </form>
         )}
       </div>

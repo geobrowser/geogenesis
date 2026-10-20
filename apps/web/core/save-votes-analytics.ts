@@ -4,8 +4,9 @@ import { recordAction } from '~/core/analytics-operations';
 import { type AuthAttempt, isSignedInOutcome } from '~/core/auth-attempt';
 
 /**
- * Sign-ins a save prompt starts (GEO-3214): the sheet's email, its other ways in, and the navbar's
- * "Save N votes". `auth_control` says which; `local_vote_count` how many votes were waiting.
+ * Sign-ins a save prompt starts (GEO-3214): the sheet's email, whether the sheet opened on its own,
+ * from a vote's Save link or from the navbar's "Save N votes" (GEO-3400). `local_vote_count` says
+ * how many votes were waiting.
  */
 export const SAVE_VOTES_ANALYTICS = {
   component: 'save_votes_prompt',
@@ -47,7 +48,8 @@ export function saveVotesSignIn(attempt: AuthAttempt | undefined): SaveVotesSign
 
 /**
  * `promptReason` is the sheet's reason for being open, when a sign-in starts from it: the navbar's
- * centred sheet and the corner one share their controls, so `auth_control` alone can't tell them apart.
+ * centred sheet and the corner one share their email field, so `auth_control` alone can't tell them
+ * apart.
  */
 export function saveVotesSignInProperties(auth_control: string, localVoteCount: number, promptReason?: string) {
   return {

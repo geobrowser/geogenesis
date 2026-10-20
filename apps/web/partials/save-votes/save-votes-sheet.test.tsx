@@ -31,7 +31,6 @@ function EmailCaptureCard() {
 const mocks = vi.hoisted(() => ({
   ready: true,
   authenticated: false,
-  signIn: vi.fn(),
   beginPrivyAuth: vi.fn(),
   cancelPrivyAuth: vi.fn(),
   impression: vi.fn(),
@@ -45,7 +44,6 @@ vi.mock('~/core/hooks/use-any-modal-open', () => ({
   useAnyModalOpen: (enabled: boolean) => enabled && mocks.anyModalOpen,
 }));
 vi.mock('~/core/hooks/use-prepare-onboarding', () => ({ usePrepareOnboarding: () => vi.fn() }));
-vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.signIn }));
 vi.mock('~/core/privy-auth-events', () => ({
   beginPrivyAuth: (...args: unknown[]) => mocks.beginPrivyAuth(...args),
   cancelPrivyAuth: () => mocks.cancelPrivyAuth(),
@@ -74,7 +72,6 @@ beforeEach(() => {
   window.sessionStorage.clear();
   mocks.ready = true;
   mocks.authenticated = false;
-  mocks.signIn.mockReset();
   mocks.beginPrivyAuth.mockReset();
   mocks.cancelPrivyAuth.mockReset();
   mocks.impression.mockReset();
@@ -189,16 +186,17 @@ describe('SaveVotesSheet', () => {
     expect(readLocalVotes().votes).toHaveLength(2);
   });
 
-  it('offers the other ways in, as a save sign-in', () => {
+  // GEO-3400: email is the sheet's one way in; Privy's other methods are left to the app's other sign-ins.
+  it('offers no other way to sign in', () => {
     vote('a');
     markPromptedThisSession();
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('inline_save'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Other ways to sign in' }));
-
-    expect(mocks.signIn).toHaveBeenCalledWith(expect.objectContaining({ auth_control: 'other_sign_in' }));
-    expect(readSaveVotesPrompt()).toBeNull();
+    expect(screen.getByRole('region', { name: 'Save your votes' })).not.toHaveTextContent('Other ways to sign in');
+    expect(
+      screen.getAllByRole('button').map(button => button.textContent || button.getAttribute('aria-label'))
+    ).toEqual(['Not now', 'Save vote']);
   });
 
   // Copilot on #2785: an ask that opens on its own uses one up, return visits included.
@@ -307,7 +305,7 @@ describe('SaveVotesSheet from the navbar', () => {
 
     const dialog = screen.getByRole('dialog', { name: 'Save your votes' });
     expect(dialog).toHaveTextContent('Save your 2 votes');
-    expect(dialog).toHaveTextContent('Other ways to sign in');
+    expect(dialog).not.toHaveTextContent('Other ways to sign in');
     expect(screen.getByRole('list', { name: 'Your votes' })).toHaveTextContent('Second claim');
     expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
     expect(mocks.impression).toHaveBeenCalledWith('navbar', 2);
@@ -325,7 +323,7 @@ describe('SaveVotesSheet from the navbar', () => {
     expect(screen.getByRole('dialog', { name: 'Save your votes' })).toBeVisible();
   });
 
-  it('tags its sign-ins with the navbar, both ways in', () => {
+  it('tags its sign-in with the navbar', () => {
     openFromNavbar();
     fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
@@ -333,16 +331,6 @@ describe('SaveVotesSheet from the navbar', () => {
       expect.objectContaining({ auth_control: 'email', prompt_reason: 'navbar' })
     );
     expect(screen.getByRole('dialog')).toHaveTextContent('Enter the code we sent to sam@hey.com');
-
-    cleanup();
-    closeSaveVotesPrompt();
-    render(<SaveVotesSheet />);
-    act(() => openSaveVotesPrompt('navbar'));
-    fireEvent.click(screen.getByRole('button', { name: 'Other ways to sign in' }));
-    expect(mocks.signIn).toHaveBeenCalledWith(
-      expect.objectContaining({ auth_control: 'other_sign_in', prompt_reason: 'navbar' })
-    );
-    expect(readSaveVotesPrompt()).toBeNull();
   });
 
   it('closes on Escape and keeps the votes, like the corner card', () => {
