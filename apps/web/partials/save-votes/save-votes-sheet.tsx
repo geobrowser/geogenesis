@@ -81,8 +81,18 @@ export function SaveVotesSheet() {
 
   const [email, setEmail] = React.useState('');
   const [invalid, setInvalid] = React.useState(false);
-  /** The address the code was sent to, once the visitor has asked for one. */
-  const [codeEmail, setCodeEmail] = React.useState<string | null>(null);
+  /**
+   * Once the visitor has asked for a code: the address it went to, and the sheet as it was then.
+   * The code step keeps that presentation and attribution to the end. Moving between the corner card
+   * and the centred dialog is a different tree, which would remount the step, clear what was typed
+   * and mail a second code.
+   */
+  const [codeStep, setCodeStep] = React.useState<{
+    email: string;
+    centered: boolean;
+    reason: SaveVotesPromptReason | null;
+  } | null>(null);
+  const codeEmail = codeStep?.email ?? null;
 
   // The return-visit ask: once per browser session, for a visitor who arrives with votes waiting.
   // A session in which they voted has already been marked, so this is never the visit they voted in.
@@ -104,15 +114,15 @@ export function SaveVotesSheet() {
   // Signed in: the sheet's job is done whichever way they got there, and the saver takes over.
   React.useEffect(() => {
     if (!authenticated) return;
-    setCodeEmail(null);
+    setCodeStep(null);
     closeSaveVotesPrompt();
   }, [authenticated]);
 
-  const centered = reason === 'navbar';
+  const centered = codeStep ? codeStep.centered : reason === 'navbar';
   // Centred, the sheet is a modal of its own, which this would find and hide itself behind. Nothing
   // else is modal at the press that opens it, and anything opened later is opened from inside it.
   const isAnyModalOpen = useAnyModalOpen(open && !centered);
-  const signInProperties = saveVotesSignInProperties('email', count, reason);
+  const signInProperties = saveVotesSignInProperties('email', count, codeStep ? codeStep.reason : reason);
   // The email capture card shares this corner, and is mid-signup if it is still up once votes exist.
   const isEmailCaptureShowing = useIsEmailCaptureShowing();
   // Privy's dialog still comes first, centred or not: it is the visitor's sign-in in progress.
@@ -124,17 +134,23 @@ export function SaveVotesSheet() {
   // saved if it completes, and stay on the device if not.
   React.useEffect(() => {
     if (!centered || !isModalOpen) return;
-    setCodeEmail(null);
+    setCodeStep(null);
     closeSaveVotesPrompt();
   }, [centered, isModalOpen]);
+  // Read when the dialog closes, which is after the render that closed it.
+  const isModalOpenRef = React.useRef(isModalOpen);
+  isModalOpenRef.current = isModalOpen;
+  /** What had focus when the centred dialog opened, to hand it back to: it has no Radix trigger. */
+  const openerRef = React.useRef<HTMLElement | null>(null);
   const visible = open && !overlayOpen;
 
   // Counted and measured once per opening, and only once the visitor can see it: an ask that waits
-  // behind an overlay and is never shown neither uses up an ask nor reports an impression.
+  // behind an overlay and is never shown neither uses up an ask nor reports an impression. Not once
+  // a code is out, either: a new reason then changes nothing on screen.
   const recordedFor = React.useRef<SaveVotesPromptReason | null>(null);
   React.useEffect(() => {
     if (!open) recordedFor.current = null;
-    if (!visible || !reason || recordedFor.current === reason) return;
+    if (!visible || !reason || codeStep || recordedFor.current === reason) return;
     recordedFor.current = reason;
     if (AUTOMATIC_REASONS.has(reason)) recordSavePromptShown();
     captureSaveVotesImpression(reason, count);
@@ -147,7 +163,7 @@ export function SaveVotesSheet() {
     if (codeEmail !== null) cancelPrivyAuth();
     // Not now, not never: the votes stay on the device and the pills still offer "Save".
     recordSavePromptDismissed();
-    setCodeEmail(null);
+    setCodeStep(null);
     closeSaveVotesPrompt();
   }, [codeEmail]);
 
@@ -160,7 +176,7 @@ export function SaveVotesSheet() {
     }
     beginPrivyAuth(signInProperties);
     prepareOnboarding();
-    setCodeEmail(trimmed);
+    setCodeStep({ email: trimmed, centered, reason });
   };
 
   if (!open) return null;
@@ -260,24 +276,32 @@ export function SaveVotesSheet() {
         }}
       >
         <Portal>
+          {/* The card inside its backdrop, Radix's own pattern for a centred dialog: a press beside
+              the card is then outside the dialog's content, which is what dismisses it. */}
           <Overlay
             hidden={overlayOpen}
-            className={cx('fixed inset-0 animate-fade-in bg-text/20', Z_LAYER_CLASS.saveVotesDialogBackdrop)}
-          />
-          {/* Full-screen and click-through, so a press beside the card lands on the backdrop. */}
-          <Content
-            hidden={overlayOpen}
-            aria-describedby={undefined}
             className={cx(
-              'pointer-events-none fixed inset-0 flex items-center justify-center p-4 focus:outline-hidden mobile:items-end mobile:p-0',
+              'fixed inset-0 flex animate-fade-in items-center justify-center bg-text/20 p-4 mobile:items-end mobile:p-0',
               Z_LAYER_CLASS.saveVotesDialog
             )}
           >
-            <div className={CENTERED_CARD_CLASS}>
+            <Content
+              aria-describedby={undefined}
+              onOpenAutoFocus={() => {
+                openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+              }}
+              onCloseAutoFocus={event => {
+                // Radix would return focus to a trigger, and there is none. Not while Privy's dialog
+                // is taking over, which owns focus then.
+                event.preventDefault();
+                if (!isModalOpenRef.current) openerRef.current?.focus();
+              }}
+              className={cx(CENTERED_CARD_CLASS, 'focus:outline-hidden')}
+            >
               <Title className="sr-only">{label}</Title>
               {content}
-            </div>
-          </Content>
+            </Content>
+          </Overlay>
         </Portal>
       </Root>
     );

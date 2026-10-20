@@ -741,6 +741,28 @@ describe('ExploreEmailCapturePopup', () => {
       expect((screen.getByRole('textbox', { name: 'Verification code' }) as HTMLInputElement).value).toBe('');
     });
 
+    // Copilot on #2933: the caret is kept at the end so typing fills the next box, but collapsing a
+    // selection too made select-all then paste append to a half-typed code instead of replacing it.
+    it('keeps a selection, so a paste over it replaces the code', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      const field = screen.getByRole('textbox', { name: 'Verification code' }) as HTMLInputElement;
+      fireEvent.change(field, { target: { value: '123' } });
+
+      field.setSelectionRange(0, 3);
+      fireEvent.select(field);
+      expect([field.selectionStart, field.selectionEnd]).toEqual([0, 3]);
+
+      // A plain caret still goes to the end.
+      field.setSelectionRange(1, 1);
+      fireEvent.select(field);
+      expect([field.selectionStart, field.selectionEnd]).toEqual([3, 3]);
+    });
+
     it('draws a box per digit from the one field', async () => {
       const view = await subscribeSuccessfully();
       await act(async () => {

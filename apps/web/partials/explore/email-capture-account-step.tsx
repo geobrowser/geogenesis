@@ -18,12 +18,13 @@ const CODE_LENGTH = 6;
 const NOTE_CLASS = 'mt-2 text-[14px] tracking-[-0.35px] text-[rgba(21,21,21,0.7)]';
 
 /**
- * Typing always lands in the next empty box, so the caret is kept at the end of the hidden field
- * rather than wherever a tap on a box put it.
+ * Typing always lands in the next empty box, so a caret is kept at the end of the hidden field rather
+ * than wherever a tap on a box put it. A selection is left alone: select-all then paste must replace
+ * a half-typed code, not be appended to it and submit the first six digits of the two.
  */
 function keepCaretAtEnd(input: HTMLInputElement) {
   const end = input.value.length;
-  if (input.selectionStart !== end || input.selectionEnd !== end) input.setSelectionRange(end, end);
+  if (input.selectionStart === input.selectionEnd && input.selectionStart !== end) input.setSelectionRange(end, end);
 }
 
 // The headless attempt and its modal fallback belong to the same signup surface.

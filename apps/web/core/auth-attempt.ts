@@ -53,6 +53,9 @@ const fields = new Set<string>([
   'marketing_handoff_id',
   // How many device votes a save sign-in was started for (GEO-3214).
   'local_vote_count',
+  // Why the save sheet was open when that sign-in started: the navbar's centred sheet and the corner
+  // card share one email field, so this is what tells their sign-ins apart (GEO-3400).
+  'prompt_reason',
 ]);
 
 const sourceIdentifierFields = new Set(['link_source', 'marketing_page', 'marketing_cta', 'marketing_handoff_id']);

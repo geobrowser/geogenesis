@@ -1,5 +1,7 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -36,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   impression: vi.fn(),
   anyModalOpen: false,
   isModalOpen: false,
+  accountStepMounts: 0,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
@@ -59,7 +62,13 @@ vi.mock('~/core/save-votes-analytics', () => ({
   }),
 }));
 vi.mock('~/partials/explore/email-capture-account-step', () => ({
-  AccountStep: ({ email }: { email: string }) => <p>Enter the code we sent to {email}</p>,
+  AccountStep: ({ email }: { email: string }) => {
+    // Mounting the real step is what mails a code, so a remount is a second email.
+    React.useEffect(() => {
+      mocks.accountStepMounts += 1;
+    }, []);
+    return <p>Enter the code we sent to {email}</p>;
+  },
 }));
 
 const vote = (entityId: string, title = entityId) =>
@@ -78,6 +87,7 @@ beforeEach(() => {
   mocks.impression.mockReset();
   mocks.anyModalOpen = false;
   mocks.isModalOpen = false;
+  mocks.accountStepMounts = 0;
 });
 
 describe('copy', () => {
@@ -354,7 +364,10 @@ describe('SaveVotesSheet from the navbar', () => {
 
   // The code step falls back to Privy's dialog when it cannot send a code. The centred modal would
   // hold focus and pointer events away from it, so it hands over instead, keeping the votes.
-  it('hands over to Privy’s dialog when the code step falls back to it', () => {
+  it('hands over to Privy’s dialog when the code step falls back to it', async () => {
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
     const view = openFromNavbar();
     fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
@@ -367,6 +380,10 @@ describe('SaveVotesSheet from the navbar', () => {
     expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
     expect(readLocalVotes().prompt.dismissCount).toBe(0);
     expect(readLocalVotes().votes).toHaveLength(2);
+    // Privy's dialog owns focus now; the sheet must not pull it back to the navbar on its way out.
+    await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+    expect(document.activeElement).not.toBe(opener);
+    opener.remove();
   });
 
   it('closes on Escape and keeps the votes, like the corner card', () => {
@@ -377,6 +394,71 @@ describe('SaveVotesSheet from the navbar', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(readLocalVotes().prompt.dismissCount).toBe(1);
     expect(readLocalVotes().votes).toHaveLength(2);
+  });
+
+  // Copilot on #2933: the two presentations are different trees, so switching mid-code remounted the
+  // code step — clearing what was typed and mailing a second code.
+  it('leaves a code step where it is when the navbar is pressed', () => {
+    vote('a');
+    vote('b');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+    act(() => openSaveVotesPrompt('threshold'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
+    expect(mocks.accountStepMounts).toBe(1);
+    mocks.impression.mockClear();
+
+    act(() => openSaveVotesPrompt('navbar'));
+
+    expect(screen.getByRole('region', { name: 'Save your votes' })).toHaveTextContent('sam@hey.com');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.accountStepMounts).toBe(1);
+    expect(mocks.impression).not.toHaveBeenCalled();
+  });
+
+  // Copilot on #2933: Radix puts `pointer-events: auto` on its content, so content that filled the
+  // screen took every press beside the card as a press inside it.
+  it('closes on a press beside the card, keeping the votes', async () => {
+    openFromNavbar();
+    const card = screen.getByRole('dialog', { name: 'Save your votes' });
+    // Radix starts listening for outside presses a tick after it opens.
+    await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+
+    // A whole press: Radix dismisses on the click that follows a left-button pointer-down.
+    const beside = card.parentElement!;
+    fireEvent.pointerDown(beside, { button: 0 });
+    fireEvent.click(beside);
+
+    expect(readSaveVotesPrompt()).toBeNull();
+    expect(readLocalVotes().prompt.dismissCount).toBe(1);
+    expect(readLocalVotes().votes).toHaveLength(2);
+  });
+
+  // Pins the structure, deliberately: jsdom does no hit-testing, so the press above lands on the
+  // backdrop whatever is drawn over it. In a browser, a dialog element that fills the screen takes
+  // every press beside the card (Radix sets `pointer-events: auto` on it), and none of them dismiss.
+  it('makes the card itself the dialog, with nothing full-screen inside the backdrop', () => {
+    openFromNavbar();
+    const dialog = screen.getByRole('dialog', { name: 'Save your votes' });
+
+    expect(dialog).toHaveClass('w-[340px]');
+    expect(dialog).not.toHaveClass('inset-0');
+    expect(dialog.parentElement).toHaveClass('fixed', 'inset-0');
+  });
+
+  // Copilot on #2933: with no Radix trigger, closing left focus on the page body.
+  it('hands focus back to what opened it', async () => {
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    opener.focus();
+    openFromNavbar();
+    await waitFor(() => expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement));
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+
+    await waitFor(() => expect(document.activeElement).toBe(opener));
+    opener.remove();
   });
 
   it('takes over from the corner card rather than showing both', () => {
