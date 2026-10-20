@@ -17,9 +17,8 @@ import { type CalendarReturn, calendarReturn, urlWithoutCalendarReturn } from '.
 import { OwnScheduleModal } from './own-schedule-modal';
 
 /**
- * The way back from Google: `?calendar=…` plus the editor's `?modal=schedule`, both cleared in one
- * write. A signed-in viewer gets the editor reopened with the outcome in it; anyone else a toast,
- * since the toast sits under the editor's backdrop.
+ * Handles `?calendar=…` and `?modal=schedule` from Google's redirect, cleared in one write. Signed in,
+ * it reopens the editor with the outcome inside (a toast would sit under its backdrop); else a toast.
  */
 export function GoogleCalendarReturn() {
   const enabled = useFeatureFlag('googleCalendar');
