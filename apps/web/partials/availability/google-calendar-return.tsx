@@ -1,7 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -11,6 +9,7 @@ import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useDeepLinkEffect } from '~/core/deep-links/use-deep-link';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { useFeatureFlag } from '~/core/state/feature-flags';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { calendarReturnCopy } from './google-calendar-copy';
 import { type CalendarReturn, calendarReturn, urlWithoutCalendarReturn } from './google-calendar-return-url';

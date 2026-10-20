@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   disconnectGoogleCalendar: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   getIdentityToken: vi.fn().mockResolvedValue('token'),
   useIdentityToken: () => ({ identityToken: 'token' }),
   usePrivy: () => ({ ready: true, authenticated: true, user: { id: 'user-a' } }),
