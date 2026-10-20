@@ -79,7 +79,7 @@ import {
   useMarkDebateReady,
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
-import { useCarriedLobbyChoice, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
+import { useCarriedLobbyChoice, useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
@@ -357,7 +357,7 @@ export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClient
 
 function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const router = useRouter();
-  const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
+  const { consume: consumeDebateReturnDestination, returnsToLobby } = useDebateReturnNavigation();
   const mediaSession = useDebateMediaSession();
   const mediaSessionKey = debateMediaSessionKey(debateId);
   const {
@@ -3089,6 +3089,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onTakeOverConnection={takeOverConnection}
             readyBusy={markReady.isPending}
             onReady={markLocalReady}
+            leaveLabel={returnsToLobby ? 'Back to lobby' : 'Leave debate'}
             onLeave={leave}
             leaveDisabled={abortDebate.isPending}
           />
@@ -3172,6 +3173,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
+                leaveLabel={returnsToLobby ? 'Back to lobby' : 'Leave debate'}
                 onLeave={leave}
                 leaveDisabled={abortDebate.isPending || recordingModalRoomState === 'saving'}
               />
@@ -3214,6 +3216,7 @@ function DebateRecordingModal({
   canRetryConnection,
   onRetryConnection,
   onLeave,
+  leaveLabel,
   leaveDisabled,
 }: {
   debate: Debate;
@@ -3249,6 +3252,7 @@ function DebateRecordingModal({
   canRetryConnection: boolean;
   onRetryConnection: () => void;
   onLeave: () => void;
+  leaveLabel: string;
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
@@ -3567,13 +3571,14 @@ function DebateRecordingModal({
             />
           )}
           <RecordingCircleButton
-            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
+            ariaLabel={roomState === 'saving' ? 'Saving local recording' : leaveLabel}
+            title={roomState === 'saving' ? 'Saving local recording' : leaveLabel}
             onClick={onLeave}
             disabled={leaveDisabled}
-            className="ml-auto shrink-0"
+            className={cx('ml-auto shrink-0', leaveLabel === 'Back to lobby' && 'w-auto grid-flow-col gap-2 px-3')}
           >
             <LeaveIcon />
+            {leaveLabel === 'Back to lobby' && <span className="text-metadata">{leaveLabel}</span>}
           </RecordingCircleButton>
         </div>
 
@@ -3643,6 +3648,7 @@ function DebateRecordingModal({
           waitingForOpponent={rematchSession !== null && !remoteConsented}
           // The only way out while the room is hidden; a lobby it returns to joins on arrival.
           onLeave={onLeave}
+          leaveLabel={leaveLabel}
           leaveDisabled={leaveDisabled}
         />
       )}
@@ -3939,11 +3945,13 @@ function DebateHandoffNotice({
   opponentName,
   waitingForOpponent,
   onLeave,
+  leaveLabel,
   leaveDisabled,
 }: {
   opponentName: string;
   waitingForOpponent: boolean;
   onLeave: () => void;
+  leaveLabel: string;
   leaveDisabled: boolean;
 }) {
   return (
@@ -3958,7 +3966,7 @@ function DebateHandoffNotice({
               onClick={onLeave}
               disabled={leaveDisabled}
             >
-              Leave
+              {leaveLabel === 'Back to lobby' ? leaveLabel : 'Leave'}
             </SmallButton>
           }
         >

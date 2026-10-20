@@ -43,17 +43,18 @@ function useServerLobbyReturn(): { lobbyId: string | null } | undefined {
 }
 
 /**
- * The leave paths' `consumeDebateReturnDestination`, preferring geo-chat's lobby over this tab's. A
+ * The leave destination and its button state, preferring geo-chat's lobby over this tab's. A
  * lobby joins on arrival by itself (GEO-3337), so nothing here asks it to.
  */
-export function useConsumeDebateReturnDestination() {
+export function useDebateReturnNavigation() {
   const lobby = useServerLobbyReturn();
   const lobbyId = lobby?.lobbyId;
   const known = lobby !== undefined;
-  return React.useCallback(
+  const consume = React.useCallback(
     () => consumeDebateReturnDestination(known ? { lobbyId: lobbyId ?? null } : undefined),
     [known, lobbyId]
   );
+  return { consume, returnsToLobby: Boolean(known ? lobbyId : storedLobbyId()) };
 }
 
 /**

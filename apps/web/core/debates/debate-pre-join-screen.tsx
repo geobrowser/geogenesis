@@ -84,6 +84,7 @@ export function DebatePreScreen({
   readyBusy,
   onReady,
   onLeave,
+  leaveLabel = 'Leave debate',
   leaveDisabled,
 }: {
   claim: string;
@@ -150,6 +151,7 @@ export function DebatePreScreen({
   readyBusy: boolean;
   onReady: () => void;
   onLeave: () => void;
+  leaveLabel?: string;
   leaveDisabled: boolean;
 }) {
   const isMobile = useIsMobileCallLayout();
@@ -491,12 +493,14 @@ export function DebatePreScreen({
 
         <div className="mt-5 flex w-full justify-center">
           <RecordingCircleButton
-            ariaLabel="Leave debate"
-            title="Leave debate"
+            ariaLabel={leaveLabel}
+            title={leaveLabel}
             onClick={onLeave}
             disabled={leaveDisabled}
+            className={leaveLabel === 'Back to lobby' ? 'w-auto grid-flow-col gap-2 px-3' : undefined}
           >
             <LeaveIcon />
+            {leaveLabel === 'Back to lobby' && <span className="text-metadata">{leaveLabel}</span>}
           </RecordingCircleButton>
         </div>
       </main>

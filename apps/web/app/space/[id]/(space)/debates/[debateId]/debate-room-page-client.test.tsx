@@ -145,11 +145,15 @@ vi.mock('~/core/debates/api', async importOriginal => {
 
 // The server-first return lives in lobby-return's own tests; here this tab's record decides.
 vi.mock('~/core/debates/lobbies/lobby-return', async importOriginal => {
-  const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
+  const { consumeDebateReturnDestination, peekDebateReturnDestination } =
+    await import('~/core/debates/debate-return-navigation');
   const { useCarriedLobbyChoice } = await importOriginal<typeof import('~/core/debates/lobbies/lobby-return')>();
   return {
     useCarriedLobbyChoice,
-    useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
+    useDebateReturnNavigation: () => ({
+      consume: consumeDebateReturnDestination,
+      returnsToLobby: Boolean(peekDebateReturnDestination()?.startsWith('/debate/')),
+    }),
   };
 });
 
@@ -6877,7 +6881,9 @@ describe('DebateRoomPageClient', () => {
     rememberLobbyReturnDestination('lobby-1');
     const view = await renderLiveDebate();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    const back = await screen.findByRole('button', { name: 'Back to lobby' });
+    expect(back).toHaveTextContent('Back to lobby');
+    fireEvent.click(back);
 
     await waitFor(() => expect(mocks.abortMutateAsync).toHaveBeenCalledOnce());
     expect(mocks.replace).toHaveBeenCalledWith('/debate/lobby-1');
