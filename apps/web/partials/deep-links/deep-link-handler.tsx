@@ -5,6 +5,7 @@ import { useRoomAccessDeepLink } from '~/core/debates/rooms/use-room-access-deep
 import { useDebatesPanelDeepLink } from '~/core/debates/use-debates-panel-deep-link';
 
 import { AvailabilityDeepLink } from '~/partials/availability/shared-availability';
+import { useGoogleCalendarReturn } from '~/partials/availability/use-google-calendar-return';
 
 /**
  * Every deep link, at one mount point. Adding a link is a hook and a value in `DEEP_LINK_MODALS`,
@@ -20,6 +21,7 @@ export function DeepLinkHandler() {
   useSignInDeepLink();
   useDebatesPanelDeepLink();
   useRoomAccessDeepLink();
+  useGoogleCalendarReturn();
 
   return <AvailabilityDeepLink />;
 }
