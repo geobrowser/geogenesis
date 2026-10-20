@@ -63,6 +63,56 @@ describe('RoomExit (GEO-3315)', () => {
     const { container } = render(<RoomExit>{null}</RoomExit>);
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('keeps a crossfade layer mounted through empty states and interrupted fades', () => {
+    vi.useFakeTimers();
+    const view = render(
+      <RoomExit crossfade layout="inline">
+        {null}
+      </RoomExit>
+    );
+    const layer = view.container.firstElementChild;
+    expect(layer).toHaveStyle({ opacity: 0 });
+
+    view.rerender(
+      <RoomExit crossfade layout="inline">
+        <span>Timer</span>
+      </RoomExit>
+    );
+    const timer = screen.getByText('Timer');
+    expect(timer.parentElement).toBe(layer);
+    expect(layer).toHaveStyle({ opacity: 1 });
+
+    view.rerender(
+      <RoomExit crossfade layout="inline">
+        {null}
+      </RoomExit>
+    );
+    expect(screen.getByText('Timer')).toBe(timer);
+    expect(layer).toHaveStyle({ opacity: 0 });
+    expect(layer).toHaveAttribute('inert');
+
+    act(() => vi.advanceTimersByTime(100));
+    view.rerender(
+      <RoomExit crossfade layout="inline">
+        <span>Timer</span>
+      </RoomExit>
+    );
+    expect(screen.getByText('Timer')).toBe(timer);
+    expect(layer).toHaveStyle({ opacity: 1 });
+    expect(layer).not.toHaveAttribute('inert');
+    expect(layer).toHaveClass('transition-opacity', 'duration-300', 'ease-linear');
+    expect(layer?.className).not.toContain('animate-');
+
+    view.rerender(
+      <RoomExit crossfade layout="inline">
+        {null}
+      </RoomExit>
+    );
+    act(() => vi.advanceTimersByTime(ROOM_EXIT_MS));
+    expect(screen.queryByText('Timer')).not.toBeInTheDocument();
+    expect(view.container.firstElementChild).toBe(layer);
+  });
 });
 
 describe('RoomDim', () => {

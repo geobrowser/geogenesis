@@ -175,15 +175,19 @@ function shown(node: React.ReactNode) {
  *
  * `layout="inline"` drops the box, for a piece that sits in a corner sized to its contents: the
  * turn timer, the muted microphone and End turn (GEO-3347).
+ * `crossfade` keeps the empty wrapper too and transitions its opacity in both directions. Paired
+ * layers can then share one fade without replaying an entrance or snapping on an interrupted exit.
  */
 export function RoomExit({
   children,
   layout = 'fill',
   className,
+  crossfade = false,
 }: {
   children: React.ReactNode;
   layout?: 'fill' | 'inline';
   className?: string;
+  crossfade?: boolean;
 }) {
   const [previous, setPrevious] = React.useState(children);
   const [leaving, setLeaving] = React.useState<React.ReactNode>(null);
@@ -199,7 +203,7 @@ export function RoomExit({
   }, [leaving]);
 
   const content = shown(children) ? children : leaving;
-  if (!shown(content)) return null;
+  if (!shown(content) && !crossfade) return null;
   const isLeaving = !shown(children);
   return (
     <div
@@ -211,9 +215,10 @@ export function RoomExit({
       className={cx(
         'pointer-events-none',
         layout === 'fill' && 'absolute inset-0',
-        isLeaving && PLAYER_EXIT_CLASS,
+        crossfade ? 'transition-opacity duration-300 ease-linear' : isLeaving && PLAYER_EXIT_CLASS,
         className
       )}
+      style={crossfade ? { opacity: isLeaving ? 0 : 1 } : undefined}
     >
       {content}
     </div>

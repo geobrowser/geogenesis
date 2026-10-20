@@ -6667,13 +6667,25 @@ describe('DebateRoomPageClient', () => {
       mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
       await renderLiveDebate(openRoundsRoundOneSpeaking());
       await waitFor(() => expect(timer('local')).not.toBeNull());
+      const activeTimer = timer('local');
+      const timerFace = activeTimer?.firstElementChild;
 
       fireEvent.click(await screen.findByRole('button', { name: 'End turn' }));
 
       await waitFor(() => expectMutedIndicator('local'));
       expect(timer('local')?.closest('[data-room-leaving]')).not.toBeNull();
       const indicator = debateVideoTile('local').querySelector('[data-muted-indicator="true"]');
-      expect(indicator?.parentElement).toHaveClass('animate-[fadeIn_250ms_ease-out_both]');
+      const entering = indicator?.parentElement;
+      const leaving = timer('local')?.closest('[data-room-leaving]');
+      expect(timer('local')).toBe(activeTimer);
+      expect(timer('local')?.firstElementChild).toBe(timerFace);
+      expect(entering).toHaveClass('transition-opacity', 'duration-300', 'ease-linear');
+      expect(leaving).toHaveClass('transition-opacity', 'duration-300', 'ease-linear');
+      expect(entering).toHaveStyle({ opacity: 1 });
+      expect(leaving).toHaveStyle({ opacity: 0 });
+      expect(entering?.parentElement).toHaveClass('mix-blend-plus-lighter');
+      expect(leaving).toHaveClass('mix-blend-plus-lighter');
+      expect(leaving?.parentElement).toHaveClass('isolate');
       await waitFor(() => expect(timer('local')).toBeNull());
     });
 

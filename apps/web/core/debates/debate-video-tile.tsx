@@ -11,7 +11,6 @@ import { Text } from '~/design-system/text';
 import { MutedMicrophoneIndicator } from './debate-room-controls';
 import {
   ROOM_COUNT_ENTER_CLASS,
-  ROOM_ENTER_CLASS,
   ROOM_OUTLINED_STYLE,
   ROOM_UI_FONT,
   RoomDim,
@@ -233,38 +232,40 @@ export function DebateVideoTile({
           )}
         </div>
       )}
-      <div
-        aria-hidden="true"
-        data-inactive-speaker={inactiveIndicatorId}
-        data-visible={showInactiveIndicator ? 'true' : 'false'}
-        className={cx(
-          'pointer-events-none absolute z-20',
-          openRounds ? 'top-[2.4cqw] right-[2.4cqw]' : 'top-3 right-3',
-          !openRounds && (showInactiveIndicator ? 'opacity-100' : 'opacity-0')
-        )}
-      >
-        {openRounds ? (
-          <RoomExit layout="inline">
-            {showInactiveIndicator && (
-              <div className={ROOM_ENTER_CLASS}>
-                <MutedMicrophoneIndicator openRounds />
-              </div>
-            )}
+      {openRounds ? (
+        // Add the two layers inside their own compositing group. With ordinary source-over
+        // blending the translucent discs darken/lighten mid-fade, even at matching opacities.
+        <div className="pointer-events-none absolute top-[2.4cqw] right-[2.4cqw] isolate z-20 grid">
+          <div
+            aria-hidden="true"
+            data-inactive-speaker={inactiveIndicatorId}
+            data-visible={showInactiveIndicator ? 'true' : 'false'}
+            className="col-start-1 row-start-1 mix-blend-plus-lighter"
+          >
+            <RoomExit layout="inline" crossfade>
+              {showInactiveIndicator && <MutedMicrophoneIndicator openRounds />}
+            </RoomExit>
+          </div>
+          <RoomExit layout="inline" crossfade className="col-start-1 row-start-1 mix-blend-plus-lighter">
+            {/* The count-in's number is the countdown, so the timer steps aside for it. */}
+            {!upcoming && countdown}
           </RoomExit>
-        ) : (
-          showInactiveIndicator && <MutedMicrophoneIndicator />
-        )}
-      </div>
-      {/* The count-in's number is the countdown, so the timer steps aside for it. */}
-      {(openRounds || countdown) && (
-        <div
-          className={cx(
-            'pointer-events-none absolute z-20',
-            openRounds ? 'top-[2.4cqw] right-[2.4cqw]' : 'top-3 right-3'
-          )}
-        >
-          {openRounds ? <RoomExit layout="inline">{!upcoming && countdown}</RoomExit> : countdown}
         </div>
+      ) : (
+        <>
+          <div
+            aria-hidden="true"
+            data-inactive-speaker={inactiveIndicatorId}
+            data-visible={showInactiveIndicator ? 'true' : 'false'}
+            className={cx(
+              'pointer-events-none absolute top-3 right-3 z-20',
+              showInactiveIndicator ? 'opacity-100' : 'opacity-0'
+            )}
+          >
+            {showInactiveIndicator && <MutedMicrophoneIndicator />}
+          </div>
+          {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
+        </>
       )}
 
       {/* One row rather than three corners, so nothing can end up underneath anything else.
