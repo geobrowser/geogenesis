@@ -56,7 +56,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: {} }) }));
 
 vi.mock('~/core/io/queries', () => ({
-  getClaimResponseSummaryPage: () => Effect.succeed([]),
+  getClaimResponseSummaryPage: () => Effect.succeed({ items: [], endCursor: null, hasNextPage: false }),
   getEntityResponseCounts: () => Effect.succeed({ positive: 2, negative: 1 }),
   getEntityResponders: () => Effect.succeed([]),
   getSpaces: () => Effect.succeed([]),

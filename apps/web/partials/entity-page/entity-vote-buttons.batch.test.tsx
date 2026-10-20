@@ -112,7 +112,7 @@ beforeEach(() => {
   mocks.getResponders.mockReset();
   mocks.getResponders.mockReturnValue([]);
   mocks.getSummaryPage.mockReset();
-  mocks.getSummaryPage.mockReturnValue([]);
+  mocks.getSummaryPage.mockReturnValue({ items: [], endCursor: null, hasNextPage: false });
   mocks.getViewerResponse.mockReset();
   mocks.getViewerResponse.mockReturnValue('positive');
   mocks.optimisticResponse = undefined;

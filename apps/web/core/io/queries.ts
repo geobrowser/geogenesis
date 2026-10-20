@@ -39,6 +39,7 @@ import {
   decodeActiveResponseDirection,
   entityResponseQueryVariables,
 } from '~/core/responses/entity-response';
+import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import { INTERESTED_VOTE_KIND } from '~/core/topics/interested';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
@@ -650,32 +651,6 @@ function getBatchEntitiesForDebateVotes(entityIds: string[], signal?: AbortContr
   });
 }
 
-/**
- * Walks a paginated `backlinksList` query and collects the distinct source entity ids.
- * `id` is typed loosely because codegen maps the UUID scalar to `any`.
- */
-function collectBacklinkSourceIds<E>(
-  fetchPage: (offset: number) => Effect.Effect<ReadonlyArray<{ fromEntity?: { id: unknown } | null } | null>, E>
-) {
-  return Effect.gen(function* () {
-    const seen = new Set<string>();
-    const ids: string[] = [];
-
-    for (let offset = 0; ; offset += BACKLINKS_PAGE_SIZE) {
-      const page = yield* fetchPage(offset);
-
-      for (const row of page) {
-        const id = row?.fromEntity?.id;
-        if (typeof id !== 'string' || seen.has(id)) continue;
-        seen.add(id);
-        ids.push(id);
-      }
-
-      if (page.length < BACKLINKS_PAGE_SIZE) return ids;
-    }
-  });
-}
-
 function commentConnectionVariables(targetEntityId: string) {
   return {
     targetEntityId,
@@ -752,23 +727,42 @@ export function getCommentEntitiesViaReplyRelations(targetEntityId: string, sign
  */
 export function getDebateVoteEntities(debateEntityId: string, signal?: AbortController['signal']) {
   return Effect.gen(function* () {
-    const ids = yield* collectBacklinkSourceIds(offset =>
-      graphql({
-        query: debateVoteBacklinksPageDocument,
-        decoder: (data: DebateVoteBacklinksPageQuery) => data.entity?.backlinksList ?? [],
-        variables: {
-          id: debateEntityId,
-          votesDebatePropertyId: VOTE_DEBATES_PROPERTY_ID,
-          voteTypeId: VOTE_TYPE_ID,
-          first: BACKLINKS_PAGE_SIZE,
-          offset,
-        },
-        signal,
-      })
-    );
+    // Cursors, not offsets: the graph rejects an offset past 1000.
+    const rows = yield* Effect.tryPromise({
+      try: () =>
+        collectCursorPages(after =>
+          Effect.runPromise(
+            graphql({
+              query: debateVoteBacklinksPageDocument,
+              decoder: (data: DebateVoteBacklinksPageQuery) => ({
+                items: data.entity?.backlinks?.nodes ?? [],
+                endCursor: data.entity?.backlinks?.pageInfo.endCursor ?? null,
+                hasNextPage: data.entity?.backlinks?.pageInfo.hasNextPage ?? false,
+              }),
+              variables: {
+                id: debateEntityId,
+                votesDebatePropertyId: VOTE_DEBATES_PROPERTY_ID,
+                voteTypeId: VOTE_TYPE_ID,
+                first: BACKLINKS_PAGE_SIZE,
+                after,
+              },
+              signal,
+            })
+          )
+        ),
+      catch: error => (error instanceof Error ? error : new Error(String(error))),
+    });
 
+    // A vote can link from more than one space, so the same source can appear twice.
+    const ids = [...new Set(rows.flatMap(row => (typeof row?.fromEntity?.id === 'string' ? [row.fromEntity.id] : [])))];
     if (ids.length === 0) return [] as Entity[];
-    return yield* getBatchEntitiesForDebateVotes(ids, signal);
+
+    // `entities` without `first` returns at most 100 rows, so hydrate in id batches.
+    const pages = yield* Effect.all(
+      batchEntityIds(ids).map(batch => getBatchEntitiesForDebateVotes(batch, signal)),
+      { concurrency: ENTITY_ID_BATCH_CONCURRENCY }
+    );
+    return pages.flat();
   });
 }
 
@@ -1569,19 +1563,22 @@ export type ClaimResponseSummaryRow = {
 export function getClaimResponseSummaryPage(
   filter: UserVoteFilter,
   first: number,
-  offset: number,
+  after: string | undefined,
   signal?: AbortController['signal']
 ) {
   return graphql({
     query: claimResponseSummariesQuery,
-    decoder: data =>
-      (data.userVotes ?? []).map((vote): ClaimResponseSummaryRow => ({
+    decoder: (data): CursorPage<ClaimResponseSummaryRow> => ({
+      items: (data.userVotesConnection?.nodes ?? []).map(vote => ({
         userId: String(vote.userId),
         objectId: String(vote.objectId),
         voteType: vote.voteType,
         voteKind: vote.voteKind,
       })),
-    variables: { filter, first, offset },
+      endCursor: data.userVotesConnection?.pageInfo.endCursor ?? null,
+      hasNextPage: data.userVotesConnection?.pageInfo.hasNextPage ?? false,
+    }),
+    variables: { filter, first, after },
     signal,
   });
 }
