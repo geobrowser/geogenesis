@@ -1,7 +1,5 @@
 'use client';
 
-import { useLoginWithEmail } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -9,6 +7,7 @@ import cx from 'classnames';
 import { currentAuthAttempt, openAuthAttempt } from '~/core/auth-attempt';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { beginPrivyAuth, completePrivyAuth } from '~/core/privy-auth-events';
+import { useLoginWithEmail } from '~/core/wallet/auth-hooks';
 
 import { ERROR_CLASS, FORM_STACK_CLASS, PRIMARY_BUTTON_CLASS, SUBTEXT_CLASS, fieldClass } from './email-capture-styles';
 

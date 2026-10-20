@@ -1,7 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -18,6 +16,7 @@ import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 import { useLocalVoteCount } from '~/core/state/local-votes';
 import { timeoutSignal } from '~/core/timeout-signal';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';

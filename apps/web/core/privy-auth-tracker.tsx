@@ -1,8 +1,8 @@
 'use client';
 
-import { useLogout, usePrivy, usePrivyLogin } from '@geogenesis/auth';
-
 import { useEffect, useRef } from 'react';
+
+import { useLogout, usePrivy, usePrivyLogin } from '~/core/wallet/auth-hooks';
 
 import { openAuthAttempt } from './auth-attempt';
 import { useOnSignOut } from './hooks/use-on-sign-out';
