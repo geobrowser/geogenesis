@@ -73,6 +73,7 @@ function ExploreForYouFeed({ walletAddress }: { walletAddress: string | null }) 
       initialSort="for-you"
       sortOptions={FOR_YOU_SORT_OPTIONS}
       followedTopicIds={followedTopicIds}
+      pendingTopicFollows={heldPicks.length > 0}
       walletAddress={walletAddress}
     />
   );
