@@ -240,14 +240,8 @@ export function DebatesBrowseFeed({
   const openPanel = useAtomValue(debateFeedPanelAtom);
   const setFeedPanel = useSetAtom(openDebateFeedPanelAtom);
 
-  /*
-   * Cleared on unmount, which is what `useState` used to do for free.
-   *
-   * Without it the slot stays claimed after the feed is gone, and the panel is open again the next
-   * time the feed mounts. `useExclusiveProposalPanel` clears its slot on unmount for the same
-   * reason; the app-level reset on a route change is the other half, for the explore card, which
-   * navigation unmounts before it can clear anything.
-   */
+  // Cleared on unmount, which `useState` did for free; otherwise the panel reopens with the next feed.
+  // Not on a pathname change: the URL follows the debate being watched as the feed scrolls.
   const store = useStore();
   React.useEffect(
     () => () => {
