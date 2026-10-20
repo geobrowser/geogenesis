@@ -26,22 +26,36 @@ const windows = vi.hoisted(() => ({
   variables: [] as Record<string, unknown>[],
   operations: [] as string[],
   responder: null as null | ((operation: string, variables: Record<string, unknown>) => unknown),
+  /**
+   * Hand each response to the fetcher's own `decoder`, as the real client does, instead of
+   * returning it as the decoded page. For responses shaped like the graph's raw reply.
+   */
+  decode: false,
 }));
 
 vi.mock('~/core/io/graphql-client', () => ({
-  graphql: ({ query, variables }: { query: any; variables: Record<string, unknown> }) => {
+  graphql: ({
+    query,
+    variables,
+    decoder,
+  }: {
+    query: any;
+    variables: Record<string, unknown>;
+    decoder: (data: unknown) => unknown;
+  }) => {
     const operation =
       query.definitions.find((definition: any) => definition.kind === 'OperationDefinition')?.name?.value ?? '';
     windows.operations.push(operation);
+    const respond = (data: unknown) => Effect.succeed(windows.decode ? decoder(data) : data);
     if (windows.responder) {
       windows.calls += 1;
       windows.variables.push(variables);
-      return Effect.succeed(windows.responder(operation, variables));
+      return respond(windows.responder(operation, variables));
     }
     const next = windows.queue[Math.min(windows.calls, windows.queue.length - 1)];
     windows.calls += 1;
     windows.variables.push(variables);
-    return Effect.succeed(next);
+    return respond(next);
   },
 }));
 
@@ -108,6 +122,7 @@ beforeEach(() => {
   windows.variables = [];
   windows.operations = [];
   windows.responder = null;
+  windows.decode = false;
 });
 
 /**
@@ -462,6 +477,97 @@ describe("a topic page's feed from the ranked topic table (GEO-3092)", () => {
     expect(offsets).toEqual([0, 0, 30]);
     // A cap below `offset + first` would leave the deeper window short.
     expect(caps).toEqual([30, 30, 60]);
+  });
+
+  describe("through the connection's own decoder", () => {
+    /** A valid entity id; the decoder drops a node whose ids are not. */
+    const hexId = (prefix: string, index: number) => `${prefix}${index.toString(16).padStart(31, '0')}`;
+
+    /** One node as the graph returns it: a named Claim typed in the feed's space. */
+    function rawNode(id: string) {
+      return {
+        id,
+        name: `entity-${id}`,
+        description: null,
+        spaceIds: [SPACE],
+        createdAt: '1780000000',
+        backlinks: { totalCount: 0 },
+        types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
+        valuesList: [],
+        relationsList: [
+          {
+            id: `f${id.slice(1)}`,
+            spaceId: SPACE,
+            position: null,
+            verified: null,
+            entityId: `d${id.slice(1)}`,
+            fromEntity: { id, name: `entity-${id}` },
+            toEntity: { id: CLAIM_TYPE_ID, name: 'Claim', types: [], valuesList: [] },
+            toSpaceId: null,
+            type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
+          },
+        ],
+      };
+    }
+
+    /** The table's raw reply for an offset window over `rows`; `null` is a node that won't decode. */
+    function serveRaw(rows: Array<string | null>) {
+      windows.decode = true;
+      windows.responder = (_operation, variables) => {
+        const offset = Number(variables.offset);
+        const nodes = rows.slice(offset, offset + Number(variables.first));
+        return {
+          entitiesRankedForTopicsConnection: { nodes: nodes.map(id => (id === null ? { id: null } : rawNode(id))) },
+        };
+      };
+    }
+
+    async function scroll() {
+      const pages: string[][] = [];
+      const offsets: unknown[] = [];
+      let cursor: string | null = null;
+      do {
+        windows.variables = [];
+        const page = await fetchExploreFeed({ ...topicArgs, sort: 'new', cursor });
+        pages.push(page.items.map(item => item.entityId));
+        offsets.push(...windows.variables.map(variables => variables.offset));
+        cursor = page.nextCursor;
+      } while (cursor && pages.length < 6);
+      return { pages, offsets, endedWithCursor: cursor !== null };
+    }
+
+    it('pages past a full window, and counts a node it could not decode toward the next offset', async () => {
+      // 30 is New's window. Row 5 does not decode, so the first window yields 29 cards from 30 nodes.
+      const ids = Array.from({ length: 35 }, (_, index) => hexId('e', index));
+      serveRaw(ids.map((id, index) => (index === 5 ? null : id)));
+
+      const { pages, offsets, endedWithCursor } = await scroll();
+
+      const expected = ids.filter((_, index) => index !== 5);
+      expect(pages.flat()).toEqual(expected);
+      // Offset 29 would serve row 29 twice; the next window starts at the 30th node, not the 29th card.
+      expect(offsets).toContain(30);
+      expect(offsets).not.toContain(29);
+      expect(endedWithCursor).toBe(false);
+    });
+
+    it('ends the feed on a short window', async () => {
+      const ids = [1, 2, 3].map(index => hexId('e', index));
+      serveRaw(ids);
+
+      const { pages, offsets } = await scroll();
+
+      expect(pages).toEqual([ids]);
+      expect(offsets).toEqual([0]);
+    });
+
+    it('serves an empty, finished page when the topic has nothing', async () => {
+      serveRaw([]);
+
+      const page = await fetchExploreFeed({ ...topicArgs, sort: 'new' });
+
+      expect(page).toMatchObject({ items: [], nextCursor: null });
+    });
   });
 
   it('leaves Top on its own query, scoped by the topic filter', async () => {
