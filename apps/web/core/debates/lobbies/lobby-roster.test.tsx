@@ -524,6 +524,37 @@ describe('LobbyPeople video grid (GEO-3399)', () => {
     expect(tileNames()).toContain('S11');
   });
 
+  it('keeps an open disagreements popup open when the grid goes compact at 10 speakers', () => {
+    const nine = lobby([...room(8), member('Daniel')]);
+    const ten = lobby([...room(9), member('Daniel')]);
+    const { rerender } = render(gridPeople(nine));
+    expect(screen.getByTestId('lobby-speaker-grid')).toHaveAttribute('data-columns', '3');
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 4 claims with Daniel' }));
+    expect(screen.getByTestId('lobby-disagreements')).toBeInTheDocument();
+
+    rerender(gridPeople(ten));
+    expect(screen.getByTestId('lobby-speaker-grid')).toHaveAttribute('data-columns', '4');
+    expect(screen.getByTestId('lobby-disagreements')).toBeInTheDocument();
+  });
+
+  it('holds the speaker whose strip thumbnail has focus on a phone', () => {
+    mocks.phone = true;
+    const target = document.createElement('div');
+    document.body.append(target);
+    const view = lobby(room(11));
+    const strip = (speaking: string[] = []) => (
+      <LobbySlotsProvider value={{ speakerStrip: target }}>{gridPeople(view, { speaking })}</LobbySlotsProvider>
+    );
+    const { rerender } = render(strip());
+    // S08 would be first to give up a tile: quiet, and the latest in the roster on the grid.
+    act(() => within(target).getByRole('button', { name: 'S08, show people' }).focus());
+
+    rerender(strip(['S10']));
+    expect(tileNames()).toEqual(expect.arrayContaining(['S08', 'S10']));
+    expect(within(target).getByRole('button', { name: 'S08, show people' })).toHaveFocus();
+    target.remove();
+  });
+
   it('draws a phone’s speaker strip into the Claims slot, and a tap there shows People', () => {
     mocks.phone = true;
     const target = document.createElement('div');

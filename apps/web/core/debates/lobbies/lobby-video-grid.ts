@@ -79,8 +79,11 @@ function placeTiles(
   const onGrid = new Set(slots.filter((id): id is string => id !== null));
   const notShown = speakers.filter(speaker => !onGrid.has(speaker.id));
 
-  // Room for everyone: gaps close up, newcomers go after, in roster order.
-  if (speakers.length <= cap) return [...onGrid, ...notShown.map(speaker => speaker.id)];
+  // Room for everyone: gaps close up, newcomers go after, in roster order. Someone held in the row
+  // stays there until the hold ends, rather than their chip being swapped for a tile under focus.
+  if (speakers.length <= cap) {
+    return [...onGrid, ...notShown.filter(speaker => !speaker.held).map(speaker => speaker.id)];
+  }
 
   // First time over the cap (a fresh page with a full room): pick by priority, then lay the picks out
   // in roster order so the grid reads like the roster.

@@ -150,6 +150,19 @@ describe('nextVideoGrid', () => {
     expect(grid.shown).toEqual(['s0', 's3', 's2']);
   });
 
+  it('leaves a held chip in the row when everyone would otherwise fit, until the hold ends', () => {
+    let grid = step(EMPTY_VIDEO_GRID, room(4));
+    expect(grid.shown).toEqual(['s0', 's1', 's2']);
+    const held = room(4, index => ({ held: index === 3 })).filter(entry => entry.id !== 's1');
+    grid = step(grid, held);
+    expect(grid.shown).toEqual(['s0', 's2']);
+    grid = step(
+      grid,
+      room(4).filter(entry => entry.id !== 's1')
+    );
+    expect(grid.shown).toEqual(['s0', 's2', 's3']);
+  });
+
   it('fills a gap with someone who is not held', () => {
     let grid = step(EMPTY_VIDEO_GRID, room(5));
     grid = step(

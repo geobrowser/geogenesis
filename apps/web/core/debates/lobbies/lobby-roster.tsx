@@ -220,11 +220,13 @@ function SpeakerTile({
   const states = useLobbyVoiceStates();
   const voice = givenVoice ?? speakerVoice(states, member);
   const small = phone || Boolean(grid?.compact);
+  // The phone's one status line: on a phone, or in the compact 4-across desktop tiles.
+  const oneLine = phone || Boolean(grid?.compact);
   const name = personName(member);
   const label = personLabel(member, isSelf);
   const you =
     isSelf && !phone ? (
-      <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
+      <Text as="span" variant="footnote" color="grey-04" className={cx('shrink-0', grid && 'ml-auto pl-2')}>
         You
       </Text>
     ) : null;
@@ -238,6 +240,7 @@ function SpeakerTile({
       disagreements={disagreements}
       line={grid?.compact}
       align={grid ? 'start' : 'center'}
+      trigger={!grid}
     />
   );
 
@@ -324,8 +327,20 @@ function SpeakerTile({
         </button>
       </LobbyPersonMenu>
       {grid ? (
-        <div className="flex min-w-0 items-center justify-between gap-2 px-1">
+        <div className="flex min-w-0 items-center px-1">
           {statusLine}
+          {disagreements !== null ? (
+            // One place in the tree for both layouts; only the look changes (see TileStatus).
+            <span className={cx('flex min-w-0', !oneLine && 'ml-auto shrink-0 pl-2')}>
+              <LobbyDisagreementsTrigger
+                lobby={lobby}
+                member={member}
+                count={disagreements}
+                variant={oneLine ? 'line' : 'pill'}
+                hidden={oneLine && voice.speaking}
+              />
+            </span>
+          ) : null}
           {you}
         </div>
       ) : (
@@ -354,6 +369,7 @@ function TileStatus({
   disagreements,
   line: oneLine = false,
   align = 'center',
+  trigger = true,
 }: {
   lobby: LobbyPageView;
   member: DebateLobbyMember;
@@ -364,6 +380,11 @@ function TileStatus({
   /** The phone's one short line, wherever the tile is. */
   line?: boolean;
   align?: 'center' | 'start';
+  /**
+   * Draw the disagreements trigger here. Video tiles draw it themselves, at one place in the tile,
+   * so switching between the one-line and full layouts does not remount it and close its popup.
+   */
+  trigger?: boolean;
 }) {
   const phone = useIsPhoneLayout();
   const justify = align === 'start' ? 'justify-start' : 'justify-center';
@@ -375,7 +396,7 @@ function TileStatus({
         className={cx('flex h-[13px] max-w-full min-w-0 items-center text-[11px] leading-[13px]', justify)}
       >
         {/* Mounted while they speak too: the trigger owns the sheet, which must not close mid-read. */}
-        {disagreements !== null ? (
+        {trigger && disagreements !== null ? (
           <LobbyDisagreementsTrigger
             lobby={lobby}
             member={member}
@@ -417,7 +438,7 @@ function TileStatus({
           </span>
         ) : null}
       </span>
-      {disagreements !== null ? (
+      {trigger && disagreements !== null ? (
         <LobbyDisagreementsTrigger lobby={lobby} member={member} count={disagreements} variant="pill" />
       ) : null}
     </>
@@ -630,7 +651,7 @@ function SpeakerVideoGrid({
       ) : null}
       {phone ? (
         <LobbySlot name="speakerStrip" inPlace={false}>
-          <LobbySpeakerStrip tiles={tiles} overflow={overflow.length} />
+          <LobbySpeakerStrip tiles={tiles} overflow={overflow.length} holdFocus={holdFocus} />
         </LobbySlot>
       ) : null}
     </section>
@@ -642,7 +663,16 @@ function SpeakerVideoGrid({
  * stays in view while you vote. Drawn by the grid into the claims panel's slot; tapping one goes
  * back to People.
  */
-function LobbySpeakerStrip({ tiles, overflow }: { tiles: GridPerson[]; overflow: number }) {
+function LobbySpeakerStrip({
+  tiles,
+  overflow,
+  holdFocus,
+}: {
+  tiles: GridPerson[];
+  overflow: number;
+  /** A focused thumbnail holds its speaker's tile, as a focused tile does. */
+  holdFocus: (id: string) => { onFocus: () => void; onBlur: () => void };
+}) {
   const showPeople = React.useContext(LobbyShowPeopleContext) ?? undefined;
   const analytics = debateActionAnalyticsAttributes('hub', 'Lobby speaker strip');
 
@@ -659,6 +689,7 @@ function LobbySpeakerStrip({ tiles, overflow }: { tiles: GridPerson[]; overflow:
           type="button"
           aria-label={`${personLabel(member, props.isSelf)}, show people`}
           {...analytics}
+          {...holdFocus(member.user_id)}
           data-speaking={voice.speaking || undefined}
           onClick={showPeople}
           className={cx(
