@@ -1,6 +1,8 @@
 import { type DocumentNode, type FieldNode, Kind, type OperationDefinitionNode, print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
+import { topicFeedTypeCountsDocument } from '~/core/topics/browse/topic-feed-type-counts-document';
+
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
@@ -8,7 +10,7 @@ import {
   exploreEntitiesConnectionDocument,
   exploreEntitiesNoPageInfoConnectionDocument,
 } from './explore-entities-document';
-import { exploreTopicFeedConnectionDocument, topicFeedTypeCountsDocument } from './explore-topic-feed-document';
+import { exploreTopicFeedConnectionDocument } from './explore-topic-feed-document';
 
 function operation(doc: DocumentNode): OperationDefinitionNode {
   const op = doc.definitions.find(d => d.kind === Kind.OPERATION_DEFINITION);

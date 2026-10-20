@@ -130,7 +130,7 @@ export type ExploreWindowReorder = (
 ) => Promise<{ rows: ExploreFeedRow[]; feed: FeedDescriptor } | null>;
 
 /** The orders a topic page's feed can be served in from gaia's topic ranking table (GEO-3092). */
-export type ExploreRankedTopicFeedSort = Extract<ExploreSort, 'best' | 'new'>;
+type RankedTopicFeedSort = Extract<ExploreSort, 'best' | 'new'>;
 
 // Entities we never want to surface in any feed.
 // - `System type` relation to the `System` entity: marks system-managed rows.
@@ -237,6 +237,31 @@ function decodeExploreBest(data: {
   return decodeConnection(data.entitiesRankedForFeedConnection ?? null);
 }
 
+type RankedWindowArgs = {
+  spaceIds: string[];
+  time: ExploreTime;
+  limit: number;
+  offset: number;
+  typeIds: readonly string[];
+};
+
+/**
+ * The variables shared by the offset-paged ranked connections: Best by type, For you's streams and
+ * a topic page's feed. Each also takes a per-type or per-topic cap, and that cap must be at least
+ * `offset + first`, or a page silently comes back short.
+ */
+function rankedWindowVariables(args: RankedWindowArgs) {
+  const t = timeThresholdSec(args.time);
+  return {
+    first: args.limit,
+    offset: args.offset,
+    spaceIds: args.spaceIds,
+    typeIds: [...args.typeIds],
+    createdAfter: t != null ? String(t) : undefined,
+    spaceIdsForLists: args.spaceIds,
+  };
+}
+
 /**
  * "Best", type-filtered by the server (GEO-2885).
  *
@@ -251,16 +276,12 @@ function decodeExploreBest(data: {
  * smallest provably exact value. It is computed here, from numbers this function owns, rather
  * than defaulted in the document — see `exploreBestByTypeConnectionDocument`.
  */
-async function fetchBestEntitiesByTypePage(args: {
-  spaceIds: string[];
-  time: ExploreTime;
-  limit: number;
-  offset: number;
-  typeIds: readonly string[];
-  requireDebateTagOnClaims?: boolean;
-  entityFilter?: EntityFilter;
-}): Promise<ExploreEntitiesPageResponse> {
-  const t = timeThresholdSec(args.time);
+async function fetchBestEntitiesByTypePage(
+  args: RankedWindowArgs & {
+    requireDebateTagOnClaims?: boolean;
+    entityFilter?: EntityFilter;
+  }
+): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
       query: exploreBestByTypeConnectionDocument,
@@ -272,17 +293,12 @@ async function fetchBestEntitiesByTypePage(args: {
         return { ...page, endCursor: String(args.offset + page.entities.length) };
       },
       variables: {
-        first: args.limit,
-        offset: args.offset,
-        spaceIds: args.spaceIds,
-        typeIds: [...args.typeIds],
+        ...rankedWindowVariables(args),
         maxPerType: args.offset + args.limit,
-        createdAfter: t != null ? String(t) : undefined,
         filter: combineEntityFilters(
           args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
           args.entityFilter
         ),
-        spaceIdsForLists: args.spaceIds,
       },
     })
   );
@@ -292,17 +308,13 @@ async function fetchBestEntitiesByTypePage(args: {
  * One window of a topic page's feed (GEO-3092), ordered by gaia's topic ranking table. Entities
  * must carry every topic in `topicIds`. A `maxPerTopic` below `offset + first` returns short.
  */
-async function fetchRankedTopicFeedPage(args: {
-  topicIds: readonly string[];
-  sort: ExploreRankedTopicFeedSort;
-  spaceIds: string[];
-  time: ExploreTime;
-  limit: number;
-  offset: number;
-  typeIds: readonly string[];
-  requireDebateTagOnClaims?: boolean;
-}): Promise<ExploreEntitiesPageResponse> {
-  const t = timeThresholdSec(args.time);
+async function fetchRankedTopicFeedPage(
+  args: RankedWindowArgs & {
+    topicIds: readonly string[];
+    sort: RankedTopicFeedSort;
+    requireDebateTagOnClaims?: boolean;
+  }
+): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
       query: exploreTopicFeedConnectionDocument,
@@ -314,16 +326,11 @@ async function fetchRankedTopicFeedPage(args: {
         return { ...page, endCursor: String(end), hasNextPage: nodes.length >= args.limit };
       },
       variables: {
-        first: args.limit,
-        offset: args.offset,
+        ...rankedWindowVariables(args),
         topicIds: [...args.topicIds],
-        spaceIds: args.spaceIds,
-        typeIds: [...args.typeIds],
         maxPerTopic: args.offset + args.limit,
-        createdAfter: t != null ? String(t) : undefined,
         debateTaggedClaims: args.requireDebateTagOnClaims ?? false,
         sortBy: args.sort,
-        spaceIdsForLists: args.spaceIds,
       },
     })
   );
@@ -343,19 +350,15 @@ type ForYouStreamPage = {
  * A For you stream (GEO-3083) with each row's followed topics, scoped and filtered like
  * `fetchBestEntitiesByTypePage`. A per-topic or per-type cap below `offset + first` returns short.
  */
-async function fetchForYouStreamPage(args: {
-  /** `best` also selects each row's followed topics; `plainBest` doesn't, for a schema without them. */
-  stream: 'topics' | 'best' | 'plainBest';
-  topicIds: readonly string[];
-  spaceIds: string[];
-  time: ExploreTime;
-  limit: number;
-  offset: number;
-  typeIds: readonly string[];
-  requireDebateTagOnClaims?: boolean;
-  entityFilter?: EntityFilter;
-}): Promise<ForYouStreamPage> {
-  const t = timeThresholdSec(args.time);
+async function fetchForYouStreamPage(
+  args: RankedWindowArgs & {
+    /** `best` also selects each row's followed topics; `plainBest` doesn't, for a schema without them. */
+    stream: 'topics' | 'best' | 'plainBest';
+    topicIds: readonly string[];
+    requireDebateTagOnClaims?: boolean;
+    entityFilter?: EntityFilter;
+  }
+): Promise<ForYouStreamPage> {
   const connection =
     args.stream === 'topics' ? 'entitiesRankedForTopicsConnection' : 'entitiesRankedForFeedByTypeConnection';
   return Effect.runPromise(
@@ -385,15 +388,11 @@ async function fetchForYouStreamPage(args: {
         return { entities, rawIndex, matchedTopicIds, fetched: nodes.length };
       },
       variables: {
-        first: args.limit,
-        offset: args.offset,
+        ...rankedWindowVariables(args),
         ...(args.stream === 'plainBest' ? {} : { topicIds: [...args.topicIds] }),
-        spaceIds: args.spaceIds,
-        typeIds: [...args.typeIds],
         ...(args.stream === 'topics'
           ? { maxPerTopic: args.offset + args.limit }
           : { maxPerType: args.offset + args.limit }),
-        createdAfter: t != null ? String(t) : undefined,
         // The topic walk applies the debate-tag rule itself (gaia#984). As a filter after the walk it
         // would drop rows past each topic's cap and leave pages nearly empty.
         ...(args.stream === 'topics' ? { debateTaggedClaims: args.requireDebateTagOnClaims ?? false } : {}),
@@ -403,7 +402,6 @@ async function fetchForYouStreamPage(args: {
             : undefined,
           args.entityFilter
         ),
-        spaceIdsForLists: args.spaceIds,
       },
     })
   );

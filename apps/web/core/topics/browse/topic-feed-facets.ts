@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { topicFeedTypeCountsDocument } from '~/core/explore/explore-topic-feed-document';
 import { buildExploreFeedFilter } from '~/core/explore/fetch-explore-feed';
 import type { EntityFilter, RelationFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
@@ -12,6 +11,7 @@ import { createPromiseTtlCache } from '~/core/utils/promise-ttl-cache';
 
 import { spaceTopicCountDocument } from './space-topic-count-document';
 import { topicFeedFilter, topicsRelationFilter } from './topic-feed-filter';
+import { topicFeedTypeCountsDocument } from './topic-feed-type-counts-document';
 import { TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-feed-types';
 
 export type TopicFeedFacet = { id: string; name: string | null; count: number };
@@ -193,11 +193,10 @@ export async function fetchTopicFeedCompositionCounts({
   const rows = await Effect.runPromise(
     graphql({
       query: topicFeedTypeCountsDocument,
-      decoder: (data: { topicFeedTypeCounts?: Array<{ typeId?: unknown; entityCount?: unknown } | null> | null }) =>
-        data.topicFeedTypeCounts ?? [],
+      decoder: data => data.topicFeedTypeCounts ?? [],
       variables: {
         topicIds: [topicId],
-        typeIds: TOPIC_FEED_ENTITY_TYPE_IDS,
+        typeIds: [...TOPIC_FEED_ENTITY_TYPE_IDS],
         spaceIds,
         // The topic feed shows every claim, curated for debate or not.
         debateTaggedClaims: false,
@@ -221,10 +220,9 @@ export async function fetchTopicFeedCompositionCounts({
 /**
  * Per-type counts for a topic space's feed: every named entity of each feed type in the space.
  *
- * Counted per type with `totalCount` rather than from the complete population the Topic page
- * sorts locally. A topic's population is the entities *tagged* with it, which stays small; a
- * space's is everything in it, and the large topic spaces hold 20–30 thousand — far too many to
- * download for a header. One aliased request carries all eleven counts.
+ * Counted per type with `totalCount`, not from gaia's topic ranking table as a topic page's are:
+ * a space's feed is everything in the space, not the entities tagged with one topic. One aliased
+ * request carries all eleven counts.
  */
 export async function fetchSpaceTopicCompositionCounts({
   spaceId,

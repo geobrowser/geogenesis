@@ -50,24 +50,3 @@ const EXPLORE_TOPIC_FEED_SOURCE = /* GraphQL */ `
 `;
 
 export const exploreTopicFeedConnectionDocument = parse(EXPLORE_TOPIC_FEED_SOURCE) as TypedDocumentNode<any, any>;
-
-/**
- * Per-type entity counts for the same population (gaia#985), for a topic page's composition strip.
- * A type with no entities is absent from the list rather than returned as zero.
- */
-const TOPIC_FEED_TYPE_COUNTS_SOURCE = /* GraphQL */ `
-  query TopicFeedTypeCounts($topicIds: [UUID!], $typeIds: [UUID!], $spaceIds: [UUID!], $debateTaggedClaims: Boolean) {
-    topicFeedTypeCounts(
-      topicIds: $topicIds
-      typeIds: $typeIds
-      spaceIds: $spaceIds
-      debateTaggedClaims: $debateTaggedClaims
-      matchAll: true
-    ) {
-      typeId
-      entityCount
-    }
-  }
-`;
-
-export const topicFeedTypeCountsDocument = parse(TOPIC_FEED_TYPE_COUNTS_SOURCE) as TypedDocumentNode<any, any>;
