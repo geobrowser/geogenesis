@@ -35,6 +35,8 @@ export type MarketingEventParams = {
   user_id?: string;
   debate_id?: string;
   space_id?: string;
+  /** The space's display name, when the control knows it. Only on `geo_join_space`. */
+  space_name?: string;
   /** The voted entity: a claim or other entity, or the debate for a winner vote. */
   target_id?: string;
   vote_kind?: 'debate_winner' | 'stance' | 'curation';
@@ -54,6 +56,7 @@ const EMPTY_PARAMS: { [K in keyof Required<MarketingEventParams>]: undefined } =
   user_id: undefined,
   debate_id: undefined,
   space_id: undefined,
+  space_name: undefined,
   target_id: undefined,
   vote_kind: undefined,
   share_method: undefined,

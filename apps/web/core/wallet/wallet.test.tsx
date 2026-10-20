@@ -12,26 +12,14 @@ const mocks = vi.hoisted(() => ({
   saveSignIn: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
-  WagmiProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+vi.mock('~/core/wallet/auth-hooks', () => ({
   useGeoLogin: () => ({ login: mocks.login }),
   usePrivy: () => ({ authenticated: false }),
 }));
-vi.mock('@geogenesis/auth/wallet', () => ({
-  createGeoWalletConfig: () => ({}),
-  createMockConfig: () => ({}),
-}));
 vi.mock('../analytics', () => ({ trackPrivyAuth: vi.fn() }));
-vi.mock('../environment', () => ({
-  Environment: {
-    variables: { isTestEnv: true, walletConnectProjectId: '' },
-    getConfig: () => ({ rpc: '' }),
-  },
-}));
 vi.mock('../hooks/use-prepare-onboarding', () => ({
   usePrepareOnboarding: () => mocks.prepareOnboarding,
 }));
-vi.mock('./geo-chain', () => ({ GEOGENESIS: {} }));
 vi.mock('../hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.saveSignIn }));
 
 afterEach(() => {

@@ -1,7 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -17,6 +15,7 @@ import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useFollowEntities } from '~/core/topics/use-follow-topics';
 import { useFollowedEntities } from '~/core/topics/use-followed-topics';
 import { normId } from '~/core/utils/norm-id';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { CreateSmall } from '~/design-system/icons/create-small';
 import { TickSmall } from '~/design-system/icons/tick-small';

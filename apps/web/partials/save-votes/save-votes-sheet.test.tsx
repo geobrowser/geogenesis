@@ -38,7 +38,7 @@ const mocks = vi.hoisted(() => ({
   anyModalOpen: false,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: false }),
 }));
 vi.mock('~/core/hooks/use-any-modal-open', () => ({ useAnyModalOpen: () => mocks.anyModalOpen }));

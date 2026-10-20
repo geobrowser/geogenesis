@@ -59,6 +59,8 @@ type InteractionBarProps = {
    * at all — today only the full-screen feed's Remove debate (GEO-2785), for the few who may.
    */
   overflow?: React.ReactNode;
+  /** Passed to `EntityVoteButtons`: whether the bar is near enough to the viewport to load counts. */
+  nearViewport?: boolean;
   className?: string;
 };
 
@@ -92,6 +94,7 @@ export function DebateInteractionBar({
   shareOpen,
   responseKind = 'curation',
   overflow,
+  nearViewport,
   className,
 }: InteractionBarProps) {
   // Defined at all means comments open in the app's global panel rather than in one this bar's
@@ -116,6 +119,7 @@ export function DebateInteractionBar({
           spaceId={spaceId}
           responseKind={voteResponseKind}
           presentation="debate-vertical"
+          nearViewport={nearViewport}
         />
         <CircleAction
           label={String(commentCount)}
@@ -157,6 +161,7 @@ export function DebateInteractionBar({
         spaceId={spaceId}
         responseKind={voteResponseKind}
         presentation="debate-horizontal"
+        nearViewport={nearViewport}
       />
       <PillAction
         onClick={onComment}

@@ -1,12 +1,11 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
 import { onSignInAbandoned } from '~/core/auth/sign-in-abandoned';
 import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
 

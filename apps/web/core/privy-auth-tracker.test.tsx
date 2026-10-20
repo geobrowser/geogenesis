@@ -43,7 +43,7 @@ function useSubscription(handlers: Handlers) {
   }, [handlers]);
   return { login: mocks.login };
 }
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({
     ready: true,
     authenticated: mocks.authenticated,

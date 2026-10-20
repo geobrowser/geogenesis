@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/debates/rematch-panel-context', () => ({ useRematchPanelContext: () => ({}) }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
   usePrivy: () => ({ authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),

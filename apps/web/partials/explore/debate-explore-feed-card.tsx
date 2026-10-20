@@ -390,6 +390,8 @@ export function DebateExploreFeedCard({
     onClaims: mediaMounted ? () => openClaims() : undefined,
     onShare: mediaMounted ? share.onOpen : undefined,
     shareOpen: share.open,
+    // The feed pre-mounts cards far below the fold; their vote counts load as they approach.
+    nearViewport,
   };
 
   return (

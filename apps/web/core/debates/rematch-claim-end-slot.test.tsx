@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   data: { claims: [] as DebateRematchClaim[], excluded_claim_ids: [] as string[] },
   indexing: { status: 'idle', pending: undefined as undefined | { expectedResponse: 'positive' | 'negative' | null } },
   matchmaking: vi.fn(),
-  spaces: { spacesById: new Map<string, { type: 'DAO' | 'PERSONAL' }>(), isLoading: false, isPlaceholderData: false },
+  spaces: { spacesById: new Map<string, { type: 'DAO' | 'PERSONAL' }>(), isLoading: false },
 }));
 vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname }));
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({ useSpacesByIds: () => mocks.spaces }));
@@ -39,7 +39,7 @@ function View({ picker = true, viewerPosition = true }: { picker?: boolean; view
 }
 beforeEach(() => {
   mocks.pathname = '/debate/room-1';
-  mocks.spaces = { spacesById: new Map([['space-1', { type: 'DAO' }]]), isLoading: false, isPlaceholderData: false };
+  mocks.spaces = { spacesById: new Map([['space-1', { type: 'DAO' }]]), isLoading: false };
   mocks.indexing = { status: 'idle', pending: undefined };
   mocks.matchmaking.mockReset().mockReturnValue({ match: null });
   mocks.data = {
@@ -86,7 +86,7 @@ describe('claim side panel in a debate-again session', () => {
     render(<View />);
     expect(screen.queryByRole('button')).toBeNull();
   });
-  it.each(['loading', 'placeholder', 'missing', 'personal'] as const)(
+  it.each(['loading', 'missing', 'personal'] as const)(
     'withholds the request for a newly visited space that is %s',
     state => {
       mocks.spaces = {
@@ -94,14 +94,12 @@ describe('claim side panel in a debate-again session', () => {
           state === 'missing' ? [] : [['space-1', { type: state === 'personal' ? 'PERSONAL' : 'DAO' }]]
         ),
         isLoading: state === 'loading',
-        isPlaceholderData: state === 'placeholder',
       };
       const view = render(<View />);
       expect(screen.queryByRole('button')).toBeNull();
       mocks.spaces = {
         spacesById: new Map([['space-1', { type: 'DAO' }]]),
         isLoading: false,
-        isPlaceholderData: false,
       };
       view.rerender(<View />);
       expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
