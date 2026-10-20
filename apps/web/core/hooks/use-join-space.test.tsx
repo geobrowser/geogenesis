@@ -1,11 +1,14 @@
-import { act, cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, render, renderHook } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { deferredSignInAtom } from '~/core/state/deferred-sign-in';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
+
+import { DeferredSignInRunner } from '~/partials/deferred-sign-in-runner';
 
 import { useJoinSpace } from './use-join-space';
 
@@ -39,6 +42,11 @@ let store = createStore();
 const queued = () => store.get(pendingActionsAtom);
 const wrapper = ({ children }: { children: ReactNode }) => <JotaiProvider store={store}>{children}</JotaiProvider>;
 const renderJoin = () => renderHook(() => useJoinSpace({ spaceId: 'space-1' }), { wrapper });
+/** The app-level owner of a prompt deferred while sign-in resolves, mounted apart from the button. */
+const renderRunner = () => {
+  const runner = render(<DeferredSignInRunner />, { wrapper });
+  return { rerender: () => runner.rerender(<DeferredSignInRunner />) };
+};
 
 afterEach(cleanup);
 
@@ -135,57 +143,81 @@ describe('useJoinSpace', () => {
     expect(mocks.requestToBeMember).not.toHaveBeenCalled();
   });
 
-  it('queues the request but holds the prompt while sign-in is still resolving', () => {
-    mocks.authResolving = true;
-    const { result } = renderJoin();
+  describe('while sign-in is still resolving', () => {
+    beforeEach(() => {
+      mocks.authResolving = true;
+    });
 
-    act(() => result.current.join());
+    it('queues the request but holds the prompt', () => {
+      renderRunner();
+      const { result } = renderJoin();
 
-    expect(queued()).toHaveLength(1);
-    expect(mocks.promptSignIn).not.toHaveBeenCalled();
-    expect(result.current.optimisticRequested).toBe(true);
-  });
+      act(() => result.current.join());
 
-  it('never prompts when the press turns out to have been made by a signed-in viewer', () => {
-    mocks.authResolving = true;
-    const { result, rerender } = renderJoin();
+      expect(queued()).toHaveLength(1);
+      expect(mocks.promptSignIn).not.toHaveBeenCalled();
+      expect(result.current.optimisticRequested).toBe(true);
+    });
 
-    act(() => result.current.join());
+    it('never prompts when the press turns out to have been made by a signed-in viewer', () => {
+      const runner = renderRunner();
+      const { result } = renderJoin();
 
-    mocks.authResolving = false;
-    mocks.smartAccount = { account: { address: '0xabc' } };
-    act(() => rerender());
+      act(() => result.current.join());
 
-    expect(mocks.promptSignIn).not.toHaveBeenCalled();
-    expect(queued()).toHaveLength(1);
-  });
+      mocks.authResolving = false;
+      mocks.smartAccount = { account: { address: '0xabc' } };
+      act(() => runner.rerender());
 
-  it('prompts a beat later when the press turns out to have been made signed out', () => {
-    mocks.authResolving = true;
-    const { result, rerender } = renderJoin();
+      expect(mocks.promptSignIn).not.toHaveBeenCalled();
+      expect(queued()).toHaveLength(1);
+      expect(store.get(deferredSignInAtom)).toHaveLength(0);
+    });
 
-    act(() => result.current.join());
-    expect(mocks.promptSignIn).not.toHaveBeenCalled();
+    it('prompts a beat later when the press turns out to have been made signed out', () => {
+      const runner = renderRunner();
+      const { result } = renderJoin();
 
-    mocks.authResolving = false;
-    act(() => rerender());
+      act(() => result.current.join());
+      expect(mocks.promptSignIn).not.toHaveBeenCalled();
 
-    expect(mocks.promptSignIn).toHaveBeenCalledTimes(1);
-    act(() => mocks.promptSignIn.mock.calls[0]![1].onCancel());
-    expect(queued()).toHaveLength(0);
-  });
+      mocks.authResolving = false;
+      act(() => runner.rerender());
 
-  it('prompts only once, however many renders follow', () => {
-    mocks.authResolving = true;
-    const { result, rerender } = renderJoin();
+      expect(mocks.promptSignIn).toHaveBeenCalledTimes(1);
+      expect(mocks.promptSignIn.mock.calls[0]![0]).toMatchObject({ auth_control: 'join_space', target_id: 'space-1' });
+      act(() => mocks.promptSignIn.mock.calls[0]![1].onCancel());
+      expect(queued()).toHaveLength(0);
+    });
 
-    act(() => result.current.join());
+    it('prompts only once, however many renders follow', () => {
+      const runner = renderRunner();
+      const { result } = renderJoin();
 
-    mocks.authResolving = false;
-    act(() => rerender());
-    act(() => rerender());
-    act(() => rerender());
+      act(() => result.current.join());
 
-    expect(mocks.promptSignIn).toHaveBeenCalledTimes(1);
+      mocks.authResolving = false;
+      act(() => runner.rerender());
+      act(() => runner.rerender());
+      act(() => runner.rerender());
+
+      expect(mocks.promptSignIn).toHaveBeenCalledTimes(1);
+    });
+
+    it('still prompts after the button unmounts, and a dismissal gives the button back', () => {
+      const runner = renderRunner();
+      const first = renderJoin();
+      act(() => first.result.current.join());
+      first.unmount();
+
+      mocks.authResolving = false;
+      act(() => runner.rerender());
+
+      expect(mocks.promptSignIn).toHaveBeenCalledTimes(1);
+      act(() => mocks.promptSignIn.mock.calls[0]![1].onCancel());
+
+      expect(queued()).toHaveLength(0);
+      expect(renderJoin().result.current.optimisticRequested).toBe(false);
+    });
   });
 });
