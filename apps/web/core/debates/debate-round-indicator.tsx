@@ -81,8 +81,11 @@ export function DebateRoundIndicator({
   );
 
   return (
-    <div data-debate-round-indicator={roundIndex} className="flex min-w-0 items-center gap-[2cqw]">
-      <p className="text-[3.6cqw] leading-none font-medium whitespace-nowrap text-[#1c1c1c]">
+    <div
+      data-debate-round-indicator={roundIndex}
+      className="flex min-w-0 items-center gap-[2cqw] text-[3.6cqw] leading-none font-medium text-[#1c1c1c]"
+    >
+      <p className="whitespace-nowrap">
         <span aria-hidden="true">
           {roundIndex === 0 ? 'Opening' : `Round ${openRoundNumber(roundIndex)}`}
           {roundIndex > 0 && <span className="font-normal text-[#5e5e5b]"> {`of ${openRoundNumber(maxRounds)}`}</span>}

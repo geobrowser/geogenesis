@@ -100,20 +100,22 @@ describe('OpenRoundPickPill (GEO-3366)', () => {
     const pill = screen.getByText(word).parentElement;
     expect(pill).toHaveClass(tone, 'rounded-full');
     expect(pill).toHaveClass(
-      'motion-safe:animate-[fadeIn_250ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.22,1,0.36,1)_both]'
+      'motion-safe:animate-[fadeIn_250ms_linear_both,roomPillSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]'
     );
     expect(pill?.style.transform).toBe('');
     expect(container.innerHTML).not.toMatch(/purple|animate-debate-stamp|rotate/);
   });
 
-  it('changes the picks to outlined words for the final wrap board', () => {
-    const view = render(<OpenRoundPickPill pick={null} />);
-    expect(screen.getByText('No pick').parentElement).toHaveClass('border-dashed');
-
-    view.rerender(<OpenRoundPickPill pick={null} wrapping />);
-    expect(screen.getByText('No pick').parentElement).toHaveClass('text-white/62');
-    expect(screen.getByText('No pick').parentElement?.style.fontFamily).toContain('var(--font-calibre)');
-    expect(view.container.querySelector('.border-dashed')).toBeNull();
+  it('reveals both picks together without a stagger', () => {
+    const { container } = render(
+      <>
+        <OpenRoundPickPill pick="extend" />
+        <OpenRoundPickPill pick="end" />
+      </>
+    );
+    const pills = [...container.querySelectorAll('[data-open-round-reveal] .rounded-full')] as HTMLElement[];
+    expect(pills).toHaveLength(2);
+    expect(pills.map(pill => pill.style.animationDelay)).toEqual(['', '']);
   });
 });
 
@@ -126,20 +128,18 @@ describe('OpenRoundResultOverlay', () => {
     expect(phrase).toHaveClass(
       'font-bold',
       'text-white',
-      'motion-safe:animate-[fadeIn_250ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.22,1,0.36,1)_both]'
+      'motion-safe:animate-[fadeIn_250ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]'
     );
     expect((phrase as HTMLElement).style.fontFamily).toContain('var(--font-calibre)');
-    expect((phrase as HTMLElement).style.textShadow).toBe(
-      '-0.035em -0.035em 0 #000, 0 -0.035em 0 #000, 0.035em -0.035em 0 #000, 0.035em 0 0 #000, 0.035em 0.035em 0 #000, 0 0.035em 0 #000, -0.035em 0.035em 0 #000, -0.035em 0 0 #000, 0 0.05em 0.16em rgba(0,0,0,0.55)'
-    );
+    expect((phrase as HTMLElement).style.textShadow).toBe('');
     const round = screen.getByText('Round 2');
     const role = screen.getByText('Rebuttal');
     expect(round).toHaveClass('font-semibold', 'text-white/85');
     expect(role).toHaveClass('font-bold', 'tracking-[-0.02em]');
-    expect(round.style.fontSize).toBe('9cqw');
-    expect(role.style.fontSize).toBe('18cqw');
+    expect(round.style.fontSize).toBe('7.02cqw');
+    expect(role.style.fontSize).toBe('14.04cqw');
     // The outline belongs to each sized line, never the smaller card wrapper.
-    expect(round.style.textShadow).toBe((phrase as HTMLElement).style.textShadow);
+    expect(round.style.textShadow).toContain('0.035em');
     expect(role.style.textShadow).toBe(round.style.textShadow);
     expect(container).toHaveTextContent('Round 2RebuttalAlice opens');
     expect(container.innerHTML).not.toMatch(/purple|animate-debate-banner/);

@@ -5,8 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { OpenRoundPick } from './api';
-import { PLAYER_FADE_CLASS } from './browse/player-overlay-styles';
-import { ROOM_UI_FONT, ROOM_WHITE_GLASS_CLASS } from './debate-room-stamps';
+import { ROOM_LABEL_FONT, ROOM_UI_FONT, ROOM_WHITE_GLASS_CLASS } from './debate-room-stamps';
 
 export type OpenRoundPickContext = {
   previousPick: OpenRoundPick | null;
@@ -41,8 +40,9 @@ type OpenRoundPickCardProps = {
  * have made one. It is open for the whole `deciding` phase and closes when the room moves to the
  * result, which the server does as soon as both have picked.
  *
- * The selection shows the pick being saved until the save answers, then the server's `savedPick`.
- * A failed save shows `savedPick` again rather than the pick that did not save.
+ * Keep the latest local choice through a successful save and stale polling responses. The card is
+ * keyed by round, so it resets with the next decision window. A failed switch returns to the last
+ * acknowledged pick, even before the query cache catches up.
  */
 export function OpenRoundPickCard({
   roundIndex,
@@ -57,6 +57,7 @@ export function OpenRoundPickCard({
   const [saveFailed, setSaveFailed] = React.useState(false);
   // Only the latest tap settles the card: an earlier save answering after a later tap must not undo it.
   const latestRequestRef = React.useRef(0);
+  const acknowledgedPickRef = React.useRef({ request: 0, pick: savedPick });
   // The card is keyed by round, so this is when the round's card opened.
   const [openedAtMs] = React.useState(() => Date.now());
   const headingId = React.useId();
@@ -66,16 +67,22 @@ export function OpenRoundPickCard({
 
   const pick = (choice: OpenRoundPick) => {
     if (disabled || choice === selectedPick) return;
+    if (latestRequestRef.current === 0) acknowledgedPickRef.current.pick = savedPick;
     const request = ++latestRequestRef.current;
     setRequestedPick(choice);
     setSaveFailed(false);
     onPick(choice, { previousPick: selectedPick, msSinceCardOpened: Date.now() - openedAtMs }).then(
-      () => {
-        if (request === latestRequestRef.current) setRequestedPick(null);
+      result => {
+        // `null` means the decision window resolved before this pick could count.
+        if (result === null) {
+          if (request === latestRequestRef.current) setRequestedPick(acknowledgedPickRef.current.pick);
+        } else if (request > acknowledgedPickRef.current.request) {
+          acknowledgedPickRef.current = { request, pick: choice };
+        }
       },
       () => {
         if (request !== latestRequestRef.current) return;
-        setRequestedPick(null);
+        setRequestedPick(acknowledgedPickRef.current.pick);
         setSaveFailed(true);
       }
     );
@@ -89,12 +96,12 @@ export function OpenRoundPickCard({
       data-open-round-pick-card={roundIndex}
       className={cx(
         'pointer-events-auto absolute top-1/2 left-1/2 z-40 grid w-[78%] -translate-x-1/2 -translate-y-1/2 justify-items-center gap-[3cqw] rounded-[5cqw] bg-[rgba(30,30,34,0.55)] px-[3.4cqw] pt-[3.4cqw] pb-[3.8cqw] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16),0_2cqw_6cqw_rgba(0,0,0,0.3)] backdrop-blur-[18px] backdrop-saturate-[1.3]',
-        PLAYER_FADE_CLASS
+        'animate-[fadeIn_250ms_linear_both]'
       )}
       style={ROOM_UI_FONT}
     >
       <div className="flex items-center gap-[2.4cqw]">
-        <h2 id={headingId} className="text-[7cqw] leading-[0.95] font-semibold tracking-[-0.02em]">
+        <h2 id={headingId} className="text-[7cqw] leading-[0.95] font-bold tracking-[-0.02em]">
           Keep debating?
         </h2>
         <PickCountdown remainingSeconds={remainingSeconds} />
@@ -159,6 +166,7 @@ function PickChoice({
       type="button"
       aria-pressed={selected}
       aria-label={`${label} ${detail}`}
+      style={ROOM_LABEL_FONT}
       disabled={disabled}
       onClick={() => onPick(choice)}
       className={cx(
@@ -170,8 +178,12 @@ function PickChoice({
         disabled && selectedPick === null && 'opacity-50'
       )}
     >
-      <span className="text-[4.6cqw] leading-none font-semibold">{selected ? `✓ ${label}` : label}</span>
-      <span className="text-[2.6cqw] leading-none font-normal opacity-75">{detail}</span>
+      <span className="text-[4.6cqw] leading-none font-bold" style={ROOM_UI_FONT}>
+        {selected ? `✓ ${label}` : label}
+      </span>
+      <span className="text-[2.6cqw] leading-none font-normal opacity-75" style={ROOM_UI_FONT}>
+        {detail}
+      </span>
     </button>
   );
 }
@@ -181,7 +193,10 @@ function PickCountdown({ remainingSeconds }: { remainingSeconds: number }) {
   const seconds = Math.max(0, remainingSeconds);
 
   return (
-    <span className="grid size-[7cqw] shrink-0 place-items-center rounded-full bg-black/50 text-[3cqw] leading-none font-medium shadow-[inset_0_0_0_0.5cqw_rgba(255,255,255,0.85)]">
+    <span
+      className="grid size-[7cqw] shrink-0 place-items-center rounded-full bg-black/50 text-[3cqw] leading-none font-medium shadow-[inset_0_0_0_0.5cqw_rgba(255,255,255,0.85)]"
+      style={ROOM_LABEL_FONT}
+    >
       <span aria-hidden="true">{seconds}</span>
       <span className="sr-only">{seconds} seconds to pick</span>
     </span>

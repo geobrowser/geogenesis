@@ -4,9 +4,15 @@ import * as React from 'react';
 
 import type { Debate, OpenRoundPick, OpenRoundRevealedPick, ParticipantSlot } from './api';
 import { PlayerRoundTitle } from './browse/debate-round-cues';
-import { PLAYER_ENTER_CLASS, PLAYER_TITLE_CLASS, PLAYER_TITLE_STYLE } from './browse/player-overlay-styles';
-import { STAMP_WORD } from './browse/stamp-styles';
-import { ROOM_UI_FONT, RoomMiddlePhrase, RoomTag, RoomTilePill } from './debate-room-stamps';
+import { PLAYER_TITLE_CLASS, PLAYER_TITLE_STYLE } from './browse/player-overlay-styles';
+import { LABEL_FONT, STAMP_WORD } from './browse/stamp-styles';
+import {
+  ROOM_MOMENT_ENTER_CLASS,
+  ROOM_PILL_ENTER_CLASS,
+  ROOM_UI_FONT,
+  RoomTag,
+  RoomTilePill,
+} from './debate-room-stamps';
 import { rebuttalRoundsLabel } from './debate-round-indicator';
 import {
   type OpenRoundsRoomPhase,
@@ -91,28 +97,13 @@ export function useOpenRoundRevealStep(
 }
 
 /** Each pick fades onto its debater: Extend white, End dark glass, No pick dashed. */
-export function OpenRoundPickPill({
-  pick,
-  wrapping = false,
-  delayMs = 0,
-}: {
-  pick: OpenRoundPick | null;
-  wrapping?: boolean;
-  delayMs?: number;
-}) {
+export function OpenRoundPickPill({ pick }: { pick: OpenRoundPick | null }) {
   const key = pick ?? 'none';
   return (
     <div aria-hidden="true" data-open-round-reveal={key} className="pointer-events-none absolute inset-0 z-[35]">
-      {wrapping ? (
-        // Option 5's final wrap board changes the revealed pills to outlined words.
-        <RoomMiddlePhrase sizeCqw={10.14} className={pick === null ? 'text-white/62' : undefined}>
-          {STAMP_WORD[key]}
-        </RoomMiddlePhrase>
-      ) : (
-        <RoomTilePill tone={pick === 'extend' ? 'white' : pick === 'end' ? 'dark' : 'dashed'} delayMs={delayMs}>
-          {STAMP_WORD[key]}
-        </RoomTilePill>
-      )}
+      <RoomTilePill tone={pick === 'extend' ? 'white' : pick === 'end' ? 'dark' : 'dashed'}>
+        {STAMP_WORD[key]}
+      </RoomTilePill>
     </div>
   );
 }
@@ -132,31 +123,37 @@ export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) 
       <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
         <div
           data-open-round-phrase
-          className={`${PLAYER_ENTER_CLASS} text-center font-bold text-white`}
-          style={PLAYER_TITLE_STYLE}
+          className={`${result.kind === 'round' ? ROOM_MOMENT_ENTER_CLASS : ROOM_PILL_ENTER_CLASS} text-center font-bold text-white`}
+          style={ROOM_UI_FONT}
         >
           {result.kind === 'round' ? (
             <>
-              <PlayerRoundTitle round={round} role={role ?? null} />
+              <PlayerRoundTitle round={round} role={role ?? null} scale={0.78} />
               <span
-                className="mx-auto mt-[1.6cqw] block max-w-[92%] truncate text-[3.744cqw] leading-none font-semibold tracking-normal"
+                className="mx-auto mt-[1.6cqw] block w-max max-w-[92%] truncate text-[3.744cqw] leading-none font-semibold tracking-normal"
                 style={PLAYER_TITLE_STYLE}
               >
                 {openRoundOpenerLine(result.opener)}
               </span>
             </>
           ) : (
-            <span className={`${PLAYER_TITLE_CLASS} block text-[11cqw]`} style={PLAYER_TITLE_STYLE}>
+            <span
+              className={`${PLAYER_TITLE_CLASS} mx-auto block w-max max-w-[92%] text-[8.58cqw]`}
+              style={PLAYER_TITLE_STYLE}
+            >
               {result.kind === 'wrap' ? 'That’s a wrap' : 'That’s the max'}
             </span>
           )}
         </div>
       </div>
       {result.kind === 'wrap' && result.note && (
-        <div className="absolute inset-x-0 top-[calc(50%+9cqw)] px-4 text-center">
+        <div
+          className="absolute inset-x-0 top-[calc(50%+9cqw)] animate-[fadeIn_250ms_linear_both] px-4 text-center"
+          style={{ animationDelay: '200ms' }}
+        >
           <span
             className="inline-block max-w-full rounded-full bg-black/72 px-[2.8cqw] py-[1.4cqw] text-[2.8cqw] leading-[1.2] font-medium tracking-[0.01em] text-balance text-white"
-            style={ROOM_UI_FONT}
+            style={LABEL_FONT}
           >
             {result.note}
           </span>

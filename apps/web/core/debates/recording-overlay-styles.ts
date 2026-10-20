@@ -1,9 +1,7 @@
-import { PLAYBACK_FONT_FAMILY } from './browse/playback-typography';
-
-/** The recording room's Calibre faces, shared by fixed formats and Open rounds. */
+/** The recording mockup's Calibre face and fallbacks. */
 export const recordingFont = {
-  fontFamily: PLAYBACK_FONT_FAMILY,
-  textRendering: 'optimizeLegibility',
+  fontFamily: 'var(--font-calibre), system-ui, -apple-system, "Segoe UI", sans-serif',
+  textRendering: 'auto',
 } as const;
 
 /** Keep the outline at the fixed-format room's 2px weight, regardless of the text size. */

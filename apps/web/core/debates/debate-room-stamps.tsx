@@ -6,16 +6,17 @@ import cx from 'classnames';
 
 import { PLAYBACK_OUTLINE_STYLE } from './browse/playback-typography';
 import {
-  PLAYER_ENTER_CLASS,
   PLAYER_EXIT_CLASS,
   PLAYER_EXIT_MS,
   PLAYER_FADE_CLASS,
-  PLAYER_PICK_BASE_CLASS,
   PLAYER_PICK_CLASS,
 } from './browse/player-overlay-styles';
 import { recordingFont } from './recording-overlay-styles';
 
 export const ROOM_UI_FONT = recordingFont;
+export const ROOM_LABEL_FONT = {
+  fontFamily: 'var(--font-geist-medium), var(--font-calibre), system-ui, sans-serif',
+} as const;
 
 /** Option 5, Debate room / Open rounds (GEO-3366). The export scales type by .78 and pills by .86. */
 export const ROOM_GLASS_CLASS = 'bg-black/66 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.24)]';
@@ -23,8 +24,13 @@ export const ROOM_WHITE_GLASS_CLASS = 'bg-white text-[#111]';
 export const ROOM_END_TURN_CLASS =
   'block rounded-full bg-black px-[3.2cqw] py-[2cqw] text-[3cqw] leading-none font-medium text-white transition hover:bg-black/85 disabled:cursor-default disabled:opacity-70';
 
-/** Share playback's 250ms fade and quiet 1.025x settle, including its reduced-motion fade. */
-export const ROOM_MOMENT_ENTER_CLASS = PLAYER_ENTER_CLASS;
+/** The updated mockup uses a quiet settle for title cards and a larger one for pills/words. */
+export const ROOM_MOMENT_ENTER_CLASS =
+  'animate-[fadeIn_250ms_linear_both] motion-safe:animate-[fadeIn_250ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]';
+export const ROOM_PILL_ENTER_CLASS =
+  'animate-[fadeIn_250ms_linear_both] motion-safe:animate-[fadeIn_250ms_linear_both,roomPillSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]';
+export const ROOM_COUNT_ENTER_CLASS =
+  'animate-[fadeIn_200ms_linear_both] motion-safe:animate-[fadeIn_200ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]';
 
 /** White outlined announcements share the merged classic + glass playback treatment. */
 export const ROOM_OUTLINED_STYLE = {
@@ -37,22 +43,21 @@ export function RoomPill({
   children,
   tone = 'dark',
   delayMs = 0,
-  fontWeight = 600,
+  fadeInMs = 250,
   className,
   style,
   ...props
 }: React.ComponentPropsWithoutRef<'span'> & {
   tone?: 'dark' | 'white' | 'red' | 'dashed';
   delayMs?: number;
-  fontWeight?: 600 | 700;
+  fadeInMs?: number;
 }) {
   return (
     <span
       {...props}
       className={cx(
-        PLAYER_PICK_BASE_CLASS,
-        'max-w-[92%]',
-        ROOM_MOMENT_ENTER_CLASS,
+        'inline-flex max-w-[92%] items-center rounded-full px-[4.644cqw] py-[2.064cqw] text-[4.816cqw] leading-none font-semibold whitespace-nowrap',
+        ROOM_PILL_ENTER_CLASS,
         tone === 'white'
           ? [ROOM_WHITE_GLASS_CLASS, 'shadow-[0_1cqw_3cqw_rgba(0,0,0,0.2)] backdrop-blur-[14px]']
           : tone === 'red'
@@ -64,7 +69,7 @@ export function RoomPill({
       )}
       style={{
         ...ROOM_UI_FONT,
-        fontWeight,
+        animationDuration: `${fadeInMs}ms, 250ms`,
         animationDelay: delayMs ? `${delayMs}ms, ${delayMs}ms` : undefined,
         ...style,
       }}
@@ -86,7 +91,7 @@ export function RoomTilePill(props: React.ComponentProps<typeof RoomPill>) {
 export function RoomPhrase({
   children,
   sizeCqw,
-  fontWeight = 600,
+  fontWeight = 700,
   className,
   ...props
 }: React.ComponentPropsWithoutRef<'div'> & {
@@ -99,7 +104,7 @@ export function RoomPhrase({
       className={cx(
         'mx-auto grid w-max max-w-[92%] justify-items-center text-center leading-[0.95] tracking-[-0.02em] text-white',
         fontWeight === 700 ? 'font-bold' : 'font-semibold',
-        ROOM_MOMENT_ENTER_CLASS,
+        ROOM_PILL_ENTER_CLASS,
         className
       )}
       style={{ ...ROOM_OUTLINED_STYLE, fontSize: `${sizeCqw}cqw` }}
@@ -117,7 +122,7 @@ export function RoomMiddlePhrase(props: React.ComponentProps<typeof RoomPhrase>)
   );
 }
 
-/** Small glass label for the last speaker or a round count. */
+/** Small glass round-count label for the cap fallback. */
 export function RoomTag({ className, style, ...props }: React.ComponentPropsWithoutRef<'span'>) {
   return (
     <span
@@ -127,7 +132,7 @@ export function RoomTag({ className, style, ...props }: React.ComponentPropsWith
         'inline-flex items-center rounded-full px-[2.2cqw] py-[1.1cqw] leading-none font-medium tracking-[0.04em] whitespace-nowrap',
         className
       )}
-      style={{ ...ROOM_UI_FONT, ...style }}
+      style={{ ...ROOM_LABEL_FONT, ...style }}
     />
   );
 }

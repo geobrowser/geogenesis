@@ -51,7 +51,7 @@ import {
   debateRoomTabPriority,
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
-import { ROOM_END_TURN_CLASS, ROOM_UI_FONT, RoomExit, RoomTag } from '~/core/debates/debate-room-stamps';
+import { ROOM_END_TURN_CLASS, ROOM_UI_FONT, RoomExit } from '~/core/debates/debate-room-stamps';
 import { DebateRoundIndicator } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
@@ -62,7 +62,7 @@ import {
   useHoldDebateTabClaim,
   writeDebateTabClaim,
 } from '~/core/debates/debate-tab-claims';
-import { DebateTileChip, DebateVideoTile, tileChipSurface } from '~/core/debates/debate-video-tile';
+import { DebateVideoTile } from '~/core/debates/debate-video-tile';
 import {
   useAbortDebate,
   useClearDebateActivity,
@@ -3271,34 +3271,10 @@ function DebateRecordingModal({
   });
   // Open rounds uses classic outlined type and glass pills (GEO-3366).
   const openRoundsStyle = isOpenRoundsDebate(debate);
-  const localTileFirst = localParticipant?.position !== false;
-  const pickReveal = (pick: OpenRoundRevealedPick | null, first: boolean) =>
-    pick ? (
-      <OpenRoundPickPill pick={pick.pick} wrapping={reveal.result?.kind === 'wrap'} delayMs={first ? 0 : 280} />
-    ) : null;
+  const pickReveal = (pick: OpenRoundRevealedPick | null) => (pick ? <OpenRoundPickPill pick={pick.pick} /> : null);
   // The pick, the reveal and what it means span both tiles, so both dim under them.
   const tilesDimmed =
     openRoundsStyle && (countdown.openRounds?.phase === 'deciding' || reveal.step === 'flip' || reveal.result !== null);
-  const lastWord =
-    countdown.effectiveStatus === 'in_progress' &&
-    countdown.openRounds?.phase === 'speaking' &&
-    countdown.activeSlot !== null &&
-    countdown.yieldingSlot === null
-      ? openRoundLastWord(debate, countdown.turnIndex)
-      : null;
-  const lastWordChip = !lastWord ? null : openRoundsStyle ? (
-    <RoomTag data-open-round-last-word={lastWord} className="text-[2.8cqw]">
-      Last word
-    </RoomTag>
-  ) : (
-    <DebateTileChip data-open-round-last-word={lastWord} className={cx('text-text', tileChipSurface)}>
-      {/* Your own tile also carries Recording, and on a phone the full line squeezes the position. */}
-      <span className="mobile:hidden">
-        {lastWord === 'debate' ? 'Last word of the debate' : 'Last word this round'}
-      </span>
-      <span className="hidden mobile:inline">{lastWord === 'debate' ? 'Final word' : 'Last word'}</span>
-    </DebateTileChip>
-  );
   const localUpcomingSeconds = reveal.holdsCountIn ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
   // Open rounds names the turn after an early end too, so an opening is still "You're up in".
   const localUpcomingLabel =
@@ -3389,7 +3365,6 @@ function DebateRecordingModal({
     localYieldHandsOver &&
     countdown.incomingSlot !== null &&
     countdown.incomingSlot === remoteParticipant?.participant_slot;
-  const remoteSpeaking = remoteParticipant !== null && countdown.activeSlot === remoteParticipant.participant_slot;
   const canEndLocalTurn =
     countdown.effectiveStatus === 'in_progress' &&
     countdown.activeSlot === localSlot &&
@@ -3401,6 +3376,7 @@ function DebateRecordingModal({
       participantPosition={localParticipant?.position ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' &&
+        (!openRoundsStyle || !localEndingTurn) &&
         (countdown.activeSlot === localSlot || countdown.yieldingSlot === localSlot)
       }
       overlayText={
@@ -3446,19 +3422,8 @@ function DebateRecordingModal({
         localSlot !== null &&
         thankingSlot === localSlot
       }
-      status={
-        // Open rounds tags the speaker's corner, as in the mockup, beside the recording indicator.
-        openRoundsStyle && countdown.activeSlot === localSlot && lastWordChip ? (
-          <span className="flex items-center gap-1.5">
-            {lastWordChip}
-            <DebateRecordingStatusPill recording={capturing} openRounds={openRoundsStyle} />
-          </span>
-        ) : (
-          <DebateRecordingStatusPill recording={capturing} openRounds={openRoundsStyle} />
-        )
-      }
-      tileControls={!openRoundsStyle && countdown.activeSlot === localSlot ? lastWordChip : null}
-      reveal={pickReveal(reveal.localPick, localTileFirst)}
+      status={<DebateRecordingStatusPill recording={capturing} openRounds={openRoundsStyle} />}
+      reveal={pickReveal(reveal.localPick)}
       chipsHidden={reveal.chipsHidden}
       openRounds={openRoundsStyle}
       dimmed={tilesDimmed}
@@ -3473,6 +3438,7 @@ function DebateRecordingModal({
       participantPosition={remoteParticipant?.position ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' &&
+        (!openRoundsStyle || !remoteEndingTurn) &&
         (countdown.activeSlot === remoteParticipant?.participant_slot ||
           countdown.yieldingSlot === remoteParticipant?.participant_slot)
       }
@@ -3497,9 +3463,7 @@ function DebateRecordingModal({
       revealInactive={remoteEndingTurn}
       inactiveIndicatorId="remote"
       countdown={remoteCountdown}
-      tileControls={!openRoundsStyle && remoteSpeaking ? lastWordChip : null}
-      status={openRoundsStyle && remoteSpeaking ? lastWordChip : undefined}
-      reveal={pickReveal(reveal.remotePick, !localTileFirst)}
+      reveal={pickReveal(reveal.remotePick)}
       chipsHidden={reveal.chipsHidden}
       openRounds={openRoundsStyle}
       dimmed={tilesDimmed}

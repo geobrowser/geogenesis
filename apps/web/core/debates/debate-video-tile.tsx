@@ -10,8 +10,8 @@ import { Text } from '~/design-system/text';
 
 import { MutedMicrophoneIndicator } from './debate-room-controls';
 import {
+  ROOM_COUNT_ENTER_CLASS,
   ROOM_ENTER_CLASS,
-  ROOM_MOMENT_ENTER_CLASS,
   ROOM_OUTLINED_STYLE,
   ROOM_UI_FONT,
   RoomDim,
@@ -57,7 +57,7 @@ export function DebateTileChip({
       {...spanProps}
       className={cx(
         'inline-flex items-center rounded-full leading-none whitespace-nowrap',
-        openRounds ? 'h-[4.4cqw] gap-[1cqw] px-[1.8cqw] text-[2.8cqw]' : 'h-4 gap-1 px-1.5 text-[0.75rem]',
+        openRounds ? 'h-[4.4cqw] gap-[1cqw] px-[1.8cqw] text-[2.8cqw] font-medium' : 'h-4 gap-1 px-1.5 text-[0.75rem]',
         className
       )}
     >
@@ -201,7 +201,7 @@ export function DebateVideoTile({
       style={openRounds ? ROOM_UI_FONT : undefined}
       className={cx(
         'relative min-h-0 overflow-hidden bg-black shadow-card',
-        openRounds ? '@container aspect-[8/5] rounded-[3cqw]' : 'aspect-[5/3] rounded-lg',
+        openRounds ? '@container aspect-[8/5] rounded-[3cqw] text-white' : 'aspect-[5/3] rounded-lg',
         active && ['outline-[3px]', openRounds ? '-outline-offset-3' : 'outline-offset-0'],
         active && (openRounds ? (finalSeconds ? 'outline-[#FF4A26]' : 'outline-white') : 'outline-purple')
       )}
@@ -339,10 +339,10 @@ export function DebateVideoTile({
             {upcoming && (
               <div
                 data-room-count-in-group
-                className="absolute inset-0 flex flex-col items-center justify-center gap-[1.6cqw] text-center"
+                className="absolute top-1/2 left-1/2 grid w-max max-w-[92%] -translate-x-1/2 -translate-y-1/2 justify-items-center text-center"
               >
                 <span
-                  className="inline-block max-w-[92%] text-[8cqw] leading-[0.95] font-semibold tracking-[-0.02em] whitespace-nowrap text-white"
+                  className="text-[7.02cqw] leading-none font-semibold tracking-normal whitespace-nowrap text-white/85"
                   data-room-phrase="count-in"
                   style={ROOM_OUTLINED_STYLE}
                 >
@@ -351,8 +351,8 @@ export function DebateVideoTile({
                 <span
                   key={upcomingSeconds}
                   className={cx(
-                    'inline-block text-[15.6cqw] leading-[0.95] font-bold tracking-[-0.02em] whitespace-nowrap text-white',
-                    ROOM_MOMENT_ENTER_CLASS
+                    'text-[15.6cqw] leading-[0.9] font-bold tracking-[-0.02em] whitespace-nowrap text-white',
+                    ROOM_COUNT_ENTER_CLASS
                   )}
                   data-room-count-in
                   style={ROOM_OUTLINED_STYLE}
@@ -365,7 +365,7 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {showGo && (
-              <RoomTilePill data-room-pill="go" tone="white" fontWeight={700}>
+              <RoomTilePill data-room-pill="go" tone="white" fadeInMs={200}>
                 Go
               </RoomTilePill>
             )}

@@ -6465,8 +6465,8 @@ describe('DebateRoomPageClient', () => {
     });
   });
 
-  // GEO-3179. Any round can be the last, so its second speaker is told they have the last word.
-  describe('open rounds last word (GEO-3179)', () => {
+  // The updated classic mockup removes the Last word chip from every recording state.
+  describe('open rounds without a Last word chip (GEO-3366)', () => {
     const lastWord = (participant: 'local' | 'remote') =>
       debateVideoTile(participant).querySelector('[data-open-round-last-word]');
 
@@ -6474,20 +6474,22 @@ describe('DebateRoomPageClient', () => {
       mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     });
 
-    it("marks the second speaker's tile on both screens, and not the first speaker's", async () => {
+    it("omits the chip on both speakers' tiles", async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:01:30.000'));
       await renderLiveDebate(openRoundsListening());
 
-      await waitFor(() => expect(lastWord('remote')).toHaveTextContent('Last word'));
+      await waitFor(() => expect(debateVideoTile('remote')).toHaveAttribute('data-active-speaker', 'true'));
+      expect(lastWord('remote')).toBeNull();
       expect(lastWord('local')).toBeNull();
     });
 
-    it("marks the second speaker's own tile", async () => {
+    it("omits the chip on the second speaker's own tile", async () => {
       joinAsBob();
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:01:30.000'));
       await renderLiveDebate(openRoundsListening());
 
-      await waitFor(() => expect(lastWord('local')).toHaveTextContent('Last word'));
+      await waitFor(() => expect(debateVideoTile('local')).toHaveAttribute('data-active-speaker', 'true'));
+      expect(lastWord('local')).toBeNull();
     });
 
     it('says nothing during the first turn of a round', async () => {
@@ -6500,12 +6502,12 @@ describe('DebateRoomPageClient', () => {
       expect(lastWord('remote')).toBeNull();
     });
 
-    it("calls the cap round's second turn the last word of the debate", async () => {
+    it('omits the chip in the cap round too', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(OPEN_ROUNDS_CAP_ROUND_ENDS_AT - 20_000);
       await renderLiveDebate(openRoundsCapRoundLastTurn());
 
-      await waitFor(() => expect(lastWord('remote')).toHaveAttribute('data-open-round-last-word', 'debate'));
-      expect(lastWord('remote')).toHaveTextContent('Last word');
+      await waitFor(() => expect(debateVideoTile('remote')).toHaveAttribute('data-active-speaker', 'true'));
+      expect(lastWord('remote')).toBeNull();
     });
 
     it('leaves fixed formats alone', async () => {
@@ -6553,7 +6555,7 @@ describe('DebateRoomPageClient', () => {
       await renderLiveDebate(aliceOpening());
 
       await waitFor(() => expect(phrase('local', 'count-in')).toHaveTextContent('You’re up in'));
-      expect(phrase('local', 'count-in')).toHaveClass('text-white', 'font-semibold');
+      expect(phrase('local', 'count-in')).toHaveClass('text-white/85', 'font-semibold');
       expect((phrase('local', 'count-in') as HTMLElement).style.fontFamily).toContain('var(--font-calibre)');
       expect((phrase('local', 'count-in') as HTMLElement).style.textShadow).toBe(
         '-0.035em -0.035em 0 #000, 0 -0.035em 0 #000, 0.035em -0.035em 0 #000, 0.035em 0 0 #000, 0.035em 0.035em 0 #000, 0 0.035em 0 #000, -0.035em 0.035em 0 #000, -0.035em 0 0 #000, 0 0.05em 0.16em rgba(0,0,0,0.55)'
@@ -6621,6 +6623,8 @@ describe('DebateRoomPageClient', () => {
       expect(pill('remote', 'turn')).toHaveTextContent('Bob’s turn');
       expect(pill('remote', 'turn')).toHaveClass('rounded-full', 'backdrop-blur-[14px]');
       expect(pill('local', 'ended')).toHaveClass('border-dashed');
+      expect(debateVideoTile('local')).toHaveAttribute('data-active-speaker', 'false');
+      expect(debateVideoTile('local').querySelector('[data-room-speaker-outline]')).toBeNull();
     });
 
     // GEO-3347. geo-chat closes a round-ending yield the moment it accepts it, so a pill there lasted
@@ -6716,16 +6720,17 @@ describe('DebateRoomPageClient', () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:03:34.000'));
       await renderLiveDebate(appended);
 
-      await waitFor(() => expect(lastWord('remote')).toBeInTheDocument());
+      await waitFor(() => expect(debateVideoTile('remote')).toHaveAttribute('data-active-speaker', 'true'));
       expect(phrase('local', 'count-in')).toBeNull();
     });
 
-    it("tags the speaker's corner with Last word", async () => {
+    it("keeps the speaker's corner free of Last word", async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:01:30.000'));
       await renderLiveDebate(openRoundsListening());
 
-      await waitFor(() => expect(lastWord('remote')).toHaveTextContent('Last word'));
-      expect(lastWord('remote')?.closest('[data-tile-chips] > div:last-child')).toBeInTheDocument();
+      await waitFor(() => expect(debateVideoTile('remote')).toHaveAttribute('data-active-speaker', 'true'));
+      expect(lastWord('remote')).toBeNull();
+      expect(lastWord('remote')).toBeNull();
     });
 
     // GEO-3315 drew thanking as a purple "Say thanks" phrase over an end card with the round count.

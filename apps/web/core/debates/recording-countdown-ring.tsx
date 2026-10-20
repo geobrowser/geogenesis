@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { LABEL_FONT, STAMP_FONT } from './browse/stamp-styles';
+import { recordingFont } from './recording-overlay-styles';
 
 const COUNTDOWN_SIZE = 51;
 const COUNTDOWN_CENTER = COUNTDOWN_SIZE / 2;
@@ -48,7 +49,7 @@ export function turnTimerBuildUp(seconds: number) {
 
 /** Grows from the timer's corner, so it stays inside its tile at its largest. */
 export const TURN_TIMER_SCALE_CLASS =
-  'origin-top-right transition-[scale] duration-[350ms] ease-[cubic-bezier(0.33,1,0.68,1)]';
+  'origin-top-right transition-[scale] duration-[350ms] ease-[cubic-bezier(0.333333,1,0.666667,1)]';
 
 /** The pulse each of the last ten seconds lands with, and the red glow of the last five. */
 export function turnTimerPulseClass(buildUp: ReturnType<typeof turnTimerBuildUp>) {
@@ -81,7 +82,7 @@ export function useRestartedEach<T extends HTMLElement>(tick: number | null) {
 }
 
 /** The room's red rim, at the disc's very edge. */
-const finalRimMask = turnTimerRimMask('3px');
+const finalRimMask = turnTimerRimMask('0.55cqw');
 
 export function RecordingCountdownRing({
   remainingSeconds,
@@ -139,6 +140,7 @@ export function RecordingCountdownRing({
           counting
             ? ({
                 '--turn-timer-swell': stage.swell,
+                scale: 'calc(1 + (var(--turn-timer-swell) - 1) * sin(var(--turn-timer-pulse-angle)))',
                 backgroundColor: final ? COUNTDOWN_WARNING_COLOR : undefined,
                 backgroundImage: buildUp && !final ? 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.25))' : undefined,
               } as React.CSSProperties)
@@ -170,8 +172,8 @@ export function RecordingCountdownRing({
               {
                 '--turn-timer-rim': `${(1 - elapsedRatio) * 360}deg`,
                 backgroundImage: 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.3) 0deg)',
-                maskImage: turnTimerRimMask('3px'),
-                WebkitMaskImage: turnTimerRimMask('3px'),
+                maskImage: turnTimerRimMask('2px'),
+                WebkitMaskImage: turnTimerRimMask('2px'),
               } as React.CSSProperties
             }
           />
@@ -219,7 +221,7 @@ export function RecordingCountdownRing({
           className="relative z-10"
           style={{
             color: numberColor,
-            fontFamily: (final ? STAMP_FONT : LABEL_FONT).fontFamily,
+            fontFamily: (final ? STAMP_FONT : proportional ? recordingFont : LABEL_FONT).fontFamily,
             fontSize: proportional ? '4cqw' : 22,
             fontWeight: final ? 700 : 500,
             fontVariantNumeric: proportional ? 'tabular-nums' : undefined,

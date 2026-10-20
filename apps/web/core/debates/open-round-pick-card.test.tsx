@@ -97,6 +97,68 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     expect(view.onPick).not.toHaveBeenCalled();
   });
 
+  it('keeps a successful pick checked while props and polling still contain the previous value', async () => {
+    const view = renderCard();
+    fireEvent.click(extend());
+    await act(async () => undefined);
+
+    expect(extend()).toHaveAttribute('aria-pressed', 'true');
+    view.rerender(<OpenRoundPickCard {...view.props} remainingSeconds={7} savedPick={null} />);
+    expect(extend()).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(extend());
+    expect(view.onPick).toHaveBeenCalledTimes(1);
+
+    view.rerender(<OpenRoundPickCard {...view.props} savedPick="extend" />);
+    view.rerender(<OpenRoundPickCard {...view.props} savedPick={null} remainingSeconds={6} />);
+    expect(extend()).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps the latest successful switch selected when an older pick arrives in props', async () => {
+    const view = renderCard();
+    fireEvent.click(extend());
+    await act(async () => undefined);
+    fireEvent.click(end());
+    await act(async () => undefined);
+
+    view.rerender(<OpenRoundPickCard {...view.props} savedPick="extend" />);
+    expect(end()).toHaveAttribute('aria-pressed', 'true');
+    expect(extend()).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('does not acknowledge a pick that missed the decision deadline', async () => {
+    const view = renderCard();
+    view.onPick.mockResolvedValueOnce(null);
+    fireEvent.click(extend());
+    await act(async () => undefined);
+
+    expect(extend()).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('alert')).toBeEmptyDOMElement();
+  });
+
+  it('starts a new round without carrying over the last round’s acknowledged pick', async () => {
+    const view = renderCard();
+    fireEvent.click(extend());
+    await act(async () => undefined);
+    expect(extend()).toHaveAttribute('aria-pressed', 'true');
+
+    view.rerender(<OpenRoundPickCard {...view.props} key={1} roundIndex={1} savedPick={null} />);
+    expect(extend()).toHaveAttribute('aria-pressed', 'false');
+    expect(end()).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('restores the last acknowledged pick after a failed switch even before polling catches up', async () => {
+    const view = renderCard();
+    fireEvent.click(extend());
+    await act(async () => undefined);
+    view.onPick.mockRejectedValueOnce(new Error('offline'));
+    fireEvent.click(end());
+    await act(async () => undefined);
+
+    expect(extend()).toHaveAttribute('aria-pressed', 'true');
+    expect(end()).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't save your pick. Tap again.");
+  });
+
   it('puts the selection back to the saved pick and asks for another tap when a save fails', async () => {
     const view = renderCard({ savedPick: 'extend' });
     view.onPick.mockRejectedValueOnce(new Error('offline'));
