@@ -6029,6 +6029,17 @@ describe('inside a debate room', () => {
     </DebateRoomProvider>
   );
 
+  it('keeps Leave when the room exits to Explore despite a stored lobby', () => {
+    rememberLobbyReturnDestination('lobby-1');
+    render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    expect(screen.queryByRole('button', { name: 'Back to lobby' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/explore');
+    expect(mocks.leaveMutate).not.toHaveBeenCalled();
+  });
+
   // geo-chat expires a `browsing` session after 90s of either party being offline, which is what
   // waiting for someone looks like. Acting on it threw the waiting person out of the room.
   it.each([['ended'], ['expired']] as const)('does not navigate away on a %s session', async status => {

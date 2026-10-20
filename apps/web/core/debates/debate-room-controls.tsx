@@ -39,6 +39,36 @@ export function RecordingCircleButton({
   );
 }
 
+/** The ready screen and recording room share the same exit control and lobby wording. */
+export function DebateLeaveButton({
+  returnsToLobby = false,
+  saving = false,
+  onClick,
+  disabled,
+  className,
+}: {
+  returnsToLobby?: boolean;
+  saving?: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const label = returnsToLobby ? 'Back to lobby' : 'Leave debate';
+  const accessibleLabel = saving ? 'Saving local recording' : label;
+  return (
+    <RecordingCircleButton
+      ariaLabel={accessibleLabel}
+      title={accessibleLabel}
+      onClick={onClick}
+      disabled={disabled || saving}
+      className={cx(returnsToLobby && 'w-auto grid-flow-col gap-2 px-3 whitespace-nowrap', className)}
+    >
+      <LeaveIcon />
+      {returnsToLobby && <span className="text-metadata">{label}</span>}
+    </RecordingCircleButton>
+  );
+}
+
 /**
  * A mic or camera toggle that sits over a video tile, as the intro screen has them.
  *

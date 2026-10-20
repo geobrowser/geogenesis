@@ -33,7 +33,7 @@ import {
 import { DebateRecordingStatusPill } from '~/core/debates/debate-recording-status-pill';
 import {
   CameraIcon,
-  LeaveIcon,
+  DebateLeaveButton,
   MicrophoneIcon,
   RecordingCircleButton,
   SpeakerIcon,
@@ -3089,7 +3089,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onTakeOverConnection={takeOverConnection}
             readyBusy={markReady.isPending}
             onReady={markLocalReady}
-            leaveLabel={returnsToLobby ? 'Back to lobby' : 'Leave debate'}
+            returnsToLobby={returnsToLobby}
             onLeave={leave}
             leaveDisabled={abortDebate.isPending}
           />
@@ -3173,7 +3173,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
-                leaveLabel={returnsToLobby ? 'Back to lobby' : 'Leave debate'}
+                returnsToLobby={returnsToLobby}
                 onLeave={leave}
                 leaveDisabled={abortDebate.isPending || recordingModalRoomState === 'saving'}
               />
@@ -3216,7 +3216,7 @@ function DebateRecordingModal({
   canRetryConnection,
   onRetryConnection,
   onLeave,
-  leaveLabel,
+  returnsToLobby,
   leaveDisabled,
 }: {
   debate: Debate;
@@ -3252,7 +3252,7 @@ function DebateRecordingModal({
   canRetryConnection: boolean;
   onRetryConnection: () => void;
   onLeave: () => void;
-  leaveLabel: string;
+  returnsToLobby: boolean;
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
@@ -3570,16 +3570,13 @@ function DebateRecordingModal({
               requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
             />
           )}
-          <RecordingCircleButton
-            ariaLabel={roomState === 'saving' ? 'Saving local recording' : leaveLabel}
-            title={roomState === 'saving' ? 'Saving local recording' : leaveLabel}
+          <DebateLeaveButton
+            returnsToLobby={returnsToLobby}
+            saving={roomState === 'saving'}
             onClick={onLeave}
             disabled={leaveDisabled}
-            className={cx('ml-auto shrink-0', leaveLabel === 'Back to lobby' && 'w-auto grid-flow-col gap-2 px-3')}
-          >
-            <LeaveIcon />
-            {leaveLabel === 'Back to lobby' && <span className="text-metadata">{leaveLabel}</span>}
-          </RecordingCircleButton>
+            className="ml-auto shrink-0"
+          />
         </div>
 
         {/* A size container, so the Open rounds panel and banners over the tiles size with them. */}
@@ -3648,7 +3645,7 @@ function DebateRecordingModal({
           waitingForOpponent={rematchSession !== null && !remoteConsented}
           // The only way out while the room is hidden; a lobby it returns to joins on arrival.
           onLeave={onLeave}
-          leaveLabel={leaveLabel}
+          returnsToLobby={returnsToLobby}
           leaveDisabled={leaveDisabled}
         />
       )}
@@ -3945,13 +3942,13 @@ function DebateHandoffNotice({
   opponentName,
   waitingForOpponent,
   onLeave,
-  leaveLabel,
+  returnsToLobby,
   leaveDisabled,
 }: {
   opponentName: string;
   waitingForOpponent: boolean;
   onLeave: () => void;
-  leaveLabel: string;
+  returnsToLobby: boolean;
   leaveDisabled: boolean;
 }) {
   return (
@@ -3966,7 +3963,7 @@ function DebateHandoffNotice({
               onClick={onLeave}
               disabled={leaveDisabled}
             >
-              {leaveLabel === 'Back to lobby' ? leaveLabel : 'Leave'}
+              {returnsToLobby ? 'Back to lobby' : 'Leave'}
             </SmallButton>
           }
         >

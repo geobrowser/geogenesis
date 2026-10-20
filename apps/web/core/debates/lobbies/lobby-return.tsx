@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useHydrated } from '~/core/hooks/use-hydrated';
+
 import {
   consumeDebateReturnDestination,
   peekDebateReturnDestination,
@@ -47,6 +49,7 @@ function useServerLobbyReturn(): { lobbyId: string | null } | undefined {
  * lobby joins on arrival by itself (GEO-3337), so nothing here asks it to.
  */
 export function useDebateReturnNavigation() {
+  const hydrated = useHydrated();
   const lobby = useServerLobbyReturn();
   const lobbyId = lobby?.lobbyId;
   const known = lobby !== undefined;
@@ -54,7 +57,8 @@ export function useDebateReturnNavigation() {
     () => consumeDebateReturnDestination(known ? { lobbyId: lobbyId ?? null } : undefined),
     [known, lobbyId]
   );
-  return { consume, returnsToLobby: Boolean(known ? lobbyId : storedLobbyId()) };
+  // Session storage is only visible in the browser; keep the server and first client label equal.
+  return { consume, returnsToLobby: hydrated && Boolean(known ? lobbyId : storedLobbyId()) };
 }
 
 /**
