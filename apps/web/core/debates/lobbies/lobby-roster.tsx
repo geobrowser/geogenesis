@@ -554,6 +554,33 @@ const DESKTOP_GRID_CLASS = {
   4: 'grid-cols-1 gap-2 @[28rem]/speakers:grid-cols-2 @[38rem]/speakers:grid-cols-3 @[44rem]/speakers:grid-cols-4',
 } as const;
 
+type HoldFocus = (key: string, on: boolean) => void;
+
+/**
+ * Holds a speaker in place while focus is inside it (see `nextVideoGrid`'s `held`). Released on blur,
+ * and on unmount: a focused element that is removed (its person left, or the strip went away with
+ * the phone layout) never reports a blur.
+ */
+function FocusHold({
+  id,
+  owner,
+  hold,
+  children,
+}: {
+  id: string;
+  owner: 'tile' | 'chip' | 'strip';
+  hold: HoldFocus;
+  children: React.ReactNode;
+}) {
+  const key = `${owner}:${id}`;
+  React.useEffect(() => () => hold(key, false), [hold, key]);
+  return (
+    <div className="contents" onFocus={() => hold(key, true)} onBlur={() => hold(key, false)}>
+      {children}
+    </div>
+  );
+}
+
 type GridPerson = { member: DebateLobbyMember; props: PersonProps; voice: SpeakerVoice };
 
 /**
@@ -577,29 +604,28 @@ function SpeakerVideoGrid({
     props: personProps(member),
     voice: speakerVoice(states, member),
   }));
-  // Whose tile or chip has focus, including a menu opened from it: React focus events bubble out of
-  // portals, so a menu's own focus still reads as inside its tile. They stay put until it leaves.
-  const [held, setHeld] = React.useState<ReadonlySet<string>>(() => new Set());
-  const holdFocus = (id: string) => ({
-    onFocus: () => setHeld(current => (current.has(id) ? current : new Set(current).add(id))),
-    onBlur: () =>
-      setHeld(current => {
-        if (!current.has(id)) return current;
+  // Whose tile, chip or strip thumbnail has focus, including a menu opened from it: React focus
+  // events bubble out of portals, so a menu's own focus still reads as inside. Kept per holder, so
+  // one unmounting (see FocusHold) releases only its own hold.
+  const [holds, setHolds] = React.useState<ReadonlySet<string>>(() => new Set());
+  const hold = React.useCallback<HoldFocus>(
+    (key, on) =>
+      setHolds(current => {
+        if (current.has(key) === on) return current;
         const next = new Set(current);
-        next.delete(id);
+        if (on) next.add(key);
+        else next.delete(key);
         return next;
       }),
-  });
-  // A tile that unmounts (its person left, or became a listener) never reports a blur, so a hold
-  // on someone no longer speaking is dropped here; otherwise they would come back unmovable.
-  const speakerIds = new Set(speakers.map(member => member.user_id));
-  if ([...held].some(id => !speakerIds.has(id))) setHeld(new Set([...held].filter(id => speakerIds.has(id))));
+    []
+  );
+  const heldIds = new Set([...holds].map(key => key.slice(key.indexOf(':') + 1)));
   const inputs: VideoGridSpeaker[] = people.map(({ member, props, voice }) => ({
     id: member.user_id,
     pinned: props.isSelf || isHosting(member),
     speaking: voice.speaking,
     camera: Boolean(voice.camera),
-    held: held.has(member.user_id),
+    held: heldIds.has(member.user_id),
   }));
 
   // The previous pick, fed back in: a render that changes nothing returns an equal state and stops.
@@ -630,8 +656,10 @@ function SpeakerVideoGrid({
         )}
       >
         {tiles.map(({ member, props, voice }) => (
-          <li key={member.user_id} className="min-w-0" {...holdFocus(member.user_id)}>
-            <SpeakerTile {...props} voice={voice} grid={{ compact }} />
+          <li key={member.user_id} className="min-w-0">
+            <FocusHold id={member.user_id} owner="tile" hold={hold}>
+              <SpeakerTile {...props} voice={voice} grid={{ compact }} />
+            </FocusHold>
           </li>
         ))}
       </ul>
@@ -642,8 +670,10 @@ function SpeakerVideoGrid({
           </h3>
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {overflow.map(({ member, props, voice }) => (
-              <li key={member.user_id} className="min-w-0" {...holdFocus(member.user_id)}>
-                <ListenerChip {...props} voice={voice} data-testid="lobby-more-speaker" />
+              <li key={member.user_id} className="min-w-0">
+                <FocusHold id={member.user_id} owner="chip" hold={hold}>
+                  <ListenerChip {...props} voice={voice} data-testid="lobby-more-speaker" />
+                </FocusHold>
               </li>
             ))}
           </ul>
@@ -651,7 +681,7 @@ function SpeakerVideoGrid({
       ) : null}
       {phone ? (
         <LobbySlot name="speakerStrip" inPlace={false}>
-          <LobbySpeakerStrip tiles={tiles} overflow={overflow.length} holdFocus={holdFocus} />
+          <LobbySpeakerStrip tiles={tiles} overflow={overflow.length} hold={hold} />
         </LobbySlot>
       ) : null}
     </section>
@@ -666,12 +696,12 @@ function SpeakerVideoGrid({
 function LobbySpeakerStrip({
   tiles,
   overflow,
-  holdFocus,
+  hold,
 }: {
   tiles: GridPerson[];
   overflow: number;
   /** A focused thumbnail holds its speaker's tile, as a focused tile does. */
-  holdFocus: (id: string) => { onFocus: () => void; onBlur: () => void };
+  hold: HoldFocus;
 }) {
   const showPeople = React.useContext(LobbyShowPeopleContext) ?? undefined;
   const analytics = debateActionAnalyticsAttributes('hub', 'Lobby speaker strip');
@@ -684,21 +714,21 @@ function LobbySpeakerStrip({
       className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto overscroll-x-contain px-4"
     >
       {tiles.map(({ member, props, voice }) => (
-        <button
-          key={member.user_id}
-          type="button"
-          aria-label={`${personLabel(member, props.isSelf)}, show people`}
-          {...analytics}
-          {...holdFocus(member.user_id)}
-          data-speaking={voice.speaking || undefined}
-          onClick={showPeople}
-          className={cx(
-            'grid h-12 w-16 shrink-0 place-items-center overflow-hidden rounded-md bg-grey-01',
-            voice.speaking ? 'border-2 border-green' : 'border border-grey-02'
-          )}
-        >
-          <SpeakerPicture member={member} camera={voice.camera} mirrored={props.isSelf} avatarSize={28} />
-        </button>
+        <FocusHold key={member.user_id} id={member.user_id} owner="strip" hold={hold}>
+          <button
+            type="button"
+            aria-label={`${personLabel(member, props.isSelf)}, show people`}
+            {...analytics}
+            data-speaking={voice.speaking || undefined}
+            onClick={showPeople}
+            className={cx(
+              'grid h-12 w-16 shrink-0 place-items-center overflow-hidden rounded-md bg-grey-01',
+              voice.speaking ? 'border-2 border-green' : 'border border-grey-02'
+            )}
+          >
+            <SpeakerPicture member={member} camera={voice.camera} mirrored={props.isSelf} avatarSize={28} />
+          </button>
+        </FocusHold>
       ))}
       {overflow > 0 ? (
         <button

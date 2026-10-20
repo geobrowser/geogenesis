@@ -88,7 +88,8 @@ function placeTiles(
   // First time over the cap (a fresh page with a full room): pick by priority, then lay the picks out
   // in roster order so the grid reads like the roster.
   if (onGrid.size === 0) {
-    return [...speakers]
+    return speakers
+      .filter(speaker => !speaker.held)
       .sort(byPriority)
       .slice(0, cap)
       .map(speaker => speaker.id)
@@ -113,8 +114,9 @@ function placeTiles(
           order.get(b.id)! - order.get(a.id)!
       );
 
+  // A held chip stays a chip, whatever would bring them to the grid: talking, hosting, a gap.
   const claim = (id: string) => {
-    if (onGrid.has(id)) return;
+    if (onGrid.has(id) || !movable(id)) return;
     const gap = slots.indexOf(null);
     if (gap !== -1) {
       slots[gap] = id;
@@ -130,12 +132,11 @@ function placeTiles(
   };
 
   for (const speaker of speakers) if (speaker.pinned) claim(speaker.id);
-  // A held chip stays a chip, even once they talk.
-  for (const speaker of speakers) if (speaker.speaking && movable(speaker.id)) claim(speaker.id);
+  for (const speaker of speakers) if (speaker.speaking) claim(speaker.id);
   // Gaps, and room left by a smaller grid before, fill by the same priority.
   for (const speaker of [...notShown].sort(byPriority)) {
     if (!slots.includes(null) && slots.length >= cap) break;
-    if (movable(speaker.id)) claim(speaker.id);
+    claim(speaker.id);
   }
   return slots.filter((id): id is string => id !== null);
 }

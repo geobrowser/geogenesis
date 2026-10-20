@@ -555,6 +555,32 @@ describe('LobbyPeople video grid (GEO-3399)', () => {
     target.remove();
   });
 
+  it('releases a strip thumbnail’s hold when the phone layout goes away with focus on it', () => {
+    mocks.phone = true;
+    const target = document.createElement('div');
+    document.body.append(target);
+    const view = lobby(room(14));
+    const grid = (speaking: string[] = []) => (
+      <LobbySlotsProvider value={{ speakerStrip: target }}>{gridPeople(view, { speaking })}</LobbySlotsProvider>
+    );
+    const { rerender } = render(grid());
+    act(() => within(target).getByRole('button', { name: 'S08, show people' }).focus());
+
+    // To a desktop: the strip unmounts with S08's thumbnail focused, and no blur.
+    mocks.phone = false;
+    rerender(grid());
+    expect(within(target).queryByTestId('lobby-speaker-strip')).toBeNull();
+
+    // Everyone on the grid but S08 talks and stops, so S08 is quiet longest when S13 needs a tile.
+    const others = tileNames().filter(name => name !== 'S08' && name !== 'Adam (you)');
+    rerender(grid(others));
+    rerender(grid());
+    rerender(grid(['S13']));
+    expect(tileNames()).toContain('S13');
+    expect(tileNames()).not.toContain('S08');
+    target.remove();
+  });
+
   it('draws a phone’s speaker strip into the Claims slot, and a tap there shows People', () => {
     mocks.phone = true;
     const target = document.createElement('div');

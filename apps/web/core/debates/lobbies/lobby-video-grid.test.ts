@@ -163,6 +163,29 @@ describe('nextVideoGrid', () => {
     expect(grid.shown).toEqual(['s0', 's2', 's3']);
   });
 
+  it('leaves a held chip out when the grid empties and is picked afresh', () => {
+    // Everyone on the grid leaves at once; the room is still over the cap, and s3's chip has focus.
+    let grid = step(EMPTY_VIDEO_GRID, room(7));
+    expect(grid.shown).toEqual(['s0', 's1', 's2']);
+    grid = step(grid, room(7, index => ({ held: index === 3 })).slice(3));
+    expect(grid.shown).toEqual(['s4', 's5', 's6']);
+  });
+
+  it('leaves a held chip in the row when they become a host', () => {
+    let grid = step(EMPTY_VIDEO_GRID, room(4));
+    grid = step(
+      grid,
+      room(4, index => ({ pinned: index === 3, held: index === 3 }))
+    );
+    expect(grid.shown).toEqual(['s0', 's1', 's2']);
+    // The hold ends: now they take a tile.
+    grid = step(
+      grid,
+      room(4, index => ({ pinned: index === 3 }))
+    );
+    expect(grid.shown).toContain('s3');
+  });
+
   it('fills a gap with someone who is not held', () => {
     let grid = step(EMPTY_VIDEO_GRID, room(5));
     grid = step(
