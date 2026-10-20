@@ -38,7 +38,7 @@ export function calendarReturnCopy(outcome: 'connected' | 'error', reason: strin
   }
 }
 
-/** "Synced 4 min ago". Coarse on purpose: syncs run every 15 minutes. */
+/** "Synced 4 min ago". Coarse, since syncs run every 15 minutes. */
 export function syncedAgo(lastSuccessAt: string | null, now = Date.now()) {
   if (!lastSuccessAt) return 'Not synced yet';
   const at = Date.parse(lastSuccessAt);

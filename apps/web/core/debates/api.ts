@@ -1238,9 +1238,8 @@ export async function getCalendarConnections(getPrivyIdentityToken: GetPrivyIden
 }
 
 /**
- * Starts Google's consent flow. Google sends the browser back to `returnTo` with
- * `?calendar=connected` or `?calendar=error&reason=…`. Credentials included: geo-chat binds the
- * flow to this browser with a cookie.
+ * Returns Google's consent URL; geo-chat redirects back to `returnTo` with `?calendar=…`.
+ * Credentials included for geo-chat's browser-binding cookie.
  */
 export async function connectGoogleCalendar(
   returnTo: string,
