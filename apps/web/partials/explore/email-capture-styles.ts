@@ -46,16 +46,17 @@ export const CONTROL_LABEL_CLASS = 'text-[16px] leading-none tracking-[-0.35px] 
  * `z-1101` is one above the chat launcher's `z-1100`, which shares this corner. Rises 5px into place
  * as it fades in each time it mounts; with reduced motion it only fades.
  */
-export const CARD_CLASS =
-  'fixed right-4 bottom-4 z-1101 w-[308px] animate-rise-in overflow-clip rounded-xl border border-grey-02 bg-white shadow-lg motion-reduce:animate-fade-in mobile:inset-x-0 mobile:bottom-0 mobile:w-auto mobile:rounded-none mobile:rounded-t-xl mobile:shadow-none';
+const CARD_SURFACE_CLASS =
+  'animate-rise-in overflow-clip rounded-xl border border-grey-02 bg-white shadow-lg motion-reduce:animate-fade-in mobile:rounded-none mobile:rounded-t-xl mobile:shadow-none';
+
+export const CARD_CLASS = `${CARD_SURFACE_CLASS} fixed right-4 bottom-4 z-1101 w-[308px] mobile:inset-x-0 mobile:bottom-0 mobile:w-auto`;
 
 /**
  * The same card centred on the screen, for the save-votes sheet the navbar opens (GEO-3400). A bit
  * wider than the corner card, which sits at the edge; on the phone it is the same bottom sheet.
  * Positioned by the full-screen layer it sits in, so it carries no offsets of its own.
  */
-export const CENTERED_CARD_CLASS =
-  'pointer-events-auto relative w-[340px] max-w-full animate-rise-in overflow-clip rounded-xl border border-grey-02 bg-white shadow-lg motion-reduce:animate-fade-in mobile:w-full mobile:rounded-none mobile:rounded-t-xl mobile:shadow-none';
+export const CENTERED_CARD_CLASS = `${CARD_SURFACE_CLASS} pointer-events-auto relative w-[340px] max-w-full mobile:w-full`;
 
 /**
  * The 12px close glyph, 11px in from the top-right corner, padded to a 20px target (a touch-sized

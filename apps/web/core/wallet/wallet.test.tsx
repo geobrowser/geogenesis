@@ -10,7 +10,7 @@ import { GeoConnectButton } from './wallet';
 const mocks = vi.hoisted(() => ({
   login: vi.fn(),
   prepareOnboarding: vi.fn(),
-  saveSignIn: vi.fn(),
+  privySignIn: vi.fn(),
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
@@ -21,7 +21,7 @@ vi.mock('../analytics', () => ({ trackPrivyAuth: vi.fn() }));
 vi.mock('../hooks/use-prepare-onboarding', () => ({
   usePrepareOnboarding: () => mocks.prepareOnboarding,
 }));
-vi.mock('../hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.saveSignIn }));
+vi.mock('../hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.privySignIn }));
 
 afterEach(() => {
   cleanup();
@@ -46,7 +46,7 @@ describe('GeoConnectButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save 2 votes' }));
 
     expect(readSaveVotesPrompt()).toBe('navbar');
-    expect(mocks.saveSignIn).not.toHaveBeenCalled();
+    expect(mocks.privySignIn).not.toHaveBeenCalled();
     expect(mocks.login).not.toHaveBeenCalled();
   });
 

@@ -112,10 +112,21 @@ export function SaveVotesSheet() {
   // Centred, the sheet is a modal of its own, which this would find and hide itself behind. Nothing
   // else is modal at the press that opens it, and anything opened later is opened from inside it.
   const isAnyModalOpen = useAnyModalOpen(open && !centered);
+  const signInProperties = saveVotesSignInProperties('email', count, reason);
   // The email capture card shares this corner, and is mid-signup if it is still up once votes exist.
   const isEmailCaptureShowing = useIsEmailCaptureShowing();
   // Privy's dialog still comes first, centred or not: it is the visitor's sign-in in progress.
   const overlayOpen = centered ? isModalOpen : isModalOpen || isChatOpen || isAnyModalOpen || isEmailCaptureShowing;
+
+  // Privy's dialog over the centred sheet is the code step's fallback (a send it could not make).
+  // The sheet's modal would hold focus and pointer events away from it, so it steps aside instead,
+  // as "Other ways to sign in" once did: the attempt Privy resumes is still a save, so the votes are
+  // saved if it completes, and stay on the device if not.
+  React.useEffect(() => {
+    if (!centered || !isModalOpen) return;
+    setCodeEmail(null);
+    closeSaveVotesPrompt();
+  }, [centered, isModalOpen]);
   const visible = open && !overlayOpen;
 
   // Counted and measured once per opening, and only once the visitor can see it: an ask that waits
@@ -147,7 +158,7 @@ export function SaveVotesSheet() {
       setInvalid(true);
       return;
     }
-    beginPrivyAuth(saveVotesSignInProperties('email', count, reason ?? undefined));
+    beginPrivyAuth(signInProperties);
     prepareOnboarding();
     setCodeEmail(trimmed);
   };
@@ -180,7 +191,7 @@ export function SaveVotesSheet() {
             <p className={HEADING_CLASS}>Check your email</p>
             <AccountStep
               email={codeEmail}
-              analytics={saveVotesSignInProperties('email', count, reason ?? undefined)}
+              analytics={signInProperties}
               analyticsLabel="Save votes verification"
               onGiveUp={close}
             />
@@ -207,7 +218,7 @@ export function SaveVotesSheet() {
                 <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, returnVisit)}</p>
               </>
             )}
-            <VoteChips votes={votes} limit={centered ? 4 : 2} className={lobbyName ? 'mt-1.5' : undefined} />
+            <VoteChips votes={votes} rows={centered ? 2 : 1} className={lobbyName ? 'mt-1.5' : undefined} />
 
             <div className={FORM_STACK_CLASS}>
               <input
@@ -296,14 +307,14 @@ const CHIP_CLASS =
   'flex items-center rounded-full border border-grey-02 bg-grey-01 px-2 py-[3px] text-[12px] leading-[14px] text-text';
 
 /**
- * The visitor's latest votes, then how many more: a reminder of what closing this leaves behind. One
- * row of two in the corner card; the centred dialog has room for a second row before the "+N".
+ * The visitor's latest votes, two to a row, then how many more: a reminder of what closing this
+ * leaves behind. One row in the corner card; the centred dialog has room for a second.
  */
-function VoteChips({ votes, limit, className }: { votes: LocalVote[]; limit: number; className?: string }) {
+function VoteChips({ votes, rows, className }: { votes: LocalVote[]; rows: 1 | 2; className?: string }) {
   const shown = [...votes]
     .reverse()
     .filter(vote => vote.title)
-    .slice(0, limit);
+    .slice(0, rows * 2);
   const more = votes.length - shown.length;
   if (shown.length === 0) return null;
   return (
@@ -311,9 +322,8 @@ function VoteChips({ votes, limit, className }: { votes: LocalVote[]; limit: num
       {shown.map(vote => (
         <li
           key={`${vote.entityId}:${vote.spaceId}:${vote.responseKind}`}
-          // Two to a row either way; in the centred dialog a touch narrower, so the "+N" closes the
-          // second row instead of wrapping onto a third.
-          className={cx(CHIP_CLASS, limit > 2 ? 'max-w-[128px]' : 'max-w-[132px]', 'gap-1')}
+          // A touch narrower over two rows, so the "+N" closes the second instead of wrapping to a third.
+          className={cx(CHIP_CLASS, rows === 2 ? 'max-w-[128px]' : 'max-w-[132px]', 'gap-1')}
         >
           <span aria-hidden className="shrink-0">
             <ResponsePositionIcon responseKind={vote.responseKind} position={vote.direction === 'positive'} selected />

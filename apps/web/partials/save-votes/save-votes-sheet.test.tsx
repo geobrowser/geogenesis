@@ -35,10 +35,11 @@ const mocks = vi.hoisted(() => ({
   cancelPrivyAuth: vi.fn(),
   impression: vi.fn(),
   anyModalOpen: false,
+  isModalOpen: false,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
-  usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: false }),
+  usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
 }));
 vi.mock('~/core/hooks/use-any-modal-open', () => ({
   useAnyModalOpen: (enabled: boolean) => enabled && mocks.anyModalOpen,
@@ -76,6 +77,7 @@ beforeEach(() => {
   mocks.cancelPrivyAuth.mockReset();
   mocks.impression.mockReset();
   mocks.anyModalOpen = false;
+  mocks.isModalOpen = false;
 });
 
 describe('copy', () => {
@@ -296,8 +298,9 @@ describe('SaveVotesSheet from the navbar', () => {
     vote('a', 'First claim');
     vote('b', 'Second claim');
     markPromptedThisSession();
-    render(<SaveVotesSheet />);
+    const view = render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('navbar'));
+    return view;
   };
 
   it('is a centred modal dialog with the corner card’s content', () => {
@@ -347,6 +350,23 @@ describe('SaveVotesSheet from the navbar', () => {
       'Agree:Claim c',
       '+2',
     ]);
+  });
+
+  // The code step falls back to Privy's dialog when it cannot send a code. The centred modal would
+  // hold focus and pointer events away from it, so it hands over instead, keeping the votes.
+  it('hands over to Privy’s dialog when the code step falls back to it', () => {
+    const view = openFromNavbar();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
+
+    mocks.isModalOpen = true;
+    view.rerender(<SaveVotesSheet />);
+
+    expect(readSaveVotesPrompt()).toBeNull();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
+    expect(readLocalVotes().prompt.dismissCount).toBe(0);
+    expect(readLocalVotes().votes).toHaveLength(2);
   });
 
   it('closes on Escape and keeps the votes, like the corner card', () => {

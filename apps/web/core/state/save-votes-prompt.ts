@@ -5,8 +5,8 @@ import { useSyncExternalStore } from 'react';
 /**
  * Whether the "Save your votes" sheet is open, and why (GEO-3214).
  *
- * Module-level rather than an atom for the same reason as `local-votes`: the navbar opens a save
- * sign-in, and its tests mock `jotai` wholesale.
+ * Module-level rather than an atom for the same reason as `local-votes`: the navbar opens the sheet,
+ * and its tests mock `jotai` wholesale.
  */
 export type SaveVotesPromptReason =
   | 'threshold'

@@ -716,6 +716,31 @@ describe('ExploreEmailCapturePopup', () => {
       expect(mocks.loginWithCode).toHaveBeenCalledOnce();
     });
 
+    // Privy goes submitting → error with the wrong code still in the field. Coming out of `busy` must
+    // not send it again: each wrong try counts toward Privy retiring the code.
+    it('does not resend a wrong code as the verification fails', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      await act(async () => {
+        fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '111111' } });
+      });
+      expect(mocks.loginWithCode).toHaveBeenCalledOnce();
+
+      mocks.otpState = { status: 'submitting-code' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      mocks.otpState = { status: 'error' };
+      await act(async () => {
+        view.rerender(<ExploreEmailCapturePopup />);
+      });
+
+      expect(mocks.loginWithCode).toHaveBeenCalledOnce();
+      expect((screen.getByRole('textbox', { name: 'Verification code' }) as HTMLInputElement).value).toBe('');
+    });
+
     it('draws a box per digit from the one field', async () => {
       const view = await subscribeSuccessfully();
       await act(async () => {
@@ -1040,7 +1065,9 @@ describe('ExploreEmailCapturePopup', () => {
       mocks.otpState = { status: 'submitting-code' };
       view.rerender(<ExploreEmailCapturePopup />);
 
-      expect(screen.getByRole('button', { name: 'Send a new code' })).toBeDisabled();
+      // GEO-3400: "Verifying…" takes the resend line's place, so there is nothing to press.
+      expect(screen.queryByRole('button', { name: 'Send a new code' })).toBeNull();
+      expect(screen.getByText('Verifying…')).toBeInTheDocument();
     });
 
     it('says so when the code is refused, and offers a new one', async () => {

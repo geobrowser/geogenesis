@@ -14,6 +14,18 @@ import { ERROR_CLASS, FORM_STACK_CLASS, SUBTEXT_CLASS } from './email-capture-st
 /** Privy's OTP is six digits. */
 const CODE_LENGTH = 6;
 
+/** The muted line under the boxes: the resend link, or the verification under way. */
+const NOTE_CLASS = 'mt-2 text-[14px] tracking-[-0.35px] text-[rgba(21,21,21,0.7)]';
+
+/**
+ * Typing always lands in the next empty box, so the caret is kept at the end of the hidden field
+ * rather than wherever a tap on a box put it.
+ */
+function keepCaretAtEnd(input: HTMLInputElement) {
+  const end = input.value.length;
+  if (input.selectionStart !== end || input.selectionEnd !== end) input.setSelectionRange(end, end);
+}
+
 // The headless attempt and its modal fallback belong to the same signup surface.
 export const ACCOUNT_ANALYTICS = {
   component: 'explore_email_capture',
@@ -138,21 +150,19 @@ export function AccountStep({
     void requestCode();
   }, [requestCode]);
 
-  // The code each verification was sent with, so a wrong one is not sent again on a re-render: the
-  // next try is the next time the six digits change.
-  const submittedRef = React.useRef<string | null>(null);
-
-  const submitCode = React.useCallback(async () => {
-    if (code.length !== CODE_LENGTH || submittedRef.current === code) return;
-    submittedRef.current = code;
-    try {
-      await loginWithCode({ code });
-      // Nothing to do on success. `authenticated` flips, the guard in the parent unmounts this,
-      // and onboarding picks up a new account with no profile on its own.
-    } catch {
-      // Privy puts the reason in `otpState`, which the markup below reads.
-    }
-  }, [code, loginWithCode]);
+  const submitCode = React.useCallback(
+    async (value: string) => {
+      if (value.length !== CODE_LENGTH) return;
+      try {
+        await loginWithCode({ code: value });
+        // Nothing to do on success. `authenticated` flips, the guard in the parent unmounts this,
+        // and onboarding picks up a new account with no profile on its own.
+      } catch {
+        // Privy puts the reason in `otpState`, which the markup below reads.
+      }
+    },
+    [loginWithCode]
+  );
 
   // `autoFocus` cannot do this job. The field renders enabled for one frame, takes focus, and is
   // then disabled by the send that starts on mount -- which blurs it, and nothing focuses it again
@@ -168,24 +178,21 @@ export function AccountStep({
     if (!busy) codeInputRef.current?.focus();
   }, [busy]);
 
-  // A wrong code empties the boxes for the next try, as Privy's step does, and may be tried again.
+  // A wrong code empties the boxes for the next try, as Privy's step does.
   React.useEffect(() => {
-    if (!failed) return;
-    submittedRef.current = null;
-    setCode('');
+    if (failed) setCode('');
   }, [failed]);
 
-  // The sixth digit is the submit: typed, pasted or filled in from the message.
-  React.useEffect(() => {
-    if (!busy && code.length === CODE_LENGTH) void submitCode();
-  }, [busy, code, submitCode]);
-
-  // Typing always lands in the next empty box, so the caret is kept at the end of the hidden field
-  // rather than wherever a tap on a box put it.
-  const keepCaretAtEnd = (input: HTMLInputElement) => {
-    const end = input.value.length;
-    if (input.selectionStart !== end || input.selectionEnd !== end) input.setSelectionRange(end, end);
-  };
+  const resendButton = (label: string) => (
+    <button
+      type="button"
+      onClick={() => void requestCode()}
+      disabled={busy}
+      className="underline underline-offset-2 disabled:opacity-60"
+    >
+      {label}
+    </button>
+  );
 
   return (
     <form
@@ -194,7 +201,7 @@ export function AccountStep({
       data-geo-analytics-intent="signup"
       onSubmit={event => {
         event.preventDefault();
-        void submitCode();
+        void submitCode(code);
       }}
       noValidate
     >
@@ -220,7 +227,7 @@ export function AccountStep({
                   failed && code.length === 0
                     ? 'border-red-01'
                     : focused && !busy && index === Math.min(code.length, CODE_LENGTH - 1)
-                      ? 'border-[#151515] ring-1 ring-[#151515]'
+                      ? 'border-text ring-1 ring-text'
                       : 'border-grey-02',
                   busy && 'text-grey-04'
                 )}
@@ -246,7 +253,14 @@ export function AccountStep({
             // job on the normalized value, which is the only place it is correct.
             pattern="\d*"
             value={code}
-            onChange={event => setCode(event.currentTarget.value.replace(/\D/g, '').slice(0, CODE_LENGTH))}
+            onChange={event => {
+              const next = event.currentTarget.value.replace(/\D/g, '').slice(0, CODE_LENGTH);
+              setCode(next);
+              // The sixth digit is the submit: typed, pasted or filled in from the message. From the
+              // change itself rather than an effect on the code, which would also fire as a failed
+              // verification hands the field back — sending the wrong code a second time.
+              void submitCode(next);
+            }}
             onFocus={event => {
               setFocused(true);
               keepCaretAtEnd(event.currentTarget);
@@ -262,38 +276,20 @@ export function AccountStep({
             className="absolute inset-0 h-full w-full cursor-text appearance-none border-0 bg-transparent text-[16px] text-transparent caret-transparent outline-hidden selection:bg-transparent"
           />
         </div>
-        {verifying ? (
-          <p role="status" className="text-[14px] tracking-[-0.35px] text-[rgba(21,21,21,0.7)]">
-            Verifying…
-          </p>
-        ) : null}
       </div>
 
-      {failed ? (
+      {verifying ? (
+        // In the resend line's place, so the card keeps its height while the code is checked.
+        // No role of its own: both hosts wrap this step in a `status` region, which announces it.
+        <p className={NOTE_CLASS}>Verifying…</p>
+      ) : failed ? (
         <p role="alert" className={ERROR_CLASS}>
-          That code did not work.{' '}
-          <button
-            type="button"
-            onClick={() => void requestCode()}
-            disabled={busy}
-            className="underline underline-offset-2 disabled:opacity-60"
-          >
-            Send a new one
-          </button>
+          That code did not work. {resendButton('Send a new one')}
         </p>
       ) : (
         // Always reachable, not only after a failure: a code can simply not arrive, and Privy
         // retires one after five wrong attempts, at which point the only way forward is a new code.
-        <p className="mt-2 text-[14px] tracking-[-0.35px] text-[rgba(21,21,21,0.7)]">
-          <button
-            type="button"
-            onClick={() => void requestCode()}
-            disabled={busy}
-            className="underline underline-offset-2 disabled:opacity-60"
-          >
-            Send a new code
-          </button>
-        </p>
+        <p className={NOTE_CLASS}>{resendButton('Send a new code')}</p>
       )}
     </form>
   );
