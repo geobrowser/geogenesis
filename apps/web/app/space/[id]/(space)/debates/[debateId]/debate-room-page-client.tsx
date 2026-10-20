@@ -43,6 +43,7 @@ import {
   DebateRoomHoldingScreen,
   DebateRoomLoadingState,
 } from '~/core/debates/debate-room-holding-screens';
+import { DebateRoomNotice, DebateRoomNoticeAction } from '~/core/debates/debate-room-notice';
 import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
@@ -3327,6 +3328,7 @@ function DebateRecordingModal({
         remainingSeconds={countdown.remainingSeconds}
         progress={countdown.progress}
         variant={speakerFinalSeconds ? 'warning' : 'default'}
+        openRounds={openRoundsStyle}
         buildUp={openRoundsStyle && speakingTurn ? { remainingMs: countdown.remainingMs } : null}
       />
     ) : null;
@@ -3642,13 +3644,43 @@ function DebateRecordingModal({
           </div>
         </div>
 
-        {roomState === 'reconnecting' && (
+        {openRoundsStyle && (
+          <RoomExit layout="inline" className="w-full max-w-[430px]">
+            {roomState === 'reconnecting' && <DebateRoomNotice>Reconnecting to the debate room…</DebateRoomNotice>}
+          </RoomExit>
+        )}
+        {!openRoundsStyle && roomState === 'reconnecting' && (
           <div className="mt-3 w-full max-w-[430px] rounded-lg border border-grey-02 bg-white px-4 py-3">
             <Text>Reconnecting to the debate room…</Text>
           </div>
         )}
 
-        {roomError && (
+        {openRoundsStyle && (
+          <RoomExit layout="inline" className="w-full max-w-[430px]">
+            {roomError && (
+              <DebateRoomNotice
+                error
+                actions={
+                  <>
+                    {['thanking', 'complete'].includes(debate.status) && (
+                      <DebateRoomNoticeAction onClick={onRetryFinalization} disabled={controlsDisabled}>
+                        Retry save
+                      </DebateRoomNoticeAction>
+                    )}
+                    {canRetryConnection && (
+                      <DebateRoomNoticeAction onClick={onRetryConnection} disabled={controlsDisabled}>
+                        Retry connection
+                      </DebateRoomNoticeAction>
+                    )}
+                  </>
+                }
+              >
+                {roomError}
+              </DebateRoomNotice>
+            )}
+          </RoomExit>
+        )}
+        {!openRoundsStyle && roomError && (
           <div className="mt-3 flex w-full max-w-[430px] flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
             <Text color="red-01">{roomError}</Text>
             {['thanking', 'complete'].includes(debate.status) && (

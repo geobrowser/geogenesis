@@ -3219,12 +3219,13 @@ describe('DebateRoomPageClient', () => {
     expect(track.detach).toHaveBeenCalled();
   });
 
-  it('surfaces a reconnecting state while LiveKit restarts a dropped call', async () => {
+  it.each([false, true])('surfaces and clears a reconnecting state (Open rounds: %s)', async openRounds => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
       status: 'connecting',
       connecting_started_at: '2099-07-02T00:00:00.000Z',
       connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+      open_rounds: openRounds ? openRoundsListening().open_rounds : undefined,
     };
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
@@ -3232,9 +3233,15 @@ describe('DebateRoomPageClient', () => {
 
     act(() => emitRoomEvent('reconnecting'));
     expect(screen.getByText('Reconnecting to the debate room…')).toBeInTheDocument();
+    if (openRounds) {
+      expect(screen.getByText('Reconnecting to the debate room…').closest('[role="status"]')).toHaveAttribute(
+        'data-room-notice',
+        'connection'
+      );
+    }
 
     act(() => emitRoomEvent('reconnected'));
-    expect(screen.queryByText('Reconnecting to the debate room…')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Reconnecting to the debate room…')).not.toBeInTheDocument());
   });
 
   it('reports a reconnect episode once, with its duration, and joins with resilient connect options', async () => {
@@ -7017,7 +7024,7 @@ function expectMutedIndicator(participant: 'local' | 'remote') {
   expect(indicator).toHaveAttribute('width', '51');
   expect(indicator).toHaveAttribute('height', '51');
   expect(indicator).toHaveAttribute('viewBox', '0 0 51 51');
-  expect(indicator).toHaveClass('size-[51px]');
+  expect(indicator).toHaveClass(mocks.debate?.open_rounds ? 'size-[9cqw]' : 'size-[51px]');
 
   const paths = indicator?.querySelectorAll('path');
   const background = paths?.[0];

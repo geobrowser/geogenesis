@@ -121,7 +121,7 @@ export function MicrophoneIcon({ muted }: { muted: boolean }) {
   );
 }
 
-export function MutedMicrophoneIndicator() {
+export function MutedMicrophoneIndicator({ openRounds = false }: { openRounds?: boolean }) {
   const gradientId = React.useId();
 
   return (
@@ -133,7 +133,7 @@ export function MutedMicrophoneIndicator() {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
       data-muted-indicator="true"
-      className="size-[51px]"
+      className={openRounds ? 'size-[9cqw]' : 'size-[51px]'}
     >
       <path
         d="M0 25.5C0 11.4167 11.4167 0 25.5 0C39.5833 0 51 11.4167 51 25.5C51 39.5833 39.5833 51 25.5 51C11.4167 51 0 39.5833 0 25.5Z"

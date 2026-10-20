@@ -17,6 +17,7 @@ import {
   RoomDim,
   RoomExit,
   RoomMiddlePhrase,
+  RoomPill,
   RoomTilePill,
 } from './debate-room-stamps';
 import { recordingLabelTextShadow, recordingOverlayTextShadow } from './recording-overlay-styles';
@@ -246,7 +247,7 @@ export function DebateVideoTile({
           <RoomExit layout="inline">
             {showInactiveIndicator && (
               <div className={ROOM_ENTER_CLASS}>
-                <MutedMicrophoneIndicator />
+                <MutedMicrophoneIndicator openRounds />
               </div>
             )}
           </RoomExit>
@@ -456,7 +457,22 @@ export function DebateVideoTile({
 
       {!openRounds && reveal}
 
-      {overlayText && (
+      {openRounds ? (
+        <RoomExit className="z-10">
+          {overlayText && (
+            <div
+              role="status"
+              aria-live="polite"
+              data-room-media-status
+              className="pointer-events-none absolute inset-0 grid place-items-center bg-black/42 px-[4cqw] backdrop-blur-sm"
+            >
+              <RoomPill className={overlayCompact ? '[&>span]:text-balance [&>span]:whitespace-normal' : undefined}>
+                {overlayText}
+              </RoomPill>
+            </div>
+          )}
+        </RoomExit>
+      ) : overlayText ? (
         <div
           role="status"
           aria-live="polite"
@@ -474,7 +490,7 @@ export function DebateVideoTile({
             {overlayText}
           </Text>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

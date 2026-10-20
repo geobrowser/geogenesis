@@ -67,6 +67,22 @@ describe('RecordingCountdownRing', () => {
     expect(view.container.querySelector('[data-countdown-progress]')).toHaveAttribute('stroke', '#FFFFFF');
   });
 
+  it('keeps Open rounds shared-phase timers proportional without a speaking-turn build-up', () => {
+    const view = render(<RecordingCountdownRing remainingSeconds={3} progress={0.7} variant="default" openRounds />);
+    const timer = screen.getByLabelText('Phase timer: 3 seconds remaining');
+    expect(timer.style.width).toBe('9cqw');
+    expect(screen.getByText('3').style.fontSize).toBe('4cqw');
+    expect(timer).not.toHaveAttribute('data-turn-timer');
+    expect(timer).not.toHaveStyle({ scale: '1.3' });
+    expect(timer.querySelector('[data-turn-timer-rim]')).toBeNull();
+    expect(timer.querySelector('[data-turn-timer-track]')).toBeInTheDocument();
+
+    // A format switch restores the fixed-format timer instead of retaining the room styling.
+    view.rerender(<RecordingCountdownRing remainingSeconds={3} progress={0.7} variant="default" />);
+    expect(timer).toHaveStyle({ width: '51px', height: '51px' });
+    expect(timer.querySelector('[data-countdown-track]')).toBeInTheDocument();
+  });
+
   it('preserves the subdued yielded-timer treatment', () => {
     render(<RecordingCountdownRing remainingSeconds={4} progress={2 / 3} variant="muted" />);
 

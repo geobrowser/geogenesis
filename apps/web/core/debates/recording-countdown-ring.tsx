@@ -88,22 +88,26 @@ export function RecordingCountdownRing({
   progress,
   variant,
   buildUp = null,
+  openRounds = buildUp !== null,
 }: {
   remainingSeconds: number;
   progress: number;
   variant: RecordingCountdownVariant;
+  /** Use the room's proportional timer during connecting and other shared phases too. */
+  openRounds?: boolean;
   /**
    * An Open rounds turn's last ten seconds, as the published player draws them (GEO-3315): from
    * 10 s the timer pulses once a second and grows a step with each pulse; from 5 s it turns warning
    * red at its full size and holds there, its white rim draining to empty by 0 and each second
    * landing with a swell and a red glow. `remainingMs` is the turn's exact time left, which the rim
-   * drains by. `null` keeps today's timer, which every fixed format does.
+   * drains by. `null` disables the build-up, including during Open rounds shared phases.
    */
   buildUp?: { remainingMs: number } | null;
 }) {
   const gradientId = React.useId();
   const elapsedRatio = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
   const muted = variant === 'muted';
+  const proportional = openRounds || buildUp !== null;
   const stage = turnTimerBuildUp(buildUp ? remainingSeconds : Infinity);
   const { counting, final } = stage;
   const ringColor = muted ? 'rgba(190,190,190,0.92)' : variant === 'warning' ? COUNTDOWN_WARNING_COLOR : '#FFFFFF';
@@ -120,8 +124,8 @@ export function RecordingCountdownRing({
       data-turn-timer={buildUp ? stage.phase : undefined}
       className={cx('relative grid shrink-0 place-items-center', buildUp && TURN_TIMER_SCALE_CLASS)}
       style={{
-        width: buildUp ? '9cqw' : COUNTDOWN_SIZE,
-        height: buildUp ? '9cqw' : COUNTDOWN_SIZE,
+        width: proportional ? '9cqw' : COUNTDOWN_SIZE,
+        height: proportional ? '9cqw' : COUNTDOWN_SIZE,
         ...(buildUp ? { scale: stage.scale } : null),
       }}
     >
@@ -138,7 +142,7 @@ export function RecordingCountdownRing({
                 backgroundColor: final ? COUNTDOWN_WARNING_COLOR : undefined,
                 backgroundImage: buildUp && !final ? 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.25))' : undefined,
               } as React.CSSProperties)
-            : buildUp
+            : proportional
               ? { backgroundImage: 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.25))' }
               : undefined
         }
@@ -157,7 +161,7 @@ export function RecordingCountdownRing({
               } as React.CSSProperties
             }
           />
-        ) : buildUp ? (
+        ) : proportional ? (
           <span
             aria-hidden="true"
             data-turn-timer-track
@@ -216,9 +220,9 @@ export function RecordingCountdownRing({
           style={{
             color: numberColor,
             fontFamily: (final ? STAMP_FONT : LABEL_FONT).fontFamily,
-            fontSize: buildUp ? '4cqw' : 22,
+            fontSize: proportional ? '4cqw' : 22,
             fontWeight: final ? 700 : 500,
-            fontVariantNumeric: buildUp ? 'tabular-nums' : undefined,
+            fontVariantNumeric: proportional ? 'tabular-nums' : undefined,
             lineHeight: 1,
             transform: 'none',
           }}
