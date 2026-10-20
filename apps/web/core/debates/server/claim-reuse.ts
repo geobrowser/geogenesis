@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
-import { FROM_DEBATE_TAG_ID, POTENTIAL_DEBATE_TAG_ID } from '~/core/debates/ontology';
+import { DEBATE_TAG_ID, FROM_DEBATE_TAG_ID, POTENTIAL_DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 import { ENTITY_ID_BATCH_CONCURRENCY, batchEntityIds } from '~/core/io/queries';
@@ -204,8 +204,12 @@ export async function applyClaimReusePolicy(
   ];
   let verified: Set<string>;
   const existingTopicsByEntity = new Map<string, Set<string>>();
-  const alreadyTaggedPotentialDebate = new Set<string>();
+  // Entities not to offer for debate again: they carry Potential debate (offered already) or
+  // Debate (chosen already) in this space.
+  const alreadyOffered = new Set<string>();
   const alreadyTaggedFromDebate = new Set<string>();
+  const offeredKeys = [uuidToHex(POTENTIAL_DEBATE_TAG_ID), uuidToHex(DEBATE_TAG_ID)];
+  const fromDebateKey = uuidToHex(FROM_DEBATE_TAG_ID);
   try {
     const entities = ids.length > 0 ? await (options.lookup ?? lookupExistingClaimsInGraph)(ids, spaceId) : [];
     const spaceKey = uuidToHex(spaceId);
@@ -221,8 +225,8 @@ export async function applyClaimReusePolicy(
     for (const entity of entities) {
       existingTopicsByEntity.set(uuidToHex(entity.id), new Set((entity.topicIds ?? []).map(uuidToHex)));
       const tags = new Set((entity.tagIds ?? []).map(uuidToHex));
-      if (tags.has(uuidToHex(POTENTIAL_DEBATE_TAG_ID))) alreadyTaggedPotentialDebate.add(uuidToHex(entity.id));
-      if (tags.has(uuidToHex(FROM_DEBATE_TAG_ID))) alreadyTaggedFromDebate.add(uuidToHex(entity.id));
+      if (offeredKeys.some(key => tags.has(key))) alreadyOffered.add(uuidToHex(entity.id));
+      if (tags.has(fromDebateKey)) alreadyTaggedFromDebate.add(uuidToHex(entity.id));
     }
   } catch (error) {
     console.warn('[debate-acceptor] could not verify matched claims; minting all of them instead', {
@@ -259,14 +263,13 @@ export async function applyClaimReusePolicy(
         if (missing.length !== claim.topics.length) next = { ...next, topics: missing };
       }
       // Same rule for the Potential debate tag: an entity already offered for debate in this
-      // space must not be tagged a second time. Only that tag counts — one already picked as a
-      // motion (the Debate tag) is still offered, as it would be if it had been minted here.
-      if (next.isContestable && alreadyTaggedPotentialDebate.has(uuidToHex(claim.existingClaimEntityId))) {
+      // space — or already chosen, carrying the Debate tag — is not offered a second time.
+      if (next.isContestable && alreadyOffered.has(uuidToHex(claim.existingClaimEntityId))) {
         next = { ...next, isContestable: false };
       }
       // And for the From a debate tag, which every published claim carries: an entity an earlier
       // debate already tagged in this space keeps its one relation.
-      if (!next.fromDebateTagged && alreadyTaggedFromDebate.has(uuidToHex(claim.existingClaimEntityId))) {
+      if (alreadyTaggedFromDebate.has(uuidToHex(claim.existingClaimEntityId))) {
         next = { ...next, fromDebateTagged: true };
       }
       return next;

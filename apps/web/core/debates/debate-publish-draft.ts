@@ -487,12 +487,12 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     // claim per debate.
     const linkedBlockClaims = new Set<string>();
     const sourcedClaims = new Set<string>();
-    const debateTaggedClaims = new Set<string>();
+    const potentialDebateTaggedClaims = new Set<string>();
     const fromDebateTaggedClaims = new Set<string>();
     const mintedClaims = new Set<string>();
     // One stance relation per (claim, motion), however many statements share the claim entity: a
     // reused entity or a D1 stable id can sit behind several extracted claims. The first statement
-    // in transcript order decides; keyed like `debateTaggedClaims`, so verbatim twins from an
+    // in transcript order decides; keyed like `potentialDebateTaggedClaims`, so verbatim twins from an
     // older payload (fresh ids) also yield one verdict per text.
     const stancedClaims = new Set<string>();
     const writesStance = (input.subjectKind ?? 'claim') === 'claim';
@@ -551,6 +551,9 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         const claimId =
           existingClaimId ?? stableClaimId ?? mintEntityId(`claim:${turn.turnIndex}:${claimEntityText.toLowerCase()}`);
         const claimRef = { id: claimId, name: claimEntityText };
+        // Every per-entity set below keys on this: the API and geo-chat may hand the same entity
+        // back dashed on one claim and dashless on another.
+        const claimKey = normalizeId(claimId);
         // GEO-2870 option A: a claim under geo-chat's stable id may already be on the graph, put
         // there by the early claims publish (`buildDebateClaimsDraft`) minutes after extraction. The
         // relations describing it take ids derived from their endpoints, the same ids that publish
@@ -560,8 +563,8 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         const isStable = stableClaimId !== null;
         // A stable id is shared by every statement of one claim, so the entity is minted once —
         // under the first statement's text — and the later statements only link to it.
-        if (existingClaimId === null && !mintedClaims.has(normalizeId(claimId))) {
-          mintedClaims.add(normalizeId(claimId));
+        if (existingClaimId === null && !mintedClaims.has(claimKey)) {
+          mintedClaims.add(claimKey);
           setText(claimId, claimEntityText, NAME_PROPERTY_ID, claimEntityText);
           relate({
             fromEntity: claimRef,
@@ -585,10 +588,9 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // dedupe nothing: two verbatim extractions from an older payload therefore mint two
         // entities (the long-standing behaviour) but yield a single motion. Near-duplicates
         // that differ in wording still slip through — matching upstream is what catches those.
-        const tagKey =
-          existingClaimId || stableClaimId ? normalizeId(claimId) : `text:${claimEntityText.toLowerCase()}`;
-        if (claim.isContestable && !debateTaggedClaims.has(tagKey)) {
-          debateTaggedClaims.add(tagKey);
+        const tagKey = existingClaimId || stableClaimId ? claimKey : `text:${claimEntityText.toLowerCase()}`;
+        if (claim.isContestable && !potentialDebateTaggedClaims.has(tagKey)) {
+          potentialDebateTaggedClaims.add(tagKey);
           relate({
             fromEntity: claimRef,
             propertyId: TAG_PROPERTY_ID,
@@ -601,8 +603,8 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // it, contestable or not — once per entity, which here means per id: verbatim twins
         // from an older payload are two entities and each is from this debate. A reused entity
         // the policy found already tagged in this space is left alone.
-        if (!claim.fromDebateTagged && !fromDebateTaggedClaims.has(normalizeId(claimId))) {
-          fromDebateTaggedClaims.add(normalizeId(claimId));
+        if (!claim.fromDebateTagged && !fromDebateTaggedClaims.has(claimKey)) {
+          fromDebateTaggedClaims.add(claimKey);
           relate({
             fromEntity: claimRef,
             propertyId: TAG_PROPERTY_ID,
@@ -614,7 +616,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         for (const topic of claim.topics ?? []) relateTopic(claimRef, topic, isStable);
         // Never from the motion to itself: the reuse policy refuses a reference to the motion,
         // but a stable id is not checked against it, and a self-relation is never right.
-        if (writesStance && claim.stance && normalizeId(claimId) !== motionKey && !stancedClaims.has(tagKey)) {
+        if (writesStance && claim.stance && claimKey !== motionKey && !stancedClaims.has(tagKey)) {
           stancedClaims.add(tagKey);
           relate({
             fromEntity: claimRef,
@@ -624,7 +626,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
             stable: isStable,
           });
         }
-        const blockClaimKey = `${blockId}:${claimId}`;
+        const blockClaimKey = `${blockId}:${claimKey}`;
         if (!linkedBlockClaims.has(blockClaimKey)) {
           linkedBlockClaims.add(blockClaimKey);
           const statement = relate({
@@ -671,8 +673,8 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
             });
           }
         }
-        if (!sourcedClaims.has(claimId)) {
-          sourcedClaims.add(claimId);
+        if (!sourcedClaims.has(claimKey)) {
+          sourcedClaims.add(claimKey);
           relate({
             fromEntity: claimRef,
             propertyId: SOURCES_PROPERTY_ID,
@@ -810,7 +812,7 @@ export function buildDebateClaimsDraft(
 
   const claimIds: string[] = [];
   const minted = new Set<string>();
-  const tagged = new Set<string>();
+  const potentialDebateTagged = new Set<string>();
   const fromDebateTagged = new Set<string>();
   const topicEdges = new Set<string>();
   let firstClaimText: string | null = null;
@@ -851,8 +853,8 @@ export function buildDebateClaimsDraft(
           );
         }
       }
-      if (claim.isContestable && !tagged.has(key)) {
-        tagged.add(key);
+      if (claim.isContestable && !potentialDebateTagged.has(key)) {
+        potentialDebateTagged.add(key);
         relate(claimRef, TAG_PROPERTY_ID, { id: POTENTIAL_DEBATE_TAG_ID, name: 'Potential debate' });
       }
       if (!fromDebateTagged.has(key)) {

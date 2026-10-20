@@ -35,9 +35,10 @@ export const DEBATE_TAG_ID = '55c95b2626f8482cb9739ea99dfde438';
  * the "Potential debate" tag.
  *
  * What the debate publisher writes on a contestable extracted claim, in place of the Debate tag
- * it wrote until 20 Oct 2026. Editors apply the same tag by hand across spaces. Nothing in the
- * app reads it: the debates surfaces still read {@link DEBATE_TAG_ID}, so an extracted claim
- * becomes a candidate motion only once a curator promotes it.
+ * it wrote until 20 Oct 2026. Editors apply the same tag by hand across spaces. Only the reuse
+ * policy reads it, so as not to write it twice; the debates surfaces still read
+ * {@link DEBATE_TAG_ID}, so an extracted claim becomes a candidate motion only once a curator
+ * promotes it.
  */
 export const POTENTIAL_DEBATE_TAG_ID = 'b63a27fd937e472092c0ef8d2a1168e5';
 
@@ -46,8 +47,10 @@ export const POTENTIAL_DEBATE_TAG_ID = 'b63a27fd937e472092c0ef8d2a1168e5';
  * "From a debate" tag.
  *
  * Provenance, not curation. The debate publisher writes it on every claim it publishes —
- * contestable or not, minted or reused — once per entity in the publication space, so the graph
- * can be asked for everything debates produced. Nothing in the app reads it.
+ * contestable or not, minted or reused — once per entity in the publication space (per sweep:
+ * the reuse policy's graph read cannot see an edit that has not indexed yet), so the graph can
+ * be asked for everything debates produced. Only the reuse policy reads it, so as not to write
+ * it twice.
  */
 export const FROM_DEBATE_TAG_ID = 'dbf13e0d452a4ebd831d9d800883a30a';
 
