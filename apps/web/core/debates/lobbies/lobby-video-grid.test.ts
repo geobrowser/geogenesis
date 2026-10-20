@@ -186,6 +186,57 @@ describe('nextVideoGrid', () => {
     expect(grid.shown).toContain('s3');
   });
 
+  it('gives someone in the row whose camera comes on the tile of the quietest camera that is off', () => {
+    let grid = step(
+      EMPTY_VIDEO_GRID,
+      room(5, index => ({ camera: index === 1 }))
+    );
+    expect(grid.shown).toEqual(['s0', 's1', 's2']);
+    grid = step(
+      grid,
+      room(5, index => ({ camera: index === 1 || index === 4 }))
+    );
+    // s2 is the latest camera-off tile in the roster; s1's camera tile is never taken for a camera.
+    expect(grid.shown).toEqual(['s0', 's1', 's4']);
+  });
+
+  it('catches up a grid picked before any camera arrived, without taking a camera tile', () => {
+    // The first pick runs before voice connects, so nobody has a camera yet.
+    let grid = step(
+      EMPTY_VIDEO_GRID,
+      room(14, () => ({ camera: false })),
+      12
+    );
+    expect(grid.shown).not.toContain('s13');
+    grid = step(
+      grid,
+      room(14, index => ({ camera: index === 13 })),
+      12
+    );
+    expect(grid.shown).toContain('s13');
+    expect(grid.shown).toHaveLength(12);
+  });
+
+  it('keeps a tile whose camera goes off, and waits for a camera-off tile to swap', () => {
+    let grid = step(EMPTY_VIDEO_GRID, room(4));
+    grid = step(
+      grid,
+      room(4, index => ({ camera: index !== 1 }))
+    );
+    expect(grid.shown).toEqual(['s0', 's1', 's2']);
+  });
+
+  it('drops tiles from the end for a smaller cap, keeping a held one', () => {
+    let grid = step(EMPTY_VIDEO_GRID, room(14), 12);
+    expect(grid.shown).toHaveLength(12);
+    grid = step(
+      grid,
+      room(14, index => ({ held: index === 11 })),
+      9
+    );
+    expect(grid.shown).toEqual(['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's11']);
+  });
+
   it('fills a gap with someone who is not held', () => {
     let grid = step(EMPTY_VIDEO_GRID, room(5));
     grid = step(

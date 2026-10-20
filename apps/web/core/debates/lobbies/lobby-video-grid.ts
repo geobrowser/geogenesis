@@ -6,8 +6,10 @@
  * and hosts always, then whoever is talking, then cameras on, then cameras off.
  *
  * Once someone has a tile it stays in the same place. Someone in the row who starts talking takes
- * the tile of whoever on the grid has been quiet longest; someone leaving leaves a gap that is filled
- * in place. Nobody else moves, and nobody being held (their tile or chip has focus, or a menu open
+ * the tile of whoever on the grid has been quiet longest; someone in the row whose camera comes on
+ * takes the tile of the quietest whose camera is off (this is also how a grid picked before cameras
+ * arrived catches up). Someone leaving leaves a gap that is filled in place, and a smaller cap (a
+ * phone) drops tiles from the end, never a held, hosting or talking one. Nobody else moves, and nobody being held (their tile or chip has focus, or a menu open
  * from it) moves at all. A grid that reshuffles on every voice is unreadable, and a tile taken out
  * from under a menu takes the menu with it.
  *
@@ -37,9 +39,11 @@ export type VideoGridState = {
   tick: number;
   /** When each id last started or stopped speaking, on `tick`'s clock. */
   spokeAt: Record<string, number>;
+  /** Whose camera was on when this was last computed, to catch one coming on. */
+  cameras: string[];
 };
 
-export const EMPTY_VIDEO_GRID: VideoGridState = { shown: [], speaking: [], tick: 0, spokeAt: {} };
+export const EMPTY_VIDEO_GRID: VideoGridState = { shown: [], speaking: [], tick: 0, spokeAt: {}, cameras: [] };
 
 export function nextVideoGrid(prev: VideoGridState, speakers: VideoGridSpeaker[], cap: number): VideoGridState {
   const ids = speakers.map(speaker => speaker.id);
@@ -60,13 +64,24 @@ export function nextVideoGrid(prev: VideoGridState, speakers: VideoGridSpeaker[]
     if (at !== undefined) spokeAt[id] = at;
   }
 
-  return { shown: placeTiles(prev.shown, speakers, spokeAt, cap), speaking: speakingNow, tick, spokeAt };
+  const camerasNow = speakers.filter(speaker => speaker.camera).map(speaker => speaker.id);
+  const hadCamera = new Set(prev.cameras);
+  const cameraCameOn = new Set(camerasNow.filter(id => !hadCamera.has(id)));
+
+  return {
+    shown: placeTiles(prev.shown, speakers, spokeAt, cameraCameOn, cap),
+    speaking: speakingNow,
+    tick,
+    spokeAt,
+    cameras: camerasNow,
+  };
 }
 
 function placeTiles(
   prevShown: string[],
   speakers: VideoGridSpeaker[],
   spokeAt: Record<string, number>,
+  cameraCameOn: ReadonlySet<string>,
   cap: number
 ): string[] {
   const byId = new Map(speakers.map(speaker => [speaker.id, speaker]));
@@ -75,7 +90,21 @@ function placeTiles(
     rank(a) - rank(b) || order.get(a.id)! - order.get(b.id)!;
 
   // Every tile where it was; someone who left leaves a gap (null) to fill in place.
-  const slots: (string | null)[] = prevShown.slice(0, cap).map(id => (byId.has(id) ? id : null));
+  const slots: (string | null)[] = prevShown.map(id => (byId.has(id) ? id : null));
+  // A smaller cap (desktop to phone): gaps go first, then, from the end, tiles that could give theirs
+  // up anyway. A held, hosting or talking tile stays; last of all, anyone not held.
+  const trim = (droppable: (id: string) => boolean) => {
+    for (let index = slots.length - 1; index >= 0 && slots.length > cap; index--) {
+      const id = slots[index];
+      if (id === null || droppable(id)) slots.splice(index, 1);
+    }
+  };
+  trim(() => false);
+  trim(id => {
+    const speaker = byId.get(id)!;
+    return !speaker.held && !speaker.pinned && !speaker.speaking;
+  });
+  trim(id => !byId.get(id)!.held);
   const onGrid = new Set(slots.filter((id): id is string => id !== null));
   const notShown = speakers.filter(speaker => !onGrid.has(speaker.id));
 
@@ -97,15 +126,16 @@ function placeTiles(
   }
 
   const movable = (id: string) => !byId.get(id)!.held;
-  // Who can give a tile up: not pinned, not talking, not held. Quiet longest first; among equals, a
-  // camera that is off before one that is on, then the later in the roster.
-  const evictable = () =>
+  // Who can give a tile up: not pinned, not talking, not held, and for a camera coming on, only
+  // someone whose camera is off. Quiet longest first; among equals, a camera that is off before one
+  // that is on, then the later in the roster.
+  const evictable = (cameraOffOnly: boolean) =>
     slots
       .map((id, index) => ({ id, index }))
       .filter((slot): slot is { id: string; index: number } => {
         if (slot.id === null) return false;
         const speaker = byId.get(slot.id)!;
-        return !speaker.pinned && !speaker.speaking && movable(slot.id);
+        return !speaker.pinned && !speaker.speaking && movable(slot.id) && !(cameraOffOnly && speaker.camera);
       })
       .sort(
         (a, b) =>
@@ -115,7 +145,7 @@ function placeTiles(
       );
 
   // A held chip stays a chip, whatever would bring them to the grid: talking, hosting, a gap.
-  const claim = (id: string) => {
+  const claim = (id: string, cameraOffOnly = false) => {
     if (onGrid.has(id) || !movable(id)) return;
     const gap = slots.indexOf(null);
     if (gap !== -1) {
@@ -123,7 +153,7 @@ function placeTiles(
     } else if (slots.length < cap) {
       slots.push(id);
     } else {
-      const out = evictable()[0];
+      const out = evictable(cameraOffOnly)[0];
       if (!out) return;
       onGrid.delete(out.id);
       slots[out.index] = id;
@@ -133,6 +163,7 @@ function placeTiles(
 
   for (const speaker of speakers) if (speaker.pinned) claim(speaker.id);
   for (const speaker of speakers) if (speaker.speaking) claim(speaker.id);
+  for (const speaker of speakers) if (cameraCameOn.has(speaker.id)) claim(speaker.id, true);
   // Gaps, and room left by a smaller grid before, fill by the same priority.
   for (const speaker of [...notShown].sort(byPriority)) {
     if (!slots.includes(null) && slots.length >= cap) break;
@@ -151,6 +182,7 @@ export function sameVideoGrid(a: VideoGridState, b: VideoGridState) {
   return (
     a.tick === b.tick &&
     sameList(a.shown, b.shown) &&
+    sameList(a.cameras, b.cameras) &&
     sameList(a.speaking, b.speaking) &&
     sameList(Object.keys(a.spokeAt), Object.keys(b.spokeAt)) &&
     Object.keys(a.spokeAt).every(id => a.spokeAt[id] === b.spokeAt[id])

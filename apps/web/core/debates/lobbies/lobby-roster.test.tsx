@@ -599,7 +599,8 @@ describe('LobbyPeople video grid (GEO-3399)', () => {
     expect(screen.getAllByTestId('lobby-speaker-frame')[0]).toHaveClass('aspect-[4/3]');
 
     const strip = within(target).getByTestId('lobby-speaker-strip');
-    const talking = within(strip).getByRole('button', { name: 'S01, show people' });
+    // Talking is in the name too: the People panel that shows it otherwise is hidden on Claims.
+    const talking = within(strip).getByRole('button', { name: 'S01, speaking, show people' });
     expect(talking).toHaveAttribute('data-speaking', 'true');
     fireEvent.click(within(strip).getByRole('button', { name: '2 more speakers, show people' }));
     expect(showPeople).toHaveBeenCalledTimes(1);

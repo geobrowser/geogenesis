@@ -717,7 +717,7 @@ function LobbySpeakerStrip({
         <FocusHold key={member.user_id} id={member.user_id} owner="strip" hold={hold}>
           <button
             type="button"
-            aria-label={`${personLabel(member, props.isSelf)}, show people`}
+            aria-label={`${personLabel(member, props.isSelf)}${voice.speaking ? ', speaking' : ''}, show people`}
             {...analytics}
             data-speaking={voice.speaking || undefined}
             onClick={showPeople}
