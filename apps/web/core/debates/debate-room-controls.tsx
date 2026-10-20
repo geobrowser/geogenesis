@@ -121,7 +121,13 @@ export function MicrophoneIcon({ muted }: { muted: boolean }) {
   );
 }
 
-export function MutedMicrophoneIndicator({ openRounds = false }: { openRounds?: boolean }) {
+export function MutedMicrophoneIndicator({
+  openRounds = false,
+  backdrop = true,
+}: {
+  openRounds?: boolean;
+  backdrop?: boolean;
+}) {
   const gradientId = React.useId();
 
   return (
@@ -138,7 +144,7 @@ export function MutedMicrophoneIndicator({ openRounds = false }: { openRounds?: 
       <path
         d="M0 25.5C0 11.4167 11.4167 0 25.5 0C39.5833 0 51 11.4167 51 25.5C51 39.5833 39.5833 51 25.5 51C11.4167 51 0 39.5833 0 25.5Z"
         fill={`url(#${gradientId})`}
-        fillOpacity="0.5"
+        fillOpacity={backdrop ? '0.5' : '0'}
       />
       <rect x="22" y="18" width="7" height="12.5" rx="3.5" stroke="white" />
       <path

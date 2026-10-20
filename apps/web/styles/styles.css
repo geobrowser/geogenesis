@@ -409,6 +409,13 @@
   initial-value: 0deg;
 }
 
+/* Let a clicked End turn settle from the current pulse instead of snapping its swell to 1. */
+@property --turn-timer-swell {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
 /* A half sine, matching the mockup's pulse rather than easing separately into each half. */
 @keyframes turnTimerPulse {
   from {

@@ -19,6 +19,8 @@ import {
   RoomPill,
   RoomTilePill,
 } from './debate-room-stamps';
+import { RecordingCornerIndicator } from './recording-corner-indicator';
+import type { RecordingCountdownRingProps } from './recording-countdown-ring';
 import { recordingLabelTextShadow, recordingOverlayTextShadow } from './recording-overlay-styles';
 
 export { recordingLabelTextShadow, recordingOverlayTextShadow } from './recording-overlay-styles';
@@ -156,7 +158,7 @@ export function DebateVideoTile({
   /** Names the tile for assistive technology — otherwise both are unlabelled `section`s. */
   tileLabel?: string;
   showMutedIndicator?: boolean;
-  countdown?: React.ReactNode;
+  countdown?: React.ReactElement<RecordingCountdownRingProps> | null;
   closingMessage?: boolean;
   /** The middle of the bottom row. The intro screen puts your mic and camera here. */
   tileControls?: React.ReactNode;
@@ -233,24 +235,12 @@ export function DebateVideoTile({
         </div>
       )}
       {openRounds ? (
-        // Add the two layers inside their own compositing group. With ordinary source-over
-        // blending the translucent discs darken/lighten mid-fade, even at matching opacities.
-        <div className="pointer-events-none absolute top-[2.4cqw] right-[2.4cqw] isolate z-20 grid">
-          <div
-            aria-hidden="true"
-            data-inactive-speaker={inactiveIndicatorId}
-            data-visible={showInactiveIndicator ? 'true' : 'false'}
-            className="col-start-1 row-start-1 mix-blend-plus-lighter"
-          >
-            <RoomExit layout="inline" crossfade>
-              {showInactiveIndicator && <MutedMicrophoneIndicator openRounds />}
-            </RoomExit>
-          </div>
-          <RoomExit layout="inline" crossfade className="col-start-1 row-start-1 mix-blend-plus-lighter">
-            {/* The count-in's number is the countdown, so the timer steps aside for it. */}
-            {!upcoming && countdown}
-          </RoomExit>
-        </div>
+        <RecordingCornerIndicator
+          participant={inactiveIndicatorId}
+          muted={showInactiveIndicator}
+          // The count-in's number is the countdown, so the timer steps aside for it.
+          countdown={upcoming ? null : countdown}
+        />
       ) : (
         <>
           <div

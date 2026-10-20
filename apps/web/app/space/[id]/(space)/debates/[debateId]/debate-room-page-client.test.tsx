@@ -6742,31 +6742,34 @@ describe('DebateRoomPageClient', () => {
       expect(pill('remote', 'turn')).toBeNull();
     });
 
-    it('fades the timer out as the muted microphone fades in when you end your turn', async () => {
+    it('keeps one circle and fades the timer away before bringing in the muted microphone', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:20.000'));
       mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
       await renderLiveDebate(openRoundsRoundOneSpeaking());
       await waitFor(() => expect(timer('local')).not.toBeNull());
-      const activeTimer = timer('local');
-      const timerFace = activeTimer?.firstElementChild;
+      const badge = timer('local');
+      const face = badge?.querySelector('[data-recording-badge-face]');
+      const timerNumber = badge?.querySelector('span.relative');
 
       fireEvent.click(await screen.findByRole('button', { name: 'End turn' }));
 
       await waitFor(() => expectMutedIndicator('local'));
-      expect(timer('local')?.closest('[data-room-leaving]')).not.toBeNull();
-      const indicator = debateVideoTile('local').querySelector('[data-muted-indicator="true"]');
-      const entering = indicator?.parentElement;
-      const leaving = timer('local')?.closest('[data-room-leaving]');
-      expect(timer('local')).toBe(activeTimer);
-      expect(timer('local')?.firstElementChild).toBe(timerFace);
-      expect(entering).toHaveClass('transition-opacity', 'duration-300', 'ease-linear');
-      expect(leaving).toHaveClass('transition-opacity', 'duration-300', 'ease-linear');
-      expect(entering).toHaveStyle({ opacity: 1 });
-      expect(leaving).toHaveStyle({ opacity: 0 });
-      expect(entering?.parentElement).toHaveClass('mix-blend-plus-lighter');
-      expect(leaving).toHaveClass('mix-blend-plus-lighter');
-      expect(leaving?.parentElement).toHaveClass('isolate');
-      await waitFor(() => expect(timer('local')).toBeNull());
+      expect(debateVideoTile('local').querySelector('[data-recording-badge]')).toBe(badge);
+      expect(badge?.querySelector('[data-recording-badge-face]')).toBe(face);
+      expect(timer('local')).toBeNull();
+      const indicator = badge?.querySelector('[data-muted-indicator="true"]');
+      expect(timerNumber?.parentElement).toHaveStyle({
+        opacity: 0,
+        transitionDuration: '100ms',
+        transitionDelay: '0ms',
+      });
+      expect(indicator?.parentElement).toHaveStyle({
+        opacity: 1,
+        transitionDuration: '150ms',
+        transitionDelay: '100ms',
+      });
+      expect(indicator?.querySelector('path')).toHaveAttribute('fill-opacity', '0');
+      await waitFor(() => expect(timerNumber).not.toBeInTheDocument());
     });
 
     it('dims both tiles under the pick panel', async () => {
@@ -7131,7 +7134,7 @@ function expectMutedIndicator(participant: 'local' | 'remote') {
     'M0 25.5C0 11.4167 11.4167 0 25.5 0C39.5833 0 51 11.4167 51 25.5C51 39.5833 39.5833 51 25.5 51C11.4167 51 0 39.5833 0 25.5Z'
   );
   expect(background).toHaveAttribute('fill', `url(#${gradient?.id})`);
-  expect(background).toHaveAttribute('fill-opacity', '0.5');
+  expect(background).toHaveAttribute('fill-opacity', mocks.debate?.open_rounds ? '0' : '0.5');
   expect(gradient).toHaveAttribute('x1', '25.5');
   expect(gradient).toHaveAttribute('y1', '0');
   expect(gradient).toHaveAttribute('x2', '25.5');

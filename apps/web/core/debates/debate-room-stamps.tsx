@@ -183,11 +183,13 @@ export function RoomExit({
   layout = 'fill',
   className,
   crossfade = false,
+  style,
 }: {
   children: React.ReactNode;
   layout?: 'fill' | 'inline';
   className?: string;
   crossfade?: boolean;
+  style?: React.CSSProperties;
 }) {
   const [previous, setPrevious] = React.useState(children);
   const [leaving, setLeaving] = React.useState<React.ReactNode>(null);
@@ -218,7 +220,7 @@ export function RoomExit({
         crossfade ? 'transition-opacity duration-300 ease-linear' : isLeaving && PLAYER_EXIT_CLASS,
         className
       )}
-      style={crossfade ? { opacity: isLeaving ? 0 : 1 } : undefined}
+      style={{ ...(crossfade ? { opacity: isLeaving ? 0 : 1 } : null), ...style }}
     >
       {content}
     </div>
