@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { NavUtils } from '~/core/utils/utils';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -17,6 +19,7 @@ interface Props {
   onBrowseClick: () => void;
   onSearchClick: () => void;
   hideLogo?: boolean;
+  showMobileLogo?: boolean;
   showBrowseButton?: boolean;
 }
 
@@ -27,6 +30,7 @@ export function Navbar({
   onBrowseClick,
   onSearchClick,
   hideLogo = false,
+  showMobileLogo = false,
   showBrowseButton = true,
 }: Props) {
   return (
@@ -56,11 +60,18 @@ export function Navbar({
           </button>
         ) : null}
         {/* The mark holds its size (`shrink-0`) so the squeeze lands on the breadcrumb text. */}
-        {hideLogo ? null : (
-          <Link href={NavUtils.toRoot()} className={showBrowseButton ? 'shrink-0 mobile:hidden' : 'shrink-0'}>
+        {!hideLogo || showMobileLogo ? (
+          <Link
+            href={NavUtils.toRoot()}
+            aria-label="Geo home"
+            className={cx(
+              'shrink-0',
+              hideLogo ? 'hidden md:block' : showBrowseButton && !showMobileLogo && 'mobile:hidden'
+            )}
+          >
             <GeoLogoLarge />
           </Link>
-        )}
+        ) : null}
         <NavbarSpaceMetadata />
       </div>
 

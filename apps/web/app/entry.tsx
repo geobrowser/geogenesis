@@ -52,6 +52,7 @@ import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
 import {
+  debateFullscreenActiveAtom,
   entitySidePanelWantsEditAtom,
   exploreDebateClaimsPanelAtom,
   rankingFullscreenActiveAtom,
@@ -264,6 +265,7 @@ export function App({ children }: { children: React.ReactNode }) {
   const navbarRef = React.useRef<HTMLElement>(null);
   const sidebarOpen = useAtomValue(browseSidebarShownAtom);
   const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
+  const debateFullscreenActive = useAtomValue(debateFullscreenActiveAtom);
   const rankingFullscreenFocusTarget = useAtomValue(rankingFullscreenFocusTargetAtom);
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
@@ -307,6 +309,7 @@ export function App({ children }: { children: React.ReactNode }) {
             onBrowseClick={() => setMobileBrowseOpen(true)}
             onSearchClick={() => setOpen(true)}
             hideLogo={sidebarOpen && !fullscreenActive}
+            showMobileLogo={debateFullscreenActive}
             showBrowseButton={!fullscreenActive}
           />
           <MobileBrowseDrawer
