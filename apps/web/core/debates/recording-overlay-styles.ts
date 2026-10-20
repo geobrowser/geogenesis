@@ -1,6 +1,8 @@
+import { PLAYBACK_FONT_FAMILY } from './browse/playback-typography';
+
 /** The recording room's Calibre faces, shared by fixed formats and Open rounds. */
 export const recordingFont = {
-  fontFamily: 'var(--font-calibre), sans-serif',
+  fontFamily: PLAYBACK_FONT_FAMILY,
   textRendering: 'optimizeLegibility',
 } as const;
 
