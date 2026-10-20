@@ -4336,6 +4336,141 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('respond to this claim before requesting a rematch');
   });
 
+  describe('a refusal for a claim in a collapsed section', () => {
+    const REFUSAL = 'respond to this claim before requesting a rematch';
+
+    function recordRequests() {
+      mocks.mutate.mockImplementation((variables: { claim_id: string; source_space_id: string }) => {
+        mocks.requestVariables = variables;
+      });
+    }
+
+    function requestFrom(claimName: string) {
+      const card = screen.getByText(claimName).closest('article');
+      fireEvent.click(within(card!).getByRole('button', { name: 'Request debate' }));
+    }
+
+    function expectOneRefusalOnItsCard(claimName: string) {
+      const card = screen.getByText(claimName).closest('article');
+      expect(within(card!).getByRole('alert')).toHaveTextContent(REFUSAL);
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
+    }
+
+    function expectOneRefusalOnThePage() {
+      const alerts = screen.getAllByRole('alert');
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]).toHaveTextContent(REFUSAL);
+      expect(alerts[0].closest('article')).toBeNull();
+    }
+
+    beforeEach(() => {
+      mocks.recommendedSections = [
+        { id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] },
+        { id: 'block-2', name: 'Open weight AI', claimIds: [CLAIM_MORE] },
+      ];
+      mocks.recommendedEntities = [sharedEntity(), publishedEntity()];
+    });
+
+    it('shows it on the page when its Recommended section was collapsed first', async () => {
+      recordRequests();
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showRecommended();
+
+      requestFrom('A claim both participants chose');
+      fireEvent.click(screen.getByRole('button', { name: /Geopolitics & chips/ }));
+      mocks.requestError = new Error(REFUSAL);
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(mocks.requestVariables?.claim_id).toBe(CLAIM_SHARED);
+      expect(screen.queryByText('A claim both participants chose')).toBeNull();
+      expectOneRefusalOnThePage();
+    });
+
+    it('moves it back onto the card, once, when the section is reopened', async () => {
+      recordRequests();
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showRecommended();
+
+      requestFrom('A claim both participants chose');
+      const toggle = screen.getByRole('button', { name: /Geopolitics & chips/ });
+      fireEvent.click(toggle);
+      mocks.requestError = new Error(REFUSAL);
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      fireEvent.click(toggle);
+
+      expectOneRefusalOnItsCard('A claim both participants chose');
+    });
+
+    it('keeps it on the card, once, while the section stays open', async () => {
+      recordRequests();
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showRecommended();
+
+      requestFrom('A claim both participants chose');
+      mocks.requestError = new Error(REFUSAL);
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expectOneRefusalOnItsCard('A claim both participants chose');
+    });
+
+    it('is not moved to the page by collapsing a different section', async () => {
+      recordRequests();
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showRecommended();
+
+      requestFrom('A claim both participants chose');
+      fireEvent.click(screen.getByRole('button', { name: /Open weight AI/ }));
+      mocks.requestError = new Error(REFUSAL);
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expectOneRefusalOnItsCard('A claim both participants chose');
+    });
+
+    describe('in the already-debated section', () => {
+      beforeEach(() => {
+        mocks.recommendedSections = [];
+        mocks.recommendedEntities = [];
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+      });
+
+      const toggle = () => screen.getByRole('button', { name: /Already debated with Salina/ });
+
+      it('shows it on the page when the section was closed again first', async () => {
+        recordRequests();
+        const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        fireEvent.click(toggle());
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled());
+        requestFrom('A claim both participants chose');
+        fireEvent.click(toggle());
+        mocks.requestError = new Error(REFUSAL);
+        view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+        expect(mocks.requestVariables?.claim_id).toBe(CLAIM_SHARED);
+        expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+        expectOneRefusalOnThePage();
+
+        fireEvent.click(toggle());
+        expectOneRefusalOnItsCard('A claim both participants chose');
+      });
+
+      it('keeps it on the card, once, while the section is open', async () => {
+        recordRequests();
+        const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        fireEvent.click(toggle());
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled());
+        requestFrom('A claim both participants chose');
+        mocks.requestError = new Error(REFUSAL);
+        view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+        expectOneRefusalOnItsCard('A claim both participants chose');
+      });
+    });
+  });
+
   it('keeps a refusal for the same claim in another space off this card', async () => {
     mocks.requestError = new Error('Other space request failed');
     mocks.requestVariables = { claim_id: CLAIM_SHARED, source_space_id: 'another-space' };
