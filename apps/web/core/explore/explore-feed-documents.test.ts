@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest';
 
 import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-document';
 import { exploreBestConnectionDocument } from './explore-best-document';
-import { exploreCompleteIndexDocument } from './explore-complete-index-document';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
-import { exploreEntitiesConnectionDocument, exploreEntitiesNoPageInfoConnectionDocument } from './explore-entities-document';
-import { exploreRelationIndexDocument } from './explore-relation-index-document';
+import {
+  exploreEntitiesConnectionDocument,
+  exploreEntitiesNoPageInfoConnectionDocument,
+} from './explore-entities-document';
+import { exploreTopicFeedConnectionDocument, topicFeedTypeCountsDocument } from './explore-topic-feed-document';
 
 function operation(doc: DocumentNode): OperationDefinitionNode {
   const op = doc.definitions.find(d => d.kind === Kind.OPERATION_DEFINITION);
@@ -151,22 +153,32 @@ describe('the type-filtered Best sort (GEO-2885)', () => {
   });
 });
 
-describe('the complete contextual feed index', () => {
-  it('reads only the fields needed to order the feed and count its types', () => {
-    expect(rootField(exploreCompleteIndexDocument).name.value).toBe('entitiesConnection');
-    expect(nodeFieldNames(exploreCompleteIndexDocument)).toEqual(['createdAt', 'id', 'rankingScore', 'typeIds']);
-    expect(argNames(rootField(exploreCompleteIndexDocument))).toEqual(
-      ['after', 'filter', 'first', 'orderBy', 'spaceIds', 'typeIds'].sort()
+describe("a topic page's feed (GEO-3092)", () => {
+  it('pages the topic ranking table by offset, requiring every topic', () => {
+    const field = rootField(exploreTopicFeedConnectionDocument);
+    expect(field.name.value).toBe('entitiesRankedForTopicsConnection');
+    expect(argNames(field)).toEqual(
+      [
+        'createdAfter',
+        'debateTaggedClaims',
+        'first',
+        'matchAll',
+        'maxPerTopic',
+        'offset',
+        'sortBy',
+        'spaceIds',
+        'topicIds',
+        'typeIds',
+      ].sort()
     );
+    // "Any of these topics" is For you's question; a topic page narrows with every selected topic.
+    expect(print(exploreTopicFeedConnectionDocument)).toContain('matchAll: true');
+    // Below `offset + first` a page comes back short, so the cap is always sent.
+    expect(variableNames(exploreTopicFeedConnectionDocument)).toContain('maxPerTopic');
   });
-  it('uses the identical compact entity selection through incoming relations', () => {
-    expect(rootField(exploreRelationIndexDocument).name.value).toBe('relationsConnection');
-    expect(nodeFieldNames(exploreRelationIndexDocument, 'fromEntity')).toEqual(
-      nodeFieldNames(exploreCompleteIndexDocument)
-    );
-    expect(argNames(rootField(exploreRelationIndexDocument))).toEqual(['after', 'filter', 'first']);
-    expect(print(exploreRelationIndexDocument)).toContain('hasNextPage');
-    expect(print(exploreRelationIndexDocument)).toContain('endCursor');
-    expect(print(exploreRelationIndexDocument)).not.toContain('totalCount');
+
+  it('counts the same population per type', () => {
+    expect(rootField(topicFeedTypeCountsDocument).name.value).toBe('topicFeedTypeCounts');
+    expect(print(topicFeedTypeCountsDocument)).toContain('matchAll: true');
   });
 });

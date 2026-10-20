@@ -50,8 +50,7 @@ vi.mock('~/core/io/graphql-client', () => ({
 vi.mock('~/core/io/subgraph', () => ({ fetchProfile: () => Effect.succeed(null) }));
 vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberRequest: async () => null }));
 
-const { ExploreSpaceScopeUnresolvedError, fetchCompleteExplorePopulationIndex, fetchExploreFeed } =
-  await import('./fetch-explore-feed');
+const { ExploreSpaceScopeUnresolvedError, fetchExploreFeed } = await import('./fetch-explore-feed');
 const { encodeExploreForYouCursor } = await import('./explore-window-cursor');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -392,195 +391,86 @@ describe('a window reorder (GEO-3140 For you, GEO-3144 interleaving)', () => {
   });
 });
 
-describe('a complete contextual population', () => {
-  it('exhausts relation pages, deduplicates source entities, and preserves all feed guards', async () => {
-    windows.queue = [
-      {
-        nodes: [
-          { fromEntity: { id: 'relation-ranked', rankingScore: '10', createdAt: '1' } },
-          { fromEntity: null },
-          null,
-        ],
-        pageInfo: { hasNextPage: true, endCursor: 'next-relation-page' },
-      },
-      {
-        nodes: [
-          { fromEntity: { id: 'relation-ranked', rankingScore: '10', createdAt: '1' } },
-          { fromEntity: { id: 'relation-unscored', rankingScore: null, createdAt: '2' } },
-        ],
-        pageInfo: { hasNextPage: false },
-      },
-    ];
-    const relationFilter = { typeId: { is: 'topics-property' }, toEntityId: { is: 'page-topic' } };
-    const entityFilter = { relations: { some: { toEntityId: { is: 'selected-topic' } } } };
-    const args = {
+describe("a topic page's feed from the ranked topic table (GEO-3092)", () => {
+  const PAGE_TOPIC = 'cccccccccccccccccccccccccccccccc';
+  const SELECTED_TOPIC = 'dddddddddddddddddddddddddddddddd';
+  const topicArgs = {
+    ...feedArgs,
+    requireDebateTagOnClaims: false,
+    rankedTopicIds: [PAGE_TOPIC, SELECTED_TOPIC],
+    entityFilter: { id: { is: 'top-only' } },
+  };
+
+  it.each(['best', 'new'] as const)('asks for %s order over entities carrying every topic', async sort => {
+    windows.queue = [windowOf([entity('t1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: '1' })];
+
+    await fetchExploreFeed({ ...topicArgs, sort });
+
+    expect(windows.operations).toEqual(['ExploreTopicFeedConnection']);
+    expect(windows.variables[0]).toMatchObject({
+      topicIds: [PAGE_TOPIC, SELECTED_TOPIC],
+      typeIds: [CLAIM_TYPE_ID],
       spaceIds: [SPACE],
-      sort: 'best' as const,
-      time: 'all' as const,
-      typeIds: [CLAIM_TYPE_ID],
-      requireName: true,
-      scopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter, relationFilter }],
-    };
-    const rows = await fetchCompleteExplorePopulationIndex(args);
-    expect(rows.map(row => row.id)).toEqual(['relation-ranked', 'relation-unscored']);
-    expect(windows.operations).toEqual(['ExploreRelationIndex', 'ExploreRelationIndex']);
-    expect(windows.variables[1]?.after).toBe('next-relation-page');
-    const filter = windows.variables[0]?.filter as any;
-    expect(filter.and[0]).toEqual(relationFilter);
-    expect(filter.and[1].fromEntity.and[1]).toEqual(entityFilter);
-    expect(filter.and[1].fromEntity.and[0]).toMatchObject({
-      typeIds: { overlaps: [CLAIM_TYPE_ID] },
-      spaceIds: { overlaps: [SPACE] },
-      values: { some: { spaceId: { in: [SPACE] }, text: { isNull: false, isNot: '' } } },
-      relations: { none: { or: expect.any(Array) } },
+      sortBy: sort,
+      offset: 0,
+      debateTaggedClaims: false,
     });
-    expect(await fetchCompleteExplorePopulationIndex(args)).toEqual(rows);
-    expect(windows.calls).toBe(2);
-
-    windows.calls = 0;
-    const newest = await fetchCompleteExplorePopulationIndex({ ...args, sort: 'new' });
-    expect(newest.map(row => row.id)).toEqual(['relation-unscored', 'relation-ranked']);
+    // Below `offset + first` a window comes back short.
+    const sent = windows.variables[0] as { first: number; maxPerTopic: number };
+    expect(sent.maxPerTopic).toBe(sent.first);
+    // The table already holds exactly the topic population; the relation filter is Top's.
+    expect(windows.variables[0]).not.toHaveProperty('filter');
   });
 
-  it.each([
-    { relation: true, endCursor: null, message: 'no end cursor', failedCalls: 1 },
-    { relation: true, endCursor: 'repeated', message: 'repeated its end cursor', failedCalls: 2 },
-    { relation: false, endCursor: null, message: 'no end cursor', failedCalls: 1 },
-    { relation: false, endCursor: 'repeated', message: 'repeated its end cursor', failedCalls: 2 },
-  ])('rejects invalid cursor chains and evicts the failed population: %j', async scenario => {
-    const id = `cursor-contract-${scenario.relation}-${scenario.endCursor}`;
-    const node = { id, rankingScore: '1', createdAt: '1' };
-    const nodes = scenario.relation ? [{ fromEntity: node }] : [node];
-    windows.responder = () => ({ nodes, pageInfo: { hasNextPage: true, endCursor: scenario.endCursor } });
-    const args = {
-      spaceIds: [SPACE],
-      sort: 'best' as const,
-      time: 'all' as const,
-      typeIds: [CLAIM_TYPE_ID],
-      scopes: [
-        {
-          typeIds: [CLAIM_TYPE_ID],
-          entityFilter: { id: { is: id } },
-          ...(scenario.relation ? { relationFilter: { toEntityId: { is: id } } } : {}),
-        },
-      ],
+  it("forwards the caller's debate-tag rule to the walk rather than filtering after it", async () => {
+    windows.queue = [windowOf([entity('t1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: '1' })];
+
+    await fetchExploreFeed({ ...topicArgs, requireDebateTagOnClaims: true });
+
+    expect(windows.variables[0]).toMatchObject({ debateTaggedClaims: true });
+  });
+
+  it('keeps New in the order the table returns, and pages on by offset', async () => {
+    const ids = Array.from({ length: 31 }, (_, index) => `n${index.toString().padStart(2, '0')}`);
+    // The table's own order, by offset: one full window of 30, then the last row.
+    windows.responder = (_operation, variables) => {
+      const offset = Number(variables.offset);
+      const rows = ids.slice(offset, offset + Number(variables.first));
+      const end = offset + rows.length;
+      return windowOf(
+        rows.map(id => entity(id, CLAIM_TYPE_ID)),
+        { hasNextPage: rows.length === variables.first, endCursor: String(end) }
+      );
     };
 
-    await expect(fetchCompleteExplorePopulationIndex(args)).rejects.toThrow(scenario.message);
-    expect(windows.calls).toBe(scenario.failedCalls);
-    windows.responder = () => ({ nodes, pageInfo: { hasNextPage: false, endCursor: null } });
-    await expect(fetchCompleteExplorePopulationIndex(args)).resolves.toEqual([node]);
-    expect(windows.calls).toBe(scenario.failedCalls + 1);
+    const pages: string[][] = [];
+    const offsets: unknown[] = [];
+    const caps: unknown[] = [];
+    let cursor: string | null = null;
+    do {
+      windows.variables = [];
+      const page = await fetchExploreFeed({ ...topicArgs, sort: 'new', cursor });
+      pages.push(page.items.map(item => item.entityId));
+      offsets.push(...windows.variables.map(variables => variables.offset));
+      caps.push(...windows.variables.map(variables => variables.maxPerTopic));
+      cursor = page.nextCursor;
+    } while (cursor && pages.length < 5);
+
+    expect(pages.flat()).toEqual(ids);
+    expect(pages[0]).toHaveLength(22);
+    // The rest of the first window is cut from it again; the next window starts at offset 30.
+    expect(offsets).toEqual([0, 0, 30]);
+    // A cap below `offset + first` would leave the deeper window short.
+    expect(caps).toEqual([30, 30, 60]);
   });
 
-  it('shares one compact population when equivalent space filters arrive in a different order', async () => {
-    const secondSpace = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
-    windows.responder = operation =>
-      operation === 'ExploreCompleteIndex'
-        ? {
-            nodes: [{ id: 'cache-order', typeIds: [CLAIM_TYPE_ID], rankingScore: '1', createdAt: '1' }],
-            pageInfo: { hasNextPage: false, endCursor: null },
-          }
-        : windowOf([], { hasNextPage: false, endCursor: null });
-    const args = {
-      spaceIds: [SPACE, secondSpace],
-      sort: 'best' as const,
-      time: 'all' as const,
-      typeIds: [CLAIM_TYPE_ID],
-      requireName: true,
-      scopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { is: 'cache-order' } } }],
-    };
+  it('leaves Top on its own query, scoped by the topic filter', async () => {
+    windows.queue = [windowOf([entity('t1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
 
-    await fetchCompleteExplorePopulationIndex(args);
-    await fetchCompleteExplorePopulationIndex({ ...args, spaceIds: [secondSpace, SPACE] });
+    await fetchExploreFeed({ ...topicArgs, sort: 'top' });
 
-    expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
-  });
-
-  it('keeps entities omitted by the denormalized candidates and places unscored entities last', async () => {
-    windows.queue = [
-      {
-        nodes: [
-          { id: 'unscored', rankingScore: null },
-          { id: 'ranked', rankingScore: '42.5' },
-        ],
-        pageInfo: { hasNextPage: false, endCursor: null },
-      },
-      windowOf([entity('unscored', CLAIM_TYPE_ID), entity('ranked', CLAIM_TYPE_ID)], {
-        hasNextPage: false,
-        endCursor: null,
-      }),
-    ];
-
-    const scopeFilter = { id: { in: ['ranked', 'unscored'] } };
-    const result = await fetchExploreFeed({
-      ...feedArgs,
-      requireDebateTagOnClaims: false,
-      completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: scopeFilter }],
-    });
-
-    expect(result.items.map(item => item.entityId)).toEqual(['ranked', 'unscored']);
-    expect(windows.calls).toBe(2);
-    expect((windows.variables[0]?.filter as { and?: unknown[] }).and).toContainEqual(scopeFilter);
-    expect(windows.variables[1]?.filter).toEqual(
-      expect.objectContaining({ and: expect.arrayContaining([{ id: { in: ['ranked', 'unscored'] } }]) })
-    );
-  });
-
-  it('uses the same compact population for New and orders it by creation time', async () => {
-    windows.queue = [
-      {
-        nodes: [
-          { id: 'older-high-rank', rankingScore: '100', createdAt: '1700000000' },
-          { id: 'newer-low-rank', rankingScore: '1', createdAt: '1800000000' },
-        ],
-        pageInfo: { hasNextPage: false, endCursor: null },
-      },
-      windowOf([entity('older-high-rank', CLAIM_TYPE_ID), entity('newer-low-rank', CLAIM_TYPE_ID)], {
-        hasNextPage: false,
-        endCursor: null,
-      }),
-    ];
-
-    const result = await fetchExploreFeed({
-      ...feedArgs,
-      sort: 'new',
-      requireDebateTagOnClaims: false,
-      completePopulationScopes: [
-        { typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { in: ['older-high-rank', 'newer-low-rank'] } } },
-      ],
-    });
-
-    expect(result.items.map(item => item.entityId)).toEqual(['newer-low-rank', 'older-high-rank']);
-    expect(windows.calls).toBe(2);
-  });
-
-  it('reuses the ordered compact population when infinite scroll advances', async () => {
-    const rows = Array.from({ length: 31 }, (_, index) => ({
-      id: `entity-${index.toString().padStart(2, '0')}`,
-      rankingScore: String(31 - index),
-      createdAt: String(1_800_000_000 - index),
-    }));
-    windows.responder = operation =>
-      operation === 'ExploreCompleteIndex'
-        ? { nodes: rows, pageInfo: { hasNextPage: false, endCursor: null } }
-        : windowOf(
-            rows.map(row => entity(row.id, CLAIM_TYPE_ID)),
-            { hasNextPage: false, endCursor: null }
-          );
-
-    const args = {
-      ...feedArgs,
-      requireDebateTagOnClaims: false,
-      completePopulationScopes: [{ typeIds: [CLAIM_TYPE_ID], entityFilter: { id: { in: rows.map(row => row.id) } } }],
-    };
-    const first = await fetchExploreFeed(args);
-    expect(first.nextCursor).not.toBeNull();
-
-    await fetchExploreFeed({ ...args, cursor: first.nextCursor });
-
-    expect(windows.operations.filter(operation => operation === 'ExploreCompleteIndex')).toHaveLength(1);
-    expect(windows.operations.filter(operation => operation === 'ExploreEntitiesConnection')).toHaveLength(2);
+    expect(windows.operations).not.toContain('ExploreTopicFeedConnection');
+    expect(JSON.stringify(windows.variables[0]?.filter)).toContain('top-only');
   });
 });
 
