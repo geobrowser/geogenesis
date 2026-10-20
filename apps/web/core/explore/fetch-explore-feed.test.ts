@@ -59,10 +59,21 @@ vi.mock('~/core/io/graphql-client', () => ({
   },
 }));
 
-// Only reached when a wallet is passed, which these cases do not do; mocked so the module graph
+// Only reached when a wallet is passed, which most cases do not do; mocked so the module graph
 // does not pull the subgraph client in.
-vi.mock('~/core/io/subgraph', () => ({ fetchProfile: () => Effect.succeed(null) }));
-vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberRequest: async () => null }));
+const viewer = vi.hoisted(() => ({ profileLookups: 0, requestLookups: [] as [string, string][] }));
+vi.mock('~/core/io/subgraph', () => ({
+  fetchProfile: () => {
+    viewer.profileLookups += 1;
+    return Effect.succeed({ spaceId: 'profile-space' });
+  },
+}));
+vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({
+  fetchActiveMemberRequest: async (spaceId: string, memberSpaceId: string) => {
+    viewer.requestLookups.push([spaceId, memberSpaceId]);
+    return { isVotingEnded: false };
+  },
+}));
 
 const { ExploreSpaceScopeUnresolvedError, fetchExploreFeed } = await import('./fetch-explore-feed');
 const { encodeExploreForYouCursor } = await import('./explore-window-cursor');
@@ -123,6 +134,8 @@ beforeEach(() => {
   windows.operations = [];
   windows.responder = null;
   windows.decode = false;
+  viewer.profileLookups = 0;
+  viewer.requestLookups = [];
 });
 
 /**
@@ -1009,5 +1022,37 @@ describe('For you', () => {
     const bestItems = items.filter(item => !item.entityId.startsWith('t'));
     expect(bestItems.length).toBeGreaterThanOrEqual(5);
     expect(opsOf('ExploreForYouBestConnection').length).toBeGreaterThan(1);
+  });
+});
+
+describe("a signed-in reader's pending membership requests", () => {
+  const page = () => [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+
+  it('checks against the member space the route already resolved, without looking it up again', async () => {
+    windows.queue = page();
+
+    const result = await fetchExploreFeed({ ...feedArgs, walletAddress: '0xabc', viewerMemberSpaceId: 'member-space' });
+
+    expect(viewer.profileLookups).toBe(0);
+    expect(viewer.requestLookups).toEqual([[SPACE, 'member-space']]);
+    expect(result.items[0]?.hasPendingMembershipRequest).toBe(true);
+  });
+
+  it('skips the checks for a reader the route found no member space for', async () => {
+    windows.queue = page();
+
+    await fetchExploreFeed({ ...feedArgs, walletAddress: '0xabc', viewerMemberSpaceId: null });
+
+    expect(viewer.profileLookups).toBe(0);
+    expect(viewer.requestLookups).toEqual([]);
+  });
+
+  it('looks the member space up itself when the caller did not', async () => {
+    windows.queue = page();
+
+    await fetchExploreFeed({ ...feedArgs, walletAddress: '0xabc' });
+
+    expect(viewer.profileLookups).toBe(1);
+    expect(viewer.requestLookups).toEqual([[SPACE, 'profile-space']]);
   });
 });
