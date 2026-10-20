@@ -151,18 +151,95 @@ type PersonProps = {
   disagreements: number | null;
 };
 
-function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }: PersonProps) {
-  const phone = useIsPhoneLayout();
-  const voice = useLobbyVoiceStates();
-  const voiceId = dashlessId(member.user_id);
-  const speaking = voice.speaking.has(voiceId);
-  // Mic state only means something in a room this tab is connected to.
-  const showMic = voice.connected && !member.stepped_out;
-  const micOn = voice.micOn.has(voiceId);
-  // Someone stepped out is in a debate elsewhere; their lobby camera is gone or about to be.
-  const camera = member.stepped_out ? undefined : voice.cameras.get(voiceId);
+/** "Ana (you)" on the viewer's own tile, chip and thumbnail; the name everywhere else. */
+function personLabel(member: DebateLobbyMember, isSelf: boolean) {
   const name = personName(member);
-  const label = isSelf ? `${name} (you)` : name;
+  return isSelf ? `${name} (you)` : name;
+}
+
+/** What a speaker's tile, chip and thumbnail read from voice. */
+type SpeakerVoice = {
+  speaking: boolean;
+  /** Mic state only means something in a room this tab is connected to. */
+  micShown: boolean;
+  micOn: boolean;
+  camera: ReturnType<LobbyVoiceStates['cameras']['get']>;
+};
+
+function speakerVoice(voice: LobbyVoiceStates, member: DebateLobbyMember): SpeakerVoice {
+  const voiceId = dashlessId(member.user_id);
+  return {
+    speaking: voice.speaking.has(voiceId),
+    micShown: voice.connected && !member.stepped_out,
+    micOn: voice.micOn.has(voiceId),
+    // Someone stepped out is in a debate elsewhere; their lobby camera is gone or about to be.
+    camera: member.stepped_out ? undefined : voice.cameras.get(voiceId),
+  };
+}
+
+const AVATAR_SIZE_CLASS = { 28: 'size-7', 40: 'size-10', 56: 'size-14' } as const;
+
+/** Their camera filling the box, or their avatar centred in it: a video tile's frame and a strip thumbnail. */
+function SpeakerPicture({
+  member,
+  camera,
+  mirrored,
+  avatarSize,
+  'data-testid': testId,
+}: {
+  member: DebateLobbyMember;
+  camera: SpeakerVoice['camera'];
+  mirrored: boolean;
+  avatarSize: keyof typeof AVATAR_SIZE_CLASS;
+  'data-testid'?: string;
+}) {
+  if (camera) return <TrackVideo track={camera.publication.track} mirrored={mirrored} data-testid={testId} />;
+  return (
+    <span className={cx('shrink-0 overflow-hidden rounded-full [&>svg]:size-full', AVATAR_SIZE_CLASS[avatarSize])}>
+      <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={avatarSize} />
+    </span>
+  );
+}
+
+/**
+ * A speaker's tile. Without lobby video, the round avatar with the name and status centred under it.
+ * In the video grid (GEO-3399, `grid`), the same tile with a 16:9 frame (4:3 on a phone) in place of
+ * the avatar and the name and status left-aligned; `compact` is the 4-across desktop size.
+ */
+function SpeakerTile({
+  lobby,
+  member,
+  isSelf,
+  viewerId,
+  status,
+  disagreements,
+  voice: givenVoice,
+  grid,
+}: PersonProps & { voice?: SpeakerVoice; grid?: { compact: boolean } }) {
+  const phone = useIsPhoneLayout();
+  const states = useLobbyVoiceStates();
+  const voice = givenVoice ?? speakerVoice(states, member);
+  const small = phone || Boolean(grid?.compact);
+  const name = personName(member);
+  const label = personLabel(member, isSelf);
+  const you =
+    isSelf && !phone ? (
+      <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
+        You
+      </Text>
+    ) : null;
+  const statusLine = (
+    <TileStatus
+      lobby={lobby}
+      member={member}
+      status={status}
+      speaking={voice.speaking}
+      muted={voice.micShown && !voice.micOn}
+      disagreements={disagreements}
+      line={grid?.compact}
+      align={grid ? 'start' : 'center'}
+    />
+  );
 
   // The person button stretches over the whole tile, so a press anywhere opens the person menu; the
   // disagreements trigger sits above it, beside the button rather than inside it.
@@ -171,10 +248,11 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
       role="group"
       aria-label={label}
       data-testid="lobby-speaker-tile"
-      data-speaking={speaking || undefined}
+      data-speaking={voice.speaking || undefined}
       className={cx(
-        'relative flex w-full min-w-0 flex-col items-center gap-2 rounded-xl border bg-white px-3 py-4 text-center transition-colors hover:border-grey-03 has-[[data-person-trigger][data-state=open]]:border-text md:gap-1 md:px-1.5 md:py-2.5',
-        speaking ? 'border-green' : 'border-grey-02'
+        'relative flex w-full min-w-0 flex-col gap-2 rounded-xl border bg-white transition-colors hover:border-grey-03 has-[[data-person-trigger][data-state=open]]:border-text md:gap-1',
+        grid ? 'p-1.5 pb-2 md:p-1 md:pb-1.5' : 'items-center px-3 py-4 text-center md:px-1.5 md:py-2.5',
+        voice.speaking ? 'border-green' : 'border-grey-02'
       )}
     >
       <LobbyPersonMenu
@@ -182,7 +260,7 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
         member={member}
         isSelf={isSelf}
         viewerId={viewerId}
-        micOn={showMic ? micOn : undefined}
+        micOn={voice.micShown ? voice.micOn : undefined}
         disagreements={disagreements}
       >
         <button
@@ -190,39 +268,72 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
           aria-label={label}
           {...personMenuAnalyticsAttributes(lobby, member, isSelf)}
           data-person-trigger
-          className="flex w-full min-w-0 flex-col items-center gap-2 after:absolute after:inset-0 after:rounded-xl md:gap-1"
+          className={cx(
+            'flex w-full min-w-0 flex-col gap-2 after:absolute after:inset-0 after:rounded-xl md:gap-1',
+            grid ? 'text-left' : 'items-center'
+          )}
         >
+          {grid ? (
+            <span
+              data-testid="lobby-speaker-frame"
+              className={cx(
+                'grid w-full place-items-center overflow-hidden bg-grey-01',
+                phone ? 'aspect-[4/3] rounded-md' : 'aspect-video rounded-lg'
+              )}
+            >
+              <SpeakerPicture
+                member={member}
+                camera={voice.camera}
+                mirrored={isSelf}
+                avatarSize={small ? 40 : 56}
+                data-testid="lobby-speaker-video"
+              />
+            </span>
+          ) : (
+            <span
+              className={cx(
+                'size-14 shrink-0 overflow-hidden rounded-full md:size-11 [&>svg]:size-full',
+                voice.speaking && 'ring-2 ring-successTertiary'
+              )}
+            >
+              {voice.camera ? (
+                <TrackVideo
+                  track={voice.camera.publication.track}
+                  mirrored={isSelf}
+                  data-testid="lobby-speaker-video"
+                />
+              ) : (
+                <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={56} />
+              )}
+            </span>
+          )}
           <span
             className={cx(
-              'size-14 shrink-0 overflow-hidden rounded-full md:size-11 [&>svg]:size-full',
-              speaking && 'ring-2 ring-successTertiary'
+              'flex max-w-full min-w-0 items-center',
+              grid && 'px-1',
+              !grid
+                ? 'gap-1.5 text-[17px] leading-[22px] font-semibold md:gap-1 md:text-[15px] md:leading-[18px] md:font-medium'
+                : small
+                  ? 'gap-1 text-[15px] leading-[18px] font-medium'
+                  : 'gap-1.5 text-[17px] leading-[22px] font-semibold'
             )}
           >
-            {camera ? (
-              <TrackVideo track={camera.publication.track} mirrored={isSelf} data-testid="lobby-speaker-video" />
-            ) : (
-              <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={56} />
-            )}
-          </span>
-          <span className="flex max-w-full min-w-0 items-center gap-1.5 text-[17px] leading-[22px] font-semibold md:gap-1 md:text-[15px] md:leading-[18px] md:font-medium">
             <span className="truncate">{name}</span>
-            <PersonTags member={member} />
+            <PersonTags member={member} small={small} />
           </span>
         </button>
       </LobbyPersonMenu>
-      <TileStatus
-        lobby={lobby}
-        member={member}
-        status={status}
-        speaking={speaking}
-        muted={showMic && !micOn}
-        disagreements={disagreements}
-      />
-      {isSelf && !phone ? (
-        <Text as="span" variant="footnote" color="grey-04">
-          You
-        </Text>
-      ) : null}
+      {grid ? (
+        <div className="flex min-w-0 items-center justify-between gap-2 px-1">
+          {statusLine}
+          {you}
+        </div>
+      ) : (
+        <>
+          {statusLine}
+          {you}
+        </>
+      )}
     </div>
   );
 }
@@ -344,7 +455,20 @@ function PersonTags({ member, small = false }: { member: DebateLobbyMember; smal
   );
 }
 
-function ListenerChip({ lobby, member, isSelf, viewerId, status, disagreements }: PersonProps) {
+/**
+ * A listener, or a speaker past the video grid's cap (GEO-3399), who also gets their mic state in the
+ * menu and a camera mark when theirs is on.
+ */
+function ListenerChip({
+  lobby,
+  member,
+  isSelf,
+  viewerId,
+  status,
+  disagreements,
+  voice,
+  'data-testid': testId = 'lobby-listener-chip',
+}: PersonProps & { voice?: SpeakerVoice; 'data-testid'?: string }) {
   const name = personName(member);
   const moved =
     Boolean(member.moved_to_listeners) ||
@@ -359,12 +483,19 @@ function ListenerChip({ lobby, member, isSelf, viewerId, status, disagreements }
         : null;
 
   return (
-    <LobbyPersonMenu lobby={lobby} member={member} isSelf={isSelf} viewerId={viewerId} disagreements={disagreements}>
+    <LobbyPersonMenu
+      lobby={lobby}
+      member={member}
+      isSelf={isSelf}
+      viewerId={viewerId}
+      micOn={voice?.micShown ? voice.micOn : undefined}
+      disagreements={disagreements}
+    >
       <button
         type="button"
-        aria-label={isSelf ? `${name} (you)` : name}
+        aria-label={personLabel(member, isSelf)}
         {...personMenuAnalyticsAttributes(lobby, member, isSelf)}
-        data-testid="lobby-listener-chip"
+        data-testid={testId}
         title={status ? STATUS_LABEL[status] : undefined}
         className="flex max-w-full min-w-0 items-center gap-2 rounded-full pr-1 text-left hover:bg-grey-01 data-[state=open]:bg-grey-01"
       >
@@ -380,6 +511,11 @@ function ListenerChip({ lobby, member, isSelf, viewerId, status, disagreements }
             New
           </span>
         ) : null}
+        {voice?.camera ? (
+          <span role="img" aria-label={LOBBY_ROSTER_COPY.cameraOn} className="shrink-0 text-grey-04 [&>svg]:size-3.5">
+            <CameraIcon disabled={false} />
+          </span>
+        ) : null}
         {detail ? (
           <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
             {detail}
@@ -390,34 +526,14 @@ function ListenerChip({ lobby, member, isSelf, viewerId, status, disagreements }
   );
 }
 
-/** What the video grid reads from voice for one speaker. */
-type SpeakerVoice = {
-  voiceId: string;
-  speaking: boolean;
-  micShown: boolean;
-  micOn: boolean;
-  camera: ReturnType<LobbyVoiceStates['cameras']['get']>;
-};
-
-function speakerVoice(voice: LobbyVoiceStates, member: DebateLobbyMember): SpeakerVoice {
-  const voiceId = dashlessId(member.user_id);
-  return {
-    voiceId,
-    speaking: voice.speaking.has(voiceId),
-    // Mic state only means something in a room this tab is connected to.
-    micShown: voice.connected && !member.stepped_out,
-    micOn: voice.micOn.has(voiceId),
-    // Someone stepped out is in a debate elsewhere; their lobby camera is gone or about to be.
-    camera: member.stepped_out ? undefined : voice.cameras.get(voiceId),
-  };
-}
-
 /** Desktop column counts, as ceilings: a narrow column drops to fewer before tiles get too small. */
 const DESKTOP_GRID_CLASS = {
   2: 'grid-cols-1 gap-3 @[28rem]/speakers:grid-cols-2',
   3: 'grid-cols-1 gap-3 @[28rem]/speakers:grid-cols-2 @[38rem]/speakers:grid-cols-3',
   4: 'grid-cols-1 gap-2 @[28rem]/speakers:grid-cols-2 @[38rem]/speakers:grid-cols-3 @[44rem]/speakers:grid-cols-4',
 } as const;
+
+type GridPerson = { member: DebateLobbyMember; props: PersonProps; voice: SpeakerVoice };
 
 /**
  * Speakers as video (GEO-3399, behind `debateVideo`): a tile per speaker up to the cap, the rest in
@@ -432,15 +548,19 @@ function SpeakerVideoGrid({
   personProps: (member: DebateLobbyMember) => PersonProps;
 }) {
   const phone = useIsPhoneLayout();
-  const voice = useLobbyVoiceStates();
+  const states = useLobbyVoiceStates();
   const cap = phone ? LOBBY_VIDEO_GRID_CAP.phone : LOBBY_VIDEO_GRID_CAP.desktop;
 
-  const people = speakers.map(member => ({ member, props: personProps(member), voice: speakerVoice(voice, member) }));
-  const inputs: VideoGridSpeaker[] = people.map(({ member, props, voice: own }) => ({
+  const people: GridPerson[] = speakers.map(member => ({
+    member,
+    props: personProps(member),
+    voice: speakerVoice(states, member),
+  }));
+  const inputs: VideoGridSpeaker[] = people.map(({ member, props, voice }) => ({
     id: member.user_id,
     pinned: props.isSelf || isHosting(member),
-    speaking: own.speaking,
-    camera: Boolean(own.camera),
+    speaking: voice.speaking,
+    camera: Boolean(voice.camera),
   }));
 
   // The previous pick, fed back in: a render that changes nothing returns an equal state and stops.
@@ -470,9 +590,9 @@ function SpeakerVideoGrid({
           phone ? (columns === 2 ? 'grid-cols-2 gap-2' : 'grid-cols-3 gap-2') : DESKTOP_GRID_CLASS[columns]
         )}
       >
-        {tiles.map(({ member, props, voice: own }) => (
+        {tiles.map(({ member, props, voice }) => (
           <li key={member.user_id} className="min-w-0">
-            <VideoSpeakerTile {...props} voice={own} compact={compact} />
+            <SpeakerTile {...props} voice={voice} grid={{ compact }} />
           </li>
         ))}
       </ul>
@@ -482,9 +602,9 @@ function SpeakerVideoGrid({
             {LOBBY_ROSTER_COPY.moreSpeakers(overflow.length)}
           </h3>
           <ul className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            {overflow.map(({ member, props, voice: own }) => (
+            {overflow.map(({ member, props, voice }) => (
               <li key={member.user_id} className="min-w-0">
-                <MoreSpeakerChip {...props} voice={own} />
+                <ListenerChip {...props} voice={voice} data-testid="lobby-more-speaker" />
               </li>
             ))}
           </ul>
@@ -500,197 +620,43 @@ function SpeakerVideoGrid({
 }
 
 /**
- * A speaker's tile with their camera: today's tile, with the round avatar swapped for a 16:9 picture
- * (4:3 on a phone) and the name and status left-aligned under it. Camera off, the same frame holds
- * their avatar, so the grid stays even.
- */
-function VideoSpeakerTile({
-  lobby,
-  member,
-  isSelf,
-  viewerId,
-  status,
-  disagreements,
-  voice,
-  compact,
-}: PersonProps & { voice: SpeakerVoice; compact: boolean }) {
-  const phone = useIsPhoneLayout();
-  const small = phone || compact;
-  const name = personName(member);
-  const label = isSelf ? `${name} (you)` : name;
-
-  return (
-    <div
-      role="group"
-      aria-label={label}
-      data-testid="lobby-speaker-tile"
-      data-speaking={voice.speaking || undefined}
-      className={cx(
-        'relative flex w-full min-w-0 flex-col gap-2 rounded-xl border bg-white p-1.5 pb-2 transition-colors hover:border-grey-03 has-[[data-person-trigger][data-state=open]]:border-text md:gap-1 md:p-1 md:pb-1.5',
-        voice.speaking ? 'border-green' : 'border-grey-02'
-      )}
-    >
-      <LobbyPersonMenu
-        lobby={lobby}
-        member={member}
-        isSelf={isSelf}
-        viewerId={viewerId}
-        micOn={voice.micShown ? voice.micOn : undefined}
-        disagreements={disagreements}
-      >
-        <button
-          type="button"
-          aria-label={label}
-          {...personMenuAnalyticsAttributes(lobby, member, isSelf)}
-          data-person-trigger
-          className="flex w-full min-w-0 flex-col gap-2 text-left after:absolute after:inset-0 after:rounded-xl md:gap-1"
-        >
-          <span
-            data-testid="lobby-speaker-frame"
-            className={cx(
-              'grid w-full place-items-center overflow-hidden bg-grey-01',
-              phone ? 'aspect-[4/3] rounded-md' : 'aspect-video rounded-lg'
-            )}
-          >
-            {voice.camera ? (
-              <TrackVideo track={voice.camera.publication.track} mirrored={isSelf} data-testid="lobby-speaker-video" />
-            ) : (
-              <span
-                className={cx('shrink-0 overflow-hidden rounded-full [&>svg]:size-full', small ? 'size-10' : 'size-14')}
-              >
-                <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={small ? 40 : 56} />
-              </span>
-            )}
-          </span>
-          <span
-            className={cx(
-              'flex max-w-full min-w-0 items-center px-1',
-              small
-                ? 'gap-1 text-[15px] leading-[18px] font-medium'
-                : 'gap-1.5 text-[17px] leading-[22px] font-semibold'
-            )}
-          >
-            <span className="truncate">{name}</span>
-            <PersonTags member={member} small={small} />
-          </span>
-        </button>
-      </LobbyPersonMenu>
-      <div className="flex min-w-0 items-center justify-between gap-2 px-1">
-        <TileStatus
-          lobby={lobby}
-          member={member}
-          status={status}
-          speaking={voice.speaking}
-          muted={voice.micShown && !voice.micOn}
-          disagreements={disagreements}
-          line={compact}
-          align="start"
-        />
-        {isSelf && !phone ? (
-          <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
-            You
-          </Text>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-/** Someone past the grid's cap: the Listening row's chip, plus whether their camera is on. */
-function MoreSpeakerChip({
-  lobby,
-  member,
-  isSelf,
-  viewerId,
-  disagreements,
-  voice,
-}: PersonProps & { voice: SpeakerVoice }) {
-  const name = personName(member);
-  const label = isSelf ? `${name} (you)` : name;
-
-  return (
-    <LobbyPersonMenu
-      lobby={lobby}
-      member={member}
-      isSelf={isSelf}
-      viewerId={viewerId}
-      micOn={voice.micShown ? voice.micOn : undefined}
-      disagreements={disagreements}
-    >
-      <button
-        type="button"
-        aria-label={label}
-        {...personMenuAnalyticsAttributes(lobby, member, isSelf)}
-        data-testid="lobby-more-speaker"
-        className="flex max-w-full min-w-0 items-center gap-2 rounded-full pr-1 text-left hover:bg-grey-01 data-[state=open]:bg-grey-01"
-      >
-        <span className="size-6 shrink-0 overflow-hidden rounded-full [&>svg]:size-full">
-          <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={24} />
-        </span>
-        <span className="truncate text-metadataMedium md:text-[15px] md:leading-[18px]">{name}</span>
-        <PersonTags member={member} small />
-        {voice.camera ? (
-          <span role="img" aria-label={LOBBY_ROSTER_COPY.cameraOn} className="shrink-0 text-grey-04 [&>svg]:size-3.5">
-            <CameraIcon disabled={false} />
-          </span>
-        ) : null}
-      </button>
-    </LobbyPersonMenu>
-  );
-}
-
-/**
  * The phone Claims tab's strip (GEO-3399): the grid's speakers as small thumbnails, so who is talking
  * stays in view while you vote. Drawn by the grid into the claims panel's slot; tapping one goes
  * back to People.
  */
-function LobbySpeakerStrip({
-  tiles,
-  overflow,
-}: {
-  tiles: { member: DebateLobbyMember; props: PersonProps; voice: SpeakerVoice }[];
-  overflow: number;
-}) {
-  const showPeople = React.useContext(LobbyShowPeopleContext);
+function LobbySpeakerStrip({ tiles, overflow }: { tiles: GridPerson[]; overflow: number }) {
+  const showPeople = React.useContext(LobbyShowPeopleContext) ?? undefined;
+  const analytics = debateActionAnalyticsAttributes('hub', 'Lobby speaker strip');
 
   return (
     <div
       role="group"
       aria-label="Speakers"
       data-testid="lobby-speaker-strip"
-      className="-mx-4 flex [scrollbar-width:none] gap-1.5 overflow-x-auto px-4 [&::-webkit-scrollbar]:hidden"
+      className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto overscroll-x-contain px-4"
     >
-      {tiles.map(({ member, props, voice }) => {
-        const name = personName(member);
-        return (
-          <button
-            key={member.user_id}
-            type="button"
-            aria-label={`${props.isSelf ? `${name} (you)` : name}, show people`}
-            {...debateActionAnalyticsAttributes('hub', 'Lobby speaker strip')}
-            data-speaking={voice.speaking || undefined}
-            onClick={showPeople ?? undefined}
-            className={cx(
-              'grid h-12 w-16 shrink-0 place-items-center overflow-hidden rounded-md bg-grey-01',
-              voice.speaking ? 'border-2 border-green' : 'border border-grey-02'
-            )}
-          >
-            {voice.camera ? (
-              <TrackVideo track={voice.camera.publication.track} mirrored={props.isSelf} />
-            ) : (
-              <span className="size-7 overflow-hidden rounded-full [&>svg]:size-full">
-                <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={28} />
-              </span>
-            )}
-          </button>
-        );
-      })}
+      {tiles.map(({ member, props, voice }) => (
+        <button
+          key={member.user_id}
+          type="button"
+          aria-label={`${personLabel(member, props.isSelf)}, show people`}
+          {...analytics}
+          data-speaking={voice.speaking || undefined}
+          onClick={showPeople}
+          className={cx(
+            'grid h-12 w-16 shrink-0 place-items-center overflow-hidden rounded-md bg-grey-01',
+            voice.speaking ? 'border-2 border-green' : 'border border-grey-02'
+          )}
+        >
+          <SpeakerPicture member={member} camera={voice.camera} mirrored={props.isSelf} avatarSize={28} />
+        </button>
+      ))}
       {overflow > 0 ? (
         <button
           type="button"
           aria-label={`${overflow} more ${overflow === 1 ? 'speaker' : 'speakers'}, show people`}
-          {...debateActionAnalyticsAttributes('hub', 'Lobby speaker strip')}
-          onClick={showPeople ?? undefined}
+          {...analytics}
+          onClick={showPeople}
           className="grid h-12 shrink-0 place-items-center rounded-md border border-grey-02 px-3 text-[14px] leading-[18px] text-grey-04"
         >
           +{overflow}

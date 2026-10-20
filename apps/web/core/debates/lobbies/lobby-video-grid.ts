@@ -69,11 +69,14 @@ function pickTiles(
   const order = new Map(speakers.map((speaker, index) => [speaker.id, index]));
   const kept = prevShown.filter(id => byId.has(id));
 
+  const byPriority = (a: VideoGridSpeaker, b: VideoGridSpeaker) =>
+    rank(a) - rank(b) || order.get(a.id)! - order.get(b.id)!;
+
   // First time over the cap (a fresh page, or a 13th speaker arriving with nobody shown yet): pick
   // by priority, then lay the picks out in roster order so the grid reads like the roster.
   if (kept.length === 0) {
-    const ranked = [...speakers].sort((a, b) => rank(a) - rank(b) || order.get(a.id)! - order.get(b.id)!);
-    return ranked
+    return [...speakers]
+      .sort(byPriority)
       .slice(0, cap)
       .map(speaker => speaker.id)
       .sort((a, b) => order.get(a)! - order.get(b)!);
@@ -111,9 +114,7 @@ function pickTiles(
   for (const speaker of speakers) if (speaker.speaking) claim(speaker.id);
 
   // Free tiles (someone left) fill by the same priority, without moving anyone already shown.
-  const waiting = speakers
-    .filter(speaker => !onGrid.has(speaker.id))
-    .sort((a, b) => rank(a) - rank(b) || order.get(a.id)! - order.get(b.id)!);
+  const waiting = speakers.filter(speaker => !onGrid.has(speaker.id)).sort(byPriority);
   for (const speaker of waiting) {
     if (tiles.length >= cap) break;
     tiles.push(speaker.id);
