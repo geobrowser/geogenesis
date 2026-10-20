@@ -21,9 +21,10 @@ import { ExploreSidePanelContainer } from '~/partials/explore/explore-side-panel
 const SIGNED_IN_BEST_FEED_PRELOAD_HREF = '/api/explore/feed?sort=best';
 
 /**
- * The lead card's stills, preloaded from the document for a signed-out reader (GEO-3280). It sits
- * behind its own boundary so its bounded read streams in after the shell and never holds it. The
- * hrefs are the card's own `src`s, so the `<img>`s take the preloaded responses.
+ * The lead card's stills, preloaded from the document (GEO-3280). A signed-in reader's first paint
+ * is the public page too, so its lead is the same card. It sits behind its own boundary so its
+ * bounded read streams in after the shell and never holds it. The hrefs are the card's own `src`s,
+ * so the `<img>`s take the preloaded responses.
  *
  * Elements rather than `preload()`: a hint from a boundary that resolves after the shell reaches
  * the browser only in the RSC payload, which nothing reads until the bundle has booted. A `<link>`
@@ -53,11 +54,13 @@ export default async function ExploreRoutePage() {
   // preload can't send one, so the feed's fetch would ignore it and the request would run twice.
   const bestSendsIdentityToken = wallet !== undefined && process.env.NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED === 'true';
   const opensOnBest = process.env.NEXT_PUBLIC_FOR_YOU_ENABLED !== 'true';
-  if (opensOnBest && !bestSendsIdentityToken) {
-    preload(wallet === undefined ? PUBLIC_BEST_FEED_PATH : SIGNED_IN_BEST_FEED_PRELOAD_HREF, {
-      as: 'fetch',
-      crossOrigin: 'use-credentials',
-    });
+  if (opensOnBest) {
+    // Every reader gets the CDN-cached public page: a signed-in reader's feed paints from it while
+    // their own page is built (`EntityFeed`'s `cdnFirstPage`), which is most of a second later.
+    preload(PUBLIC_BEST_FEED_PATH, { as: 'fetch', crossOrigin: 'use-credentials' });
+    if (wallet !== undefined && !bestSendsIdentityToken) {
+      preload(SIGNED_IN_BEST_FEED_PRELOAD_HREF, { as: 'fetch', crossOrigin: 'use-credentials' });
+    }
   }
 
   // The rail streams in behind its own boundary: nothing in it is above the fold, and awaiting it
@@ -72,7 +75,7 @@ export default async function ExploreRoutePage() {
         }
         walletAddress={wallet || null}
       />
-      {opensOnBest && wallet === undefined ? (
+      {opensOnBest ? (
         <React.Suspense fallback={null}>
           <LeadPosterPreload />
         </React.Suspense>

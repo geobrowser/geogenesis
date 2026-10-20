@@ -15,7 +15,8 @@ const speaking: LocalAudioGateInput = {
   msSinceTurnEnded: null,
   stillSpeaking: false,
   msUntilTurnStarts: null,
-  betweenRounds: false,
+  openRoundsPhase: null,
+  openRoundResultHeld: false,
 };
 
 const gate = (overrides: Partial<LocalAudioGateInput> = {}) => shouldEnableLocalAudio({ ...speaking, ...overrides });
@@ -38,14 +39,37 @@ describe('local audio gate', () => {
     }
   });
 
-  // Between Open rounds nobody holds a turn: both debaters pick, see the result and are counted in
-  // with their mics open, as in the intro and the thank-you.
-  it('opens both mics between Open rounds, unless the viewer muted themselves', () => {
-    expect(gate({ activeSlot: null, localSlot: 1, betweenRounds: true })).toBe(true);
-    expect(gate({ activeSlot: null, localSlot: 2, betweenRounds: true })).toBe(true);
-    expect(gate({ activeSlot: null, betweenRounds: false })).toBe(false);
-    expect(gate({ activeSlot: null, betweenRounds: true, audioMuted: true })).toBe(false);
+  it('opens both mics while voting, unless the viewer muted themselves', () => {
+    expect(gate({ activeSlot: null, localSlot: 1, openRoundsPhase: 'deciding' })).toBe(true);
+    expect(gate({ activeSlot: null, localSlot: 2, openRoundsPhase: 'deciding' })).toBe(true);
+    expect(gate({ activeSlot: null, openRoundsPhase: 'deciding', audioMuted: true })).toBe(false);
   });
+
+  it.each([1, 2] as const)('keeps slot %s muted until the final result hold ends', localSlot => {
+    const thanking = {
+      localSlot,
+      effectiveStatus: 'thanking' as const,
+      activeSlot: null,
+      openRoundsPhase: 'finished' as const,
+      msSinceTurnEnded: 100,
+      stillSpeaking: true,
+    };
+    expect(gate({ ...thanking, openRoundResultHeld: true })).toBe(false);
+    expect(gate({ ...thanking, openRoundResultHeld: false })).toBe(true);
+    expect(gate({ ...thanking, openRoundResultHeld: false, audioMuted: true })).toBe(false);
+  });
+
+  it.each([1, 2] as const)(
+    'mutes slot %s throughout the round transition, even during prearm or overrun',
+    localSlot => {
+      const transition = { localSlot, activeSlot: null, openRoundsPhase: 'result' as const };
+      expect(gate(transition)).toBe(false);
+      expect(gate({ ...transition, msSinceTurnEnded: 100, stillSpeaking: true })).toBe(false);
+      expect(gate({ ...transition, msUntilTurnStarts: 500 })).toBe(false);
+      expect(gate({ ...transition, activeSlot: localSlot })).toBe(false);
+      expect(gate({ ...transition, openRoundsPhase: 'speaking', activeSlot: localSlot })).toBe(true);
+    }
+  );
 
   it('is closed outside the debate itself', () => {
     expect(gate({ effectiveStatus: null })).toBe(false);

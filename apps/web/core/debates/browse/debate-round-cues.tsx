@@ -183,23 +183,25 @@ export function DebateRoundBanner({
 }
 
 /** Opening and next-round announcements use the same type weights and outline as fixed formats. */
-export function PlayerRoundTitle({ round, role }: { round: string; role: string | null }) {
+export function PlayerRoundTitle({ round, role, scale = 1 }: { round: string; role: string | null; scale?: number }) {
   return (
     <div className="mx-auto grid w-max max-w-[92%] justify-items-center text-center text-white">
-      <RoundTitleLines round={round} role={role} style={PLAYER_TITLE_STYLE} />
+      <RoundTitleLines round={round} role={role} style={PLAYER_TITLE_STYLE} scale={scale} />
     </div>
   );
 }
 
-/** Shared lines keep both formats' sizes, weights and per-line em outlines identical. */
+/** Shared lines preserve the type hierarchy and per-line em outlines across formats and surfaces. */
 function RoundTitleLines({
   round,
   role,
   style = roundCardTextShadow,
+  scale = 1,
 }: {
   round: string;
   role: string | null;
   style?: React.CSSProperties;
+  scale?: number;
 }) {
   return (
     <>
@@ -207,14 +209,18 @@ function RoundTitleLines({
           line; inheriting em lengths from a smaller wrapper would make the stroke too thin. */}
       <span
         className={cx('block', role ? PLAYBACK_ROUND_EYEBROW_CLASS : PLAYBACK_ROUND_HEADLINE_CLASS)}
-        style={{ ...style, fontSize: `${role ? ROUND_CQW : NAME_CQW}cqw`, lineHeight: 1 }}
+        style={{
+          ...style,
+          fontSize: `${Number(((role ? ROUND_CQW : NAME_CQW) * scale).toFixed(3))}cqw`,
+          lineHeight: 1,
+        }}
       >
         {round}
       </span>
       {role && (
         <span
           className={cx('block', PLAYBACK_ROUND_HEADLINE_CLASS)}
-          style={{ ...style, fontSize: `${NAME_CQW}cqw`, lineHeight: 0.95 }}
+          style={{ ...style, fontSize: `${Number((NAME_CQW * scale).toFixed(3))}cqw`, lineHeight: 0.95 }}
         >
           {role}
         </span>
