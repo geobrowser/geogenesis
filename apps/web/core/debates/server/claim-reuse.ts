@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
-import { DEBATE_TAG_ID } from '~/core/debates/ontology';
+import { FROM_DEBATE_TAG_ID, POTENTIAL_DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 import { ENTITY_ID_BATCH_CONCURRENCY, batchEntityIds } from '~/core/io/queries';
@@ -171,7 +171,7 @@ export async function applyClaimReusePolicy(
       claims: claims.length,
       matched: referenced.length,
     });
-    // Shadow mode promises to change nothing but the counters. Minting Debate-tagged
+    // Shadow mode promises to change nothing but the counters. Minting Potential-debate-tagged
     // twins of claims that already carry the tag in this space would break that.
     return claims.map(withoutReferenceOrCandidacy);
   }
@@ -204,7 +204,8 @@ export async function applyClaimReusePolicy(
   ];
   let verified: Set<string>;
   const existingTopicsByEntity = new Map<string, Set<string>>();
-  const alreadyTaggedDebate = new Set<string>();
+  const alreadyTaggedPotentialDebate = new Set<string>();
+  const alreadyTaggedFromDebate = new Set<string>();
   try {
     const entities = ids.length > 0 ? await (options.lookup ?? lookupExistingClaimsInGraph)(ids, spaceId) : [];
     const spaceKey = uuidToHex(spaceId);
@@ -219,9 +220,9 @@ export async function applyClaimReusePolicy(
     );
     for (const entity of entities) {
       existingTopicsByEntity.set(uuidToHex(entity.id), new Set((entity.topicIds ?? []).map(uuidToHex)));
-      if ((entity.tagIds ?? []).some(tag => uuidToHex(tag) === uuidToHex(DEBATE_TAG_ID))) {
-        alreadyTaggedDebate.add(uuidToHex(entity.id));
-      }
+      const tags = new Set((entity.tagIds ?? []).map(uuidToHex));
+      if (tags.has(uuidToHex(POTENTIAL_DEBATE_TAG_ID))) alreadyTaggedPotentialDebate.add(uuidToHex(entity.id));
+      if (tags.has(uuidToHex(FROM_DEBATE_TAG_ID))) alreadyTaggedFromDebate.add(uuidToHex(entity.id));
     }
   } catch (error) {
     console.warn('[debate-acceptor] could not verify matched claims; minting all of them instead', {
@@ -257,10 +258,16 @@ export async function applyClaimReusePolicy(
         const missing = claim.topics.filter(topic => !existingTopics.has(uuidToHex(topic.id)));
         if (missing.length !== claim.topics.length) next = { ...next, topics: missing };
       }
-      // Same rule for the Debate tag: an entity already listed as a debate claim in this
-      // space must not be tagged a second time.
-      if (next.isContestable && alreadyTaggedDebate.has(uuidToHex(claim.existingClaimEntityId))) {
+      // Same rule for the Potential debate tag: an entity already offered for debate in this
+      // space must not be tagged a second time. Only that tag counts — one already picked as a
+      // motion (the Debate tag) is still offered, as it would be if it had been minted here.
+      if (next.isContestable && alreadyTaggedPotentialDebate.has(uuidToHex(claim.existingClaimEntityId))) {
         next = { ...next, isContestable: false };
+      }
+      // And for the From a debate tag, which every published claim carries: an entity an earlier
+      // debate already tagged in this space keeps its one relation.
+      if (!next.fromDebateTagged && alreadyTaggedFromDebate.has(uuidToHex(claim.existingClaimEntityId))) {
+        next = { ...next, fromDebateTagged: true };
       }
       return next;
     }
@@ -301,16 +308,16 @@ function withoutReference(claim: DebateClaimInput): DebateClaimInput {
 }
 
 /**
- * Drop the reference AND the claim's candidacy as a debate motion.
+ * Drop the reference AND the claim's Potential debate tag.
  *
  * Tags are space-scoped, so most dropped references are harmless: an entity that was
  * deleted, re-typed, or lives in another space cannot already be tagged *here*, and
  * minting a tagged replacement duplicates nothing. Three paths are different, because
  * they drop the reference without ever learning what the target carries in this space
- * — the debate's own motion (which is tagged by construction: motions are drawn from
- * the Debate-tagged claims list), shadow mode, and a failed graph read. Minting a
- * tagged twin of one of those puts a second candidate motion for the same proposition
- * in the picker, which is the outcome the tag subtraction exists to prevent.
+ * — the debate's own motion (already chosen for debate, so offering a twin of it is
+ * noise), shadow mode, and a failed graph read. Minting a tagged twin of one of those
+ * offers a second copy of the same proposition for curation, which is the outcome the
+ * tag subtraction exists to prevent.
  *
  * Minting the duplicate entity is the long-standing, tolerated failure. Tagging it is
  * not, so the tag is what gets withheld.

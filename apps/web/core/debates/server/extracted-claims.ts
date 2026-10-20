@@ -45,9 +45,9 @@ export type DebateExtractedClaimsClaim = {
   topics?: { entity_id: string; name: string | null }[] | null;
   /**
    * True when the claim's main assertion is broad enough to hold positions for and
-   * against it. Only these are tagged as debate claims on Geo, because the tag is what
-   * the claim picker lists as candidate motions. Absent on payloads from before the
-   * classification shipped, which read as "not a motion".
+   * against it. Only these get the Potential debate tag on Geo, which offers them to
+   * curators as claims that could be debated (every extracted claim gets From a debate).
+   * Absent on payloads from before the classification shipped, which read as "not offered".
    */
   is_contestable?: boolean | null;
   /**
