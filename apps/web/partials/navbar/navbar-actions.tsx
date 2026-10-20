@@ -40,7 +40,7 @@ import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-m
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
 import { useCreateEntityActions } from '../create-entity/use-create-entity-actions';
-import { avatarAtom } from '../onboarding/dialog';
+import { avatarAtom } from '../onboarding/onboarding-atoms';
 import { EmailNotificationsMenuItem } from './email-notifications-menu-item';
 
 function useUser() {

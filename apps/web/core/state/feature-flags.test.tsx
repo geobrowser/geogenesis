@@ -27,6 +27,7 @@ describe('feature flags', () => {
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
     expect(defaultFeatureFlags.lobbyHosting).toBe(false);
+    expect(defaultFeatureFlags.debateVideo).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
@@ -36,6 +37,7 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      debateVideo: false,
       bountiesTab: true,
     });
   });
@@ -61,6 +63,7 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      debateVideo: false,
       bountiesTab: true,
     });
   });
@@ -88,6 +91,7 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      debateVideo: false,
       bountiesTab: true,
     });
   });

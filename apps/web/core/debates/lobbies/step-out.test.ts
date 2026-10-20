@@ -3,12 +3,16 @@ import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  carryLobbyMic,
-  clearCarriedLobbyMic,
+  carryLobbyJoinChoice,
+  clearCarriedLobbyChoice,
   debateEntryClick,
-  forgetLobbyMic,
-  readCarriedLobbyMic,
+  forgetLobbyDevices,
+  lobbyCaptureLive,
+  readCarriedLobbyChoice,
+  registerLobbyCapture,
   registerLobbyStepOut,
+  releaseLobbyCapture,
+  reportLobbyCamera,
   reportLobbyMic,
   routeIntoDebate,
 } from './step-out';
@@ -17,8 +21,8 @@ let clear: (() => void) | null = null;
 afterEach(() => {
   clear?.();
   clear = null;
-  forgetLobbyMic();
-  clearCarriedLobbyMic();
+  forgetLobbyDevices();
+  clearCarriedLobbyChoice();
   vi.useRealTimers();
 });
 
@@ -34,6 +38,38 @@ function click(overrides: Partial<{ button: number; metaKey: boolean; defaultPre
     ...overrides,
   } as unknown as React.MouseEvent & { preventDefault: ReturnType<typeof vi.fn> };
 }
+
+describe('the lobby capture registry', () => {
+  it('tracks each kind and releases only the one asked for', () => {
+    const releaseMic = vi.fn();
+    const releaseCamera = vi.fn();
+    const clearMic = registerLobbyCapture('audio', { on: true, release: releaseMic });
+    const clearCamera = registerLobbyCapture('video', { on: false, release: releaseCamera });
+    expect(lobbyCaptureLive('audio')).toBe(true);
+    expect(lobbyCaptureLive()).toBe(true);
+
+    releaseLobbyCapture('audio');
+    expect(releaseMic).toHaveBeenCalledTimes(1);
+    expect(releaseCamera).not.toHaveBeenCalled();
+
+    releaseLobbyCapture();
+    expect(releaseCamera).toHaveBeenCalledTimes(1);
+
+    clearMic();
+    clearCamera();
+    expect(lobbyCaptureLive()).toBe(false);
+  });
+
+  it('keeps a newer registration when an older one clears', () => {
+    const clearOld = registerLobbyCapture('audio', { on: true, release: vi.fn() });
+    const clearNew = registerLobbyCapture('audio', { on: false, release: vi.fn() });
+
+    clearOld();
+    expect(lobbyCaptureLive('audio')).toBe(true);
+    clearNew();
+    expect(lobbyCaptureLive('audio')).toBe(false);
+  });
+});
 
 describe('routeIntoDebate', () => {
   it('navigates at once outside a lobby', () => {
@@ -53,39 +89,56 @@ describe('routeIntoDebate', () => {
   });
 });
 
-describe('carrying the lobby mic into a debate', () => {
+describe('carrying the lobby’s devices into a debate', () => {
   /** A lobby whose step-out carries its mic, as the presence hook's does. */
   function inLobbyWithMic(on: boolean | null) {
     reportLobbyMic(on);
-    clear = registerLobbyStepOut(async () => carryLobbyMic());
+    clear = registerLobbyStepOut(async () => carryLobbyJoinChoice());
   }
 
   it('carries an unmuted mic', () => {
     inLobbyWithMic(true);
     routeIntoDebate(() => undefined);
-    expect(readCarriedLobbyMic()).toBe(true);
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true });
   });
 
   it('carries a muted mic', () => {
     inLobbyWithMic(false);
     routeIntoDebate(() => undefined);
-    expect(readCarriedLobbyMic()).toBe(false);
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: false });
+  });
+
+  // Stepping out releases the lobby's camera first; the carry still says it was on.
+  it('carries the camera as it was before the step-out released it', () => {
+    inLobbyWithMic(true);
+    reportLobbyCamera(true);
+    const releaseCleanup = registerLobbyCapture('video', { on: true, release: () => reportLobbyCamera(false) });
+    routeIntoDebate(() => undefined);
+    releaseCleanup();
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true, cameraOn: true });
+  });
+
+  it('carries a camera that was off', () => {
+    inLobbyWithMic(true);
+    reportLobbyCamera(false);
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true, cameraOn: false });
   });
 
   it('carries nothing for a listener, after the lobby page is gone, or once spent', () => {
     inLobbyWithMic(null);
     routeIntoDebate(() => undefined);
-    expect(readCarriedLobbyMic()).toBeNull();
+    expect(readCarriedLobbyChoice()).toBeNull();
 
     reportLobbyMic(true);
-    forgetLobbyMic();
+    forgetLobbyDevices();
     routeIntoDebate(() => undefined);
-    expect(readCarriedLobbyMic()).toBeNull();
+    expect(readCarriedLobbyChoice()).toBeNull();
 
     reportLobbyMic(true);
     routeIntoDebate(() => undefined);
-    clearCarriedLobbyMic();
-    expect(readCarriedLobbyMic()).toBeNull();
+    clearCarriedLobbyChoice();
+    expect(readCarriedLobbyChoice()).toBeNull();
   });
 
   it('does not reach a debate entered from outside a lobby', () => {
@@ -94,7 +147,7 @@ describe('carrying the lobby mic into a debate', () => {
     clear?.();
     clear = null;
     routeIntoDebate(() => undefined);
-    expect(readCarriedLobbyMic()).toBeNull();
+    expect(readCarriedLobbyChoice()).toBeNull();
   });
 
   it('expires after a minute', () => {
@@ -102,7 +155,7 @@ describe('carrying the lobby mic into a debate', () => {
     inLobbyWithMic(true);
     routeIntoDebate(() => undefined);
     vi.advanceTimersByTime(61_000);
-    expect(readCarriedLobbyMic()).toBeNull();
+    expect(readCarriedLobbyChoice()).toBeNull();
   });
 });
 

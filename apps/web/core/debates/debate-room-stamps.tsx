@@ -129,6 +129,9 @@ const EXIT_CLASS = {
   fade: 'motion-safe:animate-[fadeIn_300ms_linear_reverse_both]',
 } as const;
 
+/** The `fade` exit run forwards: a piece that fades in over `ROOM_EXIT_MS` and out the same way. */
+export const ROOM_ENTER_CLASS = 'motion-safe:animate-[fadeIn_300ms_linear_both]';
+
 function shown(node: React.ReactNode) {
   return node !== null && node !== undefined && node !== false;
 }
@@ -141,14 +144,19 @@ function shown(node: React.ReactNode) {
  * The wrapper is always rendered, a box over the whole of its container, so the moment is never
  * remounted on its way out and its entrance does not replay. It takes no pointer events: a moment
  * that needs them, like the pick panel, asks for them itself, and only until it starts to leave.
+ *
+ * `layout="inline"` drops the box, for a piece that sits in a corner sized to its contents: the
+ * turn timer, the muted microphone and End turn (GEO-3347).
  */
 export function RoomExit({
   children,
   exit = 'fade',
+  layout = 'fill',
   className,
 }: {
   children: React.ReactNode;
   exit?: keyof typeof EXIT_CLASS;
+  layout?: 'fill' | 'inline';
   className?: string;
 }) {
   const [previous, setPrevious] = React.useState(children);
@@ -175,7 +183,8 @@ export function RoomExit({
       inert={isLeaving}
       aria-hidden={isLeaving || undefined}
       className={cx(
-        'pointer-events-none absolute inset-0',
+        'pointer-events-none',
+        layout === 'fill' && 'absolute inset-0',
         isLeaving && [EXIT_CLASS[exit], 'motion-reduce:hidden'],
         className
       )}

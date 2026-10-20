@@ -56,6 +56,12 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'debateVideo',
+    label: 'Video in the claim picker and lobbies',
+    description: 'Camera and video tiles in the claim picker and in live debate lobbies (GEO-3165, GEO-3307).',
+    enabledByDefault: false,
+  },
+  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',

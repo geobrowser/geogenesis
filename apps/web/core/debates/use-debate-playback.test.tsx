@@ -2340,3 +2340,157 @@ describe('useDebatePlayback — drift correction leaves the audible recording al
     expect(slot1.currentTime).toBe(41);
   });
 });
+
+describe('automatic cut playback hold', () => {
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}` })
+    );
+  });
+
+  async function mounted() {
+    const debate = debateFixture();
+    const hook = renderHook(({ debate }) => useDebatePlayback(debate, true), { initialProps: { debate } });
+    await waitFor(() => expect(hook.result.current.urls.slot1).not.toBeNull());
+    const pair = [fakeVideo(), fakeVideo()];
+    hook.result.current.slot1VideoRef.current = pair[0];
+    hook.result.current.slot2VideoRef.current = pair[1];
+    await act(async () => {
+      const start = hook.result.current.resumeBoth();
+      pair.forEach(video => video.settlePlay());
+      await start;
+    });
+    return { ...hook, pair };
+  }
+
+  it('freezes both recordings and the announcement clock during a slow cut, then resumes both at its target', async () => {
+    const { result, pair } = await mounted();
+    let hold!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      hold = result.current.holdForTransition();
+      result.current.seekBoth(41.2, { preserveTransitionHold: true });
+    });
+    // No resume may even start before decoder readiness releases this automatic hold.
+    expect(pair.map(video => video.plays)).toEqual([1, 1]);
+    // Simulate two seconds of media time: the faster decoder must not speak behind an opaque canvas.
+    for (const video of pair) if (!video.paused) video.currentTime += 2;
+    act(() => result.current.onPlaybackTick());
+    expect(pair.map(video => video.paused)).toEqual([true, true]);
+    expect(result.current.livePositionMs()).toBe(41_200);
+    expect(result.current.playheadSeconds).toBe(41.2);
+    expect(result.current.playing).toBe(true);
+    expect(result.current.userPaused).toBe(false);
+    expect(result.current.turnState?.slot).toBe(2);
+    await act(async () => {
+      hold.release();
+      pair.forEach(video => video.settlePlay());
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(pair.map(video => video.paused)).toEqual([false, false]));
+    expect(pair.map(video => video.currentTime)).toEqual([41.2, 41.2]);
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+    act(() => hold.release());
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+  });
+
+  it('keeps playing after a manual seek interrupts a cut hold', async () => {
+    const { result, pair } = await mounted();
+    let hold!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      hold = result.current.holdForTransition();
+    });
+    await act(async () => {
+      result.current.seekBoth(25);
+      // The player's seek generation changes and disposes the outgoing cut after this seek.
+      hold.cancel();
+      pair.forEach(video => video.settlePlay());
+    });
+    await waitFor(() => expect(pair.map(video => video.paused)).toEqual([false, false]));
+    expect(result.current.playing).toBe(true);
+    expect(result.current.userPaused).toBe(false);
+    expect(pair.map(video => video.currentTime)).toEqual([25, 25]);
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+    act(() => {
+      hold.release();
+      hold.cancel();
+    });
+    expect(result.current.playing).toBe(true);
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+  });
+
+  it('keeps a user-paused manual seek paused and retires its old hold', async () => {
+    const { result, pair } = await mounted();
+    let hold!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      hold = result.current.holdForTransition();
+      result.current.togglePlayback();
+    });
+    act(() => {
+      result.current.seekBoth(25);
+      hold.cancel();
+      hold.release();
+    });
+    expect(pair.map(video => video.paused)).toEqual([true, true]);
+    expect(result.current.userPaused).toBe(true);
+    expect(pair.map(video => video.currentTime)).toEqual([25, 25]);
+    await act(async () => {
+      const resume = result.current.resumeBoth();
+      pair.forEach(video => video.settlePlay());
+      await resume;
+    });
+    expect(pair.map(video => video.paused)).toEqual([false, false]);
+  });
+
+  it('keeps a viewer pause and defers a viewer resume until the pair is ready', async () => {
+    const { result, pair } = await mounted();
+    let hold!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      hold = result.current.holdForTransition();
+    });
+    act(() => result.current.togglePlayback());
+    expect(result.current.userPaused).toBe(true);
+    act(() => hold.release());
+    expect(pair.map(video => video.plays)).toEqual([1, 1]);
+    let next!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      next = result.current.holdForTransition();
+    });
+    await act(() => result.current.resumeBoth());
+    expect(pair.map(video => video.plays)).toEqual([1, 1]);
+    expect(result.current.playing).toBe(true);
+    expect(result.current.userPaused).toBe(false);
+    await act(async () => {
+      next.release();
+      pair.forEach(video => video.settlePlay());
+    });
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+  });
+
+  it.each(['suspend', 'beginScrub', 'cancel', 'replacement', 'replay', 'end', 'unmount'] as const)(
+    'does not let an old cut restart playback after %s',
+    async action => {
+      const { result, pair, rerender, unmount } = await mounted();
+      let hold!: ReturnType<typeof result.current.holdForTransition>;
+      act(() => {
+        hold = result.current.holdForTransition();
+      });
+      await act(async () => {
+        if (action === 'cancel') hold.cancel();
+        else if (action === 'unmount') unmount();
+        else if (action === 'replacement') rerender({ debate: debateFixture('replacement') });
+        else if (action === 'replay') {
+          void result.current.playFromStart();
+          pair.forEach(video => video.settlePlay());
+        } else if (action === 'end') result.current.seekBoth(60);
+        else result.current[action]();
+      });
+      const starts = pair.map(video => video.plays);
+      act(() => hold.release());
+      expect(pair.map(video => video.plays)).toEqual(starts);
+      if (action !== 'replay') expect(pair.map(video => video.paused)).toEqual([true, true]);
+    }
+  );
+});

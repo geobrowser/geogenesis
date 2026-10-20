@@ -1,6 +1,6 @@
 'use client';
 
-import type * as React from 'react';
+import * as React from 'react';
 
 import cx from 'classnames';
 
@@ -12,6 +12,7 @@ import { Text } from '~/design-system/text';
 import { type DebateLobbyClaims, type DebateLobbyMember, dashlessId } from '../api';
 import { MicrophoneIcon } from '../debate-room-controls';
 import { sameId } from '../rooms/room-presence';
+import { TrackVideo } from '../track-video';
 import { LobbyDebatePairs } from './lobby-debate-pairs';
 import { LobbyDisagreementsTrigger } from './lobby-disagreements';
 import {
@@ -141,6 +142,8 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
   // Mic state only means something in a room this tab is connected to.
   const showMic = voice.connected && !member.stepped_out;
   const micOn = voice.micOn.has(voiceId);
+  // Someone stepped out is in a debate elsewhere; their lobby camera is gone or about to be.
+  const camera = member.stepped_out ? undefined : voice.cameras.get(voiceId);
   const name = personName(member);
   const label = isSelf ? `${name} (you)` : name;
 
@@ -178,7 +181,11 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
               speaking && 'ring-2 ring-successTertiary'
             )}
           >
-            <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={56} />
+            {camera ? (
+              <TrackVideo track={camera.publication.track} mirrored={isSelf} data-testid="lobby-speaker-video" />
+            ) : (
+              <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={56} />
+            )}
           </span>
           <span className="flex max-w-full min-w-0 items-center gap-1.5 text-[17px] leading-[22px] font-semibold md:gap-1 md:text-[15px] md:leading-[18px] md:font-medium">
             <span className="truncate">{name}</span>

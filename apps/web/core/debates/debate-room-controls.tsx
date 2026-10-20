@@ -39,6 +39,36 @@ export function RecordingCircleButton({
   );
 }
 
+/** The ready screen and recording room share the same exit control and lobby wording. */
+export function DebateLeaveButton({
+  returnsToLobby = false,
+  saving = false,
+  onClick,
+  disabled,
+  className,
+}: {
+  returnsToLobby?: boolean;
+  saving?: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const label = returnsToLobby ? 'Back to lobby' : 'Leave debate';
+  const accessibleLabel = saving ? 'Saving local recording' : label;
+  return (
+    <RecordingCircleButton
+      ariaLabel={accessibleLabel}
+      title={accessibleLabel}
+      onClick={onClick}
+      disabled={disabled || saving}
+      className={cx(returnsToLobby && 'w-auto grid-flow-col gap-2 px-3 whitespace-nowrap', className)}
+    >
+      <LeaveIcon />
+      {returnsToLobby && <span className="text-metadata">{label}</span>}
+    </RecordingCircleButton>
+  );
+}
+
 /**
  * A mic or camera toggle that sits over a video tile, as the intro screen has them.
  *
@@ -51,12 +81,16 @@ export function DebateTileToggleButton({
   enabled,
   onClick,
   disabled,
+  compact = false,
+  appearance = 'default',
   children,
 }: {
   ariaLabel: string;
   enabled: boolean;
   onClick: () => void;
   disabled?: boolean;
+  compact?: boolean;
+  appearance?: 'default' | 'overlay';
   children: React.ReactNode;
 }) {
   return (
@@ -71,8 +105,15 @@ export function DebateTileToggleButton({
       onClick={onClick}
       disabled={disabled}
       className={cx(
-        'grid size-10 place-items-center rounded-full shadow-light transition disabled:opacity-50',
-        enabled ? 'bg-text text-white hover:bg-text/85' : 'bg-red-03 text-red-01 hover:bg-red-03/85'
+        'grid place-items-center rounded-full shadow-light transition disabled:opacity-50',
+        compact ? 'size-8 [&>svg]:size-3' : 'size-10',
+        appearance === 'overlay'
+          ? enabled
+            ? 'bg-divider text-text hover:bg-white'
+            : 'bg-red-01 text-white hover:bg-red-01/85'
+          : enabled
+            ? 'bg-text text-white hover:bg-text/85'
+            : 'bg-red-03 text-red-01 hover:bg-red-03/85'
       )}
     >
       {children}

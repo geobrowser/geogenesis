@@ -16,6 +16,7 @@ import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-resp
 import { captureLocalVoteDropped, saveVotesSignIn } from '~/core/save-votes-analytics';
 import { savedVotesCopy, savingVotesCopy } from '~/core/save-votes-copy';
 import {
+  LOCAL_VOTES_LIST_ID,
   type LocalVote,
   bindSaveToAccount,
   clearLocalVotes,
@@ -137,7 +138,7 @@ export function LocalVotesSaver() {
   if (!next) return null;
   return (
     // Saved votes are told apart from votes cast signed in by this list id on `action_completed`.
-    <ActionContextProvider value={{ list_id: 'local_votes' }}>
+    <ActionContextProvider value={{ list_id: LOCAL_VOTES_LIST_ID }}>
       <LocalVoteWriter
         key={`${next.entityId}:${next.spaceId}:${next.responseKind}:${next.direction}`}
         vote={next}

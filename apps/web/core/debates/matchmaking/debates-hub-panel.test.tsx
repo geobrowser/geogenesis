@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -617,6 +617,22 @@ describe('DebatesHubPanel', () => {
 
     expect(store.get(debatesHubAtom)).not.toBeNull();
     opener.remove();
+  });
+
+  it('keeps mobile status-filter options inside the modal focus boundary', async () => {
+    mocks.isMobile = true;
+    window.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    renderOpen();
+    const dialog = screen.getByRole('dialog', { name: 'Debates' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Any status' }));
+    const option = await screen.findByRole('button', { name: 'Received' });
+    expect(dialog).toContainElement(option);
+    fireEvent.click(option);
+    expect(within(dialog).getByRole('button', { name: 'Received' })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('gives the mobile sheet a close button that assistive tech can reach', () => {

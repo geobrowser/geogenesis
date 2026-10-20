@@ -34,6 +34,7 @@ import {
   type DebateParticipantSummary,
   type DebateRematchClaimsResponse,
   type DebateRematchParticipant,
+  type DebateRematchSession,
   type DebateScheduleResponse,
   GEO_CHAT_CLAIM_IDS_PER_REQUEST,
   GeoChatRequestError,
@@ -91,7 +92,6 @@ import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
-import type { RecordingPlaybackVariant } from './mobile-rendition';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -104,7 +104,9 @@ import {
   refreshRematchClaimBatches,
   rematchClaimBatchesWithClaim,
 } from './rematch-claims-query-key';
+import { markRematchAnswered } from './rematch-join-intent';
 import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
+import type { RecordingUrlVariant } from './stream-playback';
 import { withQueryData } from './with-query-data';
 
 export const debateQueryNetworkOptions = {
@@ -144,7 +146,7 @@ export const debateQueryKeys = {
     debateId: string,
     filename: string,
     accountKey: string | null,
-    variant: RecordingPlaybackVariant | 'original' = 'original'
+    variant: RecordingUrlVariant | 'original' = 'original'
   ) => ['debates', 'recording-url', debateId, filename, accountKey, variant] as const,
   transcript: (debateId: string, format: TranscriptFormat) =>
     ['debates', 'transcript', dashlessId(debateId), format] as const,
@@ -196,11 +198,11 @@ export const debateQueryKeys = {
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
-  // Deliberately NOT nested under `rematch(...)`: the gateway invalidates that prefix on every
-  // `debate.rematch_changed`, and refetching here would hand `<LiveKitRoom>` a new token and tear
-  // down the live voice connection.
-  rematchLiveKit: (accountKey: string | null, sessionId: string) =>
-    ['debates', 'account', accountKey, 'rematch-livekit', sessionId] as const,
+  // Deliberately outside the `debates` root, as the lobby's voice token is. The gateway refetches
+  // that whole root on every (re)connect, and a fresh token reaching `<LiveKitRoom>` while it is
+  // Reconnecting makes livekit-client abandon the resume and rejoin from scratch (GEO-3343) — and a
+  // network blip is exactly when the socket and the call drop together.
+  rematchLiveKit: (accountKey: string | null, sessionId: string) => ['rematch-livekit', accountKey, sessionId] as const,
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
@@ -1123,19 +1125,48 @@ export function useLeaveDebateRematch(sessionId: string) {
     mutationFn: () => leaveDebateRematch(sessionId, getPrivyIdentityToken, accountKey),
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
-      const activityKey = debateQueryKeys.activity(accountKey);
-      const activity = queryClient.getQueryData<DebateActivity>(activityKey);
-      if (activity) {
-        const debate = activity.debate?.id === session.source_debate_id ? null : activity.debate;
-        const rematch = activity.rematch?.id === session.id ? null : activity.rematch;
-        if (debate !== activity.debate || rematch !== activity.rematch) {
-          queryClient.setQueryData(activityKey, { ...activity, debate, rematch });
-        }
-      }
+      forgetEndedRematch(queryClient, accountKey, session);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, session.id) });
-      void queryClient.invalidateQueries({ queryKey: activityKey });
     },
   });
+}
+
+/**
+ * Drops an ended debate-again session from the viewer's cached activity, then asks again.
+ *
+ * `DebateCoordinator` routes into a picker for as long as activity says its session is browsing, and
+ * activity refreshes on its own schedule. A session the viewer has just seen end stays in it until
+ * then, so the coordinator sent them straight back into the picker they had just left, which sent
+ * them out again (GEO-3342). The same reason `useClearDebateActivityCache` drops a room's rematch.
+ *
+ * A poll already in flight is cancelled too: its answer predates the end.
+ */
+function forgetEndedRematch(queryClient: QueryClient, accountKey: string | null, session: DebateRematchSession) {
+  const activityKey = debateQueryKeys.activity(accountKey);
+  const activity = queryClient.getQueryData<DebateActivity>(activityKey);
+  if (activity) {
+    const debate = activity.debate?.id === session.source_debate_id ? null : activity.debate;
+    const rematch = activity.rematch?.id === session.id ? null : activity.rematch;
+    if (debate !== activity.debate || rematch !== activity.rematch) {
+      queryClient.setQueryData(activityKey, { ...activity, debate, rematch });
+    }
+  }
+  // Cancelled first, then asked again. An invalidation alone cancels a request in flight only when
+  // there is data to protect: with none cached yet it joins that request, whose answer predates the
+  // end and would put the session straight back. The patch above stays synchronous, ahead of this.
+  void queryClient
+    .cancelQueries({ queryKey: activityKey })
+    .then(() => queryClient.invalidateQueries({ queryKey: activityKey }));
+}
+
+/** For the picker, which learns its session ended without a Leave of its own: the other person left. */
+export function useForgetEndedRematch() {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  return React.useCallback(
+    (session: DebateRematchSession) => forgetEndedRematch(queryClient, accountKey, session),
+    [accountKey, queryClient]
+  );
 }
 
 /**
@@ -1378,6 +1409,7 @@ export function useAcceptDebateChallenge() {
     mutationFn: (challengeId: string) => acceptDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
     onSuccess: result => {
       if (result.session) {
+        markRematchAnswered(result.session.id);
         queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
@@ -1460,8 +1492,8 @@ export function useCompleteLocalRecordingUpload(debateId: string) {
  */
 export const RECORDING_URL_STALE_MS = 5 * 60 * 1000;
 
-/** `variant: 'mobile'` signs the recording's mobile rendition (GEO-3118) instead of the file itself. */
-type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingPlaybackVariant };
+/** `variant: 'mobile'` signs the recording's feed rendition (GEO-3118, still named `mobile`) instead of the file itself. */
+type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingUrlVariant };
 
 /**
  * The signed playback URL for one debate recording, cached.

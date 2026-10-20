@@ -3,6 +3,8 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtom } from 'jotai';
+import { flushSync } from 'react-dom';
 
 import { ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
@@ -13,25 +15,28 @@ import { isOpenRoundsDebate } from '~/core/debates/open-rounds';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import {
+  BREAK_SETTLE_MS,
+  type PlayerBreak,
+  breakAnimationPositionMs,
   breakAnnouncesRound,
-  breakBannerShown,
   breakCueAt,
   breakCuts,
   breakFirstName,
   earlyEndCueAt,
-  lastWordSlotAt,
   silentAt,
 } from '~/core/debates/playback-breaks';
-import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
-import {
-  TURN_TIMER_SCALE_CLASS,
-  turnTimerBuildUp,
-  turnTimerPulseClass,
-  turnTimerRimMask,
-  turnTimerScale,
-} from '~/core/debates/recording-countdown-ring';
+import { type PlaybackTimeline, playbackTimeline } from '~/core/debates/playback-timeline';
+import { type TurnState, speakerLabel, turnStateFromSegments } from '~/core/debates/playback-utils';
+import { turnTimerRimMask } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
-import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
+import { ROUND_CARD_MS, roundBadgeAt, roundCardAt, roundParts } from '~/core/debates/round-cues';
+import { fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
+import {
+  type AttachedStream,
+  attachStreamSource,
+  canPlayNativeHls,
+  debateStreamsFully,
+} from '~/core/debates/stream-playback';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { markDebateWatched } from '~/core/debates/watched-debates';
@@ -49,10 +54,15 @@ import { DebateClaimCounter } from './debate-claim-counter';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
+import { type DebatePreviewClips, debatePreviewClips, feedFullPlaybackStartedAtom } from './feed-full-playback';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
-import { LABEL_FONT, STAMP_FONT, TAG_CLASS } from './stamp-styles';
+import { PLAYER_EXIT_MS, PLAYER_FURNITURE_OPACITY } from './player-overlay-styles';
+import { useAnnouncementFocus } from './use-announcement-focus';
 import { useDebateEndCard } from './use-debate-end-card';
+import { useDebatePreviewClips, usePreviewPairSync } from './use-debate-preview-clips';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
+import { usePlaybackAnimationClock } from './use-playback-animation-clock';
+import { useVideoCutTransition } from './use-video-cut-transition';
 
 /**
  * How many times a tile will rebuild a recording whose media pipeline died, per source (GEO-2985).
@@ -133,6 +143,25 @@ type DebateFeedPlayerProps = {
   initialSeekSeconds?: number | null;
   /** Told whenever this card's playback state changes — the linked debate's card on its own page. */
   onPlaybackState?: (state: DebatePagePlayerState) => void;
+  /**
+   * Attach no full recording until the viewer starts one — the feeds pass
+   * `DEBATE_FEED_HOLDS_FULL_PLAYBACK`. See `feed-full-playback.ts`.
+   *
+   * A held card signs its URLs as before, so the tap plays without a round trip, but mounts no
+   * <video> for them: it shows the stills and a Play control, and neither autoplays nor buffers.
+   * The first tap on any held card lifts the hold for every player in the tab — except a card
+   * with Stream preview clips (`NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK`), which stays on its clips
+   * until it is tapped itself, or plays on its own while it is the active card if both debaters
+   * have a Stream copy (`debateStreamsFully`).
+   */
+  holdFullPlayback?: boolean;
+  /** Clips to loop on a held card in place of the stills. Defaults to `debatePreviewClips`. */
+  previewClips?: DebatePreviewClips;
+  /**
+   * The stills the feed already painted, so the player shows the very URLs the card did instead of
+   * resolving its own and fetching each image a second time.
+   */
+  stills?: { slot1: string | null; slot2: string | null };
 };
 
 /** The longest `activateBothInGesture` holds pause ticks while its re-plays settle. */
@@ -149,20 +178,51 @@ export function DebateFeedPlayer({
   onPlaybackRequest,
   initialSeekSeconds = null,
   onPlaybackState,
+  holdFullPlayback = false,
+  previewClips,
+  stills,
 }: DebateFeedPlayerProps) {
+  const [fullPlaybackStarted, setFullPlaybackStarted] = useAtom(feedFullPlaybackStartedAtom);
+  /*
+   * A card with Stream preview clips is held until it is tapped itself, not until any card is.
+   * The tab-wide lift is what #2912 left open: one tap, and every card after it buffered its raw
+   * recordings again. A card without clips keeps the tab-wide rule, since a wall of stills with
+   * Play buttons is the thing that rule exists to avoid. Keyed on the debate, as the feed hands
+   * one player a different debate on a re-rank.
+   */
+  const [startedDebateId, setStartedDebateId] = React.useState<string | null>(null);
+  const cardStarted = startedDebateId === debate.id;
+  /*
+   * A card whose debaters both play from Stream starts itself while it is the active card, muted,
+   * as the feed did before the hold: adaptive HLS buffers seconds ahead, not the raw recordings'
+   * tens of MB. The next card (`buffer`) attaches too, paused, so its opening seconds are loaded
+   * by the time it is reached and it starts without a beat on its clips. Derived, not remembered,
+   * so a card that is neither is held again — its HLS detaches and stops fetching, and it goes
+   * back to its clips. A tap still keeps a card started.
+   */
+  const autoStarted = (active || buffer) && debateStreamsFully(debate.recordings);
+  // Signed only while this card is held and near the viewport; nothing at all with the flag off.
+  const preview = useDebatePreviewClips(debate, holdFullPlayback && !cardStarted && (active || preload));
+  const held = holdFullPlayback && (preview.available ? !(cardStarted || autoStarted) : !fullPlaybackStarted);
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
-  const controller = useDebatePlayback(debate, active || preload, { mediaAttached: !releaseMedia });
-  // What the <video> elements actually hold: a released card, or one re-signing lapsed URLs, has none.
-  const detached = releaseMedia || controller.urlsLapsed;
+  // A held card is detached as a released one is, so its URLs lapse and re-sign the same way.
+  const controller = useDebatePlayback(debate, active || preload, { mediaAttached: !releaseMedia && !held });
+  // What the <video> elements actually hold: a released card, a held one, or one re-signing lapsed
+  // URLs, has none.
+  const detached = releaseMedia || held || controller.urlsLapsed;
   const measurement = usePlaybackAnalytics(debate, active, controller, !detached);
   const {
     slot1VideoRef,
     slot2VideoRef,
     slot1Participant,
     slot2Participant,
+    slot1Poster: controllerSlot1Poster,
+    slot2Poster: controllerSlot2Poster,
     urls,
+    renditions,
+    streams,
     ready,
     error,
     playing,
@@ -177,7 +237,6 @@ export function DebateFeedPlayer({
     timelineSeconds,
     turnState,
     turnSpans,
-    turnSegments,
     roundTurns,
     playbackBreaks,
     subtitle,
@@ -187,12 +246,15 @@ export function DebateFeedPlayer({
     togglePlayback: togglePlaybackRaw,
     playFromStart: playFromStartRaw,
     resumeBoth,
+    holdForTransition,
     suspend,
     seekBoth: seekBothRaw,
     livePositionMs,
     beginScrub,
     endScrub,
   } = controller;
+  const [animationSeekGeneration, resetAnimationSeek] = React.useReducer((generation: number) => generation + 1, 0);
+  const animationSeekKey = `${debate.id}:${animationSeekGeneration}`;
   const showBylines = !reducedOverlays;
   const bylines = useParticipantBylines(debate.participants, showBylines && (active || preload));
   const bylineFor = (participant: DebateParticipant | null) => {
@@ -208,6 +270,8 @@ export function DebateFeedPlayer({
    */
   const slot1Src = detached ? null : urls.slot1;
   const slot2Src = detached ? null : urls.slot2;
+  const slot1Poster = stills?.slot1 ?? controllerSlot1Poster;
+  const slot2Poster = stills?.slot2 ?? controllerSlot2Poster;
   // Each re-attach brings new elements, so the hold re-arms for them. Derived during render so the
   // hold is in place before the autoplay effect sees the re-attached pair.
   const [attachment, setAttachment] = React.useState({ detached, generation: 0 });
@@ -226,11 +290,31 @@ export function DebateFeedPlayer({
   // starts playback lets the pair go first.
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
+    if (playbackEnded) resetAnimationSeek();
+    if (!playing) {
+      setFullPlaybackStarted(true);
+      setStartedDebateId(debate.id);
+    }
     pair.release();
     togglePlaybackRaw();
   };
+  /**
+   * The viewer asking to watch a held card.
+   *
+   * Lifting the hold is all it takes: the recordings attach, the pair waits until both can play,
+   * and the autoplay effect starts them muted, as on any card before the hold. Muted because the
+   * elements do not exist yet inside this tap, and iOS lets an element make sound only from a
+   * gesture made on it; the mute control appears with the video.
+   */
+  const startFullPlayback = () => {
+    measurement.control('play');
+    setFullPlaybackStarted(true);
+    setStartedDebateId(debate.id);
+    if (!active) onPlaybackRequest?.();
+  };
   const playFromStart = () => {
     measurement.control('replay');
+    resetAnimationSeek();
     pair.release();
     void playFromStartRaw();
   };
@@ -277,6 +361,7 @@ export function DebateFeedPlayer({
   };
   const seekBoth = (seconds: number) => {
     measurement.control('seek');
+    resetAnimationSeek();
     seekBothRaw(seconds);
   };
 
@@ -312,6 +397,7 @@ export function DebateFeedPlayer({
     const request = `${debate.id}@${initialSeekSeconds}`;
     if (appliedInitialSeekRef.current === request) return;
     appliedInitialSeekRef.current = request;
+    resetAnimationSeek();
     seekBothRaw(initialSeekSeconds);
   }, [debate.id, initialSeekSeconds, ready, seekBothRaw]);
 
@@ -362,7 +448,7 @@ export function DebateFeedPlayer({
 
   // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
   // it belongs to is spoken, rather than appearing a beat late on the first one.
-  // The agreed stamps design (GEO-3277, GEO-3314, GEO-3316, GEO-3317) is Open rounds only for now.
+  // Open rounds has its own playback treatment; fixed formats retain the classic overlays.
   const stamped = isOpenRoundsDebate(debate);
 
   const ticker = useDebateClaimTicker(debate, {
@@ -374,24 +460,26 @@ export function DebateFeedPlayer({
   /**
    * Which round is playing, as a card at the top of the turn and a label beside the timer after.
    *
-   * Gated on `playing` for the same reason the countdown badge is: a card frozen on a paused tile
-   * is an announcement with no turn behind it, and the viewer has stopped to look at something
-   * else. Gated on `reducedOverlays` with the claim layer, because a compact gallery tile is too
-   * small for a phrase across it.
+   * Open rounds announcements stay on the playhead through a pause, like their break graphics.
+   * Fixed formats keep their existing playing-only behavior. Compact gallery tiles omit both.
    */
   const roundCard = React.useMemo(
     () =>
-      playing && !reducedOverlays
+      (playing || stamped) && !reducedOverlays
         ? // A condensed break's own graphic already announced the round it leads into (GEO-3277).
-          roundCardAt(turnSpans, roundTurns, playheadSeconds, round =>
-            breakAnnouncesRound(playbackBreaks.breaks, round)
+          roundCardAt(
+            turnSpans,
+            roundTurns,
+            playheadSeconds,
+            round => breakAnnouncesRound(playbackBreaks.breaks, round),
+            stamped
           )
         : null,
-    [playbackBreaks.breaks, playheadSeconds, playing, reducedOverlays, roundTurns, turnSpans]
+    [playbackBreaks.breaks, playheadSeconds, playing, reducedOverlays, roundTurns, stamped, turnSpans]
   );
   const roundBadge = React.useMemo(
-    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, roundTurns, playheadSeconds) : null),
-    [playheadSeconds, playing, reducedOverlays, roundTurns, turnSpans]
+    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, roundTurns, playheadSeconds, stamped) : null),
+    [playheadSeconds, playing, reducedOverlays, roundTurns, stamped, turnSpans]
   );
 
   /**
@@ -405,19 +493,25 @@ export function DebateFeedPlayer({
     [playbackBreaks.breaks, playbackBreaks.picks, playheadMs, reducedOverlays]
   );
   const cuts = React.useMemo(() => breakCuts(playbackBreaks), [playbackBreaks]);
-  // The break's banner lies across the seam, over the top tile's name and claim corner: they step
-  // out while it is up and come back with the next speaker, as they do for the round card.
-  const bannerYield = breakBannerShown(breakCue) ? 1 : 0;
+  const scrubberTimeline = React.useMemo(() => playbackTimeline(cuts, timelineSeconds * 1000), [cuts, timelineSeconds]);
+  const seekForAutomaticCut = React.useCallback(
+    (seconds: number) => seekBothRaw(seconds, { preserveTransitionHold: true }),
+    [seekBothRaw]
+  );
+  const { slot1CanvasRef, slot2CanvasRef, seekAcrossCut } = useVideoCutTransition({
+    slot1VideoRef,
+    slot2VideoRef,
+    seek: seekForAutomaticCut,
+    holdForTransition,
+    enabled: stamped && active && !isScrubbing,
+    resetKey: `${animationSeekKey}:${slot1Src}:${slot2Src}`,
+  });
   useBreakCuts(cuts, {
     playheadMs,
     running: playing && !isScrubbing,
-    seek: seekBothRaw,
+    seek: seekAcrossCut,
     positionMs: livePositionMs,
   });
-  const lastWordSlot = React.useMemo(
-    () => (stamped && !reducedOverlays ? lastWordSlotAt(playbackBreaks, turnSegments, playheadMs) : null),
-    [playbackBreaks, playheadMs, reducedOverlays, stamped, turnSegments]
-  );
   const earlyEndCue = React.useMemo(
     () => (reducedOverlays ? null : earlyEndCueAt(playbackBreaks.earlyEnds, playheadMs)),
     [playbackBreaks.earlyEnds, playheadMs, reducedOverlays]
@@ -434,6 +528,149 @@ export function DebateFeedPlayer({
   // The end card is where an ended debate lands, except on a compact gallery tile — which has no
   // room for it and keeps the plain centred replay.
   const endCardShown = showReplay && !reducedOverlays;
+  type AnnouncementPhase = 'clear' | 'covered' | 'returning';
+  const [announcementPhase, setAnnouncementPhase] = React.useState<AnnouncementPhase>('clear');
+  const announcementShown = stamped && announcementPhase === 'covered';
+  const preserveAnnouncementFocus = useAnnouncementFocus(measurement.elementRef, announcementShown);
+  const announcementPhaseRef = React.useRef<AnnouncementPhase>('clear');
+  const completedBreaksRef = React.useRef<{ key: string; active: PlayerBreak | null; done: Set<number> }>({
+    key: animationSeekKey,
+    active: null,
+    done: new Set(),
+  });
+  const currentBreak = React.useMemo(
+    () => playbackBreaks.breaks.find(entry => playheadMs >= entry.decidingStartMs && playheadMs < entry.endMs),
+    [playbackBreaks.breaks, playheadMs]
+  );
+  const finalWrapStartMs = React.useMemo(() => {
+    const last = playbackBreaks.breaks.find(entry => entry.kind === 'final_end');
+    return last ? last.decidingStartMs + BREAK_SETTLE_MS : null;
+  }, [playbackBreaks.breaks]);
+  const announcementOriginMs = currentBreak?.decidingStartMs ?? Math.round(playheadMs - (roundCard?.ageMs ?? 0));
+  const announcementPositionMs = React.useCallback(() => {
+    const positionMs = livePositionMs();
+    return positionMs === null ? null : breakAnimationPositionMs(playbackBreaks.breaks, positionMs);
+  }, [livePositionMs, playbackBreaks.breaks]);
+  const syncAnnouncement = React.useCallback(
+    (elapsedMs: number | null, fromFrame: boolean) => {
+      const positionMs = livePositionMs() ?? playheadMs;
+      const drawnPositionMs =
+        elapsedMs === null
+          ? breakAnimationPositionMs(playbackBreaks.breaks, positionMs)
+          : announcementOriginMs + elapsedMs;
+      if (completedBreaksRef.current.key !== animationSeekKey) {
+        completedBreaksRef.current = { key: animationSeekKey, active: null, done: new Set() };
+      }
+      const history = completedBreaksRef.current;
+      // Remember a cut only once the incoming turn has been published. Retain that completion
+      // through stale samples and unavailable media; an explicit seek/replay clears it above.
+      if (
+        history.active &&
+        history.active.decidingStartMs !== currentBreak?.decidingStartMs &&
+        positionMs >= history.active.endMs
+      ) {
+        history.done.add(history.active.decidingStartMs);
+        history.active = null;
+      }
+      const cutCompleted = currentBreak ? history.done.has(currentBreak.decidingStartMs) : false;
+      if (currentBreak && !cutCompleted) history.active = currentBreak;
+      let opacity = 1;
+      let returning = false;
+      if (stamped && !reducedOverlays) {
+        if (endCardShown || (finalWrapStartMs !== null && positionMs >= finalWrapStartMs)) {
+          opacity = 0;
+        } else {
+          // The title and returning furniture are complementary halves of the same 300ms exit.
+          // Read its drawn clock, not a later seek/timeupdate or a second wall-clock transition.
+          const returnOpacity = (elapsed: number, end: number) =>
+            Math.max(0, Math.min(1, (elapsed - (end - PLAYER_EXIT_MS)) / PLAYER_EXIT_MS));
+          if (
+            currentBreak &&
+            !cutCompleted &&
+            breakCue &&
+            drawnPositionMs >= currentBreak.decidingStartMs + BREAK_SETTLE_MS
+          ) {
+            opacity =
+              currentBreak.kind === 'final_end'
+                ? 0
+                : returnOpacity(drawnPositionMs - currentBreak.decidingStartMs, breakCue.playedMs);
+            returning = opacity > 0;
+          } else if (!breakCue && roundCard && elapsedMs !== null) {
+            opacity = returnOpacity(elapsedMs, ROUND_CARD_MS);
+            returning = opacity > 0;
+          }
+        }
+        measurement.elementRef.current?.style.setProperty('--debate-furniture-opacity', String(opacity));
+      } else {
+        measurement.elementRef.current?.style.removeProperty('--debate-furniture-opacity');
+      }
+      const next: AnnouncementPhase = opacity === 0 ? 'covered' : returning ? 'returning' : 'clear';
+      if (next === announcementPhaseRef.current) return;
+      if (next === 'covered') preserveAnnouncementFocus();
+      announcementPhaseRef.current = next;
+      // Only phase boundaries render React. Commit those inside the same frame that advances the
+      // CSS clock, so furniture cannot precede the fade or reappear on a stale timeupdate sample.
+      // Layout synchronization already commits before paint and must not call flushSync.
+      if (fromFrame) flushSync(() => setAnnouncementPhase(next));
+      else setAnnouncementPhase(next);
+    },
+    [
+      announcementOriginMs,
+      animationSeekKey,
+      breakCue,
+      currentBreak,
+      endCardShown,
+      finalWrapStartMs,
+      livePositionMs,
+      measurement.elementRef,
+      playheadMs,
+      playbackBreaks.breaks,
+      reducedOverlays,
+      roundCard,
+      stamped,
+      preserveAnnouncementFocus,
+    ]
+  );
+  usePlaybackAnimationClock(
+    measurement.elementRef,
+    stamped && !reducedOverlays
+      ? (breakCue ?? (roundCard ? { elapsedMs: roundCard.ageMs ?? 0, playedMs: ROUND_CARD_MS } : null))
+      : null,
+    playing,
+    stamped
+      ? { positionMs: announcementPositionMs, originMs: announcementOriginMs, resetKey: animationSeekKey }
+      : undefined,
+    stamped ? syncAnnouncement : undefined
+  );
+  // During a break's exit there is no live turn yet. Prepare the incoming timer and label so
+  // they join the same crossfade rather than appearing abruptly after the automatic seek.
+  const incomingSpan =
+    stamped && announcementPhase === 'returning' && currentBreak && breakCue?.nextRoundIndex != null
+      ? turnSpans.find(span => Math.floor(span.index / 2) === breakCue.nextRoundIndex)
+      : null;
+  const incomingState =
+    incomingSpan && currentBreak
+      ? (turnStateFromSegments(
+          controller.turnSegments,
+          Math.max(incomingSpan.startSeconds, currentBreak.endMs / 1000)
+        ) ?? {
+          slot: incomingSpan.slot,
+          seconds: Math.max(
+            0,
+            incomingSpan.endSeconds - Math.max(incomingSpan.startSeconds, currentBreak.endMs / 1000)
+          ),
+          progress: 0,
+        })
+      : null;
+  const displayedTurn = incomingState ?? turnState;
+  const incomingRound = incomingSpan ? roundParts(incomingSpan.index, roundTurns) : null;
+  const displayedRoundBadge = incomingRound
+    ? {
+        ...incomingRound,
+        label: incomingRound.role ? `${incomingRound.round} · ${incomingRound.role}` : incomingRound.round,
+        opacity: 1,
+      }
+    : roundBadge;
   // Watched to the end, whichever layout it ended in — a compact tile never shows the end card, and
   // a debate finished there must not come back as a suggestion.
   React.useEffect(() => {
@@ -476,7 +713,22 @@ export function DebateFeedPlayer({
   }, [active, playbackEnded, replayPending]);
   const showControls = ready && (awaitingTap || showReplay);
   // An ended debate always offers a replay; a stopped one shows the paused glyph.
-  const showPausedGlyph = ready && awaitingTap && !playbackEnded;
+  const showPausedGlyph = ready && awaitingTap && !playbackEnded && !held;
+  const clips = previewClips ?? (preview.available ? preview.clips : debatePreviewClips(debate));
+  /*
+   * Stream clips are mounted on every held card near the viewport, at `preload="metadata"`, and
+   * play only on the visible one, so reaching the next card does not wait on a fetch. A clip
+   * supplied any other way plays on the active card only, as it always has.
+   */
+  const previewNear = held && (active || (preview.available && preload));
+  const slot1PreviewRef = React.useRef<HTMLVideoElement | null>(null);
+  const slot2PreviewRef = React.useRef<HTMLVideoElement | null>(null);
+  usePreviewPairSync(
+    slot1PreviewRef,
+    slot2PreviewRef,
+    preview.offsetSeconds,
+    previewNear && active && clips.slot1 !== null && clips.slot2 !== null ? `${clips.slot1}|${clips.slot2}` : null
+  );
 
   // Whether the scrubber is on screen, which the claim stack has to know as well as the scrubber
   // itself — it sits in the same bottom band and lifts clear of it. Hover is the remaining case and
@@ -503,22 +755,6 @@ export function DebateFeedPlayer({
   // Held open by the chip rather than by the pointer — the only way in on a touch screen, where
   // there is no hover to end and so no hover to hold it.
   const [pinnedSlot, setPinnedSlot] = React.useState<number | null>(null);
-  // An Open rounds counter whose list is open, or that a keyboard is inside, per slot: its corner
-  // stays visible under a round banner rather than fading out from under the viewer.
-  const [activeCounters, setActiveCounters] = React.useState<ReadonlySet<number>>(() => new Set());
-  const onCounterActive = React.useCallback(
-    (slot: number, active: boolean) =>
-      setActiveCounters(current => {
-        if (current.has(slot) === active) return current;
-        const next = new Set(current);
-        if (active) next.add(slot);
-        else next.delete(slot);
-        return next;
-      }),
-    []
-  );
-  const onCounterActive1 = React.useCallback((active: boolean) => onCounterActive(1, active), [onCounterActive]);
-  const onCounterActive2 = React.useCallback((active: boolean) => onCounterActive(2, active), [onCounterActive]);
   /**
    * The slot whose backlog the pointer has opened, held until the pointer leaves that tile.
    *
@@ -645,13 +881,11 @@ export function DebateFeedPlayer({
       return (
         <DebateClaimCounter
           history={history}
-          playheadMs={playheadMs}
           name={breakNames[slot as 1 | 2]}
+          speaker={slot === 1 ? slot1Participant : slot2Participant}
           rowsByClaimId={ticker.rowsByClaimId}
           entitiesByClaimId={ticker.entitiesByClaimId}
           onAnswered={ticker.onAnswered}
-          onSeeAll={onOpenClaims}
-          onActiveChange={slot === 1 ? onCounterActive1 : onCounterActive2}
         />
       );
     }
@@ -688,6 +922,10 @@ export function DebateFeedPlayer({
     []
   );
   const toggleFromVideo = () => {
+    if (held) {
+      startFullPlayback();
+      return;
+    }
     setFlash({ icon: playing ? 'pause' : 'play', visible: true });
     if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     flashTimeoutRef.current = setTimeout(() => setFlash(current => ({ ...current, visible: false })), 600);
@@ -719,11 +957,13 @@ export function DebateFeedPlayer({
          * without one. They are the difference between "the browser refused" and
          * "the app never noticed", which look identical on screen.
          */
+        data-announcement={stamped && announcementShown ? 'true' : undefined}
         data-debate-ready={ready ? 'true' : 'false'}
         data-debate-active={active ? 'true' : 'false'}
         data-debate-playing={playing ? 'true' : 'false'}
         data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
         data-debate-pair-held={pairHeld ? 'true' : 'false'}
+        data-debate-full-playback-held={held ? 'true' : 'false'}
         // No gap and one radius on the outside: the two tiles are a single surface in the Figma
         // frame, which is what lets the subtitle and the round card straddle the seam rather than
         // sit inside one tile.
@@ -734,7 +974,8 @@ export function DebateFeedPlayer({
         // would get two of the three wrong.
         className={cx(
           'group @container relative flex flex-col overflow-hidden',
-          reducedOverlays ? 'rounded-lg' : 'rounded-xl'
+          reducedOverlays ? 'rounded-lg' : 'rounded-xl',
+          stamped && endCardShown && '[&_[data-debate-end-card]>section]:animate-[fadeIn_250ms_ease-out_both]'
         )}
       >
         <DebaterVideo
@@ -742,19 +983,30 @@ export function DebateFeedPlayer({
           participant={slot1Participant}
           byline={bylineFor(slot1Participant)}
           src={slot1Src}
+          poster={slot1Poster}
+          posterFallback={speakerStillContentUrl(debate.id, 1)}
+          posterEager={active || preload}
           videoRef={slot1VideoRef}
-          buffer={active || buffer}
+          cutCanvasRef={stamped ? slot1CanvasRef : undefined}
+          // The next card's raw WebM has to be buffered to arrive playable on every engine. A feed
+          // rendition is a fast-start MP4 that plays from its header, so it waits to be reached.
+          // A Stream slot loads its opening segments, which is what lets it start on arrival.
+          buffer={active || (buffer && !renditions.slot1)}
+          stream={streams?.slot1 ?? false}
+          onStreamFailed={() => void refreshSlotUrl(1, { abandonStream: true })}
+          previewClip={previewNear ? clips.slot1 : null}
+          previewActive={active}
+          previewVideoRef={slot1PreviewRef}
+          onPreviewError={preview.available ? () => preview.refresh(1) : undefined}
+          held={held}
           concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 1 && !betweenTurns}
-          countdown={playing && turnState?.slot === 1 ? turnState : null}
-          roundBadge={turnState?.slot === 1 ? roundBadge : null}
-          // Only this tile's: the card and the break's banner are centred on the seam, so they cross
-          // the *top* tile's name band and come nowhere near the bottom tile's, half a player away.
-          cardYield={Math.max(roundCard?.opacity ?? 0, bannerYield)}
-          // The claim corner yields to the break's banner only, which is Open rounds only. The round
-          // card plays in every format and leaves the corner as it always has.
-          claimsYield={Math.max(bannerYield, stamped ? (roundCard?.opacity ?? 0) : 0)}
-          claimsActive={activeCounters.has(1)}
+          countdown={playing && !announcementShown && displayedTurn?.slot === 1 ? displayedTurn : null}
+          roundBadge={displayedTurn?.slot === 1 ? displayedRoundBadge : null}
+          // Fixed formats retain the top row's crossfade. Open rounds hides both identity rows
+          // and claim corners together, including lists that reach into the announcement's space.
+          cardYield={stamped ? 0 : (roundCard?.opacity ?? 0)}
+          hideForAnnouncement={announcementShown}
           stamped={stamped}
           mutedByUser={mutedByUser}
           isResuming={isResuming}
@@ -764,11 +1016,12 @@ export function DebateFeedPlayer({
           onExhausted={() => void refreshSlotUrl(1)}
           onToggle={toggleFromVideo}
           claims={claimsFor(1)}
-          lastWord={lastWordSlot === 1}
           claimsOpen={claimsOpenFor(1)}
           onClaimsHoverChange={onTileHover(1)}
+          // Not on a held card: there is nothing to pause, and an unmute there would have no element
+          // to make audible inside the tap.
           topLeft={
-            ready && !playbackEnded ? (
+            ready && !playbackEnded && !held ? (
               <div className="flex items-center gap-2">
                 {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
                   centred paused glyph and tap-to-toggle instead. */}
@@ -798,7 +1051,10 @@ export function DebateFeedPlayer({
                   className={
                     mutedByUser
                       ? undefined
-                      : 'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100'
+                      : cx(
+                          'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100',
+                          stamped && 'duration-150 ease-out motion-reduce:transition-none'
+                        )
                   }
                 >
                   {mutedByUser ? <SpeakerMuted /> : <Speaker />}
@@ -812,12 +1068,24 @@ export function DebateFeedPlayer({
           participant={slot2Participant}
           byline={bylineFor(slot2Participant)}
           src={slot2Src}
+          poster={slot2Poster}
+          posterFallback={speakerStillContentUrl(debate.id, 2)}
+          posterEager={active || preload}
           videoRef={slot2VideoRef}
-          buffer={active || buffer}
+          cutCanvasRef={stamped ? slot2CanvasRef : undefined}
+          buffer={active || (buffer && !renditions.slot2)}
+          stream={streams?.slot2 ?? false}
+          onStreamFailed={() => void refreshSlotUrl(2, { abandonStream: true })}
+          previewClip={previewNear ? clips.slot2 : null}
+          previewActive={active}
+          previewVideoRef={slot2PreviewRef}
+          onPreviewError={preview.available ? () => preview.refresh(2) : undefined}
+          held={held}
           concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 2 && !betweenTurns}
-          countdown={playing && turnState?.slot === 2 ? turnState : null}
-          roundBadge={turnState?.slot === 2 ? roundBadge : null}
+          countdown={playing && !announcementShown && displayedTurn?.slot === 2 ? displayedTurn : null}
+          roundBadge={displayedTurn?.slot === 2 ? displayedRoundBadge : null}
+          hideForAnnouncement={announcementShown}
           mutedByUser={mutedByUser}
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
@@ -826,7 +1094,6 @@ export function DebateFeedPlayer({
           onExhausted={() => void refreshSlotUrl(2)}
           onToggle={toggleFromVideo}
           claims={claimsFor(2)}
-          lastWord={lastWordSlot === 2}
           claimsOpen={claimsOpenFor(2)}
           stamped={stamped}
           onClaimsHoverChange={onTileHover(2)}
@@ -836,7 +1103,7 @@ export function DebateFeedPlayer({
           // Taller than the top tile's, per the frame.
           scrimClassName="h-[4.625rem]"
           scrubber={
-            ready ? (
+            ready && !held ? (
               // Always available so the viewer can seek. During playback it recedes to
               // hover-only and drops pointer-events so it can't swallow play/pause taps.
               // `pointer-events-none` does not stop keyboard focus reaching the range input, which
@@ -848,6 +1115,7 @@ export function DebateFeedPlayer({
                 }}
                 className={cx(
                   'transition-opacity',
+                  stamped && 'duration-150 ease-out motion-reduce:transition-none',
                   scrubberShown
                     ? 'opacity-100'
                     : // `[&_button]:` as well as the wrapper itself, because the claim markers inside
@@ -865,7 +1133,7 @@ export function DebateFeedPlayer({
               >
                 <FeedScrubber
                   currentTime={playheadSeconds}
-                  duration={timelineSeconds}
+                  timeline={scrubberTimeline}
                   markers={reducedOverlays ? [] : ticker.markers}
                   onSeek={seekBoth}
                   onScrubStart={beginScrub}
@@ -906,27 +1174,49 @@ export function DebateFeedPlayer({
           real only where the render retained speech from before the incoming debater's clock
           started (GEO-2754), which is the one case where they are already talking as it lands. */}
         {subtitle &&
-          !roundCard &&
-          !breakCue &&
-          !betweenTurns &&
-          !endCardShown &&
+          (stamped ? !announcementShown : !roundCard && !breakCue && !endCardShown) &&
+          (!betweenTurns || (stamped && Boolean(breakCue))) &&
           (!reducedOverlays || (active && playing && mutedByUser)) && (
-            <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
+            <span
+              style={stamped ? { opacity: PLAYER_FURNITURE_OPACITY } : undefined}
+              className={cx(
+                'pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white',
+                !stamped && '[text-box:trim-both_cap_alphabetic] md:max-w-[90%]'
+              )}
+            >
               {subtitle}
             </span>
           )}
 
-        {stamped ? <DebateRoundBanner cue={roundCard} /> : <DebateRoundCard cue={roundCard} />}
+        {stamped ? (
+          <DebateRoundBanner
+            cue={roundCard}
+            sharedClock
+            playing={playing}
+            clock={{ positionMs: livePositionMs, originMs: playheadMs - (roundCard?.ageMs ?? 0) }}
+          />
+        ) : (
+          <DebateRoundCard cue={roundCard} />
+        )}
         {!endCardShown && (
           <>
             <DebateBreakOverlay
               cue={breakCue}
-              names={breakNames}
-              firstSlot={debate.first_participant_slot}
+              sharedClock
+              clock={{ positionMs: livePositionMs, originMs: playheadMs - (breakCue?.elapsedMs ?? 0) }}
               roundTurns={roundTurns}
               playing={playing}
             />
-            <DebateEarlyEndLabels cue={earlyEndCue} names={breakNames} />
+            <DebateEarlyEndLabels
+              cue={earlyEndCue}
+              names={breakNames}
+              playing={playing}
+              clock={{
+                positionMs: livePositionMs,
+                originMs: Math.round(playheadMs - (earlyEndCue?.ageMs ?? 0)),
+                resetKey: animationSeekKey,
+              }}
+            />
           </>
         )}
 
@@ -948,13 +1238,27 @@ export function DebateFeedPlayer({
           </button>
         )}
 
+        {/* A held card's one control, at every width: nothing plays until it is pressed. */}
+        {held && (
+          <button
+            type="button"
+            aria-label="Play debate"
+            onClick={startFullPlayback}
+            className={cx(CENTERED_PLAYBACK_CONTROL_CLASS, 'z-30 grid')}
+          >
+            <Play />
+          </button>
+        )}
+
         {/* Desktop only — mobile already shows the centred paused glyph in this spot. */}
         <div
           aria-hidden
+          data-playback-feedback
           className={cx(
             CENTERED_PLAYBACK_CONTROL_CLASS,
-            'pointer-events-none z-20 grid transition-[opacity,scale] duration-300 md:hidden',
-            flash.visible ? 'scale-100 opacity-100' : 'scale-110 opacity-0'
+            'pointer-events-none z-30 grid transition-[opacity,scale] md:hidden',
+            stamped ? 'duration-200 ease-out motion-reduce:scale-100 motion-reduce:transition-none' : 'duration-300',
+            flash.visible ? 'scale-100 opacity-100' : stamped ? 'scale-[1.025] opacity-0' : 'scale-110 opacity-0'
           )}
         >
           {flash.icon === 'pause' ? <Pause /> : <Play />}
@@ -1005,15 +1309,24 @@ function DebaterVideo({
   participant,
   byline,
   src,
+  poster = null,
+  posterFallback = null,
+  posterEager = false,
   videoRef,
+  cutCanvasRef,
   buffer = false,
+  previewClip = null,
+  previewActive = true,
+  previewVideoRef,
+  onPreviewError,
+  stream = false,
+  onStreamFailed,
+  held = false,
   concealed = false,
   audible,
   countdown,
   roundBadge,
   cardYield = 0,
-  claimsYield = 0,
-  claimsActive = false,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -1030,14 +1343,39 @@ function DebaterVideo({
   scrimClassName = 'h-14',
   inert = false,
   stamped = false,
-  lastWord = false,
+  hideForAnnouncement = false,
 }: {
   participant: DebateParticipant | null;
   byline: string | null;
   src: string | null;
+  /**
+   * A still of this debater, painted under the video so the tile has a picture before the recording
+   * has a frame (GEO-3280). Behind rather than the `poster` attribute: the tile is held invisible
+   * while its partner cannot show a frame, and an attribute poster would hide with it.
+   */
+  poster?: string | null;
+  /** The durable route for the still, for when `poster` is a presigned URL that has lapsed. */
+  posterFallback?: string | null;
+  /** Fetch the still now rather than when it nears the viewport: the active card and the preloading one. */
+  posterEager?: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  cutCanvasRef?: React.RefObject<HTMLCanvasElement | null>;
   /** Ask the browser to buffer this recording rather than stop at its header. See the player's `buffer`. */
   buffer?: boolean;
+  /** A short muted clip to loop while there is no `src`, over the still. See the player's `previewClips`. */
+  previewClip?: string | null;
+  /** Whether this card is the visible one: its clip plays and fetches whole. Others wait at metadata. */
+  previewActive?: boolean;
+  /** The clip element, for the player to keep the pair's two clips in step. */
+  previewVideoRef?: React.RefObject<HTMLVideoElement | null>;
+  /** The clip element failed, so its URL may have lapsed. */
+  onPreviewError?: () => void;
+  /** `src` is a Cloudflare Stream HLS manifest; see `attachStreamSource`. */
+  stream?: boolean;
+  /** hls.js gave up on the Stream source: play this slot without Stream instead. */
+  onStreamFailed?: () => void;
+  /** The player is holding the full recording: no `src` is coming until the viewer asks, so say nothing is loading. */
+  held?: boolean;
   /**
    * Keep the element invisible while its partner cannot show a frame yet (GEO-2965).
    *
@@ -1054,10 +1392,10 @@ function DebaterVideo({
    * scrubber, the name's profile link — should take keyboard focus or be read out underneath it.
    */
   inert?: boolean;
-  /** Open rounds: the agreed stamps design for the timer's last ten seconds and the round tag. */
+  /** Use the Open rounds playback treatment. */
   stamped?: boolean;
-  /** Open rounds: this debater speaks last before a pick, tagged beside their name as in the mockup. */
-  lastWord?: boolean;
+  /** Hide identity and claims in the same frame as the other announcement furniture. */
+  hideForAnnouncement?: boolean;
   /**
    * How much of this tile's bottom band the round card or the break's banner has taken, 0–1.
    *
@@ -1066,11 +1404,6 @@ function DebaterVideo({
    * where it is applied below.
    */
   cardYield?: number;
-  /** How far the claim corner has stepped out from under a round banner, 0–1. A fixed format's
-   * backlog, held open, stays; an Open rounds counter steps out with its list. */
-  claimsYield?: number;
-  /** An Open rounds counter whose list is open or holds keyboard focus: kept visible under a banner. */
-  claimsActive?: boolean;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -1143,14 +1476,46 @@ function DebaterVideo({
    * is evicted. The setup repairs the source too because React Strict Mode deliberately exercises
    * an effect cleanup/setup cycle without removing the DOM node in development (GEO-2963).
    */
+  const streamRef = React.useRef<AttachedStream | null>(null);
+  const onStreamFailedRef = React.useRef(onStreamFailed);
+  React.useEffect(() => {
+    onStreamFailedRef.current = onStreamFailed;
+  }, [onStreamFailed]);
+  // Asked once per element: Safari and iOS play the manifest as `src`, everything else through hls.js.
+  const nativeHls = React.useMemo(() => canPlayNativeHls(), []);
+  const hlsManaged = stream && !nativeHls;
   React.useLayoutEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
 
+    if (stream) {
+      // Never started here: `buffered` below starts it, which is the HLS spelling of the
+      // `preload` choice the plain element gets.
+      let failed = false;
+      const attached = attachStreamSource(video, src, {
+        autoStartLoad: false,
+        nativeHls,
+        onFatalError: () => {
+          if (failed) return;
+          failed = true;
+          onStreamFailedRef.current?.();
+        },
+      });
+      streamRef.current = attached;
+      return () => {
+        attached.destroy();
+        streamRef.current = null;
+        releaseVideo(video);
+      };
+    }
+
     if (video.getAttribute('src') !== src) video.setAttribute('src', src);
 
     return () => releaseVideo(video);
-  }, [src, videoRef]);
+  }, [nativeHls, src, stream, videoRef]);
+  React.useEffect(() => {
+    if (buffered) streamRef.current?.startLoad();
+  }, [buffered, src, stream]);
 
   /**
    * Rebuild this recording when the browser gives up on it (GEO-2985).
@@ -1259,6 +1624,9 @@ function DebaterVideo({
   const onMediaError = () => {
     const video = videoRef.current;
     if (!video || !src) return;
+    // hls.js owns this element's source and reports its own failures (`onStreamFailed`); the
+    // rebuild below re-fetches a URL as `src`, which an HLS manifest is not, outside Safari.
+    if (hlsManaged) return;
     // Already repairing. `load()` itself can fire `error` again, so this guard is what keeps a
     // failing source from spinning.
     if (recoveryTimerRef.current !== null) return;
@@ -1324,21 +1692,45 @@ function DebaterVideo({
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
+        {poster && (
+          <img
+            src={poster}
+            onError={posterFallback ? fallBackToDurableStill(posterFallback) : undefined}
+            alt=""
+            data-debate-poster=""
+            aria-hidden
+            draggable={false}
+            loading={posterEager ? 'eager' : 'lazy'}
+            fetchPriority={posterEager ? 'high' : 'auto'}
+            decoding="async"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+          />
+        )}
         {src ? (
           <video
             ref={videoRef}
             // Both tiles fade in together, and only once both have a frame — see `concealed`.
+            // `relative` so it stacks above the absolutely positioned still; a static video paints
+            // under any positioned sibling whatever the DOM order.
+            // The fade in is slower than the fade out: the still is cut ten seconds into the
+            // debater's first turn, not at the frame playback starts on, so a quick fade reads as a
+            // jump cut between two poses. Hiding stays quick.
             className={cx(
-              'h-full w-full object-cover transition-opacity duration-200',
-              concealed ? 'opacity-0' : 'opacity-100'
+              'relative h-full w-full object-cover transition-opacity',
+              concealed ? 'opacity-0 duration-200' : 'opacity-100 duration-500'
             )}
             playsInline
             // `metadata` by default: enough to paint a frame and know the shape of the recording,
             // without pulling a multi-megabyte file down for a card nobody has reached yet — the
             // feed keeps several of these mounted at once. `auto` for the active card and the one
             // after it, which are about to play (`buffered`), and for any element `rebuild` raised.
-            preload={buffered ? 'auto' : 'metadata'}
-            src={src}
+            // Never `auto` on a native-HLS Stream source: on iOS 27 a seek made under `auto` before
+            // playback (the pair's preposition) never completes. The element plays on, but
+            // `currentTime` stays at the seek target and `timeupdate` stops, which freezes the
+            // captions and the turn clock. iOS loads nothing ahead for a paused manifest under
+            // either value, so `metadata` costs nothing there.
+            preload={buffered && !(stream && nativeHls) ? 'auto' : 'metadata'}
+            src={hlsManaged ? undefined : src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
             muted={muted}
             onEnded={onPlaybackTick}
@@ -1348,8 +1740,27 @@ function DebaterVideo({
             onPlay={onPlaybackTick}
             onTimeUpdate={onPlaybackTick}
           />
+        ) : previewClip ? (
+          // Muted, so it may autoplay anywhere; small, so it is fetched whole.
+          <PreviewClip src={previewClip} active={previewActive} videoRef={previewVideoRef} onError={onPreviewError} />
         ) : (
-          <div className="grid h-full place-items-center bg-bg text-grey-04">Loading…</div>
+          <div
+            className={cx(
+              'relative grid h-full place-items-center text-grey-04',
+              // Transparent over a still, so the picture shows through while the URL is being signed.
+              poster ? 'bg-transparent' : 'bg-bg'
+            )}
+          >
+            {!poster && !held && 'Loading…'}
+          </div>
+        )}
+        {cutCanvasRef && (
+          <canvas
+            ref={cutCanvasRef}
+            aria-hidden
+            data-video-cut-frame
+            className="pointer-events-none absolute inset-0 size-full opacity-0"
+          />
         )}
       </button>
 
@@ -1395,17 +1806,12 @@ function DebaterVideo({
         )}
       />
 
-      {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
-
-      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} buildUp={stamped} />}
-      {countdown && (
-        <DebateRoundBadge
-          cue={roundBadge ?? null}
-          stamped={stamped}
-          // Kept clear of the timer as it grows over a turn's last ten seconds.
-          rightPx={stamped ? TIMER_RIGHT_PX + TIMER_PX * turnTimerScale(countdown.seconds) + 8 : undefined}
-        />
+      {topLeft && (
+        <div className={cx('absolute top-3 left-3 flex items-center gap-2', stamped ? 'z-30' : 'z-10')}>{topLeft}</div>
       )}
+
+      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} smooth={stamped} />}
+      {countdown && <DebateRoundBadge cue={roundBadge ?? null} stamped={stamped} />}
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
@@ -1469,12 +1875,18 @@ function DebaterVideo({
       {claims && (
         <div
           data-claim-corner
-          data-yield={(!claimsOpen && !claimsActive && claimsYield > 0.5) || undefined}
-          style={{ opacity: claimsOpen || claimsActive ? 1 : 1 - claimsYield }}
+          inert={hideForAnnouncement}
+          data-yield={hideForAnnouncement || undefined}
+          style={{
+            opacity: hideForAnnouncement ? 0 : stamped ? PLAYER_FURNITURE_OPACITY : 1,
+            visibility: hideForAnnouncement ? 'hidden' : undefined,
+          }}
           className={cx(
-            'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom,opacity] duration-150',
-            // Stepped out from under a banner, so out of the pointer's way too, as the name row is.
-            // Tabbing into it brings it back: focus inside makes the counter active.
+            'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end duration-150',
+            stamped
+              ? 'transition-[padding-bottom] ease-out motion-reduce:transition-none'
+              : 'transition-[padding-bottom,opacity]',
+            // Hidden counters and lists cannot intercept clicks or keyboard focus under the popup.
             '[&[data-yield]_*]:pointer-events-none!',
             // Two widths, by state rather than by screen. A live claim takes the whole tile,
             // because it is one line of somebody's argument and there is nothing to read it
@@ -1528,6 +1940,9 @@ function DebaterVideo({
           card — it used to fade out under those, which cost the viewer the link to the debater's
           profile exactly when they were reading something that debater had said.
 
+          Open rounds uses the shared announcement flag to hide this row and the claims together.
+          The following crossfade applies to fixed-format playback.
+
           The round card is the one thing it does yield to, and the difference is attribution. A
           claim card is a quotation and the name under it is who said it, so the two belong on
           screen together. A round card attributes nothing, sits across this exact band, and is
@@ -1554,13 +1969,20 @@ function DebaterVideo({
           not touch focusability, which is what makes those two separable. */}
       <div
         data-debater-row
+        inert={hideForAnnouncement}
         onFocus={() => setNameFocused(true)}
         onBlur={event => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setNameFocused(false);
         }}
-        style={{ opacity: nameFocused ? 1 : 1 - cardYield }}
+        style={{
+          opacity: hideForAnnouncement ? 0 : stamped ? PLAYER_FURNITURE_OPACITY : nameFocused ? 1 : 1 - cardYield,
+          visibility: hideForAnnouncement ? 'hidden' : undefined,
+        }}
         className={cx(
-          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-center gap-2 transition-[padding-bottom,opacity] duration-150',
+          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-center gap-2 duration-150',
+          stamped
+            ? 'transition-[padding-bottom] ease-out motion-reduce:transition-none'
+            : 'transition-[padding-bottom,opacity]',
           cardYield > 0.5 && '[&_[data-debater-avatar]]:pointer-events-none [&_button]:pointer-events-none',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
@@ -1608,11 +2030,6 @@ function DebaterVideo({
               {participant && (
                 <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
               )}
-              {lastWord && (
-                <span data-last-word className={cx(TAG_CLASS, 'shrink-0 text-[2.6cqw] uppercase')} style={LABEL_FONT}>
-                  Last word
-                </span>
-              )}
             </span>
             {byline && (
               <span data-debate-byline title={byline} className="truncate text-[0.75rem] leading-4 text-white/80">
@@ -1628,68 +2045,42 @@ function DebaterVideo({
   );
 }
 
-/** The turn timer's size and inset from the tile's corner, in px (`size-8`, `right-3`). */
-const TIMER_PX = 32;
-const TIMER_RIGHT_PX = 12;
-
+/** The classic ring stays the same size and colour throughout playback. */
 function CountdownBadge({
   seconds,
   progress,
-  buildUp = false,
+  smooth = false,
 }: {
   seconds: number;
   progress: number;
-  buildUp?: boolean;
+  smooth?: boolean;
 }) {
-  // The ring shows time remaining, so it shrinks as the turn elapses rather than filling up.
   const remaining = 1 - Math.max(0, Math.min(1, progress));
-  const whole = Math.ceil(seconds);
-  // Open rounds, as the design mockup has it: from 10 s the timer swells each second and grows a
-  // step with each swell; from 5 s it turns red at its full size and holds there, its rim draining
-  // over the last five seconds and each second landing with a red glow.
-  const stage = turnTimerBuildUp(buildUp ? seconds : Infinity);
-  const { counting, final } = stage;
-  const degrees = final ? (Math.max(0, seconds) / 5) * 360 : remaining * 360;
-  // Hollowed into a ring so the badge's own backing shows through the middle. Today's ring sits 2px
-  // inside the badge; the red one runs at its very edge, 0.55cqw thick, around a solid red disc.
-  const ringMask = turnTimerRimMask(final ? '0.55cqw' : '2px');
+  const ringMask = turnTimerRimMask('2px');
   return (
     <div
-      data-turn-timer={stage.phase}
-      className={cx('absolute top-3 right-3 z-10 size-8', TURN_TIMER_SCALE_CLASS)}
-      style={{ scale: stage.scale }}
+      data-turn-timer="steady"
+      style={smooth ? { opacity: PLAYER_FURNITURE_OPACITY } : undefined}
+      className="absolute top-3 right-3 z-10 size-8"
     >
-      <div
-        // Re-mounted each second, which restarts its swell and glow.
-        key={counting ? whole : 'steady'}
-        className={cx(
-          'grid size-8 origin-top-right place-items-center rounded-full',
-          turnTimerPulseClass(stage),
-          final ? 'bg-red-01' : 'bg-linear-to-b from-black/50 to-black/25'
-        )}
-        style={{ '--turn-timer-swell': stage.swell } as React.CSSProperties}
-      >
+      <div className="grid size-8 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
         <span
+          data-turn-timer-rim
           className={cx(
-            'col-start-1 row-start-1 rounded-full',
-            // Smooth only for the Open rounds build-up; a fixed format's ring jumps as it always has.
-            buildUp && 'transition-[--turn-timer-rim] duration-300 ease-linear',
-            final ? 'size-8' : 'size-7'
+            'col-start-1 row-start-1 size-7 rounded-full',
+            smooth && 'transition-[--turn-timer-rim] duration-250 ease-linear motion-reduce:transition-none'
           )}
-          style={
-            {
-              '--turn-timer-rim': `${degrees}deg`,
-              backgroundImage: `conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,${final ? 0.28 : 0.3}) 0deg)`,
-              maskImage: ringMask,
-              WebkitMaskImage: ringMask,
-            } as React.CSSProperties
-          }
+          style={{
+            ...(smooth && { '--turn-timer-rim': `${remaining * 360}deg` }),
+            backgroundImage: smooth
+              ? 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.3) 0deg)'
+              : `conic-gradient(#ffffff ${remaining * 360}deg, rgba(255,255,255,0.3) 0deg)`,
+            maskImage: ringMask,
+            WebkitMaskImage: ringMask,
+          }}
         />
-        <span
-          className="col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none font-medium text-white tabular-nums"
-          style={final ? { ...STAMP_FONT, fontWeight: 700 } : undefined}
-        >
-          {whole}
+        <span className="col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none font-medium text-white tabular-nums">
+          {Math.ceil(seconds)}
         </span>
       </div>
     </div>
@@ -1733,21 +2124,30 @@ const isScrubKey = (key: string) =>
 
 function FeedScrubber({
   currentTime,
-  duration,
+  timeline,
   markers,
   onSeek,
   onScrubStart,
   onScrubEnd,
 }: {
   currentTime: number;
-  duration: number;
+  timeline: PlaybackTimeline;
   markers: ClaimMarker[];
   onSeek: (seconds: number) => void;
   onScrubStart: () => void;
   onScrubEnd: () => void;
 }) {
-  const bounded = clampSeconds(currentTime, duration);
+  const duration = timeline.durationMs / 1000;
+  const bounded = timeline.toPlaybackMs(currentTime * 1000) / 1000;
   const progress = duration > 0 ? (bounded / duration) * 100 : 0;
+  const displayedMarkers = React.useMemo(
+    () =>
+      markers.map(marker => ({
+        ...marker,
+        fraction: timeline.durationMs > 0 ? timeline.toPlaybackMs(marker.atMs) / timeline.durationMs : 0,
+      })),
+    [markers, timeline]
+  );
   return (
     <div className="relative flex h-5 items-center px-3 [--track-height:5px]">
       <div className="relative h-(--track-height) w-full overflow-hidden rounded-full bg-white/40">
@@ -1763,7 +2163,8 @@ function FeedScrubber({
           no longer the 2px hashes, though: they are up to 12px wide, clamped to the gap to the next
           claim — a mean 10% of the track, 44% on the densest debate in the corpus. See
           {@link MARKER_HIT_WIDTH_PX} for why that ceiling and not 24. */}
-      <ClaimScrubberMarkers markers={markers} onSeek={ms => onSeek(ms / 1000)} className="z-3" />
+      {/* Only placement uses the edited clock; claim clicks retain their precise source timestamps. */}
+      <ClaimScrubberMarkers markers={displayedMarkers} onSeek={ms => onSeek(ms / 1000)} className="z-3" />
       <span
         className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]"
         style={{ left: `calc(12px + ${progress}% * (100% - 24px) / 100%)` }}
@@ -1776,7 +2177,7 @@ function FeedScrubber({
         step="0.05"
         value={bounded}
         aria-label="Debate timeline"
-        onChange={event => onSeek(Number(event.currentTarget.value))}
+        onChange={event => onSeek(timeline.toSourceMs(Number(event.currentTarget.value) * 1000) / 1000)}
         // Pause playback for the duration of the drag so the play clock doesn't fight the
         // seek. onLostPointerCapture reliably fires when a range drag ends (the input
         // captures the pointer on pointerdown), even if the pointer leaves the thumb.
@@ -1787,5 +2188,68 @@ function FeedScrubber({
         onKeyUp={e => isScrubKey(e.key) && onScrubEnd()}
       />
     </div>
+  );
+}
+
+/**
+ * A held card's muted, looping clip.
+ *
+ * Only the visible card's plays, and only it fetches the clip whole; one further down the feed
+ * holds its header (`metadata`) so reaching it paints a frame at once without every mounted card
+ * pulling a clip. Muted, so it may autoplay anywhere, and never unmuted: sound starts only from
+ * the viewer's tap on the full recording.
+ */
+function PreviewClip({
+  src,
+  active,
+  videoRef,
+  onError,
+}: {
+  src: string;
+  active: boolean;
+  videoRef?: React.RefObject<HTMLVideoElement | null>;
+  onError?: () => void;
+}) {
+  const ownRef = React.useRef<HTMLVideoElement | null>(null);
+  const setRef = React.useCallback(
+    (element: HTMLVideoElement | null) => {
+      ownRef.current = element;
+      if (videoRef) videoRef.current = element;
+    },
+    [videoRef]
+  );
+  // `autoPlay` starts one that mounts visible. One that becomes visible later is started here, and
+  // one scrolled past is stopped, so an off-screen card is not decoding.
+  const wasActiveRef = React.useRef(active);
+  React.useEffect(() => {
+    const video = ownRef.current;
+    const wasActive = wasActiveRef.current;
+    wasActiveRef.current = active;
+    if (!video || wasActive === active) return;
+    if (active) {
+      try {
+        void video.play()?.catch(() => {});
+      } catch {
+        // A refused autoplay leaves the still under it showing.
+      }
+    } else {
+      video.pause();
+    }
+  }, [active]);
+
+  return (
+    <video
+      key={src}
+      ref={setRef}
+      data-debate-preview-clip=""
+      className="relative h-full w-full object-cover"
+      src={src}
+      muted
+      loop
+      autoPlay={active}
+      playsInline
+      preload={active ? 'auto' : 'metadata'}
+      onError={onError}
+    />
   );
 }

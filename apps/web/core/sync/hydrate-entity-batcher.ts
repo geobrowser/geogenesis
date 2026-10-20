@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 
+import { ENTITY_LIST_LIMIT } from '../io/entity-list-limit';
 import type { Entity } from '../types';
 import { E } from './orm';
 import { GeoStore } from './store';
@@ -36,7 +37,7 @@ import { GeoEventStream } from './stream';
  * dangling one decodes to 999 and would read as complete. The count comes straight from the
  * server's own total and is not filtered.
  */
-const BATCH_RELATIONS_CAP = 1000;
+const BATCH_RELATIONS_CAP = ENTITY_LIST_LIMIT;
 
 type Waiter = {
   resolve: (entity: Entity | null) => void;
@@ -123,6 +124,7 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
 
   let merged: Entity[];
   let remote: Entity[];
+  let confirmedAbsentEntityIds: string[] | undefined;
 
   try {
     /**
@@ -130,7 +132,7 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
      * filters by space as it receives events, so hydrating space-scoped here would narrow what
      * lands in the store.
      */
-    ({ merged, remote } = await E.syncMany({
+    ({ merged, remote, confirmedAbsentEntityIds } = await E.syncMany({
       store,
       cache,
       where: { id: { in: ids } },
@@ -145,7 +147,7 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
   }
 
   try {
-    if (merged.length > 0) {
+    if (merged.length > 0 || confirmedAbsentEntityIds?.length) {
       /**
        * One event for the batch rather than one per entity. The store's listener already takes an
        * array, and `syncMany` returns the raw remotes alongside so the synced baseline stays clean.
@@ -159,6 +161,7 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
         type: GeoEventStream.ENTITIES_SYNCED,
         entities: merged,
         remoteEntities: remote,
+        ...(confirmedAbsentEntityIds?.length ? { confirmedAbsentEntityIds } : {}),
       });
     }
 

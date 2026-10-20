@@ -1,6 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
+import { type DocumentNode, print } from 'graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
@@ -19,6 +20,7 @@ const graph = vi.hoisted(() => ({
   best: [] as unknown[],
   fresh: [] as unknown[],
   freshCalls: [] as Record<string, unknown>[],
+  freshQueries: [] as unknown[],
   bestCalls: 0,
 }));
 
@@ -39,6 +41,7 @@ vi.mock('~/core/io/graphql-client', () => ({
     }
     if (operation === 'ExploreEntitiesConnection') {
       graph.freshCalls.push(variables);
+      graph.freshQueries.push(query);
       return Effect.succeed({ entities: graph.fresh, endCursor: null, hasNextPage: false });
     }
     throw new Error(`unexpected operation ${operation}`);
@@ -47,8 +50,11 @@ vi.mock('~/core/io/graphql-client', () => ({
 vi.mock('~/core/io/subgraph', () => ({ fetchProfile: () => Effect.succeed(null) }));
 vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberRequest: async () => null }));
 
-const { FRESH_LIST_MAX_STALE_MS, fetchExploreFeed } = await import('./fetch-explore-feed');
+const { FRESH_LIST_MAX_STALE_MS, fetchExploreFeed, warmSharedFreshList } = await import('./fetch-explore-feed');
 const { encodeExploreWindowCursor } = await import('./explore-window-cursor');
+const { setSharedFreshListStoreForTests } = await import('./fresh-slot/shared-fresh-list');
+const { setRecentFreshScopeStoreForTests } = await import('./fresh-slot/recent-fresh-scopes');
+const { resetRecordedScopesForTests } = await import('./fetch-explore-feed');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const browse = {
@@ -104,6 +110,7 @@ beforeEach(() => {
     entity(bestIds[100]!, CLAIM_TYPE_ID),
   ];
   graph.freshCalls = [];
+  graph.freshQueries = [];
   graph.bestCalls = 0;
   // A different instant per test, so the module's Fresh list cache never carries between tests.
   clock += 10_000_000;
@@ -190,6 +197,12 @@ describe('a whole scroll with the fresh slot on', () => {
     // Later pages ran hours later and still asked for the same range (or were served from cache).
     expect(new Set(ranges).size).toBe(1);
   });
+
+  it('asks for the Fresh list without hasNextPage, which re-runs the whole filter', async () => {
+    await scroll({ config: { ...ON, freshnessHours: 24 }, revision: 1 });
+    expect(graph.freshQueries.length).toBeGreaterThan(0);
+    for (const query of graph.freshQueries) expect(print(query as DocumentNode)).not.toContain('hasNextPage');
+  });
 });
 
 // GEO-3279. A new scroll starts from the newest Fresh list this instance holds, and the current
@@ -247,6 +260,223 @@ describe('a new scroll while an older Fresh list is held', () => {
   });
 });
 
+// GEO-3279. A cold instance holds no Fresh list of its own; it starts from one another instance
+// shared through Upstash, instead of paying the Fresh query in front of its first response.
+describe('a Fresh list shared between instances', () => {
+  const minute = (at: number) => Math.floor(at / FRESH_SLOT_AS_OF_STEP_MS) * FRESH_SLOT_AS_OF_STEP_MS;
+  const shared = new Map<string, string>();
+  const writes: { value: string; ttlMs: number }[] = [];
+  const page = (now: number, cursor: string | null = null) =>
+    fetchExploreFeed({
+      browse,
+      sort: 'best',
+      time: 'all',
+      spaceFilterIds: null,
+      cursor,
+      memberOrEditorSpaceIds: [],
+      typeIds: [DEBATE_TYPE_ID, CLAIM_TYPE_ID],
+      freshSlot: { config: ON, revision: 1, now },
+    });
+  const freshItems = (served: Awaited<ReturnType<typeof fetchExploreFeed>>) =>
+    served.items.filter(item => item.ranking?.slot === 'fresh').map(item => item.entityId);
+  /** What another instance would have shared: a list pinned at `asOfMs` with only `ids` in it. */
+  const shareFromElsewhere = (asOfMs: number, ids: string[]) => {
+    const [key] = [...shared.keys()];
+    shared.set(
+      key!,
+      JSON.stringify({
+        asOfMs,
+        page: { entities: ids.map(value => entity(value, CLAIM_TYPE_ID)), endCursor: null, hasNextPage: false },
+      })
+    );
+  };
+
+  beforeEach(() => {
+    shared.clear();
+    writes.length = 0;
+    setSharedFreshListStoreForTests({
+      read: async key => shared.get(key) ?? null,
+      write: async (key, value, ttlMs) => {
+        shared.set(key, value);
+        writes.push({ value, ttlMs });
+      },
+    });
+    return () => setSharedFreshListStoreForTests(null);
+  });
+
+  it('shares the list it built, for as long as a scroll may start from it', async () => {
+    await page(clock);
+    await vi.waitFor(() => expect(writes).toHaveLength(1));
+    expect(JSON.parse(writes[0]!.value).asOfMs).toBe(minute(clock));
+    expect(writes[0]!.ttlMs).toBe(FRESH_LIST_MAX_STALE_MS);
+  });
+
+  it('starts a scroll from a shared list without querying, and pins the scroll to it', async () => {
+    // Learn the scope's key, then stand in for another instance's newer list. This instance's own
+    // list is too old to serve, so only the shared one can answer without a query.
+    await page(clock);
+    await vi.waitFor(() => expect(writes).toHaveLength(1));
+    const later = clock + FRESH_LIST_MAX_STALE_MS + 10 * FRESH_SLOT_AS_OF_STEP_MS;
+    const elsewhere = [id('s', 1), id('s', 2), id('s', 3)];
+    shareFromElsewhere(minute(later - 2 * FRESH_SLOT_AS_OF_STEP_MS), elsewhere);
+    graph.freshCalls = [];
+
+    const served = await page(later);
+    expect(freshItems(served)).toEqual(elsewhere);
+    expect(decodeFreshSlotCursor(served.nextCursor, 0).asOfMs).toBe(minute(later - 2 * FRESH_SLOT_AS_OF_STEP_MS));
+    // The current minute's list loads behind the response, as for a list held locally.
+    await vi.waitFor(() => expect(graph.freshCalls).toHaveLength(1));
+  });
+
+  it('ignores a shared list too old to start from', async () => {
+    await page(clock);
+    await vi.waitFor(() => expect(writes).toHaveLength(1));
+    const later = clock + 2 * FRESH_LIST_MAX_STALE_MS;
+    shareFromElsewhere(minute(later) - FRESH_LIST_MAX_STALE_MS - FRESH_SLOT_AS_OF_STEP_MS, [id('s', 1)]);
+    graph.freshCalls = [];
+
+    const served = await page(later);
+    expect(decodeFreshSlotCursor(served.nextCursor, 0).asOfMs).toBe(minute(later));
+    expect(graph.freshCalls).toHaveLength(1);
+  });
+
+  // GEO-3308. The scheduled warm-up builds the list the request path would, under the same key.
+  describe('warmed by the schedule', () => {
+    const warm = (now: number) =>
+      warmSharedFreshList({
+        spaceIds: [SPACE],
+        time: 'all',
+        typeIds: [DEBATE_TYPE_ID, CLAIM_TYPE_ID],
+        freshnessHours: ON.freshnessHours,
+        now,
+      });
+
+    it("shares this minute's list before it returns", async () => {
+      await warm(clock);
+      expect(writes).toHaveLength(1);
+      expect(JSON.parse(writes[0]!.value).asOfMs).toBe(minute(clock));
+      expect(writes[0]!.ttlMs).toBe(FRESH_LIST_MAX_STALE_MS);
+      expect(graph.freshCalls).toHaveLength(1);
+    });
+
+    it('leaves a first page that follows nothing to refresh, under the key the request path reads', async () => {
+      await warm(clock);
+      const [warmedKey] = [...shared.keys()];
+      graph.freshCalls = [];
+
+      const served = await page(clock + 5_000);
+      expect(freshItems(served).length).toBeGreaterThan(0);
+      expect(graph.freshCalls).toHaveLength(0);
+      expect([...shared.keys()]).toEqual([warmedKey]);
+      expect(writes).toHaveLength(1);
+    });
+  });
+
+  it('queries as before when the shared store fails', async () => {
+    setSharedFreshListStoreForTests({
+      read: async () => {
+        throw new Error('upstash down');
+      },
+      write: async () => {
+        throw new Error('upstash down');
+      },
+    });
+    const served = await page(clock);
+    expect(freshItems(served).length).toBeGreaterThan(0);
+    expect(graph.freshCalls).toHaveLength(1);
+  });
+});
+
+// GEO-3308. A signed-in reader's scope holds their own spaces; it is recorded so the cron can warm it.
+describe('recording the scopes readers request', () => {
+  const OTHER = 'cccccccccccccccccccccccccccccccc';
+  const members: { member: string; scoreMs: number }[] = [];
+  const shared = new Map<string, string>();
+  const sharedKeys: string[] = [];
+  const signedIn = {
+    ...(browse as object),
+    memberOf: [{ id: OTHER, name: 'Mine', image: null }],
+  } as never;
+  const firstPage = (now: number) =>
+    fetchExploreFeed({
+      browse: signedIn,
+      sort: 'best',
+      time: 'all',
+      spaceFilterIds: null,
+      cursor: null,
+      memberOrEditorSpaceIds: [OTHER],
+      typeIds: [DEBATE_TYPE_ID, CLAIM_TYPE_ID],
+      freshSlot: { config: ON, revision: 1, now },
+    });
+
+  beforeEach(() => {
+    members.length = 0;
+    shared.clear();
+    sharedKeys.length = 0;
+    resetRecordedScopesForTests();
+    setRecentFreshScopeStoreForTests({
+      add: async (member, scoreMs) => {
+        members.push({ member, scoreMs });
+      },
+      newest: async () => [],
+      trim: async () => {},
+    });
+    setSharedFreshListStoreForTests({
+      read: async key => shared.get(key) ?? null,
+      write: async (key, value) => {
+        shared.set(key, value);
+        sharedKeys.push(key);
+      },
+    });
+    return () => {
+      setRecentFreshScopeStoreForTests(null);
+      setSharedFreshListStoreForTests(null);
+    };
+  });
+
+  it('records the scope inputs only, once per minute', async () => {
+    await firstPage(clock);
+    await vi.waitFor(() => expect(members).toHaveLength(1));
+    expect(JSON.parse(members[0]!.member)).toEqual({
+      spaceIds: [SPACE, OTHER].sort(),
+      typeIds: [DEBATE_TYPE_ID, CLAIM_TYPE_ID].sort(),
+      time: 'all',
+      requireName: null,
+      requireDebateTagOnClaims: null,
+      freshnessHours: ON.freshnessHours,
+    });
+    await firstPage(clock + 1_000);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(members).toHaveLength(1);
+  });
+
+  it('serves the page when recording fails', async () => {
+    setRecentFreshScopeStoreForTests({
+      add: async () => {
+        throw new Error('upstash down');
+      },
+      newest: async () => [],
+      trim: async () => {},
+    });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const served = await firstPage(clock);
+    expect(served.items.some(item => item.ranking?.slot === 'fresh')).toBe(true);
+    await vi.waitFor(() => expect(error).toHaveBeenCalled());
+    error.mockRestore();
+  });
+
+  it('warms under exactly the key the request path wrote, from the recorded inputs', async () => {
+    await firstPage(clock);
+    await vi.waitFor(() => expect(members).toHaveLength(1));
+    await vi.waitFor(() => expect(sharedKeys).toHaveLength(1));
+    const recorded = JSON.parse(members[0]!.member);
+
+    await warmSharedFreshList({ ...recorded, now: clock + 120_000 });
+    expect(sharedKeys).toHaveLength(2);
+    expect(sharedKeys[1]).toBe(sharedKeys[0]);
+  });
+});
+
 describe('when the fresh slot is off or does not apply', () => {
   it('serves exactly Best, with no fresh query', async () => {
     const plain = await scroll(undefined);
@@ -284,12 +514,13 @@ describe('when the fresh slot is off or does not apply', () => {
 // GEO-3234. The browser may replace a lead its visitor has seen only with a debate the server
 // verified, so Best marks them, and only while seen demotion is on.
 describe('playable lead marks', () => {
-  async function firstPage(markPlayableLeads: boolean) {
+  async function firstPage(markPlayableLeads: boolean, stills: string[] = []) {
     const playable = new Set([bestIds[3], bestIds[6]]);
     vi.stubGlobal('fetch', async (url: string) => {
       const debateId = url.split('/debates/')[1]?.split('/')[0]?.replace(/-/g, '');
       const ok = playable.has(debateId);
-      return new Response(JSON.stringify({ artifacts: ok ? [{ kind: 'final_video' }] : [] }), { status: 200 });
+      const artifacts = ok ? [{ kind: 'final_video' }, ...stills.map(kind => ({ kind }))] : [];
+      return new Response(JSON.stringify({ artifacts }), { status: 200 });
     });
     try {
       return await fetchExploreFeed({
@@ -318,5 +549,33 @@ describe('playable lead marks', () => {
     const page = await firstPage(false);
     expect(page.items[0]?.entityId).toBe(bestIds[3]);
     expect(page.items.some(item => 'playableLead' in item)).toBe(false);
+  });
+
+  // GEO-3280. The browser opens a first visit on the newest verified debate, so its stills are the
+  // ones the page paints first.
+  const STILLS = ['speaker_still_slot_1', 'speaker_still_slot_2'];
+  const postered = (page: { items: { entityId: string; debatePosters?: unknown }[] }) =>
+    page.items.filter(item => item.debatePosters).map(item => item.entityId);
+
+  it('hands the stills to the newest verified debate, the one a first visit opens on', async () => {
+    graph.best[6] = { ...(graph.best[6] as object), createdAt: '1790000000' } as never;
+    const page = await firstPage(true, STILLS);
+    expect(page.items[0]?.entityId).toBe(bestIds[3]);
+    expect(postered(page)).toEqual([bestIds[6]]);
+    expect(page.items.find(item => item.entityId === bestIds[6])?.debatePosters).toEqual({
+      slot1: expect.stringMatching(new RegExp(`/debates/${bestIds[6]}/media/artifacts/speaker_still_slot_1/content$`)),
+      slot2: expect.stringMatching(new RegExp(`/debates/${bestIds[6]}/media/artifacts/speaker_still_slot_2/content$`)),
+    });
+  });
+
+  it('keeps the stills on the lead when it is the newest', async () => {
+    const page = await firstPage(true, STILLS);
+    expect(postered(page)).toEqual([bestIds[3]]);
+  });
+
+  it('keeps the stills on the lead while seen demotion is off', async () => {
+    graph.best[6] = { ...(graph.best[6] as object), createdAt: '1790000000' } as never;
+    const page = await firstPage(false, STILLS);
+    expect(postered(page)).toEqual([bestIds[3]]);
   });
 });

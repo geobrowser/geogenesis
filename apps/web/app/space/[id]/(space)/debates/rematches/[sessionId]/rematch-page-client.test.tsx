@@ -10,7 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
-import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
+import {
+  clearDebateReturnDestination,
+  rememberDebateReturnDestination,
+  rememberLobbyReturnDestination,
+} from '~/core/debates/debate-return-navigation';
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
@@ -38,8 +42,8 @@ const mocks = vi.hoisted(() => ({
    * which a phone keeps, so it defaults to one; the desktop pill rows have their own cases.
    */
   isPhone: true,
+  debateVideo: false,
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
-  requestLobbyRejoinOnLeave: vi.fn(),
   sourceDebateLoading: false,
   /** GEO-2870. geo-chat's extracted-claims payload for the source debate, and whether it is final. */
   extractedClaims: { turns: [], claims: [] } as { turns: unknown[]; claims: unknown[] },
@@ -70,6 +74,7 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   mutate: vi.fn(),
   leaveMutate: vi.fn(),
+  forgetEndedRematch: vi.fn(),
   acceptMutate: vi.fn(),
   rejectMutate: vi.fn(),
   /** The last rematch request error and its variables. */
@@ -214,6 +219,8 @@ vi.mock('~/core/hooks/use-media-query', () => ({
   useMediaQuery: () => mocks.isPhone,
 }));
 
+vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.debateVideo }));
+
 vi.mock('~/core/analytics', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/analytics')>()),
   capture: mocks.capture,
@@ -292,12 +299,15 @@ vi.mock('./rematch-publish-card', () => ({
 
 // The server-first return lives in lobby-return's own tests; here this tab's record decides.
 vi.mock('~/core/debates/lobbies/lobby-return', async () => {
-  const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
+  const { consumeDebateReturnDestination, peekDebateReturnDestination } =
+    await import('~/core/debates/debate-return-navigation');
   return {
     // No lobby mic carried into these sessions (GEO-3336 has its own tests).
-    useCarriedLobbyMic: () => null,
-    useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
-    useLobbyRejoinOnLeave: () => mocks.requestLobbyRejoinOnLeave,
+    useCarriedLobbyChoice: () => null,
+    useDebateReturnNavigation: () => ({
+      consume: consumeDebateReturnDestination,
+      returnsToLobby: Boolean(peekDebateReturnDestination()?.startsWith('/debate/')),
+    }),
   };
 });
 
@@ -357,6 +367,7 @@ vi.mock('~/core/debates/hooks', () => ({
     error: mocks.requestError,
     variables: mocks.requestVariables,
   }),
+  useForgetEndedRematch: () => mocks.forgetEndedRematch,
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
   useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
@@ -941,6 +952,7 @@ function mutation(mutate = mocks.mutate) {
 
 beforeEach(() => {
   mocks.isPhone = true;
+  mocks.debateVideo = false;
   mocks.capture.mockClear();
   mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
   mocks.sourceDebateLoading = false;
@@ -976,6 +988,7 @@ beforeEach(() => {
   mocks.push.mockReset();
   mocks.mutate.mockReset();
   mocks.leaveMutate.mockReset();
+  mocks.forgetEndedRematch.mockReset();
   mocks.acceptMutate.mockReset();
   mocks.rejectMutate.mockReset();
   mocks.requestError = null;
@@ -1101,6 +1114,24 @@ afterEach(() => {
 });
 
 describe('DebateRematchPageClient', () => {
+  it('keeps the videos outside the sticky filters and scrolls without switching header layouts', async () => {
+    mocks.debateVideo = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    const participants = screen.getByRole('region', { name: 'Participants' });
+    const filters = screen.getByRole('group', { name: 'Claim picker filters' });
+    const scroller = document.querySelector('[data-rematch-scroll]')!;
+    const participantContent = participants.innerHTML;
+    expect(filters).toHaveClass('sticky');
+    expect(filters).not.toContainElement(participants);
+    expect(filters).toContainElement(screen.getByRole('textbox', { name: 'Search claims and topics' }));
+    scroller.scrollTop = 160;
+    fireEvent.scroll(scroller);
+    expect(participants.innerHTML).toBe(participantContent);
+    expect(scroller.scrollTop).toBe(160);
+    expect(screen.queryByRole('button', { name: 'Show full participant videos' })).toBeNull();
+  });
+
   it('does not leave a browsing rematch during the Strict Mode effect rehearsal', async () => {
     render(
       <StrictMode>
@@ -1129,16 +1160,6 @@ describe('DebateRematchPageClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
     expect(mocks.leaveMutate).toHaveBeenCalledOnce();
-  });
-
-  // GEO-3301. The end card's "Back to <lobby>" row is gone, so Leave is what rejoins the lobby.
-  it('asks the lobby the flow started in to rejoin on arrival when the viewer leaves', () => {
-    mocks.requestLobbyRejoinOnLeave.mockClear();
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
-
-    expect(mocks.requestLobbyRejoinOnLeave).toHaveBeenCalledOnce();
   });
 
   it('carries the finished debate’s publishing card under the pair', () => {
@@ -1171,6 +1192,20 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.replace).not.toHaveBeenCalledWith(`/space/${SPACE_1}/debates`);
   });
 
+  // GEO-3342. The other person left: the session arrives ended with no click from this viewer. It is
+  // dropped from activity before the way out, or the coordinator routes the viewer straight back in.
+  it('forgets the session before going out when the other person leaves', async () => {
+    vi.spyOn(window.history, 'length', 'get').mockReturnValue(2);
+    const ended = session({ source_debate_id: null, status: 'ended' });
+    mocks.session = ended;
+    mocks.back.mockImplementation(() => expect(mocks.forgetEndedRematch).toHaveBeenCalledWith(ended));
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    expect(mocks.forgetEndedRematch).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves the debates-page exit for rematches started from a prior debate', async () => {
     const endedSession = session({ status: 'ended' });
     mocks.leaveMutate.mockImplementation(
@@ -1186,8 +1221,12 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('returns a debate-again session to the page that opened the flow', async () => {
-    rememberDebateReturnDestination('/space/my-space?tab=activity#latest');
+  it.each([
+    ['Leave', '/space/my-space?tab=activity#latest'],
+    ['Back to lobby', '/debate/lobby-1'],
+  ])('labels the picker exit %s and returns to %s', async (label, destination) => {
+    if (label === 'Back to lobby') rememberLobbyReturnDestination('lobby-1');
+    else rememberDebateReturnDestination(destination);
     const endedSession = session({ status: 'ended' });
     mocks.leaveMutate.mockImplementation(
       (_input: undefined, options: { onSuccess?: (ended: DebateRematchSession) => void }) => {
@@ -1196,9 +1235,9 @@ describe('DebateRematchPageClient', () => {
     );
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+    fireEvent.click(screen.getByRole('button', { name: label }));
 
-    expect(mocks.replace).toHaveBeenCalledWith('/space/my-space?tab=activity#latest');
+    expect(mocks.replace).toHaveBeenCalledWith(destination);
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
@@ -3883,15 +3922,17 @@ describe('DebateRematchPageClient', () => {
   });
 
   // GEO-2992. The unmute control used to live in a 200px dock fixed to the bottom-right of the
-  // viewport — outside the 720px column, and a scroll away from everything the viewer was reading.
-  // Its replacement has to be in the column, above the tabs, and pinned with them.
-  it('pins the pair header at the top of the content column', async () => {
+  // viewport — outside the content column, and a scroll away from everything the viewer was reading.
+  // Keep it above the tabs in the reading order; the full cards now scroll naturally.
+  it('places the full pair header above the sticky claim filters', async () => {
+    mocks.debateVideo = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
     const header = screen.getByTestId('rematch-pair-header');
     const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
-    expect(header.closest('.sticky')).toBe(pinned);
+    expect(header.closest('.sticky')).toBeNull();
+    expect(pinned).not.toBeNull();
 
     // Inside the column, not floating over the viewport: the dock's `fixed` shell is gone.
     expect(header.closest('main')).not.toBeNull();
@@ -3901,6 +3942,16 @@ describe('DebateRematchPageClient', () => {
     // you can pick.
     const tabs = screen.getByRole('button', { name: 'Explore' });
     expect(header.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps the audio-only participant controls pinned with the filters when video is disabled', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
+    expect(pinned).not.toBeNull();
+    expect(screen.getByTestId('rematch-pair-header').closest('.sticky')).toBe(pinned);
+    expect(screen.getByRole('button', { name: 'Leave' }).closest('.sticky')).toBe(pinned);
   });
 
   // GEO-2863 promoted the hub's "My positions" out of Explore's source menu and into a tab of its
@@ -5976,6 +6027,17 @@ describe('inside a debate room', () => {
     </DebateRoomProvider>
   );
 
+  it('keeps Leave when the room exits to Explore despite a stored lobby', () => {
+    rememberLobbyReturnDestination('lobby-1');
+    render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    expect(screen.queryByRole('button', { name: 'Back to lobby' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/explore');
+    expect(mocks.leaveMutate).not.toHaveBeenCalled();
+  });
+
   // geo-chat expires a `browsing` session after 90s of either party being offline, which is what
   // waiting for someone looks like. Acting on it threw the waiting person out of the room.
   it.each([['ended'], ['expired']] as const)('does not navigate away on a %s session', async status => {
@@ -6626,6 +6688,18 @@ describe('desktop filter row', () => {
     expect(pill(/^Governance space/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+  });
+
+  it('uses the same filter pills on a phone in the video layout', async () => {
+    mocks.isPhone = true;
+    mocks.debateVideo = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(pillRow()).toBeInTheDocument());
+    expect(pill(/^Governance\s?\d/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Hide my positions' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pick a claim to debate' })).toBeInTheDocument();
   });
 
   it('lists every space before any topic, whatever the counts', async () => {

@@ -23,3 +23,13 @@ export function parseExplorePageSort(raw: string | null, fallback: ExplorePageSo
 export function parseExploreTime(raw: string | null): ExploreTime {
   return raw && (EXPLORE_TIMES as readonly string[]).includes(raw) ? (raw as ExploreTime) : 'all';
 }
+
+/**
+ * The query parameter that marks the cacheable, signed-out first page of Best. The server treats
+ * any request carrying it as anonymous (cookies and tokens ignored); only the client decides when
+ * to send it. Vercel's CDN keys on the URL alone, so identity must never leak into this URL's answer.
+ */
+export const PUBLIC_FEED_PARAM = 'public';
+
+/** The one URL the signed-out first page is served from, shared by the preload and the feed's fetch. */
+export const PUBLIC_BEST_FEED_PATH = `/api/explore/feed?sort=best&${PUBLIC_FEED_PARAM}=1`;

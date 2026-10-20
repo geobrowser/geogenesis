@@ -34,8 +34,9 @@ import { type DebateFeedSurface, debateFeedHref } from './debate-feed-url';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateOverflowMenu } from './debate-overflow-menu';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
+import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from './feed-full-playback';
+import { DebateShareDialog } from './lazy-share-dialog';
 import { useLineClampOverflow } from './line-clamp-overflow';
-import { DebateShareDialog } from './share-dialog';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFullscreenActiveAtom } from '~/atoms';
@@ -458,6 +459,12 @@ export function DebatesBrowseFeed({
           // buffers, and nothing further than two ahead is touched at all.
           preload={activeIndex >= 0 && index > activeIndex && index <= activeIndex + PRELOAD_AHEAD}
           buffer={activeIndex >= 0 && index === activeIndex + 1}
+          // The debate a link opened is the one the viewer asked for, so it plays as before; the
+          // rest of the feed holds its full recordings until the viewer starts one.
+          holdFullPlayback={
+            DEBATE_FEED_HOLDS_FULL_PLAYBACK &&
+            !(surface === 'debate-page' && initialDebateId != null && ID.equals(debate.id, initialDebateId))
+          }
           // Cards stay mounted as the feed grows, so everything outside one behind to the preload
           // window ahead releases its <video> elements (GEO-3067).
           // With no active card (a refetch dropped it), everything stays released until one is chosen.
@@ -532,6 +539,7 @@ function DebateFeedItem({
   initialSeekSeconds,
   preload,
   buffer,
+  holdFullPlayback,
   releaseMedia,
   root,
   scrollHint,
@@ -551,6 +559,8 @@ function DebateFeedItem({
   preload: boolean;
   /** Buffer the recordings too — the card after the active one. See `DebateFeedPlayer`. */
   buffer: boolean;
+  /** Hold the full recordings until the viewer starts one. See `DebateFeedPlayer`. */
+  holdFullPlayback: boolean;
   releaseMedia: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
@@ -634,6 +644,7 @@ function DebateFeedItem({
               active={active}
               preload={preload}
               buffer={buffer}
+              holdFullPlayback={holdFullPlayback}
               releaseMedia={releaseMedia}
               initialSeekSeconds={initialSeekSeconds}
               onOpenClaims={onOpenClaims}

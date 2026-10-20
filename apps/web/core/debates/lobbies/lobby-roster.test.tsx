@@ -32,6 +32,7 @@ vi.mock('./lobby-voice', async () => {
   const Context = ReactModule.createContext({
     speaking: new Set<string>(),
     micOn: new Set<string>(),
+    cameras: new Map(),
     connected: false,
   });
   return { useLobbyVoiceStates: () => ReactModule.useContext(Context), LobbyVoiceStatesProvider: Context.Provider };
@@ -119,7 +120,9 @@ const pairs = [
 
 function renderPeople(view: LobbyPageView, speaking: string[] = []) {
   return render(
-    <LobbyVoiceStatesProvider value={{ speaking: new Set(speaking), micOn: new Set(speaking), connected: true }}>
+    <LobbyVoiceStatesProvider
+      value={{ speaking: new Set(speaking), micOn: new Set(speaking), cameras: new Map(), connected: true }}
+    >
       <LobbyPeople
         lobby={view}
         viewerId="Adam"
@@ -164,7 +167,9 @@ describe('LobbyPeople on desktop', () => {
     expect(statusLine()).toHaveClass('h-[18px]');
 
     rerender(
-      <LobbyVoiceStatesProvider value={{ speaking: new Set(['adam']), micOn: new Set(['adam']), connected: true }}>
+      <LobbyVoiceStatesProvider
+        value={{ speaking: new Set(['adam']), micOn: new Set(['adam']), cameras: new Map(), connected: true }}
+      >
         <LobbyPeople lobby={view} viewerId="Adam" ownAvailable={undefined} disagreements={null} />
       </LobbyVoiceStatesProvider>
     );
@@ -267,7 +272,9 @@ describe('LobbyPeople on a phone', () => {
     expect(screen.getByTestId('lobby-disagreements')).toBeInTheDocument();
 
     rerender(
-      <LobbyVoiceStatesProvider value={{ speaking: new Set(['daniel']), micOn: new Set(['daniel']), connected: true }}>
+      <LobbyVoiceStatesProvider
+        value={{ speaking: new Set(['daniel']), micOn: new Set(['daniel']), cameras: new Map(), connected: true }}
+      >
         <LobbyPeople
           lobby={view}
           viewerId="Adam"
@@ -302,5 +309,60 @@ describe('LobbyPeople on a phone', () => {
     expect(sheet).toHaveAttribute('role', 'dialog');
     expect(within(sheet).getByRole('button', { name: 'Request a debate with Daniel' })).toBeInTheDocument();
     expect(within(sheet).getByTestId('host-controls')).toBeInTheDocument();
+  });
+});
+
+describe('LobbyPeople video (GEO-3307)', () => {
+  function camera(id: string) {
+    const track = { attach: vi.fn(), detach: vi.fn() };
+    return { id, track, ref: { participant: { identity: id }, publication: { track, isMuted: false } } };
+  }
+
+  function renderWithCameras(view: LobbyPageView, cameras: ReturnType<typeof camera>[]) {
+    const map = new Map(cameras.map(entry => [entry.id, entry.ref]));
+    return render(
+      <LobbyVoiceStatesProvider
+        value={{ speaking: new Set(), micOn: new Set(), cameras: map as never, connected: true }}
+      >
+        <LobbyPeople lobby={view} viewerId="Adam" ownAvailable={undefined} disagreements={null} />
+      </LobbyVoiceStatesProvider>
+    );
+  }
+
+  it('shows a speaker’s camera in their tile, and the avatar for one with the camera off', () => {
+    const daniel = camera('daniel');
+    renderWithCameras(lobby([member('Adam', { role: 'host' }), member('Daniel'), member('Elena')]), [daniel]);
+    const tile = screen.getByRole('group', { name: 'Daniel' });
+    const video = within(tile).getByTestId('lobby-speaker-video');
+    expect(daniel.track.attach).toHaveBeenCalledWith(video);
+    expect(video).not.toHaveClass('-scale-x-100');
+    expect(within(screen.getByRole('group', { name: 'Elena' })).queryByTestId('lobby-speaker-video')).toBeNull();
+  });
+
+  it('mirrors the viewer’s own preview', () => {
+    renderWithCameras(lobby([member('Adam', { role: 'host' })]), [camera('adam')]);
+    expect(screen.getByTestId('lobby-speaker-video')).toHaveClass('-scale-x-100');
+  });
+
+  it('never shows video for a listener or someone stepped out', () => {
+    renderWithCameras(
+      lobby([member('Adam', { role: 'host', stepped_out: true }), member('Sam', { role: 'listener' })]),
+      [camera('adam'), camera('sam')]
+    );
+    expect(screen.queryByTestId('lobby-speaker-video')).toBeNull();
+  });
+
+  it('detaches the video when the camera goes away', () => {
+    const daniel = camera('daniel');
+    const view = lobby([member('Daniel')]);
+    const { rerender } = renderWithCameras(view, [daniel]);
+    const video = screen.getByTestId('lobby-speaker-video');
+    rerender(
+      <LobbyVoiceStatesProvider value={{ speaking: new Set(), micOn: new Set(), cameras: new Map(), connected: true }}>
+        <LobbyPeople lobby={view} viewerId="Adam" ownAvailable={undefined} disagreements={null} />
+      </LobbyVoiceStatesProvider>
+    );
+    expect(daniel.track.detach).toHaveBeenCalledWith(video);
+    expect(screen.queryByTestId('lobby-speaker-video')).toBeNull();
   });
 });

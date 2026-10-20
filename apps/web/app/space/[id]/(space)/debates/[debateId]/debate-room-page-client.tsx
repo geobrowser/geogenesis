@@ -33,7 +33,7 @@ import {
 import { DebateRecordingStatusPill } from '~/core/debates/debate-recording-status-pill';
 import {
   CameraIcon,
-  LeaveIcon,
+  DebateLeaveButton,
   MicrophoneIcon,
   RecordingCircleButton,
   SpeakerIcon,
@@ -79,17 +79,14 @@ import {
   useMarkDebateReady,
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
-import {
-  useCarriedLobbyMic,
-  useConsumeDebateReturnDestination,
-  useLobbyRejoinOnLeave,
-} from '~/core/debates/lobbies/lobby-return';
+import { useCarriedLobbyChoice, useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
   DebateMediaSessionBoundary,
   type LocalTrackLike,
   debateMediaSessionKey,
+  preJoinMediaFailure,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
 import { OpenRoundPickCard, type OpenRoundPickContext } from '~/core/debates/open-round-pick-card';
@@ -131,6 +128,8 @@ import {
   isStorageQuotaError,
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
+import { readRematchJoinIntent, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
+import { joinStateNeedsOpening, kindsForJoinState, resolveJoinChoice } from '~/core/debates/request-join-state';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { isDebateInThankYouPeriod } from '~/core/debates/thank-you-period';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
@@ -358,7 +357,7 @@ export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClient
 
 function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const router = useRouter();
-  const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
+  const { consume: consumeDebateReturnDestination, returnsToLobby } = useDebateReturnNavigation();
   const mediaSession = useDebateMediaSession();
   const mediaSessionKey = debateMediaSessionKey(debateId);
   const {
@@ -447,11 +446,37 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const rematchLeaveRequestedRef = React.useRef(false);
   const rematchLeavePublishedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
-  const carriedMic = useCarriedLobbyMic();
-  const [audioMuted, setAudioMuted] = React.useState(carriedMic === false);
+
+  const carriedLobby = useCarriedLobbyChoice();
+  /*
+   * How this person joins, read once on arrival. A card that handed over its session (already
+   * active under this room's key) recorded its choice there; otherwise the picker or room that led
+   * here remembered one for this debate. First render only: claiming the session ends the hand-off.
+   */
+  const [arrivalJoinState] = React.useState(() => {
+    const handedOver = mediaSession.activeSessionKey === mediaSessionKey;
+    const chosen = handedOver ? mediaSession.joinChoiceRef.current : readRematchJoinIntent(debateId);
+    const { micOn, cameraOn } = resolveJoinChoice(chosen, carriedLobby, { micOn: true, cameraOn: true });
+    return { audioMuted: !micOn, videoEnabled: cameraOn };
+  });
+
+  const [audioMuted, setAudioMuted] = React.useState(arrivalJoinState.audioMuted);
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
-  const [videoEnabled, setVideoEnabled] = React.useState(true);
+  const [videoEnabled, setVideoEnabled] = React.useState(arrivalJoinState.videoEnabled);
+  /** The join state as last set, for the settle effect, which must not re-run on every change. */
+  const joinStateRef = React.useRef(arrivalJoinState);
+  const setJoinState = React.useCallback((next: { audioMuted: boolean; videoEnabled: boolean }) => {
+    joinStateRef.current = next;
+    setAudioMuted(next.audioMuted);
+    setVideoEnabled(next.videoEnabled);
+  }, []);
+  /** Why a device failed to open, shown beside the controls. */
+  const [deviceError, setDeviceError] = React.useState<{
+    message: string;
+    kinds: { audio: boolean; video: boolean };
+  } | null>(null);
+  const joinStateOpenAttemptRef = React.useRef(0);
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
   const [serverClockSettled, setServerClockSettled] = React.useState(false);
   const [noiseFilterStatus, setNoiseFilterStatus] = React.useState<DebateNoiseFilterStatus>('initializing');
@@ -1784,7 +1809,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           }
         }
 
-        const hasPreviewTracks = localTracksRef.current.length > 0;
+        // The intro publishes whatever the preview holds, nothing included: someone who chose to
+        // listen only still joins, and opening devices here would override that choice.
+        const hasPreviewTracks = localTracksRef.current.length > 0 || debateStatusRef.current === 'ready';
         connectionStage = 'local_tracks';
         const tracks = hasPreviewTracks
           ? localTracksRef.current
@@ -1833,8 +1860,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         connectionStage = 'local_preview';
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
         // `bindLocalVideo` runs off this and off the element callback ref, so whichever tile is
-        // mounted picks it up.
-        setPreviewStream(stream);
+        // mounted picks it up. A receive-only intro leaves the preview empty, so a device opened
+        // later reads as a new stream and republishes.
+        if (tracks.length > 0) setPreviewStream(stream);
         publishedStreamRef.current = stream;
 
         if (!isCurrent()) {
@@ -2005,17 +2033,99 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     };
   }, [connectionConflictSource, roomState]);
 
+  const liveKindsNow = React.useCallback(
+    () => mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind),
+    [mediaSession.localTracksRef]
+  );
+
+  /**
+   * Opens what `next` needs. On failure the join state falls back to the devices still live and
+   * the preview settles on them, so the controls stay up and the live device keeps publishing.
+   */
+  const openForJoinState = React.useCallback(
+    async (
+      next: { audioMuted: boolean; videoEnabled: boolean },
+      options: { forceRestart?: boolean; fromToggle?: boolean; retry?: boolean } = {}
+    ): Promise<boolean> => {
+      // Only the person's own toggles and retries supersede each other; the settle path must not
+      // clear their message.
+      const chosen = options.fromToggle || options.retry;
+      const attempt = chosen ? ++joinStateOpenAttemptRef.current : joinStateOpenAttemptRef.current;
+      if (chosen) setDeviceError(null);
+      const liveBefore = liveKindsNow();
+      const kinds = kindsForJoinState(next, liveBefore);
+      try {
+        await ensureLocalPreview({ ...kinds, forceRestart: options.forceRestart });
+        return true;
+      } catch (error) {
+        if (!mountedRef.current || attempt !== joinStateOpenAttemptRef.current) return false;
+        const live = liveKindsNow();
+        // With nothing live, outside a toggle, the preview's own error state explains it and offers
+        // a retry.
+        if (live.length === 0 && !options.fromToggle) return false;
+        const reverted = {
+          audioMuted: next.audioMuted || !live.includes('audio'),
+          videoEnabled: next.videoEnabled && live.includes('video'),
+        };
+        setJoinState(reverted);
+        const failed = options.forceRestart
+          ? kinds
+          : {
+              audio: kinds.audio && !liveBefore.includes('audio'),
+              video: kinds.video && !liveBefore.includes('video'),
+            };
+        setDeviceError({ message: preJoinMediaFailure(error, failed).message, kinds: failed });
+        await ensureLocalPreview(kindsForJoinState(reverted, live)).catch(() => undefined);
+        return false;
+      }
+    },
+    [ensureLocalPreview, liveKindsNow, setJoinState]
+  );
+
+  // Whatever opens the failed kind later, Ready or the settle path included, takes the message down.
+  React.useEffect(() => {
+    if (!deviceError) return;
+    const live = liveKindsNow();
+    if (deviceError.kinds.audio && !live.includes('audio')) return;
+    if (deviceError.kinds.video && !live.includes('video')) return;
+    setDeviceError(null);
+  }, [deviceError, liveKindsNow, previewStream]);
+
+  const ensureKindsForJoinState = React.useCallback(
+    (next: { audioMuted: boolean; videoEnabled: boolean }) => {
+      if (!joinStateNeedsOpening(next, liveKindsNow())) return;
+      void openForJoinState(next, { fromToggle: true });
+    },
+    [liveKindsNow, openForJoinState]
+  );
+
+  const retryMedia = React.useCallback(() => {
+    // Explicit kinds, and a restart only when nothing is live: restarting would stop a device the
+    // intro is publishing.
+    void openForJoinState({ audioMuted, videoEnabled }, { forceRestart: liveKindsNow().length === 0, retry: true });
+  }, [audioMuted, liveKindsNow, openForJoinState, videoEnabled]);
+
   const toggleAudioMuted = React.useCallback(() => {
-    setAudioMuted(current => !current);
-  }, []);
+    const next = { audioMuted: !audioMuted, videoEnabled };
+    setJoinState(next);
+    ensureKindsForJoinState(next);
+  }, [audioMuted, ensureKindsForJoinState, setJoinState, videoEnabled]);
+
+  const rememberJoinStateForPicker = React.useCallback(
+    (sessionId: string) =>
+      rememberRematchJoinIntent(sessionId, { micOn: !audioMuted, cameraOn: videoEnabled, source: 'room' }),
+    [audioMuted, videoEnabled]
+  );
 
   const toggleRemoteAudioEnabled = React.useCallback(() => {
     setRemoteAudioEnabled(current => !current);
   }, []);
 
   const toggleVideoEnabled = React.useCallback(() => {
-    setVideoEnabled(current => !current);
-  }, []);
+    const next = { audioMuted, videoEnabled: !videoEnabled };
+    setJoinState(next);
+    ensureKindsForJoinState(next);
+  }, [audioMuted, ensureKindsForJoinState, setJoinState, videoEnabled]);
 
   const savePickAsync = saveOpenRoundPick.mutateAsync;
   const pickOpenRound = React.useCallback(
@@ -2172,6 +2282,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       const destination = rematchDestination(session);
       if (destination && session) {
+        rememberJoinStateForPicker(session.id);
         await followDestination(destination, debateRematchDestinationClaimKey(session));
         return;
       }
@@ -2180,6 +2291,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     [
       debate,
       finishAndPersist,
+      rememberJoinStateForPicker,
       localMediaStreamRef,
       localTracksRef,
       locallyThanking,
@@ -2409,13 +2521,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const markLocalReady = React.useCallback(async () => {
     setRoomError(null);
+    // Ready needs both devices. A failure takes the toggle's way back, or with nothing live leaves
+    // the preview's error and a Try again that asks for both.
+    if (!(await openForJoinState({ audioMuted: false, videoEnabled: true }, { retry: true }))) return;
     try {
-      await ensureLocalPreview();
       await markReady.mutateAsync();
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not mark you ready.');
     }
-  }, [ensureLocalPreview, markReady]);
+  }, [markReady, openForJoinState]);
 
   const publishRematchLeave = React.useCallback(async () => {
     if (rematchLeavePublishedRef.current) return;
@@ -2623,6 +2737,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // This tab is idle in the room — another tab held it, or it dropped — so it follows only if no
     // tab nearer the viewer has already gone on (GEO-3149), and saves what a dropped call left it
     // holding before it does.
+    //
+    // The picker's state is recorded first: `leaveIdleRoom` ends with the navigation, and by then
+    // this tab's devices are gone.
+    rememberJoinStateForPicker(session.id);
     void leaveIdleRoom(() => followDestination(idleRematchDestination, debateRematchDestinationClaimKey(session)));
   }, [
     followDestination,
@@ -2632,6 +2750,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     leaveIdleRoom,
     locallyThanking,
     rematchQuery.data,
+    rememberJoinStateForPicker,
   ]);
 
   React.useEffect(() => {
@@ -2641,13 +2760,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     void requestPersistentRecordingStorage();
   }, [debate]);
 
+  /*
+   * Opens what the join state needs whenever the intro is idle: on arrival, and again after a drop
+   * stopped the devices. Keyed on the status, not the debate object, so a refetch does not re-run
+   * it over a toggle that is still opening.
+   */
+  const debateStatus = debate?.status;
   React.useEffect(() => {
-    if (!debate || debate.status !== 'ready' || roomState !== 'idle') return;
+    if (debateStatus !== 'ready' || roomState !== 'idle') return;
     // Warm the route's largest client-only dependency before the ten/finite-second connecting
     // window starts. The import is cached by the module loader; media preview remains independent.
     void import('livekit-client').catch(() => undefined);
-    void ensureLocalPreview().catch(() => undefined);
-  }, [debate, ensureLocalPreview, roomState]);
+    void openForJoinState(joinStateRef.current);
+  }, [debateStatus, openForJoinState, roomState]);
 
   React.useEffect(() => {
     if (!debate || roomState !== 'idle') return;
@@ -2656,9 +2781,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // and is deliberately gated on focus; auto-connecting here would just fight it.
     if (connectionConflictSource !== null) return;
     if (['complete', 'cancelled'].includes(debate.status)) return;
-    // Only once the preview owns the camera: `connect` creates its own tracks when it finds none,
-    // and racing `ensurePreview` for the device leaves one tab holding two captures.
-    if (debate.status === 'ready' && previewState !== 'ready') return;
+    // Only once the preview has settled, so the intro publishes what was chosen. `idle` is a
+    // settled choice to open nothing, and connects receive-only.
+    if (debate.status === 'ready' && !(previewState === 'ready' || (previewState === 'idle' && !previewBusy))) return;
     // `ready` and `connecting` are separate opportunities, so a failed intro connection does not
     // spend the one the debate depends on. A successful one is held by the `roomState` guard.
     const autoConnectKey = `${debate.id}:${debate.status === 'ready' ? 'intro' : 'debate'}`;
@@ -2666,7 +2791,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     autoConnectAttemptedRef.current = autoConnectKey;
     setAutoConnectAttemptedKey(autoConnectKey);
     void connect();
-  }, [connect, connectionConflictSource, debate, previewState, roomState]);
+  }, [connect, connectionConflictSource, debate, previewBusy, previewState, roomState]);
 
   /**
    * Picking a different camera or microphone restarts the preview, which stops the tracks the room
@@ -2940,7 +3065,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             previewState={previewState}
             previewBusy={previewBusy}
             switchingDevice={replacingPreview}
-            error={roomError}
+            error={roomError ?? deviceError?.message ?? null}
             mediaError={previewError}
             audioInputDevices={audioInputDevices}
             audioOutputDevices={audioOutputDevices}
@@ -2953,7 +3078,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onAudioInputChange={changeAudioInput}
             onAudioOutputChange={changeAudioOutput}
             onVideoInputChange={changeVideoInput}
-            onRetryMedia={() => void ensureLocalPreview({ forceRestart: true }).catch(() => undefined)}
+            onRetryMedia={retryMedia}
             devicesLocked={
               Boolean(preScreenLocalParticipant?.ready_at) || roomState === 'connecting' || roomState === 'reconnecting'
             }
@@ -2964,6 +3089,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onTakeOverConnection={takeOverConnection}
             readyBusy={markReady.isPending}
             onReady={markLocalReady}
+            returnsToLobby={returnsToLobby}
             onLeave={leave}
             leaveDisabled={abortDebate.isPending}
           />
@@ -3047,6 +3173,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
+                returnsToLobby={returnsToLobby}
                 onLeave={leave}
                 leaveDisabled={abortDebate.isPending || recordingModalRoomState === 'saving'}
               />
@@ -3089,6 +3216,7 @@ function DebateRecordingModal({
   canRetryConnection,
   onRetryConnection,
   onLeave,
+  returnsToLobby,
   leaveDisabled,
 }: {
   debate: Debate;
@@ -3124,10 +3252,10 @@ function DebateRecordingModal({
   canRetryConnection: boolean;
   onRetryConnection: () => void;
   onLeave: () => void;
+  returnsToLobby: boolean;
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
-  const requestLobbyRejoinOnLeave = useLobbyRejoinOnLeave();
   const localParticipant =
     (localSlot
       ? debate.participants.find(participant => participant.participant_slot === localSlot)
@@ -3183,12 +3311,13 @@ function DebateRecordingModal({
   const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot, stamps);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
   const thankingSlot = reveal.holdsEndCard ? null : thankingParticipantSlot(debate, countdown);
-  const localInactive = participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
-  const remoteInactive = participantIsInactive(
-    countdown.effectiveStatus,
-    remoteParticipant?.participant_slot ?? null,
-    countdown.activeSlot
-  );
+  // Match the audio gate: both microphones are open during the pick, reveal and count-in.
+  const betweenRounds = isBetweenOpenRounds(countdown.openRounds);
+  const localInactive =
+    !betweenRounds && participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
+  const remoteInactive =
+    !betweenRounds &&
+    participantIsInactive(countdown.effectiveStatus, remoteParticipant?.participant_slot ?? null, countdown.activeSlot);
   const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
   const speakingTurn = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot !== null;
   // The speaker's last five seconds, when the timer warns, and in Open rounds the tile's outline
@@ -3220,7 +3349,7 @@ function DebateRecordingModal({
     countdown.effectiveStatus !== 'thanking' &&
     countdown.activeSlot === null &&
     countdown.yieldingSlot === null &&
-    !isBetweenOpenRounds(countdown.openRounds)
+    !betweenRounds
       ? countdownRing
       : null;
   const localCountdown = localEndingTurn
@@ -3251,12 +3380,14 @@ function DebateRecordingModal({
   const connecting = countdown.effectiveStatus === 'connecting';
   const remoteEndingTurn =
     countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
+  // Only a yield that hands over to the other speaker gets a handoff window to stamp "Turn ended" and
+  // name their turn in. Any other closes as soon as geo-chat accepts it (GEO-3347).
+  const localYieldHandsOver = localEndingTurn && turnYieldHandsOver(debate, countdown.turnIndex);
   // You ended your turn and theirs follows straight on, which they are counted into on their own
   // screen. Otherwise the pick, a lead-in or the end comes next.
   const remoteTurnIsNext =
     stamps &&
-    localEndingTurn &&
-    openRoundRunsStraightOn(debate, countdown.turnIndex) &&
+    localYieldHandsOver &&
     countdown.incomingSlot !== null &&
     countdown.incomingSlot === remoteParticipant?.participant_slot;
   const remoteSpeaking = remoteParticipant !== null && countdown.activeSlot === remoteParticipant.participant_slot;
@@ -3285,6 +3416,7 @@ function DebateRecordingModal({
       upcomingSeconds={localUpcomingSeconds}
       upcomingLabel={localUpcomingLabel}
       endingTurn={localEndingTurn}
+      turnEndedStamp={localYieldHandsOver}
       endTurnAction={
         canEndLocalTurn || (endTurnPending && localEndingTurn) ? (
           <button
@@ -3438,15 +3570,13 @@ function DebateRecordingModal({
               requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
             />
           )}
-          <RecordingCircleButton
-            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
+          <DebateLeaveButton
+            returnsToLobby={returnsToLobby}
+            saving={roomState === 'saving'}
             onClick={onLeave}
             disabled={leaveDisabled}
             className="ml-auto shrink-0"
-          >
-            <LeaveIcon />
-          </RecordingCircleButton>
+          />
         </div>
 
         {/* A size container, so the Open rounds panel and banners over the tiles size with them. */}
@@ -3513,12 +3643,9 @@ function DebateRecordingModal({
         <DebateHandoffNotice
           opponentName={remoteName}
           waitingForOpponent={rematchSession !== null && !remoteConsented}
-          // The only way out while the room is hidden, so it rejoins the lobby the way the end
-          // card's "Back to <lobby>" row did, and the picker's Leave does.
-          onLeave={() => {
-            requestLobbyRejoinOnLeave();
-            onLeave();
-          }}
+          // The only way out while the room is hidden; a lobby it returns to joins on arrival.
+          onLeave={onLeave}
+          returnsToLobby={returnsToLobby}
           leaveDisabled={leaveDisabled}
         />
       )}
@@ -3815,11 +3942,13 @@ function DebateHandoffNotice({
   opponentName,
   waitingForOpponent,
   onLeave,
+  returnsToLobby,
   leaveDisabled,
 }: {
   opponentName: string;
   waitingForOpponent: boolean;
   onLeave: () => void;
+  returnsToLobby: boolean;
   leaveDisabled: boolean;
 }) {
   return (
@@ -3834,7 +3963,7 @@ function DebateHandoffNotice({
               onClick={onLeave}
               disabled={leaveDisabled}
             >
-              Leave
+              {returnsToLobby ? 'Back to lobby' : 'Leave'}
             </SmallButton>
           }
         >
@@ -3926,6 +4055,17 @@ export function localTurnStartsInSeconds(
 function openRoundRunsStraightOn(debate: Debate, turnIndex: number | null) {
   if (turnIndex === null) return false;
   return openRoundLastWord(debate, turnIndex) === null && openRoundLeadInAfterTurn(debate, turnIndex) === 0;
+}
+
+/**
+ * Whether ending a turn early hands over to the other speaker, the only yield geo-chat gives a
+ * handoff window, as its `ends_round` rule has it. An Open round's second turn hands over to the
+ * pick, a required round's lead-in or the end, and the debate's last turn to the end; either yield
+ * closes the moment the server accepts it.
+ */
+function turnYieldHandsOver(debate: Debate, turnIndex: number | null) {
+  if (turnIndex === null || turnIndex + 1 >= debate.turn_durations_ms.length) return false;
+  return !isOpenRoundsDebate(debate) || turnIndex % 2 === 0;
 }
 
 function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex: number): ParticipantSlot {

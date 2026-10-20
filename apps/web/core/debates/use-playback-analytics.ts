@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { type AnalyticsEventName, capture } from '~/core/analytics';
+import { WATCH_DEBATE_MS, pushMarketingEvent } from '~/core/marketing-events';
 
 import type { Debate } from './api';
 import { createPlaybackMeasurement } from './playback-analytics';
@@ -20,6 +21,9 @@ export function usePlaybackAnalytics(
   // Which media this instance has already reported exposed, so re-binding to re-attached elements
   // doesn't report it again under the same `exposure_id`.
   const exposedFor = React.useRef<string | null>(null);
+  // Watch time toward the marketing "watched" event, kept across re-binds for the same media like
+  // the exposure latch, so a player swapping its <video> elements neither restarts nor repeats it.
+  const watched = React.useRef({ key: '', ms: 0, reported: false });
   // Interval numbering continues across re-binds for the same media, like the exposure latch.
   const intervalSequence = React.useRef({ key: '', count: 0 });
   const elementRef = React.useRef<HTMLDivElement>(null);
@@ -76,6 +80,8 @@ export function usePlaybackAnalytics(
       }
     };
     if (intervalSequence.current.key !== exposureKey) intervalSequence.current = { key: exposureKey, count: 0 };
+    if (watched.current.key !== exposureKey) watched.current = { key: exposureKey, ms: 0, reported: false };
+    let lastWatchedTick: number | null = null;
     const clock = createPlaybackMeasurement(properties =>
       emit('debate_playback_interval', { ...properties, interval_sequence: ++intervalSequence.current.count })
     );
@@ -94,15 +100,26 @@ export function usePlaybackAnalytics(
         exposedFor.current = exposureKey;
         emit('debate_exposed', { exposure_id: instance, visibility_rule: 'player-60pct-1s-v1' });
       }
+      const eligible =
+        inView &&
+        mediaMs >= 0 &&
+        !state.controller.isScrubbing &&
+        [primary, secondary].every(video => !video.paused && !video.ended && !video.seeking && video.readyState >= 3);
+      // The playback intervals' eligibility, unmuted only, summed across intervals.
+      if (!eligible || state.controller.mutedByUser) lastWatchedTick = null;
+      else {
+        if (lastWatchedTick !== null) watched.current.ms += now - lastWatchedTick;
+        lastWatchedTick = now;
+        if (!watched.current.reported && watched.current.ms >= WATCH_DEBATE_MS) {
+          watched.current.reported = true;
+          pushMarketingEvent('geo_watch_debate', { debate_id: debate.id });
+        }
+      }
       clock.sample({
         now,
         mediaMs: durationMs > 0 ? Math.min(mediaMs, durationMs) : mediaMs,
         durationMs,
-        eligible:
-          inView &&
-          mediaMs >= 0 &&
-          !state.controller.isScrubbing &&
-          [primary, secondary].every(video => !video.paused && !video.ended && !video.seeking && video.readyState >= 3),
+        eligible,
         muted: state.controller.mutedByUser,
         trigger: trigger.current,
       });
