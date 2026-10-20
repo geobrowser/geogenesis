@@ -8,7 +8,7 @@ import { type EntitySidePanelTarget, entitySidePanelAtom, openEntitySidePanelAto
 
 export type OpenSidePanelOptions = Pick<
   EntitySidePanelTarget,
-  'openedFromReviewEdits' | 'forceRequestedSpace' | 'scrollToComments'
+  'openedFromReviewEdits' | 'forceRequestedSpace' | 'scrollToComments' | 'initialTab'
 >;
 
 export function useEntitySidePanel() {

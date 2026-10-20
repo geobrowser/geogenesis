@@ -63,6 +63,8 @@ describe('FeatureFlagsDialog', () => {
         debateFormatSelector: true,
         exploreSidePanel: false,
         forYouFeed: false,
+        lobbyHosting: false,
+        debateVideo: false,
         bountiesTab: true,
       });
     });

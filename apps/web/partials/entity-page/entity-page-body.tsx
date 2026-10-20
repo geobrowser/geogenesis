@@ -7,6 +7,7 @@ import {
   CLAIM_PAGE_CONTENT_MAX_WIDTH,
   ClaimPageView,
 } from '~/core/claims/browse/claim-page-view';
+import { FollowButton } from '~/core/follows/follow-button';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -21,7 +22,7 @@ import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entit
 import { Spacer } from '~/design-system/spacer';
 
 import { CommentSection } from '~/partials/comments/comments-section';
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import {
   commentTargetEntityType,
@@ -138,6 +139,31 @@ function EditorFooter({
 }
 
 /**
+ * What the claim and topic views add beneath themselves while editing.
+ *
+ * The read views leave out the generic page's "Referenced by" list; it is an editor's tool there,
+ * so it comes back in edit mode only. Unlike the property toggle it ignores `hideProperties`,
+ * matching the generic `EditorFooter`, which shows backlinks in the side panel too.
+ */
+function CustomViewEditFooter({
+  entityId,
+  spaceId,
+  hideProperties = false,
+}: {
+  entityId: string;
+  spaceId: string;
+  hideProperties?: boolean;
+}) {
+  return (
+    <>
+      {hideProperties ? null : <ToggleEntityPage id={entityId} spaceId={spaceId} />}
+      <Spacer height={40} />
+      <EntityBacklinks entityId={entityId} />
+    </>
+  );
+}
+
+/**
  * Which custom read view this entity gets, if any.
  *
  * Claims keep their custom surface while editing, matching personal-space profiles: product-owned
@@ -211,6 +237,9 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   // Claim and Topic both return before the generic EditorFooter, so keeping initialization there
   // makes both custom routes self-blocking. Side panels own their edit intent and do not use this.
   const routeEditInitializer = props.variant === 'route' ? <AutomaticModeToggle /> : null;
+  const customViewFooter = isEditing ? (
+    <CustomViewEditFooter entityId={entityId} spaceId={spaceId} hideProperties={props.hideProperties} />
+  ) : undefined;
 
   if (customView === 'claim') {
     const showClaimMedia = props.variant === 'sidePanel' || props.showCover !== false;
@@ -243,7 +272,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
           isEditing={isEditing}
-          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
+          footer={customViewFooter}
         />
       </>
     );
@@ -275,7 +304,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
           isEditing={isEditing}
-          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
+          footer={customViewFooter}
         />
       </>
     );
@@ -343,8 +372,20 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     const { isRelationPage = false, previewName, previewDescription, notice, belowBodySlot, hideProperties } = props;
     const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
     const heading = <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />;
+    // A profile is followed, not voted on (GEO-3236): Follow, by the personal space this view is
+    // only ever shown for, stands where the votes were.
     const actions = (
-      <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={!isRelationPage} compact={isPersonProfile} />
+      <EntityPageActions
+        entityId={entityId}
+        spaceId={spaceId}
+        isVoteable={!isRelationPage && !isPersonProfile}
+        compact={isPersonProfile}
+        leading={
+          isPersonProfile ? (
+            <FollowButton target={{ kind: 'person', id: spaceId, name: entity?.name ?? previewName }} />
+          ) : null
+        }
+      />
     );
 
     return (
@@ -364,7 +405,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           <div>
             <div className="space-y-2">
               {isPersonProfile ? (
-                // The mobile profile keeps voting, history and the overflow
+                // The mobile profile keeps Follow, history and the overflow
                 // menu beside the name, wrapping only when space runs out.
                 <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                   <div className="min-w-0 grow">{heading}</div>

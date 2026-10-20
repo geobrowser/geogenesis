@@ -56,7 +56,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: {} }) }));
 
 vi.mock('~/core/io/queries', () => ({
-  getClaimResponseSummaryPage: () => Effect.succeed([]),
+  getClaimResponseSummaryPage: () => Effect.succeed({ items: [], endCursor: null, hasNextPage: false }),
   getEntityResponseCounts: () => Effect.succeed({ positive: 2, negative: 1 }),
   getEntityResponders: () => Effect.succeed([]),
   getSpaces: () => Effect.succeed([]),
@@ -64,6 +64,9 @@ vi.mock('~/core/io/queries', () => ({
 }));
 
 vi.mock('~/core/io/subgraph/fetch-profile', () => ({ fetchProfilesBySpaceIds: () => Effect.succeed([]) }));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: 'profile-1', isRegistered: true, isLoading: false }),
+}));
 vi.mock('~/core/state/pending-personal-space', () => ({ usePendingPersonalSpace: () => ({ isPending: false }) }));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
 vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({ ClaimResponderAvatars: () => null }));

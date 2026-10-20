@@ -3,7 +3,7 @@
 import { type ClaimResponseState, useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import type { SavePromptSurface } from '~/core/state/save-votes-prompt';
 import type { Entity } from '~/core/types';
 
 /**
@@ -11,7 +11,7 @@ import type { Entity } from '~/core/types';
  *
  * `useClaimResponseState` already exists because five surfaces were each assembling the same
  * derivation from the same two inputs, and the copies drifted. The layer immediately above it then
- * grew the same way: every caller pairs it with `usePrivySignIn` and `useClaimPositionControl`, and
+ * grew the same way: every caller pairs it with `useClaimPositionControl`, and
  * every one of them has to know that `answersReady` is `isResponseKindResolved &&
  * isViewerResponseResolved` — a conjunction whose whole purpose is to stop a click publishing the
  * wrong vote kind, spelled out by hand at each call site. That is the same bug with a longer fuse,
@@ -36,15 +36,17 @@ export function useDebateClaimResponse({
   spaceId,
   row,
   entity,
+  savePromptSurface,
 }: {
   claimId: string;
   spaceId: string;
+  /** Where the save sheet's first ask comes; see `SavePromptSurface`. */
+  savePromptSurface?: SavePromptSurface;
   /** geo-chat's row, where it has one. Null in the spaces it does not index, and before it answers. */
   row: DebateClaim | null;
   /** The claim on the graph, which carries the factual flag geo-chat's row would otherwise report. */
   entity: Entity | null;
 }): ClaimResponseState & { control: ReturnType<typeof useClaimPositionControl> } {
-  const promptSignIn = usePrivySignIn();
   const state = useClaimResponseState({ claimId, spaceId, row, entity });
 
   const control = useClaimPositionControl({
@@ -53,8 +55,9 @@ export function useDebateClaimResponse({
     readiness: state.readiness,
     answersReady: state.isResponseKindResolved && state.isViewerResponseResolved,
     responseBlockedReason: state.responseBlockedReason,
-    onRequireSignIn: promptSignIn,
+    allowsSignedOutVotes: true,
     offersDebate: false,
+    savePromptSurface,
   });
 
   return { ...state, control };

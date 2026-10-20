@@ -51,12 +51,16 @@ export function DebateTileToggleButton({
   enabled,
   onClick,
   disabled,
+  compact = false,
+  appearance = 'default',
   children,
 }: {
   ariaLabel: string;
   enabled: boolean;
   onClick: () => void;
   disabled?: boolean;
+  compact?: boolean;
+  appearance?: 'default' | 'overlay';
   children: React.ReactNode;
 }) {
   return (
@@ -71,8 +75,15 @@ export function DebateTileToggleButton({
       onClick={onClick}
       disabled={disabled}
       className={cx(
-        'grid size-10 place-items-center rounded-full shadow-light transition disabled:opacity-50',
-        enabled ? 'bg-text text-white hover:bg-text/85' : 'bg-red-03 text-red-01 hover:bg-red-03/85'
+        'grid place-items-center rounded-full shadow-light transition disabled:opacity-50',
+        compact ? 'size-8 [&>svg]:size-3' : 'size-10',
+        appearance === 'overlay'
+          ? enabled
+            ? 'bg-divider text-text hover:bg-white'
+            : 'bg-red-01 text-white hover:bg-red-01/85'
+          : enabled
+            ? 'bg-text text-white hover:bg-text/85'
+            : 'bg-red-03 text-red-01 hover:bg-red-03/85'
       )}
     >
       {children}

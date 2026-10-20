@@ -32,7 +32,12 @@ export function useOnboarding() {
 
   const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
   const [dismissedAtPath, setDismissedAtPath] = useAtom(onboardingDismissedAtPathAtom);
-  const { isRegistered, isFetched, isLoading } = usePersonalSpaceId();
+  const { isRegistered, needsProfile, isFetched, isLoading } = usePersonalSpaceId();
+  // A registered account whose profile publish never landed onboards again: re-running
+  // creation skips the registration it already has and publishes only the profile.
+  // Without this the account was treated as done for good, with no name, no page, and
+  // no way back into setup from any browser.
+  const needsSetup = !isRegistered || needsProfile;
   // While a brand-new account's personal space is being created in the
   // background, the user is optimistically "logged in" — don't re-pop the
   // onboarding dialog just because the indexer hasn't confirmed registration.
@@ -44,7 +49,7 @@ export function useOnboarding() {
   const onboardingDismissed = dismissedAtPath !== null && dismissedAtPath === pathname;
 
   const shouldOnboard =
-    isFetched && !isLoading && !isRegistered && user && !suppress && !onboardingDismissed && !pendingSetupTopicId;
+    isFetched && !isLoading && needsSetup && user && !suppress && !onboardingDismissed && !pendingSetupTopicId;
 
   // Set the onboarding to visible the first time we fetch the
   // profile for the user. Any subsequent changes to the visibility
@@ -71,7 +76,7 @@ export function useOnboarding() {
     onConnect(data) {
       const { address } = data;
 
-      if (address && isFetched && !isRegistered && !suppress && !onboardingDismissed && !pendingSetupTopicId) {
+      if (address && isFetched && needsSetup && !suppress && !onboardingDismissed && !pendingSetupTopicId) {
         setIsOnboardingVisible(true);
       }
     },

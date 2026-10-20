@@ -23,6 +23,16 @@ describe('PERMISSIONLESS_ACTIONS', () => {
     const expected = keccak256(stringToHex('PERMISSIONLESS.UNVOTED'));
     expect(PERMISSIONLESS_ACTIONS.UNVOTED).toBe(expected);
   });
+
+  it('INTERESTED matches keccak256("PERMISSIONLESS.INTERESTED")', () => {
+    const expected = keccak256(stringToHex('PERMISSIONLESS.INTERESTED'));
+    expect(PERMISSIONLESS_ACTIONS.INTERESTED).toBe(expected);
+  });
+
+  it('UNINTERESTED matches keccak256("PERMISSIONLESS.UNINTERESTED")', () => {
+    const expected = keccak256(stringToHex('PERMISSIONLESS.UNINTERESTED'));
+    expect(PERMISSIONLESS_ACTIONS.UNINTERESTED).toBe(expected);
+  });
 });
 
 describe('encodeEntityVoteTopic', () => {

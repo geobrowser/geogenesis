@@ -22,6 +22,7 @@ const EXPLORE_FOR_YOU_SOURCE = /* GraphQL */ `
     $createdAfter: String
     $filter: EntityFilter
     $maxPerTopic: Int
+    $debateTaggedClaims: Boolean
     $spaceIdsForLists: [UUID!]!
   ) {
     entitiesRankedForTopicsConnection(
@@ -33,6 +34,7 @@ const EXPLORE_FOR_YOU_SOURCE = /* GraphQL */ `
       createdAfter: $createdAfter
       filter: $filter
       maxPerTopic: $maxPerTopic
+      debateTaggedClaims: $debateTaggedClaims
     ) {
       nodes {
         matchedTopicIds(topicIds: $topicIds)

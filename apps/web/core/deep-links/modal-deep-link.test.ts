@@ -121,6 +121,13 @@ describe('toModal', () => {
     );
   });
 
+  // GEO-3152: the calendar's Back to Debates returns to a page that may carry its own state.
+  it("merges into a path's own query and keeps its fragment", () => {
+    expect(toModal({ modal: 'debates', pathname: '/space/abc?proposal=1#votes' })).toBe(
+      '/space/abc?proposal=1&modal=debates#votes'
+    );
+  });
+
   it('round-trips through the readers', () => {
     const url = new URL(toModal({ modal: 'signin', pathname: '/explore', via: 'marketing' }), 'https://geobrowser.io');
 

@@ -12,6 +12,7 @@ const marketingOrigin = 'https://geo-website-livid.vercel.app';
 const marketingPaths = [
   '/',
   '/terms',
+  '/www/:path*',
   '/api/subscribe',
   '/_marketing/:path*',
   '/opengraph-image.jpg',

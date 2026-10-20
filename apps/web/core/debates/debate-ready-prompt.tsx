@@ -11,7 +11,9 @@ import { markEnteringDebate } from './debate-entry-intent';
 import { DebateRequestDialog } from './debate-request-dialog';
 import { debatePath } from './debate-routes';
 import { useAbortDebate, useClearDebateActivity } from './hooks';
+import { routeIntoDebate } from './lobbies/step-out';
 import { SpaceChip } from './matchmaking/matchmaking-claim-card';
+import { debateMediaSessionKey } from './media-session';
 
 /**
  * GEO-2514. Accepting a request creates the debate outright — there is no match prompt in between
@@ -37,7 +39,7 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
     if (joining) return;
     setJoining(true);
     markEnteringDebate(debate.id);
-    startJoining(() => router.push(debatePath(debate)));
+    routeIntoDebate(() => startJoining(() => router.push(debatePath(debate))));
   };
 
   /**
@@ -69,9 +71,11 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
   return (
     <DebateRequestDialog
       claim={debate.claim.claim}
+      media={{ kind: 'choose', sessionKey: debateMediaSessionKey(debate.id) }}
       participants={debate.participants}
       currentUserId={currentUserId}
       formatId={debate.turn_format_id}
+      openRounds={debate.open_rounds}
       busy={abortDebate.isPending}
       error={declineError}
       actionsLayout="split"
@@ -98,7 +102,7 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
  * every Debate control, so an activity payload reported without its participants would otherwise
  * leave the viewer with no way in and no way out.
  */
-export function DebateRejoinBar({ debate }: { debate: Debate }) {
+export function DebateRejoinBar({ debate, openInAnotherTab = false }: { debate: Debate; openInAnotherTab?: boolean }) {
   const router = useRouter();
   const [joining, setJoining] = React.useState(false);
   const [, startJoining] = React.useTransition();
@@ -111,15 +115,19 @@ export function DebateRejoinBar({ debate }: { debate: Debate }) {
         onClick={() => {
           setJoining(true);
           markEnteringDebate(debate.id);
-          startJoining(() => router.push(debatePath(debate)));
+          routeIntoDebate(() => startJoining(() => router.push(debatePath(debate))));
         }}
         className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full bg-text py-2 pr-2 pl-4 text-white shadow-card transition-opacity hover:opacity-90 disabled:opacity-70"
       >
         <Text as="span" variant="metadata" color="white" className="truncate">
-          {debate.status === 'ready' ? 'Your debate is ready' : 'Your debate is under way'}
+          {openInAnotherTab
+            ? 'Your debate is open in another tab'
+            : debate.status === 'ready'
+              ? 'Your debate is ready'
+              : 'Your debate is under way'}
         </Text>
         <span className="shrink-0 rounded-full bg-white px-3 py-0.5 text-metadata text-text">
-          {joining ? 'Joining…' : 'Join'}
+          {joining ? 'Joining…' : openInAnotherTab ? 'Open here' : 'Join'}
         </span>
       </button>
     </div>

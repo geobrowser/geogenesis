@@ -13,6 +13,7 @@ import {
   resetAuthAttempt,
   trackAuthOnboarding,
 } from './auth-attempt';
+import { saveVotesSignInProperties } from './save-votes-analytics';
 
 const capture = vi.hoisted(() => vi.fn());
 vi.mock('./analytics', () => ({ capture }));
@@ -37,6 +38,46 @@ const entry = {
   playback_position_ms: 30000,
   item_position: 4,
 };
+// Copilot on #2785 (round 4): the property was set by the save prompts and stripped here.
+it('keeps how many device votes a save sign-in was started for, through to its events', () => {
+  const attempt = beginAuthAttempt(saveVotesSignInProperties('navbar', 3));
+
+  expect(attempt.properties).toMatchObject({ auth_intent: 'save_votes', auth_control: 'navbar', local_vote_count: 3 });
+  expect(capture).toHaveBeenCalledWith(
+    'auth_attempt_started',
+    expect.objectContaining({ auth_intent: 'save_votes', local_vote_count: 3 })
+  );
+});
+
+// GEO-3243: the personal space runner can resolve one creation twice, by design, and each reported it.
+it('reports each onboarding step once per sign-in attempt', () => {
+  const attempt = beginAuthAttempt(entry);
+  finishAuthAttempt('signed_up', attempt);
+  capture.mockClear();
+
+  trackAuthOnboarding('personal_space', 'completed');
+  trackAuthOnboarding('personal_space', 'completed');
+  trackAuthOnboarding('start', 'viewed');
+
+  const progress = capture.mock.calls.filter(([event]) => event === 'auth_onboarding_progress');
+  expect(progress.map(([, properties]) => [properties.onboarding_step, properties.outcome])).toEqual([
+    ['personal_space', 'completed'],
+    ['start', 'viewed'],
+  ]);
+});
+
+// GEO-3126: a sign-up from a lobby's shared link is counted by these fields on the completed attempt.
+it('carries a lobby sign-in’s target and link source through to the completed attempt', () => {
+  const lobby = { link_source: 'lobby', auth_control: 'join_lobby', target_type: 'debate_lobby', target_id: 'lobby1' };
+  beginAuthAttempt(lobby);
+  openAuthAttempt();
+  finishAuthAttempt('signed_up');
+
+  for (const event of ['auth_attempt_started', 'auth_prompt_viewed', 'auth_attempt_completed']) {
+    expect(capture).toHaveBeenCalledWith(event, expect.objectContaining(lobby));
+  }
+});
+
 describe('durable sign-in attempts', () => {
   it('retains an immutable entry through navigation and a new tab', () => {
     const properties = { ...entry, origin_entity_ids: ['debate-1'], email: 'not-stored@example.com' };

@@ -51,6 +51,21 @@ afterEach(() => {
 });
 
 describe('DebateRoomJoinPrompt', () => {
+  // GEO-3133. A reminded lobby rides the same banner with its own copy.
+  it('names a reminded lobby and offers Join lobby', () => {
+    const { container } = render(
+      <DebateRoomJoinPrompt room={room({ kind: 'lobby', name: 'Debate hour' })} onNotNow={vi.fn()} />
+    );
+
+    expect([...container.querySelectorAll('p')].map(line => line.textContent)).toEqual([
+      'Debate hour is open',
+      'A debate lobby you asked to be reminded of',
+      'Scheduled in 8 mins',
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Join lobby' }));
+    expect(mocks.push).toHaveBeenCalledWith('/debate/room-1');
+  });
+
   it('says the room is open, whether the opponent is in, then when it was scheduled', () => {
     mocks.opponent = ALEX;
     const { container } = render(<DebateRoomJoinPrompt room={room()} onNotNow={vi.fn()} />);

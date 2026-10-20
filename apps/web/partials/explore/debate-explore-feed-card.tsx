@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { useAtomValue, useSetAtom } from 'jotai';
 
 import { ActionSurfaceArticle } from '~/core/action-context-provider';
@@ -9,17 +10,21 @@ import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
-import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
+import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
+import { DebateShareDialog } from '~/core/debates/browse/lazy-share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
+import { fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
+import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
+import { useCoveredByMobileSheet } from '~/core/state/mobile-sheet-cover';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FullscreenLink } from '~/design-system/fullscreen-link';
@@ -170,11 +175,15 @@ export function DebateExploreFeedCard({
   // report at the 0.4 threshold deactivates rather than landing ambiguously inside the band —
   // a ratio reported exactly at a threshold is the normal case, not an edge case.
   const [active, setActive] = React.useState(false);
+  // Any part of the card on screen. The observer reports crossing in and out of view as well as
+  // its two thresholds, so this needs no threshold of its own.
+  const [onScreen, setOnScreen] = React.useState(false);
   React.useEffect(() => {
     if (!container) return;
     const observer = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
+          setOnScreen(entry.isIntersecting);
           setActive(current => {
             if (!entry.isIntersecting) return false;
             if (entry.intersectionRatio >= ACTIVATE_RATIO) return true;
@@ -189,11 +198,46 @@ export function DebateExploreFeedCard({
     return () => observer.disconnect();
   }, [container]);
 
+  /*
+   * Whether this card is the one the viewer is scrolling towards: its top in the lower three
+   * quarters of the screen or within one screen below it, and not yet active. The player loads such a card's
+   * opening seconds (its `buffer`) so it starts the moment it is reached instead of on its clips.
+   * Ahead only — a card the viewer has scrolled past is not coming back on its own.
+   *
+   * Its own observer, on a root extended one screen down, with enough thresholds to notice a card
+   * leaving through the top as well as one arriving from below.
+   */
+  const [upNext, setUpNext] = React.useState(false);
+  React.useEffect(() => {
+    if (!container) return;
+    const observer = new IntersectionObserver(
+      entries => {
+        for (const entry of entries) {
+          const viewportHeight = entry.rootBounds?.height ?? window.innerHeight;
+          setUpNext(entry.isIntersecting && entry.boundingClientRect.top > viewportHeight / 4);
+        }
+      },
+      { rootMargin: '0px 0px 100% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] }
+    );
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [container]);
+
   // A veto, not a replacement: where a surface holds playback to one debate —
   // a row of cards, all of them fully on screen at once — this says whether it
   // is this one's turn. A card that is allowed but scrolled away still stops,
   // because its own judgement above is unchanged.
   const playbackAllowed = useDebatePlaybackAllowed(debateId);
+  // A card nobody can see stops playing and lets go of its media: behind a mobile sheet (the side
+  // panel, the Debates hub), or off screen on the mobile layout. Paused video still holds its
+  // decoders and buffered frames, and on a phone that adds up to a reloaded tab. The card keeps its
+  // signed URLs, so it reattaches quickly (GEO-3067's `releaseMedia`). Cards inside a sheet, like a
+  // profile's Activity gallery, are not covered by it. Desktop keeps off-screen cards loaded so
+  // the next one starts at once.
+  const coveredBySheet = useCoveredByMobileSheet();
+  const isMobileLayout = useIsMobileLayout();
+  // The card up next keeps its media too, so what it has loaded is there when it arrives.
+  const releaseMedia = coveredBySheet || (isMobileLayout && !onScreen && !upNext);
 
   const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
@@ -380,6 +424,7 @@ export function DebateExploreFeedCard({
             <div className="ml-auto flex shrink-0 items-center gap-1">
               {endSlot}
               <FullscreenLink
+                requiresFullPage
                 href={NavUtils.toEntity(item.spaceId, item.entityId)}
                 entityId={item.entityId}
                 spaceId={item.spaceId}
@@ -406,10 +451,15 @@ export function DebateExploreFeedCard({
             // that same window unmounts this subtree instead of retaining two paused videos forever.
             <DebateCardVideos
               debate={readyDebate}
-              active={active && playbackAllowed}
+              stills={item.debatePosters}
+              active={active && playbackAllowed && !coveredBySheet}
+              upNext={upNext && !active && !coveredBySheet}
+              releaseMedia={releaseMedia}
               reducedOverlays={compactChrome}
               onOpenClaims={openClaims}
             />
+          ) : item.debatePosters ? (
+            <DebatePosterSkeleton debateId={debateId} posters={item.debatePosters} compact={compactChrome} />
           ) : (
             <DebateVideoSkeleton />
           )}
@@ -464,25 +514,76 @@ export function DebateExploreFeedCard({
 // there is no reason to re-run the whole subtree for a flag it does not read.)
 const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
+  stills,
   active,
+  upNext,
+  releaseMedia,
   reducedOverlays,
   onOpenClaims,
 }: {
   debate: Debate;
+  stills: ExploreFeedItem['debatePosters'];
   active: boolean;
+  upNext: boolean;
+  releaseMedia: boolean;
   reducedOverlays: boolean;
   onOpenClaims: () => void;
 }) {
   return (
     <DebateFeedPlayer
       debate={debate}
+      stills={stills}
       active={active}
       preload
+      buffer={upNext}
+      releaseMedia={releaseMedia}
+      holdFullPlayback={DEBATE_FEED_HOLDS_FULL_PLAYBACK}
       reducedOverlays={reducedOverlays}
       onOpenClaims={onOpenClaims}
     />
   );
 });
+
+/**
+ * The lead debate's stills, painted from the feed response itself (GEO-3280), until the debate and
+ * its media resolve and the player takes over with the same two images. Laid out as the player is,
+ * one surface with no gap, so the handover does not move anything. A missing still leaves its tile
+ * grey, as the player does.
+ */
+function DebatePosterSkeleton({
+  debateId,
+  posters,
+  compact,
+}: {
+  debateId: string;
+  posters: NonNullable<ExploreFeedItem['debatePosters']>;
+  compact: boolean;
+}) {
+  return (
+    <div className={cx('flex flex-col overflow-hidden', compact ? 'rounded-lg' : 'rounded-xl')} aria-hidden="true">
+      {[posters.slot1, posters.slot2].map((src, index) => (
+        <div key={index} className="relative aspect-480/289 w-full overflow-hidden bg-grey-01">
+          {src ? (
+            <img
+              src={src}
+              // The feed may hand over a presigned storage URL; a lapsed one falls back to the durable route.
+              onError={fallBackToDurableStill(speakerStillContentUrl(debateId, index === 0 ? 1 : 2))}
+              alt=""
+              data-debate-poster=""
+              draggable={false}
+              // The lead card's stills are the page's largest paint, so they go out eagerly and ahead
+              // of the other images.
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            />
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function DebateVideoSkeleton() {
   return (

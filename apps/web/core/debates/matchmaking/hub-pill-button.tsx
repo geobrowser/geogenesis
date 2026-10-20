@@ -17,7 +17,8 @@ type Props = {
   analyticsSurface?: DebateAnalyticsSurface;
   /** Explicit override for exceptional actions with a more specific intent. */
   analyticsIntent?: string;
-} & React.ComponentPropsWithoutRef<'button'>;
+  // With the ref, which React 19 passes as a prop: an opener that takes focus back on close needs it.
+} & React.ComponentProps<'button'>;
 
 /**
  * The debates feature has its own pill style — `rounded-full`, `h-7`, `text-metadata` — shared with
@@ -27,9 +28,10 @@ type Props = {
  */
 /**
  * The pill's classes, for the one place the hub needs a pill that is not a button: a link, such as
- * "Join debate". Kept here so the two cannot drift.
+ * "Join debate". Kept here so the two cannot drift. `tag` is the secondary look without its hover,
+ * for a pill that holds a value rather than acting on a press, like a picked claim list.
  */
-export function hubPillClassName(variant: 'primary' | 'secondary' = 'secondary', className?: string) {
+export function hubPillClassName(variant: 'primary' | 'secondary' | 'tag' = 'secondary', className?: string) {
   return cx(
     // `h-7` is a fixed height, so a label that wraps to a second line spills out of the pill.
     // nowrap is what prevents that: it makes min-content equal max-content, and a flex item's
@@ -38,7 +40,9 @@ export function hubPillClassName(variant: 'primary' | 'secondary' = 'secondary',
     // shrink-0 is redundant today and kept only to survive a later `min-w-0` on this button,
     // which would defeat the `min-width: auto` this leans on.
     'inline-flex h-7 shrink-0 items-center justify-center rounded-full px-3 text-metadata whitespace-nowrap transition-colors disabled:opacity-50',
-    variant === 'primary' ? 'bg-text text-white hover:bg-text/90' : 'border border-grey-02 text-text hover:bg-grey-01',
+    variant === 'primary'
+      ? 'bg-text text-white hover:bg-text/90'
+      : cx('border border-grey-02 text-text', variant === 'secondary' && 'hover:bg-grey-01'),
     className
   );
 }

@@ -88,6 +88,19 @@ describe('useRecordingPlaybackUrl', () => {
     expect(mocks.getRecordingUrl).toHaveBeenCalledTimes(2);
   });
 
+  // GEO-3118: the mobile rendition is a different file with its own signature.
+  it('signs the mobile rendition separately from the recording, and asks geo-chat for it by name', async () => {
+    const { result } = setup();
+
+    await result.current.lookup(slot1);
+    await result.current.lookup({ ...slot1, variant: 'mobile' });
+    await result.current.lookup({ ...slot1, variant: 'mobile' });
+
+    expect(mocks.getRecordingUrl).toHaveBeenCalledTimes(2);
+    expect(mocks.getRecordingUrl.mock.calls[0][4]).toBeUndefined();
+    expect(mocks.getRecordingUrl.mock.calls[1][4]).toBe('mobile');
+  });
+
   // geo-chat's presign lasts 15 minutes and a playback keeps using its URL for the whole debate,
   // so a cached URL is only handed out while it still has most of its life left.
   it('signs again once the cached URL is too old to start a playback from', async () => {

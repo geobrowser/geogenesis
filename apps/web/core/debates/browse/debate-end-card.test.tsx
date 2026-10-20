@@ -101,6 +101,7 @@ function cardFixture({
         respond: vi.fn(),
         canRespond: true,
         isResponsePending: false,
+        isResponseSubmitting: false,
         actionTitle: () => '',
         responseError: null,
       },

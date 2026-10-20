@@ -167,6 +167,8 @@ export function DebatePreScreen({
     ? remoteParticipant.display_name || remoteParticipant.profile_space_id
     : 'the other speaker';
   const mediaReady = previewState === 'ready';
+
+  const controlsAvailable = mediaReady || previewState === 'idle';
   const selectedCameraLabel =
     videoInputDevices.find(device => device.deviceId === selectedVideoInputId)?.label ?? 'Camera';
   // Named after what the person has to do, not after which flag is false — it is the only thing
@@ -215,7 +217,7 @@ export function DebatePreScreen({
       inactiveIndicatorId="local"
       tileLabel="You"
       tileControls={
-        mediaReady ? (
+        controlsAvailable ? (
           <div className="flex items-center gap-2">
             <DebateTileToggleButton
               ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
@@ -317,7 +319,7 @@ export function DebatePreScreen({
     <div key="local" className={cx(cardGroup, 'order-1')}>
       {localTile}
 
-      {!mediaReady && previewState !== 'requesting' && (
+      {!mediaReady && previewState !== 'requesting' && previewState !== 'idle' && (
         <button
           type="button"
           onClick={onRetryMedia}
@@ -331,8 +333,12 @@ export function DebatePreScreen({
       )}
 
       {/* Laid out but hidden while access is requested, so granting it does not shift the screen. */}
-      {(mediaReady || previewState === 'requesting') && (
-        <div className={cx('contents', !mediaReady && 'invisible')} aria-hidden={!mediaReady} inert={!mediaReady}>
+      {(controlsAvailable || previewState === 'requesting') && (
+        <div
+          className={cx('contents', !controlsAvailable && 'invisible')}
+          aria-hidden={!controlsAvailable}
+          inert={!controlsAvailable}
+        >
           <div className={cx('flex w-full flex-col gap-[6px]', controlsOrder)}>
             {isMobile ? (
               <>

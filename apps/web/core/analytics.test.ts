@@ -4,6 +4,10 @@ import manifest from '../public/geo-analytics-manifest.json';
 
 const analyticsScriptSrc = `http://localhost:3000/geo-analytics-${manifest.shortHash}.js`;
 
+// The runtime script is deferred until idle or the first interaction; a pointerdown is the
+// deterministic way to release it.
+const releaseDeferredScript = () => window.dispatchEvent(new Event('pointerdown'));
+
 describe('analytics', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -50,6 +54,7 @@ describe('analytics', () => {
 
     const runtime = { capture: vi.fn(), loggedIn: vi.fn() };
     window.lytics = runtime as never;
+    releaseDeferredScript();
     document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader]')?.onload?.(new Event('load'));
 
     // The identity call took the oldest event's place, so the queue never exceeded the bound.
@@ -65,6 +70,7 @@ describe('analytics', () => {
 
     const runtime = { capture: vi.fn(), loggedIn: vi.fn() };
     window.lytics = runtime as never;
+    releaseDeferredScript();
     document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader]')?.onload?.(new Event('load'));
 
     // Only the oldest identity call gives way; the newest identity state always arrives.
@@ -85,11 +91,39 @@ describe('analytics', () => {
       autoRouteTracking: false,
     });
 
+    // Configured immediately, but the script itself is not requested until idle or interaction.
+    expect(document.querySelector('script[data-geo-analytics-loader="true"]')).toBeNull();
+    releaseDeferredScript();
+
     const script = document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader="true"]');
 
     expect(script?.src).toBe(analyticsScriptSrc);
     expect(script?.integrity).toBe(manifest.integrity);
     expect(script?.crossOrigin).toBe('anonymous');
+  });
+
+  it("keeps Amplitude's viewport tracker off, since it holds every element it has seen until a full page load", async () => {
+    const { initAnalytics } = await import('./analytics');
+
+    initAnalytics();
+
+    const autocapture = window.lyticsConfig?.amplitudeAutocapture as Record<string, unknown>;
+    // The object form: a bare `false` is spread into `{ exposureDuration }` by the SDK and stays on.
+    expect(autocapture.elementInteractions).toEqual({ viewportContentUpdated: { enabled: false } });
+    // Everything `autocapture: true` turned on is still on.
+    for (const feature of [
+      'attribution',
+      'fileDownloads',
+      'formInteractions',
+      'pageViews',
+      'sessions',
+      'pageUrlEnrichment',
+      'webVitals',
+      'frustrationInteractions',
+      'networkTracking',
+    ]) {
+      expect(autocapture[feature], feature).toBe(true);
+    }
   });
 
   it('enables production collection for Genesis app routes on www.geobrowser.io', async () => {
@@ -511,5 +545,47 @@ describe('analytics', () => {
     personProfileOpened('pending:0x123', null, { interaction_surface: 'comment_author' });
 
     expect(capture).not.toHaveBeenCalled();
+  });
+
+  describe('deferred runtime load', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const loader = () => document.querySelectorAll('script[data-geo-analytics-loader="true"]');
+
+    it('requests the script once the browser is idle, not synchronously', async () => {
+      vi.useFakeTimers();
+      const { initAnalytics } = await import('./analytics');
+      initAnalytics();
+      expect(loader()).toHaveLength(0);
+      vi.advanceTimersByTime(6000);
+      expect(loader()).toHaveLength(1);
+    });
+
+    it('requests it on the first interaction and only once however often init runs', async () => {
+      const { initAnalytics, capture } = await import('./analytics');
+      initAnalytics();
+      capture('action_completed', {});
+      initAnalytics();
+      expect(loader()).toHaveLength(0);
+      releaseDeferredScript();
+      releaseDeferredScript();
+      window.dispatchEvent(new Event('keydown'));
+      expect(loader()).toHaveLength(1);
+    });
+
+    it('holds events fired before the load and delivers them after it', async () => {
+      const { initAnalytics, capture } = await import('./analytics');
+      initAnalytics();
+      capture('action_completed', { index: 1 });
+      const runtime = { capture: vi.fn() };
+      window.lytics = runtime as never;
+      expect(runtime.capture).not.toHaveBeenCalled();
+      releaseDeferredScript();
+      loader()[0]?.dispatchEvent(new Event('load'));
+      (loader()[0] as HTMLScriptElement).onload?.(new Event('load'));
+      expect(runtime.capture).toHaveBeenCalledWith('action_completed', expect.objectContaining({ index: 1 }));
+    });
   });
 });

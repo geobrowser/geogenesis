@@ -15,10 +15,13 @@ import {
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 
 import {
+  ADMIN_SCHEDULED_DEBATES_LIMIT,
+  GeoChatRequestError,
   type ScheduledDebateRequest,
   type ScheduledDebateResponseResult,
   cancelScheduledDebate,
   createScheduledDebate,
+  listAdminScheduledDebates,
   listScheduledDebates,
   rescheduleScheduledDebate,
   respondToScheduledDebate,
@@ -57,6 +60,60 @@ export function useScheduledDebates(enabled = true) {
     // Coming back to the tab is exactly when an answer is most likely to have landed already.
     refetchOnWindowFocus: true,
   });
+}
+
+/**
+ * Every scheduled debate from `from` onward, for the admin calendar (GEO-2943).
+ *
+ * Doubles as the admin check: a viewer off geo-chat's allowlist is refused (403, or 503 where no
+ * admins are configured), and `isAdmin` stays false, so the view never shows. The server is the
+ * only authority on who is an admin; nothing here can grant it.
+ */
+export function useAdminScheduledDebates(enabled: boolean, from: Date) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const present = useDebateVisibility();
+  const fromIso = from.toISOString();
+
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.adminScheduledDebates(accountKey, fromIso),
+    queryFn: ({ signal }) =>
+      listAdminScheduledDebates(
+        { from: fromIso, limit: ADMIN_SCHEDULED_DEBATES_LIMIT },
+        getPrivyIdentityToken,
+        accountKey,
+        signal
+      ),
+    enabled: enabled && authenticated,
+    // A refusal is the answer for everyone who is not an admin: never retried or polled, or every
+    // visitor would ask again forever. Anything else (a blip, a 500, a session that expired) is not
+    // an answer: it is retried, and polling carries on past it, so an admin is neither dropped to
+    // the Availability view by one bad request nor left looking at a list that stopped updating.
+    retry: (failureCount, error) => !isAdminRefusal(error) && failureCount < 2,
+    refetchInterval: query => (present && !isAdminRefusal(query.state.error) ? SCHEDULED_POLL_MS : false),
+    refetchOnWindowFocus: query => !isAdminRefusal(query.state.error),
+  });
+
+  return {
+    ...query,
+    // A refusal now outranks a list from before it: someone taken off the allowlist mid-visit stops
+    // seeing other people's matches, though React Query keeps the last answer it had.
+    isAdmin: query.data !== undefined && !isAdminRefusal(query.error),
+    /** Still finding out: the view switch waits rather than flashing in and out. */
+    isAdminPending: query.isPending && authenticated && enabled,
+    truncated: (query.data?.matches.length ?? 0) >= ADMIN_SCHEDULED_DEBATES_LIMIT,
+  };
+}
+
+/**
+ * geo-chat's answer that the viewer is not an admin: off the allowlist (403), or no admins on this
+ * deployment (503 `scheduling_admin_not_configured`). Deliberately not a 401: that is a session
+ * that expired or is still being registered, which says nothing about the allowlist and clears up.
+ */
+function isAdminRefusal(error: unknown) {
+  return (
+    error instanceof GeoChatRequestError && (error.status === 403 || error.code === 'scheduling_admin_not_configured')
+  );
 }
 
 export function useCreateScheduledDebate() {

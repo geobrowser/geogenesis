@@ -33,6 +33,20 @@ export const PILL_BUTTON_CLASS_NAME = `${PILL_BUTTON_SHAPE} !border-transparent 
 export const PILL_BUTTON_SECONDARY_CLASS_NAME = PILL_BUTTON_SHAPE;
 
 /**
+ * A modal's full-width action: the debate request modal's Accept, and every step of onboarding.
+ * Plain `<button>` classes rather than a `Button` variant, whose base shape (square corners, padding,
+ * shadow) these would have to fight.
+ *
+ * 28px on desktop, 44px on phones (`md:` is max-width here), the smallest comfortable touch target.
+ */
+export const DIALOG_ACTION_BUTTON_CLASS_NAME =
+  'flex h-7 md:h-11 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50';
+
+/** The outlined counterpart to `DIALOG_ACTION_BUTTON_CLASS_NAME`: Decline, Not now, Skip. */
+export const DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME =
+  'flex h-7 md:h-11 w-full items-center justify-center rounded-full border border-grey-02 bg-white px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50';
+
+/**
  * The button's classes on their own, for a link that should look like one. A
  * `<Button>` inside a `<Link>` nests two interactive elements.
  */

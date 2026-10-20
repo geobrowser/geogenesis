@@ -99,6 +99,27 @@ export function reportEvent({ name, tags, extra, level = 'info' }: TelemetryEven
   }
 }
 
+/**
+ * Leaves a trail on whatever this tab reports next, without reporting anything itself. For a
+ * state that is not an error yet but explains one if it follows.
+ */
+export function addTelemetryBreadcrumb(
+  category: string,
+  message: string,
+  data?: Record<string, unknown>,
+  level: 'info' | 'warning' = 'info'
+): void {
+  if (!isTelemetryEnabled) {
+    return;
+  }
+
+  try {
+    Sentry.addBreadcrumb({ category, message, data, level });
+  } catch (reportingError) {
+    console.error('[Telemetry] Failed to add breadcrumb', reportingError);
+  }
+}
+
 export function setTelemetryUser(user: TelemetryUser | null): void {
   if (!isTelemetryEnabled) {
     return;

@@ -17,6 +17,7 @@ import {
   useClaimResponseSummaryBatch,
 } from '~/core/responses/use-claim-response-summaries';
 
+import { EntitySidePanelNavigation } from './entity-side-panel-navigation';
 import { EntityVoteButtons, RespondersPopoverContent } from './entity-vote-buttons';
 
 const mocks = vi.hoisted(() => ({
@@ -32,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   getProfiles: vi.fn(),
   personProfileOpened: vi.fn(),
 }));
+
+vi.mock('~/core/debates/rematch-panel-context', () => ({ useRematchPanelContext: () => ({}) }));
 
 vi.mock('@geogenesis/auth', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
@@ -109,7 +112,7 @@ beforeEach(() => {
   mocks.getResponders.mockReset();
   mocks.getResponders.mockReturnValue([]);
   mocks.getSummaryPage.mockReset();
-  mocks.getSummaryPage.mockReturnValue([]);
+  mocks.getSummaryPage.mockReturnValue({ items: [], endCursor: null, hasNextPage: false });
   mocks.getViewerResponse.mockReset();
   mocks.getViewerResponse.mockReturnValue('positive');
   mocks.optimisticResponse = undefined;
@@ -122,7 +125,10 @@ beforeEach(() => {
   mocks.personProfileOpened.mockReset();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('EntityVoteButtons claims-page batching', () => {
   it('skips entity hydration and all individual response queries while the page batch is unresolved', async () => {
@@ -139,10 +145,12 @@ describe('EntityVoteButtons claims-page batching', () => {
   it('uses the batch-seeded caches without fetching or hydrating Entity once batching resolves', async () => {
     renderButtons(true, true);
 
-    await waitFor(() => expect(mocks.queryEntityOptions).toHaveLength(1));
+    await waitFor(() => expect(mocks.queryEntityOptions.length).toBeGreaterThan(0));
     expect(mocks.getCounts).not.toHaveBeenCalled();
     expect(mocks.getViewerResponse).not.toHaveBeenCalled();
-    expect(mocks.queryEntityOptions.at(-1)).toMatchObject({ enabled: false });
+    // Every render, not a count of them: the queue subscription can re-run the component once on
+    // mount without changing anything, and what matters is that no render ever enabled the query.
+    for (const options of mocks.queryEntityOptions) expect(options).toMatchObject({ enabled: false });
   });
 
   // This used to assert chevrons — the `0 0 16 16` glyphs a factual claim drew. Claims are thumbs
@@ -301,15 +309,16 @@ function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance
  * not part of the boundary's `ready`.
  */
 describe('RespondersPopoverContent under a batch', () => {
-  const renderPopover = (queryClient: QueryClient, responseKind: 'stance' | 'curation' = 'stance') =>
+  const renderPopover = (queryClient: QueryClient, responseKind: 'stance' | 'curation' = 'stance', inRoom = false) =>
     render(
       <ClaimResponseBatchBoundary ready>
-        <RespondersPopoverContent
-          entityId="claim-1"
-          spaceId="space-1"
-          objectType={0}
-          responseKind={responseKind}
-        />
+        {inRoom ? (
+          <EntitySidePanelNavigation entityId="claim-1" spaceId="space-1">
+            <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind={responseKind} />
+          </EntitySidePanelNavigation>
+        ) : (
+          <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind={responseKind} />
+        )}
       </ClaimResponseBatchBoundary>,
       {
         wrapper: ({ children }: { children: ReactNode }) => (
@@ -383,11 +392,14 @@ describe('RespondersPopoverContent under a batch', () => {
       },
     ]);
 
-    const view = renderPopover(queryClient, responseKind);
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const view = renderPopover(queryClient, responseKind, true);
     const profileLink = await view.findByRole('link', { name: 'Dovile' });
     fireEvent.click(profileLink);
+    expect(open).toHaveBeenCalledTimes(1);
+    open.mockRestore();
 
-    expect(mocks.personProfileOpened).toHaveBeenCalledWith('profile-9', 'person-9', {
+    expect(mocks.personProfileOpened).toHaveBeenCalledExactlyOnceWith('profile-9', 'person-9', {
       interaction_surface: interactionSurface,
     });
   });

@@ -7,14 +7,18 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 
+import { getCachedIdentityToken } from '~/core/auth/identity-token';
 import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
 import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cache';
 import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
-import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
-import type { ExploreFeedItem, ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { type ExplorePageSort, PUBLIC_FEED_PARAM } from '~/core/explore/explore-feed-params';
+import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
+import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
+import { seenStore } from '~/core/explore/seen-demotion/seen-store';
+import { useFeedViewer } from '~/core/hooks/use-awaited-smart-account';
 import { exploreMoreFiltersOpenAtom } from '~/core/state/explore-more-filters';
 import { normId } from '~/core/utils/norm-id';
 
@@ -26,6 +30,14 @@ import type { ClaimCardVariant } from '~/partials/explore/claim-explore-feed-car
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
+
+/**
+ * Cards drawn in full on the first render, whatever the viewport. The rest wait until they are near
+ * it (see `ExploreFeedCard`'s `deferUntilNearViewport`). Enough to fill a desktop screen without
+ * waiting on the observer, so the cards a reader sees first — and the lead card's poster, which is
+ * the page's largest paint — never pass through a placeholder.
+ */
+const EAGER_CARD_COUNT = 4;
 
 function LoadingSkeleton() {
   return (
@@ -47,6 +59,9 @@ const SORT_LABELS: Record<ExplorePageSort, string> = {
 };
 
 const DEFAULT_SORT_OPTIONS: readonly ExplorePageSort[] = ['best', 'new', 'top'];
+
+/** GEO-3144. Read by the server too: Explore pages are interleaved for experiment groups only when set. */
+const FEED_INTERLEAVING_ENABLED = process.env.NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED === 'true';
 
 /**
  * The sorts a time range applies to.
@@ -133,7 +148,57 @@ type EntityFeedProps = {
    * cross-space browsing surface the panel was asked for.
    */
   titleOpensSidePanel?: boolean;
+  /**
+   * Send the signed-in viewer's Privy identity token with each page request (GEO-3140), so the
+   * server can personalize For you for a person it has verified rather than one the client names.
+   * Explore only; harmless where the server does not personalize.
+   */
+  sendIdentityToken?: boolean;
+  /**
+   * The wallet cookie the page was rendered with, if any. It keys the first page from hydration on
+   * (see `useFeedViewer`), rather than the page being fetched anonymously and then again once the
+   * smart account resolves.
+   */
+  walletAddress?: string | null;
+  /**
+   * Fetch the signed-out first page of Best from the CDN-cached anonymous URL (Explore only). Used
+   * only when nobody is signed in and the request is the plain first Best page; anything else keeps
+   * the personal URL, because the CDN ignores cookies.
+   */
+  cdnFirstPage?: boolean;
 };
+
+/**
+ * The query string of a feed request. `anonymous` adds the cacheable-URL marker, and only to the
+ * plain first Best page: any cursor, filter or other sort stays on the uncached URL.
+ */
+export function buildFeedQuery(params: {
+  sort: ExplorePageSort;
+  time: ExploreTime | undefined;
+  spaceIds: readonly string[];
+  typeIds: readonly string[] | undefined;
+  topicIds: readonly string[];
+  followedTopicIds: readonly string[];
+  fixedParams: Record<string, string>;
+  cursor: string | undefined;
+  anonymous?: boolean;
+}): string {
+  const sp = new URLSearchParams();
+  sp.set('sort', params.sort);
+  // Absent means "no time filter" — see the route's parseTime. Sending nothing is what keeps a
+  // hidden range out of the feed it isn't shown for.
+  if (params.time !== undefined) sp.set('time', params.time);
+  // Omitted rather than sent as `all` when nothing is ticked: the routes read an absent parameter
+  // as "no narrowing", which is the same answer with one fewer special string in it.
+  if (params.spaceIds.length > 0) sp.set('spaceIds', params.spaceIds.join(','));
+  if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
+  if (params.topicIds.length > 0) sp.set('topicIds', params.topicIds.join(','));
+  if (params.followedTopicIds.length > 0) sp.set('followedTopicIds', params.followedTopicIds.join(','));
+  for (const [key, value] of Object.entries(params.fixedParams)) sp.set(key, value);
+  if (params.cursor) sp.set('cursor', params.cursor);
+  if (params.anonymous && sp.toString() === 'sort=best') sp.set(PUBLIC_FEED_PARAM, '1');
+  return sp.toString();
+}
 
 async function fetchFeedPage(
   apiEndpoint: string,
@@ -148,26 +213,22 @@ async function fetchFeedPage(
     followedTopicIds: readonly string[];
     fixedParams: Record<string, string>;
     cursor: string | undefined;
+    identityToken?: string | null;
+    anonymous?: boolean;
   }
 ): Promise<ExploreFeedResult> {
-  const sp = new URLSearchParams();
-  sp.set('sort', params.sort);
-  // Absent means "no time filter" — see the route's parseTime. Sending nothing is what keeps a
-  // hidden range out of the feed it isn't shown for.
-  if (params.time !== undefined) sp.set('time', params.time);
-  // Omitted rather than sent as `all` when nothing is ticked: the routes read an absent parameter
-  // as "no narrowing", which is the same answer with one fewer special string in it.
-  if (params.spaceIds.length > 0) sp.set('spaceIds', params.spaceIds.join(','));
-  if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
-  if (params.topicIds.length > 0) sp.set('topicIds', params.topicIds.join(','));
-  if (params.followedTopicIds.length > 0) sp.set('followedTopicIds', params.followedTopicIds.join(','));
-  for (const [key, value] of Object.entries(params.fixedParams)) sp.set(key, value);
-  if (params.cursor) sp.set('cursor', params.cursor);
-  const res = await fetch(`${apiEndpoint}?${sp.toString()}`, { credentials: 'include' });
+  const res = await fetch(`${apiEndpoint}?${buildFeedQuery(params)}`, {
+    credentials: 'include',
+    ...(params.identityToken ? { headers: { authorization: `Bearer ${params.identityToken}` } } : {}),
+  });
   if (!res.ok) {
     throw new Error('Feed failed');
   }
   return res.json() as Promise<ExploreFeedResult>;
+}
+
+function sameFeedOtherThanAccount(a: readonly unknown[], b: readonly unknown[]) {
+  return a.length === b.length && a.slice(0, -1).every((part, i) => part === b[i]);
 }
 
 type TopicFacetResult = { topics: Array<{ id: string; name: string | null; count: number }> };
@@ -226,6 +287,9 @@ export function EntityFeed({
   dividerBeforeFeed = false,
   titleOpensSidePanel = false,
   claimCardVariant = 'feed',
+  sendIdentityToken = false,
+  walletAddress = null,
+  cdnFirstPage = false,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
@@ -416,15 +480,17 @@ export function EntityFeed({
     [maxTopicSelections]
   );
 
-  // Key the query on the smart-account address because that hook is what writes the
-  // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier
-  // (before the cookie is set), which caused refetches to return anonymous data on
-  // sign-in and leave "Join space" buttons stuck for a few seconds.
-  const { smartAccount } = useSmartAccount();
-  const smartAccountAddress = smartAccount?.account.address ?? null;
+  const isForYou = sort === 'for-you';
+  // Only where the server can use it, so no other page waits on Privy for a token: For you, and
+  // Best while interleaving is on (GEO-3144), which needs to know who is reading.
+  const usesIdentityToken = sendIdentityToken && (isForYou || (sort === 'best' && FEED_INTERLEAVING_ENABLED));
+  // Key the query on the wallet the server route will read from the cookie: the smart-account
+  // address once it resolves (that hook writes the cookie), and the cookie's own value until then.
+  // Privy's user.id updates earlier (before the cookie is set), which caused refetches to return
+  // anonymous data on sign-in and leave "Join space" buttons stuck for a few seconds.
+  const { viewerAddress, awaitingIdentityToken } = useFeedViewer(walletAddress, usesIdentityToken);
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
   // request, and caching them apart would refetch on a change the viewer never made.
-  const isForYou = sort === 'for-you';
   const requestedFollowedTopicIds = isForYou ? (followedTopicIds ?? []) : [];
   const queryKey = [
     apiEndpoint,
@@ -434,15 +500,20 @@ export function EntityFeed({
     typeIdsKey,
     topicIdsKey,
     fixedParamsKey,
-    smartAccountAddress,
     // Only on For you, so every other sort's key, and so its cache, is unchanged.
     ...(isForYou ? [requestedFollowedTopicIds.join(',')] : []),
+    // Last, so `placeholderData` below can tell a change of account from a change of filter.
+    viewerAddress,
   ];
+
+  const wantsIdentityToken = usesIdentityToken && viewerAddress !== null;
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
     queryKey,
-    queryFn: ({ pageParam }) =>
+    queryFn: async ({ pageParam }) =>
       fetchFeedPage(apiEndpoint, {
+        identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
+        anonymous: cdnFirstPage && viewerAddress === null && !wantsIdentityToken,
         sort,
         time: requestedTime,
         spaceIds: requestedSpaceIds,
@@ -452,7 +523,11 @@ export function EntityFeed({
         fixedParams,
         cursor: pageParam as string | undefined,
       }),
-    enabled: !isForYou || followedTopicIds !== null,
+    enabled: !awaitingIdentityToken && (!isForYou || followedTopicIds !== null),
+    // When only the account changed (signing in on the page, or an account that arrived after the
+    // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery && sameFeedOtherThanAccount(previousQuery.queryKey, queryKey) ? previous : undefined,
     initialPageParam: undefined as string | undefined,
     getNextPageParam: last => last.nextCursor ?? undefined,
     retry: 2,
@@ -476,10 +551,24 @@ export function EntityFeed({
     return () => io.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
+  // GEO-3234. Load what this browser has already shown, once, while the first page is in flight.
+  const isBest = sort === 'best';
+  React.useEffect(() => {
+    if (isBest) seenStore().prime();
+  }, [isBest]);
+  const [mountedAtSec] = React.useState(() => Math.floor(Date.now() / 1000));
+
   const items = React.useMemo(() => {
-    const pages = data?.pages ?? [];
-    const flat: ExploreFeedItem[] = [];
-    for (const p of pages) flat.push(...p.items);
+    // GEO-3234. Best's pages composed together for this visitor: seen cards hidden, gaps filled from
+    // each page's reserve, nothing shown twice. Pages without the config pass through.
+    const flat = composeSeenPages(
+      (data?.pages ?? []).map(p => ({
+        items: p.items,
+        reserve: p.reserve,
+        config: readSeenDemotionPageConfig(p.seenDemotion),
+      })),
+      { snapshot: seenStore().snapshot(), nowSec: mountedAtSec }
+    );
     if (!isForYou) return flat;
     // For you pages two streams that overlap, so an item served from one can come back later from
     // the other. The first appearance stays.
@@ -490,7 +579,7 @@ export function EntityFeed({
       seen.add(id);
       return true;
     });
-  }, [data?.pages, isForYou]);
+  }, [data?.pages, isForYou, mountedAtSec]);
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_LABELS[sort];
@@ -640,7 +729,7 @@ export function EntityFeed({
       <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
-        ) : isLoading || (isForYou && followedTopicIds === null) ? (
+        ) : isLoading || awaitingIdentityToken || (isForYou && followedTopicIds === null) ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <LoadingSkeleton key={i} />
@@ -658,6 +747,7 @@ export function EntityFeed({
               hideJoinButton={lockedSpaceId != null}
               titleOpensSidePanel={titleOpensSidePanel}
               claimCardVariant={claimCardVariant}
+              deferUntilNearViewport={index >= EAGER_CARD_COUNT}
             />
           ))
         )}

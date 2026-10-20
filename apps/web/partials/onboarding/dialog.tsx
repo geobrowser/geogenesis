@@ -11,7 +11,6 @@ import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
 import { trackAuthOnboarding } from '~/core/auth-attempt';
@@ -19,6 +18,7 @@ import type { BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { ROOT_SPACE } from '~/core/constants';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboarding';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -33,7 +33,11 @@ import { devLog } from '~/core/utils/dev-log';
 import { NavUtils, validateEntityId } from '~/core/utils/utils';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
-import { Button, SquareButton } from '~/design-system/button';
+import {
+  DIALOG_ACTION_BUTTON_CLASS_NAME,
+  DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME,
+  SquareButton,
+} from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -52,19 +56,8 @@ import { Truncate } from '~/design-system/truncate';
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
-export const nameAtom = atomWithStorage<string>('onboardingName', '');
-export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
-export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
-export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
-
-/**
- * Topic picks from the 'interested-in' step. Onboarding no longer blocks on space
- * creation, so these are persisted for the background PendingPersonalSpaceRunner,
- * which applies them (membership proposals) once a real spaceId exists, then clears them.
- */
-export const selectedTopicIdsAtom = atomWithStorage<string[]>('onboardingSelectedTopics', []);
-
 type Step = OnboardingStep;
+
 
 const stepOrder: Partial<Record<Step, number>> = {
   start: 1,
@@ -76,9 +69,7 @@ const stepByOrder = Object.fromEntries(Object.entries(stepOrder).map(([step, ord
   Step
 >;
 
-// 'enter-profile' and 'create-space' linger in the type only to normalize
-// values persisted by an older version of the flow — see effectiveStep.
-export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
+import { avatarAtom, nameAtom, selectedTopicIdsAtom, stepAtom, topicIdAtom } from './onboarding-atoms';
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
 // How long the completion screen shows before we route the user onward. The
@@ -106,6 +97,8 @@ export const OnboardingDialog = () => {
   const setPending = useSetAtom(pendingPersonalSpaceAtom);
   const setChatOpen = useSetAtom(isChatOpenAtom);
   const [hasSeenAssistant, setHasSeenAssistant] = useAtom(hasSeenAssistantAtom);
+  // The chat widget's own phone breakpoint, where it opens as a full sheet.
+  const isPhone = useMediaQuery('(max-width: 767px)');
 
   const [selectedTopicIds, setSelectedTopicIds] = useAtom(selectedTopicIdsAtom);
   const [featuredSpaces, setFeaturedSpaces] = useState<BrowseSpaceRow[]>([]);
@@ -139,6 +132,12 @@ export const OnboardingDialog = () => {
     // atomWithStorage sync, clobber the original tab's progress.
     if (!isOnboardingVisible) return;
     if (step === 'existing-entity-match' && entityMatchCandidates.length === 0) {
+      setStep('start');
+    }
+    // The step persists, so a finished run leaves it at 'done'. Onboarding showing again
+    // means setup has to run again (a registered account whose profile never landed),
+    // and `shouldOpenOnboardingDialog` keeps the dialog shut at 'done' — start over.
+    if (step === 'done') {
       setStep('start');
     }
   }, [isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
@@ -211,7 +210,9 @@ export const OnboardingDialog = () => {
     // Kick off the background personal-space creation immediately.
     setPending({ topicId, address, status: 'pending' });
 
-    if (!hasSeenAssistant) {
+    // Not on phones, where the assistant is a sheet that covers the page the viewer was just sent
+    // back to. Left unmarked as seen so it still introduces itself on a wider screen.
+    if (!hasSeenAssistant && !isPhone) {
       setChatOpen(true);
       setHasSeenAssistant(true);
     }
@@ -267,7 +268,10 @@ export const OnboardingDialog = () => {
           onEscapeKeyDown={e => e.preventDefault()}
           onPointerDownOutside={e => e.preventDefault()}
           onInteractOutside={e => e.preventDefault()}
-          className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center p-6"
+          // Scrolls, and the card centres itself with `my-auto`: centred while it fits, and on a
+          // viewport shorter than the card (a phone's keyboard up, landscape) it scrolls instead of
+          // clipping its top out of reach the way `items-center` would.
+          className="fixed inset-0 z-1000 flex h-full w-full flex-col items-center overflow-y-auto p-6"
         >
           <Title className="sr-only">Set up your Geo account</Title>
           <ModalCard childKey="card" effectiveStep={effectiveStep}>
@@ -318,7 +322,7 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className={`pointer-events-auto relative z-100 mt-40 flex ${effectiveStep === 'completed' ? 'h-[245px] px-6 py-10' : 'h-[485px] p-6 pt-8'} w-full max-w-[360px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown`}
+      className={`pointer-events-auto relative z-100 my-auto flex shrink-0 ${effectiveStep === 'completed' ? 'h-[245px] px-6 py-10' : 'h-[485px] p-6 pt-8'} w-full max-w-[360px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown`}
     >
       {children}
     </motion.div>
@@ -560,10 +564,11 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
             </a>
           </Text>
         </div>
-        <Button
+        <button
+          type="button"
           disabled={!validName || isSearching || isUploadingAvatar}
           onClick={handleContinue}
-          className={`${!validName ? 'bg-[#F0F0F0]' : 'bg-ctaHover'} h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal`}
+          className={DIALOG_ACTION_BUTTON_CLASS_NAME}
         >
           {isSearching ? (
             <span className="inline-flex h-[1.125rem] items-center">
@@ -572,7 +577,7 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
           ) : (
             'Continue'
           )}
-        </Button>
+        </button>
       </div>
     </div>
   );
@@ -618,13 +623,9 @@ function StepExistingEntityMatch({ candidates, onSkip, onSelect }: StepExistingE
         ))}
       </div>
       <div className="shrink-0 pt-4">
-        <Button
-          type="button"
-          onClick={handlePrimary}
-          className="h-6 w-full rounded-md bg-ctaHover pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal"
-        >
+        <button type="button" onClick={handlePrimary} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
           Continue
-        </Button>
+        </button>
       </div>
     </div>
   );
@@ -829,24 +830,18 @@ function StepInterestedIn({
         </div>
       )}
       {isError ? (
-        <Button
-          onClick={onRetry}
-          className="min-h-6 w-full rounded-md bg-ctaHover pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal"
-        >
+        <button type="button" onClick={onRetry} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
           Try again
-        </Button>
+        </button>
       ) : (
-        <Button
+        <button
+          type="button"
           onClick={onCompleteOnboard}
           disabled={isLoading}
-          variant={isCreateProfile ? 'primary' : 'secondary'}
-          className={cx(
-            'min-h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal',
-            !isLoading && isCreateProfile && 'bg-ctaHover'
-          )}
+          className={isCreateProfile ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
         >
           {primaryLabel}
-        </Button>
+        </button>
       )}
     </div>
   );

@@ -97,6 +97,12 @@
   --animate-rise-in: riseIn 200ms ease-out both;
   --animate-slide-down: slideDown 300ms ease-in-out;
   --animate-slide-up: slideUp 300ms ease-in-out;
+  /* Open rounds' stamps (GEO-3277, GEO-3315), in published playback's breaks and the recording
+     room's moments: each pick stamped onto its debater, then the banner saying what the picks
+     mean. Each rests on its last frame, so with reduced motion the element is simply in place. */
+  --animate-debate-stamp: debateStampScale 216ms cubic-bezier(0.33, 1, 0.68, 1) both, fadeIn 90ms linear both;
+  --animate-debate-banner: debateBanner 300ms cubic-bezier(0.33, 1, 0.68, 1) both;
+  --animate-debate-banner-out: debateBannerOut 300ms cubic-bezier(0.33, 1, 0.68, 1) both;
 
   /* Font Sizes */
   --text-mainPage: 3.25rem;
@@ -362,6 +368,71 @@
   50% {
     transform: translateY(-12px);
   }
+}
+
+/* The design mockup's stamp, exactly: two motions on their own curves. It comes down from 1.3x to
+   its size over 216 ms on an ease-out cubic, and is fully opaque by 90 ms (`fadeIn`). No bounce or
+   shake; its tilt is the element's own `transform`, which `scale` composes with. */
+@keyframes debateStampScale {
+  from {
+    scale: 1.3;
+  }
+  to {
+    scale: 1;
+  }
+}
+
+@keyframes debateBanner {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* The banner leaves the way it came: on across, left to right. */
+@keyframes debateBannerOut {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 100%);
+  }
+}
+
+/* The turn timer's once-a-second swell, a half sine over its first 350 ms, on top of its stepped
+   size: +0.08x of its size while it grows (10 s to 5 s), +0.05x once it is red. */
+@keyframes turnTimerPulse {
+  0% {
+    scale: 1;
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    scale: var(--turn-timer-swell, 1.0615);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+/* The red glow each of the last five seconds lands with, fading over the second. */
+@keyframes turnTimerGlow {
+  from {
+    filter: drop-shadow(0 0 0.6rem color-mix(in srgb, var(--color-red-01) 75%, transparent));
+  }
+  to {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
+/* The turn timer's rim over its last five seconds, an animatable angle so it drains smoothly
+   between the playhead's samples. */
+@property --turn-timer-rim {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 360deg;
 }
 
 @keyframes fadeIn {
@@ -730,6 +801,14 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
   body[data-mobile-sheet-open] {
     overscroll-behavior-y: none;
   }
+
+  /* No rubber-band at the top of sheet content: a pull down from there moves the sheet instead.
+     Content that bleeds to the edge (profile activity's carousel overshoots by ~1px) must not let
+     the whole sheet pan sideways; nested carousels keep their own horizontal scroll. */
+  [data-mobile-sheet-surface] [data-mobile-sheet-scroll] {
+    overflow-x: hidden;
+    overscroll-behavior-y: none;
+  }
 }
 
 /* Ranking compose edit mode (mobile): hide app navbar and use full viewport. */
@@ -752,34 +831,12 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
   width: var(--radix-popper-anchor-width);
 }
 
-/*
- * Calibre @font-face (must live in this file so @tailwindcss/postcss runs on a full Tailwind entry).
- * A standalone fonts-only CSS import can throw: TypeError: Cannot read properties of undefined (reading 'map').
- */
-@font-face {
-  font-family: 'Calibre';
-  font-style: normal;
-  font-weight: 400;
-  src: url('/fonts/calibre-regular.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Calibre';
-  font-style: normal;
-  font-weight: 500;
-  src: url('/fonts/calibre-medium.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Calibre';
-  font-style: normal;
-  font-weight: 600;
-  src: url('/fonts/calibre-semibold.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Calibre';
-  font-style: normal;
-  font-weight: 700;
-  src: url('/fonts/calibre-bold.woff2') format('woff2');
+/* Open rounds playback: a small settle in place, with no wipe or travelling exit. */
+@keyframes debatePlayerSettle {
+  from {
+    scale: 1.025;
+  }
+  to {
+    scale: 1;
+  }
 }

@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   listMatchmakingMatches: vi.fn(),
   listDebatePeople: vi.fn(),
   accountKey: 'user-a' as string | null,
+  promoteSession: vi.fn(),
+  releaseSession: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -45,6 +47,14 @@ vi.mock('../hooks', async importOriginal => {
 
 vi.mock('../debate-gateway', () => ({ useDebateGatewayScope: vi.fn(), useMatchmakingScope: () => true }));
 
+vi.mock('../media-session', async importOriginal => ({
+  ...(await importOriginal<typeof import('../media-session')>()),
+  useOptionalDebateMediaSession: () => ({
+    promoteSession: mocks.promoteSession,
+    releaseSession: mocks.releaseSession,
+  }),
+}));
+
 const debate = {
   id: 'debate-1',
   status: 'ready',
@@ -63,6 +73,8 @@ beforeEach(() => {
   mocks.listMatchmakingMatches.mockReset();
   mocks.listDebatePeople.mockReset();
   mocks.accountKey = 'user-a';
+  mocks.promoteSession.mockReset();
+  mocks.releaseSession.mockReset();
   clearEnteringDebate();
 });
 
@@ -88,6 +100,43 @@ describe('useAcceptDebateRequest', () => {
     result.current.mutate({ requestId: 'request-1' });
 
     await waitFor(() => expect(intent.current).toBe('debate-1'));
+  });
+
+  it('hands the devices to the debate even after the accepting surface has gone', async () => {
+    let answer!: (response: unknown) => void;
+    mocks.acceptDebateRequest.mockReturnValue(
+      new Promise(resolve => {
+        answer = resolve;
+      })
+    );
+
+    const { result, unmount } = renderHook(() => useAcceptDebateRequest(), { wrapper });
+    result.current.mutate({ requestId: 'request-1' });
+    unmount();
+
+    answer({ request: { id: 'request-1' }, debate });
+
+    await waitFor(() =>
+      expect(mocks.promoteSession).toHaveBeenCalledWith('debate-request:request-1', 'debate:debate-1')
+    );
+  });
+
+  it('lets the devices go when the accept produced no debate, surface gone or not', async () => {
+    let answer!: (response: unknown) => void;
+    mocks.acceptDebateRequest.mockReturnValue(
+      new Promise(resolve => {
+        answer = resolve;
+      })
+    );
+
+    const { result, unmount } = renderHook(() => useAcceptDebateRequest(), { wrapper });
+    result.current.mutate({ requestId: 'request-1' });
+    unmount();
+
+    answer({ request: { id: 'request-1' }, debate: null });
+
+    await waitFor(() => expect(mocks.releaseSession).toHaveBeenCalledWith('debate-request:request-1'));
+    expect(mocks.promoteSession).not.toHaveBeenCalled();
   });
 
   it('stays put when acceptance produced no debate', async () => {

@@ -10,7 +10,7 @@ import { currentAuthAttempt, openAuthAttempt } from '~/core/auth-attempt';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { beginPrivyAuth, completePrivyAuth } from '~/core/privy-auth-events';
 
-import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
+import { ERROR_CLASS, FORM_STACK_CLASS, PRIMARY_BUTTON_CLASS, SUBTEXT_CLASS, fieldClass } from './email-capture-styles';
 
 /** Privy's OTP is six digits. */
 const CODE_LENGTH = 6;
@@ -27,6 +27,9 @@ export const ACCOUNT_ANALYTICS = {
   signup_surface: 'explore_email_capture',
 } as const;
 
+/** The attribution a code step reports under: the surface it sits in, and its own sign-in properties. */
+export type AccountStepAnalytics = { readonly component: string } & Readonly<Record<string, string | number>>;
+
 /**
  * The code step, driven by Privy's own flow state rather than a second copy of it kept here.
  *
@@ -34,7 +37,18 @@ export const ACCOUNT_ANALYTICS = {
  * labelled control instead of six unlabelled ones, and the code arrives by mail, so pasting is what
  * most people actually do.
  */
-export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () => void }) {
+export function AccountStep({
+  email,
+  onGiveUp,
+  analytics = ACCOUNT_ANALYTICS,
+  analyticsLabel = 'Explore account verification',
+}: {
+  email: string;
+  onGiveUp: () => void;
+  /** Whose sign-in this is. Defaults to Explore's email capture, the step's first host. */
+  analytics?: AccountStepAnalytics;
+  analyticsLabel?: string;
+}) {
   // Headless email completion runs directly after verification, even if authentication has
   // already unmounted this card. Modal completions go through the app-wide PrivyAuthTracker.
   // EmbeddedWalletSync separately creates and activates the wallet for a headless login.
@@ -43,16 +57,19 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     loginWithCode,
     state: otpState,
   } = useLoginWithEmail({
-    onComplete: args => completePrivyAuth(args, ACCOUNT_ANALYTICS),
+    onComplete: args => completePrivyAuth(args, analytics),
   });
   // Held in a ref so the effect below does not re-run and re-send when the callback identity
   // changes, which would mail a second code on an unrelated re-render.
   const giveUpRef = React.useRef(onGiveUp);
   giveUpRef.current = onGiveUp;
+  // The same, for the attribution: a host can build it per render, and it must not re-send the code.
+  const analyticsRef = React.useRef(analytics);
+  analyticsRef.current = analytics;
   // Keep the modal fallback's UI error handler with the card; its analytics attribution is
   // snapshotted by usePrivySignIn and survives the card disappearing after authentication.
   const openPrivyModal = usePrivySignIn(undefined, {
-    analytics: ACCOUNT_ANALYTICS,
+    analytics,
     resumeAuthAttempt: true,
     onError: () => giveUpRef.current(),
   });
@@ -112,9 +129,10 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     if (hasRequestedRef.current) return;
     hasRequestedRef.current = true;
     const attempt = currentAuthAttempt();
-    if (!attempt || attempt.endedAt || attempt.properties.component !== 'explore_email_capture')
-      beginPrivyAuth(ACCOUNT_ANALYTICS, { resume: true });
-    openAuthAttempt(ACCOUNT_ANALYTICS);
+    const attribution = analyticsRef.current;
+    if (!attempt || attempt.endedAt || attempt.properties.component !== attribution.component)
+      beginPrivyAuth(attribution, { resume: true });
+    openAuthAttempt(attribution);
     void requestCode();
   }, [requestCode]);
 
@@ -149,7 +167,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
 
   return (
     <form
-      data-geo-analytics-label="Explore account verification"
+      data-geo-analytics-label={analyticsLabel}
       data-geo-analytics-type="account"
       data-geo-analytics-intent="signup"
       onSubmit={submitCode}
@@ -164,7 +182,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
 
       {/* The subscribe row's layout after the restyle: a column, same spacing and width, so the
           card does not change shape when it swaps to this step. */}
-      <div className="mt-[19px] flex flex-col gap-[6px] mobile:mx-auto mobile:mt-5 mobile:max-w-[394px]">
+      <div className={FORM_STACK_CLASS}>
         <input
           // `text` with a numeric `inputMode`, not `type="number"`: a number input drops leading
           // zeros, accepts `e` and `-`, and puts a spinner on a field that is not a quantity.
@@ -188,21 +206,17 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
           aria-invalid={failed}
           disabled={busy}
           className={cx(
-            `${CONTROL_HEIGHT_CLASS} w-full min-w-0 rounded-full border bg-white px-3 text-center text-[17px] leading-[19px] tracking-[0.2em] text-text outline-hidden transition-colors placeholder:tracking-[0.2em] placeholder:text-[#b6b6b6] disabled:text-grey-03`,
-            failed ? 'border-red-01' : 'border-grey-02 focus:border-text'
+            fieldClass(failed),
+            'text-center tracking-[0.2em] placeholder:tracking-[0.2em] placeholder:text-[#b6b6b6]'
           )}
         />
-        <button
-          type="submit"
-          disabled={busy || code.length !== CODE_LENGTH}
-          className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full bg-[#151515] px-2.5 whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60`}
-        >
+        <button type="submit" disabled={busy || code.length !== CODE_LENGTH} className={PRIMARY_BUTTON_CLASS}>
           {verifying ? 'Verifying…' : 'Continue'}
         </button>
       </div>
 
       {failed ? (
-        <p role="alert" className="mt-2 text-[14px] tracking-[-0.35px] text-red-01">
+        <p role="alert" className={ERROR_CLASS}>
           That code did not work.{' '}
           <button
             type="button"

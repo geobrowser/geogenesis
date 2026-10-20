@@ -1,14 +1,24 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
+import { registerLobbyStepOut } from './lobbies/step-out';
+import {
+  clearRematchJoinIntents,
+  hasAnsweredRematchJoin,
+  markRematchAnswered,
+  readRematchJoinIntent,
+} from './rematch-join-intent';
 
 const mocks = vi.hoisted(() => ({
+  leaveRematchMutate: vi.fn(),
   push: vi.fn(),
+  /** The room view the page at `/debate/{id}` loaded, read by the coordinator from the cache. */
+  roomAtPath: null as { kind: 'debate' | 'lobby' } | null,
   activity: null as DebateActivity | null,
   requests: { outbound: null, incoming: [] } as DebateRequestsResponse,
   acceptRequestMutate: vi.fn(),
@@ -18,6 +28,9 @@ const mocks = vi.hoisted(() => ({
   // Whether this tab is the focused one. jsdom reports no focus, so the real store would make
   // every routing case here look like a background tab.
   hasAttention: true,
+  /** The visibility-backed presence the gateway would report on its own (GEO-3119). */
+  visiblePresence: true,
+  gatewayPresence: vi.fn(),
   prompts: [] as DebateSharePrompt[],
   promptsFetching: false,
   mediaMutate: vi.fn(),
@@ -73,6 +86,7 @@ vi.mock('./hooks', () => ({
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallengeMutate, isPending: false, error: null }),
+  useLeaveDebateRematch: () => ({ mutate: mocks.leaveRematchMutate, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
   useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
   useClearDebateActivity: () => mocks.clearDebateActivity,
@@ -87,6 +101,7 @@ vi.mock('./rooms/hooks', () => ({
     refetch: mocks.refetchRooms,
   }),
   useFinishedRoomIds: () => mocks.finishedRoomIds,
+  useDebateRoom: () => ({ data: mocks.roomAtPath ?? undefined }),
 }));
 
 // The banner names the opponent from the request that booked the room; that read is its own concern.
@@ -96,17 +111,23 @@ vi.mock('./rooms/room-opponent', async importOriginal => ({
 }));
 
 vi.mock('./debate-attention', () => ({
-  useDebatePresence: () => true,
+  useDebatePresence: () => mocks.visiblePresence,
   useDebateAttention: () => mocks.hasAttention,
 }));
 
+// Receipts are their own concern (debate-request-receipts.test.tsx); here they would only fetch.
+vi.mock('./debate-request-receipts', () => ({ useDebateRequestReceipts: () => undefined }));
+
 vi.mock('./debate-gateway', () => ({
-  useDebateGateway: () => ({
-    status: mocks.gatewayPaused ? 'degraded' : 'ready',
-    paused: mocks.gatewayPaused,
-    pauseReason: mocks.gatewayPauseReason,
-    capabilities: [],
-  }),
+  useDebateGateway: (_enabled: boolean, _token: unknown, _accountKey: unknown, presence: boolean) => {
+    mocks.gatewayPresence(presence);
+    return {
+      status: mocks.gatewayPaused ? 'degraded' : 'ready',
+      paused: mocks.gatewayPaused,
+      pauseReason: mocks.gatewayPauseReason,
+      capabilities: [],
+    };
+  },
   useDebateGatewayScope: () => undefined,
 }));
 
@@ -148,6 +169,7 @@ vi.mock('~/core/state/feature-flags', async importOriginal => ({
 
 beforeEach(() => {
   sessionStorage.clear();
+  mocks.roomAtPath = null;
   mocks.push.mockReset();
   mocks.mediaMutate.mockReset();
   mocks.handleMutate.mockReset();
@@ -171,6 +193,8 @@ beforeEach(() => {
   mocks.finishedRoomIds = new Set();
   mocks.refetchRooms.mockReset().mockResolvedValue(undefined);
   mocks.hasAttention = true;
+  mocks.visiblePresence = true;
+  mocks.gatewayPresence.mockReset();
   mocks.prompts = [];
   mocks.promptsFetching = false;
   mocks.authenticated = true;
@@ -207,6 +231,7 @@ afterEach(() => {
   cleanup();
   sessionStorage.clear();
   clearEnteringDebate();
+  clearRematchJoinIntents();
   vi.restoreAllMocks();
 });
 
@@ -475,6 +500,28 @@ describe('DebateCoordinator', () => {
     expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
   });
 
+  // GEO-3119: a hidden tab goes offline after thirty seconds, but never at the cost of the viewer's
+  // own request. geo-chat refuses an accept from an offline requester.
+  it('keeps a hidden requester online while their challenge waits for an answer', () => {
+    mocks.visiblePresence = false;
+    mocks.currentUserId = 'user-requester';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    expect(mocks.gatewayPresence).toHaveBeenLastCalledWith(true);
+  });
+
+  it('lets a hidden tab go offline when nothing of the viewer is pending', () => {
+    mocks.visiblePresence = false;
+    mocks.currentUserId = 'user-recipient';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    expect(mocks.gatewayPresence).toHaveBeenLastCalledWith(false);
+  });
+
   it('does not interrupt the sender of a challenge while it waits to be answered', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
@@ -524,6 +571,256 @@ describe('DebateCoordinator', () => {
 
     // Give the effect the same room to fire that the focused-tab case below needs.
     await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('records the choice made on the challenge card against the new session', async () => {
+    mocks.currentUserId = 'user-recipient';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = { ...activityWithRematch('browsing'), rematch: null, challenge: pendingChallenge() };
+    mocks.acceptChallengeMutate.mockImplementation(
+      (_id: string, options?: { onSuccess?: (result: { session: { id: string } }) => void }) => {
+        options?.onSuccess?.({ session: { id: 'rematch-1' } });
+      }
+    );
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Explore claims' }));
+
+    expect(mocks.acceptChallengeMutate).toHaveBeenCalled();
+    // debateVideo is off here, so the card records the mic alone.
+    expect(readRematchJoinIntent('rematch-1')).toStrictEqual({ micOn: false, source: 'card' });
+  });
+
+  it('walks the person who accepted into the picker without a card', async () => {
+    mocks.currentUserId = 'user-recipient';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Join room' })).toBeNull();
+  });
+
+  it('still walks them in when nothing remembers the answer', async () => {
+    mocks.currentUserId = 'user-recipient';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+    clearRematchJoinIntents();
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+  });
+
+  it('holds the sender until they choose', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await screen.findByRole('button', { name: 'Join room' });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('shows no card to the person who accepted', async () => {
+    mocks.currentUserId = 'user-recipient';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByRole('button', { name: 'Join room' })).toBeNull();
+  });
+
+  it('asks the sender how to join instead of moving them', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Remote speaker accepted your request')).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('shows no card for a session a room holds', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    const activity = challengeRematchActivity();
+    mocks.upcomingRooms = [upcomingRoom({ room_id: 'room-1', rematch_session_id: activity.rematch!.id })];
+    mocks.activity = activity;
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  it('shows no card for a session carrying the rooms sentinel space', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    const activity = challengeRematchActivity();
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_space_id: 'debates' } };
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  it('shows no card over a debate room', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/debate/room-1';
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  it('waits for the room list before showing the card', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsSettled = false;
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  it('shows no card once they are in the picker it would send them to', async () => {
+    mocks.currentUserId = 'user-requester';
+    const activity = challengeRematchActivity();
+    mocks.pathname = `/space/${activity.rematch!.source_space_id}/debates/rematches/${activity.rematch!.id}`;
+    mocks.activity = activity;
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  it('closes the card as soon as it is answered, before the navigation commits', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+    let letThePushThrough!: () => void;
+    const release = registerLobbyStepOut(
+      () =>
+        new Promise<void>(resolve => {
+          letThePushThrough = resolve;
+        })
+    );
+
+    try {
+      render(<DebateCoordinator />);
+      await screen.findByText('Remote speaker accepted your request');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
+
+      expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+      expect(mocks.push).not.toHaveBeenCalled();
+
+      await act(async () => {
+        letThePushThrough();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    } finally {
+      release();
+    }
+  });
+
+  it('leaves a later card usable after one has been answered', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    const first = challengeRematchActivity();
+    mocks.activity = first;
+
+    const view = render(<DebateCoordinator />);
+    await screen.findByText('Remote speaker accepted your request');
+    fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
+
+    // A different challenge, accepted after the first was answered.
+    mocks.activity = { ...first, rematch: { ...first.rematch!, id: 'rematch-2' } };
+    view.rerender(<DebateCoordinator />);
+
+    await screen.findByText('Remote speaker accepted your request');
+    expect(screen.getByRole('button', { name: 'Join room' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeEnabled();
+  });
+
+  it('walks them in once they choose', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+    render(<DebateCoordinator />);
+    await screen.findByText('Remote speaker accepted your request');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join room' }));
+
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
+
+    expect(hasAnsweredRematchJoin('rematch-1')).toBe(true);
+  });
+
+  /*
+   * Declining tells the other person. They are waiting in the picker for someone who has decided
+   * not to come, and closing this card locally would leave them there until it expires.
+   */
+  it('leaves the session when the sender declines', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+    render(<DebateCoordinator />);
+    await screen.findByText('Remote speaker accepted your request');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+    expect(mocks.leaveRematchMutate).toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  /*
+   * The person who accepted answered on the challenge card a moment earlier, so they are walked in
+   * as before rather than asked twice.
+   */
+  it('does not ask someone who has already answered', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+    markRematchAnswered('rematch-1');
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  // One tab, the same rule the routing it replaces uses: visible *and* focused.
+  it('shows the card on no tab the viewer is not looking at', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.hasAttention = false;
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
@@ -809,6 +1106,20 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(screen.queryByText(/Your debate/)).not.toBeInTheDocument());
   });
 
+  // A reminded lobby stays in the list after it opens, including while the viewer is in it.
+  it('does not offer the lobby on screen, only another one', async () => {
+    mocks.pathname = '/debate/lobby-1';
+    mocks.roomAtPath = { kind: 'lobby' };
+    mocks.upcomingRooms = [upcomingRoom({ room_id: 'lobby1', kind: 'lobby', name: 'Here' })];
+
+    const { rerender } = render(<DebateCoordinator />);
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Join lobby' })).not.toBeInTheDocument());
+
+    mocks.upcomingRooms = [...mocks.upcomingRooms, upcomingRoom({ room_id: 'lobby2', kind: 'lobby', name: 'Next' })];
+    rerender(<DebateCoordinator />);
+    expect(await screen.findByRole('button', { name: 'Join lobby' })).toBeInTheDocument();
+  });
+
   it('snoozes a room for the session on Not now', async () => {
     mocks.pathname = '/space/space-1/claims';
     mocks.upcomingRooms = [upcomingRoom()];
@@ -840,6 +1151,24 @@ describe('DebateCoordinator', () => {
       await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
     }
   );
+
+  // GEO-3131. A lobby shares the room path but is where people wait between debates, so a
+  // challenge or request accepted there must take them into the picker.
+  it('routes a browsing rematch out of a lobby', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/debate/room-1';
+    mocks.roomAtPath = { kind: 'lobby' };
+    const activity = activityWithRematch('browsing');
+    mocks.activity = {
+      ...activity,
+      rematch: { ...activity.rematch!, source_debate_id: null, status: 'browsing' },
+      challenge: null,
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+  });
 
   // Nor may anything app-wide sit over a room, which is open for as long as the pair are in it.
   it('does not offer a rejoin bar over a debate room', async () => {
@@ -951,6 +1280,30 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(screen.getByText('Your debate is ready')).toBeInTheDocument());
+  });
+
+  // GEO-3149. The room is already open in another of the viewer's tabs: a modal with Decline in
+  // front of this one would only get in the way, so the non-blocking bar offers the way in.
+  it('offers a link instead of the ready prompt when another tab has the room', async () => {
+    window.localStorage.setItem(
+      'geo:debate-tab-claim:debate:debate-1',
+      JSON.stringify({ tabId: 'the-other-tab', at: Date.now() })
+    );
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+
+    try {
+      render(<DebateCoordinator />);
+
+      expect(await screen.findByRole('button', { name: /Your debate is open in another tab/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+    } finally {
+      window.localStorage.removeItem('geo:debate-tab-claim:debate:debate-1');
+    }
   });
 
   // The loop this stops: the room hides itself and returns whoever opens a debate whose recording
@@ -1399,6 +1752,43 @@ function upcomingRoom(overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDeba
     others_present: false,
     rematch_session_id: null,
     ...overrides,
+  };
+}
+
+/**
+ * A profile challenge's picker session, named.
+ *
+ * The plain fixture carries `participants: []`, which is not a shape production produces for a
+ * challenge — it names both people. Sessions that cannot name them fall back to routing, so a test
+ * using the empty fixture exercises that fallback rather than the card.
+ */
+function challengeRematchActivity(): DebateActivity {
+  const activity = activityWithRematch('browsing');
+  return {
+    ...activity,
+    challenge: null,
+    rematch: {
+      ...activity.rematch!,
+      source_debate_id: null,
+      participants: [
+        {
+          user_id: 'user-requester',
+          profile_space_id: 'profile-requester',
+          display_name: 'You',
+          avatar_cid: null,
+          participant_slot: 1,
+          consented_at: null,
+        },
+        {
+          user_id: 'user-recipient',
+          profile_space_id: 'profile-recipient',
+          display_name: 'Remote speaker',
+          avatar_cid: null,
+          participant_slot: 2,
+          consented_at: null,
+        },
+      ],
+    },
   };
 }
 

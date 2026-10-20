@@ -14,12 +14,6 @@ vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: string) => mocks.flags[id] ?? false,
 }));
 
-// The panel has its own suites; this one is about whether it is rendered at all. It stands in as an
-// `<aside>` because that element is the thing the layout keys on — see the reflow case below.
-vi.mock('./explore-side-panel', () => ({
-  ExploreSidePanel: () => <aside data-testid="explore-side-panel" />,
-}));
-
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));
 vi.mock('~/core/topics/use-followed-topics', () => ({
   useFollowedTopics: () => ({ topicIds: new Set(['bbbb', 'aaaa']), isLoading: false }),
@@ -28,6 +22,7 @@ vi.mock('~/core/topics/use-followed-topics', () => ({
 vi.mock('./explore-welcome-banner', () => ({ ExploreWelcomeBanner: () => null }));
 // Stubbed alongside its siblings above: the capture reaches Privy and wagmi for the account
 // shortcut it offers (GEO-2948), and this suite is about which column the layout reserves.
+vi.mock('./explore-live-lobbies-banner', () => ({ ExploreLiveLobbiesBanner: () => null }));
 vi.mock('./email-capture-popup', () => ({ ExploreEmailCapturePopup: () => null }));
 vi.mock('~/partials/feed/entity-feed', () => ({
   EntityFeed: (props: Record<string, unknown>) => {
@@ -38,13 +33,9 @@ vi.mock('~/partials/feed/entity-feed', () => ({
 
 function renderExplore() {
   return render(
-    <ExplorePage
-      featuredSpaces={[]}
-      featuredRankings={[]}
-      pendingMembershipSpaceIds={[]}
-      memberOrEditorSpaceIds={[]}
-      communityCalls={[]}
-    />
+    // The panel has its own suites; this one is about whether it is rendered at all. It stands in as
+    // an `<aside>` because that element is the thing the layout keys on — see the reflow case below.
+    <ExplorePage sidePanel={<aside data-testid="explore-side-panel" />} />
   );
 }
 
@@ -116,16 +107,7 @@ describe('ExplorePage For you sort', () => {
   // Privy restores the wallet after mount; until then the follows read as empty.
   it('waits for a signed-in account instead of serving Best first', () => {
     mocks.flags = { forYouFeed: true };
-    render(
-      <ExplorePage
-        featuredSpaces={[]}
-        featuredRankings={[]}
-        pendingMembershipSpaceIds={[]}
-        memberOrEditorSpaceIds={[]}
-        communityCalls={[]}
-        signedIn
-      />
-    );
+    render(<ExplorePage sidePanel={null} walletAddress="0x00000000000000000000000000000000000000aa" />);
 
     expect(mocks.feedProps.at(-1)?.followedTopicIds).toBeNull();
   });

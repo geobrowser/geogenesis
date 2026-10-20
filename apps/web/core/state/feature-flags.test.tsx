@@ -26,6 +26,8 @@ describe('feature flags', () => {
     // GEO-2914 hid the Explore side panel behind this rather than deleting it, so off is the
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
+    expect(defaultFeatureFlags.lobbyHosting).toBe(false);
+    expect(defaultFeatureFlags.debateVideo).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
@@ -34,16 +36,25 @@ describe('feature flags', () => {
       debateFormatSelector: false,
       exploreSidePanel: false,
       forYouFeed: false,
+      lobbyHosting: false,
+      debateVideo: false,
       bountiesTab: true,
     });
   });
 
-  // Claims, debates and scheduling shipped to everyone. Every browser that ever opened the flags
-  // dialog still has the retired ids in storage, and they must not survive normalization — a stray
-  // `questionsTab` reaching the dialog would render a checkbox for a flag nothing reads.
+  // Claims, debates, scheduling and lobby joining shipped to everyone. Every browser that ever
+  // opened the flags dialog still has the retired ids in storage, and they must not survive
+  // normalization — a stray `questionsTab` reaching the dialog would render a checkbox for a flag
+  // nothing reads.
   it('drops the retired flags that are still in storage', () => {
     expect(
-      normalizeFeatureFlags({ questionsTab: true, debatesTab: true, peerAvailability: true, debateDebugging: true })
+      normalizeFeatureFlags({
+        questionsTab: true,
+        debatesTab: true,
+        peerAvailability: true,
+        lobbyJoining: true,
+        debateDebugging: true,
+      })
     ).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
@@ -51,6 +62,8 @@ describe('feature flags', () => {
       debateFormatSelector: false,
       exploreSidePanel: false,
       forYouFeed: false,
+      lobbyHosting: false,
+      debateVideo: false,
       bountiesTab: true,
     });
   });
@@ -77,6 +90,8 @@ describe('feature flags', () => {
       debateFormatSelector: true,
       exploreSidePanel: false,
       forYouFeed: false,
+      lobbyHosting: false,
+      debateVideo: false,
       bountiesTab: true,
     });
   });

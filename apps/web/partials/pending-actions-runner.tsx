@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { useOnSignOut } from '~/core/hooks/use-on-sign-out';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
@@ -19,6 +20,12 @@ export function PendingActionsRunner() {
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const reportError = useReportError();
+
+  // Signing out — here, in another tab, or by session expiry — drops whatever is queued. A logout in
+  // this tab reloads the page and takes the queue with it, but the other two leave this tab running:
+  // a queued action would otherwise wait for the next account to sign in here and publish as them.
+  // Privy's `authenticated`, not the smart account, which reads null for a moment mid-sign-up.
+  useOnSignOut(() => setActions([]));
 
   const runningRef = React.useRef<Set<string>>(new Set());
   const [retryNonce, setRetryNonce] = React.useState(0);
@@ -38,7 +45,9 @@ export function PendingActionsRunner() {
       void (async () => {
         try {
           await action.run();
-          setActions(prev => prev.filter(a => a.id !== action.id));
+          // This instance, not every action with its id: a newer press for the same control may have
+          // replaced it while it ran, and that one still has to run.
+          setActions(prev => prev.filter(a => a !== action));
         } catch (error) {
           // Keep the action queued and the optimistic UI on screen
           reportError(`Couldn't save ${action.label}: ${describeError(error)}`, () => setRetryNonce(n => n + 1));

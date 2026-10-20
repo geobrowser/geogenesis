@@ -1,4 +1,5 @@
-export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates';
+/** `calendar` is the full-screen week everyone's free time is drawn on (GEO-3152). */
+export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates' | 'profile-positions' | 'calendar' | 'lobby';
 /**
  * Surfaces with actions but no filters. The last four are availability and scheduling's own
  * dialogs and prompts, which open from the hub and from outside it alike.
@@ -24,6 +25,14 @@ const ACTION_SURFACE_ANALYTICS = {
     labelPrefix: 'Profile debates',
     actionIntent: 'profile_debates_action',
   },
+  'profile-positions': {
+    labelPrefix: 'Profile positions',
+    actionIntent: 'profile_positions_action',
+  },
+  calendar: {
+    labelPrefix: 'Debate calendar',
+    actionIntent: 'debate_calendar_action',
+  },
   'request-popup': {
     labelPrefix: 'Debate request popup',
     actionIntent: 'debate_request_popup_action',
@@ -44,13 +53,28 @@ const ACTION_SURFACE_ANALYTICS = {
     labelPrefix: 'Scheduled debate prompt',
     actionIntent: 'scheduled_debate_prompt_action',
   },
+  lobby: {
+    labelPrefix: 'Debate lobby',
+    actionIntent: 'debate_lobby_action',
+  },
 } as const satisfies Record<DebateActionAnalyticsSurface, { labelPrefix: string; actionIntent: string }>;
 
 const FILTER_INTENTS = {
   hub: 'filter_debates_hub',
   rematch: 'filter_debate_rematch',
   'profile-debates': 'filter_profile_debates',
+  'profile-positions': 'filter_profile_positions',
+  calendar: 'filter_debate_calendar',
+  lobby: 'filter_debate_lobby',
 } as const satisfies Record<DebateAnalyticsSurface, string>;
+
+/**
+ * A control's analytics label on a surface, `Debate hub Request debate` on the hub. For a label
+ * pinned to keep a series going through a copy change, so every surface pins it the same way.
+ */
+export function debateAnalyticsLabel(surface: DebateActionAnalyticsSurface, action: string) {
+  return `${ACTION_SURFACE_ANALYTICS[surface].labelPrefix} ${action}`;
+}
 
 /** Stable metadata for actions shared across debate surfaces. */
 export function debateActionAnalyticsAttributes(
@@ -58,11 +82,9 @@ export function debateActionAnalyticsAttributes(
   action: string,
   intent?: string
 ) {
-  const analytics = ACTION_SURFACE_ANALYTICS[surface];
-
   return {
-    'data-geo-analytics-label': `${analytics.labelPrefix} ${action}`,
-    'data-geo-analytics-intent': intent ?? analytics.actionIntent,
+    'data-geo-analytics-label': debateAnalyticsLabel(surface, action),
+    'data-geo-analytics-intent': intent ?? ACTION_SURFACE_ANALYTICS[surface].actionIntent,
   } as const;
 }
 
@@ -77,7 +99,7 @@ export function debateSurfaceAnalyticsAttributes(
 
 /**
  * Stable metadata for hub-only controls that cannot use {@link HubPillButton} because their visual
- * treatment is different (inline links, menus, and the schedule callout).
+ * treatment is different (inline links and menus).
  */
 export function hubAnalyticsAttributes(action: string, intent?: string) {
   return debateActionAnalyticsAttributes('hub', action, intent);

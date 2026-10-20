@@ -7,6 +7,9 @@ import cx from 'classnames';
 import { Megaphone } from '~/design-system/icons/megaphone';
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
+import { useLobbyLineup } from '../lobbies/live-lobbies';
+import { LiveLobbiesPreview } from '../lobbies/live-lobbies-preview';
+import { useLobbyReminderReplay } from '../lobbies/lobby-reminder-press';
 import { useDebateRequests } from './hooks';
 import { useDebatesHub } from './use-debates-hub';
 import { useUnexpiredRequests } from './use-request-countdown';
@@ -38,29 +41,49 @@ export function DebatesHubButton() {
     : (requests ? incoming.length : (activity?.incoming_request_count ?? 0)) +
       (activity?.scheduled_awaiting_answer_count ?? 0);
 
+  // GEO-3268. Mounting the lineup here, on every page, is also what keeps the lobby list live with
+  // the panel closed: it holds the matchmaking scope that carries `debate.lobbies_changed`.
+  const { live } = useLobbyLineup();
+  const liveLabel = liveLobbiesLabel(live);
+  // GEO-3289. A reminder a visitor asked for before signing up is set from here once their account
+  // can, so it does not wait on the panel being open or the lobby's card still showing.
+  useLobbyReminderReplay();
+
   return (
-    <button
-      type="button"
-      data-debates-hub-opener
-      data-geo-analytics-label="Navbar debate hub toggle"
-      data-geo-analytics-intent="toggle_debates_hub"
-      // The pending count is the whole point of the button, and an aria-label would otherwise
-      // override the visible number. It says "Debate" to match the label below: a control should
-      // answer to the word it shows, so the two move together.
-      //
-      // Counted, because this is read aloud and "1 pending requests" is not a sentence.
-      aria-label={
-        requestCount > 0 ? `Debate, ${requestCount} pending ${requestCount === 1 ? 'request' : 'requests'}` : 'Debate'
-      }
-      aria-expanded={isOpen}
-      onClick={() => toggle()}
-      className={cx(
-        'flex items-center gap-1.5 rounded-full px-2.5 py-1.5 transition-colors duration-200',
-        isOpen ? 'bg-divider text-text' : 'bg-grey-01 text-text hover:bg-divider focus:bg-divider'
-      )}
-    >
-      <Megaphone />
-      {/* A megaphone says nothing about debates on its own (GEO-2689). "Debate" reads as the
+    <LiveLobbiesPreview lobbies={live} disabled={isOpen}>
+      <button
+        type="button"
+        data-debates-hub-opener
+        data-geo-analytics-label="Navbar debate hub toggle"
+        data-geo-analytics-intent="toggle_debates_hub"
+        // The pending count is the whole point of the button, and an aria-label would otherwise
+        // override the visible number. It says "Debate" to match the label below: a control should
+        // answer to the word it shows, so the two move together.
+        //
+        // Counted, because this is read aloud and "1 pending requests" is not a sentence.
+        aria-label={[
+          'Debate',
+          live.length === 0 ? null : live.length === 1 ? 'a lobby is live' : `${live.length} lobbies are live`,
+          requestCount > 0 ? `${requestCount} pending ${requestCount === 1 ? 'request' : 'requests'}` : null,
+        ]
+          .filter(Boolean)
+          .join(', ')}
+        aria-expanded={isOpen}
+        onClick={() => toggle()}
+        className={cx(
+          'relative flex items-center gap-1.5 rounded-full transition-colors duration-200',
+          // Live: the navbar's black pill, the Log in button's, so it reads as the thing to press.
+          // The chip sits 4px in from the right edge; phones drop it, and the usual padding returns.
+          liveLabel
+            ? 'bg-[#151515] py-1 pr-1 pl-2.5 text-white hover:bg-[#151515]/90 focus:bg-[#151515]/90 mobile:px-2.5 mobile:py-1.5'
+            : cx(
+                'px-2.5 py-1.5',
+                isOpen ? 'bg-divider text-text' : 'bg-grey-01 text-text hover:bg-divider focus:bg-divider'
+              )
+        )}
+      >
+        <Megaphone />
+        {/* A megaphone says nothing about debates on its own (GEO-2689). "Debate" reads as the
           invitation the button is, where the panel behind it stays headed "Debates" for the things
           it lists — the `aria-label` above follows this word rather than the panel's, so the button
           answers to what it shows.
@@ -70,8 +93,33 @@ export function DebatesHubButton() {
           Dropped on phones, where the navbar has the least room to give and the label is the only
           thing here that can be spared. The `aria-label` carries the name through regardless, so
           nothing is lost for anyone reading it that way. */}
-      <span className="text-browseMenu font-normal not-italic mobile:hidden">Debate</span>
-      {requestCount > 0 ? <span className="text-metadataMedium leading-none">{requestCount}</span> : null}
-    </button>
+        <span className="text-browseMenu font-normal not-italic mobile:hidden">Debate</span>
+        {requestCount > 0 ? <span className="text-metadataMedium leading-none">{requestCount}</span> : null}
+        {liveLabel ? (
+          <>
+            {/* The chip: green with a pulsing dot, "Live · 14" for one lobby and "2 live" for more.
+              Phones have no room for it beside the icon, so they get the dot alone. */}
+            <span
+              aria-hidden
+              className="inline-flex h-5 items-center gap-[5px] rounded-full bg-green pr-2 pl-[7px] text-breadcrumb text-text mobile:hidden"
+            >
+              <span className="size-1.5 animate-pulse-strong rounded-full bg-text motion-reduce:animate-none" />
+              {liveLabel}
+            </span>
+            <span
+              aria-hidden
+              data-testid="live-lobby-dot"
+              className="absolute -top-0.5 -right-0.5 hidden size-2.5 animate-pulse-strong rounded-full border-2 border-white bg-green motion-reduce:animate-none mobile:block"
+            />
+          </>
+        ) : null}
+      </button>
+    </LiveLobbiesPreview>
   );
+}
+
+/** The chip's words: the one lobby's headcount, or how many lobbies; `null` with none live. */
+export function liveLobbiesLabel(live: { headcount: number }[]) {
+  if (live.length === 0) return null;
+  return live.length === 1 ? `Live · ${live[0]!.headcount}` : `${live.length} live`;
 }

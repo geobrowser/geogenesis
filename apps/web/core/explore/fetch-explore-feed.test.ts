@@ -333,6 +333,65 @@ describe('a type selection filters server-side (GEO-2885)', () => {
   });
 });
 
+describe('a window reorder (GEO-3140 For you, GEO-3144 interleaving)', () => {
+  const claims = Array.from({ length: 30 }, (_, i) => entity(`c${i}`, CLAIM_TYPE_ID));
+
+  it("names Best's version when nothing replaces it", async () => {
+    windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
+    const result = await fetchExploreFeed({ ...feedArgs, typeIds: [CLAIM_TYPE_ID] });
+    expect(result.feed).toEqual({ name: 'best', version: 'best-1' });
+  });
+
+  it("serves the reordered window, through Best's own diversity pass, under the reorder's name", async () => {
+    windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
+    const seen: string[][] = [];
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      typeIds: [CLAIM_TYPE_ID],
+      reorderWindow: async (rows, { windowKey, arrange }) => {
+        seen.push([windowKey, ...rows.map(r => r.entityId)]);
+        return { rows: arrange([...rows].reverse()), feed: { name: 'for-you', version: 'for-you-1.0+web.1' } };
+      },
+    });
+    expect(seen[0]?.slice(0, 2)).toEqual(['', 'c0']);
+    expect(result.feed).toEqual({ name: 'for-you', version: 'for-you-1.0+web.1' });
+    expect(result.items[0]?.entityId).toBe('c29');
+    expect(result.items).toHaveLength(22);
+  });
+
+  it('cuts later pages from the same reordered window, without repeats', async () => {
+    windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
+    const reorderWindow = async (rows: { entityId: string }[]) => ({
+      rows: [...rows].reverse() as never,
+      feed: { name: 'for-you' as const, version: 'v' },
+    });
+    const first = await fetchExploreFeed({ ...feedArgs, typeIds: [CLAIM_TYPE_ID], reorderWindow });
+    const second = await fetchExploreFeed({
+      ...feedArgs,
+      typeIds: [CLAIM_TYPE_ID],
+      reorderWindow,
+      cursor: first.nextCursor,
+    });
+    const all = [...first.items, ...second.items].map(i => i.entityId);
+    expect(new Set(all).size).toBe(30);
+  });
+
+  it('falls back to Best when the reorder declines', async () => {
+    windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
+    const result = await fetchExploreFeed({ ...feedArgs, typeIds: [CLAIM_TYPE_ID], reorderWindow: async () => null });
+    expect(result.feed?.name).toBe('best');
+    expect(result.items[0]?.entityId).toBe('c0');
+  });
+
+  it('is not consulted on New', async () => {
+    windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
+    const reorderWindow = vi.fn();
+    const result = await fetchExploreFeed({ ...feedArgs, sort: 'new', typeIds: [CLAIM_TYPE_ID], reorderWindow });
+    expect(reorderWindow).not.toHaveBeenCalled();
+    expect(result.feed).toBeUndefined();
+  });
+});
+
 describe('a complete contextual population', () => {
   it('exhausts relation pages, deduplicates source entities, and preserves all feed guards', async () => {
     windows.queue = [
@@ -586,13 +645,13 @@ describe('leading Best with a playable debate', () => {
     `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   const mediaAsked: string[] = [];
 
-  const withMedia = (processed: Record<string, boolean>) =>
+  const withMedia = (processed: Record<string, boolean>, stills: string[] = []) =>
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
         mediaAsked.push(url);
         const id = Object.keys(processed).find(hex => url.includes(`/debates/${uuid(hex)}/media`));
-        const artifacts = id && processed[id] ? [{ kind: 'final_video' }] : [];
+        const artifacts = id && processed[id] ? [{ kind: 'final_video' }, ...stills.map(kind => ({ kind }))] : [];
         return new Response(JSON.stringify({ artifacts }), { status: 200 });
       })
     );
@@ -655,6 +714,32 @@ describe('leading Best with a playable debate', () => {
 
     expect(mediaAsked).toEqual([]);
   });
+
+  // GEO-3280. The card paints these before its own debate and media queries return.
+  it("hands the lead debate's stills to the card, and only the lead's", async () => {
+    windows.queue = [rankedWindow()];
+    withMedia({ [D1]: true, [D2]: true }, ['speaker_still_slot_1', 'speaker_still_slot_2']);
+
+    const result = await fetchExploreFeed(leadArgs);
+    const [lead, ...rest] = result.items;
+
+    expect(lead.entityId).toBe(D1);
+    expect(lead.debatePosters).toEqual({
+      slot1: expect.stringMatching(new RegExp(`/debates/${D1}/media/artifacts/speaker_still_slot_1/content$`)),
+      slot2: expect.stringMatching(new RegExp(`/debates/${D1}/media/artifacts/speaker_still_slot_2/content$`)),
+    });
+    expect(rest.every(item => item.debatePosters === undefined)).toBe(true);
+  });
+
+  it('gives the lead no stills when geo-chat cut none', async () => {
+    windows.queue = [rankedWindow()];
+    withMedia({ [D2]: true });
+
+    const result = await fetchExploreFeed(leadArgs);
+
+    expect(result.items[0].entityId).toBe(D2);
+    expect(result.items[0].debatePosters).toBeUndefined();
+  });
 });
 
 /** GEO-3083. For you: the followed-topic stream mixed 3:1 with Best, both under Best's rules. */
@@ -714,7 +799,18 @@ describe('For you', () => {
     expect(topic).toMatchObject({ topicIds: [TOPIC_A, TOPIC_B], offset: 0, first: 66, maxPerTopic: 66 });
     expect(best).toMatchObject({ offset: 0, first: 66, maxPerType: 66, topicIds: [TOPIC_A, TOPIC_B] });
     expect(topic.typeIds).toEqual(best.typeIds);
-    expect((topic.filter as { or?: unknown }).or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
+    // The topic walk applies the debate-tag rule itself (gaia#984); Best still takes it as a filter.
+    expect(topic.debateTaggedClaims).toBe(true);
+    expect((topic.filter as { or?: unknown } | undefined)?.or).toBeUndefined();
+    expect((best.filter as { or?: unknown }).or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
+  });
+
+  it('leaves the debate-tag rule off the topic walk when the feed does not ask for it', async () => {
+    respond(claims('t', 5), claims('b', 5));
+
+    await fetchExploreFeed({ ...forYouArgs, requireDebateTagOnClaims: false });
+
+    expect(opsOf('ExploreForYouConnection')[0]?.debateTaggedClaims).toBe(false);
   });
 
   it('serves three followed items then one Best item', async () => {

@@ -1,3 +1,4 @@
+import { uuidToHex } from '~/core/id/normalize';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 
 /**
@@ -77,6 +78,17 @@ export const POSITION_VOTE_KINDS = [1] as const;
  * same set as the New order, which drops the retractions itself.
  */
 export const POSITION_VOTE_TYPES = [0, 1] as const;
+
+/** Entity filter shared by answered-claim counts and "Hide my positions" exclusions. */
+export function heldPositionFilter(personalSpaceId: string) {
+  return {
+    votedBy: {
+      userId: uuidToHex(personalSpaceId),
+      kinds: [...POSITION_VOTE_KINDS],
+      types: [...POSITION_VOTE_TYPES],
+    },
+  };
+}
 
 /**
  * Subspace relations that mean somebody vouched for this space.

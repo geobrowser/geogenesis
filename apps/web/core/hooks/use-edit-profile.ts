@@ -26,7 +26,7 @@ import { store } from '~/core/sync/use-sync-engine';
 import type { Profile, Relation, Value } from '~/core/types';
 import { findMediaUrlValue, useEntityAvatarUrl, useEntityCoverUrl } from '~/core/utils/use-entity-media';
 
-import { avatarAtom } from '~/partials/onboarding/dialog';
+import { avatarAtom } from '~/partials/onboarding/onboarding-atoms';
 import type { ProfileImageKind } from '~/partials/profile/profile-edit-rules';
 
 export type ProfileImageEdit =
