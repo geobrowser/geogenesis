@@ -30,6 +30,7 @@ import { type TurnState, speakerLabel, turnStateFromSegments } from '~/core/deba
 import { turnTimerRimMask } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { ROUND_CARD_MS, roundBadgeAt, roundCardAt, roundParts } from '~/core/debates/round-cues';
+import { fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
 import {
   type AttachedStream,
   attachStreamSource,
@@ -156,6 +157,11 @@ type DebateFeedPlayerProps = {
   holdFullPlayback?: boolean;
   /** Clips to loop on a held card in place of the stills. Defaults to `debatePreviewClips`. */
   previewClips?: DebatePreviewClips;
+  /**
+   * The stills the feed already painted, so the player shows the very URLs the card did instead of
+   * resolving its own and fetching each image a second time.
+   */
+  stills?: { slot1: string | null; slot2: string | null };
 };
 
 /** The longest `activateBothInGesture` holds pause ticks while its re-plays settle. */
@@ -174,6 +180,7 @@ export function DebateFeedPlayer({
   onPlaybackState,
   holdFullPlayback = false,
   previewClips,
+  stills,
 }: DebateFeedPlayerProps) {
   const [fullPlaybackStarted, setFullPlaybackStarted] = useAtom(feedFullPlaybackStartedAtom);
   /*
@@ -211,8 +218,8 @@ export function DebateFeedPlayer({
     slot2VideoRef,
     slot1Participant,
     slot2Participant,
-    slot1Poster,
-    slot2Poster,
+    slot1Poster: controllerSlot1Poster,
+    slot2Poster: controllerSlot2Poster,
     urls,
     renditions,
     streams,
@@ -263,6 +270,8 @@ export function DebateFeedPlayer({
    */
   const slot1Src = detached ? null : urls.slot1;
   const slot2Src = detached ? null : urls.slot2;
+  const slot1Poster = stills?.slot1 ?? controllerSlot1Poster;
+  const slot2Poster = stills?.slot2 ?? controllerSlot2Poster;
   // Each re-attach brings new elements, so the hold re-arms for them. Derived during render so the
   // hold is in place before the autoplay effect sees the re-attached pair.
   const [attachment, setAttachment] = React.useState({ detached, generation: 0 });
@@ -975,6 +984,7 @@ export function DebateFeedPlayer({
           byline={bylineFor(slot1Participant)}
           src={slot1Src}
           poster={slot1Poster}
+          posterFallback={speakerStillContentUrl(debate.id, 1)}
           posterEager={active || preload}
           videoRef={slot1VideoRef}
           cutCanvasRef={stamped ? slot1CanvasRef : undefined}
@@ -1059,6 +1069,7 @@ export function DebateFeedPlayer({
           byline={bylineFor(slot2Participant)}
           src={slot2Src}
           poster={slot2Poster}
+          posterFallback={speakerStillContentUrl(debate.id, 2)}
           posterEager={active || preload}
           videoRef={slot2VideoRef}
           cutCanvasRef={stamped ? slot2CanvasRef : undefined}
@@ -1299,6 +1310,7 @@ function DebaterVideo({
   byline,
   src,
   poster = null,
+  posterFallback = null,
   posterEager = false,
   videoRef,
   cutCanvasRef,
@@ -1342,6 +1354,8 @@ function DebaterVideo({
    * while its partner cannot show a frame, and an attribute poster would hide with it.
    */
   poster?: string | null;
+  /** The durable route for the still, for when `poster` is a presigned URL that has lapsed. */
+  posterFallback?: string | null;
   /** Fetch the still now rather than when it nears the viewport: the active card and the preloading one. */
   posterEager?: boolean;
   videoRef: React.RefObject<HTMLVideoElement | null>;
@@ -1681,6 +1695,7 @@ function DebaterVideo({
         {poster && (
           <img
             src={poster}
+            onError={posterFallback ? fallBackToDurableStill(posterFallback) : undefined}
             alt=""
             data-debate-poster=""
             aria-hidden
