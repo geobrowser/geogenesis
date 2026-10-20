@@ -42,6 +42,7 @@ import {
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { castLocalVote } from '~/core/state/cast-local-vote';
+import { useHoldVote } from '~/core/state/held-votes';
 import { removeLocalVote, useLocalVote } from '~/core/state/local-votes';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
@@ -187,7 +188,7 @@ function EntityResponseButtons({
   // Known to be signed out — not still restoring a session, when `authenticated` reads false too.
   const signedOut = authReady && !authenticated;
   const authResolving = useAuthResolving();
-  const [heldDirection, setHeldDirection] = React.useState<ActiveResponseDirection | null>(null);
+  const holdVote = useHoldVote();
   const queryClient = useQueryClient();
   // Signed in without a usable space, a vote is held only when one is on its way: being created for
   // a new account, or still loading for a returning one. With neither, nothing would ever publish it,
@@ -233,8 +234,9 @@ function EntityResponseButtons({
   //
   // Replayed through whichever control is mounted now (`useQueuedAction`): its response hook knows
   // the personal space, and keys the in-flight state this control draws by it.
+  const queuedVoteId = `entity-vote:${entityId}:${spaceId}`;
   const queuedVote = useQueuedAction({
-    id: `entity-vote:${entityId}:${spaceId}`,
+    id: queuedVoteId,
     component: 'entity_vote_buttons',
     label: 'your vote',
     // Held until the viewer's own side is known: right after sign-in it is still loading, and its
@@ -265,13 +267,17 @@ function EntityResponseButtons({
 
   // A queued (pre-personal-space) vote overrides the mutation's own optimistic state until it is
   // replayed and cleared from the queue, at which point the mutation's state takes over.
-  const effectiveOptimistic = queuedResponse !== undefined ? queuedResponse : optimisticResponse;
+  // While sign-in resolves, a queued press may yet become a device vote.
+  const heldResponse = authResolving ? queuedResponse : undefined;
+  const countedQueuedResponse = authResolving ? undefined : queuedResponse;
+  const effectiveOptimistic = countedQueuedResponse !== undefined ? countedQueuedResponse : optimisticResponse;
   const activeResponse = effectiveOptimistic === undefined ? serverResponseDirection : effectiveOptimistic;
   // A vote cast signed out and kept on this device until a save publishes it (GEO-3214). Drawn as the
   // viewer's — the arrow fills — but left out of the score and the split: it doesn't count until it
   // is saved, and the counts say so by not moving. `activeResponse` stays the counted side.
   const localDirection = useLocalVote(entityId, spaceId, responseKind);
-  const drawnResponse = effectiveOptimistic === undefined && localDirection !== null ? localDirection : activeResponse;
+  const drawnResponse =
+    heldResponse ?? (effectiveOptimistic === undefined && localDirection !== null ? localDirection : activeResponse);
 
   const positiveResponses = BigInt(responseCounts?.positive ?? 0);
   const negativeResponses = BigInt(responseCounts?.negative ?? 0);
@@ -300,11 +306,20 @@ function EntityResponseButtons({
       // Signed out: vote on this device, with no sign-in in the way. The save sheet asks for an
       // account once there are a few.
       //
-      // Still resolving, the side is held instead. `!smartAccount` reads as signed out for that
-      // moment, and acting on it showed a signed-in viewer the sign-in prompt — or, before that,
-      // dropped the press, which loses a fast tap on a page that has only just loaded.
+      // Still resolving, the side is queued and held instead, app-wide (`HeldVotesRunner`).
+      // `!smartAccount` reads as signed out for that moment, and acting on it showed a signed-in
+      // viewer the sign-in prompt — or, before that, dropped the press, which loses a fast tap on a
+      // page that has only just loaded.
       if (authResolving) {
-        setHeldDirection(direction);
+        queueVoteWrite(direction);
+        holdVote({
+          actionId: queuedVoteId,
+          entityId,
+          spaceId,
+          responseKind,
+          title: entity?.name ?? '',
+          attribution: getContext(),
+        });
         return;
       }
       if (signedOut && responseKind !== null) {
@@ -323,38 +338,6 @@ function EntityResponseButtons({
     }
     if (spaceOnTheWay) queueVoteWrite(direction);
   }
-
-  const actOnHeldPress = (direction: ActiveResponseDirection) => {
-    if (smartAccount) {
-      queueVoteWrite(direction);
-      return;
-    }
-
-    if (signedOut && responseKind !== null) {
-      castLocalVote({
-        entityId,
-        spaceId,
-        responseKind,
-        direction,
-        title: entity?.name ?? '',
-        attribution: getContext(),
-      });
-      return;
-    }
-
-    openPrivySignIn(direction);
-  };
-
-  const actOnHeldPressRef = React.useRef(actOnHeldPress);
-  React.useEffect(() => {
-    actOnHeldPressRef.current = actOnHeldPress;
-  });
-
-  React.useEffect(() => {
-    if (heldDirection === null || authResolving) return;
-    setHeldDirection(null);
-    actOnHeldPressRef.current(heldDirection);
-  }, [heldDirection, authResolving]);
 
   /** A press signed in replaces this entity's device vote rather than being saved over by it. */
   function dropLocalVote() {

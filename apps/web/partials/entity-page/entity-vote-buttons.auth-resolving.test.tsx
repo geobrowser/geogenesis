@@ -12,6 +12,8 @@ import { clearLocalVotes, readLocalVotes } from '~/core/state/local-votes';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 import { closeSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
+import { HeldVotesRunner } from '~/partials/held-votes-runner';
+
 import { EntityVoteButtons } from './entity-vote-buttons';
 
 const SPACE = '41e851610e13a19441c4d980f2f2ce6b';
@@ -71,7 +73,10 @@ function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <JotaiProvider store={store}>
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      <QueryClientProvider client={client}>
+        <HeldVotesRunner />
+        {children}
+      </QueryClientProvider>
     </JotaiProvider>
   );
 }
@@ -160,5 +165,75 @@ describe('a vote pressed while sign-in is still resolving', () => {
     renderButtons();
 
     for (const button of buttons()) expect(button).not.toBeDisabled();
+  });
+});
+
+describe('a vote held across the page and sticky-header arrows', () => {
+  function Page({ sticky }: { sticky: boolean }) {
+    return (
+      <>
+        <EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />
+        {sticky ? <EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" compact /> : null}
+      </>
+    );
+  }
+
+  const renderPage = () => {
+    const view = render(<Page sticky />, { wrapper });
+    return { rerender: (sticky: boolean) => view.rerender(<Page sticky={sticky} />) };
+  };
+  const pageArrows = () => buttons().slice(0, 2);
+  const stickyArrows = () => buttons().slice(2, 4);
+
+  it('carries out a press from the sticky header after it unmounts', async () => {
+    const page = renderPage();
+    fireEvent.click(stickyArrows()[0]!);
+    page.rerender(false);
+
+    mocks.authReady = true;
+    page.rerender(false);
+
+    await waitFor(() => expect(readLocalVotes().votes).toHaveLength(1));
+    expect(readLocalVotes().votes[0]!.direction).toBe('positive');
+    expect(queued()).toHaveLength(0);
+  });
+
+  it('casts one vote, not one toggling the other off, when both hold the same side', async () => {
+    const page = renderPage();
+    fireEvent.click(pageArrows()[0]!);
+    fireEvent.click(stickyArrows()[0]!);
+
+    mocks.authReady = true;
+    page.rerender(true);
+
+    await waitFor(() => expect(readLocalVotes().votes).toHaveLength(1));
+    expect(readLocalVotes().votes[0]!.direction).toBe('positive');
+  });
+
+  it('takes the last side pressed, whichever set took it', async () => {
+    const page = renderPage();
+    fireEvent.click(stickyArrows()[0]!);
+    fireEvent.click(pageArrows()[1]!);
+
+    mocks.authReady = true;
+    page.rerender(true);
+
+    await waitFor(() => expect(readLocalVotes().votes).toHaveLength(1));
+    expect(readLocalVotes().votes[0]!.direction).toBe('negative');
+  });
+
+  it('queues one write, for the last side pressed, for a viewer who turns out to be signed in', async () => {
+    mocks.authReady = true;
+    mocks.authenticated = true;
+    const page = renderPage();
+    fireEvent.click(pageArrows()[0]!);
+    fireEvent.click(stickyArrows()[1]!);
+
+    mocks.smartAccount = { account: { address: '0xviewer' } };
+    page.rerender(true);
+
+    await waitFor(() => expect(queued()).toEqual([expect.objectContaining({ intent: 'negative' })]));
+    expect(readLocalVotes().votes).toEqual([]);
+    expect(mocks.promptSignIn).not.toHaveBeenCalled();
   });
 });

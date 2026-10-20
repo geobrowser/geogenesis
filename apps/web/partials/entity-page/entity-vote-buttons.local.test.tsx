@@ -12,6 +12,8 @@ import { clearLocalVotes, readLocalVotes, toggleLocalVote } from '~/core/state/l
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 import { closeSaveVotesPrompt, readSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
+import { HeldVotesRunner } from '~/partials/held-votes-runner';
+
 import { EntityVoteButtons } from './entity-vote-buttons';
 
 const SPACE = '41e851610e13a19441c4d980f2f2ce6b';
@@ -78,7 +80,10 @@ function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <JotaiProvider store={store}>
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      <QueryClientProvider client={client}>
+        <HeldVotesRunner />
+        {children}
+      </QueryClientProvider>
     </JotaiProvider>
   );
 }
@@ -127,15 +132,20 @@ describe('a vote from a signed-out visitor', () => {
       wrapper,
     });
 
+    expect(await screen.findByText('1')).toBeInTheDocument();
+
     fireEvent.click(upvote());
 
     expect(readLocalVotes().votes).toEqual([]);
-    expect(queued()).toHaveLength(0);
+    expect(queued()).toEqual([expect.objectContaining({ intent: 'positive' })]);
+    expect(screen.getByText('1')).toBeInTheDocument();
 
     mocks.authReady = true;
     view.rerender(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />);
 
     await waitFor(() => expect(readLocalVotes().votes).toHaveLength(1));
+    expect(queued()).toHaveLength(0);
+    expect(screen.getByText('1')).toBeInTheDocument();
   });
 
   it('switches and takes back, like the arrows do signed in', () => {
