@@ -50,7 +50,7 @@ export function getSpaceRank(spaceId: string): number {
  * (`store.hydrateReactiveState`), so the "winner" would change between renders and take the query
  * keys and gateway scopes derived from it along with it.
  */
-function compareTiedSpaceIds(a: string, b: string): number {
+export function compareTiedSpaceIds(a: string, b: string): number {
   const left = normalizeSpaceId(a);
   const right = normalizeSpaceId(b);
   return left < right ? -1 : left > right ? 1 : 0;

@@ -5,6 +5,7 @@ import { Effect, Either } from 'effect';
 import { chunk } from '~/core/community/community-graphql';
 import { Environment } from '~/core/environment';
 import { normId } from '~/core/utils/norm-id';
+import { compareTiedSpaceIds } from '~/core/utils/space/space-ranking';
 
 import { graphql } from './graphql';
 
@@ -72,18 +73,14 @@ export async function fetchPersonalSpacesByPageIds(pageIds: string[]): Promise<M
     candidatesByPageId.set(pageId, [...(candidatesByPageId.get(pageId) ?? []), normId(space.id)]);
   }
 
-  // Someone can front more than one personal space — a second wallet that set up a space for the
+  // Someone can front more than one personal space: a second wallet that set up a space for the
   // same person (GEO-3395). Their positions and record live in whichever space they actually use,
-  // so the main one is picked by activity rather than by the order the API listed them.
-  // Validated before being written into the query, which takes them inline.
+  // so the main one is picked by activity rather than by the order the API listed them. Validated
+  // before being written into the activity query, which takes them inline.
   const contested = [...new Set([...candidatesByPageId.values()].filter(c => c.length > 1).flat())].filter(id =>
     IdUtils.isValid(id)
   );
-  // A failed read still answers: the id tie-break below picks the same space every time.
-  const activity =
-    contested.length > 0
-      ? await fetchSpaceActivity(contested).catch(() => new Map<string, SpaceActivity>())
-      : new Map<string, SpaceActivity>();
+  const activity = contested.length > 0 ? await fetchSpaceActivity(contested) : new Map<string, SpaceActivity>();
   for (const [pageId, candidates] of candidatesByPageId) {
     byPageId.set(pageId, candidates.length === 1 ? candidates[0] : mainSpace(candidates, activity));
   }
@@ -91,41 +88,44 @@ export async function fetchPersonalSpacesByPageIds(pageIds: string[]): Promise<M
 }
 
 type SpaceActivity = { votes: number; content: number };
-type CountsResult = Record<
-  string,
-  | { totalCount: number }
-  | { valuesConnection: { totalCount: number }; relationsConnection: { totalCount: number } }
-  | null
->;
+type Count = { totalCount: number };
+type ActivityResult = Record<`v${number}`, Count | null> &
+  Record<`s${number}`, { valuesConnection: Count; relationsConnection: Count } | null>;
 
-/** Votes cast as each space, and the values and relations in it, for the few spaces in contention. */
+/**
+ * Votes cast as each space, and the values and relations in it, for the few spaces in contention.
+ * A failed read answers with no activity rather than failing the whole lookup: `mainSpace` then
+ * falls back to the id, which picks the same space every time.
+ */
 async function fetchSpaceActivity(spaceIds: string[]): Promise<Map<string, SpaceActivity>> {
-  const selections = spaceIds
-    .map(
-      (id, index) => `
+  const activity = new Map<string, SpaceActivity>();
+  const selections = spaceIds.map(
+    (id, index) => `
     v${index}: userVotesConnection(first: 0, filter: { userId: { is: "${id}" } }) { totalCount }
     s${index}: space(id: "${id}") { valuesConnection(first: 0) { totalCount } relationsConnection(first: 0) { totalCount } }`
-    )
-    .join('');
-  const result = await run<CountsResult>(`query {${selections}\n}`);
-  const activity = new Map<string, SpaceActivity>();
+  );
+  const result = await run<ActivityResult>(`query {${selections.join('')}\n}`).catch(error => {
+    console.error('[personal-spaces] failed to read activity for contested spaces:', error);
+    return null;
+  });
+  if (!result) return activity;
+
   spaceIds.forEach((id, index) => {
-    const votes = result[`v${index}`] as { totalCount: number } | null;
-    const space = result[`s${index}`] as Extract<CountsResult[string], { valuesConnection: unknown }> | null;
+    const space = result[`s${index}`];
     activity.set(id, {
-      votes: votes?.totalCount ?? 0,
+      votes: result[`v${index}`]?.totalCount ?? 0,
       content: (space?.valuesConnection.totalCount ?? 0) + (space?.relationsConnection.totalCount ?? 0),
     });
   });
   return activity;
 }
 
-/** Most votes, then most content; the id breaks a full tie so the answer is the same on every read. */
+/** Most votes, then most content; a full tie goes to the lowest id, as space ranking breaks ties. */
 function mainSpace(candidates: string[], activity: Map<string, SpaceActivity>): string {
   const none: SpaceActivity = { votes: 0, content: 0 };
   return [...candidates].sort((a, b) => {
     const left = activity.get(a) ?? none;
     const right = activity.get(b) ?? none;
-    return right.votes - left.votes || right.content - left.content || (a < b ? -1 : a > b ? 1 : 0);
+    return right.votes - left.votes || right.content - left.content || compareTiedSpaceIds(a, b);
   })[0];
 }
