@@ -121,31 +121,21 @@ export function RecordingCountdownRing({
 
   const timerContents = (
     <>
-      {final ? (
+      {proportional ? (
         <span
           aria-hidden="true"
-          data-turn-timer-rim
-          className="absolute inset-0 rounded-full transition-[--turn-timer-rim] duration-500 ease-linear"
+          data-turn-timer-rim={final ? true : undefined}
+          data-turn-timer-track={final ? undefined : true}
+          className={cx(
+            'absolute rounded-full transition-[--turn-timer-rim] duration-500 ease-linear',
+            final ? 'inset-0' : 'size-[calc(100%-4px)]'
+          )}
           style={
             {
-              '--turn-timer-rim': `${rimDegrees}deg`,
-              backgroundImage: 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.28) 0deg)',
-              maskImage: finalRimMask,
-              WebkitMaskImage: finalRimMask,
-            } as React.CSSProperties
-          }
-        />
-      ) : proportional ? (
-        <span
-          aria-hidden="true"
-          data-turn-timer-track
-          className="absolute size-[calc(100%-4px)] rounded-full transition-[--turn-timer-rim] duration-500 ease-linear"
-          style={
-            {
-              '--turn-timer-rim': `${(1 - elapsedRatio) * 360}deg`,
-              backgroundImage: 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.3) 0deg)',
-              maskImage: turnTimerRimMask('2px'),
-              WebkitMaskImage: turnTimerRimMask('2px'),
+              '--turn-timer-rim': `${final ? rimDegrees : (1 - elapsedRatio) * 360}deg`,
+              backgroundImage: `conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,${final ? 0.28 : 0.3}) 0deg)`,
+              maskImage: final ? finalRimMask : turnTimerRimMask('2px'),
+              WebkitMaskImage: final ? finalRimMask : turnTimerRimMask('2px'),
             } as React.CSSProperties
           }
         />

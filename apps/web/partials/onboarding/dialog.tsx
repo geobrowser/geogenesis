@@ -1,6 +1,5 @@
 'use client';
 
-import { useLogout } from '@geogenesis/auth';
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import { useQueryClient } from '@tanstack/react-query';
@@ -31,6 +30,7 @@ import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { SearchResult } from '~/core/types';
 import { devLog } from '~/core/utils/dev-log';
 import { NavUtils, validateEntityId } from '~/core/utils/utils';
+import { useLogout } from '~/core/wallet/auth-hooks';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import {
@@ -53,11 +53,11 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
+import { avatarAtom, nameAtom, selectedTopicIdsAtom, stepAtom, topicIdAtom } from './onboarding-atoms';
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 type Step = OnboardingStep;
-
 
 const stepOrder: Partial<Record<Step, number>> = {
   start: 1,
@@ -68,8 +68,6 @@ const stepByOrder = Object.fromEntries(Object.entries(stepOrder).map(([step, ord
   number,
   Step
 >;
-
-import { avatarAtom, nameAtom, selectedTopicIdsAtom, stepAtom, topicIdAtom } from './onboarding-atoms';
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
 // How long the completion screen shows before we route the user onward. The

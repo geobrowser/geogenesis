@@ -1,6 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -10,6 +9,7 @@ import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identi
 import { useToast } from '~/core/hooks/use-toast';
 import { useReportError } from '~/core/state/status-bar-store';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { SmallButton } from '~/design-system/button';
 

@@ -763,19 +763,18 @@ const EMPTY_IDS: string[] = [];
 /**
  * The personal spaces behind a list of people, for their names and faces.
  *
- * `useSpacesByIds` holds the previous id set's map while a new one loads (`keepPreviousData`), and
- * reports neither loading nor anything wrong. So this is loading exactly while someone asked for is
- * not in the map yet: a list that grew waits for its new names rather than drawing "Untitled
- * person", and a list that shrank, every name already in hand, draws at once.
+ * Loading exactly while someone asked for is not in the map yet: a list that grew waits for its
+ * new names rather than drawing "Untitled person", and a list that shrank, every name already in
+ * hand, draws at once.
  */
 function usePeopleSpaces(ids: readonly string[]) {
-  const { spacesById, isLoading, isPlaceholderData } = useSpacesByIds([...ids]);
+  const { spacesById, isLoading } = useSpacesByIds([...ids]);
   const spaceFor = React.useCallback(
     (id: string) => spacesById.get(id) ?? [...spacesById.values()].find(space => normId(space.id) === id),
     [spacesById]
   );
   const missing = ids.some(id => !spaceFor(id));
-  return { spaceFor, isLoading: missing && (isLoading || isPlaceholderData) };
+  return { spaceFor, isLoading: missing && isLoading };
 }
 
 function personEntry(id: string, spaceFor: (id: string) => Space | undefined): FollowListEntry {

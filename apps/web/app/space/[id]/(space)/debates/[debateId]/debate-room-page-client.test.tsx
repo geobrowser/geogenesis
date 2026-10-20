@@ -145,11 +145,15 @@ vi.mock('~/core/debates/api', async importOriginal => {
 
 // The server-first return lives in lobby-return's own tests; here this tab's record decides.
 vi.mock('~/core/debates/lobbies/lobby-return', async importOriginal => {
-  const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
+  const { consumeDebateReturnDestination, peekDebateReturnDestination } =
+    await import('~/core/debates/debate-return-navigation');
   const { useCarriedLobbyChoice } = await importOriginal<typeof import('~/core/debates/lobbies/lobby-return')>();
   return {
     useCarriedLobbyChoice,
-    useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
+    useDebateReturnNavigation: () => ({
+      consume: consumeDebateReturnDestination,
+      returnsToLobby: Boolean(peekDebateReturnDestination()?.startsWith('/debate/')),
+    }),
   };
 });
 
@@ -4928,7 +4932,8 @@ describe('DebateRoomPageClient', () => {
 
   // A blank screen is only right while the handoff is quick. Past it the other room is likely gone,
   // so the viewer is told who the room is waiting on and keeps a way out.
-  it('says who it is waiting on, with a way out, once the handoff runs long', async () => {
+  it.each([false, true])('keeps a labelled exit during a slow handoff (from lobby: %s)', async fromLobby => {
+    if (fromLobby) rememberLobbyReturnDestination('lobby-1');
     installRecordingMocks();
     vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:24.000Z'));
     const view = await renderLiveDebate();
@@ -4944,9 +4949,10 @@ describe('DebateRoomPageClient', () => {
     mocks.rematch = rematchSession('deciding', { localConsented: true });
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByText('Waiting for Bri...')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+    const notice = (await screen.findByText('Waiting for Bri...')).closest('[role="status"]')!;
+    fireEvent.click(within(notice as HTMLElement).getByRole('button', { name: fromLobby ? 'Back to lobby' : 'Leave' }));
     await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    if (fromLobby) await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/debate/lobby-1'));
   });
 
   it('automatically consents shortly before the thank-you countdown ends', async () => {
@@ -6825,7 +6831,7 @@ describe('DebateRoomPageClient', () => {
 
       await waitFor(() => expect(debateVideoTile('remote')).toHaveAttribute('data-active-speaker', 'true'));
       expect(lastWord('remote')).toBeNull();
-      expect(lastWord('remote')).toBeNull();
+      expect(lastWord('local')).toBeNull();
     });
 
     // GEO-3315 drew thanking as a purple "Say thanks" phrase over an end card with the round count.
@@ -6988,18 +6994,28 @@ describe('DebateRoomPageClient', () => {
     view.unmount();
   });
 
-  it('returns to the lobby the viewer stepped out of after leaving an active debate', async () => {
-    setHistoryLength(2);
-    rememberLobbyReturnDestination('lobby-1');
-    const view = await renderLiveDebate();
+  it.each(['ready', 'in_progress', 'open_rounds'] as const)(
+    'returns to the lobby from a %s debate with a visible label',
+    async status => {
+      setHistoryLength(2);
+      rememberLobbyReturnDestination('lobby-1');
+      if (status === 'ready') mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+      if (status === 'open_rounds') vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:20.000'));
+      const view =
+        status === 'ready'
+          ? render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />)
+          : await renderLiveDebate(status === 'open_rounds' ? openRoundsRoundOneSpeaking() : undefined);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+      const back = await screen.findByRole('button', { name: 'Back to lobby' });
+      expect(back).toHaveTextContent('Back to lobby');
+      fireEvent.click(back);
 
-    await waitFor(() => expect(mocks.abortMutateAsync).toHaveBeenCalledOnce());
-    expect(mocks.replace).toHaveBeenCalledWith('/debate/lobby-1');
-    expect(mocks.back).not.toHaveBeenCalled();
-    view.unmount();
-  });
+      await waitFor(() => expect(mocks.abortMutateAsync).toHaveBeenCalledOnce());
+      expect(mocks.replace).toHaveBeenCalledWith('/debate/lobby-1');
+      expect(mocks.back).not.toHaveBeenCalled();
+      view.unmount();
+    }
+  );
 
   it('retains an in-memory recording after a quota failure and retries the same Blob', async () => {
     mocks.enqueueRecording.mockRejectedValueOnce(new DOMException('Storage full', 'QuotaExceededError'));

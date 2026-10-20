@@ -1,6 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import {
   type Query,
   type QueryClient,
@@ -21,6 +20,7 @@ import { fromPayload, localTimezone, toPayload } from '~/core/availability/block
 import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
 import { type ScheduleEditorSurface, debateScheduleSaved } from '~/core/availability/schedule-analytics';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
   type CreateDebateChallengeBody,

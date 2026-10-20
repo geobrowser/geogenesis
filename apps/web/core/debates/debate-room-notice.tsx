@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { Button } from '~/design-system/button';
+
 import { ROOM_ENTER_CLASS, ROOM_GLASS_CLASS, ROOM_UI_FONT } from './debate-room-stamps';
 
 /** Connection and save recovery stay readable on the room's white surface as well as video. */
@@ -34,12 +36,20 @@ export function DebateRoomNotice({
   );
 }
 
-export function DebateRoomNoticeAction(props: React.ComponentPropsWithoutRef<'button'>) {
+export function DebateRoomNoticeAction({
+  appearance = 'glass',
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<'button'> & { appearance?: 'glass' | 'default' }) {
+  if (appearance === 'default') return <Button {...props} type="button" variant="tertiary" className={className} />;
   return (
     <button
       {...props}
       type="button"
-      className="rounded-full bg-white px-3 py-2 text-[14px] leading-none font-medium text-[#111] transition-colors hover:bg-white/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-default disabled:opacity-50"
+      className={cx(
+        'rounded-full bg-white px-3 py-2 text-[14px] leading-none font-medium text-[#111] transition-colors hover:bg-white/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-default disabled:opacity-50',
+        className
+      )}
     />
   );
 }

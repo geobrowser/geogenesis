@@ -7,6 +7,7 @@ import * as React from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
+import { parseShareLink } from '~/core/sharing/share-link';
 
 import { Menu } from '~/design-system/menu';
 
@@ -40,6 +41,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete window.lytics;
   cleanup();
   setToast.mockClear();
   vi.restoreAllMocks();
@@ -66,6 +68,35 @@ describe('CopyOwnAvailabilityLinkButton', () => {
 });
 
 describe('CopyAvailabilityLinkMenuItem', () => {
+  it('tags another person’s calendar and records the current sharer separately', async () => {
+    const user = userEvent.setup();
+    const owner = '11111111111141118111111111111111';
+    personalSpaceId = '22222222222242228222222222222222';
+    window.lytics = {
+      getContext: () => ({ is_identified: true }),
+      getIdentity: () => ({ personal_space_id: personalSpaceId }),
+    };
+    render(
+      <Menu open onOpenChange={vi.fn()} trigger={<span>More</span>}>
+        <CopyAvailabilityLinkMenuItem profileSpaceId={owner} />
+      </Menu>
+    );
+    await user.click(screen.getByRole('button', { name: 'Copy availability link' }));
+    const url = new URL(await navigator.clipboard.readText());
+    expect(url.pathname).toBe(`/space/${owner}`);
+    expect(url.searchParams.get('modal')).toBe('availability');
+    expect(url.searchParams.get('via')).toBe('share');
+    expect(capture).toHaveBeenCalledWith(
+      'share_link_handoff',
+      expect.objectContaining({
+        ...parseShareLink(url.searchParams),
+        sharer_profile_space_id: personalSpaceId,
+        sharer_role: 'unknown',
+      })
+    );
+    expect(url.toString()).not.toContain(personalSpaceId);
+  });
+
   it("copies the profile's link, whoever is looking, and closes the menu it sits in", async () => {
     const user = userEvent.setup();
     const onOpenChange = vi.fn();

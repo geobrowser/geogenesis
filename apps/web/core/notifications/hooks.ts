@@ -1,9 +1,9 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
   type NotificationPreferences,

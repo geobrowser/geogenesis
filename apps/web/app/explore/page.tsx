@@ -31,9 +31,20 @@ const SIGNED_IN_BEST_FEED_PRELOAD_HREF = '/api/explore/feed?sort=best';
  */
 async function LeadPosterPreload() {
   const hrefs = await readLeadPosterUrls();
-  return hrefs.map((href, index) => (
-    <link key={href} rel="preload" as="image" href={href} fetchPriority={index === 0 ? 'high' : 'auto'} />
-  ));
+  // Stills the server resolved sit on the storage origin, which the page has not talked to yet; the
+  // handshake overlaps the document's remaining parse. The `<img>`s are not CORS requests, so the
+  // connection is the anonymous-less pool, which a bare preconnect warms.
+  const origins = [...new Set(hrefs.map(href => new URL(href).origin))];
+  return (
+    <>
+      {origins.map(origin => (
+        <link key={origin} rel="preconnect" href={origin} />
+      ))}
+      {hrefs.map((href, index) => (
+        <link key={href} rel="preload" as="image" href={href} fetchPriority={index === 0 ? 'high' : 'auto'} />
+      ))}
+    </>
+  );
 }
 
 export default async function ExploreRoutePage() {

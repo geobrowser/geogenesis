@@ -1,7 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -29,6 +27,7 @@ import {
   useSaveVotesPromptLobbyName,
   wasPromptedThisSession,
 } from '~/core/state/save-votes-prompt';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';

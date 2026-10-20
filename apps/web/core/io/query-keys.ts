@@ -36,8 +36,9 @@ export function personalSpacesByPageIdsQueryKey(pageIds: string[]) {
   return ['personal-spaces-by-page-ids', normalizeSpaceIds(pageIds)] as const;
 }
 
-export function spacesByIdsQueryKey(spaceIds: string[]) {
-  return ['spaces-by-ids', normalizeSpaceIds(spaceIds)] as const;
+/** One cache entry per space, for the same reason as {@link profileBySpaceIdQueryKey}. */
+export function spaceByIdQueryKey(spaceId: string) {
+  return ['space-by-id', validateSpaceId(spaceId) ?? spaceId] as const;
 }
 
 /**
