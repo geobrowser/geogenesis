@@ -55,20 +55,17 @@ vi.mock('~/core/io/graphql-client', async () => {
           })
         );
       }
-      if (operation?.name?.value === 'ExploreRelationIndex') {
-        const nodes = [
-          { id: 'debate-1', typeIds: [DEBATE_TYPE_ID], rankingScore: '5', createdAt: '5' },
-          { id: 'claim-1', typeIds: [CLAIM_TYPE_ID], rankingScore: '4', createdAt: '4' },
-          {
-            id: 'claim-news',
-            typeIds: [CLAIM_TYPE_ID, CLAIM_TYPE_ID, NEWS_STORY_TYPE_ID],
-            rankingScore: null,
-            createdAt: '3',
-          },
-        ];
+      if (operation?.name?.value === 'TopicFeedTypeCounts') {
         return Effect.succeed(
           decoder({
-            relationsConnection: { nodes: nodes.map(fromEntity => ({ fromEntity })), pageInfo: { hasNextPage: false } },
+            topicFeedTypeCounts: [
+              { typeId: CLAIM_TYPE_ID.replace(/-/g, '').toUpperCase(), entityCount: 2 },
+              { typeId: DEBATE_TYPE_ID, entityCount: '1' },
+              { typeId: NEWS_STORY_TYPE_ID, entityCount: 1 },
+              { typeId: 'not-a-feed-type', entityCount: 9 },
+              { typeId: TOPIC_C, entityCount: 'nope' },
+              null,
+            ],
           })
         );
       }
@@ -157,7 +154,7 @@ describe('fetchTopicFeedFacets', () => {
 });
 
 describe('fetchTopicFeedCompositionCounts', () => {
-  it('counts every selected type from the same compact population the feed orders', async () => {
+  it("reads gaia's per-type counts for the topic, with every feed type and zero for the absent ones", async () => {
     const expected = emptyTopicFeedCompositionCounts();
     expected.typeCounts[CLAIM_TYPE_ID] = 2;
     expected.typeCounts[DEBATE_TYPE_ID] = 1;
@@ -165,14 +162,24 @@ describe('fetchTopicFeedCompositionCounts', () => {
 
     await expect(fetchTopicFeedCompositionCounts({ spaceIds, topicId: PAGE_TOPIC })).resolves.toEqual(expected);
 
-    const populationCalls = mocks.calls.filter(call => call.operation === 'ExploreRelationIndex');
-    expect(populationCalls).toHaveLength(1);
-    const fromEntity = populationCalls[0]?.variables.filter.and[1].fromEntity;
-    expect(fromEntity.and[0]).toMatchObject({
-      spaceIds: { overlaps: spaceIds },
-      typeIds: { overlaps: expect.arrayContaining([CLAIM_TYPE_ID, DEBATE_TYPE_ID, NEWS_STORY_TYPE_ID]) },
-    });
-    expect(fromEntity.and[1]).toEqual(topicFeedFilter(PAGE_TOPIC));
+    expect(mocks.calls).toEqual([
+      {
+        operation: 'TopicFeedTypeCounts',
+        variables: {
+          topicIds: [PAGE_TOPIC],
+          typeIds: TOPIC_FEED_ENTITY_TYPE_IDS,
+          spaceIds,
+          debateTaggedClaims: false,
+        },
+      },
+    ]);
+  });
+
+  it('asks nothing for no spaces', async () => {
+    await expect(fetchTopicFeedCompositionCounts({ spaceIds: [], topicId: PAGE_TOPIC })).resolves.toEqual(
+      emptyTopicFeedCompositionCounts()
+    );
+    expect(mocks.calls).toEqual([]);
   });
 });
 
