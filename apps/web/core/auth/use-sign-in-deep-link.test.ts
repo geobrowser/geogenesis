@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   openSignIn: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({ usePrivy: () => ({ ready: true, authenticated: false }) }));
+vi.mock('~/core/wallet/auth-hooks', () => ({ usePrivy: () => ({ ready: true, authenticated: false }) }));
 vi.mock('~/core/deep-links/use-deep-link', () => ({
   useDeepLinkParams: () => ({ via: mocks.via, cleanUrl: window.location.pathname }),
   useDeepLinkEffect: ({ run }: { run: () => void }) => void (mocks.run = run),

@@ -8,56 +8,51 @@ import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 import { usePathname, useSearchParams } from 'next/navigation';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
 import { LastPageOutsideDebatesTracker } from '~/core/debates/lobbies/lobby-exit';
+import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { DebateMediaSessionProvider } from '~/core/debates/media-session';
 import { PlaybackDiagnostics } from '~/core/debates/playback-diagnostics';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
-import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
-import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
-import { Toast } from '~/core/hooks/use-toast';
-import { browseSidebarShownAtom } from '~/core/state/browse-sidebar-state';
 import { requestsAnyModal } from '~/core/deep-links/modal-deep-link';
-import { useSticky } from '~/core/hooks/use-sticky';
-import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
+import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
+import { useSticky } from '~/core/hooks/use-sticky';
+import { Toast } from '~/core/hooks/use-toast';
+import { browseSidebarShownAtom } from '~/core/state/browse-sidebar-state';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useLocalVotes } from '~/core/state/local-votes';
 import { pendingCreatedSpaceAtom } from '~/core/state/pending-created-space';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
+import { Persistence } from '~/core/state/persistence';
 import { useSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import { Persistence } from '~/core/state/persistence';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { SlideUpBodyState } from '~/design-system/slide-up-body-state';
 
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
 import { MobileBrowseDrawer } from '~/partials/browse-sidebar/mobile-browse-drawer';
+import { ChatLauncher } from '~/partials/chat/chat-launcher';
+import { createSpaceDialogOpenAtom } from '~/partials/create-space/create-space-state';
 import { EntityStickyHeaderHost } from '~/partials/entity-page/entity-sticky-header-host';
 import { PersonalProfileCreatePostSidePanelSync } from '~/partials/entity-page/personal-profile-create-post-side-panel-sync';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
-import { shouldOpenOnboardingDialog } from '~/partials/onboarding/onboarding-dialog-visibility';
-import { ChatLauncher } from '~/partials/chat/chat-launcher';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
+import { stepAtom as onboardingStepAtom } from '~/partials/onboarding/onboarding-atoms';
+import { shouldOpenOnboardingDialog } from '~/partials/onboarding/onboarding-dialog-visibility';
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
+import { entitySidePanelWantsEditAtom, rankingFullscreenActiveAtom, rankingFullscreenFocusTargetAtom } from '~/atoms';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
-import { createSpaceDialogOpenAtom } from '~/partials/create-space/create-space-state';
-import { stepAtom as onboardingStepAtom } from '~/partials/onboarding/onboarding-atoms';
-import {
-  entitySidePanelWantsEditAtom,
-  rankingFullscreenActiveAtom,
-  rankingFullscreenFocusTargetAtom,
-} from '~/atoms';
 
 // Opened on demand, so none of these is needed to paint or hydrate a page. Each renders nothing
 // until something opens it, which is also what the server rendered, so there is nothing to mismatch.

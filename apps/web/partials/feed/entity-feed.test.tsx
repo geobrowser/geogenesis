@@ -41,9 +41,12 @@ const mocks = vi.hoisted(() => ({
   identityToken: null as string | null,
 }));
 
-vi.mock('@geogenesis/auth', async importOriginal => ({
-  ...(await importOriginal<typeof import('@geogenesis/auth')>()),
+vi.mock('~/core/wallet/auth-hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/wallet/auth-hooks')>()),
   useIdentityToken: () => ({ identityToken: mocks.identityToken }),
+  // Privy still restoring, which is what a reader with a wallet cookie sees on first paint. The
+  // facade's own signed-out value reports `ready: true`, which ends these waits at once.
+  usePrivy: () => ({ ready: false, authenticated: false }),
 }));
 
 vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({

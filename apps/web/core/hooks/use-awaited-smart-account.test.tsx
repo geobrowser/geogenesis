@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated }),
   useIdentityToken: () => ({ identityToken: mocks.identityToken }),
 }));
