@@ -44,6 +44,11 @@ export const Z_LAYERS = {
   // the assistant launcher and the debates panel included, since a modal takes every tap.
   bottomSheetBackdrop: 10008,
   bottomSheet: 10009,
+
+  // The save-votes prompt when the navbar's "Save N votes" opens it centred (GEO-3400). A modal the
+  // visitor asked for, so it takes the same top layer; it never opens over a bottom sheet.
+  saveVotesDialogBackdrop: 10008,
+  saveVotesDialog: 10009,
 } as const;
 
 export const Z_LAYER_CLASS = {
@@ -63,4 +68,6 @@ export const Z_LAYER_CLASS = {
   scheduleDialog: 'z-[10007]',
   bottomSheetBackdrop: 'z-[10008]',
   bottomSheet: 'z-[10009]',
+  saveVotesDialogBackdrop: 'z-[10008]',
+  saveVotesDialog: 'z-[10009]',
 } as const;

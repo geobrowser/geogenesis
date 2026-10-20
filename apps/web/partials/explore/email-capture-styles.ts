@@ -50,6 +50,14 @@ export const CARD_CLASS =
   'fixed right-4 bottom-4 z-1101 w-[308px] animate-rise-in overflow-clip rounded-xl border border-grey-02 bg-white shadow-lg motion-reduce:animate-fade-in mobile:inset-x-0 mobile:bottom-0 mobile:w-auto mobile:rounded-none mobile:rounded-t-xl mobile:shadow-none';
 
 /**
+ * The same card centred on the screen, for the save-votes sheet the navbar opens (GEO-3400). A bit
+ * wider than the corner card, which sits at the edge; on the phone it is the same bottom sheet.
+ * Positioned by the full-screen layer it sits in, so it carries no offsets of its own.
+ */
+export const CENTERED_CARD_CLASS =
+  'pointer-events-auto relative w-[340px] max-w-full animate-rise-in overflow-clip rounded-xl border border-grey-02 bg-white shadow-lg motion-reduce:animate-fade-in mobile:w-full mobile:rounded-none mobile:rounded-t-xl mobile:shadow-none';
+
+/**
  * The 12px close glyph, 11px in from the top-right corner, padded to a 20px target (a touch-sized
  * one on the phone sheet). `grey-04` on white, `text` on the phone, for 3:1 against what is behind it.
  */

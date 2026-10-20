@@ -45,8 +45,17 @@ export function saveVotesSignIn(attempt: AuthAttempt | undefined): SaveVotesSign
   return isSignedInOutcome(attempt.outcome) ? 'save' : 'not_save';
 }
 
-export function saveVotesSignInProperties(auth_control: string, localVoteCount: number) {
-  return { ...SAVE_VOTES_ANALYTICS, auth_control, local_vote_count: localVoteCount };
+/**
+ * `promptReason` is the sheet's reason for being open, when a sign-in starts from it: the navbar's
+ * centred sheet and the corner one share their controls, so `auth_control` alone can't tell them apart.
+ */
+export function saveVotesSignInProperties(auth_control: string, localVoteCount: number, promptReason?: string) {
+  return {
+    ...SAVE_VOTES_ANALYTICS,
+    auth_control,
+    local_vote_count: localVoteCount,
+    ...(promptReason ? { prompt_reason: promptReason } : {}),
+  };
 }
 
 /** The sheet coming on screen. A plain capture: it is not inside an `ActionSurface` to measure. */

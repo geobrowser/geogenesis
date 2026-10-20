@@ -1,5 +1,7 @@
 'use client';
 
+import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -28,6 +30,7 @@ import {
   wasPromptedThisSession,
 } from '~/core/state/save-votes-prompt';
 import { usePrivy } from '~/core/wallet/auth-hooks';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
@@ -36,6 +39,7 @@ import { AccountStep } from '~/partials/explore/email-capture-account-step';
 import { useIsEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
 import {
   CARD_CLASS,
+  CENTERED_CARD_CLASS,
   CLOSE_BUTTON_CLASS,
   ERROR_CLASS,
   FORM_STACK_CLASS,
@@ -63,6 +67,9 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
  * The Explore email capture's card and code step, given new content: a corner card on desktop, a
  * bottom sheet on phones. Mounted app-wide, because the controls that open it are on the claim page,
  * entity pages, the debates hub and the debate player as well as Explore.
+ *
+ * Opened from the navbar's "Save N votes", it is the same card as a centred modal dialog instead
+ * (GEO-3400): the visitor asked for it, so it comes forward rather than waiting in the corner.
  */
 export function SaveVotesSheet() {
   const { ready, authenticated, isModalOpen } = usePrivy();
@@ -103,10 +110,14 @@ export function SaveVotesSheet() {
     closeSaveVotesPrompt();
   }, [authenticated]);
 
-  const isAnyModalOpen = useAnyModalOpen(open);
+  const centered = reason === 'navbar';
+  // Centred, the sheet is a modal of its own, which this would find and hide itself behind. Nothing
+  // else is modal at the press that opens it, and anything opened later is opened from inside it.
+  const isAnyModalOpen = useAnyModalOpen(open && !centered);
   // The email capture card shares this corner, and is mid-signup if it is still up once votes exist.
   const isEmailCaptureShowing = useIsEmailCaptureShowing();
-  const overlayOpen = isModalOpen || isChatOpen || isAnyModalOpen || isEmailCaptureShowing;
+  // Privy's dialog still comes first, centred or not: it is the visitor's sign-in in progress.
+  const overlayOpen = centered ? isModalOpen : isModalOpen || isChatOpen || isAnyModalOpen || isEmailCaptureShowing;
   const visible = open && !overlayOpen;
 
   // Counted and measured once per opening, and only once the visitor can see it: an ask that waits
@@ -138,13 +149,13 @@ export function SaveVotesSheet() {
       setInvalid(true);
       return;
     }
-    beginPrivyAuth(saveVotesSignInProperties('email', count));
+    beginPrivyAuth(saveVotesSignInProperties('email', count, reason ?? undefined));
     prepareOnboarding();
     setCodeEmail(trimmed);
   };
 
   const otherWays = () => {
-    void saveSignIn('other_sign_in', count);
+    void saveSignIn('other_sign_in', count, reason ?? undefined);
     closeSaveVotesPrompt();
   };
 
@@ -155,16 +166,9 @@ export function SaveVotesSheet() {
 
   const returnVisit = reason === 'return_visit';
 
-  return (
-    <div
-      hidden={overlayOpen}
-      role="region"
-      aria-label={lobbyName ? 'Join the discussion' : 'Save your votes'}
-      onKeyDown={event => {
-        if (event.key === 'Escape') close();
-      }}
-      className={CARD_CLASS}
-    >
+  const label = lobbyName ? 'Join the discussion' : 'Save your votes';
+  const content = (
+    <>
       <button
         type="button"
         onClick={close}
@@ -183,7 +187,7 @@ export function SaveVotesSheet() {
             <p className={HEADING_CLASS}>Check your email</p>
             <AccountStep
               email={codeEmail}
-              analytics={saveVotesSignInProperties('email', count)}
+              analytics={saveVotesSignInProperties('email', count, reason ?? undefined)}
               analyticsLabel="Save votes verification"
               onGiveUp={close}
             />
@@ -248,6 +252,52 @@ export function SaveVotesSheet() {
           </form>
         )}
       </div>
+    </>
+  );
+
+  if (centered) {
+    return (
+      <Root
+        open
+        onOpenChange={next => {
+          if (!next) close();
+        }}
+      >
+        <Portal>
+          <Overlay
+            hidden={overlayOpen}
+            className={cx('fixed inset-0 animate-fade-in bg-text/20', Z_LAYER_CLASS.saveVotesDialogBackdrop)}
+          />
+          {/* Full-screen and click-through, so a press beside the card lands on the backdrop. */}
+          <Content
+            hidden={overlayOpen}
+            aria-describedby={undefined}
+            className={cx(
+              'pointer-events-none fixed inset-0 flex items-center justify-center p-4 focus:outline-hidden mobile:items-end mobile:p-0',
+              Z_LAYER_CLASS.saveVotesDialog
+            )}
+          >
+            <div className={CENTERED_CARD_CLASS}>
+              <Title className="sr-only">{label}</Title>
+              {content}
+            </div>
+          </Content>
+        </Portal>
+      </Root>
+    );
+  }
+
+  return (
+    <div
+      hidden={overlayOpen}
+      role="region"
+      aria-label={label}
+      onKeyDown={event => {
+        if (event.key === 'Escape') close();
+      }}
+      className={CARD_CLASS}
+    >
+      {content}
     </div>
   );
 }

@@ -8,7 +8,14 @@ import { useSyncExternalStore } from 'react';
  * Module-level rather than an atom for the same reason as `local-votes`: the navbar opens a save
  * sign-in, and its tests mock `jotai` wholesale.
  */
-export type SaveVotesPromptReason = 'threshold' | 'single_claim' | 'repeat' | 'return_visit' | 'inline_save';
+export type SaveVotesPromptReason =
+  | 'threshold'
+  | 'single_claim'
+  | 'repeat'
+  | 'return_visit'
+  | 'inline_save'
+  /** The navbar's "Save N votes", which opens the sheet as a centred dialog (GEO-3400). */
+  | 'navbar';
 
 /**
  * Where a vote was cast. A claim page or a debate's end card has no second claim beside it to vote

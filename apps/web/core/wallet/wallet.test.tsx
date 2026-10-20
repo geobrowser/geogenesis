@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { clearLocalVotes, toggleLocalVote } from '../state/local-votes';
+import { closeSaveVotesPrompt, readSaveVotesPrompt } from '../state/save-votes-prompt';
 import { GeoConnectButton } from './wallet';
 
 const mocks = vi.hoisted(() => ({
@@ -25,6 +26,7 @@ vi.mock('../hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.saveS
 afterEach(() => {
   cleanup();
   clearLocalVotes();
+  closeSaveVotesPrompt();
 });
 
 describe('GeoConnectButton', () => {
@@ -34,23 +36,17 @@ describe('GeoConnectButton', () => {
     expect(screen.getByRole('button', { name: 'Log in' })).toHaveClass('h-7', '!py-0');
   });
 
-  // GEO-3214: with votes waiting on this device, the pill is a save prompt.
-  it('offers to save the votes on this device, and signs in as a save', () => {
+  // GEO-3214: with votes waiting on this device, the pill is a save prompt. GEO-3400: it opens the
+  // save sheet, centred, whose own sign-ins save the votes, rather than Privy's dialog.
+  it('offers to save the votes on this device, and opens the save sheet', () => {
     toggleLocalVote({ responseKind: 'stance', entityId: 'a', spaceId: 's', direction: 'positive', title: 'A' });
     toggleLocalVote({ responseKind: 'stance', entityId: 'b', spaceId: 's', direction: 'negative', title: 'B' });
     render(<GeoConnectButton />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Save 2 votes' }));
 
-    // The attempt's own `auth_intent` is what lets the saver publish them after this sign-in.
-    expect(mocks.saveSignIn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        component: 'save_votes_prompt',
-        auth_intent: 'save_votes',
-        auth_control: 'navbar',
-        local_vote_count: 2,
-      })
-    );
+    expect(readSaveVotesPrompt()).toBe('navbar');
+    expect(mocks.saveSignIn).not.toHaveBeenCalled();
     expect(mocks.login).not.toHaveBeenCalled();
   });
 

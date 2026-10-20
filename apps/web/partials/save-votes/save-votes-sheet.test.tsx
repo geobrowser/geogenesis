@@ -41,7 +41,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: false }),
 }));
-vi.mock('~/core/hooks/use-any-modal-open', () => ({ useAnyModalOpen: () => mocks.anyModalOpen }));
+vi.mock('~/core/hooks/use-any-modal-open', () => ({
+  useAnyModalOpen: (enabled: boolean) => enabled && mocks.anyModalOpen,
+}));
 vi.mock('~/core/hooks/use-prepare-onboarding', () => ({ usePrepareOnboarding: () => vi.fn() }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.signIn }));
 vi.mock('~/core/privy-auth-events', () => ({
@@ -50,10 +52,11 @@ vi.mock('~/core/privy-auth-events', () => ({
 }));
 vi.mock('~/core/save-votes-analytics', () => ({
   captureSaveVotesImpression: (...args: unknown[]) => mocks.impression(...args),
-  saveVotesSignInProperties: (auth_control: string, local_vote_count: number) => ({
+  saveVotesSignInProperties: (auth_control: string, local_vote_count: number, prompt_reason?: string) => ({
     component: 'save_votes_prompt',
     auth_control,
     local_vote_count,
+    prompt_reason,
   }),
 }));
 vi.mock('~/partials/explore/email-capture-account-step', () => ({
@@ -286,5 +289,82 @@ describe('SaveVotesSheet', () => {
     expect(chips).toHaveTextContent('Second claim');
     expect(chips).not.toHaveTextContent('First claim');
     expect(chips).toHaveTextContent('+1');
+  });
+});
+
+// GEO-3400: the navbar's "Save N votes" opens the same sheet, centred, instead of Privy's dialog.
+describe('SaveVotesSheet from the navbar', () => {
+  const openFromNavbar = () => {
+    vote('a', 'First claim');
+    vote('b', 'Second claim');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+    act(() => openSaveVotesPrompt('navbar'));
+  };
+
+  it('is a centred modal dialog with the corner card’s content', () => {
+    openFromNavbar();
+
+    const dialog = screen.getByRole('dialog', { name: 'Save your votes' });
+    expect(dialog).toHaveTextContent('Save your 2 votes');
+    expect(dialog).toHaveTextContent('Other ways to sign in');
+    expect(screen.getByRole('list', { name: 'Your votes' })).toHaveTextContent('Second claim');
+    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(mocks.impression).toHaveBeenCalledWith('navbar', 2);
+  });
+
+  it('is not an automatic ask, so it does not use one up', () => {
+    openFromNavbar();
+    expect(readLocalVotes().prompt.shownCount).toBe(0);
+  });
+
+  // It is a modal itself, which the any-modal check would otherwise find and hide behind.
+  it('stays up while a modal is open, where the corner card would wait', () => {
+    mocks.anyModalOpen = true;
+    openFromNavbar();
+    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toBeVisible();
+  });
+
+  it('tags its sign-ins with the navbar, both ways in', () => {
+    openFromNavbar();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(
+      expect.objectContaining({ auth_control: 'email', prompt_reason: 'navbar' })
+    );
+    expect(screen.getByRole('dialog')).toHaveTextContent('Enter the code we sent to sam@hey.com');
+
+    cleanup();
+    closeSaveVotesPrompt();
+    render(<SaveVotesSheet />);
+    act(() => openSaveVotesPrompt('navbar'));
+    fireEvent.click(screen.getByRole('button', { name: 'Other ways to sign in' }));
+    expect(mocks.signIn).toHaveBeenCalledWith(
+      expect.objectContaining({ auth_control: 'other_sign_in', prompt_reason: 'navbar' })
+    );
+    expect(readSaveVotesPrompt()).toBeNull();
+  });
+
+  it('closes on Escape and keeps the votes, like the corner card', () => {
+    openFromNavbar();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+
+    expect(readSaveVotesPrompt()).toBeNull();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(readLocalVotes().prompt.dismissCount).toBe(1);
+    expect(readLocalVotes().votes).toHaveLength(2);
+  });
+
+  it('takes over from the corner card rather than showing both', () => {
+    vote('a');
+    vote('b');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+    act(() => openSaveVotesPrompt('threshold'));
+    expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
+
+    act(() => openSaveVotesPrompt('navbar'));
+    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toBeInTheDocument();
   });
 });

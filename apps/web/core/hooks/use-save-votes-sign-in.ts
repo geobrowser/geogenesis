@@ -14,7 +14,8 @@ import { usePrivySignIn } from './use-privy-sign-in';
 export function useSaveVotesSignIn() {
   const signIn = usePrivySignIn();
   return useCallback(
-    (authControl: string, localVoteCount: number) => signIn(saveVotesSignInProperties(authControl, localVoteCount)),
+    (authControl: string, localVoteCount: number, promptReason?: string) =>
+      signIn(saveVotesSignInProperties(authControl, localVoteCount, promptReason)),
     [signIn]
   );
 }
