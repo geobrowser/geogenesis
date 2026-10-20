@@ -13,15 +13,15 @@ afterEach(() => {
 describe('RoomExit (GEO-3315)', () => {
   it('keeps a moment up while it leaves, then lets it go', () => {
     vi.useFakeTimers();
-    const view = render(<RoomExit>{<span>Round 2</span>}</RoomExit>);
+    const view = render(<RoomExit exit="roll">{<span>Round 2</span>}</RoomExit>);
     const moment = screen.getByText('Round 2');
     expect(moment.parentElement).not.toHaveAttribute('data-room-leaving');
 
-    view.rerender(<RoomExit>{null}</RoomExit>);
+    view.rerender(<RoomExit exit="roll">{null}</RoomExit>);
     // The same element, not a fresh one, so its entrance does not replay on the way out.
     expect(screen.getByText('Round 2')).toBe(moment);
     expect(moment.parentElement).toHaveAttribute('data-room-leaving', 'true');
-    expect(moment.parentElement).toHaveClass('animate-[fadeIn_300ms_linear_reverse_both]');
+    expect(moment.parentElement).toHaveClass('motion-safe:animate-debate-banner-out', 'motion-reduce:hidden');
 
     act(() => {
       vi.advanceTimersByTime(ROOM_EXIT_MS);

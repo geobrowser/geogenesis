@@ -3,8 +3,6 @@
 import * as React from 'react';
 
 import type { Debate, OpenRoundPick, OpenRoundRevealedPick, ParticipantSlot } from './api';
-import { PlayerRoundTitle } from './browse/debate-round-cues';
-import { PLAYER_ENTER_CLASS, PLAYER_TITLE_CLASS, PLAYER_TITLE_STYLE } from './browse/player-overlay-styles';
 import { STAMP_WORD } from './browse/stamp-styles';
 import { ROOM_UI_FONT, RoomMiddlePhrase, RoomTag, RoomTilePill } from './debate-room-stamps';
 import { rebuttalRoundsLabel } from './debate-round-indicator';
@@ -129,29 +127,15 @@ export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) 
   const [round, role] = result.kind === 'round' ? result.label.split(' · ') : [];
   return (
     <div data-open-round-result={result.kind} className="pointer-events-none absolute inset-0 z-[45]">
-      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
-        <div
-          data-open-round-phrase
-          className={`${PLAYER_ENTER_CLASS} text-center font-bold text-white`}
-          style={PLAYER_TITLE_STYLE}
-        >
-          {result.kind === 'round' ? (
-            <>
-              <PlayerRoundTitle round={round} role={role ?? null} />
-              <span
-                className="mx-auto mt-[1.6cqw] block max-w-[92%] truncate text-[3.744cqw] leading-none font-semibold tracking-normal"
-                style={PLAYER_TITLE_STYLE}
-              >
-                {openRoundOpenerLine(result.opener)}
-              </span>
-            </>
-          ) : (
-            <span className={`${PLAYER_TITLE_CLASS} block text-[11cqw]`} style={PLAYER_TITLE_STYLE}>
-              {result.kind === 'wrap' ? 'That’s a wrap' : 'That’s the max'}
-            </span>
-          )}
-        </div>
-      </div>
+      <RoomMiddlePhrase
+        sizeCqw={result.kind === 'round' ? 14.04 : 8.58}
+        fontWeight={result.kind === 'round' ? 700 : 600}
+        eyebrow={role ? round : undefined}
+        data-open-round-phrase
+        sub={result.kind === 'round' ? openRoundOpenerLine(result.opener) : undefined}
+      >
+        {result.kind === 'round' ? (role ?? round) : result.kind === 'wrap' ? 'That’s a wrap' : 'That’s the max'}
+      </RoomMiddlePhrase>
       {result.kind === 'wrap' && result.note && (
         <div className="absolute inset-x-0 top-[calc(50%+9cqw)] px-4 text-center">
           <span

@@ -100,7 +100,7 @@ describe('OpenRoundPickPill (GEO-3366)', () => {
     const pill = screen.getByText(word).parentElement;
     expect(pill).toHaveClass(tone, 'rounded-full');
     expect(pill).toHaveClass(
-      'motion-safe:animate-[fadeIn_250ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.22,1,0.36,1)_both]'
+      'motion-safe:animate-[fadeIn_250ms_linear_both,roomMomentSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]'
     );
     expect(pill?.style.transform).toBe('');
     expect(container.innerHTML).not.toMatch(/purple|animate-debate-stamp|rotate/);
@@ -126,21 +126,12 @@ describe('OpenRoundResultOverlay', () => {
     expect(phrase).toHaveClass(
       'font-bold',
       'text-white',
-      'motion-safe:animate-[fadeIn_250ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.22,1,0.36,1)_both]'
+      'motion-safe:animate-[fadeIn_250ms_linear_both,roomMomentSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]'
     );
     expect((phrase as HTMLElement).style.fontFamily).toContain('var(--font-calibre)');
     expect((phrase as HTMLElement).style.textShadow).toBe(
-      '-0.035em -0.035em 0 #000, 0 -0.035em 0 #000, 0.035em -0.035em 0 #000, 0.035em 0 0 #000, 0.035em 0.035em 0 #000, 0 0.035em 0 #000, -0.035em 0.035em 0 #000, -0.035em 0 0 #000, 0 0.05em 0.16em rgba(0,0,0,0.55)'
+      '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000'
     );
-    const round = screen.getByText('Round 2');
-    const role = screen.getByText('Rebuttal');
-    expect(round).toHaveClass('font-semibold', 'text-white/85');
-    expect(role).toHaveClass('font-bold', 'tracking-[-0.02em]');
-    expect(round.style.fontSize).toBe('9cqw');
-    expect(role.style.fontSize).toBe('18cqw');
-    // The outline belongs to each sized line, never the smaller card wrapper.
-    expect(round.style.textShadow).toBe((phrase as HTMLElement).style.textShadow);
-    expect(role.style.textShadow).toBe(round.style.textShadow);
     expect(container).toHaveTextContent('Round 2RebuttalAlice opens');
     expect(container.innerHTML).not.toMatch(/purple|animate-debate-banner/);
   });
@@ -153,7 +144,7 @@ describe('OpenRoundResultOverlay', () => {
   it('ends with outlined type, and a reason only when there is one', () => {
     const { container, rerender } = render(<OpenRoundResultOverlay result={{ kind: 'wrap', note: null }} />);
     expect(container.textContent).toBe('That’s a wrap');
-    expect(container.querySelector('[data-open-round-phrase]')).toHaveClass('text-white', 'font-bold');
+    expect(container.querySelector('[data-open-round-phrase]')).toHaveClass('text-white', 'font-semibold');
     rerender(<OpenRoundResultOverlay result={{ kind: 'wrap', note: 'No picks in time' }} />);
     expect(container).toHaveTextContent('That’s a wrapNo picks in time');
   });

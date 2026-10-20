@@ -1,4 +1,4 @@
-/** Classic + glass styles shared by Open rounds playback and the recording room. */
+/** Open rounds playback only. The recording room keeps its own stamps design. */
 import { PLAYBACK_FONT_FAMILY, PLAYBACK_OUTLINE_STYLE, PLAYBACK_ROUND_HEADLINE_CLASS } from './playback-typography';
 
 export const PLAYER_PICK_STYLE = { fontFamily: PLAYBACK_FONT_FAMILY, fontWeight: 600 } as const;

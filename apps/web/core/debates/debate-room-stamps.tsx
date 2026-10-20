@@ -4,16 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { PLAYBACK_OUTLINE_STYLE } from './browse/playback-typography';
-import {
-  PLAYER_ENTER_CLASS,
-  PLAYER_EXIT_CLASS,
-  PLAYER_EXIT_MS,
-  PLAYER_FADE_CLASS,
-  PLAYER_PICK_BASE_CLASS,
-  PLAYER_PICK_CLASS,
-} from './browse/player-overlay-styles';
-import { recordingFont } from './recording-overlay-styles';
+import { recordingFont, recordingOverlayTextShadow } from './recording-overlay-styles';
 
 export const ROOM_UI_FONT = recordingFont;
 
@@ -23,13 +14,14 @@ export const ROOM_WHITE_GLASS_CLASS = 'bg-white text-[#111]';
 export const ROOM_END_TURN_CLASS =
   'block rounded-full bg-black px-[3.2cqw] py-[2cqw] text-[3cqw] leading-none font-medium text-white transition hover:bg-black/85 disabled:cursor-default disabled:opacity-70';
 
-/** Share playback's 250ms fade and quiet 1.025x settle, including its reduced-motion fade. */
-export const ROOM_MOMENT_ENTER_CLASS = PLAYER_ENTER_CLASS;
+/** The export fades over 250 ms while settling from 1.06x, without moving across the tile. */
+export const ROOM_MOMENT_ENTER_CLASS =
+  'motion-safe:animate-[fadeIn_250ms_linear_both,roomMomentSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]';
 
-/** White outlined announcements share the merged classic + glass playback treatment. */
+/** Open rounds keeps its white type, using the fixed-format room's face and outline weight. */
 export const ROOM_OUTLINED_STYLE = {
   ...recordingFont,
-  ...PLAYBACK_OUTLINE_STYLE,
+  ...recordingOverlayTextShadow,
 } as const;
 
 /** A glass pill that fades in with the reference's small settle, without moving across the tile. */
@@ -37,6 +29,7 @@ export function RoomPill({
   children,
   tone = 'dark',
   delayMs = 0,
+  fadeInMs = 250,
   fontWeight = 600,
   className,
   style,
@@ -44,28 +37,29 @@ export function RoomPill({
 }: React.ComponentPropsWithoutRef<'span'> & {
   tone?: 'dark' | 'white' | 'red' | 'dashed';
   delayMs?: number;
+  fadeInMs?: number;
   fontWeight?: 600 | 700;
 }) {
   return (
     <span
       {...props}
       className={cx(
-        PLAYER_PICK_BASE_CLASS,
-        'max-w-[92%]',
+        'inline-flex max-w-[92%] items-center rounded-full px-[4.644cqw] py-[2.064cqw] text-[4.816cqw] leading-none',
+        fontWeight === 700 ? 'font-bold' : 'font-semibold',
         ROOM_MOMENT_ENTER_CLASS,
         tone === 'white'
           ? [ROOM_WHITE_GLASS_CLASS, 'shadow-[0_1cqw_3cqw_rgba(0,0,0,0.2)] backdrop-blur-[14px]']
           : tone === 'red'
             ? 'bg-[#FF4A26]/90 text-white backdrop-blur-[14px]'
             : tone === 'dashed'
-              ? PLAYER_PICK_CLASS.none
-              : PLAYER_PICK_CLASS.end,
+              ? 'border-[0.5cqw] border-dashed border-white/60 bg-transparent text-white/80'
+              : 'bg-[rgba(36,36,40,0.48)] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)] backdrop-blur-[14px]',
         className
       )}
       style={{
         ...ROOM_UI_FONT,
-        fontWeight,
         animationDelay: delayMs ? `${delayMs}ms, ${delayMs}ms` : undefined,
+        animationDuration: `${fadeInMs}ms, 250ms`,
         ...style,
       }}
     >
@@ -82,17 +76,22 @@ export function RoomTilePill(props: React.ComponentProps<typeof RoomPill>) {
   );
 }
 
-/** A single outlined announcement, fading in and out in place. */
+/** An outlined announcement and optional opener, fading in and out in place. */
 export function RoomPhrase({
   children,
+  eyebrow,
+  sub,
   sizeCqw,
   fontWeight = 600,
   className,
   ...props
 }: React.ComponentPropsWithoutRef<'div'> & {
+  eyebrow?: React.ReactNode;
+  sub?: React.ReactNode;
   sizeCqw: number;
   fontWeight?: 600 | 700;
 }) {
+  const card = eyebrow !== undefined || sub !== undefined;
   return (
     <div
       {...props}
@@ -102,9 +101,22 @@ export function RoomPhrase({
         ROOM_MOMENT_ENTER_CLASS,
         className
       )}
-      style={{ ...ROOM_OUTLINED_STYLE, fontSize: `${sizeCqw}cqw` }}
+      style={{ ...ROOM_OUTLINED_STYLE, fontSize: card ? '16px' : `${sizeCqw}cqw` }}
     >
-      <span className="block whitespace-nowrap">{children}</span>
+      {eyebrow && (
+        <span className="text-[7.02cqw] leading-none font-semibold tracking-[-0.01em] text-white/88">{eyebrow}</span>
+      )}
+      <span
+        className={cx('block whitespace-nowrap', card && 'leading-[0.95] tracking-[-0.03em]')}
+        style={card ? { fontSize: `${sizeCqw}cqw` } : undefined}
+      >
+        {children}
+      </span>
+      {sub && (
+        <span className="mt-[1.6cqw] max-w-full truncate text-[3.744cqw] leading-none font-semibold tracking-normal">
+          {sub}
+        </span>
+      )}
     </div>
   );
 }
@@ -142,7 +154,7 @@ export function RoomDim({ on }: { on: boolean }) {
       aria-hidden="true"
       data-room-dim={on ? 'on' : 'off'}
       className={cx(
-        'pointer-events-none absolute inset-0 z-[15] bg-black/42 transition-opacity duration-250 ease-out',
+        'pointer-events-none absolute inset-0 z-[15] bg-black/42 transition-opacity duration-300 motion-reduce:transition-none',
         on ? 'opacity-100' : 'opacity-0'
       )}
     />
@@ -150,10 +162,16 @@ export function RoomDim({ on }: { on: boolean }) {
 }
 
 /** How long a moment takes to fade out. Playback also uses this duration for its banner exit. */
-export const ROOM_EXIT_MS = PLAYER_EXIT_MS;
+export const ROOM_EXIT_MS = 300;
 
-/** Muted indicators and panels share playback's soft entrance. */
-export const ROOM_ENTER_CLASS = PLAYER_FADE_CLASS;
+const EXIT_CLASS = {
+  // Legacy playback banners still roll; recording-room moments use the default fade.
+  roll: 'motion-safe:animate-debate-banner-out',
+  fade: 'motion-safe:animate-[fadeIn_300ms_linear_reverse_both]',
+} as const;
+
+/** The `fade` exit run forwards: a piece that fades in over `ROOM_EXIT_MS` and out the same way. */
+export const ROOM_ENTER_CLASS = 'motion-safe:animate-[fadeIn_300ms_linear_both]';
 
 function shown(node: React.ReactNode) {
   return node !== null && node !== undefined && node !== false;
@@ -161,8 +179,8 @@ function shown(node: React.ReactNode) {
 
 /**
  * A moment that leaves rather than vanishing (GEO-3315). While `children` is there it renders as is;
- * when it goes, the last of it stays for `ROOM_EXIT_MS`, fading out, so the next moment
- * comes in over the last one going rather than after a cut. Reduced motion keeps the fade.
+ * when it goes, the last of it stays for `ROOM_EXIT_MS`, rolling or fading out, so the next moment
+ * comes in over the last one going rather than after a cut. With reduced motion it simply goes.
  *
  * The wrapper is always rendered, a box over the whole of its container, so the moment is never
  * remounted on its way out and its entrance does not replay. It takes no pointer events: a moment
@@ -173,10 +191,12 @@ function shown(node: React.ReactNode) {
  */
 export function RoomExit({
   children,
+  exit = 'fade',
   layout = 'fill',
   className,
 }: {
   children: React.ReactNode;
+  exit?: keyof typeof EXIT_CLASS;
   layout?: 'fill' | 'inline';
   className?: string;
 }) {
@@ -206,7 +226,7 @@ export function RoomExit({
       className={cx(
         'pointer-events-none',
         layout === 'fill' && 'absolute inset-0',
-        isLeaving && PLAYER_EXIT_CLASS,
+        isLeaving && [EXIT_CLASS[exit], 'motion-reduce:hidden'],
         className
       )}
     >

@@ -435,6 +435,15 @@
   initial-value: 360deg;
 }
 
+@keyframes roomMomentSettle {
+  from {
+    scale: 1.06;
+  }
+  to {
+    scale: 1;
+  }
+}
+
 @keyframes fadeIn {
   0% {
     opacity: 0;
