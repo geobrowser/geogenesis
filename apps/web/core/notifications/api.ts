@@ -86,3 +86,19 @@ export function updateNotificationPreferences(
     body: patch,
   });
 }
+
+/**
+ * The seen ping (GEO-3371): this visit, and the browser's zone, which the retention emails are
+ * scheduled in. The service accepts a token that expired within the past week, so a visit counts
+ * even when Privy is too slow to hand out a fresh one. Resolves to the HTTP status.
+ */
+export async function sendSeenPing(baseUrl: string, accessToken: string, timeZone: string): Promise<number> {
+  const response = await fetch(`${baseUrl}/me/seen`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ time_zone: timeZone }),
+    // Survives the page being hidden or closed right after it fires.
+    keepalive: true,
+  });
+  return response.status;
+}
