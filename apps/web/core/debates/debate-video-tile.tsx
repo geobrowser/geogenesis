@@ -337,29 +337,28 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {upcoming && (
-              <div className="absolute inset-0 text-center text-[16px] leading-[1.45]">
-                <div className="absolute top-[30%] left-1/2 w-max -translate-x-1/2 -translate-y-1/2">
-                  <span
-                    className="inline-block text-[5.148cqw] leading-[0.95] font-semibold tracking-[-0.02em] whitespace-nowrap text-white"
-                    data-room-phrase="count-in"
-                    style={ROOM_OUTLINED_STYLE}
-                  >
-                    {upcomingLabel.replace("You're", 'You’re')}
-                  </span>
-                </div>
-                <div className="absolute top-[64%] left-1/2 w-max -translate-x-1/2 -translate-y-1/2">
-                  <span
-                    key={upcomingSeconds}
-                    className={cx(
-                      'inline-block text-[15.6cqw] leading-[0.95] font-bold tracking-[-0.02em] whitespace-nowrap text-white',
-                      ROOM_MOMENT_ENTER_CLASS
-                    )}
-                    data-room-count-in
-                    style={ROOM_OUTLINED_STYLE}
-                  >
-                    {upcomingSeconds}
-                  </span>
-                </div>
+              <div
+                data-room-count-in-group
+                className="absolute inset-0 flex flex-col items-center justify-center gap-[1.6cqw] text-center"
+              >
+                <span
+                  className="inline-block max-w-[92%] text-[8cqw] leading-[0.95] font-semibold tracking-[-0.02em] whitespace-nowrap text-white"
+                  data-room-phrase="count-in"
+                  style={ROOM_OUTLINED_STYLE}
+                >
+                  {upcomingLabel.replace("You're", 'You’re')}
+                </span>
+                <span
+                  key={upcomingSeconds}
+                  className={cx(
+                    'inline-block text-[15.6cqw] leading-[0.95] font-bold tracking-[-0.02em] whitespace-nowrap text-white',
+                    ROOM_MOMENT_ENTER_CLASS
+                  )}
+                  data-room-count-in
+                  style={ROOM_OUTLINED_STYLE}
+                >
+                  {upcomingSeconds}
+                </span>
               </div>
             )}
           </RoomExit>
