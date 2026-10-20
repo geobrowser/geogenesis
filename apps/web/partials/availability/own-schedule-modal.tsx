@@ -11,6 +11,7 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { AvailabilityModal } from './availability-modal';
 import { CopyOwnAvailabilityLinkButton } from './copy-availability-link';
+import type { CalendarReturn } from './google-calendar-return-url';
 import { GoogleCalendarSection } from './google-calendar-section';
 
 type Props = {
@@ -21,6 +22,8 @@ type Props = {
   onSaved?: (blocks: AvailabilityBlock[]) => void;
   /** Which control opened it, for the saved event. */
   surface: ScheduleEditorSurface;
+  /** The outcome of connecting Google Calendar, when reopened on the way back. */
+  calendarReturn?: CalendarReturn | null;
 };
 
 /**
@@ -45,7 +48,13 @@ function ScheduleEditorWithCalendar(props: Props) {
   return (
     <ScheduleEditor
       {...props}
-      calendarSection={disabled ? undefined : <GoogleCalendarSection />}
+      calendarSection={
+        disabled
+          ? undefined
+          : ({ unsavedChanges }) => (
+              <GoogleCalendarSection unsavedChanges={unsavedChanges} returned={props.calendarReturn ?? null} />
+            )
+      }
       busyIntervals={busyRange ? intervals : undefined}
     />
   );

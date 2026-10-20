@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { toOwnSchedule } from '~/core/availability/own-schedule-deep-link';
 import type { GoogleCalendarConnection } from '~/core/debates/api';
 import {
   useCalendarConnections,
@@ -12,7 +13,8 @@ import {
 
 import { Text } from '~/design-system/text';
 
-import { connectionErrorCopy, requestErrorCopy, syncedAgo } from './google-calendar-copy';
+import { calendarReturnCopy, connectionErrorCopy, requestErrorCopy, syncedAgo } from './google-calendar-copy';
+import type { CalendarReturn } from './google-calendar-return-url';
 
 const PRIMARY_BUTTON =
   'rounded-full bg-[#151515] px-4 py-1 text-metadata text-white transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-40';
@@ -24,7 +26,15 @@ const TEXT_BUTTON = 'rounded-full px-3 py-1 text-metadata text-grey-04 transitio
  * Google Calendar in the viewer's own schedule editor. geo-chat reads only busy times and takes them
  * out of their debate availability; it never adds time. Behind `googleCalendar`.
  */
-export function GoogleCalendarSection() {
+export function GoogleCalendarSection({
+  unsavedChanges = false,
+  returned = null,
+}: {
+  /** Connecting leaves the page, which would drop the grid's draft. */
+  unsavedChanges?: boolean;
+  /** How connecting went, when the editor was reopened on the way back from Google. */
+  returned?: CalendarReturn | null;
+}) {
   const { google, isError, disabled, refetch } = useCalendarConnections(true);
 
   // Off server-side: nothing to offer, so nothing to draw.
@@ -46,23 +56,40 @@ export function GoogleCalendarSection() {
 
   return (
     <section aria-label="Google Calendar" className="flex shrink-0 flex-col gap-2">
-      {google ? <ConnectedCalendar connection={google} /> : <ConnectCalendar />}
+      {returned ? (
+        <p role="status" className={returned.outcome === 'error' ? 'text-footnote text-red-01' : 'text-footnote'}>
+          {calendarReturnCopy(returned.outcome, returned.reason)}
+        </p>
+      ) : null}
+      {google ? (
+        <ConnectedCalendar connection={google} unsavedChanges={unsavedChanges} />
+      ) : (
+        <ConnectCalendar unsavedChanges={unsavedChanges} />
+      )}
     </section>
   );
 }
 
-/** Sends the browser to Google; geo-chat sends it back here with `?calendar=…`. */
+/** Sends the browser to Google; geo-chat sends it back here with `?calendar=…`, reopening this editor. */
 function useConnect() {
   const connect = useConnectGoogleCalendar();
   const start = () =>
-    connect.mutate(window.location.href, {
+    connect.mutate(toOwnSchedule(window.location.href), {
       onSuccess: ({ authorization_url }) => window.location.assign(authorization_url),
     });
   // Still pending while the browser leaves, so the button stays disabled.
   return { start, pending: connect.isPending || connect.isSuccess, error: connect.isError ? connect.error : null };
 }
 
-function ConnectCalendar() {
+function SaveFirstHint() {
+  return (
+    <Text as="p" variant="footnote" color="grey-04">
+      Save your hours first.
+    </Text>
+  );
+}
+
+function ConnectCalendar({ unsavedChanges }: { unsavedChanges: boolean }) {
   const connect = useConnect();
 
   return (
@@ -71,10 +98,16 @@ function ConnectCalendar() {
         <Text as="p" variant="footnote">
           Block out times you’re busy on Google Calendar. Geo only sees when you’re busy, never your events.
         </Text>
-        <button type="button" onClick={connect.start} disabled={connect.pending} className={PRIMARY_BUTTON}>
+        <button
+          type="button"
+          onClick={connect.start}
+          disabled={connect.pending || unsavedChanges}
+          className={PRIMARY_BUTTON}
+        >
           {connect.pending ? 'Opening Google…' : 'Connect Google Calendar'}
         </button>
       </div>
+      {unsavedChanges ? <SaveFirstHint /> : null}
       {connect.error ? (
         <p role="alert" className="text-footnote text-red-01">
           {requestErrorCopy(connect.error)}
@@ -84,7 +117,13 @@ function ConnectCalendar() {
   );
 }
 
-function ConnectedCalendar({ connection }: { connection: GoogleCalendarConnection }) {
+function ConnectedCalendar({
+  connection,
+  unsavedChanges,
+}: {
+  connection: GoogleCalendarConnection;
+  unsavedChanges: boolean;
+}) {
   const connect = useConnect();
   const refresh = useRefreshGoogleCalendar();
   const disconnect = useDisconnectGoogleCalendar();
@@ -109,7 +148,12 @@ function ConnectedCalendar({ connection }: { connection: GoogleCalendarConnectio
           <div className="flex shrink-0 items-center gap-2">
             {/* Refresh does nothing while access is gone, so Reconnect takes its place. */}
             {needsReconnect ? (
-              <button type="button" onClick={connect.start} disabled={connect.pending} className={PRIMARY_BUTTON}>
+              <button
+                type="button"
+                onClick={connect.start}
+                disabled={connect.pending || unsavedChanges}
+                className={PRIMARY_BUTTON}
+              >
                 {connect.pending ? 'Opening Google…' : 'Reconnect'}
               </button>
             ) : (
@@ -128,6 +172,8 @@ function ConnectedCalendar({ connection }: { connection: GoogleCalendarConnectio
           </div>
         )}
       </div>
+
+      {needsReconnect && unsavedChanges ? <SaveFirstHint /> : null}
 
       {connection.status === 'ok' ? null : (
         <Text as="p" variant="footnote" className="text-red-01">

@@ -62,14 +62,17 @@ describe('GoogleCalendarSection', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('connects with the current URL to come back to, then goes to Google', async () => {
+  it('connects with the current URL plus the editor trigger to come back to, then goes to Google', async () => {
     const assign = vi.fn();
     vi.stubGlobal('location', { ...window.location, href: 'https://www.geobrowser.io/explore?tab=x', assign });
     render(<GoogleCalendarSection />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Connect Google Calendar' }));
 
-    expect(mocks.connect.mutate).toHaveBeenCalledWith('https://www.geobrowser.io/explore?tab=x', expect.anything());
+    expect(mocks.connect.mutate).toHaveBeenCalledWith(
+      'https://www.geobrowser.io/explore?tab=x&modal=schedule',
+      expect.anything()
+    );
     const { onSuccess } = mocks.connect.mutate.mock.calls[0][1];
     onSuccess({ authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth?x=1' });
     expect(assign).toHaveBeenCalledWith('https://accounts.google.com/o/oauth2/v2/auth?x=1');
@@ -113,6 +116,29 @@ describe('GoogleCalendarSection', () => {
     render(<GoogleCalendarSection />);
 
     expect(screen.getByRole('alert')).toHaveTextContent('You just refreshed. Try again in a minute.');
+  });
+
+  it('holds Connect while the grid has unsaved edits', () => {
+    render(<GoogleCalendarSection unsavedChanges />);
+
+    expect(screen.getByRole('button', { name: 'Connect Google Calendar' })).toBeDisabled();
+    expect(screen.getByText('Save your hours first.')).toBeInTheDocument();
+  });
+
+  it('holds Reconnect while the grid has unsaved edits, but not Disconnect', () => {
+    mocks.connections.google = connection({ status: 'needs_reconnect', last_error: 'invalid_grant' });
+    render(<GoogleCalendarSection unsavedChanges />);
+
+    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Disconnect' })).toBeEnabled();
+    expect(screen.getByText('Save your hours first.')).toBeInTheDocument();
+  });
+
+  it('says how connecting went when reopened on the way back', () => {
+    mocks.connections.google = connection();
+    render(<GoogleCalendarSection returned={{ outcome: 'connected', reason: null }} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(/^Google Calendar connected/);
   });
 
   it('confirms before disconnecting', async () => {
