@@ -135,6 +135,9 @@ export const debateFeedPanelAtom = atom<'claims' | 'comments' | null>(null);
 /**
  * Every panel sharing the one right-hand slot. Opening any of these clears the others.
  *
+ * A slot panel whose opener can sit inside another slot panel must render from an app-level host,
+ * or clearing that panel unmounts the new one. Hosts close their own panel on route change.
+ *
  * Not in this slot (left alone on purpose): ranking-compose entity sheets, proposal review
  * panels (exclusive among themselves), the debates hub, and slide-ups (those stack).
  */
