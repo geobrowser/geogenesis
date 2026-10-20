@@ -19,6 +19,7 @@ function renderCard(props: Partial<ComponentProps<typeof OpenRoundPickCard>> = {
     savedPick: null,
     rebuttalTurnMs: 45_000,
     remainingSeconds: 8,
+    progress: 0.2,
     onPick,
     localReconnecting: false,
     reconnectingOpponentName: null,
@@ -76,6 +77,36 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     expect(end()).toHaveClass('bg-white', 'text-[#111]');
     expect(extend()).toHaveClass('opacity-40', 'bg-black/66');
     expect(extend()).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('drains the decision ring with the room clock, including partial seconds and late joins', () => {
+    const view = renderCard({ remainingSeconds: 5, progress: 0.525 });
+    const ring = view.container.querySelector('[data-pick-countdown-progress]');
+    expect(ring).toHaveAttribute('pathLength', '1');
+    expect(ring).toHaveAttribute('stroke-dashoffset', '0.525');
+    expect(screen.getByText('5 seconds to pick')).toBeInTheDocument();
+
+    view.rerender(<OpenRoundPickCard {...view.props} remainingSeconds={3} progress={0.75} />);
+    expect(view.container.querySelector('[data-pick-countdown-progress]')).toBe(ring);
+    expect(ring).toHaveAttribute('stroke-dashoffset', '0.75');
+    expect(screen.getByText('3 seconds to pick')).toBeInTheDocument();
+
+    view.rerender(<OpenRoundPickCard {...view.props} remainingSeconds={0} progress={1} />);
+    expect(ring).toHaveAttribute('stroke-dashoffset', '1');
+    expect(extend()).toBeDisabled();
+    expect(end()).toBeDisabled();
+  });
+
+  it.each([
+    [-0.5, 0],
+    [1.5, 1],
+    [NaN, 0],
+  ])('keeps an invalid decision progress %s inside the ring', (progress, expected) => {
+    const view = renderCard({ progress });
+    expect(view.container.querySelector('[data-pick-countdown-progress]')).toHaveAttribute(
+      'stroke-dashoffset',
+      String(expected)
+    );
   });
 
   it('tells the room how long the card was open when the pick was tapped (GEO-3182)', () => {

@@ -3587,6 +3587,7 @@ function DebateRecordingModal({
                   }
                   rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
                   remainingSeconds={countdown.remainingSeconds}
+                  progress={countdown.progress}
                   onPick={(pick, context) =>
                     onPickOpenRound(openRoundDeciding.roundIndex, pick, {
                       ...context,

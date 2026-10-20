@@ -6151,12 +6151,26 @@ describe('DebateRoomPageClient', () => {
       rerenderAt(view, '20:02:03.000', openRoundsDeciding());
       await waitFor(() => expect(pickCard()).toBeInTheDocument());
       expect(screen.getByText('7 seconds to pick')).toBeInTheDocument();
+      const decisionRing = pickCard()?.querySelector('[data-pick-countdown-progress]');
+      expect(decisionRing).toHaveAttribute('stroke-dashoffset', '0.3');
       // The card carries the window's countdown, so the tiles do not repeat it. The speaker's timer
       // fades out as the card comes in (GEO-3347).
       expect(debateVideoTile('local').querySelector('[data-countdown-progress]')).not.toBeInTheDocument();
       await waitFor(() =>
         expect(debateVideoTile('remote').querySelector('[data-countdown-progress]')).not.toBeInTheDocument()
       );
+
+      rerenderAt(view, '20:02:07.500', openRoundsDeciding());
+      await waitFor(() => expect(decisionRing).toHaveAttribute('stroke-dashoffset', '0.75'));
+      expect(screen.getByText('3 seconds to pick')).toBeInTheDocument();
+    });
+
+    it('drains the pick ring over the configured decision window when joining partway through', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:05.000'));
+      await renderLiveDebate(openRoundsDeciding({ decision_window_ms: 20_000 }));
+
+      await waitFor(() => expect(screen.getByText('15 seconds to pick')).toBeInTheDocument());
+      expect(pickCard()?.querySelector('[data-pick-countdown-progress]')).toHaveAttribute('stroke-dashoffset', '0.25');
     });
 
     it('saves a pick for the round that just ended', async () => {

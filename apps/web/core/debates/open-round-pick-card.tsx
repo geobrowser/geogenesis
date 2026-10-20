@@ -20,6 +20,8 @@ type OpenRoundPickCardProps = {
   rebuttalTurnMs: number;
   /** What is left of the decision window, on the room's clock. */
   remainingSeconds: number;
+  /** Elapsed fraction of the server's decision window, including a partial second. */
+  progress: number;
   /**
    * Saves the pick. A rejection puts the selection back to `savedPick` and asks for another tap.
    * `context` is for analytics (GEO-3182): what was selected when the pick was tapped, and how long
@@ -49,6 +51,7 @@ export function OpenRoundPickCard({
   savedPick,
   rebuttalTurnMs,
   remainingSeconds,
+  progress,
   onPick,
   localReconnecting,
   reconnectingOpponentName,
@@ -104,7 +107,7 @@ export function OpenRoundPickCard({
         <h2 id={headingId} className="text-[7cqw] leading-[0.95] font-bold tracking-[-0.02em]">
           Keep debating?
         </h2>
-        <PickCountdown remainingSeconds={remainingSeconds} />
+        <PickCountdown remainingSeconds={remainingSeconds} progress={progress} />
       </div>
 
       <div role="group" aria-labelledby={headingId} className="flex gap-[2.4cqw]">
@@ -189,15 +192,37 @@ function PickChoice({
 }
 
 /** The decision window's seconds left, in a ringed circle beside the question. */
-function PickCountdown({ remainingSeconds }: { remainingSeconds: number }) {
+function PickCountdown({ remainingSeconds, progress }: { remainingSeconds: number; progress: number }) {
   const seconds = Math.max(0, remainingSeconds);
+  const elapsed = seconds === 0 ? 1 : Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
 
   return (
     <span
-      className="grid size-[7cqw] shrink-0 place-items-center rounded-full bg-black/50 text-[3cqw] leading-none font-medium shadow-[inset_0_0_0_0.5cqw_rgba(255,255,255,0.85)]"
+      data-pick-countdown
+      className="relative block size-[7cqw] shrink-0 rounded-full bg-black/50 font-medium tabular-nums"
       style={ROOM_LABEL_FONT}
     >
-      <span aria-hidden="true">{seconds}</span>
+      <svg aria-hidden="true" viewBox="0 0 28 28" className="block size-full fill-none">
+        <circle cx="14" cy="14" r="13" stroke="white" strokeOpacity="0.2" strokeWidth="2" />
+        <circle
+          data-pick-countdown-progress
+          cx="14"
+          cy="14"
+          r="13"
+          stroke="white"
+          strokeOpacity="0.85"
+          strokeWidth="2"
+          pathLength="1"
+          strokeDasharray="1"
+          strokeDashoffset={elapsed}
+          transform="rotate(-90 14 14)"
+          className="transition-[stroke-dashoffset] duration-500 ease-linear"
+        />
+        {/* Center the digit's cap height on the circle, independently of the font's line box. */}
+        <text x="14" y="14" dy="0.35em" textAnchor="middle" fontSize="12" fill="currentColor">
+          {seconds}
+        </text>
+      </svg>
       <span className="sr-only">{seconds} seconds to pick</span>
     </span>
   );
