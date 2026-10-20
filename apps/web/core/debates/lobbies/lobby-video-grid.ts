@@ -5,13 +5,18 @@
  * grid holds `cap` tiles and the rest wait in the "More speakers" row. Who gets a tile: the viewer
  * and hosts always, then whoever is talking, then cameras on, then cameras off.
  *
- * Once someone has a tile it stays in the same place. Someone in the row who starts talking takes
- * the tile of whoever on the grid has been quiet longest; someone in the row whose camera comes on
- * takes the tile of the quietest whose camera is off (this is also how a grid picked before cameras
- * arrived catches up). Someone leaving leaves a gap that is filled in place, and a smaller cap (a
- * phone) drops tiles from the end, never a held, hosting or talking one. Nobody else moves, and nobody being held (their tile or chip has focus, or a menu open
- * from it) moves at all. A grid that reshuffles on every voice is unreadable, and a tile taken out
- * from under a menu takes the menu with it.
+ * Once someone has a tile it stays in the same place, and only these move anyone:
+ * - Someone in the row starts talking: they take a tile from someone on the grid whose camera is
+ *   off if there is one, and only then from a camera, the quietest first in each. A video grid
+ *   should not slowly fill with avatars while live cameras wait in the row.
+ * - Someone in the row turns their camera on: they take the tile of the quietest camera that is
+ *   off, never a camera's. This is also how a grid picked before cameras arrived catches up.
+ * - Someone leaves: their gap is filled in place.
+ * - The cap shrinks (a phone): tiles drop from the end, quiet ones first, then talkers, the viewer
+ *   and hosts last.
+ * Nobody being held (their tile, chip or thumbnail has focus, or a menu open from it) moves at
+ * all. A grid that reshuffles on every voice is unreadable, and a tile taken out from under a menu
+ * takes the menu with it.
  *
  * Pure, so the page can keep the previous result in state and feed it back in; the same inputs give
  * the same state, so re-rendering never churns it.
@@ -130,8 +135,8 @@ function placeTiles(
 
   const movable = (id: string) => !byId.get(id)!.held;
   // Who can give a tile up: not pinned, not talking, not held, and for a camera coming on, only
-  // someone whose camera is off. Quiet longest first; among equals, a camera that is off before one
-  // that is on, then the later in the roster.
+  // someone whose camera is off. A camera that is off before one that is on, so live cameras keep
+  // their tiles; within each, quiet longest first, then the later in the roster.
   const evictable = (cameraOffOnly: boolean) =>
     slots
       .map((id, index) => ({ id, index }))
@@ -142,8 +147,8 @@ function placeTiles(
       })
       .sort(
         (a, b) =>
-          (spokeAt[a.id] ?? -1) - (spokeAt[b.id] ?? -1) ||
           Number(byId.get(a.id)!.camera) - Number(byId.get(b.id)!.camera) ||
+          (spokeAt[a.id] ?? -1) - (spokeAt[b.id] ?? -1) ||
           order.get(b.id)! - order.get(a.id)!
       );
 

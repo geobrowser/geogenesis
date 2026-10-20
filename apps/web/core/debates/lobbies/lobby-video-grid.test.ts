@@ -84,6 +84,21 @@ describe('nextVideoGrid', () => {
     expect(grid.shown).toEqual(['s3', 's1', 's2']);
   });
 
+  it('takes a talker’s tile from a camera that is off before a quieter camera that is on', () => {
+    // Patrick's case, cap 2: x has a camera and never talks; y has none and talked once.
+    const at = (talking: string | null) => [
+      speaker('x', { speaking: talking === 'x' }),
+      speaker('y', { camera: false, speaking: talking === 'y' }),
+      speaker('z', { camera: false, speaking: talking === 'z' }),
+    ];
+    let grid = step(EMPTY_VIDEO_GRID, at(null), 2);
+    expect(grid.shown).toEqual(['x', 'y']);
+    grid = step(grid, at('y'), 2);
+    grid = step(grid, at(null), 2);
+    grid = step(grid, at('z'), 2);
+    expect(grid.shown).toEqual(['x', 'z']);
+  });
+
   it('never takes a tile from the viewer, a host or someone talking', () => {
     const base = (index: number) => ({ pinned: index === 0, speaking: index === 1 || index === 2 });
     let grid = step(EMPTY_VIDEO_GRID, room(3, base));
