@@ -694,7 +694,8 @@ describe('ExploreEmailCapturePopup', () => {
       expect(window.localStorage.getItem('dismissedNotices')).toContain('exploreEmailCapture');
     });
 
-    it('submits the code and lets the session take over', async () => {
+    // GEO-3400: like Privy's own step, the sixth digit is the submit; there is no button to press.
+    it('submits the code on its sixth digit and lets the session take over', async () => {
       const view = await subscribeSuccessfully();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
@@ -702,12 +703,53 @@ describe('ExploreEmailCapturePopup', () => {
 
       mocks.otpState = { status: 'awaiting-code-input' };
       view.rerender(<ExploreEmailCapturePopup />);
-      fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '123456' } });
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '123456' } });
       });
 
+      expect(mocks.loginWithCode).toHaveBeenCalledOnce();
       expect(mocks.loginWithCode).toHaveBeenCalledWith({ code: '123456' });
+
+      // A re-render is not a second try with the same code.
+      view.rerender(<ExploreEmailCapturePopup />);
+      expect(mocks.loginWithCode).toHaveBeenCalledOnce();
+    });
+
+    it('draws a box per digit from the one field', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '427' } });
+
+      expect(screen.getAllByTestId('code-box').map(box => box.textContent)).toEqual(['4', '2', '7', '', '', '']);
+    });
+
+    it('empties the boxes after a wrong code, and takes the same code again', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      await act(async () => {
+        fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '111111' } });
+      });
+
+      mocks.otpState = { status: 'error' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      const field = screen.getByRole('textbox', { name: 'Verification code' }) as HTMLInputElement;
+      expect(field.value).toBe('');
+      expect(screen.getByRole('alert')).toHaveTextContent('That code did not work.');
+
+      await act(async () => {
+        fireEvent.change(field, { target: { value: '111111' } });
+      });
+      expect(mocks.loginWithCode).toHaveBeenCalledTimes(2);
     });
 
     // Privy sends six digits and nothing else, so anything pasted around them is noise rather than
@@ -735,8 +777,9 @@ describe('ExploreEmailCapturePopup', () => {
       view.rerender(<ExploreEmailCapturePopup />);
 
       fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '123' } });
+      fireEvent.submit(screen.getByRole('textbox', { name: 'Verification code' }));
 
-      expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+      expect(mocks.loginWithCode).not.toHaveBeenCalled();
     });
 
     // The other half of the same bug, and the one that made the step unusable even when the modal
@@ -912,11 +955,8 @@ describe('ExploreEmailCapturePopup', () => {
       expect(screen.queryByRole('textbox', { name: 'Verification code' })).toBeNull();
     });
 
-    // 28px is the desktop frame's control height and fine with a cursor. On a phone it is a 28px
-    // touch target against 44pt in Apple's guidance and 48dp in Material, which is what made the
-    // card feel cramped. Pinned because the height is shared between the two rows and has drifted
-    // apart once already.
-    it('gives the code field and button a touch-sized height on the phone', async () => {
+    // 44px at every width, Privy's size: each box is a tap target as well as a digit (GEO-3400).
+    it('gives the code boxes a touch-sized height', async () => {
       const view = await subscribeSuccessfully();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
@@ -924,8 +964,9 @@ describe('ExploreEmailCapturePopup', () => {
       mocks.otpState = { status: 'awaiting-code-input' };
       view.rerender(<ExploreEmailCapturePopup />);
 
-      expect(screen.getByRole('textbox', { name: 'Verification code' }).className).toContain('mobile:h-11');
-      expect(screen.getByRole('button', { name: 'Continue' }).className).toContain('mobile:h-11');
+      const boxes = screen.getAllByTestId('code-box');
+      expect(boxes).toHaveLength(6);
+      boxes.forEach(box => expect(box.className).toContain('h-11'));
     });
 
     it('starts exactly one attributed attempt for the create-account press', async () => {
