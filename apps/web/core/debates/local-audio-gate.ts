@@ -52,6 +52,8 @@ export type LocalAudioGateInput = {
    * keep both closed, including the normal turn overrun and incoming-speaker prearm.
    */
   openRoundsPhase: OpenRoundsRoomPhase['phase'] | null;
+  /** The final wrap/max board stays up briefly after the room enters thanking. */
+  openRoundResultHeld: boolean;
 };
 
 /**
@@ -70,8 +72,10 @@ export function shouldEnableLocalAudio({
   stillSpeaking,
   msUntilTurnStarts,
   openRoundsPhase,
+  openRoundResultHeld,
 }: LocalAudioGateInput): boolean {
   if (audioMuted || !effectiveStatus || !localSlot) return false;
+  if (openRoundResultHeld) return false;
   // The intro is an open two-way call; turn-taking starts with the debate. Load-bearing: the turn
   // rule below would otherwise disable the published microphone track and the mic meter with it.
   if (effectiveStatus === 'ready') return true;

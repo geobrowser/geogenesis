@@ -747,6 +747,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // which is the entire question the overrun has to settle.
   const localSpeakingRef = useLocalSpeechActivity(previewStream, roomState === 'connected');
   const localTurnStartsIn = debate ? localTurnStartsInSeconds(debate, countdown, localSlot) : null;
+  const revealHold = debate
+    ? openRoundThankingHold({
+        debate,
+        phase: countdown.openRounds,
+        effectiveStatus: countdown.effectiveStatus,
+        elapsedMs: countdown.elapsedMs,
+        remainingSeconds: countdown.remainingSeconds,
+      })
+    : null;
+  // The final board holds both microphones and the exit on the same room clock.
+  const revealHoldsExit = Boolean(revealHold?.maxReached || revealHold?.wrapHeld);
   const localAudioGate: LocalAudioGateInput = {
     effectiveStatus: debate ? countdown.effectiveStatus : null,
     activeSlot: countdown.activeSlot,
@@ -756,6 +767,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     stillSpeaking: localSpeakingRef.current,
     msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
     openRoundsPhase: countdown.openRounds?.phase ?? null,
+    openRoundResultHeld: revealHoldsExit,
   };
   const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
   // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
@@ -810,18 +822,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * room is hidden through the handoff (GEO-3301), so sitting out the rest of the period would be up
    * to 20 seconds of blank screen. Both the exit and its Retry save read this one answer.
    */
-  const revealHold = debate
-    ? openRoundThankingHold({
-        debate,
-        phase: countdown.openRounds,
-        effectiveStatus: countdown.effectiveStatus,
-        elapsedMs: countdown.elapsedMs,
-        remainingSeconds: countdown.remainingSeconds,
-      })
-    : null;
   // An Open rounds debate's last result ("That's the max", "That's a wrap") is still up in the first
   // moments of thanking, which both rooms' immediate consent would otherwise cut short.
-  const revealHoldsExit = Boolean(revealHold?.maxReached || revealHold?.wrapHeld);
   const handoffSettled =
     !revealHoldsExit && (rematchReady || (countdown.effectiveStatus === 'thanking' && rematchSessionClosed));
 
@@ -3290,9 +3292,9 @@ function DebateRecordingModal({
   const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
   const thankingSlot = reveal.holdsEndCard ? null : thankingParticipantSlot(debate, countdown);
-  // Voting is an open call; the reveal, round title and count-in mute both participants.
+  // Voting is an open call; the reveal, round title, count-in and final board mute both participants.
   const betweenRounds = isBetweenOpenRounds(countdown.openRounds);
-  const roundTransition = countdown.openRounds?.phase === 'result';
+  const roundTransition = countdown.openRounds?.phase === 'result' || reveal.holdsEndCard;
   const localInactive =
     roundTransition ||
     (!betweenRounds && participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot));

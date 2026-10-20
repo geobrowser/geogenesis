@@ -6093,6 +6093,106 @@ describe('DebateRoomPageClient', () => {
       mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     });
 
+    const finalBoards = [
+      {
+        kind: 'wrap',
+        debate: openRoundsRevealEnd,
+        thankingAt: openRoundsAt('20:02:08.000'),
+        holdMs: 1_500,
+      },
+      {
+        kind: 'max',
+        debate: openRoundsCapRoundLastTurn,
+        thankingAt: OPEN_ROUNDS_CAP_ROUND_ENDS_AT,
+        holdMs: 3_000,
+      },
+    ] as const;
+
+    function expectFinalBoardMuted() {
+      for (const participant of ['local', 'remote'] as const) {
+        expectMutedIndicator(participant);
+        expect(document.querySelector(`[data-inactive-speaker="${participant}"]`)).toHaveAttribute(
+          'data-visible',
+          'true'
+        );
+      }
+    }
+
+    for (const board of finalBoards) {
+      it.each([1, 2] as const)(
+        `keeps slot %s muted through the final ${board.kind} board and releases after its hold`,
+        async slot => {
+          if (slot === 2) joinAsBob();
+          const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+          mocks.createLocalTracks.mockResolvedValue([
+            audioTrack,
+            { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+          ]);
+          const debate = board.debate();
+          vi.spyOn(Date, 'now').mockReturnValue(board.thankingAt - 500);
+          const view = await renderLiveDebate(debate);
+
+          // The local clock enters thanking before the server payload catches up.
+          rerenderAt(view, board.thankingAt + 500, debate);
+          await waitFor(() =>
+            expect(document.querySelector(`[data-open-round-result="${board.kind}"]`)).not.toBeNull()
+          );
+          await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+          expectFinalBoardMuted();
+
+          // A subsequent poll writes thanking. Neither that nor the end of the hold may drift
+          // from the clock driving the board and the existing exit to the picker.
+          const thanking: Debate = {
+            ...debate,
+            status: 'thanking',
+            current_speaker_slot: null,
+            turn_started_at: new Date(board.thankingAt).toISOString(),
+            turn_ends_at: new Date(board.thankingAt + 60_000).toISOString(),
+            open_rounds: { ...debate.open_rounds!, phase: 'finished' },
+          };
+          rerenderAt(view, board.thankingAt + board.holdMs - 1, thanking);
+          expect(audioTrack.mediaStreamTrack.enabled).toBe(false);
+          expectFinalBoardMuted();
+
+          rerenderAt(view, board.thankingAt + board.holdMs, thanking);
+          await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
+          await waitFor(() => expect(document.querySelector(`[data-open-round-result="${board.kind}"]`)).toBeNull());
+          expectNoMutedIndicator('local');
+          expectNoMutedIndicator('remote');
+          expect(recordingSurface()).toHaveClass('invisible');
+        }
+      );
+
+      it(`connects with the microphone muted while the final ${board.kind} board is held`, async () => {
+        const setEnabled = vi.fn();
+        let enabled = true;
+        const audioTrack = {
+          mediaStreamTrack: {
+            kind: 'audio',
+            get enabled() {
+              return enabled;
+            },
+            set enabled(value: boolean) {
+              enabled = value;
+              setEnabled(value);
+            },
+          },
+          stop: vi.fn(),
+          detach: vi.fn(),
+        };
+        mocks.createLocalTracks.mockResolvedValue([
+          audioTrack,
+          { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+        ]);
+        vi.spyOn(Date, 'now').mockReturnValue(board.thankingAt + 500);
+        await renderLiveDebate(board.debate());
+
+        await waitFor(() => expect(setEnabled).toHaveBeenCalledWith(false));
+        expect(setEnabled).not.toHaveBeenCalledWith(true);
+        expectFinalBoardMuted();
+      });
+    }
+
     it('opens the microphone for voting, then mutes the transition until the speaking turn starts', async () => {
       const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: true }, stop: vi.fn(), detach: vi.fn() };
       mocks.createLocalTracks.mockResolvedValue([

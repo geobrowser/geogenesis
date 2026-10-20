@@ -16,6 +16,7 @@ const speaking: LocalAudioGateInput = {
   stillSpeaking: false,
   msUntilTurnStarts: null,
   openRoundsPhase: null,
+  openRoundResultHeld: false,
 };
 
 const gate = (overrides: Partial<LocalAudioGateInput> = {}) => shouldEnableLocalAudio({ ...speaking, ...overrides });
@@ -42,6 +43,20 @@ describe('local audio gate', () => {
     expect(gate({ activeSlot: null, localSlot: 1, openRoundsPhase: 'deciding' })).toBe(true);
     expect(gate({ activeSlot: null, localSlot: 2, openRoundsPhase: 'deciding' })).toBe(true);
     expect(gate({ activeSlot: null, openRoundsPhase: 'deciding', audioMuted: true })).toBe(false);
+  });
+
+  it.each([1, 2] as const)('keeps slot %s muted until the final result hold ends', localSlot => {
+    const thanking = {
+      localSlot,
+      effectiveStatus: 'thanking' as const,
+      activeSlot: null,
+      openRoundsPhase: 'finished' as const,
+      msSinceTurnEnded: 100,
+      stillSpeaking: true,
+    };
+    expect(gate({ ...thanking, openRoundResultHeld: true })).toBe(false);
+    expect(gate({ ...thanking, openRoundResultHeld: false })).toBe(true);
+    expect(gate({ ...thanking, openRoundResultHeld: false, audioMuted: true })).toBe(false);
   });
 
   it.each([1, 2] as const)(
