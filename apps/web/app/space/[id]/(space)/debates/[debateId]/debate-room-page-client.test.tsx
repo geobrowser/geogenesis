@@ -6285,6 +6285,11 @@ describe('DebateRoomPageClient', () => {
       await waitFor(() => expect(reveal('local')).toHaveAttribute('data-open-round-reveal', 'extend'));
       expect(reveal('remote')).toHaveAttribute('data-open-round-reveal', 'extend');
       expect(reveal('remote')).toHaveTextContent('Extend');
+      const localVote = reveal('local');
+      const remoteVote = reveal('remote');
+      const localPill = localVote?.querySelector('.rounded-full');
+      expect(localVote).toHaveClass('opacity-100');
+      expect(remoteVote).toHaveClass('opacity-100');
       expect(result()).toBeNull();
       // Nothing counts down over the picks, and nobody is counted in yet.
       expect(debateVideoTile('local').querySelector('[data-countdown-progress]')).not.toBeInTheDocument();
@@ -6302,8 +6307,13 @@ describe('DebateRoomPageClient', () => {
         'data-debate-round-indicator',
         '1'
       );
-      // The pick pills fade as the outlined announcement comes in, then are gone.
-      await waitFor(() => expect(reveal('local')).toBeNull());
+      // The same votes remain behind the title, fading back rather than disappearing.
+      expect(reveal('local')).toBe(localVote);
+      expect(reveal('remote')).toBe(remoteVote);
+      expect(reveal('local')?.querySelector('.rounded-full')).toBe(localPill);
+      expect(localVote).toHaveClass('opacity-40', 'transition-opacity', 'duration-250');
+      expect(remoteVote).toHaveClass('opacity-40');
+      expect(localVote?.closest('[data-room-leaving]')).toBeNull();
       expect(chips('local')).toHaveAttribute('data-tile-chips', 'visible');
       expect(chips('remote')).toHaveAttribute('data-tile-chips', 'visible');
       expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
@@ -6311,6 +6321,8 @@ describe('DebateRoomPageClient', () => {
       // With no count-in from geo-chat, "Round 2" holds to the end of the window.
       rerenderAt(view, '20:02:06.900', openRoundsRevealRebut());
       expect(result()?.textContent).toBe('Round 2RebuttalYou open');
+      expect(reveal('local')).toBe(localVote);
+      expect(reveal('remote')).toBe(remoteVote);
       expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
     });
 
@@ -6324,6 +6336,8 @@ describe('DebateRoomPageClient', () => {
       expect(within(debateVideoTile('local')).getByText('5')).toBeInTheDocument();
       // The round announcement fades out as the count-in comes in (GEO-3366).
       await waitFor(() => expect(result()).toBeNull());
+      await waitFor(() => expect(reveal('local')).toBeNull());
+      expect(reveal('remote')).toBeNull();
       expect(chips('local')).toHaveAttribute('data-tile-chips', 'visible');
 
       rerenderAt(view, '20:02:11.300', revealRebutWithCountIn());
@@ -6341,6 +6355,8 @@ describe('DebateRoomPageClient', () => {
       await renderLiveDebate(revealRebutWithCountIn());
 
       await waitFor(() => expect(result()).toHaveTextContent('Round 2RebuttalAlice opens'));
+      expect(reveal('local')).toHaveClass('opacity-40');
+      expect(reveal('remote')).toHaveClass('opacity-40');
       expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
     });
 
@@ -6378,6 +6394,8 @@ describe('DebateRoomPageClient', () => {
       // Each pick is stamped onto its own tile, and stays there under the banner.
       expect(reveal('local')).toHaveTextContent('Extend');
       expect(reveal('remote')).toHaveTextContent('End');
+      expect(reveal('local')).toHaveClass('opacity-100');
+      expect(reveal('remote')).toHaveClass('opacity-100');
     });
 
     it('shows a missing pick as no pick, and says why the debate ended', async () => {

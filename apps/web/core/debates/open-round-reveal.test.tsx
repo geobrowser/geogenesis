@@ -117,6 +117,18 @@ describe('OpenRoundPickPill (GEO-3366)', () => {
     expect(pills).toHaveLength(2);
     expect(pills.map(pill => pill.style.animationDelay)).toEqual(['', '']);
   });
+
+  it('subdues a revealed vote without remounting its pill or replaying its entrance', () => {
+    const view = render(<OpenRoundPickPill pick="extend" />);
+    const pill = screen.getByText('Extend').parentElement;
+    const layer = view.container.firstElementChild;
+    expect(layer).toHaveClass('opacity-100');
+
+    view.rerender(<OpenRoundPickPill pick="extend" subdued />);
+    expect(screen.getByText('Extend').parentElement).toBe(pill);
+    expect(view.container.firstElementChild).toBe(layer);
+    expect(layer).toHaveClass('opacity-40', 'transition-opacity', 'duration-250');
+  });
 });
 
 describe('OpenRoundResultOverlay', () => {
@@ -229,7 +241,8 @@ describe('useOpenRoundReveal', () => {
   it('announces the new round to its opener as "You", and moves the counter to it', () => {
     const current = reveal({ elapsedMs: 2_000 });
     expect(current.result).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: null });
-    expect(current.localPick).toBeNull();
+    expect(current.localPick?.pick).toBe('extend');
+    expect(current.remotePick?.pick).toBe('extend');
     expect(current.chipsHidden).toBe(false);
     expect(current.announcedRoundPhase).toMatchObject({ phase: 'speaking', roundIndex: 1 });
   });
@@ -238,6 +251,8 @@ describe('useOpenRoundReveal', () => {
     const current = reveal({ elapsedMs: 4_000, localSlot: 2, remote: { slot: 1, name: 'Alice' } });
     expect(current.step).toBe('countIn');
     expect(current.result).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: 'Alice' });
+    expect(current.localPick?.pick).toBe('extend');
+    expect(current.remotePick?.pick).toBe('extend');
   });
 
   it("keeps the opener's announcement up while a stale payload has not brought the new round yet", () => {
@@ -274,6 +289,8 @@ describe('useOpenRoundReveal', () => {
   it("clears the opener's tiles for their count-in", () => {
     const current = reveal({ elapsedMs: 4_000 });
     expect(current.result).toBeNull();
+    expect(current.localPick).toBeNull();
+    expect(current.remotePick).toBeNull();
     expect(current.holdsCountIn).toBe(false);
   });
 

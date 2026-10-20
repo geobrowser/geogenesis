@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { Debate, OpenRoundPick, OpenRoundRevealedPick, ParticipantSlot } from './api';
 import { PlayerRoundTitle } from './browse/debate-round-cues';
 import { PLAYER_TITLE_CLASS, PLAYER_TITLE_STYLE } from './browse/player-overlay-styles';
@@ -30,7 +32,8 @@ import { roundLabel } from './round-cues';
  *
  * - `flip`: each debater's pick appears on their tile.
  * - `result`: what the picks mean, for the rest of the window. Two Extends: "Round N" and who opens
- *   it. Anything else: "That's a wrap", with the picks left up so the split explains itself.
+ *   it, with the picks subdued behind the title. Anything else: "That's a wrap", with the picks
+ *   left up so the split explains itself.
  * - `countIn`: Extend only, after the window. The opener gets the room's usual 5 s count-in, which
  *   geo-chat adds after the window as `extend_count_in_ms`.
  *
@@ -97,10 +100,17 @@ export function useOpenRoundRevealStep(
 }
 
 /** Each pick fades onto its debater: Extend white, End dark glass, No pick dashed. */
-export function OpenRoundPickPill({ pick }: { pick: OpenRoundPick | null }) {
+export function OpenRoundPickPill({ pick, subdued = false }: { pick: OpenRoundPick | null; subdued?: boolean }) {
   const key = pick ?? 'none';
   return (
-    <div aria-hidden="true" data-open-round-reveal={key} className="pointer-events-none absolute inset-0 z-[35]">
+    <div
+      aria-hidden="true"
+      data-open-round-reveal={key}
+      className={cx(
+        'pointer-events-none absolute inset-0 z-[35] transition-opacity duration-250 ease-out',
+        subdued ? 'opacity-40' : 'opacity-100'
+      )}
+    >
       <RoomTilePill tone={pick === 'extend' ? 'white' : pick === 'end' ? 'dark' : 'dashed'}>
         {STAMP_WORD[key]}
       </RoomTilePill>
@@ -323,9 +333,10 @@ export function useOpenRoundReveal({
         : { kind: 'wrap', note: openRoundWrapNote(localPick?.pick, { name: remote.name, pick: remotePick?.pick }) };
   }
 
-  // The picks land, then stay up beside "That's a wrap" so a split explains itself. A new round
-  // takes the tiles back for its own text.
-  const picksShown = step === 'flip' || (step === 'result' && outcome === 'end');
+  // Keep the votes behind the result, including a new round's title. The opener clears both picks
+  // with the title for their count-in; the listener keeps them as long as their title stays up.
+  // A required round's lead-in has no vote to reveal.
+  const picksShown = !leadIn && (step === 'flip' || result?.kind === 'round' || result?.kind === 'wrap');
   const newRound = resultPhase?.outcome === 'extend' && (step === 'result' || step === 'countIn');
 
   return {

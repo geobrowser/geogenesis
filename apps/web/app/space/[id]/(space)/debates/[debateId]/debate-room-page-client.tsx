@@ -3271,7 +3271,8 @@ function DebateRecordingModal({
   });
   // Open rounds uses classic outlined type and glass pills (GEO-3366).
   const openRoundsStyle = isOpenRoundsDebate(debate);
-  const pickReveal = (pick: OpenRoundRevealedPick | null) => (pick ? <OpenRoundPickPill pick={pick.pick} /> : null);
+  const pickReveal = (pick: OpenRoundRevealedPick | null) =>
+    pick ? <OpenRoundPickPill pick={pick.pick} subdued={reveal.result?.kind === 'round'} /> : null;
   // The pick, the reveal and what it means span both tiles, so both dim under them.
   const tilesDimmed =
     openRoundsStyle && (countdown.openRounds?.phase === 'deciding' || reveal.step === 'flip' || reveal.result !== null);
