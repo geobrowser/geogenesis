@@ -59,8 +59,36 @@ type Props = {
  * locks rather than offering to start a second one.
  */
 export function EditProfileDialog({ open, onOpenChange }: Props) {
-  const { canEdit, entityId, isHydrated, isLoading, spaceId, current, status, errorMessage, publish, reset } =
-    useEditProfile({ isOpen: open });
+  /**
+   * A Save pressed while a brand-new account's profile is still being set up
+   * (GEO-3302). The draft stays in this form and is published by the effect below
+   * once there is a profile to publish it to. Held here rather than queued
+   * anywhere global: the navbar keeps this dialog mounted after a close, so the
+   * draft and the files picked for it survive the wait.
+   *
+   * Stamped with the account it was pressed for. An account switch drops it (see
+   * the owner effect), but that drop only lands on the next render — the effect
+   * publishing it runs in the same commit and has to be able to tell on its own.
+   */
+  const [heldSave, setHeldSave] = React.useState<{ address: string | undefined } | null>(null);
+  const isSaveHeld = heldSave !== null;
+
+  const {
+    canEdit,
+    profileSetup,
+    address,
+    entityId,
+    isHydrated,
+    isLoading,
+    spaceId,
+    current,
+    status,
+    errorMessage,
+    publish,
+    reset,
+  } = useEditProfile({ isOpen: open, keepWaiting: isSaveHeld });
+
+  const isWaitingForProfile = profileSetup === 'waiting';
 
   const history = useProfileHistory({ entityId, spaceId, enabled: open && entityId !== '' });
 
@@ -140,17 +168,26 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // into has to go with it. Otherwise the fields stay non-pristine, the new profile
   // can never seed them, and the previous account's draft sits on screen ready to
   // be saved into somebody else's space.
-  const ownerRef = React.useRef(entityId);
+  //
+  // Except when the profile simply arrives. A new account starts with no entity id
+  // and gains one once its profile is indexed (GEO-3302); that is the same person,
+  // and wiping the form then would throw away the draft they typed while waiting.
+  // The address tells the two apart — an account switch through the signed-out
+  // state also passes through an empty entity id.
+  const ownerRef = React.useRef({ entityId, address });
   React.useEffect(() => {
-    if (ownerRef.current === entityId) return;
-    ownerRef.current = entityId;
+    const previous = ownerRef.current;
+    if (previous.entityId === entityId && previous.address === address) return;
+    ownerRef.current = { entityId, address };
+    if (previous.address === address && previous.entityId === '') return;
+    setHeldSave(null);
     resetForm();
     // The queued positions and degrees belong to whoever was signed in when they
     // were entered. Left alone they would publish into the new account's space,
     // and the open sheet would still be editing the previous person's row.
     history.discard();
     setSheet(null);
-  }, [entityId, resetForm, history]);
+  }, [entityId, address, resetForm, history]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -210,7 +247,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // Includes a hydration that settled without producing an entity: the fields would
   // be seeded from the profile endpoint alone, and saving against no relations
   // would duplicate an image edge rather than retarget it.
-  const isUnavailable = !isLoading && (!canEdit || !isHydrated);
+  //
+  // Not while a new account's profile is still on its way: that is a wait, and
+  // the form stays usable through it.
+  const isUnavailable = !isLoading && !isWaitingForProfile && (!canEdit || !isHydrated);
 
   /**
    * Whether the history on screen is the profile's own.
@@ -262,11 +302,25 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   const isNameMissing = publishName.trim() === '';
   const canSave = canEdit && isHydrated && !isLoading && (hasChanges || hasFailed) && !isNameMissing && !isPublishing;
 
+  /**
+   * Save while the profile is still being set up: it waits, then publishes.
+   *
+   * The name is not required to hold. Until the profile is indexed there is no
+   * name to seed the field from, so it reads empty while one is on its way; a
+   * pristine name is taken from the profile at publish time, like any other
+   * untouched field. Only a name the user cleared themselves blocks.
+   */
+  const isNameAwaited = isWaitingForProfile && pristineRef.current.name;
+  const canHoldSave =
+    isWaitingForProfile && !isSaveHeld && hasChanges && (!isNameMissing || isNameAwaited) && !isPublishing;
+  /** A missing name worth flagging — not one that is merely still on its way. */
+  const showNameMissing = isNameMissing && !isNameAwaited;
+
   const close = () => {
     // Dismissing during a publish never cancels it, and the staged edit stays put
     // so a retry can re-send it. Reachable by reopening the modal while a save is
     // still running — Save itself closes without coming through here.
-    if (!isPublishing) {
+    if (!isPublishing && !isSaveHeld) {
       reset();
       resetForm();
       history.discard();
@@ -281,15 +335,22 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
    */
   const hasUnsavedEdits = !isPublishing && (hasChanges || hasFailed);
 
-  const unavailableNote = 'We couldn’t find your profile to edit. Try reloading the page.';
+  const unavailableNote =
+    profileSetup === 'stalled'
+      ? 'Your profile is taking longer than usual to set up, so nothing was saved. Try again in a few minutes.'
+      : 'We couldn’t find your profile to edit. Try reloading the page.';
 
   const footerNote = isUnavailable
     ? unavailableNote
-    : isPublishing
-      ? 'Publishing to your space. This usually takes about 10 seconds.'
-      : hasFailed
-        ? 'Nothing was published.'
-        : 'Saving publishes to your space.';
+    : isSaveHeld
+      ? 'Your changes will save as soon as your profile is ready, even if you close this.'
+      : isWaitingForProfile
+        ? 'Your profile is still being set up. You can make changes now, and they’ll save once it’s ready.'
+        : isPublishing
+          ? 'Publishing to your space. This usually takes about 10 seconds.'
+          : hasFailed
+            ? 'Nothing was published.'
+            : 'Saving publishes to your space.';
 
   const onSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -304,6 +365,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   };
 
   const save = () => {
+    if (canHoldSave) {
+      setHeldSave({ address });
+      return;
+    }
     if (!canSave) return;
 
     // Save hands straight off to the status bar rather than holding the screen.
@@ -327,16 +392,67 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     onOpenChange(false);
   };
 
-  // Every way `canSave` can be false while there is still something to lose.
-  const saveBlockedReason = isNameMissing
-    ? 'Add a name to save your profile.'
-    : isUnavailable
-      ? unavailableNote
-      : isLoading
-        ? 'Your profile is still loading. Try again in a moment.'
-        : null;
+  // The held save, carried out — or handed back — once the wait is over.
+  //
+  // A profile that arrives publishes through the ordinary `save` below, with the
+  // pristine fields now reading the indexed values. One that never arrives brings
+  // the modal back with the draft in it and says nothing was saved: a held save
+  // must not vanish without a word if setup is broken.
+  React.useEffect(() => {
+    if (!heldSave) return;
+    // Somebody else's draft by now; the owner effect is already discarding it.
+    if (heldSave.address !== address) return;
+    if (profileSetup === 'stalled') {
+      setHeldSave(null);
+      if (!open) onOpenChange(true);
+      return;
+    }
+    if (isWaitingForProfile || isLoading) return;
+    setHeldSave(null);
+    if (canSave) save();
+    // Nothing left to publish once the indexed profile is read — the edit matched
+    // what was already there — needs no word. Anything else that blocks it does: a
+    // name cleared on purpose, or a profile that arrived but failed to load, which
+    // would otherwise hold the save forever without saying so.
+    else if ((hasChanges || !isHydrated) && !open) onOpenChange(true);
+    // `save` is a fresh closure every render and reads the current form; listing
+    // it would re-run this on every keystroke for no change in outcome.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    heldSave,
+    address,
+    profileSetup,
+    isWaitingForProfile,
+    isLoading,
+    isHydrated,
+    canSave,
+    hasChanges,
+    open,
+    onOpenChange,
+  ]);
 
-  const discardGuard = useDiscardEditsGuard({ hasUnsavedEdits, canSave, saveBlockedReason, discard: close, save });
+  // Every way `canSave` can be false while there is still something to lose.
+  const saveBlockedReason = canHoldSave
+    ? null
+    : isNameMissing && !isNameAwaited
+      ? 'Add a name to save your profile.'
+      : isUnavailable
+        ? unavailableNote
+        : isLoading
+          ? 'Your profile is still loading. Try again in a moment.'
+          : null;
+
+  // A held save closes like a publish does: its draft is already on its way.
+  const discardGuard = useDiscardEditsGuard({
+    hasUnsavedEdits: hasUnsavedEdits && !isSaveHeld,
+    canSave: canSave || canHoldSave,
+    saveBlockedReason,
+    discard: close,
+    save: () => {
+      save();
+      onOpenChange(false);
+    },
+  });
 
   /**
    * Escape and the backdrop. On a sheet they step back to the modal, the same as
@@ -469,15 +585,17 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                       }}
                       disabled={isPublishing}
                       placeholder="Your name"
-                      required
-                      aria-required="true"
-                      aria-invalid={isNameMissing}
-                      aria-describedby={isNameMissing ? 'edit-profile-name-error' : undefined}
+                      // Not while the name is still on its way: the browser would refuse the
+                      // submit outright, and a held Save is exactly what that submit is for.
+                      required={!isNameAwaited}
+                      aria-required={!isNameAwaited}
+                      aria-invalid={showNameMissing}
+                      aria-describedby={showNameMissing ? 'edit-profile-name-error' : undefined}
                     />
                     {/* Name is the only thing that blocks Save. Without this the button
                     just sits disabled, which says nothing to anyone and nothing at
                     all to a screen reader. */}
-                    {isNameMissing && (
+                    {showNameMissing && (
                       <span id="edit-profile-name-error" role="alert" className="text-footnote text-red-01">
                         Name is required.
                       </span>
@@ -567,10 +685,20 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                       onClick={discardGuard.requestClose}
                       className={profilePillClassName('secondary')}
                     >
-                      {isPublishing ? 'Close' : 'Cancel'}
+                      {isPublishing || isSaveHeld ? 'Close' : 'Cancel'}
                     </button>
-                    <button type="submit" disabled={!canSave} className={profilePillClassName('primary')}>
-                      {isPublishing ? 'Publishing' : hasFailed ? 'Retry' : 'Save profile'}
+                    <button
+                      type="submit"
+                      disabled={!(canSave || canHoldSave)}
+                      className={profilePillClassName('primary')}
+                    >
+                      {isPublishing
+                        ? 'Publishing'
+                        : isSaveHeld
+                          ? 'Saving when ready'
+                          : hasFailed
+                            ? 'Retry'
+                            : 'Save profile'}
                     </button>
                   </div>
                 </footer>
