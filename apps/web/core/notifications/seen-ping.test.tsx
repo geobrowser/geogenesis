@@ -20,12 +20,14 @@ vi.mock('~/core/wallet/privy-session', () => ({
 vi.mock('~/core/debates/browser-timezone', () => ({
   browserTimezone: () => 'America/Los_Angeles',
 }));
-vi.mock('./api', () => ({
+vi.mock('./api', async importOriginal => ({
+  ...(await importOriginal<typeof import('./api')>()),
   geoNotificationsApiUrl: () => 'https://n.example',
   sendSeenPing: (...args: unknown[]) => mocks.ping(...args),
 }));
 
 const { SeenPing } = await import('./seen-ping');
+const { NotificationsRequestError } = await import('./api');
 
 function returnToTab() {
   act(() => {
@@ -39,7 +41,7 @@ beforeEach(() => {
   mocks.auth = { ready: true, authenticated: true };
   mocks.stored = 'stored-token';
   mocks.fresh = vi.fn(async () => 'fresh-token');
-  mocks.ping = vi.fn(async () => 200);
+  mocks.ping = vi.fn(async () => ({ local_date: '2026-10-25', new_day: true }));
 });
 afterEach(() => {
   cleanup();
@@ -71,9 +73,14 @@ describe('SeenPing', () => {
   });
 
   it('asks Privy for a fresh token when the stored one is refused', async () => {
-    mocks.ping = vi.fn(async (_url: string, token: string) => (token === 'fresh-token' ? 200 : 401));
+    mocks.ping = vi.fn(async (_url: string, token: string) => {
+      if (token !== 'fresh-token') throw new NotificationsRequestError('invalid token', 401);
+      return { local_date: '2026-10-25', new_day: true };
+    });
     render(<SeenPing />);
-    await waitFor(() => expect(mocks.ping).toHaveBeenCalledWith('https://n.example', 'fresh-token', 'America/Los_Angeles'));
+    await waitFor(() =>
+      expect(mocks.ping).toHaveBeenCalledWith('https://n.example', 'fresh-token', 'America/Los_Angeles')
+    );
   });
 
   it('tries again on the next return after a failed ping', async () => {
@@ -83,9 +90,19 @@ describe('SeenPing', () => {
     render(<SeenPing />);
     await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
 
-    mocks.ping = vi.fn(async () => 200);
+    mocks.ping = vi.fn(async () => ({ local_date: '2026-10-25', new_day: true }));
     returnToTab();
     await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not ask Privy when the service is down rather than refusing the token', async () => {
+    mocks.ping = vi.fn(async () => {
+      throw new NotificationsRequestError('geo-notifications 503', 503);
+    });
+    render(<SeenPing />);
+    await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
+    await act(async () => undefined);
+    expect(mocks.fresh).not.toHaveBeenCalled();
   });
 
   it('does nothing for a signed-out reader', async () => {
@@ -104,6 +121,8 @@ describe('SeenPing', () => {
     const { rerender } = render(<SeenPing />);
     mocks.auth = { ready: true, authenticated: true };
     rerender(<SeenPing />);
-    await waitFor(() => expect(mocks.ping).toHaveBeenCalledWith('https://n.example', 'fresh-token', 'America/Los_Angeles'));
+    await waitFor(() =>
+      expect(mocks.ping).toHaveBeenCalledWith('https://n.example', 'fresh-token', 'America/Los_Angeles')
+    );
   });
 });

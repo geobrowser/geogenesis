@@ -3,22 +3,15 @@
 import * as React from 'react';
 
 import { browserTimezone } from '~/core/debates/browser-timezone';
+import { zonedDay } from '~/core/debates/debate-hours';
+import { resolveWithin } from '~/core/utils/resolve-within';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 import { storedPrivyAccessToken } from '~/core/wallet/privy-session';
 
-import { geoNotificationsApiUrl, sendSeenPing } from './api';
+import { NotificationsRequestError, geoNotificationsApiUrl, sendSeenPing } from './api';
 
 /** How long to wait for Privy to hand out a fresh token before giving up on this ping. */
 const FRESH_TOKEN_TIMEOUT_MS = 5_000;
-
-/** Today in the browser's own zone, YYYY-MM-DD. */
-export function browserLocalDate(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
-  return Promise.race([promise, new Promise<null>(resolve => setTimeout(() => resolve(null), ms))]);
-}
 
 /**
  * Tells geo-notifications this signed-in person visited, and their browser's zone (GEO-3371): on
@@ -36,28 +29,34 @@ export function SeenPing() {
   const { ready, authenticated, getAccessToken } = usePrivy();
   const getAccessTokenRef = React.useRef(getAccessToken);
   getAccessTokenRef.current = getAccessToken;
-  const lastPingedDate = React.useRef<string | null>(null);
+  const lastPingedDay = React.useRef<string | null>(null);
   const inFlight = React.useRef(false);
 
   const ping = React.useCallback(async () => {
     const baseUrl = geoNotificationsApiUrl();
     const timeZone = browserTimezone();
-    const today = browserLocalDate();
-    if (!baseUrl || !timeZone || inFlight.current || lastPingedDate.current === today) return;
+    if (!baseUrl || !timeZone) return;
+    const today = zonedDay(new Date(), timeZone);
+    if (inFlight.current || lastPingedDay.current === today) return;
     inFlight.current = true;
     try {
-      let status: number | null = null;
       const stored = storedPrivyAccessToken();
-      if (stored) status = await sendSeenPing(baseUrl, stored, timeZone);
-      if (status !== null && status >= 200 && status < 300) {
-        lastPingedDate.current = today;
-        return;
+      if (stored) {
+        try {
+          await sendSeenPing(baseUrl, stored, timeZone);
+          lastPingedDay.current = today;
+          return;
+        } catch (error) {
+          // Only a refused token is worth a fresh one; anything else waits for the next focus.
+          if (!(error instanceof NotificationsRequestError && error.status === 401)) return;
+        }
       }
-      // No stored token, or one too old: a fresh one, if Privy can give it in time.
-      const fresh = await withTimeout(getAccessTokenRef.current(), FRESH_TOKEN_TIMEOUT_MS).catch(() => null);
+      const fresh = await resolveWithin(() => getAccessTokenRef.current(), FRESH_TOKEN_TIMEOUT_MS, null).catch(
+        () => null
+      );
       if (!fresh || fresh === stored) return;
-      status = await sendSeenPing(baseUrl, fresh, timeZone);
-      if (status >= 200 && status < 300) lastPingedDate.current = today;
+      await sendSeenPing(baseUrl, fresh, timeZone);
+      lastPingedDay.current = today;
     } catch {
       // Offline or the service is down: the next focus tries again.
     } finally {
@@ -70,11 +69,10 @@ export function SeenPing() {
     if (storedPrivyAccessToken() || (ready && authenticated)) void ping();
   }, [ready, authenticated, ping]);
 
-  // Back to the tab on a new local day.
+  // Back to the tab: `ping` itself sends nothing on a day it already counted.
   React.useEffect(() => {
     const onReturn = () => {
       if (document.visibilityState !== 'visible') return;
-      if (lastPingedDate.current === browserLocalDate()) return;
       if (storedPrivyAccessToken() || authenticated) void ping();
     };
     document.addEventListener('visibilitychange', onReturn);
