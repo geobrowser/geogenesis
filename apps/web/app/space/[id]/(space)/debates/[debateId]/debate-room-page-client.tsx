@@ -755,7 +755,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
     stillSpeaking: localSpeakingRef.current,
     msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
-    betweenRounds: isBetweenOpenRounds(countdown.openRounds),
+    openRoundsPhase: countdown.openRounds?.phase ?? null,
   };
   const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
   // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
@@ -3286,13 +3286,20 @@ function DebateRecordingModal({
   const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
   const thankingSlot = reveal.holdsEndCard ? null : thankingParticipantSlot(debate, countdown);
-  // Match the audio gate: both microphones are open during the pick, reveal and count-in.
+  // Voting is an open call; the reveal, round title and count-in mute both participants.
   const betweenRounds = isBetweenOpenRounds(countdown.openRounds);
+  const roundTransition = countdown.openRounds?.phase === 'result';
   const localInactive =
-    !betweenRounds && participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
+    roundTransition ||
+    (!betweenRounds && participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot));
   const remoteInactive =
-    !betweenRounds &&
-    participantIsInactive(countdown.effectiveStatus, remoteParticipant?.participant_slot ?? null, countdown.activeSlot);
+    roundTransition ||
+    (!betweenRounds &&
+      participantIsInactive(
+        countdown.effectiveStatus,
+        remoteParticipant?.participant_slot ?? null,
+        countdown.activeSlot
+      ));
   const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
   const speakingTurn = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot !== null;
   // The speaker's last five seconds, when the timer warns, and in Open rounds the tile's outline
@@ -3415,7 +3422,7 @@ function DebateRecordingModal({
       inactive={localInactive}
       revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon || localEndingTurn}
       inactiveIndicatorId="local"
-      showMutedIndicator={localEndingTurn}
+      showMutedIndicator={localEndingTurn || roundTransition}
       countdown={localCountdown}
       closingMessage={
         countdown.effectiveStatus === 'thanking' &&
@@ -3463,6 +3470,7 @@ function DebateRecordingModal({
       endingTurn={remoteEndingTurn}
       revealInactive={remoteEndingTurn}
       inactiveIndicatorId="remote"
+      showMutedIndicator={roundTransition}
       countdown={remoteCountdown}
       reveal={pickReveal(reveal.remotePick)}
       chipsHidden={reveal.chipsHidden}

@@ -6087,7 +6087,7 @@ describe('DebateRoomPageClient', () => {
       mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     });
 
-    it('opens the listener’s microphone for the pick, and closes it again when the next round starts', async () => {
+    it('opens the microphone for voting, then mutes the transition until the speaking turn starts', async () => {
       const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: true }, stop: vi.fn(), detach: vi.fn() };
       mocks.createLocalTracks.mockResolvedValue([
         audioTrack,
@@ -6108,21 +6108,22 @@ describe('DebateRoomPageClient', () => {
       expectNoMutedIndicator('local');
       expectNoMutedIndicator('remote');
 
-      // Through the reveal and count-in too.
+      // Voting has resolved: both microphones close for the votes and round title.
       rerenderAt(view, '20:02:05.000', revealRebutWithCountIn());
-      await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
-      expectNoMutedIndicator('local');
-      expectNoMutedIndicator('remote');
+      await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+      expectMutedIndicator('local');
+      expectMutedIndicator('remote');
 
       rerenderAt(view, '20:02:09.000', revealRebutWithCountIn());
       await waitFor(() => expect(within(debateVideoTile('local')).getByText('Your turn in')).toBeInTheDocument());
-      expect(audioTrack.mediaStreamTrack.enabled).toBe(true);
-      expectNoMutedIndicator('local');
-      expectNoMutedIndicator('remote');
+      expect(audioTrack.mediaStreamTrack.enabled).toBe(false);
+      expectMutedIndicator('local');
+      expectMutedIndicator('remote');
 
       // Round 2: Alice opens it, so Bob's muted indicator returns.
       rerenderAt(view, '20:02:12.400', revealRebutWithCountIn());
       await waitFor(() => expectActiveDebateVideoTile('local', 'outline-white'));
+      await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
       expectNoMutedIndicator('local');
       expectMutedIndicator('remote');
 
@@ -6131,6 +6132,53 @@ describe('DebateRoomPageClient', () => {
       await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
       expectMutedIndicator('local');
       expectNoMutedIndicator('remote');
+    });
+
+    it.each(['opener', 'listener'] as const)(
+      'keeps the %s muted through the title and final count-in second',
+      async role => {
+        if (role === 'listener') joinAsBob();
+        const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+        mocks.createLocalTracks.mockResolvedValue([
+          audioTrack,
+          { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+        ]);
+        vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:06.000'));
+        const view = await renderLiveDebate(revealRebutWithCountIn());
+        await waitFor(() => expect(document.querySelector('[data-open-round-result="round"]')).not.toBeNull());
+        await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+        expectMutedIndicator('local');
+        expectMutedIndicator('remote');
+
+        // The normal one-second microphone prearm must not unmute a round transition.
+        rerenderAt(view, '20:02:11.700', revealRebutWithCountIn());
+        expect(audioTrack.mediaStreamTrack.enabled).toBe(false);
+        expectMutedIndicator('local');
+        expectMutedIndicator('remote');
+
+        rerenderAt(view, '20:02:12.400', revealRebutWithCountIn());
+        await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(role === 'opener'));
+      }
+    );
+
+    it('mutes a required round’s title and count-in even though there was no vote', async () => {
+      const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+      mocks.createLocalTracks.mockResolvedValue([
+        audioTrack,
+        { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+      ]);
+      const debate = openRoundsRequiredRoundListening({ required_round_lead_in_ms: 8_000, extend_count_in_ms: 5_000 });
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:01.000'));
+      const view = await renderLiveDebate(debate);
+      await waitFor(() => expect(document.querySelector('[data-open-round-result="round"]')).not.toBeNull());
+      await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+      expectMutedIndicator('local');
+      expectMutedIndicator('remote');
+
+      rerenderAt(view, '20:02:07.500', debate);
+      expect(audioTrack.mediaStreamTrack.enabled).toBe(false);
+      expectMutedIndicator('local');
+      expectMutedIndicator('remote');
     });
   });
 
