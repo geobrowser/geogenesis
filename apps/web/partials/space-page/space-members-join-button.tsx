@@ -10,11 +10,16 @@ import { UnderVote } from './request-status-label';
 
 type SpaceMembersJoinButtonProps = {
   spaceId: string;
+  spaceName?: string;
   memberRequest: ActiveMemberRequest | null;
 };
 
-export function SpaceMembersJoinButton({ spaceId, memberRequest }: SpaceMembersJoinButtonProps) {
-  const { join: handleJoin, status, optimisticRequested } = useJoinSpace({ spaceId });
+export function SpaceMembersJoinButton({ spaceId, spaceName, memberRequest }: SpaceMembersJoinButtonProps) {
+  const {
+    join: handleJoin,
+    status,
+    optimisticRequested,
+  } = useJoinSpace({ spaceId, space: spaceName ? { name: spaceName } : undefined });
 
   // Durable + optimistic pending state so a request made anywhere (and surviving
   // refresh) reflects here without waiting on this page's SSR memberRequest.

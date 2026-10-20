@@ -95,7 +95,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
 
       try {
         await requestSpaceMembership({ spaceId, personalSpaceId: requesterSpaceId, tx, queryClient, space });
-        pushMarketingEvent('geo_join_space', { space_id: normalizedSpaceId });
+        pushMarketingEvent('geo_join_space', { space_id: normalizedSpaceId, space_name: space?.name ?? undefined });
       } catch (error) {
         dispatch({ type: 'ERROR', payload: `${error}`, retry: () => handleRequestToBeMember() });
         // Necessary to propagate error status to useMutation
