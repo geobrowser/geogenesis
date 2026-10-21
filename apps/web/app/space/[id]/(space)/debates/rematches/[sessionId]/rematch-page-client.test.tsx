@@ -6193,17 +6193,17 @@ describe('inside a debate room', () => {
       render(withPresence('waiting', <DebateRematchPageClient sessionId="rematch-1" />));
 
       const leaveButton = screen.getByRole('button', { name: 'Leave' });
-      expect(leaveButton).toHaveAttribute('data-geo-analytics-label', 'Debate room leave');
+      expect(leaveButton).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Leave');
 
       fireEvent.click(leaveButton);
       const dialog = await screen.findByRole('dialog');
       expect(within(dialog).getByRole('button', { name: 'Stay' })).toHaveAttribute(
         'data-geo-analytics-label',
-        'Debate room leave confirm stay'
+        'Debate rematch Leave dialog stay'
       );
       expect(within(dialog).getByRole('button', { name: 'Leave room' })).toHaveAttribute(
         'data-geo-analytics-label',
-        'Debate room leave confirm leave'
+        'Debate rematch Leave dialog leave room'
       );
     });
   });

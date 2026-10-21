@@ -6,9 +6,9 @@ import type { Debate } from '~/core/debates/api';
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { CameraIcon } from '~/core/debates/debate-room-controls';
 import { DebateUploadProgressBar } from '~/core/debates/debate-upload-progress-bar';
+import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
 import { useServerClock } from '~/core/debates/matchmaking/use-request-countdown';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
-import { useRoomAnalyticsPrefix } from '~/core/debates/rooms/room-context';
 import { debateThankYouDeadlineMs } from '~/core/debates/thank-you-period';
 import {
   type PublishOptOutOffer,
@@ -51,7 +51,6 @@ export function RematchPublishCard({
   const setThankingDebate = useSetThankingDebate();
   const cancelWindowOpen = useRecordingCancelWindowOpen(debate);
   const [dismissed, setDismissed] = React.useState(false);
-  const analyticsPrefix = useRoomAnalyticsPrefix();
 
   const hasUploadedRecording = debate.recordings.length > 0;
   const recordingCancelled = debate.recording_cancelled_at !== null;
@@ -94,14 +93,14 @@ export function RematchPublishCard({
       data-testid="rematch-publish-card"
       icon={<CameraIcon disabled={false} />}
       onDismiss={dismiss}
-      dismissAnalyticsLabel={`${analyticsPrefix} publish card dismiss`}
+      dismissAnalyticsLabel={debateAnalyticsLabel('rematch', 'Publish card dismiss')}
       action={
         showsCancel ? (
           <SmallButton
             type="button"
             className={PILL_BUTTON_SECONDARY_CLASS_NAME}
             onClick={() => offer.debateId && setPublishOptOutRequest(offer.debateId)}
-            data-geo-analytics-label={`${analyticsPrefix} publish card cancel`}
+            {...debateActionAnalyticsAttributes('rematch', 'Publish card cancel')}
             disabled={offer.busy || offer.debateId === null}
           >
             Cancel

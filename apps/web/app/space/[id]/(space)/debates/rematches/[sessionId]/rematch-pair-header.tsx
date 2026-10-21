@@ -7,7 +7,7 @@ import cx from 'classnames';
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
-import { useRoomAnalyticsPrefix } from '~/core/debates/rooms/room-context';
+import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
@@ -260,7 +260,6 @@ function YouCard({
   opponentName: string;
   leaveAction?: React.ReactNode;
 }) {
-  const analyticsPrefix = useRoomAnalyticsPrefix();
   const live = voice.kind === 'live';
   const muted = live && voice.muted;
   const failed = live && Boolean(voice.micFailureMessage);
@@ -324,7 +323,7 @@ function YouCard({
         type="button"
         onClick={voice.onAction}
         // The fixed copy of the voice states ("Retry", "Enable audio"), never anything a person wrote.
-        data-geo-analytics-label={`${analyticsPrefix} voice ${voice.actionLabel.toLowerCase()}`}
+        {...debateActionAnalyticsAttributes('rematch', `Voice ${voice.actionLabel.toLowerCase()}`)}
         className={cx(PAIR_PILL, 'rounded-full bg-text text-white transition-opacity hover:opacity-80')}
       >
         {voice.actionLabel}
@@ -369,7 +368,7 @@ function YouCard({
               <button
                 type="button"
                 onClick={voice.onRetryMic}
-                data-geo-analytics-label={`${analyticsPrefix} retry microphone`}
+                {...debateActionAnalyticsAttributes('rematch', 'Retry microphone')}
                 className="text-footnoteMedium text-text underline"
               >
                 Try again
@@ -401,7 +400,6 @@ function OpponentCard({
   describedBy: string;
   video?: React.ReactNode;
 }) {
-  const analyticsPrefix = useRoomAnalyticsPrefix();
   const talking = showMicState && state === 'talking';
   const videoAnchorRef = React.useRef<HTMLSpanElement>(null);
   const { outside, dismissed, dismiss } = useFloatingOpponentVideo(videoAnchorRef);
@@ -449,7 +447,7 @@ function OpponentCard({
         onClick={onOpen}
         aria-label={`Open ${name}’s personal space`}
         // Not the aria-label, which carries their name.
-        data-geo-analytics-label={`${analyticsPrefix} opponent card`}
+        {...debateActionAnalyticsAttributes('rematch', 'Opponent card')}
         aria-describedby={describedBy}
         className={cx(
           CARD_SURFACE,
@@ -467,7 +465,7 @@ function OpponentCard({
           type="button"
           aria-label="Hide floating video"
           title="Hide floating video"
-          data-geo-analytics-label={`${analyticsPrefix} hide floating video`}
+          {...debateActionAnalyticsAttributes('rematch', 'Hide floating video')}
           onClick={event => {
             // Keyboard dismissal must leave focus in the visible picker. Pointer dismissal
             // should not focus the search box and open the phone's keyboard.
@@ -633,18 +631,17 @@ function TalkingBars() {
  * comes back every time the viewer mutes themselves on purpose is just a mute button that argues.
  */
 function UnmuteNotice({ opponentName, onUnmute, onDismiss }: PairHeaderNotice & { opponentName: string }) {
-  const analyticsPrefix = useRoomAnalyticsPrefix();
   return (
     <DebateNotice
       data-testid="rematch-unmute-notice"
       icon={<MicrophoneIcon muted />}
       onDismiss={onDismiss}
-      dismissAnalyticsLabel={`${analyticsPrefix} unmute notice dismiss`}
+      dismissAnalyticsLabel={debateAnalyticsLabel('rematch', 'Unmute notice dismiss')}
       action={
         <button
           type="button"
           onClick={onUnmute}
-          data-geo-analytics-label={`${analyticsPrefix} unmute notice unmute`}
+          {...debateActionAnalyticsAttributes('rematch', 'Unmute notice unmute')}
           className="h-7 shrink-0 rounded-full border border-grey-02 bg-white px-2.5 text-metadataMedium text-text transition-colors hover:border-grey-03"
         >
           Unmute
@@ -663,8 +660,7 @@ function UnmuteNotice({ opponentName, onUnmute, onDismiss }: PairHeaderNotice & 
  */
 function VoiceToast({ toast, opponentName }: { toast: PairHeaderToast; opponentName: string }) {
   const name = firstName(opponentName);
-  const analyticsPrefix = useRoomAnalyticsPrefix();
-  const analyticsToast = toast.kind === 'opponent-talking' ? 'opponent talking toast' : 'talking while muted toast';
+  const analyticsToast = toast.kind === 'opponent-talking' ? 'Opponent talking toast' : 'Talking while muted toast';
 
   return (
     <div
@@ -680,7 +676,7 @@ function VoiceToast({ toast, opponentName }: { toast: PairHeaderToast; opponentN
       <button
         type="button"
         onClick={toast.onUnmute}
-        data-geo-analytics-label={`${analyticsPrefix} ${analyticsToast} unmute`}
+        {...debateActionAnalyticsAttributes('rematch', `${analyticsToast} unmute`)}
         className="h-7 shrink-0 rounded-full bg-white px-2.5 text-metadataMedium text-text transition-opacity hover:opacity-80"
       >
         {toast.kind === 'opponent-talking' ? 'Unmute to reply' : 'Unmute'}
@@ -689,7 +685,7 @@ function VoiceToast({ toast, opponentName }: { toast: PairHeaderToast; opponentN
         type="button"
         onClick={toast.onDismiss}
         aria-label="Dismiss"
-        data-geo-analytics-label={`${analyticsPrefix} ${analyticsToast} dismiss`}
+        {...debateActionAnalyticsAttributes('rematch', `${analyticsToast} dismiss`)}
         className="grid size-7 shrink-0 place-items-center rounded-full text-grey-03 transition-colors hover:text-white"
       >
         <CloseSmall />

@@ -58,6 +58,7 @@ import type {
   MatchmakingReadiness,
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
+import { type DebateAnalyticsSurface, debateAnalyticsLabel } from './hub-analytics';
 import { hubCardMotion } from './hub-motion';
 import { useHubScrollSelector } from './hub-scroll';
 
@@ -167,10 +168,10 @@ type Props = {
    */
   allowsSignedOutVotes?: boolean;
   /**
-   * Names the card's clicks for analytics, e.g. "Debate room claim card" gives "Debate room claim
-   * card agree". Unset, the card's controls carry no label, as before.
+   * Names the card's clicks for analytics on this surface, e.g. "Debate rematch Claim card agree".
+   * Unset, the card's controls carry no label, as before.
    */
-  analyticsLabelPrefix?: string;
+  analyticsSurface?: DebateAnalyticsSurface;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -216,7 +217,7 @@ export function MatchmakingClaimCard({
   allowsSignedOutVotes = false,
   hideEndSlot,
   endSlot,
-  analyticsLabelPrefix,
+  analyticsSurface,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -264,7 +265,7 @@ export function MatchmakingClaimCard({
           claim={claim}
           positions={positions}
           readiness={readiness}
-          analyticsLabelPrefix={analyticsLabelPrefix}
+          analyticsSurface={analyticsSurface}
           activeDebate={activeDebate}
           answersReady={answersReady}
           answersMayComeFromIndex={answersMayComeFromIndex}
@@ -284,7 +285,7 @@ export function MatchmakingClaimCard({
         <UnresolvableControls
           positions={positions}
           readiness={readiness}
-          analyticsLabelPrefix={analyticsLabelPrefix}
+          analyticsSurface={analyticsSurface}
           claim={claim}
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
@@ -781,7 +782,7 @@ function RespondableControls({
   headerMeta,
   hasFooter,
   noteFor,
-  analyticsLabelPrefix,
+  analyticsSurface,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -816,7 +817,7 @@ function RespondableControls({
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
   headerMeta?: React.ReactNode;
-  analyticsLabelPrefix?: string;
+  analyticsSurface?: DebateAnalyticsSurface;
 }) {
   // One read for the card, and now the second half of what the card draws from. The header flags a
   // contested claim, the footer reports the split, and — since GEO-2823 — the viewer's own response
@@ -953,7 +954,7 @@ function RespondableControls({
         claim={claim}
         isOnGraph
         onOpenClaim={onOpenClaim}
-        analyticsLabel={analyticsLabelPrefix ? `${analyticsLabelPrefix} title` : undefined}
+        analyticsLabel={analyticsSurface ? debateAnalyticsLabel(analyticsSurface, 'Claim card title') : undefined}
         isControversial={summary.isControversial}
         meta={headerMeta}
         endSlot={
@@ -984,7 +985,7 @@ function RespondableControls({
         titleFor={actionTitle}
         noteFor={noteFor}
         localSide={localVoteSide}
-        analyticsLabelPrefix={analyticsLabelPrefix}
+        analyticsSurface={analyticsSurface}
       />
       {responseError ? (
         <div role="alert" className="mt-2">
@@ -1157,14 +1158,14 @@ function UnresolvableControls({
   hideEndSlot,
   endSlot,
   headerMeta,
-  analyticsLabelPrefix,
+  analyticsSurface,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: Debate | boolean | null;
   onOpenClaim?: () => void;
-  analyticsLabelPrefix?: string;
+  analyticsSurface?: DebateAnalyticsSurface;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
   headerMeta?: React.ReactNode;
@@ -1175,7 +1176,7 @@ function UnresolvableControls({
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
-        analyticsLabel={analyticsLabelPrefix ? `${analyticsLabelPrefix} title` : undefined}
+        analyticsLabel={analyticsSurface ? debateAnalyticsLabel(analyticsSurface, 'Claim card title') : undefined}
         meta={headerMeta}
         endSlot={
           /* The slot stays live even though the graph cannot resolve this claim, because nothing in
@@ -1230,7 +1231,7 @@ export function PositionRow({
   localSide = null,
   endSlot,
   showParticipants = true,
-  analyticsLabelPrefix,
+  analyticsSurface,
 }: {
   positions: DebateClaimPositionSummary[];
   responseKind: ResponseKind;
@@ -1270,8 +1271,8 @@ export function PositionRow({
    * apart, and the nearer one reads as the voters.
    */
   showParticipants?: boolean;
-  /** Names the two pills for click analytics: the prefix and the pill's own word, lowercased. */
-  analyticsLabelPrefix?: string;
+  /** Names the two pills for click analytics: "<surface> Claim card agree" / "… disagree". */
+  analyticsSurface?: DebateAnalyticsSurface;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
   const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
@@ -1325,7 +1326,9 @@ export function PositionRow({
             title={titleFor?.(true)}
             localOnly={localSide === true}
             analyticsLabel={
-              analyticsLabelPrefix ? `${analyticsLabelPrefix} ${copy.positiveAction.toLowerCase()}` : undefined
+              analyticsSurface
+                ? debateAnalyticsLabel(analyticsSurface, `Claim card ${copy.positiveAction.toLowerCase()}`)
+                : undefined
             }
           />
           {localSide === true ? <LocalVoteNote /> : noteFor?.(true)}
@@ -1343,7 +1346,9 @@ export function PositionRow({
             title={titleFor?.(false)}
             localOnly={localSide === false}
             analyticsLabel={
-              analyticsLabelPrefix ? `${analyticsLabelPrefix} ${copy.negativeAction.toLowerCase()}` : undefined
+              analyticsSurface
+                ? debateAnalyticsLabel(analyticsSurface, `Claim card ${copy.negativeAction.toLowerCase()}`)
+                : undefined
             }
           />
           {localSide === false ? <LocalVoteNote /> : noteFor?.(false)}

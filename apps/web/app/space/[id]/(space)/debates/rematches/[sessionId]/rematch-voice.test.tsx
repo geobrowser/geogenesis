@@ -3185,7 +3185,7 @@ describe('click analytics labels in the room header', () => {
     await flushOwnership();
     expect(await screen.findByRole('button', { name: 'Turn camera on' })).toHaveAttribute(
       'data-geo-analytics-label',
-      'Debate room turn camera on'
+      'Debate rematch Turn camera on'
     );
   }
 

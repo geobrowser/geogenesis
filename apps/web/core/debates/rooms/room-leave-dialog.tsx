@@ -2,6 +2,8 @@
 
 import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 
 import { ROOM_LEAVE_CONFIRM } from './room-copy';
@@ -41,7 +43,7 @@ export function RoomLeaveDialog({ open, onOpenChange, state, opponentName, onLea
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                data-geo-analytics-label="Debate room leave confirm stay"
+                {...debateActionAnalyticsAttributes('rematch', 'Leave dialog stay')}
                 className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
               >
                 {ROOM_LEAVE_CONFIRM.stay}
@@ -49,7 +51,7 @@ export function RoomLeaveDialog({ open, onOpenChange, state, opponentName, onLea
               <button
                 type="button"
                 onClick={onLeave}
-                data-geo-analytics-label="Debate room leave confirm leave"
+                {...debateActionAnalyticsAttributes('rematch', 'Leave dialog leave room')}
                 className={DIALOG_ACTION_BUTTON_CLASS_NAME}
               >
                 {ROOM_LEAVE_CONFIRM.leave}

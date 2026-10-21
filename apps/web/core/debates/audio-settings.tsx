@@ -4,6 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
+import { type DebateAnalyticsSurface, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
 import { type MediaDeviceOption, systemDefaultAudioOutput } from '~/core/debates/media-session';
 
 import { Text } from '~/design-system/text';
@@ -27,7 +28,7 @@ export function AudioSettings({
   devicesLocked = false,
   onAudioInputChange,
   onAudioOutputChange,
-  analyticsLabelPrefix,
+  analyticsSurface,
 }: {
   audioInputDevices: MediaDeviceOption[];
   audioOutputDevices: MediaDeviceOption[];
@@ -44,8 +45,8 @@ export function AudioSettings({
   devicesLocked?: boolean;
   onAudioInputChange: (deviceId: string) => void;
   onAudioOutputChange: (deviceId: string) => void;
-  /** Names the rows for click analytics: "<prefix> microphone option", "<prefix> speaker option". */
-  analyticsLabelPrefix?: string;
+  /** Names the device rows for click analytics, e.g. "Debate rematch Microphone option". Unset, no label. */
+  analyticsSurface?: DebateAnalyticsSurface;
 }) {
   return (
     <div className="space-y-3">
@@ -56,7 +57,7 @@ export function AudioSettings({
         disabled={devicesLocked}
         framed={framed}
         onChange={onAudioInputChange}
-        analyticsLabel={analyticsLabelPrefix ? `${analyticsLabelPrefix} microphone option` : undefined}
+        analyticsLabel={analyticsSurface ? debateAnalyticsLabel(analyticsSurface, 'Microphone option') : undefined}
       />
       <div className={framed ? undefined : 'border-t border-grey-02 pt-3'}>
         <DeviceOptionGroup
@@ -66,7 +67,7 @@ export function AudioSettings({
           disabled={!audioOutputSupported}
           framed={framed}
           onChange={onAudioOutputChange}
-          analyticsLabel={analyticsLabelPrefix ? `${analyticsLabelPrefix} speaker option` : undefined}
+          analyticsLabel={analyticsSurface ? debateAnalyticsLabel(analyticsSurface, 'Speaker option') : undefined}
         />
       </div>
       {error && (

@@ -6,11 +6,11 @@ import cx from 'classnames';
 import { motion } from 'framer-motion';
 
 import type { DebateRematchParticipant, DebateRematchRequest } from '~/core/debates/api';
+import { debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
 import { hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
 import { SpaceChip } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { RequestParties } from '~/core/debates/matchmaking/request-parties';
 import { useRequestCountdown } from '~/core/debates/matchmaking/use-request-countdown';
-import { useRoomAnalyticsPrefix } from '~/core/debates/rooms/room-context';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Time } from '~/design-system/icons/time';
@@ -38,7 +38,6 @@ export function RematchRequestCard({
   currentUserId: string;
 }) {
   const countdown = useRequestCountdown(request.expires_at);
-  const analyticsPrefix = useRoomAnalyticsPrefix();
 
   // Each side as the parties row wants them: the person, plus the side they took on this claim.
   const parties = participants.map(participant => {
@@ -86,7 +85,7 @@ export function RematchRequestCard({
         viewer={viewer}
         opponent={opponent}
         profileLinkTarget="_blank"
-        profileAnalyticsLabel={`${analyticsPrefix} request card opponent profile`}
+        profileAnalyticsLabel={debateAnalyticsLabel('rematch', 'Request card opponent profile')}
       />
 
       {/* The hub never draws an expired request — `useUnexpiredRequests` filters them out before its

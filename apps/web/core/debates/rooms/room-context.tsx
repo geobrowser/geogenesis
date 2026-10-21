@@ -48,14 +48,6 @@ export function useInDebateRoom(): boolean {
 }
 
 /**
- * The click-analytics label prefix for a control the room and the rematch picker share, so a click
- * in a scheduled room is told apart from the same click after a debate (GEO-3433).
- */
-export function useRoomAnalyticsPrefix(): 'Debate room' | 'Debate rematch' {
-  return useInDebateRoom() ? 'Debate room' : 'Debate rematch';
-}
-
-/**
  * `true` outside a room, where there is no join event to wait on. Inside one an unresolved presence
  * is `false`, or Request debate opens against someone the room has not said is there.
  */
