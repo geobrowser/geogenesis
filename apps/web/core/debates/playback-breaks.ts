@@ -245,12 +245,20 @@ export type BreakCut = {
  * the next speaker's first, is cut straight away, as the rendered video cuts it.
  */
 export function breakCuts(breaks: PlaybackBreaks): BreakCut[] {
-  return [
+  const cuts = [
     ...breaks.breaks.map(cutForBreak),
     ...breaks.earlyEnds.map(entry => ({ atMs: entry.startMs, toMs: entry.endMs })),
   ]
     .filter(cut => cut.toMs > cut.atMs)
     .sort((a, b) => a.atMs - b.atMs);
+  // An outgoing tail and the next turn's slow start meet at the original handoff. Seek once,
+  // without briefly landing in the second cut and showing an intermediate timer value.
+  return cuts.reduce<BreakCut[]>((merged, cut) => {
+    const previous = merged.at(-1);
+    if (previous && cut.atMs <= previous.toMs) previous.toMs = Math.max(previous.toMs, cut.toMs);
+    else merged.push({ ...cut });
+    return merged;
+  }, []);
 }
 
 /**

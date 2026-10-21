@@ -145,12 +145,15 @@ export function turnStateFromSegments(segments: DebateMediaTurnSegment[], second
   const countdownEndMs = originalClock ? active.countdown_end_ms! : active.output_end_ms;
   const clockMs = Math.max(1, originalClock ? active.countdown_duration_ms! : countdownEndMs - countdownStartMs);
   // A paused final frame holds the value at the retained turn's end.
-  const positionMs = Math.min(ms, active.output_end_ms);
+  const positionMs = originalClock ? Math.min(ms, active.output_end_ms) : ms;
 
   return {
     slot: active.participant_slot,
     progress: Math.max(0, Math.min(1, (positionMs - countdownStartMs) / clockMs)),
-    seconds: Math.max(0, (countdownEndMs - Math.max(positionMs, countdownStartMs)) / 1_000),
+    seconds: Math.max(
+      0,
+      (countdownEndMs - (originalClock ? Math.max(positionMs, countdownStartMs) : positionMs)) / 1_000
+    ),
   };
 }
 

@@ -170,6 +170,20 @@ describe('breakCuts', () => {
     ]);
   });
 
+  it('makes one seek across a silent tail and the following slow start', () => {
+    const base = BREAKS.earlyEnds[0];
+    expect(
+      breakCuts({
+        breaks: [],
+        picks: [],
+        earlyEnds: [
+          { ...base, kind: 'turn_end', startMs: 40_300, endMs: 60_000 },
+          { ...base, kind: 'turn_start', startMs: 60_000, endMs: 62_700 },
+        ],
+      })
+    ).toEqual([{ atMs: 40_300, toMs: 62_700 }]);
+  });
+
   it('leaves a break shorter than its share whole', () => {
     const short = { ...BREAKS, earlyEnds: [], breaks: [{ ...BREAKS.breaks[0], endMs: 121_000 }] };
     expect(breakCuts(short)).toEqual([]);
