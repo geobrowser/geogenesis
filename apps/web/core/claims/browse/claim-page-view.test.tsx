@@ -108,6 +108,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mocks.pathname,
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('~/core/state/editor/editor-provider', () => ({ useActiveTabIdForEditor: () => null }));
 

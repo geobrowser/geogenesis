@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
+import { readRefEmail } from '~/core/claims/browse/email-vote-link';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { isLikelyEmail } from '~/core/newsletter/subscribe-result';
@@ -22,8 +23,10 @@ import {
 } from '~/core/state/local-votes';
 import {
   type SaveVotesPromptReason,
+  arrivedFromEmail,
   closeSaveVotesPrompt,
   isSaveVotesPressReason,
+  markArrivedFromEmail,
   openSaveVotesPrompt,
   useSaveVotesPrompt,
   useSaveVotesPromptLobbyName,
@@ -58,6 +61,7 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
   'single_claim',
   'repeat',
   'return_visit',
+  'email_link',
 ]);
 
 /**
@@ -94,6 +98,14 @@ export function SaveVotesSheet() {
     reason: SaveVotesPromptReason | null;
   } | null>(null);
   const codeEmail = codeStep?.email ?? null;
+
+  // Landed from one of our emails: everyone they go to has an account, so this visit's asks are to
+  // log in (GEO-3374). Read once, on arrival, from the URL the visit started on.
+  const [logIn, setLogIn] = React.useState(false);
+  React.useEffect(() => {
+    if (readRefEmail(new URLSearchParams(window.location.search))) markArrivedFromEmail();
+    setLogIn(arrivedFromEmail());
+  }, []);
 
   // The return-visit ask: once per browser session, for a visitor who arrives with votes waiting.
   // A session in which they voted has already been marked, so this is never the visit they voted in.
@@ -216,7 +228,7 @@ export function SaveVotesSheet() {
         ) : (
           <form
             data-geo-analytics-label="Save votes"
-            data-geo-analytics-intent="signup"
+            data-geo-analytics-intent={logIn ? 'login' : 'signup'}
             onSubmit={submitEmail}
             noValidate
           >
@@ -231,8 +243,8 @@ export function SaveVotesSheet() {
               </>
             ) : (
               <>
-                <p className={HEADING_CLASS}>{saveVotesHeading(count, returnVisit)}</p>
-                <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, returnVisit)}</p>
+                <p className={HEADING_CLASS}>{saveVotesHeading(count, returnVisit, logIn)}</p>
+                <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, returnVisit, logIn)}</p>
               </>
             )}
             <VoteChips votes={votes} rows={centered ? 2 : 1} className={lobbyName ? 'mt-1.5' : undefined} />
@@ -253,7 +265,7 @@ export function SaveVotesSheet() {
                 className={cx(fieldClass(invalid), 'text-left placeholder:text-grey-03 mobile:text-center')}
               />
               <button type="submit" className={PRIMARY_BUTTON_CLASS}>
-                {saveVotesSubmitLabel(count)}
+                {saveVotesSubmitLabel(count, logIn)}
               </button>
             </div>
 

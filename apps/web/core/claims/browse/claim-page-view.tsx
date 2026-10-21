@@ -55,9 +55,11 @@ import { ClaimRecordTab } from './claim-record-tab';
 import { getClaimSources } from './claim-sources';
 import { ClaimSourcesTab } from './claim-sources-tab';
 import { ClaimTopicsTab } from './claim-topics-tab';
+import { EmailVoteNote } from './email-vote-note';
 import { useClaimActivityRows } from './use-claim-activity-rows';
 import { useClaimRecord } from './use-claim-record';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
+import { useEmailVoteLink } from './use-email-vote-link';
 
 type ClaimTab = 'overview' | 'debates' | 'claims' | 'topics' | 'sources' | 'custom';
 type ClaimSystemTab = Exclude<ClaimTab, 'custom'>;
@@ -696,6 +698,16 @@ function ClaimPositionSection({
     // One claim on the page, so the save sheet asks after the first vote rather than the second.
     savePromptSurface: 'single',
   });
+  // A vote link from one of our emails, cast once on arrival through the same control (GEO-3374).
+  const emailVote = useEmailVoteLink({
+    claimId: entityId,
+    spaceId,
+    viewerPosition: control.viewerPosition,
+    answersReady: isResponseKindResolved && isViewerResponseResolved,
+    canRespond: control.canRespond,
+    isConnected: control.isConnected,
+    respond: control.respond,
+  });
   const indexedPosition = trustedIndexedPosition(state.summary, control.isResponsePending);
   useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId, indexedPosition });
   // The same number the thread's composers move: an explanation published here is a comment on this
@@ -719,6 +731,14 @@ function ClaimPositionSection({
         disabled={!control.canRespond}
         pending={control.isResponseSubmitting}
         titleFor={control.actionTitle}
+        noteFor={position => (
+          <EmailVoteNote
+            outcome={emailVote}
+            position={position}
+            viewerPosition={control.viewerPosition}
+            onUndo={() => control.respond(position)}
+          />
+        )}
         localSide={control.localVoteSide}
         // Explore's pill row width, so the two read as one control.
         positionRowClassName="max-w-[360px]"

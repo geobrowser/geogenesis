@@ -9,7 +9,14 @@ import { useSyncExternalStore } from 'react';
  * and its tests mock `jotai` wholesale.
  */
 export type SaveVotesPromptReason =
-  'threshold' | 'single_claim' | 'repeat' | 'return_visit' | 'inline_save' | SaveVotesPressReason;
+  | 'threshold'
+  | 'single_claim'
+  | 'repeat'
+  | 'return_visit'
+  | 'inline_save'
+  /** An email's vote link put a side on this device (GEO-3374). */
+  | 'email_link'
+  | SaveVotesPressReason;
 
 /**
  * A "Save N votes" sign-in button: the navbar's, or the debate feed's phone bar (GEO-3415). Pressed,
@@ -111,6 +118,29 @@ export function savePromptReasonAfterVote({
   }
   if (shownCount === 1 && count >= SECOND_ASK_AT) return 'repeat';
   return null;
+}
+
+/**
+ * Marks the browser session as one that started from one of our emails (GEO-3374). Every email goes
+ * to people who already have an account, so for the rest of the visit the sheet asks them to log in
+ * rather than to sign up.
+ */
+const EMAIL_ARRIVAL_KEY = 'geo:arrived-from-email';
+
+export function markArrivedFromEmail() {
+  try {
+    window.sessionStorage.setItem(EMAIL_ARRIVAL_KEY, '1');
+  } catch {
+    // Storage blocked: the sheet falls back to its sign-up wording.
+  }
+}
+
+export function arrivedFromEmail() {
+  try {
+    return window.sessionStorage.getItem(EMAIL_ARRIVAL_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 export function markPromptedThisSession() {
