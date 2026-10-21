@@ -41,6 +41,10 @@ describe('Privy login methods', () => {
       'core/auth/google-oauth.tsx',
       'core/auth/google-sign-in.ts',
     ]);
+    expect(using(/useGoogleSignInOffered\(/).sort()).toEqual([
+      'core/auth/google-oauth.tsx',
+      'core/auth/google-sign-in.ts',
+    ]);
     expect(using(/= useGoogleOAuthSignIn\(/)).toEqual(['partials/explore/email-capture-popup.tsx']);
     expect(using(/useLinkWithOAuth/)).toEqual([]);
     expect(using(/from '@privy-io\/react-auth'/)).toEqual([]);

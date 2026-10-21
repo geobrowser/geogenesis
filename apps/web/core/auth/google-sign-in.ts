@@ -2,6 +2,7 @@
 
 import type { PrivyClientConfig } from '@geogenesis/auth';
 
+import { isInAppBrowser } from '~/core/auth/in-app-browser';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 type LoginMethods = NonNullable<PrivyClientConfig['loginMethods']>;
@@ -16,10 +17,16 @@ export function useGoogleSignInEnabled() {
   return useFeatureFlag('googleSignIn');
 }
 
+/** Whether to offer Google here: the flag is on and this is not an in-app browser, where Google refuses OAuth. */
+export function useGoogleSignInOffered() {
+  // Read only once the flag is on, which is after hydration, so the server render never differs.
+  return useGoogleSignInEnabled() && !isInAppBrowser();
+}
+
 /**
  * `login()` options that add Google to Privy's modal, or `undefined` to keep it email-only.
  * Google redirects, so anything queued in memory at the press is dropped; accepted while the flag gates it.
  */
 export function useGoogleSignInOptions() {
-  return useGoogleSignInEnabled() ? GOOGLE_SIGN_IN_OPTIONS : undefined;
+  return useGoogleSignInOffered() ? GOOGLE_SIGN_IN_OPTIONS : undefined;
 }
