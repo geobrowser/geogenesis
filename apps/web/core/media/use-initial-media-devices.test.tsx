@@ -20,11 +20,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 const list = [
-  { kind: 'audioinput', deviceId: 'default' },
-  { kind: 'audioinput', deviceId: 'usb-mic' },
-  { kind: 'videoinput', deviceId: 'camera' },
-  { kind: 'audiooutput', deviceId: 'default' },
-  { kind: 'audiooutput', deviceId: 'headphones' },
+  { kind: 'audioinput', deviceId: 'default', label: 'default' },
+  { kind: 'audioinput', deviceId: 'usb-mic', label: 'usb-mic' },
+  { kind: 'videoinput', deviceId: 'camera', label: 'camera' },
+  { kind: 'audiooutput', deviceId: 'default', label: 'default' },
+  { kind: 'audiooutput', deviceId: 'headphones', label: 'headphones' },
 ];
 
 describe('initial devices for lobby, claim-picker and community-call rooms', () => {
@@ -68,9 +68,9 @@ describe('initial devices for lobby, claim-picker and community-call rooms', () 
     );
     unmount();
     mocks.enumerate.mockResolvedValue([
-      { kind: 'audioinput', deviceId: 'missing-mic' },
-      { kind: 'videoinput', deviceId: 'missing-camera' },
-      { kind: 'audiooutput', deviceId: 'missing-speaker' },
+      { kind: 'audioinput', deviceId: 'missing-mic', label: 'missing-mic' },
+      { kind: 'videoinput', deviceId: 'missing-camera', label: 'missing-camera' },
+      { kind: 'audiooutput', deviceId: 'missing-speaker', label: 'missing-speaker' },
     ]);
     const returned = renderHook(() => useInitialMediaDevices());
     await waitFor(() =>
@@ -81,6 +81,19 @@ describe('initial devices for lobby, claim-picker and community-call rooms', () 
         audioOutputId: 'missing-speaker',
       })
     );
+  });
+
+  it('retains a remembered input when only a redacted default device is exposed before permission', async () => {
+    rememberMediaDevice('audioinput', 'usb-mic');
+    rememberMediaDevice('videoinput', 'usb-camera');
+    mocks.enumerate.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'default', label: '' },
+      { kind: 'videoinput', deviceId: 'default', label: '' },
+    ]);
+    const { result } = renderHook(() => useInitialMediaDevices());
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.audioInputId).toBe('usb-mic');
+    expect(result.current.videoInputId).toBe('usb-camera');
   });
 
   it('keeps capture usable with hidden inputs and disables unsupported speaker routing', async () => {

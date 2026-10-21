@@ -1044,7 +1044,7 @@ describe('RematchVoiceHeader', () => {
 
     await waitFor(() => expect(mocks.getUserMedia).toHaveBeenCalledWith({ audio: { deviceId: 'chosen-mic' } }));
     expect(mocks.livekitRoomProps.at(-1)?.options).toMatchObject({
-      audioCaptureDefaults: { deviceId: 'chosen-mic' },
+      audioCaptureDefaults: { deviceId: { ideal: 'chosen-mic' } },
     });
   });
 

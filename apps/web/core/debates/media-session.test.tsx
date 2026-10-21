@@ -113,7 +113,7 @@ describe('remembered devices across debate sessions', () => {
 
   it('keeps a disconnected preference and restores it on devicechange', async () => {
     rememberMediaDevice('audioinput', 'mic-2');
-    mocks.enumerateDevices.mockResolvedValue([{ kind: 'audioinput', deviceId: 'default' }]);
+    mocks.enumerateDevices.mockResolvedValue([{ kind: 'audioinput', deviceId: 'default', label: 'Default mic' }]);
     mocks.createLocalTracks.mockResolvedValue([{ mediaStreamTrack: { kind: 'audio' }, stop: vi.fn() }]);
     render(
       <DebateMediaSessionProvider>
@@ -125,7 +125,7 @@ describe('remembered devices across debate sessions', () => {
     await waitFor(() => expect(screen.getByTestId('selected-devices')).toHaveTextContent('default/'));
     expect(readMediaDevicePreference('audioinput')).toBe('mic-2');
     mocks.enumerateDevices.mockResolvedValue([
-      { kind: 'audioinput', deviceId: 'default' },
+      { kind: 'audioinput', deviceId: 'default', label: 'Default mic' },
       { kind: 'audioinput', deviceId: 'mic-2' },
     ]);
     await fireDeviceChange();

@@ -4,21 +4,17 @@ import * as React from 'react';
 
 import { supportsAudioOutputSelection } from 'livekit-client';
 
-import { availableMediaDeviceId, readMediaDevicePreference } from './device-preferences';
+import type { MediaDeviceIds } from './device-options';
+import { availableMediaDeviceId, availableMediaInputId, readMediaDevicePreference } from './device-preferences';
 
-type InitialMediaDevices = {
-  ready: boolean;
-  audioInputId?: string;
-  videoInputId?: string;
-  audioOutputId?: string;
-};
+type InitialMediaDevices = MediaDeviceIds & { ready: boolean };
 
 /**
  * Read on entry to a room, before it captures or plays media. Freeze the result for this visit:
  * changing LiveKitRoom's options during a call would rebuild the room and disconnect everyone.
  * Pickers switch the live room separately and save only explicit choices for the next visit.
  */
-export function useInitialMediaDevices(fallback: Omit<InitialMediaDevices, 'ready'> = {}) {
+export function useInitialMediaDevices(fallback: MediaDeviceIds = {}) {
   const fallbackRef = React.useRef(fallback);
   const [devices, setDevices] = React.useState<InitialMediaDevices>({ ready: false });
   React.useEffect(() => {
@@ -34,12 +30,16 @@ export function useInitialMediaDevices(fallback: Omit<InitialMediaDevices, 'read
         // Capture can still work even when enumeration is unavailable.
       }
       if (cancelled) return;
-      // Before permission, inputs can have blank IDs. Keep the preference as an ideal constraint
-      // then; the browser can fall back without another prompt if that device is unavailable.
-      const input = (kind: MediaDeviceKind, preferred: string | undefined) => {
-        const available = list.filter(device => device.kind === kind && device.deviceId);
-        return preferred && available.length ? availableMediaDeviceId(preferred, available) : preferred;
-      };
+      // Before permission, browsers can expose only the default device, even with a nonempty ID.
+      // A list with hidden labels cannot tell us a saved device is disconnected. Keep the preference
+      // then; capture uses ideal constraints and falls back without a second permission request.
+      const input = (kind: 'audioinput' | 'videoinput', preferred: string | undefined) =>
+        preferred
+          ? availableMediaInputId(
+              preferred,
+              list.filter(device => device.kind === kind)
+            ) || undefined
+          : undefined;
       setDevices({
         ready: true,
         audioInputId: input('audioinput', audioInputId),

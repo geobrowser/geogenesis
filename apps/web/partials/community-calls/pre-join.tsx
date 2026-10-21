@@ -8,11 +8,7 @@ import { Track } from 'livekit-client';
 
 import { formatFullDate, formatTimeRange } from '~/core/community-calls/format';
 import { Occurrence } from '~/core/community-calls/types';
-import {
-  availableMediaDeviceId,
-  readMediaDevicePreference,
-  rememberMediaDevice,
-} from '~/core/media/device-preferences';
+import { availableMediaInputId, readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
 import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 
 import { Button } from '~/design-system/button';
@@ -49,23 +45,24 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
   });
   const [permissionError, setPermissionError] = React.useState<string | null>(null);
 
+  const onPreviewError = React.useCallback((err: Error) => {
+    // Never join claiming tracks that were denied or could not be opened.
+    setAudioEnabled(false);
+    setVideoEnabled(false);
+    setPermissionError(
+      err.name === 'NotAllowedError'
+        ? 'Camera/microphone access was denied. You can still join without video.'
+        : err.message
+    );
+  }, []);
   const tracks = usePreviewTracks(
     {
-      audio: initialDevices.ready && audioEnabled ? (audioDeviceId ? { deviceId: audioDeviceId } : true) : false,
-      video: initialDevices.ready && videoEnabled ? (videoDeviceId ? { deviceId: videoDeviceId } : true) : false,
+      audio:
+        initialDevices.ready && audioEnabled ? (audioDeviceId ? { deviceId: { ideal: audioDeviceId } } : true) : false,
+      video:
+        initialDevices.ready && videoEnabled ? (videoDeviceId ? { deviceId: { ideal: videoDeviceId } } : true) : false,
     },
-    err => {
-      // Denied/dismissed browser permission — drop back to camera+mic off so we don't
-      // join claiming a track that doesn't exist (that desync is what corrupts the
-      // LiveKit grid layout once in the room).
-      setAudioEnabled(false);
-      setVideoEnabled(false);
-      setPermissionError(
-        err.name === 'NotAllowedError'
-          ? 'Camera/microphone access was denied. You can still join without video.'
-          : err.message
-      );
-    }
+    onPreviewError
   );
 
   const videoTrack = tracks?.find(t => t.kind === Track.Kind.Video);
@@ -92,10 +89,10 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
         const video = list.filter(d => d.kind === 'videoinput' && d.deviceId);
         setDevices({ audio, video });
         // Update effective selections only. A disconnected device stays remembered in storage.
-        if (audio.length)
-          setAudioDeviceId(availableMediaDeviceId(readMediaDevicePreference('audioinput') ?? audioDeviceId, audio));
-        if (video.length)
-          setVideoDeviceId(availableMediaDeviceId(readMediaDevicePreference('videoinput') ?? videoDeviceId, video));
+        const preferredAudio = readMediaDevicePreference('audioinput') ?? audioDeviceId;
+        const preferredVideo = readMediaDevicePreference('videoinput') ?? videoDeviceId;
+        if (audio.length && preferredAudio) setAudioDeviceId(availableMediaInputId(preferredAudio, audio));
+        if (video.length && preferredVideo) setVideoDeviceId(availableMediaInputId(preferredVideo, video));
       } catch {
         // Keep the preview usable if enumeration is unavailable.
       }

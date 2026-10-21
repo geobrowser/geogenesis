@@ -34,7 +34,7 @@ import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { tokenAllowsCamera } from '~/core/debates/livekit-grant';
 import { useCarriedLobbyChoice } from '~/core/debates/lobbies/lobby-return';
-import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
+import { systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
 import {
   type DebateJoinChoiceSource,
   isChosenJoinIntent,
@@ -45,6 +45,7 @@ import { resolveJoinChoice } from '~/core/debates/request-join-state';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { TrackVideo } from '~/core/debates/track-video';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { toMediaDeviceOptions, withMediaDeviceOptions } from '~/core/media/device-options';
 import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
@@ -540,12 +541,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   const { selectedAudioInputId, selectedVideoInputId } = useDebateMediaSession();
   const devices = useInitialMediaDevices({ audioInputId: selectedAudioInputId, videoInputId: selectedVideoInputId });
   const roomOptions = React.useMemo(
-    () => ({
-      reconnectPolicy: new ExtendedReconnectPolicy(),
-      audioCaptureDefaults: devices.audioInputId ? { deviceId: devices.audioInputId } : undefined,
-      videoCaptureDefaults: devices.videoInputId ? { deviceId: devices.videoInputId } : undefined,
-      ...(devices.audioOutputId ? { audioOutput: { deviceId: devices.audioOutputId } } : {}),
-    }),
+    () => withMediaDeviceOptions(devices, { reconnectPolicy: new ExtendedReconnectPolicy() }),
     [devices]
   );
 
@@ -1410,10 +1406,8 @@ function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null
   const audioOutputSupported = speakers.devices.length > 0;
 
   return {
-    audioInputDevices: toDeviceOptions(microphones.devices, 'Microphone'),
-    audioOutputDevices: audioOutputSupported
-      ? toDeviceOptions(speakers.devices, 'Speaker')
-      : [systemDefaultAudioOutput],
+    audioInputDevices: toMediaDeviceOptions(microphones.devices),
+    audioOutputDevices: audioOutputSupported ? toMediaDeviceOptions(speakers.devices) : [systemDefaultAudioOutput],
     selectedAudioInputId: microphones.activeDeviceId,
     selectedAudioOutputId: speakers.activeDeviceId,
     audioOutputSupported,
@@ -1429,20 +1423,11 @@ function useVoiceCameraSettings(room: Room) {
   const cameras = useMediaDeviceSelect({ kind: 'videoinput', room, requestPermissions: false });
 
   return {
-    cameraDevices: toDeviceOptions(cameras.devices, 'Camera'),
+    cameraDevices: toMediaDeviceOptions(cameras.devices),
     selectedCameraId: cameras.activeDeviceId,
     onCameraChange: (deviceId: string) => {
       void cameras.setActiveMediaDevice(deviceId);
       changeVideoInput(deviceId);
     },
   };
-}
-
-function toDeviceOptions(devices: MediaDeviceInfo[], fallbackLabel: string): MediaDeviceOption[] {
-  return devices.map((device, index) => ({
-    deviceId: device.deviceId,
-    groupId: device.groupId,
-    kind: device.kind as MediaDeviceOption['kind'],
-    label: device.label || `${fallbackLabel} ${index + 1}`,
-  }));
 }

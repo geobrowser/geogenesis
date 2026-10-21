@@ -39,6 +39,7 @@ import { ChatEntry, usePersistentChat } from '~/core/community-calls/use-persist
 import { useReconnectionState } from '~/core/community-calls/use-reconnection-state';
 import { useRecordingMetadataSync } from '~/core/community-calls/use-recording-metadata-sync';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { withMediaDeviceOptions } from '~/core/media/device-options';
 import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 import { setTelemetryUser } from '~/core/telemetry/logger';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
@@ -101,12 +102,7 @@ export function LiveRoom({
   // Memoized so `<LiveKitRoom>` doesn't tear down/recreate its Room on every re-render.
   const devices = useInitialMediaDevices({ audioInputId: audioDeviceId, videoInputId: videoDeviceId });
   const roomOptions = React.useMemo(
-    () => ({
-      reconnectPolicy: new ExtendedReconnectPolicy(),
-      audioCaptureDefaults: devices.audioInputId ? { deviceId: devices.audioInputId } : undefined,
-      videoCaptureDefaults: devices.videoInputId ? { deviceId: devices.videoInputId } : undefined,
-      ...(devices.audioOutputId ? { audioOutput: { deviceId: devices.audioOutputId } } : {}),
-    }),
+    () => withMediaDeviceOptions(devices, { reconnectPolicy: new ExtendedReconnectPolicy() }),
     [devices]
   );
 

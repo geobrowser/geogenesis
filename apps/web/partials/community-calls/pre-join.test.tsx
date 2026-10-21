@@ -64,12 +64,12 @@ describe('community-call device choices', () => {
     render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={onJoin} />);
     await waitFor(() => expect(screen.getByLabelText('Camera')).toHaveValue('usb-camera'));
     expect(mocks.preview).toHaveBeenLastCalledWith(
-      { audio: false, video: { deviceId: 'usb-camera' } },
+      { audio: false, video: { deviceId: { ideal: 'usb-camera' } } },
       expect.any(Function)
     );
     fireEvent.click(screen.getByRole('button', { name: 'Audio off' }));
     expect(mocks.preview).toHaveBeenLastCalledWith(
-      { audio: { deviceId: 'usb-mic' }, video: { deviceId: 'usb-camera' } },
+      { audio: { deviceId: { ideal: 'usb-mic' } }, video: { deviceId: { ideal: 'usb-camera' } } },
       expect.any(Function)
     );
     fireEvent.change(screen.getByLabelText('Microphone'), { target: { value: 'default' } });
@@ -83,6 +83,22 @@ describe('community-call device choices', () => {
       audioDeviceId: 'default',
       videoDeviceId: 'camera',
     });
+  });
+
+  it('leaves browser-default capture unchanged after enumeration when nobody has picked a device', async () => {
+    render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Camera').querySelectorAll('option')).toHaveLength(3));
+    expect(mocks.preview).toHaveBeenLastCalledWith({ audio: false, video: true }, expect.any(Function));
+  });
+
+  it('keeps the preview callback stable across UI updates so LiveKit does not restart capture', async () => {
+    const view = render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Join community call' })).toBeEnabled());
+    const callback = mocks.preview.mock.lastCall?.[1];
+    view.rerender(<PreJoin spaceName="Geo" occurrence={occurrence} joining onJoin={vi.fn()} />);
+    expect(mocks.preview.mock.lastCall?.[1]).toBe(callback);
+    fireEvent.click(screen.getByRole('button', { name: 'Audio off' }));
+    expect(mocks.preview.mock.lastCall?.[1]).toBe(callback);
   });
 
   it('falls back on unplug and restores the choice on reconnect without overwriting it', async () => {

@@ -52,6 +52,18 @@ describe('browser media device preferences', () => {
     expect(listener).toHaveBeenCalledTimes(2);
   });
 
+  it('uses the latest choice in this tab when a write fails instead of restoring an older saved device', () => {
+    rememberMediaDevice('audioinput', 'old-mic');
+    const failedWrite = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('Full', 'QuotaExceededError');
+    });
+    rememberMediaDevice('audioinput', 'new-mic');
+    expect(readMediaDevicePreference('audioinput')).toBe('new-mic');
+    failedWrite.mockRestore();
+    rememberMediaDevice('audioinput', 'new-mic');
+    expect(readMediaDevicePreference('audioinput')).toBe('new-mic');
+  });
+
   it('continues when storage is unavailable', () => {
     vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new DOMException('Blocked', 'SecurityError');
@@ -61,5 +73,8 @@ describe('browser media device preferences', () => {
     });
     expect(readMediaDevicePreference('audioinput')).toBeUndefined();
     expect(() => rememberMediaDevice('audioinput', 'mic')).not.toThrow();
+    expect(readMediaDevicePreference('audioinput')).toBe('mic');
+    vi.restoreAllMocks();
+    rememberMediaDevice('audioinput', 'mic');
   });
 });

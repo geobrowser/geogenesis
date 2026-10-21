@@ -32,6 +32,7 @@ import {
 } from 'livekit-client';
 
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { withMediaDeviceOptions } from '~/core/media/device-options';
 import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
@@ -124,18 +125,7 @@ export function LobbyVoice({
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const queryClient = useQueryClient();
   const devices = useInitialMediaDevices();
-  const roomOptions = React.useMemo<RoomOptions>(
-    () => ({
-      ...ROOM_OPTIONS,
-      audioCaptureDefaults: devices.audioInputId ? { deviceId: devices.audioInputId } : undefined,
-      videoCaptureDefaults: {
-        ...ROOM_OPTIONS.videoCaptureDefaults,
-        ...(devices.videoInputId ? { deviceId: devices.videoInputId } : {}),
-      },
-      ...(devices.audioOutputId ? { audioOutput: { deviceId: devices.audioOutputId } } : {}),
-    }),
-    [devices]
-  );
+  const roomOptions = React.useMemo(() => withMediaDeviceOptions(devices, ROOM_OPTIONS), [devices]);
   const lobbyId = lobby.lobby_id;
   const canPublish = rolePublishes(lobby);
 

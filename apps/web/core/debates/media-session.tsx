@@ -5,7 +5,14 @@ import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
 import * as React from 'react';
 
 import {
+  type MediaDeviceOption,
+  authorizeAudioOutput,
+  systemDefaultAudioOutput,
+  toMediaDeviceOptions,
+} from '~/core/media/device-options';
+import {
   availableMediaDeviceId,
+  availableMediaInputId,
   readMediaDevicePreference,
   rememberMediaDevice,
   subscribeMediaDevicePreferences,
@@ -13,12 +20,8 @@ import {
 
 import type { DebateJoinChoice } from './request-join-state';
 
-export type MediaDeviceOption = {
-  deviceId: string;
-  groupId: string;
-  kind: 'audioinput' | 'audiooutput' | 'videoinput';
-  label: string;
-};
+export { systemDefaultAudioOutput } from '~/core/media/device-options';
+export type { MediaDeviceOption } from '~/core/media/device-options';
 
 export type PreJoinMediaState = 'idle' | 'requesting' | 'ready' | 'denied' | 'unavailable' | 'error';
 
@@ -28,13 +31,6 @@ export type LocalTrackLike = {
   stopProcessor?: () => Promise<void>;
   stop: () => void;
   detach?: () => void;
-};
-
-export const systemDefaultAudioOutput: MediaDeviceOption = {
-  deviceId: 'default',
-  groupId: 'default',
-  kind: 'audiooutput',
-  label: 'System default',
 };
 
 export type DebateMediaSession = {
@@ -197,48 +193,27 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     if (!mountedRef.current || !activeSessionKeyRef.current || mediaDeviceRefreshGenerationRef.current !== generation) {
       return;
     }
-    const audioInputs = devices
-      .filter(device => device.kind === 'audioinput')
-      .map((device, index) => ({
-        deviceId: device.deviceId,
-        groupId: device.groupId,
-        kind: 'audioinput' as const,
-        label: device.label || `Microphone ${index + 1}`,
-      }));
+    const audioInputs = toMediaDeviceOptions(devices.filter(device => device.kind === 'audioinput'));
     const audioOutputs = audioOutputSupportedRef.current
-      ? devices
-          .filter(device => device.kind === 'audiooutput')
-          .map((device, index) => ({
-            deviceId: device.deviceId,
-            groupId: device.groupId,
-            kind: 'audiooutput' as const,
-            label: device.label || `Speaker ${index + 1}`,
-          }))
+      ? toMediaDeviceOptions(devices.filter(device => device.kind === 'audiooutput'))
       : [systemDefaultAudioOutput];
-    const videoInputs = devices
-      .filter(device => device.kind === 'videoinput')
-      .map((device, index) => ({
-        deviceId: device.deviceId,
-        groupId: device.groupId,
-        kind: 'videoinput' as const,
-        label: device.label || `Camera ${index + 1}`,
-      }));
+    const videoInputs = toMediaDeviceOptions(devices.filter(device => device.kind === 'videoinput'));
 
     const availableOutputs = audioOutputs.length > 0 ? audioOutputs : [systemDefaultAudioOutput];
     setAudioInputDevices(current => (sameMediaDeviceOptions(current, audioInputs) ? current : audioInputs));
     setAudioOutputDevices(current => (sameMediaDeviceOptions(current, availableOutputs) ? current : availableOutputs));
     setVideoInputDevices(current => (sameMediaDeviceOptions(current, videoInputs) ? current : videoInputs));
-    const nextAudioInputId = availableMediaDeviceId(
+    const nextAudioInputId = availableMediaInputId(
       readMediaDevicePreference('audioinput') ?? selectedAudioInputIdRef.current,
-      audioInputs
+      devices.filter(device => device.kind === 'audioinput')
     );
     const nextAudioOutputId = availableMediaDeviceId(
       readMediaDevicePreference('audiooutput') ?? selectedAudioOutputIdRef.current,
       availableOutputs
     );
-    const nextVideoInputId = availableMediaDeviceId(
+    const nextVideoInputId = availableMediaInputId(
       readMediaDevicePreference('videoinput') ?? selectedVideoInputIdRef.current,
-      videoInputs
+      devices.filter(device => device.kind === 'videoinput')
     );
 
     selectedAudioInputIdRef.current = nextAudioInputId;
@@ -464,11 +439,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       const isCurrent = () => mountedRef.current && audioOutputSelectionGenerationRef.current === generation;
       try {
         let selectedId = deviceId;
-        const mediaDevices = navigator.mediaDevices as MediaDevices & {
-          selectAudioOutput?: (options: { deviceId: string }) => Promise<MediaDeviceInfo>;
-        };
-        if (deviceId !== systemDefaultAudioOutput.deviceId && mediaDevices.selectAudioOutput) {
-          const authorizedDevice = await mediaDevices.selectAudioOutput({ deviceId });
+        const authorizedDevice = await authorizeAudioOutput(deviceId);
+        if (authorizedDevice) {
           if (!isCurrent()) return;
           selectedId = authorizedDevice.deviceId;
           setAudioOutputDevices(current =>
