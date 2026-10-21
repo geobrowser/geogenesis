@@ -19,9 +19,13 @@ export const PUBLISHED_DEBATE_LOOKUP_TIMEOUT_MS = 2_500;
 /**
  * The debate page's own query (`cachedFetchEntityPage` in the entity route), so a link redirects
  * exactly when that page would render: the hidden flag is read in the same space scope it uses.
+ *
+ * The signal goes to the runtime as well as the query. The query only uses it to cancel a request
+ * in flight; the client's retries sleep between attempts (honouring Retry-After, up to 30s), and
+ * only interrupting the fiber ends that sleep on time.
  */
 const fetchEntityFromGraph = async (entityId: string, spaceId: string, signal: AbortSignal) =>
-  (await Effect.runPromise(getEntityPage(entityId, spaceId, signal)))?.entity ?? null;
+  (await Effect.runPromise(getEntityPage(entityId, spaceId, signal), { signal }))?.entity ?? null;
 
 /**
  * Where a debate's recording link should go instead, once the debate is on the graph (GEO-3435).

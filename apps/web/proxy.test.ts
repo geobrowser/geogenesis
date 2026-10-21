@@ -131,6 +131,17 @@ describe('debate recording links', () => {
     expect(lookup).toHaveBeenCalledWith(VALID_SPACE, VALID_ENTITY, new URLSearchParams('t=42'));
   });
 
+  // Review of #2951: the lookup is loaded on demand, and its module can throw on load (app config
+  // checks env vars). That must fall back to the recording page, not fail the request.
+  it('lets the recording page render when the lookup itself fails', async () => {
+    lookup.mockRejectedValue(new Error('NEXT_PUBLIC_PRIVY_APP_ID is not set'));
+
+    const response = await proxy(request(RECORDING, { headers: NAVIGATION }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
+
   it('lets the recording page render while the debate is not published', async () => {
     lookup.mockResolvedValue(null);
 

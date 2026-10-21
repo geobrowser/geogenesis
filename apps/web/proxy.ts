@@ -69,10 +69,16 @@ export default function proxy(request: NextRequest): NextResponse | Promise<Next
  * links pay for the graph lookup; every other `/space` URL stays synchronous.
  */
 async function openPublishedDebate(request: NextRequest, spaceId: string, debateId: string): Promise<NextResponse> {
-  // Loaded on demand: the graph client brings the SDK, viem and app config (which throws on a
-  // missing env var) with it, and must not load for every /space request. See `space-url.ts`.
-  const { publishedDebatePath } = await import('~/core/debates/server/published-debate-path');
-  const debatePage = await publishedDebatePath(spaceId, debateId, request.nextUrl.searchParams);
+  let debatePage: string | null;
+  try {
+    // Loaded on demand: the graph client brings the SDK, viem and app config (which throws on a
+    // missing env var) with it, and must not load for every /space request. See `space-url.ts`.
+    // A failure to load falls back to the recording page like any other, rather than failing it.
+    const { publishedDebatePath } = await import('~/core/debates/server/published-debate-path');
+    debatePage = await publishedDebatePath(spaceId, debateId, request.nextUrl.searchParams);
+  } catch {
+    debatePage = null;
+  }
   return debatePage ? NextResponse.redirect(new URL(debatePage, request.url), 307) : NextResponse.next();
 }
 
