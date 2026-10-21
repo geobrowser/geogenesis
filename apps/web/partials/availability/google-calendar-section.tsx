@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import type { CalendarConnectSource } from '~/core/availability/calendar-analytics';
 import { toOwnSchedule } from '~/core/availability/own-schedule-deep-link';
 import type { GoogleCalendarConnection } from '~/core/debates/api';
 import {
@@ -71,12 +72,15 @@ export function GoogleCalendarSection({
 }
 
 /** Sends the browser to Google; geo-chat sends it back here with `?calendar=…`, reopening this editor. */
-function useConnect() {
+function useConnect(source: CalendarConnectSource) {
   const connect = useConnectGoogleCalendar();
   const start = () =>
-    connect.mutate(toOwnSchedule(window.location.href), {
-      onSuccess: ({ authorization_url }) => window.location.assign(authorization_url),
-    });
+    connect.mutate(
+      { returnTo: toOwnSchedule(window.location.href), source },
+      {
+        onSuccess: ({ authorization_url }) => window.location.assign(authorization_url),
+      }
+    );
   // Still pending while the browser leaves, so the button stays disabled.
   return { start, pending: connect.isPending || connect.isSuccess, error: connect.isError ? connect.error : null };
 }
@@ -90,7 +94,7 @@ function SaveFirstHint() {
 }
 
 function ConnectCalendar({ unsavedChanges }: { unsavedChanges: boolean }) {
-  const connect = useConnect();
+  const connect = useConnect('connect');
 
   return (
     <div className="flex flex-col gap-2 rounded-lg bg-grey-01 p-3">
@@ -124,7 +128,7 @@ function ConnectedCalendar({
   connection: GoogleCalendarConnection;
   unsavedChanges: boolean;
 }) {
-  const connect = useConnect();
+  const connect = useConnect('reconnect');
   const refresh = useRefreshGoogleCalendar();
   const disconnect = useDisconnectGoogleCalendar();
   const [confirmingDisconnect, setConfirmingDisconnect] = React.useState(false);

@@ -27,6 +27,9 @@ vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: string) => id === 'googleCalendar' && mocks.flagOn,
 }));
 
+const capture = vi.hoisted(() => vi.fn());
+vi.mock('~/core/analytics', () => ({ capture }));
+
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => mocks.setToast }));
 
 vi.mock('./own-schedule-modal', () => ({
@@ -77,6 +80,7 @@ describe('GoogleCalendarReturn', () => {
     mocks.search = '';
     mocks.setToast.mockReset();
     replaceState.mockReset();
+    capture.mockReset();
   });
 
   afterEach(() => {
@@ -131,5 +135,32 @@ describe('GoogleCalendarReturn', () => {
     expect(mocks.setToast).not.toHaveBeenCalled();
     expect(replaceState).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('counts a return once, however often it re-renders', () => {
+    mocks.search = 'modal=schedule&calendar=connected';
+    const { rerender } = render(<GoogleCalendarReturn />);
+    rerender(<GoogleCalendarReturn />);
+    rerender(<GoogleCalendarReturn />);
+
+    expect(capture.mock.calls).toEqual([['calendar_connected', { provider: 'google' }]]);
+  });
+
+  it('counts a failed return by its reason, signed out too', () => {
+    mocks.authenticated = false;
+    mocks.search = 'modal=schedule&calendar=error&reason=scope_missing';
+    render(<GoogleCalendarReturn />);
+
+    expect(capture.mock.calls).toEqual([
+      ['calendar_connect_failed', { provider: 'google', reason: 'scope_missing', stage: 'callback' }],
+    ]);
+  });
+
+  it('counts nothing for a plain editor link', () => {
+    mocks.search = 'modal=schedule';
+    render(<GoogleCalendarReturn />);
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(capture).not.toHaveBeenCalled();
   });
 });

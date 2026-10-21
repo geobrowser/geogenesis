@@ -70,7 +70,7 @@ describe('GoogleCalendarSection', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Connect Google Calendar' }));
 
     expect(mocks.connect.mutate).toHaveBeenCalledWith(
-      'https://www.geobrowser.io/explore?tab=x&modal=schedule',
+      { returnTo: 'https://www.geobrowser.io/explore?tab=x&modal=schedule', source: 'connect' },
       expect.anything()
     );
     const { onSuccess } = mocks.connect.mutate.mock.calls[0][1];
@@ -91,11 +91,15 @@ describe('GoogleCalendarSection', () => {
     expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument();
   });
 
-  it('offers Reconnect instead of Refresh when access is gone', () => {
+  it('offers Reconnect instead of Refresh when access is gone', async () => {
     mocks.connections.google = connection({ status: 'needs_reconnect', last_error: 'invalid_grant', stale: true });
     render(<GoogleCalendarSection />);
 
-    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+    expect(mocks.connect.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'reconnect' }),
+      expect.anything()
+    );
     expect(screen.queryByRole('button', { name: 'Refresh' })).not.toBeInTheDocument();
     expect(screen.getByText(/no longer has access/)).toBeInTheDocument();
     // The reconnect line already says busy time has stopped; the stale line would repeat it.

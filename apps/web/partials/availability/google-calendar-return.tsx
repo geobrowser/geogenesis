@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { calendarConnectCallbackFailed, calendarConnected } from '~/core/availability/calendar-analytics';
 import { OWN_SCHEDULE_MODAL } from '~/core/availability/own-schedule-deep-link';
 import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useDeepLinkEffect } from '~/core/deep-links/use-deep-link';
@@ -36,6 +37,8 @@ export function GoogleCalendarReturn() {
     // Held until Privy settles whether there is an editor to open.
     enabled: enabled && ready,
     run: () => {
+      if (result?.outcome === 'connected') calendarConnected('google');
+      else if (result) calendarConnectCallbackFailed('google', result.reason);
       if (scheduleRequested && authenticated) setOpened({ returned: result });
       else if (result) setToast(<span>{calendarReturnCopy(result.outcome, result.reason)}</span>);
     },

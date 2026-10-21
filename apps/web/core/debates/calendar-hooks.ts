@@ -3,6 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
+  type CalendarConnectSource,
+  calendarConnectRequestFailed,
+  calendarConnectStarted,
+  calendarDisconnected,
+  calendarRefreshed,
+} from '~/core/availability/calendar-analytics';
+
+import {
   type CalendarConnections,
   GeoChatRequestError,
   connectGoogleCalendar,
@@ -74,8 +82,10 @@ export function useInvalidateCalendarReads() {
 export function useConnectGoogleCalendar() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation<{ authorization_url: string }, Error, string>({
-    mutationFn: returnTo => connectGoogleCalendar(returnTo, getPrivyIdentityToken, accountKey),
+  return useMutation<{ authorization_url: string }, Error, { returnTo: string; source: CalendarConnectSource }>({
+    mutationFn: ({ returnTo }) => connectGoogleCalendar(returnTo, getPrivyIdentityToken, accountKey),
+    onMutate: ({ source }) => calendarConnectStarted('google', source),
+    onError: error => calendarConnectRequestFailed('google', error),
   });
 }
 
@@ -86,6 +96,7 @@ export function useRefreshGoogleCalendar() {
 
   return useMutation<CalendarConnections, Error, void>({
     mutationFn: () => refreshGoogleCalendar(getPrivyIdentityToken, accountKey),
+    onSuccess: () => calendarRefreshed('google'),
     onSettled: invalidate,
   });
 }
@@ -96,6 +107,7 @@ export function useDisconnectGoogleCalendar() {
 
   return useMutation<void, Error, void>({
     mutationFn: () => disconnectGoogleCalendar(getPrivyIdentityToken, accountKey),
+    onSuccess: () => calendarDisconnected('google'),
     onSettled: invalidate,
   });
 }

@@ -11,12 +11,14 @@ import { GeoChatRequestError } from './api';
 import {
   useCalendarBusy,
   useCalendarConnections,
+  useConnectGoogleCalendar,
   useDisconnectGoogleCalendar,
   useRefreshGoogleCalendar,
 } from './calendar-hooks';
 import { debateQueryKeys } from './hooks';
 
 const mocks = vi.hoisted(() => ({
+  connectGoogleCalendar: vi.fn(),
   getCalendarConnections: vi.fn(),
   getCalendarBusy: vi.fn(),
   refreshGoogleCalendar: vi.fn(),
@@ -38,11 +40,15 @@ vi.mock('./debate-gateway', () => ({
 
 vi.mock('./api', async importOriginal => ({
   ...(await importOriginal<typeof import('./api')>()),
+  connectGoogleCalendar: mocks.connectGoogleCalendar,
   getCalendarConnections: mocks.getCalendarConnections,
   getCalendarBusy: mocks.getCalendarBusy,
   refreshGoogleCalendar: mocks.refreshGoogleCalendar,
   disconnectGoogleCalendar: mocks.disconnectGoogleCalendar,
 }));
+
+const capture = vi.hoisted(() => vi.fn());
+vi.mock('~/core/analytics', () => ({ capture }));
 
 let client: QueryClient;
 const wrapper = ({ children }: { children: ReactNode }) => (
@@ -56,6 +62,7 @@ beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   setCachedIdentityToken('token');
   for (const mock of Object.values(mocks)) mock.mockReset();
+  capture.mockReset();
 });
 
 describe('useCalendarConnections', () => {
@@ -125,5 +132,42 @@ describe('calendar mutations', () => {
     await act(() => result.current.mutateAsync());
 
     expect(invalidatedKeys(invalidate)).toEqual(expect.arrayContaining(affected));
+  });
+
+  it('counts a refresh only when it went through', async () => {
+    mocks.refreshGoogleCalendar.mockResolvedValueOnce({ google: null });
+    mocks.refreshGoogleCalendar.mockRejectedValueOnce(new GeoChatRequestError('Slow down', 'rate_limited', 429));
+
+    const { result } = renderHook(() => useRefreshGoogleCalendar(), { wrapper });
+    await act(() => result.current.mutateAsync());
+    await act(() => result.current.mutateAsync().catch(() => undefined));
+
+    expect(capture.mock.calls).toEqual([['calendar_refreshed', { provider: 'google' }]]);
+  });
+
+  it('counts a disconnect once it went through', async () => {
+    mocks.disconnectGoogleCalendar.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useDisconnectGoogleCalendar(), { wrapper });
+    await act(() => result.current.mutateAsync());
+
+    expect(capture.mock.calls).toEqual([['calendar_disconnected', { provider: 'google' }]]);
+  });
+
+  it('counts a connect as started, then failed when geo-chat refuses it', async () => {
+    mocks.connectGoogleCalendar.mockRejectedValue(new GeoChatRequestError('Bad return', 'invalid_return_to', 400));
+
+    const { result } = renderHook(() => useConnectGoogleCalendar(), { wrapper });
+    await act(() =>
+      result.current
+        .mutateAsync({ returnTo: 'http://localhost:3002/?modal=schedule', source: 'connect' })
+        .catch(() => undefined)
+    );
+
+    expect(mocks.connectGoogleCalendar.mock.calls[0][0]).toBe('http://localhost:3002/?modal=schedule');
+    expect(capture.mock.calls).toEqual([
+      ['calendar_connect_started', { provider: 'google', source: 'connect' }],
+      ['calendar_connect_failed', { provider: 'google', reason: 'invalid_return_to', stage: 'request' }],
+    ]);
   });
 });
