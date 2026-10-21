@@ -17,20 +17,24 @@ const debateEntity = (extra: { types?: { id: string }[]; values?: unknown[] } = 
   values: extra.values ?? [],
 });
 
-const path = (fetchEntity: (entityId: string, spaceId: string) => Promise<unknown>, query = '') =>
-  publishedDebatePath(
-    SPACE_ID,
-    DEBATE_ID,
-    new URLSearchParams(query),
-    fetchEntity as Parameters<typeof publishedDebatePath>[3]
-  );
+type Fetch = NonNullable<Parameters<typeof publishedDebatePath>[3]>['fetchEntity'];
+
+const path = (
+  fetchEntity: (entityId: string, spaceId: string, signal: AbortSignal) => Promise<unknown>,
+  query = '',
+  timeoutMs?: number
+) =>
+  publishedDebatePath(SPACE_ID, DEBATE_ID, new URLSearchParams(query), {
+    fetchEntity: fetchEntity as Fetch,
+    timeoutMs,
+  });
 
 describe('publishedDebatePath (GEO-3435)', () => {
   it('opens the debate page once the debate is on the graph, asking for it in its space', async () => {
     const fetchEntity = vi.fn().mockResolvedValue(debateEntity());
 
     await expect(path(fetchEntity)).resolves.toBe(DEBATE_PAGE);
-    expect(fetchEntity).toHaveBeenCalledWith(DEBATE_ID, SPACE_ID);
+    expect(fetchEntity).toHaveBeenCalledWith(DEBATE_ID, SPACE_ID, expect.any(AbortSignal));
   });
 
   it('stays on the recording while the debate is not on the graph yet', async () => {
@@ -50,6 +54,14 @@ describe('publishedDebatePath (GEO-3435)', () => {
 
   it('stays on the recording when the graph cannot be reached, rather than failing the page', async () => {
     await expect(path(vi.fn().mockRejectedValue(new Error('graph down')))).resolves.toBeNull();
+  });
+
+  // The graph client retries and has no timeout of its own; the proxy holds the request meanwhile.
+  it('gives up on a slow graph and stays on the recording', async () => {
+    const hangsUntilAborted = (_id: string, _space: string, signal: AbortSignal) =>
+      new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('aborted'))));
+
+    await expect(path(hangsUntilAborted, '', 20)).resolves.toBeNull();
   });
 
   it('carries the link’s query over, repeated keys included', async () => {

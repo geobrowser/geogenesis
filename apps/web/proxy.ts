@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-import { publishedDebatePath } from '~/core/debates/server/published-debate-path';
-import { isPossibleSpacePath } from '~/core/utils/space-url';
+import { debateRecordingFromPath } from '~/core/debates/recording-routes';
+import { isPossibleSpacePath, isValidId } from '~/core/utils/space-url';
 
 /**
  * Rejects structurally impossible `/space/...` URLs with a real 404.
@@ -45,9 +45,13 @@ import { isPossibleSpacePath } from '~/core/utils/space-url';
  * problem.
  */
 export default function proxy(request: NextRequest): NextResponse | Promise<NextResponse> {
-  if (isPossibleSpacePath(request.nextUrl.pathname)) {
-    const recording = request.nextUrl.pathname.match(DEBATE_RECORDING_PATH);
-    return recording ? openPublishedDebate(request, recording[1], recording[2]) : NextResponse.next();
+  const recording = debateRecordingFromPath(request.nextUrl.pathname);
+  // A recording link's debate id is checked like the space's: one that cannot exist is rejected as
+  // cheaply as any other impossible URL, rather than costing a graph round-trip.
+  const possible = isPossibleSpacePath(request.nextUrl.pathname) && (!recording || isValidId(recording.debateId));
+
+  if (possible) {
+    return recording ? openPublishedDebate(request, recording.spaceId, recording.debateId) : NextResponse.next();
   }
 
   if (!isBrowserNavigation(request)) {
@@ -57,9 +61,6 @@ export default function proxy(request: NextRequest): NextResponse | Promise<Next
   return NextResponse.rewrite(new URL('/_not-found', request.url), { status: 404 });
 }
 
-/** `/space/<space>/debates/<debate>/recording`, the link geo-chat's "Your debate is ready" email sends. */
-const DEBATE_RECORDING_PATH = /^\/space\/([^/]+)\/debates\/([^/]+)\/recording\/?$/;
-
 /**
  * A debate's recording link opens the debate's own page once the debate is on the graph (GEO-3435),
  * as a real 307 here: the recording route streams, so a redirect from the page would only arrive
@@ -68,6 +69,9 @@ const DEBATE_RECORDING_PATH = /^\/space\/([^/]+)\/debates\/([^/]+)\/recording\/?
  * links pay for the graph lookup; every other `/space` URL stays synchronous.
  */
 async function openPublishedDebate(request: NextRequest, spaceId: string, debateId: string): Promise<NextResponse> {
+  // Loaded on demand: the graph client brings the SDK, viem and app config (which throws on a
+  // missing env var) with it, and must not load for every /space request. See `space-url.ts`.
+  const { publishedDebatePath } = await import('~/core/debates/server/published-debate-path');
   const debatePage = await publishedDebatePath(spaceId, debateId, request.nextUrl.searchParams);
   return debatePage ? NextResponse.redirect(new URL(debatePage, request.url), 307) : NextResponse.next();
 }

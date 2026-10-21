@@ -1,4 +1,6 @@
 import { NextRequest } from 'next/server';
+import fs from 'node:fs';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { publishedDebatePath } from '~/core/debates/server/published-debate-path';
@@ -136,6 +138,26 @@ describe('debate recording links', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('location')).toBeNull();
+  });
+
+  // A crawler-shaped URL with a junk debate id must stay as cheap as the other impossible URLs above,
+  // not cost a graph round-trip.
+  it('rejects a recording link whose debate id cannot exist, without asking the graph', async () => {
+    const browser = await proxy(request(`/space/${VALID_SPACE}/debates/not-an-id/recording`, { headers: NAVIGATION }));
+    const crawler = await proxy(request(`/space/${VALID_SPACE}/debates/not-an-id/recording`, { headers: CRAWLER }));
+
+    expect(browser.status).toBe(404);
+    expect(browser.headers.get('x-middleware-rewrite')).toContain('/_not-found');
+    expect(crawler.status).toBe(404);
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  // The proxy runs on every /space request; the graph client (SDK, viem, app config that throws on a
+  // missing env var) must load only when a recording link needs it. See `core/utils/space-url.ts`.
+  it('loads the graph lookup only on demand', () => {
+    const source = fs.readFileSync(path.join(__dirname, 'proxy.ts'), 'utf8');
+    expect(source).not.toMatch(/^import[^;]*published-debate-path/m);
+    expect(source).not.toMatch(/^import[^;]*@geoprotocol\/geo-sdk/m);
   });
 
   it('asks the graph only for recording links', () => {
