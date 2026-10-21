@@ -34,7 +34,7 @@ import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { tokenAllowsCamera } from '~/core/debates/livekit-grant';
 import { useCarriedLobbyChoice } from '~/core/debates/lobbies/lobby-return';
-import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
+import { systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
 import {
   type DebateJoinChoiceSource,
   isChosenJoinIntent,
@@ -45,6 +45,8 @@ import { resolveJoinChoice } from '~/core/debates/request-join-state';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { TrackVideo } from '~/core/debates/track-video';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { switchMediaDevice, toMediaDeviceOptions, withMediaDeviceOptions } from '~/core/media/device-options';
+import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -58,7 +60,6 @@ import {
   type PairMicState,
   RematchPairHeader,
 } from './rematch-pair-header';
-
 import styles from './rematch-video-header.module.css';
 
 // A pair arriving from a recorded debate was already speaking with the microphone open, so the
@@ -537,19 +538,11 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
     retry();
   }, [retry]);
 
-  // The device the user last picked in the debate surfaces, frozen at mount: a changed room
-  // options identity makes `<LiveKitRoom>` rebuild its Room, dropping the live call.
   const { selectedAudioInputId, selectedVideoInputId } = useDebateMediaSession();
-  const initialAudioInputIdRef = React.useRef(selectedAudioInputId);
-  const initialVideoInputIdRef = React.useRef(selectedVideoInputId);
+  const devices = useInitialMediaDevices({ audioInputId: selectedAudioInputId, videoInputId: selectedVideoInputId });
   const roomOptions = React.useMemo(
-    () => ({
-      // LiveKit's default reconnect gives up after ~37s; this rides out deploys and brief drops.
-      reconnectPolicy: new ExtendedReconnectPolicy(),
-      audioCaptureDefaults: initialAudioInputIdRef.current ? { deviceId: initialAudioInputIdRef.current } : undefined,
-      videoCaptureDefaults: initialVideoInputIdRef.current ? { deviceId: initialVideoInputIdRef.current } : undefined,
-    }),
-    []
+    () => withMediaDeviceOptions(devices, { reconnectPolicy: new ExtendedReconnectPolicy() }),
+    [devices]
   );
 
   // Every condition the controls themselves render on, because a permission prompt with no voice UI
@@ -562,8 +555,8 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // microphone, `<LiveKitRoom audio>` is opening it for real and a second request alongside the one
   // already on screen is pure redundancy.
   usePrimedMicrophonePermission(
-    !micIntent && voiceActive && ownership === 'owned' && Boolean(join.data) && Boolean(opponent),
-    initialAudioInputIdRef.current || undefined
+    devices.ready && !micIntent && voiceActive && ownership === 'owned' && Boolean(join.data) && Boolean(opponent),
+    devices.audioInputId || undefined
   );
 
   const opponentName = opponent ? opponent.display_name || opponent.profile_space_id : '';
@@ -638,7 +631,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // Only reachable on the way out, and only where the room was mounted but had not connected when
   // the exit began: there is nothing to hold open, so the header keeps the one line the room was
   // drawing from inside rather than collapsing to nothing.
-  if (!voiceActive || !join.data) return headerWith(CONNECTING_VOICE);
+  if (!voiceActive || !join.data || !devices.ready) return headerWith(CONNECTING_VOICE);
 
   return (
     <LiveKitRoom
@@ -1182,6 +1175,11 @@ function LocalAudioControls({
         framed={isMobile}
         onChange={cameraSettings.onCameraChange}
       />
+      {cameraSettings.error && (
+        <p role="alert" className="text-metadata text-red-01">
+          {cameraSettings.error}
+        </p>
+      )}
     </div>
   );
 
@@ -1389,6 +1387,7 @@ function DesktopSettingsPopover({
  */
 function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null) {
   const { changeAudioInput, changeAudioOutput, audioOutputError } = useDebateMediaSession();
+  const [inputError, setInputError] = React.useState<string | null>(null);
   // `requestPermissions` defaults to true, and enumerating with it calls `getUserMedia` whenever a
   // device label is blank — which is exactly the state a denied microphone leaves them in. That
   // second prompt has no user gesture behind it, so it fails, and its rejection empties the list:
@@ -1399,13 +1398,14 @@ function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null
   const speakers = useMediaDeviceSelect({ kind: 'audiooutput', room, requestPermissions: false });
 
   const selectMicrophone = (deviceId: string) => {
-    void microphones.setActiveMediaDevice(deviceId);
-    changeAudioInput(deviceId);
+    setInputError(null);
+    void switchMediaDevice(room, 'audioinput', deviceId)
+      .then(() => changeAudioInput(deviceId))
+      .catch(() => setInputError('Could not switch microphones. Try another device.'));
   };
 
   const selectSpeaker = (deviceId: string) => {
-    void speakers.setActiveMediaDevice(deviceId);
-    void changeAudioOutput(deviceId);
+    void changeAudioOutput(deviceId, selectedId => switchMediaDevice(room, 'audiooutput', selectedId));
   };
 
   // Browsers without `setSinkId` enumerate no outputs at all; show the same disabled "System
@@ -1413,15 +1413,13 @@ function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null
   const audioOutputSupported = speakers.devices.length > 0;
 
   return {
-    audioInputDevices: toDeviceOptions(microphones.devices, 'Microphone'),
-    audioOutputDevices: audioOutputSupported
-      ? toDeviceOptions(speakers.devices, 'Speaker')
-      : [systemDefaultAudioOutput],
+    audioInputDevices: toMediaDeviceOptions(microphones.devices),
+    audioOutputDevices: audioOutputSupported ? toMediaDeviceOptions(speakers.devices) : [systemDefaultAudioOutput],
     selectedAudioInputId: microphones.activeDeviceId,
     selectedAudioOutputId: speakers.activeDeviceId,
     audioOutputSupported,
     // The panel is where someone goes to fix their audio, so it is where the failures belong.
-    error: micFailure ? micFailureMessage(micFailure) : audioOutputError,
+    error: inputError ?? (micFailure ? micFailureMessage(micFailure) : audioOutputError),
     onAudioInputChange: selectMicrophone,
     onAudioOutputChange: selectSpeaker,
   };
@@ -1429,23 +1427,18 @@ function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null
 
 function useVoiceCameraSettings(room: Room) {
   const { changeVideoInput } = useDebateMediaSession();
+  const [error, setError] = React.useState<string | null>(null);
   const cameras = useMediaDeviceSelect({ kind: 'videoinput', room, requestPermissions: false });
 
   return {
-    cameraDevices: toDeviceOptions(cameras.devices, 'Camera'),
+    cameraDevices: toMediaDeviceOptions(cameras.devices),
     selectedCameraId: cameras.activeDeviceId,
+    error,
     onCameraChange: (deviceId: string) => {
-      void cameras.setActiveMediaDevice(deviceId);
-      changeVideoInput(deviceId);
+      setError(null);
+      void switchMediaDevice(room, 'videoinput', deviceId)
+        .then(() => changeVideoInput(deviceId))
+        .catch(() => setError('Could not switch cameras. Try another device.'));
     },
   };
-}
-
-function toDeviceOptions(devices: MediaDeviceInfo[], fallbackLabel: string): MediaDeviceOption[] {
-  return devices.map((device, index) => ({
-    deviceId: device.deviceId,
-    groupId: device.groupId,
-    kind: device.kind as MediaDeviceOption['kind'],
-    label: device.label || `${fallbackLabel} ${index + 1}`,
-  }));
 }
