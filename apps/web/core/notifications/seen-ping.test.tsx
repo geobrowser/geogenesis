@@ -78,6 +78,23 @@ describe('SeenPing', () => {
     await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(2));
   });
 
+  it('pings again on a new UTC day within the same local day, since visits are counted per UTC day', async () => {
+    // 8am in Los Angeles is 15:00 UTC on the 25th; 6pm is already 01:00 UTC on the 26th.
+    vi.setSystemTime(new Date('2026-10-25T08:00:00-07:00'));
+    render(<SeenPing />);
+    await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
+
+    vi.setSystemTime(new Date('2026-10-25T18:00:00-07:00'));
+    returnToTab();
+    await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(2));
+
+    // Same local day and same UTC day: nothing.
+    vi.setSystemTime(new Date('2026-10-25T20:00:00-07:00'));
+    returnToTab();
+    await act(async () => undefined);
+    expect(mocks.ping).toHaveBeenCalledTimes(2);
+  });
+
   it('asks Privy for a fresh token when the stored one is refused', async () => {
     mocks.ping = vi.fn(async (_url: string, token: string) => {
       if (token !== 'fresh-token') throw new NotificationsRequestError('invalid token', 401);

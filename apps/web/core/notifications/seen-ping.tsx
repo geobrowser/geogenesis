@@ -32,7 +32,7 @@ async function pingWithin(baseUrl: string, token: string, timeZone: string): Pro
 
 /**
  * Tells geo-notifications this signed-in person visited, and their browser's zone (GEO-3371): on
- * every full page load, and when the tab comes back into focus on a new local day, so someone who
+ * every full page load, and when the tab comes back into focus on a new local or UTC day, so someone who
  * keeps one tab open all week still counts as visiting each day they use it. The retention emails
  * are scheduled from it (no program email on a day you visited, What you missed after a week away,
  * the stop after 30 days).
@@ -53,7 +53,10 @@ export function SeenPing() {
     const baseUrl = geoNotificationsApiUrl();
     const timeZone = browserTimezone();
     if (!baseUrl || !timeZone) return;
-    const today = zonedDay(new Date(), timeZone);
+    // Once per local day *and* per UTC day: the scheduler decides by local day, but geo-notifications
+    // counts visitors per UTC day (to compare with the warehouse), and a local day spans two of them.
+    const now = new Date();
+    const today = `${zonedDay(now, timeZone)}|${zonedDay(now, 'UTC')}`;
     if (inFlight.current || lastPingedDay.current === today) return;
     inFlight.current = true;
     try {
