@@ -1,6 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -27,6 +26,7 @@ import {
 } from '~/core/state/local-votes';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeError } from '~/core/utils/error-diagnostics';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 /**
  * Publishes the votes a visitor cast on this device once a save prompt has signed them in

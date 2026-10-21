@@ -1,6 +1,6 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { Button } from '~/design-system/button';
 

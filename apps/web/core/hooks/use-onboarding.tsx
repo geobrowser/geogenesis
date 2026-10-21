@@ -1,13 +1,12 @@
 'use client';
 
-import { useAccountEffect, usePrivy } from '@geogenesis/auth';
-
 import { useCallback, useEffect } from 'react';
 
 import { atom, useAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { useAccountEffect, usePrivy } from '~/core/wallet/auth-hooks';
 
 import { usePersonalSpaceId } from './use-personal-space-id';
 

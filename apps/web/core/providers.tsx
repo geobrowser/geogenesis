@@ -15,9 +15,7 @@ import { SentryUserIdentifier } from './sentry-user-identifier';
 import { DiffProvider } from './state/diff-store';
 import { store } from './state/jotai-store';
 import { SyncEngineProvider } from './sync/use-sync-engine';
-import { WalletProvider } from './wallet';
-import { EmbeddedWalletSync } from './wallet/embedded-wallet-sync';
-import { PrivyProvider } from './wallet/privy';
+import { AuthRoot } from './wallet/auth-root';
 
 interface Props {
   children: React.ReactNode;
@@ -25,23 +23,21 @@ interface Props {
 
 export function Providers({ children }: Props) {
   return (
-    <PrivyProvider>
+    <>
+      <AuthRoot />
       <PrivyAuthTracker />
       <ReactQueryProvider>
-        <WalletProvider>
-          <EmbeddedWalletSync />
-          <AnalyticsUserIdentifier />
-          <NotificationRegistration />
-          <BrowserTimezoneReporter />
-          <SentryUserIdentifier />
-          <JotaiProvider store={store}>
-            <SyncEngineProvider>
-              <DiffProvider>{children}</DiffProvider>
-              {process.env.NEXT_PUBLIC_DISABLE_RQ_DEVTOOLS !== '1' && <ReactQueryDevtools initialIsOpen={false} />}
-            </SyncEngineProvider>
-          </JotaiProvider>
-        </WalletProvider>
+        <AnalyticsUserIdentifier />
+        <NotificationRegistration />
+        <BrowserTimezoneReporter />
+        <SentryUserIdentifier />
+        <JotaiProvider store={store}>
+          <SyncEngineProvider>
+            <DiffProvider>{children}</DiffProvider>
+            {process.env.NEXT_PUBLIC_DISABLE_RQ_DEVTOOLS !== '1' && <ReactQueryDevtools initialIsOpen={false} />}
+          </SyncEngineProvider>
+        </JotaiProvider>
       </ReactQueryProvider>
-    </PrivyProvider>
+    </>
   );
 }

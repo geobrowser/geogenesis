@@ -4,7 +4,7 @@ import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-l
 
 import * as React from 'react';
 
-import { Provider, useAtomValue } from 'jotai';
+import { Provider, useAtomValue, useSetAtom } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
@@ -15,7 +15,8 @@ import { lockMobileSheetDocumentOverscroll } from '~/core/utils/mobile-sheet-dra
 import { NavUtils } from '~/core/utils/utils';
 
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
-import { entityCommentsPanelAtom, entitySidePanelAtom } from '~/atoms';
+import { ExploreDebateClaimsPanelHost } from './explore-debate-claims-panel-host';
+import { entityCommentsPanelAtom, entitySidePanelAtom, openEntitySidePanelAtom } from '~/atoms';
 
 // Reached through the claims panel, which now carries the shared response controls. The module's
 // top-level `atomWithStorage` runs on import, and under Node's own webstorage — which shadows
@@ -58,6 +59,8 @@ type ObserverRecord = {
 let observers: ObserverRecord[] = [];
 
 vi.mock('~/core/state/feature-flags', () => ({}));
+
+vi.mock('next/navigation', () => ({ usePathname: () => '/root/explore' }));
 
 vi.mock('~/core/debates/hooks', () => ({
   useDebate: () => mocks.debateQuery,
@@ -372,6 +375,7 @@ function CardHarness({
     <QueryClientProvider client={client}>
       <Provider>
         {allowedId === undefined ? card : <DebatePlaybackGate allowedId={allowedId}>{card}</DebatePlaybackGate>}
+        <ExploreDebateClaimsPanelHost />
         <PanelProbe />
         <CommentsPanelProbe />
       </Provider>
@@ -782,6 +786,104 @@ describe('DebateExploreFeedCard', () => {
     // Re-entering the look-ahead band restores a warm, inactive player before it is visible.
     intersectAll(0.1);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  // One shared claims panel for the feed — opening Claims on a second card must replace the first,
+  // not stack a second identical overlay behind it.
+  it('replaces the open claims panel when a second card opens one', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+
+    render(
+      <QueryClientProvider client={client}>
+        <Provider>
+          <DebateExploreFeedCard item={item} fallback={<div />} />
+          <DebateExploreFeedCard item={{ ...item, entityId: 'debate-two' }} fallback={<div />} />
+          <ExploreDebateClaimsPanelHost />
+        </Provider>
+      </QueryClientProvider>
+    );
+    intersectAll(0.7);
+
+    // Both cards offer the control, which is the precondition the bug needed.
+    const claimsButtons = screen.queryAllByRole('button', { name: /^Claims/ });
+    expect(claimsButtons).toHaveLength(2);
+
+    fireEvent.click(claimsButtons[0]);
+    expect(screen.queryAllByTestId('claims-panel')).toHaveLength(1);
+
+    fireEvent.click(claimsButtons[1]);
+    expect(screen.queryAllByTestId('claims-panel')).toHaveLength(1);
+  });
+
+  // And closing it leaves the feed with none, rather than uncovering the one it replaced.
+  it('leaves no claims panel open after closing the one that replaced another', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+
+    render(
+      <QueryClientProvider client={client}>
+        <Provider>
+          <DebateExploreFeedCard item={item} fallback={<div />} />
+          <DebateExploreFeedCard item={{ ...item, entityId: 'debate-two' }} fallback={<div />} />
+          <ExploreDebateClaimsPanelHost />
+        </Provider>
+      </QueryClientProvider>
+    );
+    intersectAll(0.7);
+
+    for (const button of screen.queryAllByRole('button', { name: /^Claims/ })) fireEvent.click(button);
+    fireEvent.click(screen.getByText('Close'));
+
+    expect(screen.queryAllByTestId('claims-panel')).toHaveLength(0);
+  });
+
+  /*
+   * A debate card can sit inside the entity side panel (a profile's activity). Claims there must
+   * replace the side panel with the claims panel: not stack on it, and not close the side panel and
+   * take the card, and the panel it drew, with it.
+   */
+  it('replaces the entity side panel when a card inside it opens Claims', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+
+    function SidePanel() {
+      const target = useAtomValue(entitySidePanelAtom);
+      return target ? (
+        <aside data-testid="entity-side-panel">
+          <DebateExploreFeedCard item={item} fallback={<div />} />
+        </aside>
+      ) : null;
+    }
+    function OpenSidePanel() {
+      const open = useSetAtom(openEntitySidePanelAtom);
+      React.useEffect(
+        () => open({ entityId: 'person-1', spaceId: 'space-1', openedWithMainViewEditing: false }),
+        [open]
+      );
+      return null;
+    }
+
+    render(
+      <QueryClientProvider client={client}>
+        <Provider>
+          <OpenSidePanel />
+          <SidePanel />
+          <ExploreDebateClaimsPanelHost />
+        </Provider>
+      </QueryClientProvider>
+    );
+    intersectAll(0.7);
+    const openPanels = () =>
+      screen.queryAllByTestId('entity-side-panel').length + screen.queryAllByTestId('claims-panel').length;
+    expect(openPanels()).toBe(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Claims/ }));
+    expect(screen.queryAllByTestId('claims-panel')).toHaveLength(1);
+    expect(openPanels()).toBe(1);
+
+    fireEvent.click(screen.getByText('Close'));
+    expect(openPanels()).toBe(0);
   });
 
   /**

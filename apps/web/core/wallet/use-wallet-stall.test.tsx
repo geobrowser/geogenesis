@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   reload: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   useWallets: () => ({ wallets: mocks.wallets }),
   retryEmbeddedWalletSetup: mocks.retryEmbeddedWalletSetup,
 }));

@@ -21,9 +21,8 @@ import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
  * ones somebody tagged with it; a space's are everything imported into it — tens of thousands in
  * the large topic spaces against a few dozen debates — so ungated they bury the rest of the feed.
  *
- * Ranked through the ordinary Explore paths rather than the Topic page's complete-population
- * index: that index downloads the whole population to sort it, which is fine for the entities one
- * topic names and not for a space holding tens of thousands.
+ * Ranked through the ordinary Explore paths rather than the topic page's topic ranking table: a
+ * space's feed is everything in the space, not the entities tagged with one topic.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

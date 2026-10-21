@@ -17,6 +17,8 @@ import { spaceSidebarHasContentAtom } from '~/atoms';
 
 type Props = {
   spaceId: string;
+  /** The space's display name, sent with the Join button's conversion on the community-calls card. */
+  spaceName?: string;
   /** Daily activities are client-only (signed-in viewer); pass true on Overview only. */
   dailyActivities?: boolean;
   communityCalls?: CallSeries[];
@@ -29,7 +31,13 @@ type Props = {
  * use {@link ExploreSidePanel} instead. Publishes content state to the layout header via
  * {@link spaceSidebarHasContentAtom}.
  */
-export function SpaceOverviewSidePanel({ spaceId, dailyActivities = false, communityCalls, subspaces }: Props) {
+export function SpaceOverviewSidePanel({
+  spaceId,
+  spaceName,
+  dailyActivities = false,
+  communityCalls,
+  subspaces,
+}: Props) {
   const { tasks } = useSpaceDailyActivityTasks(spaceId);
 
   // Built as a list so an absent section never leaves a dangling divider behind it — with three
@@ -48,7 +56,7 @@ export function SpaceOverviewSidePanel({ spaceId, dailyActivities = false, commu
   if (communityCalls && communityCalls.length > 0) {
     sections.push({
       key: 'community-calls',
-      node: <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} />,
+      node: <SpaceCommunityCallsSection spaceId={spaceId} spaceName={spaceName} series={communityCalls} />,
     });
   }
 

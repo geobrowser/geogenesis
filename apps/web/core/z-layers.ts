@@ -44,6 +44,12 @@ export const Z_LAYERS = {
   // the assistant launcher and the debates panel included, since a modal takes every tap.
   bottomSheetBackdrop: 10008,
   bottomSheet: 10009,
+
+  // The save-votes prompt when the navbar's "Save N votes" opens it centred (GEO-3400), backdrop and
+  // card in one layer: the card sits inside its backdrop. Above the status bar, toasts and chat
+  // launcher; level with the schedule dialog, which needs an account, so the two never meet. Below
+  // the bottom sheet, which stays on top of everything.
+  saveVotesDialog: 10007,
 } as const;
 
 export const Z_LAYER_CLASS = {
@@ -63,4 +69,5 @@ export const Z_LAYER_CLASS = {
   scheduleDialog: 'z-[10007]',
   bottomSheetBackdrop: 'z-[10008]',
   bottomSheet: 'z-[10009]',
+  saveVotesDialog: 'z-[10007]',
 } as const;

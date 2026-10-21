@@ -10,7 +10,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
-import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
+import {
+  clearDebateReturnDestination,
+  rememberDebateReturnDestination,
+  rememberLobbyReturnDestination,
+} from '~/core/debates/debate-return-navigation';
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
@@ -159,7 +163,7 @@ const mocks = vi.hoisted(() => ({
   entityQueryPages: null as MatchmakingClaim[][] | null,
   // What `keepPreviousData` would still be holding once the query goes disabled.
   lastEnabledData: undefined as { pages: unknown[] } | undefined,
-  spacesHeldOver: false,
+  spacesPending: false,
   scopeHeldOver: false,
   entityQueryFetchingNextPage: false,
   /** Both participants' graph positions. */
@@ -295,11 +299,15 @@ vi.mock('./rematch-publish-card', () => ({
 
 // The server-first return lives in lobby-return's own tests; here this tab's record decides.
 vi.mock('~/core/debates/lobbies/lobby-return', async () => {
-  const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
+  const { consumeDebateReturnDestination, peekDebateReturnDestination } =
+    await import('~/core/debates/debate-return-navigation');
   return {
     // No lobby mic carried into these sessions (GEO-3336 has its own tests).
     useCarriedLobbyChoice: () => null,
-    useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
+    useDebateReturnNavigation: () => ({
+      consume: consumeDebateReturnDestination,
+      returnsToLobby: Boolean(peekDebateReturnDestination()?.startsWith('/debate/')),
+    }),
   };
 });
 
@@ -932,11 +940,9 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
         [SPACE_2, 'Governance space'] as const,
       ].map(([id, name]) => [id, { type: mocks.spaceTypes[id] ?? 'DAO', entity: { name, image: null } }])
     ),
-    isLoading: false,
-    // The real hook holds the previous id set's map rather than blanking it, and flags that it is
-    // doing so. A held map answers nothing about ids it was never asked for, which is the whole
-    // reason the picker has to wait it out.
-    isPlaceholderData: mocks.spacesHeldOver,
+    // Loading while any requested id is unresolved; the map holds only the ids already answered,
+    // which is why the picker has to wait it out.
+    isLoading: mocks.spacesPending,
   }),
 }));
 
@@ -1020,7 +1026,7 @@ beforeEach(() => {
   mocks.taggedClaimsAskedFor = [];
   mocks.entityQueryHasNextPage = false;
   mocks.lastEnabledData = undefined;
-  mocks.spacesHeldOver = false;
+  mocks.spacesPending = false;
   mocks.scopeHeldOver = false;
   mocks.entityQueryLoading = false;
   mocks.entityHydrationLoading = false;
@@ -1215,8 +1221,12 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('returns a debate-again session to the page that opened the flow', async () => {
-    rememberDebateReturnDestination('/space/my-space?tab=activity#latest');
+  it.each([
+    ['Leave', '/space/my-space?tab=activity#latest'],
+    ['Back to lobby', '/debate/lobby-1'],
+  ])('labels the picker exit %s and returns to %s', async (label, destination) => {
+    if (label === 'Back to lobby') rememberLobbyReturnDestination('lobby-1');
+    else rememberDebateReturnDestination(destination);
     const endedSession = session({ status: 'ended' });
     mocks.leaveMutate.mockImplementation(
       (_input: undefined, options: { onSuccess?: (ended: DebateRematchSession) => void }) => {
@@ -1225,9 +1235,9 @@ describe('DebateRematchPageClient', () => {
     );
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+    fireEvent.click(screen.getByRole('button', { name: label }));
 
-    expect(mocks.replace).toHaveBeenCalledWith('/space/my-space?tab=activity#latest');
+    expect(mocks.replace).toHaveBeenCalledWith(destination);
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
@@ -1958,7 +1968,7 @@ describe('DebateRematchPageClient', () => {
      */
     it('keeps counting the rows it draws while the space types are unresolved', async () => {
       viewerOnlyClaim();
-      mocks.spacesHeldOver = true;
+      mocks.spacesPending = true;
       render(<DebateRematchPageClient sessionId="rematch-1" />);
 
       await waitFor(() => expect(mocks.rematchClaimIds.flat()).toContain(VIEWER_ONLY));
@@ -3210,11 +3220,11 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(appearsBefore('Ranked first once filtered', 'Ranked first when unfiltered')).toBe(true));
   });
 
-  // `useSpacesByIds` keeps the previous id set's map instead of blanking every space image on
-  // screen, and says so through `isPlaceholderData`. The picker reads it for ids that may not be
-  // in it — one just added to the allowlist — and a missing type reads as publishable, so the
-  // personal space this gate exists to exclude is exactly what the held map lets through.
-  it('waits out a held-over space map rather than trusting what it does not contain', async () => {
+  // `useSpacesByIds` keeps the ids it already resolved on screen while a new one loads. The picker
+  // reads the map for ids that may not be in it yet — one just added to the allowlist — and a
+  // missing type reads as publishable, so the personal space this gate exists to exclude is
+  // exactly what an unresolved id lets through.
+  it('waits out an unresolved space lookup rather than trusting what it does not contain', async () => {
     mocks.matchmakingClaims = [
       { ...matchmakingClaim(), topics: [] },
       {
@@ -3222,7 +3232,7 @@ describe('DebateRematchPageClient', () => {
         topics: [{ id: 'topic-later', name: 'Later' }],
       },
     ];
-    mocks.spacesHeldOver = true;
+    mocks.spacesPending = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
@@ -5917,7 +5927,7 @@ describe('the Related tab', () => {
   it('holds no slot on another tab’s space lookup when discovery found nothing', async () => {
     mocks.entities = [sharedEntity(), sourceClaimEntity()];
     mocks.relatedEntities = [sourceClaimEntity()];
-    mocks.spacesHeldOver = true;
+    mocks.spacesPending = true;
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await settleTabSwap();
@@ -5970,7 +5980,7 @@ describe('the Related tab', () => {
    */
   it('holds the slot rather than drawing rows whose spaces are still unresolved', async () => {
     debateWithRelated();
-    mocks.spacesHeldOver = true;
+    mocks.spacesPending = true;
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await settleTabSwap();
@@ -6151,6 +6161,17 @@ describe('inside a debate room', () => {
       {children}
     </DebateRoomProvider>
   );
+
+  it('keeps Leave when the room exits to Explore despite a stored lobby', () => {
+    rememberLobbyReturnDestination('lobby-1');
+    render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    expect(screen.queryByRole('button', { name: 'Back to lobby' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/explore');
+    expect(mocks.leaveMutate).not.toHaveBeenCalled();
+  });
 
   // geo-chat expires a `browsing` session after 90s of either party being offline, which is what
   // waiting for someone looks like. Acting on it threw the waiting person out of the room.

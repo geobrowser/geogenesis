@@ -403,24 +403,33 @@
 
 /* The turn timer's once-a-second swell, a half sine over its first 350 ms, on top of its stepped
    size: +0.08x of its size while it grows (10 s to 5 s), +0.05x once it is red. */
+@property --turn-timer-pulse-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* Let a clicked End turn settle from the current pulse instead of snapping its swell to 1. */
+@property --turn-timer-swell {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 1;
+}
+
+/* A half sine, matching the mockup's pulse rather than easing separately into each half. */
 @keyframes turnTimerPulse {
-  0% {
-    scale: 1;
-    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  from {
+    --turn-timer-pulse-angle: 0deg;
   }
-  50% {
-    scale: var(--turn-timer-swell, 1.0615);
-    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
-  }
-  100% {
-    scale: 1;
+  to {
+    --turn-timer-pulse-angle: 180deg;
   }
 }
 
 /* The red glow each of the last five seconds lands with, fading over the second. */
 @keyframes turnTimerGlow {
   from {
-    filter: drop-shadow(0 0 0.6rem color-mix(in srgb, var(--color-red-01) 75%, transparent));
+    filter: drop-shadow(0 0 9.6px rgba(255, 74, 38, 0.75));
   }
   to {
     filter: drop-shadow(0 0 0 transparent);
@@ -433,6 +442,15 @@
   syntax: '<angle>';
   inherits: false;
   initial-value: 360deg;
+}
+
+@keyframes roomPillSettle {
+  from {
+    scale: 1.06;
+  }
+  to {
+    scale: 1;
+  }
 }
 
 @keyframes fadeIn {

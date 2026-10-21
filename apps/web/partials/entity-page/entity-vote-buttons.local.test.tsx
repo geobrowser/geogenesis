@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => ({
   freshRead: null as Promise<'positive' | 'negative' | null> | null,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.authReady, authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
 }));

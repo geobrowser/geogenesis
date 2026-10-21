@@ -1,9 +1,10 @@
 'use client';
 
-import { toViemAccount, useWalletClient, useWallets } from '@geogenesis/auth';
 import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { RevertedUserOperationError } from '@geogenesis/auth/account';
 import { useQuery } from '@tanstack/react-query';
+
+import { toViemAccount, useWalletClient, useWallets } from '~/core/wallet/auth-hooks';
 
 import { forgetSyncedWalletCookie, syncWalletCookie } from '../cookie/sync-wallet-cookie';
 import { ReceiptConfirmationTimeoutError } from '../errors';

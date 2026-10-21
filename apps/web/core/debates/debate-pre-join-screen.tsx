@@ -18,13 +18,7 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 
 import { AudioSettings, MobileSettingsSheet } from './audio-settings';
 import { DebateRecordingStatusPill } from './debate-recording-status-pill';
-import {
-  CameraIcon,
-  DebateTileToggleButton,
-  LeaveIcon,
-  MicrophoneIcon,
-  RecordingCircleButton,
-} from './debate-room-controls';
+import { CameraIcon, DebateLeaveButton, DebateTileToggleButton, MicrophoneIcon } from './debate-room-controls';
 import { DebateTileChip, DebateVideoTile, tileChipSurface } from './debate-video-tile';
 import { DeviceOptionGroup } from './device-option-group';
 import { MicrophoneLevelMeter } from './microphone-level-meter';
@@ -84,6 +78,7 @@ export function DebatePreScreen({
   readyBusy,
   onReady,
   onLeave,
+  returnsToLobby = false,
   leaveDisabled,
 }: {
   claim: string;
@@ -150,6 +145,7 @@ export function DebatePreScreen({
   readyBusy: boolean;
   onReady: () => void;
   onLeave: () => void;
+  returnsToLobby?: boolean;
   leaveDisabled: boolean;
 }) {
   const isMobile = useIsMobileCallLayout();
@@ -490,14 +486,7 @@ export function DebatePreScreen({
         )}
 
         <div className="mt-5 flex w-full justify-center">
-          <RecordingCircleButton
-            ariaLabel="Leave debate"
-            title="Leave debate"
-            onClick={onLeave}
-            disabled={leaveDisabled}
-          >
-            <LeaveIcon />
-          </RecordingCircleButton>
+          <DebateLeaveButton returnsToLobby={returnsToLobby} onClick={onLeave} disabled={leaveDisabled} />
         </div>
       </main>
 

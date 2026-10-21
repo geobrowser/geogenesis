@@ -33,7 +33,7 @@ import {
 import { DebateRecordingStatusPill } from '~/core/debates/debate-recording-status-pill';
 import {
   CameraIcon,
-  LeaveIcon,
+  DebateLeaveButton,
   MicrophoneIcon,
   RecordingCircleButton,
   SpeakerIcon,
@@ -43,6 +43,7 @@ import {
   DebateRoomHoldingScreen,
   DebateRoomLoadingState,
 } from '~/core/debates/debate-room-holding-screens';
+import { DebateRoomNotice, DebateRoomNoticeAction } from '~/core/debates/debate-room-notice';
 import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
@@ -50,7 +51,7 @@ import {
   debateRoomTabPriority,
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
-import { RoomExit, RoomTag } from '~/core/debates/debate-room-stamps';
+import { ROOM_END_TURN_CLASS, ROOM_UI_FONT, RoomExit } from '~/core/debates/debate-room-stamps';
 import { DebateRoundIndicator } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
@@ -61,7 +62,7 @@ import {
   useHoldDebateTabClaim,
   writeDebateTabClaim,
 } from '~/core/debates/debate-tab-claims';
-import { DebateTileChip, DebateVideoTile, tileChipSurface } from '~/core/debates/debate-video-tile';
+import { DebateVideoTile } from '~/core/debates/debate-video-tile';
 import {
   useAbortDebate,
   useClearDebateActivity,
@@ -79,7 +80,7 @@ import {
   useMarkDebateReady,
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
-import { useCarriedLobbyChoice, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
+import { useCarriedLobbyChoice, useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
@@ -91,7 +92,7 @@ import {
 } from '~/core/debates/media-session';
 import { OpenRoundPickCard, type OpenRoundPickContext } from '~/core/debates/open-round-pick-card';
 import {
-  OpenRoundPickStamp,
+  OpenRoundPickPill,
   OpenRoundResultOverlay,
   openRoundThankingHold,
   useOpenRoundReveal,
@@ -357,7 +358,7 @@ export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClient
 
 function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const router = useRouter();
-  const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
+  const { consume: consumeDebateReturnDestination, returnsToLobby } = useDebateReturnNavigation();
   const mediaSession = useDebateMediaSession();
   const mediaSessionKey = debateMediaSessionKey(debateId);
   const {
@@ -746,6 +747,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // which is the entire question the overrun has to settle.
   const localSpeakingRef = useLocalSpeechActivity(previewStream, roomState === 'connected');
   const localTurnStartsIn = debate ? localTurnStartsInSeconds(debate, countdown, localSlot) : null;
+  const revealHold = debate
+    ? openRoundThankingHold({
+        debate,
+        phase: countdown.openRounds,
+        effectiveStatus: countdown.effectiveStatus,
+        elapsedMs: countdown.elapsedMs,
+        remainingSeconds: countdown.remainingSeconds,
+      })
+    : null;
+  // The final board holds both microphones and the exit on the same room clock.
+  const revealHoldsExit = Boolean(revealHold?.maxReached || revealHold?.wrapHeld);
   const localAudioGate: LocalAudioGateInput = {
     effectiveStatus: debate ? countdown.effectiveStatus : null,
     activeSlot: countdown.activeSlot,
@@ -754,7 +766,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
     stillSpeaking: localSpeakingRef.current,
     msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
-    betweenRounds: isBetweenOpenRounds(countdown.openRounds),
+    openRoundsPhase: countdown.openRounds?.phase ?? null,
+    openRoundResultHeld: revealHoldsExit,
   };
   const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
   // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
@@ -809,18 +822,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * room is hidden through the handoff (GEO-3301), so sitting out the rest of the period would be up
    * to 20 seconds of blank screen. Both the exit and its Retry save read this one answer.
    */
-  const revealHold = debate
-    ? openRoundThankingHold({
-        debate,
-        phase: countdown.openRounds,
-        effectiveStatus: countdown.effectiveStatus,
-        elapsedMs: countdown.elapsedMs,
-        remainingSeconds: countdown.remainingSeconds,
-      })
-    : null;
   // An Open rounds debate's last result ("That's the max", "That's a wrap") is still up in the first
   // moments of thanking, which both rooms' immediate consent would otherwise cut short.
-  const revealHoldsExit = Boolean(revealHold?.maxReached || revealHold?.wrapHeld);
   const handoffSettled =
     !revealHoldsExit && (rematchReady || (countdown.effectiveStatus === 'thanking' && rematchSessionClosed));
 
@@ -2167,6 +2170,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       endedAtMs: serverClock.now(),
     };
     setRoomError(null);
+    // Close both the source and published tracks at the press, before the request or React's
+    // next effect. The recorder holds these same tracks, and a deliberate yield has no overrun.
+    setLocalTrackPreferences(
+      localTracksRef.current,
+      { audioEnabled: false, videoEnabled },
+      sourceMediaStreamTracksRef.current
+    );
     setPendingTurnYield(pendingYield);
     try {
       await endDebateTurn.mutateAsync({
@@ -2189,9 +2199,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     countdown.turnIndex,
     endDebateTurn,
     localSlot,
+    localTracksRef,
     pendingTurnYield,
     refetchDebate,
     serverClock,
+    videoEnabled,
   ]);
 
   const toggleNoiseFilter = React.useCallback(async () => {
@@ -3089,6 +3101,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onTakeOverConnection={takeOverConnection}
             readyBusy={markReady.isPending}
             onReady={markLocalReady}
+            returnsToLobby={returnsToLobby}
             onLeave={leave}
             leaveDisabled={abortDebate.isPending}
           />
@@ -3172,6 +3185,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
+                returnsToLobby={returnsToLobby}
                 onLeave={leave}
                 leaveDisabled={abortDebate.isPending || recordingModalRoomState === 'saving'}
               />
@@ -3214,6 +3228,7 @@ function DebateRecordingModal({
   canRetryConnection,
   onRetryConnection,
   onLeave,
+  returnsToLobby,
   leaveDisabled,
 }: {
   debate: Debate;
@@ -3249,6 +3264,7 @@ function DebateRecordingModal({
   canRetryConnection: boolean;
   onRetryConnection: () => void;
   onLeave: () => void;
+  returnsToLobby: boolean;
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
@@ -3268,65 +3284,51 @@ function DebateRecordingModal({
     localSlot,
     remote: { slot: remoteParticipant?.participant_slot ?? null, name: remoteName },
   });
-  // Open rounds draws the room's moments in the published player's stamps design (GEO-3315); every
-  // fixed format keeps today's.
-  const stamps = isOpenRoundsDebate(debate);
-  const localTileFirst = localParticipant?.position !== false;
-  const pickReveal = (pick: OpenRoundRevealedPick | null, first: boolean) =>
-    pick ? <OpenRoundPickStamp pick={pick.pick} order={first ? 'first' : 'second'} /> : null;
+  // Open rounds uses classic outlined type and glass pills (GEO-3366).
+  const openRoundsStyle = isOpenRoundsDebate(debate);
+  const pickReveal = (pick: OpenRoundRevealedPick | null) =>
+    pick ? <OpenRoundPickPill pick={pick.pick} subdued={reveal.result?.kind === 'round'} /> : null;
   // The pick, the reveal and what it means span both tiles, so both dim under them.
   const tilesDimmed =
-    stamps && (countdown.openRounds?.phase === 'deciding' || reveal.step === 'flip' || reveal.result !== null);
-  const lastWord =
-    countdown.effectiveStatus === 'in_progress' &&
-    countdown.openRounds?.phase === 'speaking' &&
-    countdown.activeSlot !== null &&
-    countdown.yieldingSlot === null
-      ? openRoundLastWord(debate, countdown.turnIndex)
-      : null;
-  const lastWordChip = !lastWord ? null : stamps ? (
-    <RoomTag data-open-round-last-word={lastWord} className="text-[2.6cqw]">
-      Last word
-    </RoomTag>
-  ) : (
-    <DebateTileChip data-open-round-last-word={lastWord} className={cx('text-text', tileChipSurface)}>
-      {/* Your own tile also carries Recording, and on a phone the full line squeezes the position. */}
-      <span className="mobile:hidden">
-        {lastWord === 'debate' ? 'Last word of the debate' : 'Last word this round'}
-      </span>
-      <span className="hidden mobile:inline">{lastWord === 'debate' ? 'Final word' : 'Last word'}</span>
-    </DebateTileChip>
-  );
+    openRoundsStyle && (countdown.openRounds?.phase === 'deciding' || reveal.step === 'flip' || reveal.result !== null);
   const localUpcomingSeconds = reveal.holdsCountIn ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
   // Open rounds names the turn after an early end too, so an opening is still "You're up in".
   const localUpcomingLabel =
-    !stamps && countdown.yieldingSlot && !countdown.preservesExistingCountIn
+    !openRoundsStyle && countdown.yieldingSlot && !countdown.preservesExistingCountIn
       ? 'Your turn in'
       : (upcomingTurnLabel(debate, countdown) ?? "You're up in");
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
-  const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot, stamps);
+  const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
   const thankingSlot = reveal.holdsEndCard ? null : thankingParticipantSlot(debate, countdown);
-  // Match the audio gate: both microphones are open during the pick, reveal and count-in.
+  // Voting is an open call; the reveal, round title, count-in and final board mute both participants.
   const betweenRounds = isBetweenOpenRounds(countdown.openRounds);
+  const roundTransition = countdown.openRounds?.phase === 'result' || reveal.holdsEndCard;
   const localInactive =
-    !betweenRounds && participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
+    roundTransition ||
+    (!betweenRounds && participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot));
   const remoteInactive =
-    !betweenRounds &&
-    participantIsInactive(countdown.effectiveStatus, remoteParticipant?.participant_slot ?? null, countdown.activeSlot);
+    roundTransition ||
+    (!betweenRounds &&
+      participantIsInactive(
+        countdown.effectiveStatus,
+        remoteParticipant?.participant_slot ?? null,
+        countdown.activeSlot
+      ));
   const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
   const speakingTurn = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot !== null;
   // The speaker's last five seconds, when the timer warns, and in Open rounds the tile's outline
   // turns red with it (GEO-3315).
   const speakerFinalSeconds = speakingTurn && countdown.remainingSeconds > 0 && countdown.remainingSeconds <= 5;
-  const finalSeconds = stamps && speakerFinalSeconds;
+  const finalSeconds = openRoundsStyle && speakerFinalSeconds;
   const countdownRing =
     countdown.remainingSeconds > 0 ? (
       <RecordingCountdownRing
         remainingSeconds={countdown.remainingSeconds}
         progress={countdown.progress}
         variant={speakerFinalSeconds ? 'warning' : 'default'}
-        buildUp={stamps && speakingTurn ? { remainingMs: countdown.remainingMs } : null}
+        openRounds={openRoundsStyle}
+        buildUp={openRoundsStyle && speakingTurn ? { remainingMs: countdown.remainingMs } : null}
       />
     ) : null;
   const yieldedCountdownRing =
@@ -3353,10 +3355,10 @@ function DebateRecordingModal({
     : countdown.activeSlot === localSlot
       ? countdownRing
       : sharedPhaseCountdown;
-  // In Open rounds the "Turn ended" stamp says it, as in the mockup, without the spent timer.
+  // In Open rounds the "Turn ended" pill says it, as in the mockup, without the spent timer.
   const remoteCountdown =
     countdown.yieldingSlot === remoteParticipant?.participant_slot
-      ? stamps
+      ? openRoundsStyle
         ? null
         : yieldedCountdownRing
       : countdown.activeSlot === remoteParticipant?.participant_slot
@@ -3367,6 +3369,30 @@ function DebateRecordingModal({
   );
   const remoteConsented = Boolean(remoteRematchParticipant?.consented_at);
   const controlsDisabled = roomState === 'saving' || roomState === 'transitioning';
+  const canRetrySave = ['thanking', 'complete'].includes(debate.status);
+  const recoveryActions =
+    canRetrySave || canRetryConnection ? (
+      <>
+        {canRetrySave && (
+          <DebateRoomNoticeAction
+            appearance={openRoundsStyle ? 'glass' : 'default'}
+            onClick={onRetryFinalization}
+            disabled={controlsDisabled}
+          >
+            Retry save
+          </DebateRoomNoticeAction>
+        )}
+        {canRetryConnection && (
+          <DebateRoomNoticeAction
+            appearance={openRoundsStyle ? 'glass' : 'default'}
+            onClick={onRetryConnection}
+            disabled={controlsDisabled}
+          >
+            Retry connection
+          </DebateRoomNoticeAction>
+        )}
+      </>
+    ) : null;
   const handingOff =
     countdown.effectiveStatus === 'thanking' &&
     countdown.remainingSeconds > 0 &&
@@ -3376,17 +3402,16 @@ function DebateRecordingModal({
   const connecting = countdown.effectiveStatus === 'connecting';
   const remoteEndingTurn =
     countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
-  // Only a yield that hands over to the other speaker gets a handoff window to stamp "Turn ended" and
+  // Only a yield that hands over to the other speaker gets a handoff window to show "Turn ended" and
   // name their turn in. Any other closes as soon as geo-chat accepts it (GEO-3347).
   const localYieldHandsOver = localEndingTurn && turnYieldHandsOver(debate, countdown.turnIndex);
   // You ended your turn and theirs follows straight on, which they are counted into on their own
   // screen. Otherwise the pick, a lead-in or the end comes next.
   const remoteTurnIsNext =
-    stamps &&
+    openRoundsStyle &&
     localYieldHandsOver &&
     countdown.incomingSlot !== null &&
     countdown.incomingSlot === remoteParticipant?.participant_slot;
-  const remoteSpeaking = remoteParticipant !== null && countdown.activeSlot === remoteParticipant.participant_slot;
   const canEndLocalTurn =
     countdown.effectiveStatus === 'in_progress' &&
     countdown.activeSlot === localSlot &&
@@ -3398,6 +3423,7 @@ function DebateRecordingModal({
       participantPosition={localParticipant?.position ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' &&
+        (!openRoundsStyle || !localEndingTurn) &&
         (countdown.activeSlot === localSlot || countdown.yieldingSlot === localSlot)
       }
       overlayText={
@@ -3419,7 +3445,11 @@ function DebateRecordingModal({
             type="button"
             onClick={onEndTurn}
             disabled={endTurnPending || localEndingTurn}
-            className="min-h-9 rounded-full bg-black px-5 text-sm font-medium text-white shadow-light transition hover:bg-black/85 disabled:cursor-default disabled:opacity-70 md:min-h-14 md:px-8 md:text-xl"
+            className={
+              openRoundsStyle
+                ? ROOM_END_TURN_CLASS
+                : 'min-h-9 rounded-full bg-black px-5 text-sm font-medium text-white shadow-light transition hover:bg-black/85 disabled:cursor-default disabled:opacity-70 md:min-h-14 md:px-8 md:text-xl'
+            }
           >
             End turn
           </button>
@@ -3431,7 +3461,7 @@ function DebateRecordingModal({
       inactive={localInactive}
       revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon || localEndingTurn}
       inactiveIndicatorId="local"
-      showMutedIndicator={localEndingTurn}
+      showMutedIndicator={localEndingTurn || roundTransition}
       countdown={localCountdown}
       closingMessage={
         countdown.effectiveStatus === 'thanking' &&
@@ -3439,21 +3469,10 @@ function DebateRecordingModal({
         localSlot !== null &&
         thankingSlot === localSlot
       }
-      status={
-        // Open rounds tags the speaker's corner, as in the mockup, beside the recording indicator.
-        stamps && countdown.activeSlot === localSlot && lastWordChip ? (
-          <span className="flex items-center gap-1.5">
-            {lastWordChip}
-            <DebateRecordingStatusPill recording={capturing} />
-          </span>
-        ) : (
-          <DebateRecordingStatusPill recording={capturing} />
-        )
-      }
-      tileControls={!stamps && countdown.activeSlot === localSlot ? lastWordChip : null}
-      reveal={pickReveal(reveal.localPick, localTileFirst)}
+      status={<DebateRecordingStatusPill recording={capturing} openRounds={openRoundsStyle} />}
+      reveal={pickReveal(reveal.localPick)}
       chipsHidden={reveal.chipsHidden}
-      stamps={stamps}
+      openRounds={openRoundsStyle}
       dimmed={tilesDimmed}
       finalSeconds={finalSeconds && countdown.activeSlot === localSlot}
     >
@@ -3466,6 +3485,7 @@ function DebateRecordingModal({
       participantPosition={remoteParticipant?.position ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' &&
+        (!openRoundsStyle || !remoteEndingTurn) &&
         (countdown.activeSlot === remoteParticipant?.participant_slot ||
           countdown.yieldingSlot === remoteParticipant?.participant_slot)
       }
@@ -3482,19 +3502,18 @@ function DebateRecordingModal({
       // Open rounds shows the speaker's "Wrap it up" on both screens, with their red timer (GEO-3315).
       // On the debate's last turn the listener's own tile says "Debate ends soon" instead.
       showWrapItUp={
-        stamps &&
+        openRoundsStyle &&
         !showLocalDebateEndsSoon &&
-        wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null, true)
+        wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null)
       }
       endingTurn={remoteEndingTurn}
       revealInactive={remoteEndingTurn}
       inactiveIndicatorId="remote"
+      showMutedIndicator={roundTransition}
       countdown={remoteCountdown}
-      tileControls={!stamps && remoteSpeaking ? lastWordChip : null}
-      status={stamps && remoteSpeaking ? lastWordChip : undefined}
-      reveal={pickReveal(reveal.remotePick, !localTileFirst)}
+      reveal={pickReveal(reveal.remotePick)}
       chipsHidden={reveal.chipsHidden}
-      stamps={stamps}
+      openRounds={openRoundsStyle}
       dimmed={tilesDimmed}
       finalSeconds={finalSeconds && countdown.activeSlot === remoteParticipant?.participant_slot}
       nextTurnName={remoteTurnIsNext ? remoteName : null}
@@ -3555,85 +3574,100 @@ function DebateRecordingModal({
           {debate.claim.claim}
         </h1>
 
-        {/* Where the debate is and the way out, between the claim and the tiles (GEO-3174). A fixed
+        <div
+          className="@container w-full max-w-[430px]"
+          style={openRoundsStyle ? { ...ROOM_UI_FONT, fontSize: 16, lineHeight: 1.45 } : undefined}
+        >
+          {/* Where the debate is and the way out, between the claim and the tiles (GEO-3174). A fixed
             format has no rounds to count, so its row holds Leave alone. */}
-        <div className="mb-3 flex w-full max-w-[430px] items-center justify-between gap-2">
-          {countdown.openRounds && debate.open_rounds && (
-            <DebateRoundIndicator
-              // Once the new round is announced, the counter moves to it.
-              phase={reveal.announcedRoundPhase ?? countdown.openRounds}
-              maxRounds={debate.open_rounds.max_rebuttal_rounds}
-              requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
-            />
-          )}
-          <RecordingCircleButton
-            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            onClick={onLeave}
-            disabled={leaveDisabled}
-            className="ml-auto shrink-0"
+          <div
+            className={cx(
+              'flex w-full items-center justify-between',
+              openRoundsStyle ? 'mb-[1.6cqw] gap-[2cqw]' : 'mb-3 gap-2'
+            )}
           >
-            <LeaveIcon />
-          </RecordingCircleButton>
-        </div>
-
-        {/* A size container, so the Open rounds panel and banners over the tiles size with them. */}
-        <div className="@container relative grid w-full max-w-[430px] gap-2">
-          {orderedVideoTiles}
-
-          {/* The pick panel fades and the round's banner rolls out, as the next moment comes in. */}
-          <RoomExit className="z-40">
-            {openRoundDeciding && debate.open_rounds && localSlot !== null && (
-              <OpenRoundPickCard
-                // A fresh card per round, so nothing picked or failed in one round carries into the next.
-                key={openRoundDeciding.roundIndex}
-                roundIndex={openRoundDeciding.roundIndex}
-                savedPick={
-                  debate.open_rounds.round_index === openRoundDeciding.roundIndex ? debate.open_rounds.my_pick : null
-                }
-                rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
-                remainingSeconds={countdown.remainingSeconds}
-                onPick={(pick, context) =>
-                  onPickOpenRound(openRoundDeciding.roundIndex, pick, {
-                    ...context,
-                    decisionDeadlineAtMs: openRoundDeciding.decisionDeadlineAtMs,
-                  })
-                }
-                localReconnecting={roomState === 'reconnecting'}
-                reconnectingOpponentName={remoteDisconnected ? remoteName : null}
+            {countdown.openRounds && debate.open_rounds && (
+              <DebateRoundIndicator
+                // Once the new round is announced, the counter moves to it.
+                phase={reveal.announcedRoundPhase ?? countdown.openRounds}
+                maxRounds={debate.open_rounds.max_rebuttal_rounds}
+                requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
               />
             )}
-          </RoomExit>
+            <DebateLeaveButton
+              appearance={openRoundsStyle ? 'text' : 'default'}
+              returnsToLobby={returnsToLobby}
+              saving={roomState === 'saving'}
+              onClick={onLeave}
+              disabled={leaveDisabled}
+              className="ml-auto shrink-0"
+            />
+          </div>
 
-          <RoomExit exit="roll" className="z-[45]">
-            {reveal.result && <OpenRoundResultOverlay result={reveal.result} />}
-          </RoomExit>
-          {debate.open_rounds && (
-            <p role="status" aria-live="polite" data-open-round-announcement className="sr-only">
-              {reveal.announcement}
-            </p>
-          )}
+          {/* A size container, so the Open rounds panel and announcements over the tiles size with them. */}
+          <div
+            className={cx('@container relative grid w-full max-w-[430px]', openRoundsStyle ? 'gap-[1.6cqw]' : 'gap-2')}
+          >
+            {orderedVideoTiles}
+
+            {/* The pick panel and round announcement fade out, as the next moment comes in. */}
+            <RoomExit className="z-40">
+              {openRoundDeciding && debate.open_rounds && localSlot !== null && (
+                <OpenRoundPickCard
+                  // A fresh card per round, so nothing picked or failed in one round carries into the next.
+                  key={openRoundDeciding.roundIndex}
+                  roundIndex={openRoundDeciding.roundIndex}
+                  savedPick={
+                    debate.open_rounds.round_index === openRoundDeciding.roundIndex ? debate.open_rounds.my_pick : null
+                  }
+                  rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
+                  remainingSeconds={countdown.remainingSeconds}
+                  progress={countdown.progress}
+                  onPick={(pick, context) =>
+                    onPickOpenRound(openRoundDeciding.roundIndex, pick, {
+                      ...context,
+                      decisionDeadlineAtMs: openRoundDeciding.decisionDeadlineAtMs,
+                    })
+                  }
+                  localReconnecting={roomState === 'reconnecting'}
+                  reconnectingOpponentName={remoteDisconnected ? remoteName : null}
+                />
+              )}
+            </RoomExit>
+
+            <RoomExit className="z-[45]">{reveal.result && <OpenRoundResultOverlay result={reveal.result} />}</RoomExit>
+            {debate.open_rounds && (
+              <p role="status" aria-live="polite" data-open-round-announcement className="sr-only">
+                {reveal.announcement}
+              </p>
+            )}
+          </div>
         </div>
 
-        {roomState === 'reconnecting' && (
+        {openRoundsStyle && (
+          <RoomExit layout="inline" className="w-full max-w-[430px]">
+            {roomState === 'reconnecting' && <DebateRoomNotice>Reconnecting to the debate room…</DebateRoomNotice>}
+          </RoomExit>
+        )}
+        {!openRoundsStyle && roomState === 'reconnecting' && (
           <div className="mt-3 w-full max-w-[430px] rounded-lg border border-grey-02 bg-white px-4 py-3">
             <Text>Reconnecting to the debate room…</Text>
           </div>
         )}
 
-        {roomError && (
+        {openRoundsStyle && (
+          <RoomExit layout="inline" className="w-full max-w-[430px]">
+            {roomError && (
+              <DebateRoomNotice error actions={recoveryActions}>
+                {roomError}
+              </DebateRoomNotice>
+            )}
+          </RoomExit>
+        )}
+        {!openRoundsStyle && roomError && (
           <div className="mt-3 flex w-full max-w-[430px] flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
             <Text color="red-01">{roomError}</Text>
-            {['thanking', 'complete'].includes(debate.status) && (
-              <Button type="button" variant="tertiary" onClick={onRetryFinalization} disabled={controlsDisabled}>
-                Retry save
-              </Button>
-            )}
-            {canRetryConnection && (
-              <Button type="button" variant="tertiary" onClick={onRetryConnection} disabled={controlsDisabled}>
-                Retry connection
-              </Button>
-            )}
+            {recoveryActions}
           </div>
         )}
       </main>
@@ -3643,6 +3677,7 @@ function DebateRecordingModal({
           waitingForOpponent={rematchSession !== null && !remoteConsented}
           // The only way out while the room is hidden; a lobby it returns to joins on arrival.
           onLeave={onLeave}
+          returnsToLobby={returnsToLobby}
           leaveDisabled={leaveDisabled}
         />
       )}
@@ -3826,15 +3861,14 @@ function localTurnGoIsVisible(countdown: DebateCountdown, localSlot: Participant
 }
 
 /**
- * "Wrap it up" over the speaker's last five seconds. In Open rounds it lands as the timer turns red
- * and clears after about two seconds (GEO-3315), leaving the timer to count the rest.
+ * "Wrap it up" stays over the speaker's final five seconds, as on the classic + glass board.
  */
-function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | null, stamps = false) {
+function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | null) {
   return (
     countdown.effectiveStatus === 'in_progress' &&
     slot !== null &&
     countdown.activeSlot === slot &&
-    countdown.remainingSeconds > (stamps ? 3 : 0) &&
+    countdown.remainingSeconds > 0 &&
     countdown.remainingSeconds <= 5
   );
 }
@@ -3939,11 +3973,13 @@ function DebateHandoffNotice({
   opponentName,
   waitingForOpponent,
   onLeave,
+  returnsToLobby,
   leaveDisabled,
 }: {
   opponentName: string;
   waitingForOpponent: boolean;
   onLeave: () => void;
+  returnsToLobby: boolean;
   leaveDisabled: boolean;
 }) {
   return (
@@ -3958,7 +3994,7 @@ function DebateHandoffNotice({
               onClick={onLeave}
               disabled={leaveDisabled}
             >
-              Leave
+              {returnsToLobby ? 'Back to lobby' : 'Leave'}
             </SmallButton>
           }
         >
@@ -4278,17 +4314,19 @@ function disconnectConnectingRoom(connectingRoomRef: React.MutableRefObject<Room
 }
 
 function useDebateCountdown(debate: Debate | null, serverNow: () => number): DebateCountdown {
-  const [now, setNow] = React.useState(serverNow);
+  const [, refresh] = React.useReducer(tick => tick + 1, 0);
+  // Ticks schedule renders; they must not cache the clock. A yield can be confirmed between
+  // ticks, and evaluating its timestamp against the previous tick would hand the turn back.
+  const now = serverNow();
   const countdownWindow = debate ? countdownWindowForDebate(debate, now) : null;
   const boundaryAtMs = countdownWindow?.targetMs ?? null;
 
   React.useEffect(() => {
     const currentNow = serverNow();
-    setNow(currentNow);
-    const timer = window.setInterval(() => setNow(serverNow()), 500);
+    const timer = window.setInterval(refresh, 500);
     const boundaryTimer =
       boundaryAtMs !== null && boundaryAtMs > currentNow
-        ? window.setTimeout(() => setNow(serverNow()), boundaryAtMs - currentNow + 1)
+        ? window.setTimeout(refresh, boundaryAtMs - currentNow + 1)
         : null;
     return () => {
       window.clearInterval(timer);
