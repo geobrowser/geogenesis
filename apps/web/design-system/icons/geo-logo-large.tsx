@@ -1,40 +1,26 @@
 import * as React from 'react';
 
 export function GeoLogoLarge() {
-  // Multiple app-shell logos can exist at once (for example, the hidden mobile
-  // navbar logo and the open browse drawer). A shared SVG paint-server id makes
-  // some browsers resolve the visible circle against the hidden logo's gradient.
-  const gradientId = `geo-logo-gradient-${React.useId().replace(/:/g, '')}`;
-
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      preserveAspectRatio="none"
+      overflow="visible"
+      style={{ display: 'block' }}
+      width="25.8662"
+      height="30"
+      viewBox="0 0 25.8662 30"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M14.3558 14.5685C14.5064 14.824 14.4369 15.1543 14.1838 15.3089C12.9706 16.0499 11.5349 16.4784 9.99619 16.4784C8.46312 16.4784 7.0323 16.053 5.82196 15.3171C5.56819 15.1628 5.49827 14.832 5.64911 14.5761L9.51384 8.02041C9.73427 7.6465 10.2751 7.6465 10.4955 8.02041L14.3558 14.5685ZM4.94964 16.9532C4.66671 16.787 4.29709 16.8695 4.13047 17.1522L2.95809 19.1408C2.73416 19.5207 3.00801 20 3.44895 20H16.5604C17.0014 20 17.2752 19.5207 17.0513 19.1408L15.8745 17.1447C15.7077 16.8618 15.3376 16.7795 15.0546 16.9462C13.5791 17.8155 11.8478 18.3159 9.99619 18.3159C8.14957 18.3159 6.4226 17.8182 4.94964 16.9532Z"
-        fill="black"
+        d="M23.6374 28.2346C23.9907 28.8166 23.5717 29.5611 22.8909 29.5611H2.9992C2.31839 29.5611 1.8994 28.8167 2.25264 28.2347L4.00242 25.3518C4.25863 24.9296 4.81249 24.806 5.24126 25.0509C7.48535 26.333 10.117 27.0718 12.9319 27.0719C15.7543 27.0719 18.3928 26.3292 20.6408 25.0409C21.0697 24.7951 21.6242 24.9185 21.8807 25.341L23.6374 28.2346ZM12.1985 11.8531C12.5386 11.2931 13.3516 11.2933 13.6917 11.8531L19.5432 21.4924C19.7837 21.8887 19.6743 22.4069 19.2749 22.6424C17.4349 23.7272 15.2616 24.3561 12.9319 24.3561C10.6105 24.356 8.44448 23.7315 6.60858 22.6537C6.20827 22.4187 6.09825 21.8997 6.33918 21.5029L12.1985 11.8531Z"
+        fill="#151515"
       />
-      <circle
-        cx="9.99613"
-        cy="8.49619"
-        r="7.4278"
-        transform="rotate(-180 9.99613 8.49619)"
-        stroke={`url(#${gradientId})`}
-        strokeWidth="2.13675"
+      <path
+        d="M12.9326 23.5588C6.60632 23.5586 1.55672 18.5905 1.55666 12.5578C1.55666 6.52517 6.60628 1.55711 12.9326 1.55686C19.2592 1.55686 24.3096 6.52502 24.3096 12.5578C24.3095 18.5906 19.2592 23.5588 12.9326 23.5588Z"
+        stroke="#151515"
+        strokeWidth="3.11332"
       />
-      <defs>
-        <radialGradient
-          id={gradientId}
-          cx="0"
-          cy="0"
-          r="1"
-          gradientUnits="userSpaceOnUse"
-          gradientTransform="translate(9.99613 15.4291) rotate(-90) scale(15.4291 55.084)"
-        >
-          <stop stopColor="#FF78E6" />
-          <stop offset="1" stopColor="#9542FF" />
-        </radialGradient>
-      </defs>
     </svg>
   );
 }
