@@ -5,7 +5,7 @@ import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
 import * as React from 'react';
 
 import cx from 'classnames';
-import type { Room, RoomConnectOptions, RoomOptions } from 'livekit-client';
+import type { DisconnectReason, Room, RoomConnectOptions, RoomOptions } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
@@ -1564,7 +1564,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const previousRoom = roomRef.current;
       if (previousRoom) {
         roomRef.current = null;
-        previousRoom.disconnect(false);
+        disconnectLiveKitRoom(previousRoom, false);
       }
 
       setConnectionConflictSource(null);
@@ -1603,9 +1603,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setJoinResponse(token);
 
         connectionStage = 'sdk_import';
-        const [livekit, { startVoiceCallTelemetry }] = await Promise.all([
+        const [livekit, { startVoiceCallTelemetry }, { disconnectReasonName }] = await Promise.all([
           import('livekit-client'),
           import('~/core/debates/use-voice-call-telemetry'),
+          import('~/core/livekit/disconnect-reason'),
         ]);
         if (!isCurrent()) return;
         connectionStage = 'audio_output';
@@ -1768,7 +1769,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               debateId,
               debateStatus: debateStatusRef.current,
               roomState: roomStateRef.current,
-              disconnectReason: disconnectReasonName(livekit.DisconnectReason, payload),
+              disconnectReason: disconnectReasonName(
+                typeof payload === 'number' ? (payload as DisconnectReason) : undefined
+              ),
               elapsedMs: reconnectElapsedMs,
             });
           }
@@ -1784,17 +1787,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           peerConnectionTimeout: 25_000,
         });
         if (!isCurrent()) {
-          room.disconnect();
+          disconnectLiveKitRoom(room);
           if (connectingRoomRef.current === room) connectingRoomRef.current = null;
           return;
         }
         connectingRoomRef.current = null;
         roomRef.current = room;
-        startVoiceCallTelemetry(room as unknown as Room, 'debate', debateId, {
-          debate_id: debateId,
-          participant_slot: token.participant_slot,
-          call_session_id: crypto.randomUUID(),
-        });
+        roomTelemetryStops.set(
+          room,
+          startVoiceCallTelemetry(room as unknown as Room, 'debate', debateId, {
+            debate_id: debateId,
+            participant_slot: token.participant_slot,
+            call_session_id: crypto.randomUUID(),
+          })
+        );
         // Whoever joins second finds the other already there, and no arrival event will fire.
         if ((room.remoteParticipants?.size ?? 0) > 0) setRemotePresence('present');
 
@@ -1812,7 +1818,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           await markJoined.mutateAsync();
           markedJoinedRef.current = true;
           if (!isCurrent()) {
-            room.disconnect();
+            disconnectLiveKitRoom(room);
             stopLocalTracks(localTracksRef);
             localMediaStreamRef.current = null;
             if (roomRef.current === room) roomRef.current = null;
@@ -1832,7 +1838,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             })) as LocalTrackLike[]);
         if (!hasPreviewTracks) newlyCreatedTracks = tracks;
         if (!isCurrent()) {
-          room.disconnect();
+          disconnectLiveKitRoom(room);
           stopTracks(newlyCreatedTracks);
           if (roomRef.current === room) roomRef.current = null;
           return;
@@ -1848,7 +1854,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         for (const track of tracks) {
           await publishTrackWithRetry(room, track, isCurrent);
           if (!isCurrent()) {
-            room.disconnect();
+            disconnectLiveKitRoom(room);
             stopLocalTracks(localTracksRef);
             localMediaStreamRef.current = null;
             if (roomRef.current === room) roomRef.current = null;
@@ -1862,7 +1868,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         connectionStage = 'noise_filter';
         await initializeNoiseFilter(tracks, isCurrent);
         if (!isCurrent()) {
-          room.disconnect();
+          disconnectLiveKitRoom(room);
           stopLocalTracks(localTracksRef);
           localMediaStreamRef.current = null;
           if (roomRef.current === room) roomRef.current = null;
@@ -1877,7 +1883,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         publishedStreamRef.current = stream;
 
         if (!isCurrent()) {
-          room.disconnect();
+          disconnectLiveKitRoom(room);
           stopLocalTracks(localTracksRef);
           localMediaStreamRef.current = null;
           if (roomRef.current === room) roomRef.current = null;
@@ -1895,7 +1901,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       } catch (error) {
         if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
         if (connectingRoom && roomRef.current !== connectingRoom) {
-          connectingRoom.disconnect();
+          disconnectLiveKitRoom(connectingRoom);
           stopTracks(newlyCreatedTracks);
         }
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
@@ -4230,17 +4236,6 @@ function captureDebateRoomResilienceEvent(
   }
 }
 
-// LiveKit's DisconnectReason is a numeric protobuf enum; resolve the payload back to its name so
-// analytics reads "SERVER_SHUTDOWN" instead of "3". Numeric-enum objects carry reverse mappings
-// (numeric keys), which are skipped. Unknown values fall back to their stringified form.
-function disconnectReasonName(disconnectReasons: Record<string, unknown>, payload: unknown) {
-  if (payload === undefined || payload === null) return 'unknown';
-  for (const [name, value] of Object.entries(disconnectReasons)) {
-    if (value === payload && Number.isNaN(Number(name))) return name;
-  }
-  return String(payload);
-}
-
 function captureDebateRoomConnectionFailure({
   debateId,
   stage,
@@ -4290,6 +4285,16 @@ async function publishTrackWithRetry(room: RoomLike, track: LocalTrackLike, isCu
   }
 }
 
+/** Cleanup belongs to each Room, including ones superseded before joining finishes. */
+const roomTelemetryStops = new WeakMap<RoomLike, () => void>();
+
+function disconnectLiveKitRoom(room: RoomLike | null, stopTracks?: boolean) {
+  if (!room) return;
+  roomTelemetryStops.get(room)?.();
+  roomTelemetryStops.delete(room);
+  room.disconnect(stopTracks);
+}
+
 function disconnectRoom(
   roomRef: React.MutableRefObject<RoomLike | null>,
   localTracksRef: React.MutableRefObject<LocalTrackLike[]>,
@@ -4297,7 +4302,7 @@ function disconnectRoom(
   remoteMediaRef: React.RefObject<HTMLDivElement | null>
 ) {
   stopLocalTracks(localTracksRef);
-  roomRef.current?.disconnect();
+  disconnectLiveKitRoom(roomRef.current);
   roomRef.current = null;
   if (localVideoRef.current) {
     localVideoRef.current.srcObject = null;
@@ -4308,7 +4313,7 @@ function disconnectRoom(
 }
 
 function disconnectConnectingRoom(connectingRoomRef: React.MutableRefObject<RoomLike | null>) {
-  connectingRoomRef.current?.disconnect();
+  disconnectLiveKitRoom(connectingRoomRef.current);
   connectingRoomRef.current = null;
 }
 

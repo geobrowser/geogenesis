@@ -3,7 +3,7 @@ import { db } from '~/core/database/indexeddb';
 import { addTelemetryBreadcrumb, reportEvent } from '~/core/telemetry/logger';
 
 import { GeoChatRequestError, type LocalRecordingPartUrl, type ObjectStoreUpload } from './api';
-import { trackRecordingPartUpload } from './recording-part-telemetry';
+import { type RecordingPartUploadContext, trackRecordingPartUpload } from './recording-part-telemetry';
 import { RecordingUploadError, recordingStorageHttpError } from './recording-upload-errors';
 
 /**
@@ -400,7 +400,7 @@ export type RecordingStreamStall = {
 };
 
 export type RecordingPartStreamerOptions = RecordingPartTransport & {
-  telemetry?: { debate_id: string; recording_started_at_ms: number; upload_phase: 'live' | 'queued' };
+  telemetry?: RecordingPartUploadContext;
   /**
    * Called before every part. The upload shares the participant's upstream with the live call,
    * so it yields whenever the call is struggling — the bytes are safe in IndexedDB and go out
@@ -723,9 +723,7 @@ export class RecordingPartStreamer {
     const { start, end } = partRange(partNumber, multipart.partSize, this.byteSize);
     const body = await this.ledger.read(start, end, this.options.readDurable);
     const put = () => this.options.putPart(upload, body);
-    if (this.options.telemetry) {
-      await trackRecordingPartUpload(this.options.telemetry, partNumber, body.size, put);
-    } else await put();
+    await trackRecordingPartUpload(this.options.telemetry, partNumber, body.size, put);
     this.uploaded.add(partNumber);
     this.urls.delete(partNumber);
     // Its bytes are safe in object storage now, so this tab need not hold them.
@@ -793,8 +791,7 @@ export async function uploadRemainingParts(
       const { start, end } = partRange(partNumber, multipart.partSize, blob.size);
       const body = await bytes.read(start, end);
       const put = () => transport.putPart(upload, body);
-      if (transport.telemetry) await trackRecordingPartUpload(transport.telemetry, partNumber, body.size, put);
-      else await put();
+      await trackRecordingPartUpload(transport.telemetry, partNumber, body.size, put);
       uploaded.add(partNumber);
       const uploadedBytes = [...uploaded].reduce((sum, number) => {
         const range = partRange(number, multipart.partSize, blob.size);

@@ -284,7 +284,10 @@ export function startVoiceCallTelemetry(
 
   // Named and attributed as community calls do, so one reason reads the same in both.
   const onDisconnected = (reason?: DisconnectReason) => {
-    const cause = disconnectCause(reason);
+    const reportedCause = disconnectCause(reason);
+    // Explicit debate teardown calls the returned stop function first. A remaining
+    // CLIENT_INITIATED is the SDK's freeze/drop path, not someone pressing Leave.
+    const cause = surface === 'debate' && reportedCause === 'intentional' ? 'client' : reportedCause;
     reportChange({ change: 'disconnected', reason: disconnectReasonName(reason), cause });
     finish(cause === 'intentional' ? 'left' : 'disconnected');
   };
@@ -302,7 +305,19 @@ export function startVoiceCallTelemetry(
     if (kind === 'audioinput') noteMicKind();
   };
 
-  const onPageHide = () => finish('page_closed');
+  const onPageHide = () => {
+    if (surface !== 'debate') return finish('page_closed');
+    // The debate deliberately keeps its Room alive on pagehide (mobile lock/background).
+    // Save a checkpoint for a real unload, but keep observing if this document returns.
+    settleQuality();
+    reportChange({
+      change: 'page_hidden',
+      connection_quality: quality,
+      seconds_connected: secondsSince(connectedAt),
+      seconds_poor: Math.round(poorSeconds),
+      seconds_lost: Math.round(lostSeconds),
+    });
+  };
 
   const onMuteChange = (publication: TrackPublication) => {
     if (publication.source === Track.Source.Microphone) muteChanged = true;

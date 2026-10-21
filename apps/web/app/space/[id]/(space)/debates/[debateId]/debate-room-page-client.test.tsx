@@ -43,6 +43,7 @@ import { DebateRoomPageClient, upcomingTurnLabel } from './debate-room-page-clie
 
 const mocks = vi.hoisted(() => ({
   startVoiceCallTelemetry: vi.fn(),
+  stopVoiceCallTelemetry: vi.fn(),
   currentUserId: 'user-a',
   prefetchAllowlist: vi.fn(),
   warmRelatedClaims: vi.fn(),
@@ -413,6 +414,8 @@ beforeEach(() => {
   mocks.roomConnect.mockReset();
   mocks.roomConstruct.mockReset();
   mocks.roomDisconnect.mockReset();
+  mocks.stopVoiceCallTelemetry.mockReset();
+  mocks.startVoiceCallTelemetry.mockReset().mockReturnValue(mocks.stopVoiceCallTelemetry);
   mocks.publishTrack.mockReset();
   mocks.supportsAudioOutputSelection.mockReset().mockReturnValue(true);
   mocks.selectAudioOutput.mockReset().mockImplementation(({ deviceId }: { deviceId: string }) =>
@@ -952,6 +955,10 @@ describe('DebateRoomPageClient', () => {
 
     await waitFor(() => expect(mocks.roomDisconnect).toHaveBeenCalled());
     expect(mocks.roomDisconnect).toHaveBeenCalledWith(false);
+    expect(mocks.stopVoiceCallTelemetry).toHaveBeenCalled();
+    expect(mocks.stopVoiceCallTelemetry.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.roomDisconnect.mock.invocationCallOrder[0]
+    );
   });
 
   // Once ready, the opponent's ready can flip the debate to `connecting` at any moment. The

@@ -15,7 +15,7 @@ it('records the network start and completion time of each part', async () => {
   vi.useFakeTimers();
   vi.setSystemTime(1000);
   await trackRecordingPartUpload(context, 2, 500, async () => {
-    vi.setSystemTime(1400);
+    vi.advanceTimersByTime(400);
   });
   expect(capture.mock.calls).toEqual([
     ['debate_recording_part_upload', { ...context, part_number: 2, bytes: 500, started_at_ms: 1000, phase: 'started' }],
@@ -27,7 +27,7 @@ it('records the network start and completion time of each part', async () => {
         bytes: 500,
         started_at_ms: 1000,
         ended_at_ms: 1400,
-        duration_ms: 400,
+        elapsed_ms: 400,
         phase: 'completed',
       },
     ],
@@ -50,4 +50,14 @@ it('allows upload success even when analytics throws', async () => {
   const put = vi.fn().mockResolvedValue(undefined);
   await trackRecordingPartUpload(context, 1, 50, put);
   expect(put).toHaveBeenCalledOnce();
+});
+
+it('measures elapsed time independently of a wall clock adjustment', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(1000);
+  await trackRecordingPartUpload(context, 1, 50, async () => {
+    vi.advanceTimersByTime(400);
+    vi.setSystemTime(500);
+  });
+  expect(capture.mock.calls.at(-1)?.[1]).toMatchObject({ started_at_ms: 1000, ended_at_ms: 500, elapsed_ms: 400 });
 });

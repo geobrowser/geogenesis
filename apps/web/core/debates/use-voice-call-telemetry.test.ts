@@ -497,8 +497,8 @@ describe('debate room call telemetry (GEO-3411)', () => {
       'poor',
       'excellent',
     ]);
-    call.emit(RoomEvent.Disconnected, DisconnectReason.CLIENT_INITIATED);
     stop();
+    call.emit(RoomEvent.Disconnected, DisconnectReason.CLIENT_INITIATED);
     expect(events('debate_voice_ended')).toEqual([
       expect.objectContaining({ seconds_poor: 10, seconds_connected: 40 }),
     ]);
@@ -514,5 +514,28 @@ describe('debate room call telemetry (GEO-3411)', () => {
     expect(events('debate_voice_sampled')).toHaveLength(1);
     expect(events('debate_voice_sampled')[0].quality_limitation_reason).toBeUndefined();
     stop();
+  });
+  it('continues observing after mobile pagehide and reports a checkpoint for an unload', async () => {
+    const call = fakeRoom();
+    const stop = startVoiceCallTelemetry(call.room, 'debate', 'd');
+    call.emitLocal(ParticipantEvent.ConnectionQualityChanged, ConnectionQuality.Poor);
+    await vi.advanceTimersByTimeAsync(3000);
+    window.dispatchEvent(new Event('pagehide'));
+    expect(events('debate_voice_changed').at(-1)).toMatchObject({ change: 'page_hidden', seconds_poor: 3 });
+    expect(events('debate_voice_ended')).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(7000);
+    expect(events('debate_voice_sampled')[0]).toMatchObject({ seconds_poor: 10 });
+    call.emitLocal(ParticipantEvent.ConnectionQualityChanged, ConnectionQuality.Good);
+    stop();
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ seconds_poor: 10, end_reason: 'left' })]);
+  });
+
+  it('reports a browser-initiated drop as disconnected unless the app explicitly left', () => {
+    const call = fakeRoom();
+    const stop = startVoiceCallTelemetry(call.room, 'debate', 'd');
+    call.emit(RoomEvent.Disconnected, DisconnectReason.CLIENT_INITIATED);
+    stop();
+    expect(events('debate_voice_changed').at(-1)).toMatchObject({ change: 'disconnected', cause: 'client' });
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'disconnected' })]);
   });
 });
