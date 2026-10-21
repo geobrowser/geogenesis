@@ -298,6 +298,7 @@ async function sendRemainingParts(
       getPartUrls: (partFilename, uploadId, partNumbers) =>
         dependencies.getPartUrls!(upload.debateId, partFilename, uploadId, partNumbers),
       putPart: dependencies.putPart!,
+      telemetry: { debate_id: upload.debateId, recording_started_at_ms: upload.startedAtMs, upload_phase: 'queued' },
     },
     async (partNumber, uploadedBytes) => {
       progress.uploadedPartNumbers = [...progress.uploadedPartNumbers, partNumber];

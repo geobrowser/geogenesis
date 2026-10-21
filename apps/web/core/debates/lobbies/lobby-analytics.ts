@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { capture } from '~/core/analytics';
+import { captureSafely } from '~/core/analytics-capture-safely';
 import { currentNavigationType } from '~/core/utils/navigation-type';
 
 import { type Debate, type DebateLobbyRole, type DebateLobbyRoomVote, type DebateLobbyView, dashlessId } from '../api';
@@ -162,15 +162,6 @@ function persist() {
   }
 }
 
-/** Analytics never gets in the way of the lobby. */
-function send(...args: Parameters<typeof capture>) {
-  try {
-    capture(...args);
-  } catch {
-    // Dropped.
-  }
-}
-
 function cancelRelease() {
   if (releaseTimer === null) return;
   clearTimeout(releaseTimer);
@@ -209,7 +200,7 @@ function end(exit: LobbyExit, now = Date.now(), ended = session) {
   if (!ended || ended.endedAt !== null) return;
   ended.endedAt = now;
   persist();
-  send('lobby_left', {
+  captureSafely('lobby_left', {
     lobby_id: ended.lobbyId,
     lobby_session_id: ended.sessionId,
     time_in_lobby_ms: Math.max(0, Math.round((ended.steppedOutAt ?? now) - ended.joinedAt)),
@@ -330,7 +321,7 @@ export function lobbyJoined(
   session = started;
   retained.delete(started.lobbyId);
   persist();
-  send('lobby_joined', {
+  captureSafely('lobby_joined', {
     lobby_id: started.lobbyId,
     lobby_session_id: started.sessionId,
     ...newcomerProperty(isNewcomer),
@@ -376,7 +367,7 @@ export function lobbyViewerRole(
   active.role = role;
   active.hosting = hosting;
   persist();
-  send('lobby_role_changed', {
+  captureSafely('lobby_role_changed', {
     lobby_id: active.lobbyId,
     lobby_session_id: active.sessionId,
     role,
@@ -446,7 +437,7 @@ export function lobbyDebateSeen(debate: Pick<Debate, 'id' | 'lobby_id'>, now = D
   current.debates.add(debate.id);
   persist();
   end('debate_started', now, current);
-  send('lobby_debate_started', {
+  captureSafely('lobby_debate_started', {
     lobby_id: current.lobbyId,
     lobby_session_id: current.sessionId,
     debate_id: debate.id,
@@ -478,7 +469,7 @@ export function lobbyDebateRequested(
   if (!target || target.requests.has(request.requestId)) return;
   target.requests.add(request.requestId);
   persist();
-  send('lobby_debate_requested', {
+  captureSafely('lobby_debate_requested', {
     lobby_id: target.lobbyId,
     lobby_session_id: target.sessionId,
     request_kind: request.kind,
@@ -488,7 +479,7 @@ export function lobbyDebateRequested(
 }
 
 export function lobbyCreated(lobbyId: string, { scheduled }: { scheduled: boolean }) {
-  send('lobby_created', { lobby_id: dashlessId(lobbyId), scheduled });
+  captureSafely('lobby_created', { lobby_id: dashlessId(lobbyId), scheduled });
 }
 
 /** The session id to put on an event about this lobby, when the viewer has one going. */
@@ -502,7 +493,7 @@ export function lobbyRsvpChanged(
   { going, startsAt, reminderCount }: { going: boolean; startsAt: string; reminderCount: number }
 ) {
   const sinceStart = msSince(startsAt);
-  send('lobby_rsvp_changed', {
+  captureSafely('lobby_rsvp_changed', {
     lobby_id: dashlessId(lobbyId),
     going,
     going_count: reminderCount,
@@ -527,7 +518,7 @@ function roomVoteProperties(lobbyId: string, vote: DebateLobbyRoomVote) {
  */
 export function lobbyRoomVoteStarted(lobbyId: string, vote: DebateLobbyRoomVote, { replaced }: { replaced: boolean }) {
   const id = dashlessId(lobbyId);
-  send('lobby_room_vote_started', {
+  captureSafely('lobby_room_vote_started', {
     ...roomVoteProperties(id, vote),
     replaced,
     eligible: vote.tally.eligible,
@@ -539,7 +530,7 @@ function endRoomVote(lobbyId: string, vote: DebateLobbyRoomVote, reason: LobbyRo
   if (endedRoomVotes.has(vote.vote_id)) return;
   endedRoomVotes.add(vote.vote_id);
   const voteMs = msSince(vote.started_at);
-  send('lobby_room_vote_ended', {
+  captureSafely('lobby_room_vote_ended', {
     ...roomVoteProperties(lobbyId, vote),
     agree: vote.tally.agree,
     disagree: vote.tally.disagree,
@@ -576,7 +567,7 @@ export function lobbyEnded(lobbyId: string, { scheduled, opensAt }: { scheduled:
   endRunningRoomVote(id);
   const current = sessionFor(id, Date.now());
   const openMs = msSince(opensAt);
-  send('lobby_ended', {
+  captureSafely('lobby_ended', {
     lobby_id: id,
     ...sessionProperty(current),
     scheduled,

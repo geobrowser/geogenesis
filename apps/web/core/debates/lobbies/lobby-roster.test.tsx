@@ -1,14 +1,17 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyMember } from '../api';
 import type { LobbyPageView } from './lobby-view';
 
-const mocks = vi.hoisted(() => ({ phone: false, guest: false }));
+const mocks = vi.hoisted(() => ({ phone: false, guest: false, video: false }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (id: string) => id === 'debateVideo' && mocks.video,
+}));
 vi.mock('./lobby-guest-hooks', () => ({ useIsLobbyGuest: () => mocks.guest }));
 vi.mock('./lobby-people', () => ({
   LobbyPersonName: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
@@ -48,11 +51,14 @@ window.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver
 
 const { LobbyPeople } = await import('./lobby-roster');
 const { LobbyVoiceStatesProvider } = await import('./lobby-voice');
+const { LobbyShowPeopleContext, LobbySlotsProvider } = await import('./lobby-slots');
+const { lobbyMetaLabel } = await import('./lobby-header');
 
 afterEach(() => {
   cleanup();
   mocks.phone = false;
   mocks.guest = false;
+  mocks.video = false;
 });
 
 function member(id: string, extra: Partial<DebateLobbyMember> = {}): DebateLobbyMember {
@@ -364,5 +370,260 @@ describe('LobbyPeople video (GEO-3307)', () => {
     );
     expect(daniel.track.detach).toHaveBeenCalledWith(video);
     expect(screen.queryByTestId('lobby-speaker-video')).toBeNull();
+  });
+});
+
+function room(count: number) {
+  return [
+    member('Adam', { role: 'host', creator: true }),
+    ...Array.from({ length: count - 1 }, (_, index) => member(`S${String(index + 1).padStart(2, '0')}`)),
+  ];
+}
+
+function gridCamera(id: string) {
+  const track = { attach: vi.fn(), detach: vi.fn() };
+  return [id.toLowerCase(), { participant: { identity: id }, publication: { track, isMuted: false } }] as const;
+}
+
+function gridPeople(view: LobbyPageView, { cameras = [] as string[], speaking = [] as string[] } = {}) {
+  return (
+    <LobbyVoiceStatesProvider
+      value={{
+        speaking: new Set(speaking.map(id => id.toLowerCase())),
+        micOn: new Set(speaking.map(id => id.toLowerCase())),
+        cameras: new Map(cameras.map(gridCamera)) as never,
+        connected: true,
+      }}
+    >
+      <LobbyPeople
+        lobby={view}
+        viewerId="Adam"
+        ownAvailable={undefined}
+        disagreements={[{ user_id: 'daniel', claims: 4 }]}
+      />
+    </LobbyVoiceStatesProvider>
+  );
+}
+
+const tileNames = () => screen.getAllByTestId('lobby-speaker-tile').map(tile => tile.getAttribute('aria-label') ?? '');
+
+describe('LobbyPeople video grid (GEO-3399)', () => {
+  beforeEach(() => {
+    mocks.video = true;
+  });
+
+  it('keeps today’s tiles with the debateVideo flag off', () => {
+    mocks.video = false;
+    render(gridPeople(lobby([member('Adam', { role: 'host' }), member('Daniel')]), { cameras: ['Daniel'] }));
+    expect(screen.queryByTestId('lobby-speaker-grid')).toBeNull();
+    expect(screen.queryByTestId('lobby-speaker-frame')).toBeNull();
+  });
+
+  it('shows each speaker’s camera in a frame, and the avatar in the same frame with the camera off', () => {
+    render(
+      gridPeople(lobby([member('Adam', { role: 'host' }), member('Daniel'), member('Elena')]), {
+        cameras: ['Adam', 'Daniel'],
+      })
+    );
+    expect(screen.getByTestId('lobby-speaker-grid')).toHaveAttribute('data-columns', '2');
+    expect(screen.getAllByTestId('lobby-speaker-frame')).toHaveLength(3);
+
+    const daniel = screen.getByRole('group', { name: 'Daniel' });
+    expect(within(daniel).getByTestId('lobby-speaker-video')).not.toHaveClass('-scale-x-100');
+    expect(within(daniel).getByTestId('lobby-speaker-frame')).toHaveClass('aspect-video');
+    expect(within(daniel).getByTestId('lobby-disagreements-trigger')).toHaveClass('rounded-full');
+    expect(within(screen.getByRole('group', { name: 'Elena' })).queryByTestId('lobby-speaker-video')).toBeNull();
+
+    const own = screen.getByRole('group', { name: 'Adam (you)' });
+    expect(within(own).getByTestId('lobby-speaker-video')).toHaveClass('-scale-x-100');
+    expect(within(own).getByText('You')).toBeInTheDocument();
+  });
+
+  it('outlines whoever is talking', () => {
+    render(gridPeople(lobby(room(3)), { speaking: ['S01'] }));
+    expect(screen.getByRole('group', { name: 'S01' })).toHaveClass('border-green');
+    expect(screen.getByRole('group', { name: 'S02' })).toHaveClass('border-grey-02');
+  });
+
+  it('goes 3 across for 5 to 9 speakers and 4 across, compact, from 10', () => {
+    const { unmount } = render(gridPeople(lobby(room(8))));
+    expect(screen.getByTestId('lobby-speaker-grid')).toHaveAttribute('data-columns', '3');
+    unmount();
+
+    render(gridPeople(lobby([...room(9), member('Daniel')])));
+    expect(screen.getByTestId('lobby-speaker-grid')).toHaveAttribute('data-columns', '4');
+    // The phone's one line: "Disagrees on 4" as text, not a pill.
+    const trigger = within(screen.getByRole('group', { name: 'Daniel' })).getByTestId('lobby-disagreements-trigger');
+    expect(trigger).not.toHaveClass('rounded-full');
+  });
+
+  it('stops at 12 tiles and lists the rest under More speakers, marking cameras that are on', () => {
+    render(gridPeople(lobby(room(14)), { cameras: ['S13'] }));
+    expect(screen.getAllByTestId('lobby-speaker-tile')).toHaveLength(12);
+
+    const more = screen.getByTestId('lobby-more-speakers');
+    expect(within(more).getByText('More speakers · 2')).toBeInTheDocument();
+    const chips = within(more).getAllByTestId('lobby-more-speaker');
+    expect(chips).toHaveLength(2);
+    expect(screen.getByRole('heading', { name: 'Speakers · 14' })).toBeInTheDocument();
+  });
+
+  it('gives a tile to someone in the row who starts talking, without moving anyone else', () => {
+    const view = lobby(room(14));
+    const { rerender } = render(gridPeople(view));
+    const before = tileNames();
+    expect(before).not.toContain('S13');
+
+    rerender(gridPeople(view, { speaking: ['S13'] }));
+    const after = tileNames();
+    expect(after).toContain('S13');
+    expect(after).toHaveLength(12);
+    const changed = after.flatMap((name, index) => (name === before[index] ? [] : [index]));
+    expect(changed).toHaveLength(1);
+    expect(after[0]).toBe('Adam (you)');
+  });
+
+  it('leaves a focused tile in place when a talker needs one, and a focused chip in the row', () => {
+    const view = lobby(room(14));
+    const { rerender } = render(gridPeople(view));
+    // S11 would be first to go: quiet, and the latest in the roster. Its menu button has focus.
+    act(() =>
+      within(screen.getByRole('group', { name: 'S11' }))
+        .getByRole('button', { name: 'S11' })
+        .focus()
+    );
+
+    rerender(gridPeople(view, { speaking: ['S13'] }));
+    expect(tileNames()).toEqual(expect.arrayContaining(['S11', 'S13']));
+    expect(tileNames()).not.toContain('S10');
+
+    // Focus on S12's chip in the row: talking does not pull the chip out from under it.
+    act(() => within(screen.getByTestId('lobby-more-speakers')).getByRole('button', { name: 'S12' }).focus());
+    rerender(gridPeople(view, { speaking: ['S13', 'S12'] }));
+    expect(tileNames()).not.toContain('S12');
+    expect(within(screen.getByTestId('lobby-more-speakers')).getByRole('button', { name: 'S12' })).toHaveFocus();
+  });
+
+  it('drops the hold on someone whose focused tile went away, so they can take a tile when back', () => {
+    const view = lobby(room(14));
+    const without = lobby(room(14).filter(entry => entry.user_id !== 'S11'));
+    const { rerender } = render(gridPeople(view));
+    act(() =>
+      within(screen.getByRole('group', { name: 'S11' }))
+        .getByRole('button', { name: 'S11' })
+        .focus()
+    );
+
+    // S11 leaves with focus on their tile; S12 fills the gap, so S11 comes back to the row.
+    rerender(gridPeople(without));
+    rerender(gridPeople(view));
+    expect(within(screen.getByTestId('lobby-more-speakers')).getByRole('button', { name: 'S11' })).not.toHaveFocus();
+
+    // Nothing holds them now: talking brings them onto the grid.
+    rerender(gridPeople(view, { speaking: ['S11'] }));
+    expect(tileNames()).toContain('S11');
+  });
+
+  it('keeps an open disagreements popup open when the grid goes compact at 10 speakers', () => {
+    const nine = lobby([...room(8), member('Daniel')]);
+    const ten = lobby([...room(9), member('Daniel')]);
+    const { rerender } = render(gridPeople(nine));
+    expect(screen.getByTestId('lobby-speaker-grid')).toHaveAttribute('data-columns', '3');
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 4 claims with Daniel' }));
+    expect(screen.getByTestId('lobby-disagreements')).toBeInTheDocument();
+
+    rerender(gridPeople(ten));
+    expect(screen.getByTestId('lobby-speaker-grid')).toHaveAttribute('data-columns', '4');
+    expect(screen.getByTestId('lobby-disagreements')).toBeInTheDocument();
+  });
+
+  it('holds the speaker whose strip thumbnail has focus on a phone', () => {
+    mocks.phone = true;
+    const target = document.createElement('div');
+    document.body.append(target);
+    const view = lobby(room(11));
+    const strip = (speaking: string[] = []) => (
+      <LobbySlotsProvider value={{ speakerStrip: target }}>{gridPeople(view, { speaking })}</LobbySlotsProvider>
+    );
+    const { rerender } = render(strip());
+    // S08 would be first to give up a tile: quiet, and the latest in the roster on the grid.
+    act(() => within(target).getByRole('button', { name: 'S08, show people' }).focus());
+
+    rerender(strip(['S10']));
+    expect(tileNames()).toEqual(expect.arrayContaining(['S08', 'S10']));
+    expect(within(target).getByRole('button', { name: 'S08, show people' })).toHaveFocus();
+    target.remove();
+  });
+
+  it('releases a strip thumbnail’s hold when the phone layout goes away with focus on it', () => {
+    mocks.phone = true;
+    const target = document.createElement('div');
+    document.body.append(target);
+    const view = lobby(room(14));
+    const grid = (speaking: string[] = []) => (
+      <LobbySlotsProvider value={{ speakerStrip: target }}>{gridPeople(view, { speaking })}</LobbySlotsProvider>
+    );
+    const { rerender } = render(grid());
+    act(() => within(target).getByRole('button', { name: 'S08, show people' }).focus());
+
+    // To a desktop: the strip unmounts with S08's thumbnail focused, and no blur.
+    mocks.phone = false;
+    rerender(grid());
+    expect(within(target).queryByTestId('lobby-speaker-strip')).toBeNull();
+
+    // Everyone on the grid but S08 talks and stops, so S08 is quiet longest when S13 needs a tile.
+    const others = tileNames().filter(name => name !== 'S08' && name !== 'Adam (you)');
+    rerender(grid(others));
+    rerender(grid());
+    rerender(grid(['S13']));
+    expect(tileNames()).toContain('S13');
+    expect(tileNames()).not.toContain('S08');
+    target.remove();
+  });
+
+  it('draws a phone’s speaker strip into the Claims slot, and a tap there shows People', () => {
+    mocks.phone = true;
+    const target = document.createElement('div');
+    document.body.append(target);
+    const showPeople = vi.fn();
+    render(
+      <LobbySlotsProvider value={{ speakerStrip: target }}>
+        <LobbyShowPeopleContext.Provider value={showPeople}>
+          {gridPeople(lobby(room(11)), { cameras: ['S01'], speaking: ['S01'] })}
+        </LobbyShowPeopleContext.Provider>
+      </LobbySlotsProvider>
+    );
+
+    expect(screen.getByTestId('lobby-speaker-grid')).toHaveAttribute('data-columns', '3');
+    expect(screen.getAllByTestId('lobby-speaker-tile')).toHaveLength(9);
+    expect(screen.getAllByTestId('lobby-speaker-frame')[0]).toHaveClass('aspect-[4/3]');
+
+    const strip = within(target).getByTestId('lobby-speaker-strip');
+    // Talking is in the name too: the People panel that shows it otherwise is hidden on Claims.
+    const talking = within(strip).getByRole('button', { name: 'S01, speaking, show people' });
+    expect(talking).toHaveAttribute('data-speaking', 'true');
+    fireEvent.click(within(strip).getByRole('button', { name: '2 more speakers, show people' }));
+    expect(showPeople).toHaveBeenCalledTimes(1);
+    target.remove();
+  });
+
+  it('draws no strip without a Claims slot, and none on a desktop', () => {
+    mocks.phone = true;
+    const { unmount } = render(gridPeople(lobby(room(3))));
+    expect(screen.queryByTestId('lobby-speaker-strip')).toBeNull();
+    unmount();
+
+    mocks.phone = false;
+    const target = document.createElement('div');
+    render(<LobbySlotsProvider value={{ speakerStrip: target }}>{gridPeople(lobby(room(3)))}</LobbySlotsProvider>);
+    expect(target).toBeEmptyDOMElement();
+  });
+});
+
+describe('lobbyMetaLabel', () => {
+  it('says Video on with lobby video, Voice only without', () => {
+    const view = { members: [member('Adam', { role: 'host' })] };
+    expect(lobbyMetaLabel(view, true)).toBe('Hosted by Adam · Video on · Not recorded');
+    expect(lobbyMetaLabel(view)).toBe('Hosted by Adam · Voice only · Not recorded');
   });
 });

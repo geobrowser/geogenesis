@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AuthAttempt, AuthAttemptOutcome } from './auth-attempt';
-import { saveVotesSignIn } from './save-votes-analytics';
+import { type AuthAttempt, type AuthAttemptOutcome, authProperties } from './auth-attempt';
+import { saveVotesSignIn, saveVotesSignInProperties } from './save-votes-analytics';
 
 const attempt = (outcome?: AuthAttemptOutcome, auth_intent = 'save_votes'): AuthAttempt => ({
   id: 'attempt',
@@ -36,5 +36,16 @@ describe('saveVotesSignIn', () => {
   it('is not a save when another prompt started it, and leaves another tab’s sign-in to that tab', () => {
     expect(saveVotesSignIn(attempt('signed_up', 'vote'))).toBe('not_save');
     expect(saveVotesSignIn(undefined)).toBe('elsewhere');
+  });
+});
+
+// Copilot on #2933: the auth events keep only allowlisted properties, and dropped this one.
+describe('saveVotesSignInProperties', () => {
+  it('keeps why the sheet was open through to the auth events', () => {
+    expect(authProperties(saveVotesSignInProperties('email', 2, 'navbar'))).toMatchObject({
+      auth_intent: 'save_votes',
+      local_vote_count: 2,
+      prompt_reason: 'navbar',
+    });
   });
 });
