@@ -77,8 +77,8 @@ describe('remembered devices across debate sessions', () => {
       { kind: 'audiooutput', deviceId: 'speaker-1' },
     ]);
     mocks.createLocalTracks.mockImplementation(async () => [
-      { mediaStreamTrack: { kind: 'audio' }, stop: vi.fn() },
-      { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() },
+      restartableTrack('audio', 'mic-2'),
+      restartableTrack('video', 'camera-2'),
     ]);
     const first = render(
       <DebateMediaSessionProvider>
@@ -114,7 +114,8 @@ describe('remembered devices across debate sessions', () => {
   it('keeps a disconnected preference and restores it on devicechange', async () => {
     rememberMediaDevice('audioinput', 'mic-2');
     mocks.enumerateDevices.mockResolvedValue([{ kind: 'audioinput', deviceId: 'default', label: 'Default mic' }]);
-    mocks.createLocalTracks.mockResolvedValue([{ mediaStreamTrack: { kind: 'audio' }, stop: vi.fn() }]);
+    const audio = restartableTrack('audio', 'default');
+    mocks.createLocalTracks.mockResolvedValue([audio]);
     render(
       <DebateMediaSessionProvider>
         <MediaSessionHarness />
@@ -129,9 +130,8 @@ describe('remembered devices across debate sessions', () => {
       { kind: 'audioinput', deviceId: 'mic-2' },
     ]);
     await fireDeviceChange();
-    await waitFor(() =>
-      expect(mocks.createLocalTracks).toHaveBeenLastCalledWith({ audio: { deviceId: 'mic-2' }, video: false })
-    );
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    expect(mocks.createLocalTracks).toHaveBeenCalledOnce();
   });
 
   it('reads a choice made by another surface when the next session starts', () => {
@@ -162,11 +162,11 @@ describe('confirmed input preferences', () => {
         { kind: 'videoinput', deviceId: 'old-camera', label: 'Old camera' },
         { kind: 'videoinput', deviceId: 'camera-2', label: 'New camera' },
       ]);
-      const tracks = () => [
-        { mediaStreamTrack: { kind: 'audio' }, stop: vi.fn() },
-        { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() },
-      ];
-      mocks.createLocalTracks.mockResolvedValue(tracks());
+      const audio = restartableTrack('audio', 'old-mic');
+      const video = restartableTrack('video', 'old-camera');
+      const chosen = kind === 'audioinput' ? audio : video;
+      const restart = chosen.restartTrack.getMockImplementation()!;
+      mocks.createLocalTracks.mockResolvedValue([audio, video]);
       render(
         <DebateMediaSessionProvider>
           <MediaSessionHarness />
@@ -177,31 +177,35 @@ describe('confirmed input preferences', () => {
       await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
       const oldPreference = readMediaDevicePreference(kind);
       let fail!: (error: Error) => void;
-      mocks.createLocalTracks.mockReturnValueOnce(
+      chosen.restartTrack.mockReturnValueOnce(
         new Promise((_resolve, reject) => {
           fail = reject;
         })
       );
       fireEvent.click(screen.getByRole('button', { name: button }));
-      await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(chosen.restartTrack).toHaveBeenCalledOnce());
       expect(readMediaDevicePreference(kind)).toBe(oldPreference);
       await act(async () => fail(new Error('Device unavailable')));
-      await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('error'));
+      await waitFor(() => expect(screen.getByTestId('preview-busy')).toHaveTextContent('false'));
+      expect(screen.getByTestId('preview-error')).not.toBeEmptyDOMElement();
       expect(readMediaDevicePreference(kind)).toBe(oldPreference);
       expect(screen.getByTestId('selected-devices')).toHaveTextContent('old-mic/old-camera');
 
-      let finish!: (value: ReturnType<typeof tracks>) => void;
-      mocks.createLocalTracks.mockReturnValueOnce(
-        new Promise(resolve => {
+      let finish!: () => void;
+      chosen.restartTrack.mockImplementationOnce(async options => {
+        await new Promise<void>(resolve => {
           finish = resolve;
-        })
-      );
+        });
+        await restart(options);
+      });
       fireEvent.click(screen.getByRole('button', { name: button }));
-      await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(3));
+      await waitFor(() => expect(chosen.restartTrack).toHaveBeenCalledTimes(3));
       expect(readMediaDevicePreference(kind)).toBe(oldPreference);
-      await act(async () => finish(tracks()));
+      await act(async () => finish());
       await waitFor(() => expect(readMediaDevicePreference(kind)).toBe(kind === 'audioinput' ? 'mic-2' : 'camera-2'));
       expect(screen.getByTestId('selected-devices')).toHaveTextContent(selected);
+      expect(mocks.createLocalTracks).toHaveBeenCalledOnce();
+      expect((kind === 'audioinput' ? video : audio).restartTrack).not.toHaveBeenCalled();
     }
   );
 
@@ -217,9 +221,10 @@ describe('confirmed input preferences', () => {
         { kind, deviceId: kind === 'audioinput' ? 'mic-2' : 'camera-2', label: 'Requested device' },
         { kind, deviceId: 'actual-device', label: 'Actual device' },
       ]);
-      mocks.createLocalTracks.mockResolvedValue([
-        { mediaStreamTrack: { kind: mediaKind, getSettings: () => ({ deviceId: 'actual-device' }) }, stop: vi.fn() },
-      ]);
+      const capture = restartableTrack(mediaKind as 'audio' | 'video', 'actual-device');
+      const restart = capture.restartTrack.getMockImplementation()!;
+      capture.restartTrack.mockImplementationOnce(async () => restart({ deviceId: 'actual-device' }));
+      mocks.createLocalTracks.mockResolvedValue([capture]);
       render(
         <DebateMediaSessionProvider>
           <MediaSessionHarness />
@@ -235,7 +240,8 @@ describe('confirmed input preferences', () => {
       expect(readMediaDevicePreference(kind)).toBe('working-device');
       await fireDeviceChange();
       expect(screen.getByTestId('selected-devices')).toHaveTextContent(expected);
-      expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2);
+      expect(mocks.createLocalTracks).toHaveBeenCalledOnce();
+      expect(capture.restartTrack).toHaveBeenCalledOnce();
     }
   );
 
@@ -504,8 +510,7 @@ describe('DebateMediaSessionProvider restarts it starts itself', () => {
     ]);
     await fireDeviceChange();
 
-    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalled());
-    expect(mocks.createLocalTracks).toHaveBeenLastCalledWith(expect.objectContaining({ video: false }));
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
   });
 
   it('keeps the camera shut through a device change after a hand-off', async () => {
@@ -535,8 +540,7 @@ describe('DebateMediaSessionProvider restarts it starts itself', () => {
     ]);
     await fireDeviceChange();
 
-    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalled());
-    expect(mocks.createLocalTracks).toHaveBeenLastCalledWith(expect.objectContaining({ video: false }));
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
   });
 
   /*
@@ -568,8 +572,7 @@ describe('DebateMediaSessionProvider restarts it starts itself', () => {
     ]);
     await fireDeviceChange();
 
-    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalled());
-    expect(mocks.createLocalTracks).toHaveBeenLastCalledWith(expect.objectContaining({ audio: false }));
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
   });
 
   it('asks for both again once a new surface takes the session', async () => {
@@ -595,6 +598,389 @@ describe('DebateMediaSessionProvider restarts it starts itself', () => {
     await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalled());
     expect(mocks.createLocalTracks).toHaveBeenLastCalledWith(expect.objectContaining({ audio: expect.anything() }));
     expect(mocks.createLocalTracks.mock.calls.at(-1)?.[0]?.video).toBeTruthy();
+  });
+});
+
+function restartableTrack(kind: 'audio' | 'video', deviceId: string) {
+  const listeners = new Map<string, () => void>();
+  let source = { kind, enabled: true, readyState: 'live', getSettings: () => ({ deviceId }) };
+  const track = {
+    get mediaStreamTrack() {
+      return source;
+    },
+    get mediaStream() {
+      return { getTracks: () => [source] };
+    },
+    restartTrack: vi.fn(async (options?: { deviceId?: string }) => {
+      const nextId = options?.deviceId ?? deviceId;
+      source = { ...source, enabled: true, readyState: 'live', getSettings: () => ({ deviceId: nextId }) };
+      listeners.get('restarted')?.();
+    }),
+    on: (event: string, callback: () => void) => listeners.set(event, callback),
+    off: (event: string, callback: () => void) => {
+      if (listeners.get(event) === callback) listeners.delete(event);
+    },
+    stop: vi.fn(),
+  };
+  return track;
+}
+
+async function startInputs() {
+  const audio = restartableTrack('audio', 'mic-1');
+  const video = restartableTrack('video', 'camera-1');
+  mocks.enumerateDevices.mockResolvedValue([
+    { kind: 'audioinput', deviceId: 'mic-1', groupId: 'audio', label: 'Mic 1' },
+    { kind: 'audioinput', deviceId: 'mic-2', groupId: 'audio-2', label: 'Mic 2' },
+    { kind: 'videoinput', deviceId: 'camera-1', groupId: 'video', label: 'Camera 1' },
+    { kind: 'videoinput', deviceId: 'camera-2', groupId: 'video-2', label: 'Camera 2' },
+  ]);
+  mocks.createLocalTracks.mockResolvedValue([audio, video]);
+  render(
+    <DebateMediaSessionProvider>
+      <MediaSessionHarness />
+    </DebateMediaSessionProvider>
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ensure both' }));
+  await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+  return { audio, video };
+}
+
+describe('input changes on existing LocalTracks', () => {
+  it('switches only the selected kind and retains disabled tracks', async () => {
+    const { audio, video } = await startInputs();
+    audio.mediaStreamTrack.enabled = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    await waitFor(() => expect(screen.getByTestId('preview-busy')).toHaveTextContent('false'));
+    expect(audio.mediaStreamTrack.enabled).toBe(false);
+    expect(video.restartTrack).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Select camera' }));
+    await waitFor(() => expect(video.restartTrack).toHaveBeenCalledWith({ deviceId: 'camera-2' }));
+    expect(audio.restartTrack).toHaveBeenCalledTimes(1);
+    expect(audio.stop).not.toHaveBeenCalled();
+    expect(video.stop).not.toHaveBeenCalled();
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains a mute applied while the new microphone is still opening', async () => {
+    const { audio } = await startInputs();
+    const restart = audio.restartTrack.getMockImplementation()!;
+    let finish!: () => void;
+    audio.restartTrack.mockImplementationOnce(async options => {
+      await new Promise<void>(resolve => {
+        finish = resolve;
+      });
+      await restart(options);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalled());
+    audio.mediaStreamTrack.enabled = false;
+    await act(async () => finish());
+    expect(audio.mediaStreamTrack.enabled).toBe(false);
+  });
+
+  it('waits for an input restart before acquiring preview tracks', async () => {
+    const { audio, video } = await startInputs();
+    const restart = audio.restartTrack.getMockImplementation()!;
+    let finish!: () => void;
+    audio.restartTrack.mockImplementationOnce(async options => {
+      audio.mediaStreamTrack.readyState = 'ended';
+      await new Promise<void>(resolve => {
+        finish = resolve;
+      });
+      await restart(options);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledOnce());
+    mocks.createLocalTracks.mockResolvedValueOnce([restartableTrack('audio', 'mic-2')]);
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure both' }));
+    await act(async () => new Promise(resolve => setTimeout(resolve, 0)));
+    await act(async () => finish());
+    await waitFor(() => expect(screen.getByTestId('preview-busy')).toHaveTextContent('false'));
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+    expect(audio.stop).not.toHaveBeenCalled();
+    expect(video.stop).not.toHaveBeenCalled();
+  });
+
+  it.each(['success', 'failure'])(
+    'stops a restart that has lost ownership after %s even if the session is unchanged',
+    async outcome => {
+      const { audio } = await startInputs();
+      const restart = audio.restartTrack.getMockImplementation()!;
+      let finish!: () => void;
+      audio.restartTrack.mockImplementationOnce(async options => {
+        await new Promise<void>(resolve => {
+          finish = resolve;
+        });
+        if (outcome === 'failure') throw new Error('Capture interrupted');
+        await restart(options);
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+      await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledOnce());
+      const preview = screen.getByTestId('preview-stream').textContent;
+      fireEvent.click(screen.getByRole('button', { name: 'Drop track ownership' }));
+      await act(async () => finish());
+      expect(audio.stop).toHaveBeenCalled();
+      expect(screen.getByTestId('preview-stream')).toHaveTextContent(preview!);
+    }
+  );
+
+  it('keeps replacement tracks when a stale acquisition finishes enumerating devices', async () => {
+    const original = [restartableTrack('audio', 'old-mic'), restartableTrack('video', 'old-camera')];
+    const replacement = [restartableTrack('audio', 'new-mic'), restartableTrack('video', 'new-camera')];
+    let finishEnumeration!: (devices: MediaDeviceInfo[]) => void;
+    mocks.enumerateDevices
+      .mockReturnValueOnce(
+        new Promise<MediaDeviceInfo[]>(resolve => {
+          finishEnumeration = resolve;
+        })
+      )
+      .mockResolvedValue([]);
+    mocks.createLocalTracks.mockResolvedValueOnce(original).mockResolvedValueOnce(replacement);
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure both' }));
+    await waitFor(() => expect(mocks.enumerateDevices).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: 'Start other match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure both' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    const preview = screen.getByTestId('preview-stream').textContent;
+    await act(async () => finishEnumeration([]));
+    expect(screen.getByTestId('preview-stream')).toHaveTextContent(preview!);
+    for (const track of replacement) expect(track.stop).not.toHaveBeenCalled();
+  });
+
+  it('keeps a newer camera choice after a simultaneous device fallback', async () => {
+    const { audio, video } = await startInputs();
+    const restart = audio.restartTrack.getMockImplementation()!;
+    let finish!: () => void;
+    audio.restartTrack.mockImplementationOnce(async options => {
+      await new Promise<void>(resolve => {
+        finish = resolve;
+      });
+      await restart(options);
+    });
+    mocks.enumerateDevices.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'mic-2', groupId: 'audio-2', label: 'Mic 2' },
+      { kind: 'videoinput', deviceId: 'camera-2', groupId: 'video-2', label: 'Camera 2' },
+      { kind: 'videoinput', deviceId: 'camera-3', groupId: 'video-3', label: 'Camera 3' },
+    ]);
+    await fireDeviceChange();
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: 'Select third camera' }));
+    await act(async () => finish());
+    await waitFor(() => expect(video.restartTrack).toHaveBeenCalledTimes(2));
+    expect(video.restartTrack.mock.calls.map(call => call[0]?.deviceId)).toEqual(['camera-2', 'camera-3']);
+    expect(video.mediaStreamTrack.getSettings().deviceId).toBe('camera-3');
+    expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-2/camera-3');
+  });
+
+  it('serializes rapid microphone choices so the last one wins', async () => {
+    const { audio } = await startInputs();
+    let finish!: () => void;
+    audio.restartTrack.mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Select third mic' }));
+    expect(audio.restartTrack).toHaveBeenCalledTimes(1);
+    await act(async () => finish());
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenLastCalledWith({ deviceId: 'mic-3' }));
+    expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-3/');
+  });
+
+  it.each(['audio', 'video'] as const)(
+    'shows the actual %s device after an ideal selection silently falls back',
+    async kind => {
+      const { audio, video } = await startInputs();
+      const track = kind === 'audio' ? audio : video;
+      const restart = track.restartTrack.getMockImplementation()!;
+      const actualId = kind === 'audio' ? 'mic-1' : 'camera-1';
+      track.restartTrack.mockImplementationOnce(async () => restart({ deviceId: actualId }));
+      fireEvent.click(screen.getByRole('button', { name: kind === 'audio' ? 'Select mic' : 'Select camera' }));
+      await waitFor(() => expect(track.restartTrack).toHaveBeenCalledOnce());
+      await waitFor(() => expect(screen.getByTestId('preview-busy')).toHaveTextContent('false'));
+      expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-1/camera-1');
+      expect(track.mediaStreamTrack.getSettings().deviceId).toBe(actualId);
+    }
+  );
+
+  it('does not replace a newer microphone choice with an earlier silent fallback', async () => {
+    const { audio } = await startInputs();
+    const restart = audio.restartTrack.getMockImplementation()!;
+    let finishFirst!: () => void;
+    let finishSecond!: () => void;
+    audio.restartTrack
+      .mockImplementationOnce(async () => {
+        await new Promise<void>(resolve => {
+          finishFirst = resolve;
+        });
+        await restart({ deviceId: 'mic-1' });
+      })
+      .mockImplementationOnce(async options => {
+        await new Promise<void>(resolve => {
+          finishSecond = resolve;
+        });
+        await restart(options);
+      });
+    fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: 'Select third mic' }));
+    await act(async () => finishFirst());
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-3/');
+    await act(async () => finishSecond());
+    expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-3/');
+  });
+
+  it('recovers the previous microphone if the selected device fails', async () => {
+    const { audio, video } = await startInputs();
+    audio.restartTrack.mockRejectedValueOnce(new Error('Capture failed'));
+    fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenLastCalledWith({ deviceId: 'mic-1' }));
+    await waitFor(() => expect(screen.getByTestId('preview-error')).toHaveTextContent('microphone'));
+    expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-1/camera-1');
+    expect(video.restartTrack).not.toHaveBeenCalled();
+  });
+
+  it('does not mark an ended microphone ready after all recovery attempts fail, and retries only that kind', async () => {
+    const { audio, video } = await startInputs();
+    audio.restartTrack.mockImplementation(async () => {
+      audio.mediaStreamTrack.readyState = 'ended';
+      throw new Error('No microphone available');
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('error'));
+    expect(video.restartTrack).not.toHaveBeenCalled();
+    expect(video.stop).not.toHaveBeenCalled();
+    const replacement = restartableTrack('audio', 'mic-1');
+    mocks.createLocalTracks.mockResolvedValueOnce([replacement]);
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure both' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    expect(mocks.createLocalTracks).toHaveBeenLastCalledWith({ audio: true, video: false });
+    expect(video.stop).not.toHaveBeenCalled();
+  });
+
+  it('stops a restarted capture that finishes after release, and skips queued selections', async () => {
+    const { audio } = await startInputs();
+    let finish!: () => void;
+    audio.restartTrack.mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Select third mic' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Release match' }));
+    await act(async () => finish());
+    expect(audio.restartTrack).toHaveBeenCalledTimes(1);
+    expect(audio.stop).toHaveBeenCalled();
+    expect(screen.getByTestId('preview-stream')).toHaveTextContent('none');
+  });
+
+  it('does not reopen either track when an unrelated device is plugged in', async () => {
+    const { audio, video } = await startInputs();
+    await fireDeviceChange();
+    expect(audio.restartTrack).not.toHaveBeenCalled();
+    expect(video.restartTrack).not.toHaveBeenCalled();
+  });
+
+  it('refreshes preview and retains mute when LiveKit reacquires capture itself', async () => {
+    const { audio } = await startInputs();
+    const original = screen.getByTestId('preview-stream').textContent;
+    audio.mediaStreamTrack.enabled = false;
+    await act(async () => audio.restartTrack({ deviceId: 'mic-2' }));
+    expect(screen.getByTestId('preview-stream').textContent).not.toBe(original);
+    expect(audio.mediaStreamTrack.enabled).toBe(false);
+  });
+
+  it.each([
+    ['audio', 'pending'],
+    ['audio', 'failed'],
+    ['video', 'pending'],
+    ['video', 'failed'],
+  ] as const)('follows an owned %s restart while adding the other input is %s', async (kind, phase) => {
+    const track = restartableTrack(kind, 'original');
+    mocks.createLocalTracks.mockResolvedValueOnce([track]);
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: kind === 'audio' ? 'Ensure mic only' : 'Ensure camera only' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    track.mediaStreamTrack.enabled = false;
+    let reject!: (error: Error) => void;
+    mocks.createLocalTracks.mockReturnValueOnce(
+      new Promise((_resolve, refuse) => {
+        reject = refuse;
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure both' }));
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2));
+    if (phase === 'failed') {
+      await act(async () => reject(new Error('Other input unavailable')));
+      await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('error'));
+    }
+    await act(async () => track.restartTrack({ deviceId: 'replacement' }));
+    expect(screen.getByTestId('preview-devices')).toHaveTextContent(`${kind}:replacement`);
+    expect(track.mediaStreamTrack.enabled).toBe(false);
+    expect(track.stop).not.toHaveBeenCalled();
+    if (phase === 'pending') {
+      await act(async () => reject(new Error('Other input unavailable')));
+      await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('error'));
+      expect(screen.getByTestId('preview-devices')).toHaveTextContent(`${kind}:replacement`);
+    }
+  });
+
+  it('recovers an ended track even when enumeration still reports the same device', async () => {
+    const { audio, video } = await startInputs();
+    audio.mediaStreamTrack.readyState = 'ended';
+    await fireDeviceChange();
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-1' }));
+    expect(video.restartTrack).not.toHaveBeenCalled();
+  });
+
+  it('follows a changed system default even though its device id stays default', async () => {
+    const { audio, video } = await startInputs();
+    mocks.enumerateDevices.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'default', groupId: 'built-in', label: 'Default microphone' },
+      { kind: 'videoinput', deviceId: 'camera-1', groupId: 'video', label: 'Camera 1' },
+    ]);
+    await fireDeviceChange();
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: 'default' }));
+    audio.restartTrack.mockClear();
+    mocks.enumerateDevices.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'default', groupId: 'headset', label: 'Default microphone' },
+      { kind: 'videoinput', deviceId: 'camera-1', groupId: 'video', label: 'Camera 1' },
+    ]);
+    await fireDeviceChange();
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: 'default' }));
+    expect(video.restartTrack).not.toHaveBeenCalled();
+  });
+
+  it('moves a missing microphone to another input while leaving the camera alone', async () => {
+    const { audio, video } = await startInputs();
+    mocks.enumerateDevices.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'mic-2', groupId: 'audio-2', label: 'Mic 2' },
+      { kind: 'videoinput', deviceId: 'camera-1', groupId: 'video', label: 'Camera 1' },
+    ]);
+    await fireDeviceChange();
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    expect(video.restartTrack).not.toHaveBeenCalled();
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1104,17 +1490,22 @@ function MediaSessionHarness({ outputRoute }: { outputRoute?: (id: string) => Pr
   return (
     <>
       <div data-testid="preview-stream">{streamId(media.previewStream)}</div>
+      <div data-testid="preview-devices">
+        {media.previewStream
+          ?.getTracks()
+          .map(track => `${track.kind}:${track.getSettings?.().deviceId}`)
+          .join(',')}
+      </div>
       <div data-testid="session-key">{media.activeSessionKey ?? 'none'}</div>
       <div data-testid="join-choice">{JSON.stringify(media.joinChoiceRef.current)}</div>
       <button type="button" onClick={() => (media.joinChoiceRef.current = { micOn: true, cameraOn: false })}>
         Choose mic only
       </button>
+      <div data-testid="preview-error">{media.previewError}</div>
+      <div data-testid="preview-busy">{String(media.previewBusy)}</div>
       <div data-testid="selected-output">{media.selectedAudioOutputId}</div>
       <button type="button" onClick={() => media.changeAudioInput('mic-2')}>
         Select microphone
-      </button>
-      <button type="button" onClick={() => media.changeVideoInput('camera-2')}>
-        Select camera
       </button>
       <div data-testid="preview-state">{media.previewState}</div>
       <div data-testid="audio-output-supported">{media.audioOutputSupported ? 'yes' : 'no'}</div>
@@ -1160,6 +1551,26 @@ function MediaSessionHarness({ outputRoute }: { outputRoute?: (id: string) => Pr
       </button>
       <button type="button" onClick={() => media.promoteSession('match:match-1', 'debate:debate-1')}>
         Promote debate
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          media.localTracksRef.current = [];
+        }}
+      >
+        Drop track ownership
+      </button>
+      <button type="button" onClick={() => media.changeVideoInput('camera-3')}>
+        Select third camera
+      </button>
+      <button type="button" onClick={() => media.changeAudioInput('mic-2')}>
+        Select mic
+      </button>
+      <button type="button" onClick={() => media.changeAudioInput('mic-3')}>
+        Select third mic
+      </button>
+      <button type="button" onClick={() => media.changeVideoInput('camera-2')}>
+        Select camera
       </button>
       <button type="button" onClick={() => void media.changeAudioOutput('speaker-2', outputRoute)}>
         Select other speaker
