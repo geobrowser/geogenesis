@@ -118,7 +118,13 @@ vi.mock('~/partials/profile/edit-profile-dialog', () => ({
     return open ? <div data-testid="edit-profile-dialog" /> : null;
   },
 }));
-vi.mock('~/core/wallet', () => ({ GeoConnectButton: () => <button>Connect</button> }));
+vi.mock('~/core/wallet', () => ({
+  GeoConnectButton: ({ compact, component }: { compact?: boolean; component?: string }) => (
+    <button data-compact={String(Boolean(compact))} data-component={component}>
+      Connect
+    </button>
+  ),
+}));
 vi.mock('~/design-system/fallback-image', () => ({
   FallbackImage: ({ value }: { value: string }) => <img src={value} alt="" />,
 }));
@@ -457,6 +463,35 @@ describe('NavbarActions profile menu', () => {
       render(<NavbarActions />);
 
       expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    });
+  });
+
+  // GEO-3415. The debate feed's phone bar reuses these controls at its smaller size.
+  describe('compact', () => {
+    it('asks for the small Log in, attributed to the bar', () => {
+      mocks.hasSmartAccount = false;
+      mocks.authenticated = false;
+      render(<NavbarActions compact />);
+
+      const connect = screen.getByRole('button', { name: 'Connect' });
+      expect(connect).toHaveAttribute('data-compact', 'true');
+      expect(connect).toHaveAttribute('data-component', 'debate_feed_bar');
+    });
+
+    it('keeps the navbar’s own Log in as it was', () => {
+      mocks.hasSmartAccount = false;
+      mocks.authenticated = false;
+      render(<NavbarActions />);
+
+      const connect = screen.getByRole('button', { name: 'Connect' });
+      expect(connect).toHaveAttribute('data-compact', 'false');
+      expect(connect).not.toHaveAttribute('data-component');
+    });
+
+    it('gives the avatar a 44px target at every phone width', () => {
+      render(<NavbarActions compact />);
+
+      expect(screen.getByRole('button', { name: 'Open profile menu' })).toHaveClass('h-11', 'w-11');
     });
   });
 

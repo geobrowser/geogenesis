@@ -77,11 +77,18 @@ function useIsMobileNavbar() {
   return React.useSyncExternalStore(subscribeToMobileNavbar, getMobileNavbarSnapshot, getServerMobileNavbarSnapshot);
 }
 
+/** The analytics `component` for sign-ins started from the debate feed's phone bar. */
+const DEBATE_FEED_BAR_COMPONENT = 'debate_feed_bar';
+
 const PROFILE_MENU_ACTION_CLASS =
   'flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none mobile:min-h-11';
 const PROFILE_MENU_DIVIDED_ACTION_CLASS = cx(PROFILE_MENU_ACTION_CLASS, 'border-t border-grey-02');
 
-export function NavbarActions() {
+/**
+ * `compact` is the debate feed's phone bar (GEO-3415): the same account states and profile menu, with
+ * the smaller Log in pill and a 44px avatar target at every phone width rather than only below 640px.
+ */
+export function NavbarActions({ compact = false }: { compact?: boolean } = {}) {
   const [open, onOpenChange] = React.useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = React.useState(false);
   // Mounted from the first open onward rather than always: the dialog's hooks read
@@ -176,7 +183,13 @@ export function NavbarActions() {
     }
 
     if (state === 'signed_out' || !address) {
-      return <GeoConnectButton key="navbar-content" />;
+      return (
+        <GeoConnectButton
+          key="navbar-content"
+          compact={compact}
+          component={compact ? DEBATE_FEED_BAR_COMPONENT : undefined}
+        />
+      );
     }
 
     // Optimistic identity: while the personal space is being created in the
@@ -206,7 +219,13 @@ export function NavbarActions() {
                   // only way to a profile, personal space or sign out on mobile, which it had no way to
                   // reach at all until this change. Not applied to the rest of the row: those controls
                   // were already on phones and belong to GEO-2970's sweep.
-                  <button type="button" className="flex items-center justify-center p-0 mobile:h-11 mobile:w-11">
+                  <button
+                    type="button"
+                    className={cx(
+                      'flex items-center justify-center p-0',
+                      compact ? '-mr-2 h-11 w-11' : 'mobile:h-11 mobile:w-11'
+                    )}
+                  >
                     {/* The trigger is an image and nothing else: `FallbackImage` has an empty alt and
                         `Avatar` carries no label, so Radix's button announced as nothing at all. It is
                         the only way to a profile, personal space or sign out on a phone. Named the way
