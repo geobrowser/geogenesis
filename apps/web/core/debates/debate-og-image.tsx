@@ -4,7 +4,9 @@ import { ImageResponse } from 'next/og';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { GeoLogoIcon, initials, seedHue } from '~/core/blocks/ranking/ranking-og-image';
+import { initials, seedHue } from '~/core/blocks/ranking/ranking-og-image';
+
+import { GeoMark } from '~/design-system/icons/geo-mark';
 
 import { CLAIM_MEASURE_PX, claimLineHeight, fitClaimToBand } from './debate-og-claim-fit';
 
@@ -589,7 +591,7 @@ function Card({ data }: { data: DebateOgCardData }) {
         <div style={{ display: 'flex', fontSize: 27, fontWeight: 500 }}>Watch the debate on</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           {/* The real mark, shared with the ranking card so the two lockups cannot drift. */}
-          <GeoLogoIcon size={24} color="#ffffff" />
+          <GeoMark size={24} color="#ffffff" />
           <div style={{ display: 'flex', fontSize: 27, fontWeight: 500 }}>Geo</div>
         </div>
       </div>

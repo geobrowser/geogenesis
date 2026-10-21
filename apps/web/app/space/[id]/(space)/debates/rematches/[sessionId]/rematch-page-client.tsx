@@ -2543,6 +2543,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     exiting: () => exitStartedRef.current || leaveRequestedRef.current,
   });
 
+  const [closedSections, setClosedSections] = React.useState<ReadonlySet<string>>(() => new Set());
+  const reportSectionOpen = React.useCallback((sectionId: string, open: boolean) => {
+    setClosedSections(current => {
+      if (current.has(sectionId) === !open) return current;
+      const next = new Set(current);
+      if (open) next.delete(sectionId);
+      else next.add(sectionId);
+      return next;
+    });
+  }, []);
+
   /** The last request failure, and whether the claim it was sent for is still on screen. */
   const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
   const requestErrorTarget = requestError ? createRequest.variables : undefined;
@@ -2554,9 +2565,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     idEquals(claim.claim.space_id, requestErrorTarget.source_space_id);
   const requestErrorHasCard =
     requestErrorTarget !== undefined &&
-    (visibleDebatedClaims.some(hasRequestTarget) ||
+    ((!closedSections.has(ALREADY_DEBATED_SECTION) && visibleDebatedClaims.some(hasRequestTarget)) ||
       (showsSections
-        ? visibleSections.some(section => section.claims.some(hasRequestTarget))
+        ? visibleSections.some(
+            section => !closedSections.has(recommendedSectionKey(section.id)) && section.claims.some(hasRequestTarget)
+          )
         : visibleClaims.some(hasRequestTarget)));
 
   /**
@@ -3153,7 +3166,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             // Each data block on the curator's page is its own section, in page order.
             <div className="flex flex-col gap-4">
               {visibleSections.map(section => (
-                <RecommendedSection key={section.id} name={section.name} count={section.claims.length}>
+                <RecommendedSection
+                  key={section.id}
+                  name={section.name}
+                  count={section.claims.length}
+                  onOpenChange={open => reportSectionOpen(recommendedSectionKey(section.id), open)}
+                >
                   <HubCardList>{section.claims.map(claim => renderClaimCard(claim))}</HubCardList>
                 </RecommendedSection>
               ))}
@@ -3251,6 +3269,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               count={visibleDebatedClaims.length}
               defaultOpen={false}
               showCount
+              onOpenChange={open => reportSectionOpen(ALREADY_DEBATED_SECTION, open)}
             >
               <HubCardList>{visibleDebatedClaims.map(claim => renderClaimCard(claim, true))}</HubCardList>
             </RecommendedSection>
@@ -3580,12 +3599,17 @@ function TopicMatchCaption({ names }: { names: string[] }) {
   );
 }
 
+/** The page's names for its collapsible sections, so it can tell which of them are closed. */
+const ALREADY_DEBATED_SECTION = 'already-debated';
+const recommendedSectionKey = (sectionId: string) => `recommended:${sectionId}`;
+
 /** One curated block, collapsible so a long page of recommendations stays scannable. */
 function RecommendedSection({
   name,
   count,
   defaultOpen = true,
   showCount = false,
+  onOpenChange,
   children,
 }: {
   name: string;
@@ -3593,10 +3617,20 @@ function RecommendedSection({
   defaultOpen?: boolean;
   /** Draw the count beside the name. A closed section otherwise gives no hint of what is in it. */
   showCount?: boolean;
+  onOpenChange?: (open: boolean) => void;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
   const contentId = React.useId();
+
+  const onOpenChangeRef = React.useRef(onOpenChange);
+  React.useLayoutEffect(() => {
+    onOpenChangeRef.current = onOpenChange;
+  });
+  React.useLayoutEffect(() => {
+    onOpenChangeRef.current?.(open);
+    return () => onOpenChangeRef.current?.(true);
+  }, [open]);
 
   return (
     <section>

@@ -29,6 +29,7 @@ import { Text } from '~/design-system/text';
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 
 import { DebateClaimsPanel } from './debate-claims-panel';
+import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { type DebateFeedSurface, debateFeedHref } from './debate-feed-url';
 import { DebateInteractionBar } from './debate-interaction-bar';
@@ -442,7 +443,7 @@ export function DebatesBrowseFeed({
         if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', ' '].includes(event.key))
           lastScrollIntent.current = performance.now();
       }}
-      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
+      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
     >
       {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map((debate, index) => (
@@ -537,7 +538,12 @@ export function DebatesBrowseFeed({
   // toggling the claims/comments panel doesn't remount the players and restart playback.
   return (
     <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh md:bg-white">
-      <div className="min-w-0 flex-1">{feed}</div>
+      <div className="min-w-0 flex-1">
+        {/* Phones only. The feed covers the app navbar there, so it brings its own (GEO-3415); the
+            scroller below is the viewport less this bar's 2.75rem on every size. */}
+        <DebateFeedMobileBar />
+        {feed}
+      </div>
       {sidePanel}
     </div>
   );
@@ -641,7 +647,8 @@ function DebateFeedItem({
           className="relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
           style={DEBATE_COLUMN_STYLE}
         >
-          <div className="md:mt-4">
+          {/* 20px under the phone bar with the item's 12px: the gap the design leaves under the navbar. */}
+          <div className="md:mt-2">
             <DebateTitleHeader
               key={debate.claim.claim}
               claim={debate.claim.claim}
