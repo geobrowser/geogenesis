@@ -37,6 +37,7 @@ export function ExploreCardTopicFollow({
 
 function MoreTopics({ topics }: { topics: readonly ExploreCardTopic[] }) {
   const [open, setOpen] = React.useState(false);
+  const list = <TopicList topics={topics} />;
 
   return (
     <Root open={open} onOpenChange={setOpen}>
@@ -60,16 +61,23 @@ function MoreTopics({ topics }: { topics: readonly ExploreCardTopic[] }) {
           onClick={event => event.stopPropagation()}
           className="z-100 w-[260px] origin-top-right rounded-lg border border-grey-02 bg-white p-1 shadow-lg"
         >
-          <ul aria-label="More topics">
-            {topics.map(topic => (
-              <li key={topic.id} className="flex items-center justify-between gap-3 rounded px-2 py-1.5">
-                <span className="min-w-0 truncate text-metadataMedium text-text">{topic.name}</span>
-                <FollowButton target={{ kind: 'topic', id: topic.id, name: topic.name }} />
-              </li>
-            ))}
-          </ul>
+          {list}
         </Content>
       </Portal>
+      {open ? null : <div hidden>{list}</div>}
     </Root>
+  );
+}
+
+function TopicList({ topics }: { topics: readonly ExploreCardTopic[] }) {
+  return (
+    <ul aria-label="More topics">
+      {topics.map(topic => (
+        <li key={topic.id} className="flex items-center justify-between gap-3 rounded px-2 py-1.5">
+          <span className="min-w-0 truncate text-metadataMedium text-text">{topic.name}</span>
+          <FollowButton target={{ kind: 'topic', id: topic.id, name: topic.name }} />
+        </li>
+      ))}
+    </ul>
   );
 }

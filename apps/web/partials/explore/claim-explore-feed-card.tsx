@@ -71,6 +71,7 @@ export function ClaimExploreFeedCard({
   titleOpensSidePanel = false,
   variant = 'feed',
   responseNote,
+  topicFollow = false,
 }: {
   item: ExploreFeedItem;
   hideSpaceLink?: boolean;
@@ -97,6 +98,7 @@ export function ClaimExploreFeedCard({
    * the only answer worth reporting is the reader's own.
    */
   responseNote?: (position: boolean) => React.ReactNode;
+  topicFollow?: boolean;
 }) {
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
@@ -278,7 +280,7 @@ export function ClaimExploreFeedCard({
           compactOnMobile={matchesDebatePanelOnMobile}
           endSlot={
             <div className="ml-auto flex min-w-0 items-center">
-              <ExploreCardTopicFollow topics={item.topics} />
+              {topicFollow ? <ExploreCardTopicFollow topics={item.topics} /> : null}
               <ClaimEndSlot
                 claimId={item.entityId}
                 spaceId={item.spaceId}

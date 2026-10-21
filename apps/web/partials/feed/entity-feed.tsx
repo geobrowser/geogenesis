@@ -148,6 +148,7 @@ type EntityFeedProps = {
    * cross-space browsing surface the panel was asked for.
    */
   titleOpensSidePanel?: boolean;
+  topicFollow?: boolean;
   /**
    * Send the signed-in viewer's Privy identity token with each page request (GEO-3140), so the
    * server can personalize For you for a person it has verified rather than one the client names.
@@ -295,6 +296,7 @@ export function EntityFeed({
   dividerBeforeFeed = false,
   titleOpensSidePanel = false,
   claimCardVariant = 'feed',
+  topicFollow = false,
   sendIdentityToken = false,
   walletAddress = null,
   cdnFirstPage = false,
@@ -792,6 +794,7 @@ export function EntityFeed({
               hideJoinButton={lockedSpaceId != null}
               titleOpensSidePanel={titleOpensSidePanel}
               claimCardVariant={claimCardVariant}
+              topicFollow={topicFollow}
               deferUntilNearViewport={index >= EAGER_CARD_COUNT}
             />
           ))

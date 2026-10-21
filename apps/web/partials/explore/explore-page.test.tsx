@@ -109,6 +109,16 @@ describe('ExplorePage For you sort', () => {
     });
   });
 
+  it('offers topic Follow on the cards of both feeds', () => {
+    renderExplore();
+    expect(mocks.feedProps.at(-1)?.topicFollow).toBe(true);
+
+    cleanup();
+    mocks.flags = { forYouFeed: true };
+    renderExplore();
+    expect(mocks.feedProps.at(-1)?.topicFollow).toBe(true);
+  });
+
   // Privy restores the wallet after mount; until then the follows read as empty.
   it('waits for a signed-in account instead of serving Best first', () => {
     mocks.flags = { forYouFeed: true };

@@ -1,5 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionContextProvider, useActionContext } from '~/core/action-context-provider';
@@ -7,9 +9,15 @@ import type { FollowTarget } from '~/core/follows/follow-button';
 
 import { ExploreCardTopicFollow } from './explore-card-topic-follow';
 
+const mounted = new Map<string, number>();
+
 vi.mock('~/core/follows/follow-button', () => ({
   FollowButton: ({ target }: { target: FollowTarget }) => {
     const getContext = useActionContext('topic_follow_button', 'topic', target.id);
+    React.useEffect(() => {
+      mounted.set(target.id, (mounted.get(target.id) ?? 0) + 1);
+      return () => void mounted.set(target.id, mounted.get(target.id)! - 1);
+    }, [target.id]);
     return (
       <button type="button" data-component={getContext().component}>
         Follow {target.name}
@@ -29,7 +37,10 @@ const renderInCard = (ui: React.ReactElement) =>
     </ActionContextProvider>
   );
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mounted.clear();
+});
 
 describe('ExploreCardTopicFollow', () => {
   it('draws nothing for an entity with no topics', () => {
@@ -82,5 +93,18 @@ describe('ExploreCardTopicFollow', () => {
     for (const name of ['Follow Climate', 'Follow Finance']) {
       expect(screen.getByRole('button', { name }).getAttribute('data-component')).toBe('explore_card_topic_follow');
     }
+  });
+
+  it('keeps the listed topics’ Follow mounted while the list is closed', () => {
+    renderInCard(<ExploreCardTopicFollow topics={[CLIMATE, FINANCE, ENERGY]} />);
+    const trigger = screen.getByRole('button', { name: 'Show 2 more topics' });
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole('list', { name: 'More topics' })).toBeTruthy();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+    expect(screen.queryByRole('list', { name: 'More topics' })).toBeNull();
+    expect(mounted.get(FINANCE.id)).toBe(1);
+    expect(mounted.get(ENERGY.id)).toBe(1);
   });
 });

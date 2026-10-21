@@ -119,6 +119,7 @@ type DebateExploreFeedCardProps = {
   onPlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
   /** Additional action placed beside the full-screen link. */
   endSlot?: React.ReactNode;
+  topicFollow?: boolean;
   /**
    * Rendered instead of the debate card when the debate can't be shown as a video — feature flag
    * off, the geo-chat record is missing or unwatchable, or its final video isn't processed yet.
@@ -148,6 +149,7 @@ export function DebateExploreFeedCard({
   onPlaybackRequest,
   onPlaybackAvailabilityChange,
   endSlot,
+  topicFollow = false,
   fallback,
 }: DebateExploreFeedCardProps) {
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
@@ -421,7 +423,7 @@ export function DebateExploreFeedCard({
           compact={compactChrome}
           endSlot={
             <div className="ml-auto flex min-w-0 items-center gap-1">
-              <ExploreCardTopicFollow topics={item.topics} className="mr-2" />
+              {topicFollow ? <ExploreCardTopicFollow topics={item.topics} className="mr-2" /> : null}
               {endSlot}
               <FullscreenLink
                 requiresFullPage

@@ -225,6 +225,12 @@ vi.mock('./explore-join-space-button', () => ({
   ),
 }));
 
+vi.mock('./explore-card-topic-follow', () => ({
+  ExploreCardTopicFollow: ({ topics }: { topics?: { name: string }[] }) => (
+    <div data-testid="topic-follow">{topics?.map(topic => topic.name).join(',')}</div>
+  ),
+}));
+
 type ObserverRecord = {
   callback: IntersectionObserverCallback;
   elements: Set<Element>;
@@ -610,5 +616,15 @@ describe('ClaimExploreFeedCard', () => {
     // Beside the space chip, which is what the meta row is for — not a second voice in the split.
     const metaRow = screen.getByText('Global Politics').closest('div') as HTMLElement;
     expect(metaRow.textContent).toContain('Controversial');
+  });
+
+  it('offers the claim’s topics at the end of its meta row only when asked to', () => {
+    const tagged = { ...item, topics: [{ id: 'topic-a', name: 'Climate' }] };
+    const { unmount } = render(<ClaimExploreFeedCard item={tagged} />);
+    expect(screen.queryByTestId('topic-follow')).toBeNull();
+    unmount();
+
+    render(<ClaimExploreFeedCard item={tagged} topicFollow />);
+    expect(screen.getByTestId('topic-follow').textContent).toBe('Climate');
   });
 });
