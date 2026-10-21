@@ -58,7 +58,7 @@ describe('Navbar', () => {
     expect(left).toHaveClass('max-[359px]:gap-2!');
   });
 
-  it.each([false, true])('opens browse navigation with mobile debate branding %s', async showMobileLogo => {
+  it('opens browse navigation from a full-height touch target', async () => {
     const onBrowseClick = vi.fn();
     const user = userEvent.setup();
     const browseButtonRef = React.createRef<HTMLButtonElement>();
@@ -70,8 +70,6 @@ describe('Navbar', () => {
         navbarRef={navbarRef}
         onBrowseClick={onBrowseClick}
         onSearchClick={vi.fn()}
-        hideLogo
-        showMobileLogo={showMobileLogo}
       />
     );
 
@@ -82,11 +80,6 @@ describe('Navbar', () => {
     expect(button).toHaveAttribute('aria-expanded', 'false');
     expect(button).toHaveAttribute('aria-controls', 'mobile-browse-drawer');
     expect(button).toHaveClass('h-11', 'w-11', 'mobile:flex');
-    if (showMobileLogo) {
-      expect(screen.getByRole('link', { name: 'Geo home' })).toHaveAttribute('href', '/root');
-    } else {
-      expect(screen.queryByRole('link', { name: 'Geo home' })).not.toBeInTheDocument();
-    }
 
     await user.click(button);
     expect(onBrowseClick).toHaveBeenCalledOnce();

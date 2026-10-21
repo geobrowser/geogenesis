@@ -246,7 +246,8 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
 
     const heading = screen.getByRole('heading', { name: 'Debates are useful' });
     expect(screen.queryByRole('button', { name: 'Join a debate' })).not.toBeInTheDocument();
-    // Navigation lives in the app navbar, so the feed doesn't need its own back arrow.
+    // The feed carried its own back arrow on mobile because it covers the navbar there. The
+    // browser's own back is the way out now, so nothing in the feed should offer a second one.
     expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
     const feedItem = heading.closest('section');
     assert(feedItem, 'Expected the debate heading to be rendered inside a feed item');
