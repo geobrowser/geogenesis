@@ -1,17 +1,14 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyMember } from '../api';
 import type { LobbyPageView } from './lobby-view';
 
-const mocks = vi.hoisted(() => ({ phone: false, guest: false, video: false }));
+const mocks = vi.hoisted(() => ({ phone: false, guest: false }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
-vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: (id: string) => id === 'debateVideo' && mocks.video,
-}));
 vi.mock('./lobby-guest-hooks', () => ({ useIsLobbyGuest: () => mocks.guest }));
 vi.mock('./lobby-people', () => ({
   LobbyPersonName: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
@@ -58,7 +55,6 @@ afterEach(() => {
   cleanup();
   mocks.phone = false;
   mocks.guest = false;
-  mocks.video = false;
 });
 
 function member(id: string, extra: Partial<DebateLobbyMember> = {}): DebateLobbyMember {
@@ -408,17 +404,6 @@ function gridPeople(view: LobbyPageView, { cameras = [] as string[], speaking = 
 const tileNames = () => screen.getAllByTestId('lobby-speaker-tile').map(tile => tile.getAttribute('aria-label') ?? '');
 
 describe('LobbyPeople video grid (GEO-3399)', () => {
-  beforeEach(() => {
-    mocks.video = true;
-  });
-
-  it('keeps today’s tiles with the debateVideo flag off', () => {
-    mocks.video = false;
-    render(gridPeople(lobby([member('Adam', { role: 'host' }), member('Daniel')]), { cameras: ['Daniel'] }));
-    expect(screen.queryByTestId('lobby-speaker-grid')).toBeNull();
-    expect(screen.queryByTestId('lobby-speaker-frame')).toBeNull();
-  });
-
   it('shows each speaker’s camera in a frame, and the avatar in the same frame with the camera off', () => {
     render(
       gridPeople(lobby([member('Adam', { role: 'host' }), member('Daniel'), member('Elena')]), {
@@ -621,9 +606,8 @@ describe('LobbyPeople video grid (GEO-3399)', () => {
 });
 
 describe('lobbyMetaLabel', () => {
-  it('says Video on with lobby video, Voice only without', () => {
+  it('says Video on', () => {
     const view = { members: [member('Adam', { role: 'host' })] };
-    expect(lobbyMetaLabel(view, true)).toBe('Hosted by Adam · Video on · Not recorded');
-    expect(lobbyMetaLabel(view)).toBe('Hosted by Adam · Voice only · Not recorded');
+    expect(lobbyMetaLabel(view)).toBe('Hosted by Adam · Video on · Not recorded');
   });
 });

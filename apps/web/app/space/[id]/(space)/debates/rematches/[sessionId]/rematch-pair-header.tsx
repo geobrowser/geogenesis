@@ -7,7 +7,6 @@ import cx from 'classnames';
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
@@ -132,20 +131,13 @@ export function RematchPairHeader({
    * The label itself stays fixed. Folding the state into it would rename the control every time the
    * other person mutes, and a control whose name moves is harder to use than one that is quiet.
    */
-  const videoLayout = useFeatureFlag('debateVideo');
   const opponentStatusId = React.useId();
   const opponentStatus = voice.kind === 'live' ? opponentMicLabel(voice.opponentState, opponentName) : '';
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Option A keeps the videos side by side, with the phone's controls in their own row.
-          The audio-only layout retains its stacked participant cards. */}
-      <div
-        className={cx(
-          'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2',
-          videoLayout ? styles.pair : 'mobile:grid-cols-1'
-        )}
-      >
+      {/* The videos side by side, with the phone's controls in their own row. */}
+      <div className={cx('grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2', styles.pair)}>
         <OpponentCard
           video={opponentVideo}
           opponent={opponent}
@@ -185,9 +177,8 @@ function toastAnnouncement(toast: PairHeaderToast, opponentName: string) {
 }
 
 function VsBadge() {
-  const videoLayout = useFeatureFlag('debateVideo');
   return (
-    <div className={cx('flex items-center justify-center', videoLayout && styles.vs)}>
+    <div className={cx('flex items-center justify-center', styles.vs)}>
       <span
         aria-hidden
         className="grid size-7 place-items-center rounded-full bg-text text-tag tracking-[0.04em] text-white"
@@ -224,8 +215,8 @@ export const PAIR_PILL = 'flex h-6 shrink-0 items-center gap-1 px-2 text-chatMed
 /**
  * The layout both cards wear.
  *
- * Avatar, then a column holding the name with that person's state directly under it, then that
- * person's secondary action in the corner. One component rather than two similar ones, because
+ * Their video (or avatar) across the top, then one row with the name, that person's state and
+ * their secondary action at the end. One component rather than two similar ones, because
  * these sit side by side: the mute pill drifting out to the card's left edge while the opponent's
  * chip stayed indented under their name was invisible in either card alone and impossible to miss
  * across the pair.
@@ -245,32 +236,15 @@ function PairCardBody({
   /** The corner: Leave on your side, View profile on theirs. */
   action?: React.ReactNode;
 }) {
-  const videoLayout = useFeatureFlag('debateVideo');
-  if (videoLayout) {
-    return (
-      <div className={styles.cardBody}>
-        {avatar}
-        <span title={nameTitle} className={styles.cardName}>
-          {name}
-        </span>
-        <div className={styles.cardState}>{state}</div>
-        {action ? <div className={styles.cardAction}>{action}</div> : null}
-      </div>
-    );
-  }
   return (
-    <>
-      <div className="flex w-full items-center gap-2.5">
-        {avatar}
-        <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-          <span title={nameTitle} className="w-full truncate text-left text-quoteMedium text-text">
-            {name}
-          </span>
-          {state}
-        </div>
-        {action ? <div className="flex shrink-0 items-center">{action}</div> : null}
-      </div>
-    </>
+    <div className={styles.cardBody}>
+      {avatar}
+      <span title={nameTitle} className={styles.cardName}>
+        {name}
+      </span>
+      <div className={styles.cardState}>{state}</div>
+      {action ? <div className={styles.cardAction}>{action}</div> : null}
+    </div>
   );
 }
 
@@ -285,7 +259,6 @@ function YouCard({
   opponentName: string;
   leaveAction?: React.ReactNode;
 }) {
-  const videoLayout = useFeatureFlag('debateVideo');
   const live = voice.kind === 'live';
   const muted = live && voice.muted;
   const failed = live && Boolean(voice.micFailureMessage);
@@ -359,7 +332,7 @@ function YouCard({
       data-testid="rematch-you-card"
       role="group"
       aria-label="You"
-      className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5', videoLayout && [styles.card, styles.youCard])}
+      className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5', styles.card, styles.youCard)}
     >
       <PairCardBody
         avatar={
@@ -419,11 +392,10 @@ function OpponentCard({
   describedBy: string;
   video?: React.ReactNode;
 }) {
-  const videoLayout = useFeatureFlag('debateVideo');
   const talking = showMicState && state === 'talking';
   const videoAnchorRef = React.useRef<HTMLSpanElement>(null);
-  const { outside, dismissed, dismiss } = useFloatingOpponentVideo(videoAnchorRef, videoLayout);
-  const floating = videoLayout && showMicState && Boolean(video) && outside && !dismissed;
+  const { outside, dismissed, dismiss } = useFloatingOpponentVideo(videoAnchorRef);
+  const floating = showMicState && Boolean(video) && outside && !dismissed;
 
   // Base and hover in one expression, because a hover variant outranks a plain utility on
   // specificity whichever order they are written in. An unconditional `hover:border-grey-03`
@@ -471,7 +443,8 @@ function OpponentCard({
           CARD_SURFACE,
           border,
           'flex flex-col gap-2.5 text-left transition-colors',
-          videoLayout && [styles.card, styles.opponentCard],
+          styles.card,
+          styles.opponentCard,
           floating && styles.floatingActive
         )}
       >
@@ -503,13 +476,13 @@ function OpponentCard({
 }
 
 /** Observe the unchanged video slot, so docking the video cannot change the visibility signal. */
-function useFloatingOpponentVideo(anchorRef: React.RefObject<HTMLSpanElement | null>, enabled: boolean) {
+function useFloatingOpponentVideo(anchorRef: React.RefObject<HTMLSpanElement | null>) {
   const [outside, setOutside] = React.useState(false);
   const [dismissed, setDismissed] = React.useState(false);
 
   React.useEffect(() => {
     const anchor = anchorRef.current;
-    if (!enabled || !anchor || typeof IntersectionObserver === 'undefined') return;
+    if (!anchor || typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(
       entries => {
         // Batched transitions are chronological; use the latest visibility state.
@@ -524,7 +497,7 @@ function useFloatingOpponentVideo(anchorRef: React.RefObject<HTMLSpanElement | n
     );
     observer.observe(anchor);
     return () => observer.disconnect();
-  }, [anchorRef, enabled]);
+  }, [anchorRef]);
 
   return { outside, dismissed, dismiss: () => setDismissed(true) };
 }
@@ -548,7 +521,6 @@ function ParticipantAvatar({
   anchorRef?: React.Ref<HTMLSpanElement>;
   floating?: boolean;
 }) {
-  const videoLayout = useFeatureFlag('debateVideo');
   return (
     // The size lives on the wrapper, not on `<Avatar>`: its `size` prop only reaches the generated
     // fallback, while a real avatar renders `h-full w-full` and takes whatever box it is given.
@@ -557,7 +529,8 @@ function ParticipantAvatar({
       data-testid="pair-avatar"
       className={cx(
         'inline-flex shrink-0 overflow-hidden',
-        videoLayout ? [styles.video, border] : 'size-8 rounded-full',
+        styles.video,
+        border,
         speaking && 'ring-2 ring-successTertiary',
         floating && styles.floatingActive
       )}
@@ -567,24 +540,22 @@ function ParticipantAvatar({
         data-testid={floating ? 'rematch-floating-opponent-video' : undefined}
       >
         {video ?? (
-          <span className={videoLayout ? styles.fallback : 'contents'}>
-            <Avatar avatarUrl={avatarUrl} value={value ?? name} size={videoLayout ? 56 : 32} alt="" />
+          <span className={styles.fallback}>
+            <Avatar avatarUrl={avatarUrl} value={value ?? name} size={56} alt="" />
           </span>
         )}
-        {videoLayout ? (
-          <DebateTileChip
-            aria-hidden
-            className={cx(
-              tileChipSurface,
-              'absolute bottom-1.5 left-1.5 max-w-[calc(100%-12px)] text-text',
-              styles.videoName,
-              floating && styles.floatingName
-            )}
-          >
-            {speaking ? <TalkingBars /> : null}
-            <span className="truncate">{name}</span>
-          </DebateTileChip>
-        ) : null}
+        <DebateTileChip
+          aria-hidden
+          className={cx(
+            tileChipSurface,
+            'absolute bottom-1.5 left-1.5 max-w-[calc(100%-12px)] text-text',
+            styles.videoName,
+            floating && styles.floatingName
+          )}
+        >
+          {speaking ? <TalkingBars /> : null}
+          <span className="truncate">{name}</span>
+        </DebateTileChip>
       </span>
     </span>
   );

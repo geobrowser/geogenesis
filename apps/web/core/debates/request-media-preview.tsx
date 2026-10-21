@@ -13,7 +13,6 @@ import {
   type DebateJoinState,
   type DebateMediaPermission,
   describeJoinState,
-  describeMicOnlyJoinState,
   isMediaBlocked,
   mayAutoStartPreview,
 } from './request-join-state';
@@ -47,8 +46,6 @@ type DebateRequestMediaPreviewProps = {
   fallback?: React.ReactNode;
   initialJoinState?: DebateJoinState | null;
   onJoinStateChange?: (state: DebateJoinState) => void;
-  /** False for a card that leads into an audio-only claim picker: mic only, camera never opened. */
-  camera?: boolean;
   appearance?: 'compact' | 'tile';
   formatSummary?: (state: DebateJoinState) => string;
   /** Lets a card place media status below its participant container. */
@@ -77,7 +74,6 @@ function MediaPreview({
   retain,
   initialJoinState = null,
   onJoinStateChange,
-  camera = true,
   renderLayout,
   appearance = 'compact',
   formatSummary,
@@ -135,7 +131,7 @@ function MediaPreview({
     };
   }, [sessionKey]);
 
-  const open = { micOn: want.micOn && !micToLobby, cameraOn: camera && want.cameraOn && !cameraToLobby };
+  const open = { micOn: want.micOn && !micToLobby, cameraOn: want.cameraOn && !cameraToLobby };
   const openKey = `${open.micOn}:${open.cameraOn}`;
   React.useEffect(() => {
     let active = true;
@@ -166,7 +162,7 @@ function MediaPreview({
             camera: open.cameraOn && !acquired.current.cameraOn ? true : current.camera,
           }));
         } else {
-          const failed = preJoinMediaFailure(error, camera ? undefined : { audio: true, video: false });
+          const failed = preJoinMediaFailure(error);
           setFailure(failed.message);
 
           if (failed.state === 'denied') {
@@ -197,7 +193,7 @@ function MediaPreview({
   }, [sessionKey, openKey]);
 
   const micOn = want.micOn && !missing.mic;
-  const cameraOn = camera && want.cameraOn && !missing.camera;
+  const cameraOn = want.cameraOn && !missing.camera;
 
   // The preview element is fed from the session's stream rather than owning a `getUserMedia` of its
   // own, so there is one camera open between this card and the room it leads to.
@@ -207,8 +203,7 @@ function MediaPreview({
     video.srcObject = session.previewStream ?? null;
   }, [session.previewStream, cameraOn]);
 
-  // A camera that is not offered is not reported blocked either: there would be nothing to unblock.
-  const cameraBlocked = camera && permission !== null && isMediaBlocked(permission.camera);
+  const cameraBlocked = permission !== null && isMediaBlocked(permission.camera);
   const micBlocked = permission !== null && isMediaBlocked(permission.microphone);
   const blocked = cameraBlocked && micBlocked;
 
@@ -218,11 +213,11 @@ function MediaPreview({
   }, [cameraOn, micOn, onJoinStateChange, permission]);
 
   // What the room this session is handed to starts with, rather than reading it off live tracks.
-  // After `beginSession`, which clears it; no camera choice where none was offered.
+  // After `beginSession`, which clears it.
   React.useEffect(() => {
-    session.joinChoiceRef.current = camera ? { micOn, cameraOn } : { micOn };
+    session.joinChoiceRef.current = { micOn, cameraOn };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, cameraOn, micOn, sessionKey]);
+  }, [cameraOn, micOn, sessionKey]);
 
   const toggle = (next: Partial<DebateJoinState>) => {
     if (next.micOn !== undefined && micBlocked) return;
@@ -236,7 +231,7 @@ function MediaPreview({
     setWant(current => ({ ...current, ...next }));
   };
 
-  const { summary, announcement } = camera ? describeJoinState({ micOn, cameraOn }) : describeMicOnlyJoinState(micOn);
+  const { summary, announcement } = describeJoinState({ micOn, cameraOn });
 
   const summaryText = formatSummary?.({ micOn, cameraOn }) ?? summary;
 
@@ -253,7 +248,7 @@ function MediaPreview({
           <MicrophoneIcon muted={!micOn} />
         </DebateTileToggleButton>
       )}
-      {camera && !cameraBlocked && (
+      {!cameraBlocked && (
         <DebateTileToggleButton
           ariaLabel={cameraOn ? 'Turn camera off' : 'Turn camera on'}
           compact={appearance === 'compact'}
@@ -317,11 +312,11 @@ function MediaPreview({
         <Text variant="footnote" color="grey-04">
           {failure}
         </Text>
-      ) : missing.mic && camera && missing.camera ? (
+      ) : missing.mic && missing.camera ? (
         <Text variant="footnote" color="grey-04">
           No camera or microphone found.
         </Text>
-      ) : camera && missing.camera ? (
+      ) : missing.camera ? (
         <Text variant="footnote" color="grey-04">
           No camera found.
         </Text>
