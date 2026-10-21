@@ -5,7 +5,7 @@ import { keepPreviousData } from '@tanstack/react-query';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom, useStore } from 'jotai';
 
 import { capture } from '~/core/analytics';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
@@ -39,7 +39,7 @@ import { DebateShareDialog } from './lazy-share-dialog';
 import { useLineClampOverflow } from './line-clamp-overflow';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
-import { debateFullscreenActiveAtom } from '~/atoms';
+import { debateFeedPanelAtom, debateFullscreenActiveAtom, openDebateFeedPanelAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
 /** How many cards past the active one open their recordings. See the `preload` prop below. */
@@ -231,10 +231,24 @@ export function DebatesBrowseFeed({
       /* Navigation must work without analytics. */
     }
   };
-  // Which panel is open, not which debate it was opened from: the claims and
-  // comments panels describe the debate you're watching, so they follow the feed
-  // as you scroll rather than staying pinned to the one whose button you pressed.
-  const [openPanel, setOpenPanel] = React.useState<'claims' | 'comments' | null>(null);
+  /*
+   * Which panel is open — held in `debateFeedPanelAtom` rather than here, so it joins the app's one
+   * panel slot. Which panel, not which debate it was opened from: both describe the debate being
+   * watched, so they follow the feed as it scrolls rather than staying pinned to the one whose
+   * button was pressed.
+   */
+  const openPanel = useAtomValue(debateFeedPanelAtom);
+  const setFeedPanel = useSetAtom(openDebateFeedPanelAtom);
+
+  // Cleared on unmount, which `useState` did for free; otherwise the panel reopens with the next feed.
+  // Not on a pathname change: the URL follows the debate being watched as the feed scrolls.
+  const store = useStore();
+  React.useEffect(
+    () => () => {
+      if (store.get(debateFeedPanelAtom)) store.set(debateFeedPanelAtom, null);
+    },
+    [store]
+  );
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
@@ -479,11 +493,11 @@ export function DebatesBrowseFeed({
           // otherwise open on the debate being scrolled away from.
           onOpenClaims={() => {
             setActiveId(debate.id);
-            setOpenPanel('claims');
+            setFeedPanel('claims');
           }}
           onOpenComments={() => {
             setActiveId(debate.id);
-            setOpenPanel('comments');
+            setFeedPanel('comments');
           }}
           onPlaybackRequest={() => setActiveId(debate.id)}
         />
@@ -495,7 +509,7 @@ export function DebatesBrowseFeed({
   );
 
   const activeDebate = visibleDebates.find(debate => debate.id === activeId) ?? null;
-  const closePanel = () => setOpenPanel(null);
+  const closePanel = () => setFeedPanel(null);
 
   const sidePanel =
     openPanel === 'claims' && activeDebate ? (

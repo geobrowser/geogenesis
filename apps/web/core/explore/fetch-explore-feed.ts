@@ -9,12 +9,11 @@ import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { hasProcessedVideo } from '~/core/debates/playback-utils';
 import { geoChatBaseUrl } from '~/core/debates/server/geo-chat-base-url';
 import { speakerStillUrl } from '~/core/debates/speaker-still';
-import { EntitiesOrderBy, type EntityFilter, type RelationFilter } from '~/core/gql/graphql';
+import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
-import { collectCursorPages } from '~/core/sync/collect-cursor-pages';
 import { normId } from '~/core/utils/norm-id';
 import { createPromiseTtlCache } from '~/core/utils/promise-ttl-cache';
 import { runAfterResponse } from '~/core/utils/run-after-response';
@@ -28,7 +27,6 @@ import {
   buildExploreFeedRows,
   decodeExploreCardEntity,
 } from './explore-card-item';
-import { exploreCompleteIndexDocument } from './explore-complete-index-document';
 import { EXPLORE_ENTITY_NAME_PROPERTY_ID, EXPLORE_PAGE_SIZE } from './explore-constants';
 import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
 import {
@@ -47,9 +45,7 @@ import {
 } from './explore-entities-document';
 import { exploreForYouBestConnectionDocument, exploreForYouConnectionDocument } from './explore-for-you-document';
 import { FOR_YOU_FEED, composeForYouPage } from './explore-for-you-mix';
-import type { ExploreCompleteIndexNode } from './explore-index-selection';
-import { exploreRelationIndexDocument } from './explore-relation-index-document';
-import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import { exploreTopicFeedConnectionDocument } from './explore-topic-feed-document';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import {
   type ExploreForYouCursor,
@@ -133,18 +129,8 @@ export type ExploreWindowReorder = (
   context: { windowKey: string; arrange: (rows: ExploreFeedRow[]) => ExploreFeedRow[] }
 ) => Promise<{ rows: ExploreFeedRow[]; feed: FeedDescriptor } | null>;
 
-/**
- * One disjoint branch of a contextual feed's complete population.
- *
- * Each scope must include every entity that belongs to the feed for its supplied types; the
- * results are merged and ranked here. Topic feeds use one scope for all directly tagged entities.
- */
-export type ExploreCompletePopulationScope = {
-  typeIds: readonly string[];
-  entityFilter: EntityFilter;
-  /** Optional relation entry point. Source entities still satisfy the full feed predicate. */
-  relationFilter?: RelationFilter;
-};
+/** The orders a topic page's feed can be served in from gaia's topic ranking table (GEO-3092). */
+type RankedTopicFeedSort = Extract<ExploreSort, 'best' | 'new'>;
 
 // Entities we never want to surface in any feed.
 // - `System type` relation to the `System` entity: marks system-managed rows.
@@ -251,6 +237,31 @@ function decodeExploreBest(data: {
   return decodeConnection(data.entitiesRankedForFeedConnection ?? null);
 }
 
+type RankedWindowArgs = {
+  spaceIds: string[];
+  time: ExploreTime;
+  limit: number;
+  offset: number;
+  typeIds: readonly string[];
+};
+
+/**
+ * The variables shared by the offset-paged ranked connections: Best by type, For you's streams and
+ * a topic page's feed. Each also takes a per-type or per-topic cap, and that cap must be at least
+ * `offset + first`, or a page silently comes back short.
+ */
+function rankedWindowVariables(args: RankedWindowArgs) {
+  const t = timeThresholdSec(args.time);
+  return {
+    first: args.limit,
+    offset: args.offset,
+    spaceIds: args.spaceIds,
+    typeIds: [...args.typeIds],
+    createdAfter: t != null ? String(t) : undefined,
+    spaceIdsForLists: args.spaceIds,
+  };
+}
+
 /**
  * "Best", type-filtered by the server (GEO-2885).
  *
@@ -265,16 +276,12 @@ function decodeExploreBest(data: {
  * smallest provably exact value. It is computed here, from numbers this function owns, rather
  * than defaulted in the document — see `exploreBestByTypeConnectionDocument`.
  */
-async function fetchBestEntitiesByTypePage(args: {
-  spaceIds: string[];
-  time: ExploreTime;
-  limit: number;
-  offset: number;
-  typeIds: readonly string[];
-  requireDebateTagOnClaims?: boolean;
-  entityFilter?: EntityFilter;
-}): Promise<ExploreEntitiesPageResponse> {
-  const t = timeThresholdSec(args.time);
+async function fetchBestEntitiesByTypePage(
+  args: RankedWindowArgs & {
+    requireDebateTagOnClaims?: boolean;
+    entityFilter?: EntityFilter;
+  }
+): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
       query: exploreBestByTypeConnectionDocument,
@@ -286,17 +293,44 @@ async function fetchBestEntitiesByTypePage(args: {
         return { ...page, endCursor: String(args.offset + page.entities.length) };
       },
       variables: {
-        first: args.limit,
-        offset: args.offset,
-        spaceIds: args.spaceIds,
-        typeIds: [...args.typeIds],
+        ...rankedWindowVariables(args),
         maxPerType: args.offset + args.limit,
-        createdAfter: t != null ? String(t) : undefined,
         filter: combineEntityFilters(
           args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : undefined,
           args.entityFilter
         ),
-        spaceIdsForLists: args.spaceIds,
+      },
+    })
+  );
+}
+
+/**
+ * One window of a topic page's feed (GEO-3092), ordered by gaia's topic ranking table. Entities
+ * must carry every topic in `topicIds`. A `maxPerTopic` below `offset + first` returns short.
+ */
+async function fetchRankedTopicFeedPage(
+  args: RankedWindowArgs & {
+    topicIds: readonly string[];
+    sort: RankedTopicFeedSort;
+    requireDebateTagOnClaims?: boolean;
+  }
+): Promise<ExploreEntitiesPageResponse> {
+  return Effect.runPromise(
+    graphql({
+      query: exploreTopicFeedConnectionDocument,
+      decoder: (data: { entitiesRankedForTopicsConnection?: { nodes?: unknown[] } | null }) => {
+        const nodes = data.entitiesRankedForTopicsConnection?.nodes ?? [];
+        const page = decodeConnection({ nodes });
+        // The connection reports no next page, ever; a full window is the only sign of more.
+        const end = args.offset + nodes.length;
+        return { ...page, endCursor: String(end), hasNextPage: nodes.length >= args.limit };
+      },
+      variables: {
+        ...rankedWindowVariables(args),
+        topicIds: [...args.topicIds],
+        maxPerTopic: args.offset + args.limit,
+        debateTaggedClaims: args.requireDebateTagOnClaims ?? false,
+        sortBy: args.sort,
       },
     })
   );
@@ -316,19 +350,15 @@ type ForYouStreamPage = {
  * A For you stream (GEO-3083) with each row's followed topics, scoped and filtered like
  * `fetchBestEntitiesByTypePage`. A per-topic or per-type cap below `offset + first` returns short.
  */
-async function fetchForYouStreamPage(args: {
-  /** `best` also selects each row's followed topics; `plainBest` doesn't, for a schema without them. */
-  stream: 'topics' | 'best' | 'plainBest';
-  topicIds: readonly string[];
-  spaceIds: string[];
-  time: ExploreTime;
-  limit: number;
-  offset: number;
-  typeIds: readonly string[];
-  requireDebateTagOnClaims?: boolean;
-  entityFilter?: EntityFilter;
-}): Promise<ForYouStreamPage> {
-  const t = timeThresholdSec(args.time);
+async function fetchForYouStreamPage(
+  args: RankedWindowArgs & {
+    /** `best` also selects each row's followed topics; `plainBest` doesn't, for a schema without them. */
+    stream: 'topics' | 'best' | 'plainBest';
+    topicIds: readonly string[];
+    requireDebateTagOnClaims?: boolean;
+    entityFilter?: EntityFilter;
+  }
+): Promise<ForYouStreamPage> {
   const connection =
     args.stream === 'topics' ? 'entitiesRankedForTopicsConnection' : 'entitiesRankedForFeedByTypeConnection';
   return Effect.runPromise(
@@ -358,15 +388,11 @@ async function fetchForYouStreamPage(args: {
         return { entities, rawIndex, matchedTopicIds, fetched: nodes.length };
       },
       variables: {
-        first: args.limit,
-        offset: args.offset,
+        ...rankedWindowVariables(args),
         ...(args.stream === 'plainBest' ? {} : { topicIds: [...args.topicIds] }),
-        spaceIds: args.spaceIds,
-        typeIds: [...args.typeIds],
         ...(args.stream === 'topics'
           ? { maxPerTopic: args.offset + args.limit }
           : { maxPerType: args.offset + args.limit }),
-        createdAfter: t != null ? String(t) : undefined,
         // The topic walk applies the debate-tag rule itself (gaia#984). As a filter after the walk it
         // would drop rows past each topic's cap and leave pages nearly empty.
         ...(args.stream === 'topics' ? { debateTaggedClaims: args.requireDebateTagOnClaims ?? false } : {}),
@@ -376,7 +402,6 @@ async function fetchForYouStreamPage(args: {
             : undefined,
           args.entityFilter
         ),
-        spaceIdsForLists: args.spaceIds,
       },
     })
   );
@@ -445,203 +470,6 @@ async function fetchExploreEntitiesPage(args: {
       },
     })
   );
-}
-
-const COMPLETE_INDEX_PAGE_SIZE = 500;
-
-async function fetchCompleteIndexScope(
-  args: ExploreCompletePopulationScope & {
-    spaceIds: string[];
-    time: ExploreTime;
-    requireName?: boolean;
-    requireDebateTagOnClaims?: boolean;
-  }
-): Promise<ExploreCompleteIndexNode[]> {
-  const filter = buildExploreFeedFilter({ ...args, includeEntityScopeInFilter: Boolean(args.relationFilter) });
-
-  // Both entry points exhaust the same cursor contract. A malformed cursor must reject the
-  // population promise (and evict it from the cache), never cache a partial count or loop forever.
-  return collectCursorPages<ExploreCompleteIndexNode>(async after => {
-    if (args.relationFilter) {
-      const page = await Effect.runPromise(
-        graphql({
-          query: exploreRelationIndexDocument,
-          decoder: response => response.relationsConnection ?? null,
-          variables: {
-            first: COMPLETE_INDEX_PAGE_SIZE,
-            after: after ?? null,
-            filter: { and: [args.relationFilter, { fromEntity: filter }] },
-          },
-        })
-      );
-      return {
-        items: (page?.nodes ?? []).flatMap(node => (node?.fromEntity ? [node.fromEntity] : [])),
-        endCursor: page?.pageInfo?.endCursor ?? null,
-        hasNextPage: page?.pageInfo?.hasNextPage ?? false,
-      };
-    }
-
-    const page = await Effect.runPromise(
-      graphql({
-        query: exploreCompleteIndexDocument,
-        decoder: response => response.entitiesConnection ?? null,
-        variables: {
-          limit: COMPLETE_INDEX_PAGE_SIZE,
-          after: after ?? null,
-          filter,
-          spaceIds: { in: args.spaceIds },
-          typeIds: { in: [...args.typeIds] },
-        },
-      })
-    );
-    return {
-      items: page?.nodes ?? [],
-      endCursor: page?.pageInfo?.endCursor ?? null,
-      hasNextPage: page?.pageInfo?.hasNextPage ?? false,
-    };
-  });
-}
-
-function rankingScore(value: ExploreCompleteIndexNode['rankingScore']): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const score = Number(value);
-  return Number.isFinite(score) ? score : null;
-}
-
-type CompletePopulationIndexArgs = {
-  spaceIds: string[];
-  sort: Extract<ExploreSort, 'best' | 'new'>;
-  time: ExploreTime;
-  typeIds: readonly string[];
-  requireName?: boolean;
-  requireDebateTagOnClaims?: boolean;
-  scopes: readonly ExploreCompletePopulationScope[];
-};
-
-/** Matches the Topic facet/composition query freshness while bounding stale feed membership. */
-const COMPLETE_POPULATION_CACHE_TTL_MS = 60_000;
-/** Each entry may hold a whole Topic population, so keep the per-instance cache deliberately small. */
-const COMPLETE_POPULATION_CACHE_MAX_ENTRIES = 24;
-const completePopulationCache = createPromiseTtlCache<ExploreCompleteIndexNode[]>({
-  ttlMs: COMPLETE_POPULATION_CACHE_TTL_MS,
-  maxEntries: COMPLETE_POPULATION_CACHE_MAX_ENTRIES,
-});
-
-function completePopulationCacheKey(args: CompletePopulationIndexArgs): string {
-  return JSON.stringify({
-    // These are set-valued GraphQL filters. Canonicalizing their order lets the header request
-    // reuse the feed request even though the browse sidebar and Topic scope assemble the same
-    // spaces in different orders.
-    spaceIds: args.spaceIds.map(normId).sort(),
-    sort: args.sort,
-    time: args.time,
-    typeIds: args.typeIds.map(normId).sort(),
-    requireName: args.requireName ?? null,
-    requireDebateTagOnClaims: args.requireDebateTagOnClaims ?? null,
-    scopes: args.scopes,
-  });
-}
-
-async function buildCompletePopulationIndex(args: CompletePopulationIndexArgs): Promise<ExploreCompleteIndexNode[]> {
-  const scopeRows = await Promise.all(
-    args.scopes
-      .filter(scope => scope.typeIds.length > 0)
-      .map(scope =>
-        fetchCompleteIndexScope({
-          spaceIds: args.spaceIds,
-          time: args.time,
-          typeIds: scope.typeIds,
-          requireName: args.requireName,
-          requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-          entityFilter: scope.entityFilter,
-          relationFilter: scope.relationFilter,
-        })
-      )
-  );
-
-  const byId = new Map<string, ExploreCompleteIndexNode>();
-  for (const row of scopeRows.flat()) {
-    if (!row.id) continue;
-    byId.set(normId(row.id), row);
-  }
-
-  return [...byId.values()].sort((left, right) => {
-    if (args.sort === 'new') {
-      const created =
-        parseEntityUpdatedAtToUnixSec(String(right.createdAt ?? '')) -
-        parseEntityUpdatedAtToUnixSec(String(left.createdAt ?? ''));
-      return created || (right.id ?? '').localeCompare(left.id ?? '');
-    }
-
-    const leftScore = rankingScore(left.rankingScore);
-    const rightScore = rankingScore(right.rankingScore);
-    if (leftScore === null && rightScore !== null) return 1;
-    if (leftScore !== null && rightScore === null) return -1;
-    if (leftScore !== null && rightScore !== null && leftScore !== rightScore) return rightScore - leftScore;
-    return (right.id ?? '').localeCompare(left.id ?? '');
-  });
-}
-
-/**
- * Reuses one compact population across the page requests generated by infinite scroll.
- *
- * This cache is per server instance and therefore best-effort on serverless, but every hit avoids
- * downloading and sorting the complete Topic population again. Rejected requests are evicted, and
- * both entry count and freshness are bounded so a wide range of filters cannot grow memory forever.
- */
-export async function fetchCompleteExplorePopulationIndex(
-  args: CompletePopulationIndexArgs
-): Promise<ExploreCompleteIndexNode[]> {
-  return completePopulationCache.get(completePopulationCacheKey(args), () => buildCompletePopulationIndex(args));
-}
-
-/**
- * Complete contextual ordering without the generic connection's expensive combined predicate.
- * Best keeps ranking-score order (with unscored entities last); New keeps creation-time order.
- */
-async function fetchCompleteEntitiesPage(args: {
-  spaceIds: string[];
-  sort: Extract<ExploreSort, 'best' | 'new'>;
-  time: ExploreTime;
-  limit: number;
-  offset: number;
-  typeIds: readonly string[];
-  requireName?: boolean;
-  requireDebateTagOnClaims?: boolean;
-  scopes: readonly ExploreCompletePopulationScope[];
-}): Promise<ExploreEntitiesPageResponse> {
-  const ordered = await fetchCompleteExplorePopulationIndex(args);
-
-  const indexPage = ordered.slice(args.offset, args.offset + args.limit);
-  const ids = indexPage.flatMap(row => (row.id ? [row.id] : []));
-  if (ids.length === 0) {
-    return { entities: [], endCursor: null, hasNextPage: false };
-  }
-
-  // The compact index already proved these ids belong to the contextual population. Repeating the
-  // relation-heavy Topic predicate here would throw away the speedup, so the card query narrows by
-  // those exact ids and retains the ordinary display/name/space guards.
-  const cardPage = await fetchExploreEntitiesPage({
-    spaceIds: args.spaceIds,
-    time: args.time,
-    limit: ids.length,
-    after: null,
-    orderBy: [EntitiesOrderBy.CreatedAtDesc],
-    typeIds: args.typeIds,
-    requireName: args.requireName,
-    requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-    entityFilter: { id: { in: ids } },
-  });
-  const cardById = new Map(cardPage.entities.map(entity => [normId(entity.id), entity]));
-
-  return {
-    entities: ids.flatMap(id => {
-      const entity = cardById.get(normId(id));
-      return entity ? [entity] : [];
-    }),
-    endCursor: String(args.offset + ids.length),
-    hasNextPage: args.offset + ids.length < ordered.length,
-  };
 }
 
 /** One Fresh list per scroll and scope, shared by every page request of that scroll. */
@@ -994,6 +822,11 @@ export async function fetchExploreFeed(args: {
   spaceFilterIds: string[] | null;
   cursor: string | null;
   walletAddress?: string | null;
+  /**
+   * The wallet's member space, when the caller has already resolved it (`null` for none), so the
+   * pending-request check does not look it up again on every page. Omitted, it is looked up.
+   */
+  viewerMemberSpaceId?: string | null;
   memberOrEditorSpaceIds: string[];
   /** Restrict surfaced entities to these type IDs (via `filter.typeIds.overlaps`). Omit for no type filter. */
   typeIds?: readonly string[];
@@ -1033,10 +866,11 @@ export async function fetchExploreFeed(args: {
    */
   reorderWindow?: ExploreWindowReorder;
   /**
-   * Complete population branches for a contextual feed. When supplied, Best and New order this
-   * full population from a compact index rather than applying one expensive combined predicate.
+   * GEO-3092. A topic page's topics, the page's own first: Best and New then page through entities
+   * tagged with all of them straight from gaia's topic ranking table, and `entityFilter` is not
+   * consulted for those sorts. Top is unaffected.
    */
-  completePopulationScopes?: readonly ExploreCompletePopulationScope[];
+  rankedTopicIds?: readonly string[];
   /**
    * GEO-3221. The fresh slot's live config: newest items merged into Best's page at read time.
    * Applied only to plain Best with a type selection, and only to a scroll that began with it.
@@ -1085,8 +919,10 @@ export async function fetchExploreFeed(args: {
     if (pendingTargets.length === 0) return out;
 
     try {
-      const profile = await Effect.runPromise(fetchProfile(wallet));
-      const memberSpaceId = profile?.spaceId;
+      const memberSpaceId =
+        args.viewerMemberSpaceId !== undefined
+          ? args.viewerMemberSpaceId
+          : (await Effect.runPromise(fetchProfile(wallet)))?.spaceId;
       if (!memberSpaceId) return out;
 
       const pendingMap = new Map<string, boolean>();
@@ -1128,25 +964,28 @@ export async function fetchExploreFeed(args: {
   // Best with a type selection goes to the server (GEO-2885); Best with none keeps the untyped
   // walk, which is the right plan when there is no type argument and is what the by-type
   // connection cannot serve — it matches nothing without `typeIds`.
-  const completeSort =
-    (args.completePopulationScopes?.length ?? 0) > 0 && (args.sort === 'best' || args.sort === 'new')
+  const rankedTopicSort =
+    (args.rankedTopicIds?.length ?? 0) > 0 &&
+    (args.typeIds?.length ?? 0) > 0 &&
+    (args.sort === 'best' || args.sort === 'new')
       ? args.sort
       : null;
-  const usesCompletePopulation = completeSort !== null;
-  const bestFiltersServerSide = !usesCompletePopulation && args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
+  const bestFiltersServerSide = rankedTopicSort === null && args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
+
+  const windowOffsetOf = (windowAfter: string | null) =>
+    Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0;
 
   const fetchWindow = (windowAfter: string | null) =>
-    completeSort !== null
-      ? fetchCompleteEntitiesPage({
+    rankedTopicSort !== null
+      ? fetchRankedTopicFeedPage({
+          topicIds: args.rankedTopicIds ?? [],
+          sort: rankedTopicSort,
           spaceIds: baseIds,
-          sort: completeSort,
           time: args.time,
           limit: windowSize,
-          offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
+          offset: windowOffsetOf(windowAfter),
           typeIds: args.typeIds ?? [],
-          requireName: args.requireName,
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-          scopes: args.completePopulationScopes ?? [],
         })
       : bestFiltersServerSide
         ? fetchBestEntitiesByTypePage({
@@ -1156,7 +995,7 @@ export async function fetchExploreFeed(args: {
             // This path paginates by offset, and the window cursor's `after` slot carries it as
             // a decimal string. Anything unparseable restarts at 0, matching the tolerance
             // `decodeExploreWindowCursor` already documents.
-            offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
+            offset: windowOffsetOf(windowAfter),
             typeIds: args.typeIds ?? [],
             requireDebateTagOnClaims: args.requireDebateTagOnClaims,
             entityFilter: args.entityFilter,

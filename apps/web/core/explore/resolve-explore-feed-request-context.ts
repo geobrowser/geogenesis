@@ -35,31 +35,32 @@ export async function resolveExploreFeedRequestContext(routeSpaceId?: string, op
 
   if (walletAddress) {
     personalMemberSpaceId = await resolveMemberSpaceFromWalletSafe(walletAddress);
-    if (personalMemberSpaceId) {
-      try {
-        const context = await getGovernanceHomeSpaceContext(personalMemberSpaceId);
-        memberOrEditorSpaceIds = [
-          ...new Set([...context.editorIds, ...context.myProposalSpaceIds, personalMemberSpaceId]),
-        ];
-      } catch {
-        memberOrEditorSpaceIds = [personalMemberSpaceId];
-      }
-    }
+  }
+
+  // Both need only the member space, so they run side by side: in sequence they were two graph
+  // round trips ahead of every signed-in feed page.
+  const [membership, fetchedBrowse] = await Promise.allSettled([
+    personalMemberSpaceId ? getGovernanceHomeSpaceContext(personalMemberSpaceId) : Promise.resolve(null),
+    fetchBrowseSidebarData(personalMemberSpaceId),
+  ]);
+  if (personalMemberSpaceId) {
+    memberOrEditorSpaceIds =
+      membership.status === 'fulfilled' && membership.value
+        ? [...new Set([...membership.value.editorIds, ...membership.value.myProposalSpaceIds, personalMemberSpaceId])]
+        : [personalMemberSpaceId];
   }
 
   let browse: BrowseSidebarData;
-  try {
-    browse = await fetchBrowseSidebarData(personalMemberSpaceId);
-  } catch {
-    if (personalMemberSpaceId) {
-      try {
-        browse = await fetchBrowseSidebarData(null);
-      } catch {
-        browse = EMPTY_BROWSE;
-      }
-    } else {
+  if (fetchedBrowse.status === 'fulfilled') {
+    browse = fetchedBrowse.value;
+  } else if (personalMemberSpaceId) {
+    try {
+      browse = await fetchBrowseSidebarData(null);
+    } catch {
       browse = EMPTY_BROWSE;
     }
+  } else {
+    browse = EMPTY_BROWSE;
   }
 
   if (routeSpaceId) {

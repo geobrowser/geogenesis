@@ -51,7 +51,12 @@ import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
-import { entitySidePanelWantsEditAtom, rankingFullscreenActiveAtom, rankingFullscreenFocusTargetAtom } from '~/atoms';
+import {
+  entitySidePanelWantsEditAtom,
+  exploreDebateClaimsPanelAtom,
+  rankingFullscreenActiveAtom,
+  rankingFullscreenFocusTargetAtom,
+} from '~/atoms';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 // Opened on demand, so none of these is needed to paint or hydrate a page. Each renders nothing
@@ -66,6 +71,13 @@ const EntitySidePanel = dynamic(
 );
 const EntityCommentsPanelHost = dynamic(
   () => import('~/partials/comments/entity-comments-panel-host').then(m => ({ default: m.EntityCommentsPanelHost })),
+  { ssr: false }
+);
+const ExploreDebateClaimsPanelHost = dynamic(
+  () =>
+    import('~/partials/explore/explore-debate-claims-panel-host').then(m => ({
+      default: m.ExploreDebateClaimsPanelHost,
+    })),
   { ssr: false }
 );
 const FeatureFlagsDialog = dynamic(
@@ -150,6 +162,11 @@ function EntitySidePanelGate() {
 function EntityCommentsPanelGate() {
   const { commentsTarget } = useEntityCommentsPanel();
   return useSticky(commentsTarget !== null) ? <EntityCommentsPanelHost /> : null;
+}
+
+function ExploreDebateClaimsPanelGate() {
+  const target = useAtomValue(exploreDebateClaimsPanelAtom);
+  return useSticky(target !== null) ? <ExploreDebateClaimsPanelHost /> : null;
 }
 
 // Opens from /feature-flags or Cmd/Ctrl+Shift+F. The listener lives in the dialog once it is loaded;
@@ -313,6 +330,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <EntitySidePanelGate />
         <PlaybackDiagnostics />
         <EntityCommentsPanelGate />
+        <ExploreDebateClaimsPanelGate />
         {/* Client-side rendered due to `window.localStorage` usage */}
         <ClientOnly>
           {/* Suspense: onboarding preparation reads `useSearchParams`. */}
