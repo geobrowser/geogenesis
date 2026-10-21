@@ -92,10 +92,24 @@ export function useTurnOverrun({
   const endedAtRef = React.useRef(0);
   const yieldedRef = React.useRef(yielded);
   yieldedRef.current = yielded;
+  // The cap is held in a ref rather than returned from the turn effect's cleanup: that effect re-runs
+  // on any input change, and a re-run mid-overrun would otherwise clear the cap without re-arming
+  // it, leaving a noisy room to hold the microphone open, and recorded, past the window. Only the
+  // overrun ending (or unmounting) clears it.
+  const capTimerRef = React.useRef<number | null>(null);
   const stop = React.useCallback(() => {
     phaseRef.current = 'idle';
+    if (capTimerRef.current !== null) window.clearTimeout(capTimerRef.current);
+    capTimerRef.current = null;
     setSince(null);
   }, []);
+  React.useEffect(
+    () => () => {
+      if (capTimerRef.current !== null) window.clearTimeout(capTimerRef.current);
+      capTimerRef.current = null;
+    },
+    []
+  );
 
   const speakingRef = useSpeechActivity(track, listening, speaking => {
     if (speaking && phaseRef.current === 'waiting') {
@@ -129,8 +143,8 @@ export function useTurnOverrun({
     } else {
       return;
     }
-    const timer = window.setTimeout(stop, windowMs);
-    return () => window.clearTimeout(timer);
+    if (capTimerRef.current !== null) window.clearTimeout(capTimerRef.current);
+    capTimerRef.current = window.setTimeout(stop, windowMs);
   }, [overrunPossible, speakingRef, startsLate, stop, turnActive, windowMs]);
 
   return since;

@@ -31,11 +31,19 @@ type Props = {
   yielded?: boolean;
   startsLate?: boolean;
   listening?: boolean;
+  windowMs?: number;
 };
 
 function renderOverrun(initial: Props) {
   return renderHook(
-    ({ turnActive, overrunPossible = true, yielded = false, startsLate = false, listening = true }: Props) =>
+    ({
+      turnActive,
+      overrunPossible = true,
+      yielded = false,
+      startsLate = false,
+      listening = true,
+      windowMs = REMOTE_OVERRUN_WINDOW_MS,
+    }: Props) =>
       useTurnOverrun({
         track,
         listening,
@@ -43,7 +51,7 @@ function renderOverrun(initial: Props) {
         overrunPossible,
         yielded,
         startsLate,
-        windowMs: REMOTE_OVERRUN_WINDOW_MS,
+        windowMs,
       }),
     { initialProps: initial }
   );
@@ -153,6 +161,21 @@ describe('useTurnOverrun', () => {
       setSpeaking(true);
       expect(view.result.current).toBeNull();
     });
+  });
+
+  it('keeps its cap through a re-render that changes its inputs mid-overrun', () => {
+    const view = renderOverrun({ turnActive: true });
+    setSpeaking(true);
+    view.rerender({ turnActive: false });
+    expect(view.result.current).not.toBeNull();
+
+    // Any input change re-runs the turn effect while they are still talking. The cap must survive
+    // it, or a noisy room holds the microphone open, and recorded, past the window.
+    act(() => vi.advanceTimersByTime(1_000));
+    view.rerender({ turnActive: false, windowMs: REMOTE_OVERRUN_WINDOW_MS + 10_000 });
+    view.rerender({ turnActive: false, startsLate: true });
+    act(() => vi.advanceTimersByTime(REMOTE_OVERRUN_WINDOW_MS - 1_000));
+    expect(view.result.current).toBeNull();
   });
 
   it('ends a running overrun when listening stops, which the speech reading no longer reports', () => {
