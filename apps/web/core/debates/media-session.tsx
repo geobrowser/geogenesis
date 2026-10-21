@@ -28,16 +28,18 @@ export type LocalTrackLike = {
   detach?: () => void;
 };
 
+type LocalCapture = Pick<LocalTrackLike, 'mediaStreamTrack' | 'mediaStream'>;
+
 /** The capture source can differ from mediaStreamTrack when Krisp supplies processed audio. */
-export function localTrackSource(track: LocalTrackLike) {
+export function localTrackSource(track: LocalCapture) {
   return track.mediaStream?.getTracks()[0] ?? track.mediaStreamTrack;
 }
 
-export function isLocalTrackLive(track: LocalTrackLike) {
+export function isLocalTrackLive(track: LocalCapture) {
   return localTrackSource(track).readyState !== 'ended';
 }
 
-export function setLocalTrackEnabled(track: LocalTrackLike, enabled: boolean, source?: MediaStreamTrack) {
+export function setLocalTrackEnabled(track: LocalCapture, enabled: boolean, source?: MediaStreamTrack) {
   track.mediaStreamTrack.enabled = enabled;
   (source ?? localTrackSource(track)).enabled = enabled;
 }
@@ -462,6 +464,16 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           const ownsTrack = () => isCurrent() && localTracksRef.current.includes(track);
           const previousId = localTrackSource(track).getSettings?.().deviceId;
           const previousCapture = track.mediaStreamTrack;
+          const reconcileSelection = (failed = false) => {
+            const actualId = isLocalTrackLive(track) ? localTrackSource(track).getSettings?.().deviceId : '';
+            // System aliases deliberately follow the OS. Never replace a newer queued choice.
+            if (!failed && (!actualId || deviceId === 'default' || deviceId === 'communications')) return;
+            const selectedRef = kind === 'audio' ? selectedAudioInputIdRef : selectedVideoInputIdRef;
+            if (selectedRef.current !== deviceId) return;
+            const nextId = actualId ?? '';
+            selectedRef.current = nextId;
+            (kind === 'audio' ? setSelectedAudioInputId : setSelectedVideoInputId)(nextId);
+          };
           const restorePreferences = () => {
             // Toggles and turn changes can happen while capture is reopening.
             setLocalTrackEnabled(track, previousCapture.enabled);
@@ -479,6 +491,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
               return;
             }
             updatePreview();
+            reconcileSelection();
             setPreviewState('ready');
           } catch (error) {
             if (!ownsTrack()) {
@@ -497,15 +510,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
               return;
             }
             updatePreview();
-            const recoveredId = isLocalTrackLive(track) ? (localTrackSource(track).getSettings?.().deviceId ?? '') : '';
             setPreviewState(isLocalTrackLive(track) ? 'ready' : 'error');
-            if (kind === 'audio' && selectedAudioInputIdRef.current === deviceId) {
-              selectedAudioInputIdRef.current = recoveredId;
-              setSelectedAudioInputId(recoveredId);
-            } else if (kind === 'video' && selectedVideoInputIdRef.current === deviceId) {
-              selectedVideoInputIdRef.current = recoveredId;
-              setSelectedVideoInputId(recoveredId);
-            }
+            reconcileSelection(true);
             setPreviewError(preJoinMediaFailure(error, { audio: kind === 'audio', video: kind === 'video' }).message);
           } finally {
             if (isCurrent()) setPreviewBusy(false);

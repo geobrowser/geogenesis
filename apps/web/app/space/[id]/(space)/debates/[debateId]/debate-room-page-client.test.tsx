@@ -3809,7 +3809,20 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Recording')).not.toBeInTheDocument();
   });
 
+  it('records the published tracks by default without waiting for experimental input playback', async () => {
+    mocks.recordingInputReady = new Promise<void>(() => {});
+    installRecordingMocks();
+    await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce());
+    expect(mocks.recordingInputCreated).not.toHaveBeenCalled();
+    expect(mocks.capturingMutateAsync).toHaveBeenCalled();
+    const stream = mocks.mediaRecorderConstruct.mock.calls[0]?.[0] as MediaStream;
+    expect(stream.getAudioTracks()[0]).toMatchObject({ id: 'krisp-processed-audio' });
+    expect(stream.getVideoTracks()).toHaveLength(1);
+  });
+
   it('does not announce recording until its stable media input is ready', async () => {
+    mocks.featureFlags.debateDeviceSwitchRecording = true;
     const ready = deferred<void>();
     mocks.recordingInputReady = ready.promise;
     installRecordingMocks();
@@ -3823,6 +3836,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('cancels a pending recording startup when the room unmounts', async () => {
+    mocks.featureFlags.debateDeviceSwitchRecording = true;
     const ready = deferred<void>();
     mocks.recordingInputReady = ready.promise;
     installRecordingMocks();
@@ -3835,6 +3849,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('reports a recording input failure after a device change instead of silently recording black or silence', async () => {
+    mocks.featureFlags.debateDeviceSwitchRecording = true;
     installRecordingMocks();
     await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce());
@@ -5386,6 +5401,7 @@ describe('DebateRoomPageClient', () => {
   it.each(['input failure', 'browser stop'])(
     'does not save a recorder stopped by %s until final events',
     async cause => {
+      mocks.featureFlags.debateDeviceSwitchRecording = true;
       setHistoryLength(2);
       const recorders = installRecordingMocks();
       vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:15.000Z'));

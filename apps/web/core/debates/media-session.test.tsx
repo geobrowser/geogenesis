@@ -379,6 +379,50 @@ describe('input changes on existing LocalTracks', () => {
     expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-3/');
   });
 
+  it.each(['audio', 'video'] as const)(
+    'shows the actual %s device after an ideal selection silently falls back',
+    async kind => {
+      const { audio, video } = await startInputs();
+      const track = kind === 'audio' ? audio : video;
+      const restart = track.restartTrack.getMockImplementation()!;
+      const actualId = kind === 'audio' ? 'mic-1' : 'camera-1';
+      track.restartTrack.mockImplementationOnce(async () => restart({ deviceId: actualId }));
+      fireEvent.click(screen.getByRole('button', { name: kind === 'audio' ? 'Select mic' : 'Select camera' }));
+      await waitFor(() => expect(track.restartTrack).toHaveBeenCalledOnce());
+      await waitFor(() => expect(screen.getByTestId('preview-busy')).toHaveTextContent('false'));
+      expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-1/camera-1');
+      expect(track.mediaStreamTrack.getSettings().deviceId).toBe(actualId);
+    }
+  );
+
+  it('does not replace a newer microphone choice with an earlier silent fallback', async () => {
+    const { audio } = await startInputs();
+    const restart = audio.restartTrack.getMockImplementation()!;
+    let finishFirst!: () => void;
+    let finishSecond!: () => void;
+    audio.restartTrack
+      .mockImplementationOnce(async () => {
+        await new Promise<void>(resolve => {
+          finishFirst = resolve;
+        });
+        await restart({ deviceId: 'mic-1' });
+      })
+      .mockImplementationOnce(async options => {
+        await new Promise<void>(resolve => {
+          finishSecond = resolve;
+        });
+        await restart(options);
+      });
+    fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: 'Select third mic' }));
+    await act(async () => finishFirst());
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-3/');
+    await act(async () => finishSecond());
+    expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-3/');
+  });
+
   it('recovers the previous microphone if the selected device fails', async () => {
     const { audio, video } = await startInputs();
     audio.restartTrack.mockRejectedValueOnce(new Error('Capture failed'));

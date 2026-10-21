@@ -362,6 +362,7 @@ export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClient
 
 function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const router = useRouter();
+  const deviceSwitchRecordingEnabled = useFeatureFlag('debateDeviceSwitchRecording');
   const { consume: consumeDebateReturnDestination, returnsToLobby } = useDebateReturnNavigation();
   const mediaSession = useDebateMediaSession();
   const mediaSessionKey = debateMediaSessionKey(debateId);
@@ -1216,6 +1217,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         debateId: debateIdRef.current,
         timesliceMs: 1_000,
         prepareStream: async source => {
+          // Keep normal recordings on the published tracks until the experimental adapter has
+          // passed iPhone autoplay and background-tab acceptance checks.
+          if (!deviceSwitchRecordingEnabled) return source;
           input = createRecordingInput(source);
           recordingInputRef.current = input;
           await input.ready;
@@ -1299,7 +1303,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (started && isCurrent()) recorderRef.current = started.recorder;
       else releaseRecordingInput(input);
     },
-    [releaseRecordingInput, reportRecorderFailure]
+    [deviceSwitchRecordingEnabled, releaseRecordingInput, reportRecorderFailure]
   );
 
   const stopLocalRecorder = React.useCallback(async () => {
