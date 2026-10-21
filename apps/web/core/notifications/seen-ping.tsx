@@ -22,7 +22,7 @@ const TIMED_OUT = Symbol('timed out');
 
 /** One ping under the deadline; throws on timeout like any other failure. */
 async function pingWithin(baseUrl: string, token: string, timeZone: string): Promise<void> {
-  const result = await resolveWithin(
+  const result = await resolveWithin<unknown>(
     signal => sendSeenPing(baseUrl, token, timeZone, signal),
     SEEN_REQUEST_TIMEOUT_MS,
     TIMED_OUT
