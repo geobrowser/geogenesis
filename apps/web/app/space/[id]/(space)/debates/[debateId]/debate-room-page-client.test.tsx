@@ -4353,86 +4353,95 @@ describe('DebateRoomPageClient', () => {
 
   // GEO-3406: press between clock ticks, then replace the optimistic yield with the real row.
   // Observe every track write: checking only the settled DOM misses a mic that reopened briefly.
-  it.each([0, 6_000])('never reopens a yielded mic with a %i ms response delay', async responseDelayMs => {
-    vi.useFakeTimers();
-    vi.setSystemTime(openRoundsAt('20:02:20.000'));
-    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
-    const pendingEnd = deferred<Debate>();
-    const enabledWrites: boolean[] = [];
-    const audioTrack = createLocalAudioTrack();
-    const processedTrack = { kind: 'audio', enabled: true, id: 'krisp-processed-audio' };
-    for (const track of [audioTrack.sourceMediaStreamTrack, processedTrack]) {
-      let enabled = true;
-      Object.defineProperty(track, 'enabled', {
-        get() {
-          return enabled;
-        },
-        set(value: boolean) {
-          enabled = value;
-          enabledWrites.push(value);
-        },
+  it.each([0, 6_000].flatMap(responseDelayMs => ([1, 2] as const).map(slot => ({ slot, responseDelayMs }))))(
+    'never reopens slot $slot’s yielded mic with a $responseDelayMs ms response delay',
+    async ({ slot, responseDelayMs }) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(openRoundsAt('20:02:20.000'));
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+      if (slot === 2) joinAsBob();
+      const pendingEnd = deferred<Debate>();
+      const enabledWrites: boolean[] = [];
+      const audioTrack = createLocalAudioTrack();
+      const processedTrack = { kind: 'audio', enabled: true, id: 'krisp-processed-audio' };
+      for (const track of [audioTrack.sourceMediaStreamTrack, processedTrack]) {
+        let enabled = true;
+        Object.defineProperty(track, 'enabled', {
+          get() {
+            return enabled;
+          },
+          set(value: boolean) {
+            enabled = value;
+            enabledWrites.push(value);
+          },
+        });
+      }
+      mocks.krispNoiseFilter.mockReturnValue({
+        processedTrack,
+        setEnabled: mocks.krispSetEnabled,
+        isEnabled: mocks.krispIsEnabled,
+        destroy: mocks.krispDestroy,
       });
+      const enabledAtRequest: boolean[] = [];
+      mocks.endTurnMutateAsync.mockImplementation(() => {
+        enabledAtRequest.push(audioTrack.sourceMediaStreamTrack.enabled, processedTrack.enabled);
+        return pendingEnd.promise;
+      });
+      mocks.createLocalTracks.mockResolvedValue([
+        audioTrack,
+        { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+      ]);
+      // If the turn were incorrectly handed back and then left again, ongoing speech would allow
+      // the buzzer overrun to keep the microphone live for another three seconds.
+      mocks.localSpeaking = { current: true };
+      mocks.debate = {
+        ...openRoundsRoundOneSpeaking(),
+        first_participant_slot: slot,
+        current_speaker_slot: slot,
+      };
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await act(async () => {
+        await vi.waitFor(() => expect(audioTrack.setProcessor).toHaveBeenCalledOnce());
+      });
+      expect(processedTrack.enabled).toBe(true);
+
+      await act(() => vi.advanceTimersByTimeAsync(200));
+      fireEvent.click(screen.getByRole('button', { name: 'End turn' }));
+      const { endedAtMs } = mocks.endTurnMutateAsync.mock.calls[0]![0];
+      expect(enabledAtRequest).toEqual([false, false]);
+      expect(processedTrack.enabled).toBe(false);
+      enabledWrites.length = 0;
+      await act(() => vi.advanceTimersByTimeAsync(responseDelayMs));
+      expect(processedTrack.enabled).toBe(false);
+
+      const acceptedAtMs = Date.now();
+      const yielded: Debate = {
+        ...mocks.debate!,
+        turn_yields: [
+          {
+            turn_index: 2,
+            user_id: mocks.currentUserId,
+            participant_slot: slot,
+            yielded_at: new Date(endedAtMs).toISOString(),
+            accepted_at: new Date(acceptedAtMs).toISOString(),
+            handoff_deadline_at: new Date(acceptedAtMs + 5_000).toISOString(),
+          },
+        ],
+      };
+      mocks.debate = yielded;
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await act(async () => pendingEnd.resolve(yielded));
+
+      expect(screen.queryByRole('button', { name: 'End turn' })).not.toBeInTheDocument();
+      expect(debateVideoTile('local')).toHaveAttribute('data-active-speaker', 'false');
+      expect(debateVideoTile('local').querySelector('[data-turn-timer]')).toBeNull();
+      expect(enabledWrites).not.toContain(true);
+      await act(() => vi.advanceTimersByTimeAsync(5_500));
+      expectMutedIndicator('local');
+      expect(processedTrack.enabled).toBe(false);
+      expect(enabledWrites).not.toContain(true);
     }
-    mocks.krispNoiseFilter.mockReturnValue({
-      processedTrack,
-      setEnabled: mocks.krispSetEnabled,
-      isEnabled: mocks.krispIsEnabled,
-      destroy: mocks.krispDestroy,
-    });
-    const enabledAtRequest: boolean[] = [];
-    mocks.endTurnMutateAsync.mockImplementation(() => {
-      enabledAtRequest.push(audioTrack.sourceMediaStreamTrack.enabled, processedTrack.enabled);
-      return pendingEnd.promise;
-    });
-    mocks.createLocalTracks.mockResolvedValue([
-      audioTrack,
-      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
-    ]);
-    // If the turn were incorrectly handed back and then left again, ongoing speech would allow
-    // the buzzer overrun to keep the microphone live for another three seconds.
-    mocks.localSpeaking = { current: true };
-    mocks.debate = openRoundsRoundOneSpeaking();
-    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await act(async () => undefined);
-    expect(audioTrack.setProcessor).toHaveBeenCalledOnce();
-    expect(processedTrack.enabled).toBe(true);
-
-    await act(() => vi.advanceTimersByTimeAsync(200));
-    fireEvent.click(screen.getByRole('button', { name: 'End turn' }));
-    const { endedAtMs } = mocks.endTurnMutateAsync.mock.calls[0]![0];
-    expect(enabledAtRequest).toEqual([false, false]);
-    expect(processedTrack.enabled).toBe(false);
-    enabledWrites.length = 0;
-    await act(() => vi.advanceTimersByTimeAsync(responseDelayMs));
-    expect(processedTrack.enabled).toBe(false);
-
-    const acceptedAtMs = Date.now();
-    const yielded: Debate = {
-      ...mocks.debate!,
-      turn_yields: [
-        {
-          turn_index: 2,
-          user_id: 'user-a',
-          participant_slot: 1,
-          yielded_at: new Date(endedAtMs).toISOString(),
-          accepted_at: new Date(acceptedAtMs).toISOString(),
-          handoff_deadline_at: new Date(acceptedAtMs + 5_000).toISOString(),
-        },
-      ],
-    };
-    mocks.debate = yielded;
-    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await act(async () => pendingEnd.resolve(yielded));
-
-    expect(screen.queryByRole('button', { name: 'End turn' })).not.toBeInTheDocument();
-    expect(debateVideoTile('local')).toHaveAttribute('data-active-speaker', 'false');
-    expect(debateVideoTile('local').querySelector('[data-turn-timer]')).toBeNull();
-    expect(enabledWrites).not.toContain(true);
-    await act(() => vi.advanceTimersByTimeAsync(5_500));
-    expectMutedIndicator('local');
-    expect(processedTrack.enabled).toBe(false);
-    expect(enabledWrites).not.toContain(true);
-  });
+  );
 
   it('opens both mics for the pick immediately after confirming the last turn yield', async () => {
     vi.useFakeTimers();
@@ -4452,7 +4461,9 @@ describe('DebateRoomPageClient', () => {
       turn_ends_at: '2026-10-06T20:03:37.200Z',
     };
     const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await act(async () => undefined);
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.publishTrack).toHaveBeenCalledOnce());
+    });
     expect(audioTrack.mediaStreamTrack.enabled).toBe(true);
 
     await act(() => vi.advanceTimersByTimeAsync(200));
@@ -4480,6 +4491,33 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByRole('button', { name: 'End turn' })).not.toBeInTheDocument();
     expectNoMutedIndicator('local');
     expectNoMutedIndicator('remote');
+    expect(audioTrack.mediaStreamTrack.enabled).toBe(true);
+  });
+
+  it('restores the mic and allows retry when End turn fails without committing a yield', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(openRoundsAt('20:02:20.000'));
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    const pendingEnd = deferred<Debate>();
+    mocks.endTurnMutateAsync.mockReturnValue(pendingEnd.promise);
+    const audioTrack = createLocalAudioTrack();
+    mocks.krispSupported.mockReturnValue(false);
+    mocks.createLocalTracks.mockResolvedValue([audioTrack]);
+    mocks.debate = openRoundsRoundOneSpeaking();
+    mocks.refetchDebate.mockResolvedValue({ data: mocks.debate });
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await act(async () => {
+      await vi.waitFor(() => expect(mocks.publishTrack).toHaveBeenCalledOnce());
+    });
+    expect(audioTrack.mediaStreamTrack.enabled).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'End turn' }));
+    expect(audioTrack.mediaStreamTrack.enabled).toBe(false);
+    await act(async () => pendingEnd.reject(new Error('Could not end the turn.')));
+
+    expect(mocks.refetchDebate).toHaveBeenCalledOnce();
+    expect(screen.getByText('Could not end the turn.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'End turn' })).toBeEnabled();
     expect(audioTrack.mediaStreamTrack.enabled).toBe(true);
   });
 
