@@ -45,6 +45,7 @@ import { resolveJoinChoice } from '~/core/debates/request-join-state';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { TrackVideo } from '~/core/debates/track-video';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -58,7 +59,6 @@ import {
   type PairMicState,
   RematchPairHeader,
 } from './rematch-pair-header';
-
 import styles from './rematch-video-header.module.css';
 
 // A pair arriving from a recorded debate was already speaking with the microphone open, so the
@@ -537,19 +537,16 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
     retry();
   }, [retry]);
 
-  // The device the user last picked in the debate surfaces, frozen at mount: a changed room
-  // options identity makes `<LiveKitRoom>` rebuild its Room, dropping the live call.
   const { selectedAudioInputId, selectedVideoInputId } = useDebateMediaSession();
-  const initialAudioInputIdRef = React.useRef(selectedAudioInputId);
-  const initialVideoInputIdRef = React.useRef(selectedVideoInputId);
+  const devices = useInitialMediaDevices({ audioInputId: selectedAudioInputId, videoInputId: selectedVideoInputId });
   const roomOptions = React.useMemo(
     () => ({
-      // LiveKit's default reconnect gives up after ~37s; this rides out deploys and brief drops.
       reconnectPolicy: new ExtendedReconnectPolicy(),
-      audioCaptureDefaults: initialAudioInputIdRef.current ? { deviceId: initialAudioInputIdRef.current } : undefined,
-      videoCaptureDefaults: initialVideoInputIdRef.current ? { deviceId: initialVideoInputIdRef.current } : undefined,
+      audioCaptureDefaults: devices.audioInputId ? { deviceId: devices.audioInputId } : undefined,
+      videoCaptureDefaults: devices.videoInputId ? { deviceId: devices.videoInputId } : undefined,
+      ...(devices.audioOutputId ? { audioOutput: { deviceId: devices.audioOutputId } } : {}),
     }),
-    []
+    [devices]
   );
 
   // Every condition the controls themselves render on, because a permission prompt with no voice UI
@@ -562,8 +559,8 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // microphone, `<LiveKitRoom audio>` is opening it for real and a second request alongside the one
   // already on screen is pure redundancy.
   usePrimedMicrophonePermission(
-    !micIntent && voiceActive && ownership === 'owned' && Boolean(join.data) && Boolean(opponent),
-    initialAudioInputIdRef.current || undefined
+    devices.ready && !micIntent && voiceActive && ownership === 'owned' && Boolean(join.data) && Boolean(opponent),
+    devices.audioInputId || undefined
   );
 
   const opponentName = opponent ? opponent.display_name || opponent.profile_space_id : '';
@@ -638,7 +635,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // Only reachable on the way out, and only where the room was mounted but had not connected when
   // the exit began: there is nothing to hold open, so the header keeps the one line the room was
   // drawing from inside rather than collapsing to nothing.
-  if (!voiceActive || !join.data) return headerWith(CONNECTING_VOICE);
+  if (!voiceActive || !join.data || !devices.ready) return headerWith(CONNECTING_VOICE);
 
   return (
     <LiveKitRoom

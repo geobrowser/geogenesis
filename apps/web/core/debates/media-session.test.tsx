@@ -3,6 +3,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
+
 import { DebateMediaSessionProvider, useDebateMediaSession } from './media-session';
 
 const mocks = vi.hoisted(() => ({
@@ -19,6 +21,7 @@ vi.mock('livekit-client', () => ({
 }));
 
 beforeEach(() => {
+  window.localStorage.clear();
   mocks.createLocalTracks.mockReset();
   mocks.enumerateDevices.mockReset().mockResolvedValue([]);
   mocks.selectAudioOutput.mockReset().mockResolvedValue({
@@ -64,6 +67,85 @@ async function fireDeviceChange() {
     await Promise.resolve();
   });
 }
+
+describe('remembered devices across debate sessions', () => {
+  it('restores saved input and output devices after the provider remounts', async () => {
+    mocks.supportsAudioOutputSelection.mockReturnValue(true);
+    mocks.enumerateDevices.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'mic-2' },
+      { kind: 'videoinput', deviceId: 'camera-2' },
+      { kind: 'audiooutput', deviceId: 'speaker-1' },
+    ]);
+    mocks.createLocalTracks.mockImplementation(async () => [
+      { mediaStreamTrack: { kind: 'audio' }, stop: vi.fn() },
+      { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() },
+    ]);
+    const first = render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select microphone' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    fireEvent.click(screen.getByRole('button', { name: 'Select camera' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    fireEvent.click(screen.getByRole('button', { name: 'Select speaker' }));
+    await waitFor(() => expect(readMediaDevicePreference('audiooutput')).toBe('speaker-1'));
+    expect(readMediaDevicePreference('audioinput')).toBe('mic-2');
+    expect(readMediaDevicePreference('videoinput')).toBe('camera-2');
+    first.unmount();
+    mocks.createLocalTracks.mockClear();
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure preview' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    expect(mocks.createLocalTracks).toHaveBeenLastCalledWith({
+      audio: { deviceId: 'mic-2' },
+      video: { deviceId: 'camera-2' },
+    });
+    expect(screen.getByTestId('selected-output')).toHaveTextContent('speaker-1');
+  });
+
+  it('keeps a disconnected preference and restores it on devicechange', async () => {
+    rememberMediaDevice('audioinput', 'mic-2');
+    mocks.enumerateDevices.mockResolvedValue([{ kind: 'audioinput', deviceId: 'default' }]);
+    mocks.createLocalTracks.mockResolvedValue([{ mediaStreamTrack: { kind: 'audio' }, stop: vi.fn() }]);
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure mic only' }));
+    await waitFor(() => expect(screen.getByTestId('selected-devices')).toHaveTextContent('default/'));
+    expect(readMediaDevicePreference('audioinput')).toBe('mic-2');
+    mocks.enumerateDevices.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'default' },
+      { kind: 'audioinput', deviceId: 'mic-2' },
+    ]);
+    await fireDeviceChange();
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenLastCalledWith({ audio: { deviceId: 'mic-2' }, video: false })
+    );
+  });
+
+  it('reads a choice made by another surface when the next session starts', () => {
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    act(() => rememberMediaDevice('audioinput', 'community-call-mic'));
+    fireEvent.click(screen.getByRole('button', { name: 'Start other match' }));
+    expect(screen.getByTestId('selected-devices')).toHaveTextContent('community-call-mic/');
+  });
+});
 
 describe('DebateMediaSessionProvider restarts it starts itself', () => {
   it('keeps the camera shut through a device change over a mic-only session', async () => {
@@ -695,6 +777,13 @@ function MediaSessionHarness() {
       <div data-testid="join-choice">{JSON.stringify(media.joinChoiceRef.current)}</div>
       <button type="button" onClick={() => (media.joinChoiceRef.current = { micOn: true, cameraOn: false })}>
         Choose mic only
+      </button>
+      <div data-testid="selected-output">{media.selectedAudioOutputId}</div>
+      <button type="button" onClick={() => media.changeAudioInput('mic-2')}>
+        Select microphone
+      </button>
+      <button type="button" onClick={() => media.changeVideoInput('camera-2')}>
+        Select camera
       </button>
       <div data-testid="preview-state">{media.previewState}</div>
       <div data-testid="audio-output-supported">{media.audioOutputSupported ? 'yes' : 'no'}</div>
