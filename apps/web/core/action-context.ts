@@ -100,6 +100,11 @@ export type ActionContext = {
    * a vote in answer to the room reads apart from one on any other claim in the lobby.
    */
   room_vote_id?: string;
+  /**
+   * GEO-3374. Which of our emails the action came from: the `ref_email` slug its link carried. Set on
+   * a vote an email's vote link cast, and on that vote again when a device vote is saved later.
+   */
+  ref_email?: string;
 };
 export const ACTION_CONTEXT_FIELDS = [
   'component',
@@ -130,6 +135,7 @@ export const ACTION_CONTEXT_FIELDS = [
   'feed_seen_hidden',
   'lobby_id',
   'room_vote_id',
+  'ref_email',
   'auth_attempt_id',
   'action_session_id',
   'action_anonymous_id',

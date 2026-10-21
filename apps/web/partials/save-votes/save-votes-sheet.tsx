@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
+import { arrivedFromEmail } from '~/core/deep-links/ref-email';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { isLikelyEmail } from '~/core/newsletter/subscribe-result';
@@ -23,8 +24,8 @@ import {
 import {
   type SaveVotesPromptReason,
   closeSaveVotesPrompt,
-  isSaveVotesPressReason,
   openSaveVotesPrompt,
+  opensSaveVotesCentered,
   useSaveVotesPrompt,
   useSaveVotesPromptLobbyName,
   wasPromptedThisSession,
@@ -58,6 +59,7 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
   'single_claim',
   'repeat',
   'return_visit',
+  'email_link',
 ]);
 
 /**
@@ -69,7 +71,8 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
  * entity pages, the debates hub and the debate player as well as Explore.
  *
  * Opened from the navbar's "Save N votes", it is the same card as a centred modal dialog instead
- * (GEO-3400): the visitor asked for it, so it comes forward rather than waiting in the corner.
+ * (GEO-3400): the visitor asked for it, so it comes forward rather than waiting in the corner. An
+ * email's vote link opens it centred too (GEO-3374); see `opensSaveVotesCentered`.
  */
 export function SaveVotesSheet() {
   const { ready, authenticated, isModalOpen } = usePrivy();
@@ -95,6 +98,11 @@ export function SaveVotesSheet() {
   } | null>(null);
   const codeEmail = codeStep?.email ?? null;
 
+  // Landed from one of our emails: everyone they go to has an account, so this visit's asks are to
+  // log in (GEO-3374). Read at the first render, so the sign-up wording never paints first; the
+  // landing itself is noted by `SaveVotesGate`, which is mounted long before this sheet is.
+  const [logIn] = React.useState(() => arrivedFromEmail());
+
   // The return-visit ask: once per browser session, for a visitor who arrives with votes waiting.
   // A session in which they voted has already been marked, so this is never the visit they voted in.
   React.useEffect(() => {
@@ -119,7 +127,7 @@ export function SaveVotesSheet() {
     closeSaveVotesPrompt();
   }, [authenticated]);
 
-  const centered = codeStep ? codeStep.centered : isSaveVotesPressReason(reason);
+  const centered = codeStep ? codeStep.centered : opensSaveVotesCentered(reason);
   // Centred, the sheet is a modal of its own, which this would find and hide itself behind. Nothing
   // else is modal at the press that opens it, and anything opened later is opened from inside it.
   const isAnyModalOpen = useAnyModalOpen(open && !centered);
@@ -216,7 +224,7 @@ export function SaveVotesSheet() {
         ) : (
           <form
             data-geo-analytics-label="Save votes"
-            data-geo-analytics-intent="signup"
+            data-geo-analytics-intent={logIn ? 'login' : 'signup'}
             onSubmit={submitEmail}
             noValidate
           >
@@ -231,8 +239,8 @@ export function SaveVotesSheet() {
               </>
             ) : (
               <>
-                <p className={HEADING_CLASS}>{saveVotesHeading(count, returnVisit)}</p>
-                <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, returnVisit)}</p>
+                <p className={HEADING_CLASS}>{saveVotesHeading(count, returnVisit, logIn)}</p>
+                <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, returnVisit, logIn)}</p>
               </>
             )}
             <VoteChips votes={votes} rows={centered ? 2 : 1} className={lobbyName ? 'mt-1.5' : undefined} />
@@ -253,7 +261,7 @@ export function SaveVotesSheet() {
                 className={cx(fieldClass(invalid), 'text-left placeholder:text-grey-03 mobile:text-center')}
               />
               <button type="submit" className={PRIMARY_BUTTON_CLASS}>
-                {saveVotesSubmitLabel(count)}
+                {saveVotesSubmitLabel(count, logIn)}
               </button>
             </div>
 
