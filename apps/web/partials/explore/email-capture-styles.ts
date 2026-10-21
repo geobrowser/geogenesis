@@ -81,5 +81,8 @@ export const PRIMARY_BUTTON_CLASS = `inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTR
 /** The outlined pill beside it, for the equal-weight alternative. */
 export const SECONDARY_BUTTON_CLASS = `inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full border border-grey-02 px-2.5 whitespace-nowrap text-[rgba(21,21,21,0.7)] transition-colors hover:border-text hover:text-text`;
 
+/** The outlined pill with Google's mark, in the text color Google's branding asks for. */
+export const GOOGLE_BUTTON_CLASS = `inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center gap-2 rounded-full border border-grey-02 bg-white px-2.5 whitespace-nowrap text-[#151515] transition-colors hover:border-text disabled:opacity-60`;
+
 /** A line under the form saying what went wrong. */
 export const ERROR_CLASS = 'mt-2 text-[14px] tracking-[-0.35px] text-red-01';

@@ -3,12 +3,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 
 import * as React from 'react';
 
-import { getDefaultStore } from 'jotai';
+import { Provider, createStore, getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { beginAuthAttempt, currentAuthAttempt, readAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
+import { GoogleOAuthHost } from '~/core/auth/google-oauth';
 import type { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { isChatOpenAtom } from '~/core/state/chat-store';
+import { featureFlagsStorageKey } from '~/core/state/feature-flags';
 import { toggleLocalVote } from '~/core/state/local-votes';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
@@ -35,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   signupCompleted: vi.fn(),
   trackPrivyAuth: vi.fn(),
   capture: vi.fn(),
+  initOAuth: vi.fn(),
 }));
 
 vi.mock('~/core/analytics', () => ({
@@ -56,6 +59,7 @@ vi.mock('~/core/wallet/auth-hooks', () => ({
       state: mocks.otpState,
     };
   },
+  useLoginWithOAuth: () => ({ initOAuth: mocks.initOAuth }),
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
@@ -110,6 +114,7 @@ beforeEach(() => {
   mocks.trackPrivyAuth.mockReset();
   mocks.useLoginWithEmailArgs = undefined;
   mocks.otpState = { status: 'initial' };
+  mocks.initOAuth.mockReset().mockResolvedValue(undefined);
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ json: async () => ({ result: 'subscribed' }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -1245,5 +1250,68 @@ describe('ExploreEmailCapturePopup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong'));
+  });
+});
+
+// GEO-3139. The account offer is our own UI, so Google is our button here rather than Privy's modal.
+describe('ExploreEmailCapturePopup Google sign-in', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  /** Subscribes with the flag set, in a fresh store so the flag is read from storage. */
+  async function subscribeWithGoogleFlag(enabled: boolean) {
+    window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ googleSignIn: enabled }));
+    render(
+      <Provider store={createStore()}>
+        <GoogleOAuthHost />
+        <ExploreEmailCapturePopup />
+      </Provider>
+    );
+    scrollPastTrigger();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+    });
+  }
+
+  it('offers no Google button with the flag off', async () => {
+    await subscribeWithGoogleFlag(false);
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
+  });
+
+  it('starts Google sign-in under the popup attribution with the flag on', async () => {
+    await subscribeWithGoogleFlag(true);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    });
+
+    expect(mocks.initOAuth).toHaveBeenCalledWith({ provider: 'google' });
+    expect(mocks.prepareOnboarding).toHaveBeenCalled();
+    // Persisted before the redirect, so the completion after the reload is attributed to the popup.
+    expect(currentAuthAttempt()?.properties).toMatchObject({
+      component: 'explore_email_capture',
+      auth_control: 'continue_with_google',
+    });
+  });
+
+  // Privy refuses Google in in-app browsers, and a retry there can never work.
+  it('offers no Google button in an in-app browser', async () => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (iPhone) Mobile/15E148 Instagram 320.0.0'
+    );
+    await subscribeWithGoogleFlag(true);
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
+  });
+
+  it('says so and ends the attempt when the redirect cannot start', async () => {
+    mocks.initOAuth.mockRejectedValue(new Error('blocked'));
+    await subscribeWithGoogleFlag(true);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Google sign-in did not start');
+    expect(currentAuthAttempt()?.outcome).toBe('closed');
   });
 });

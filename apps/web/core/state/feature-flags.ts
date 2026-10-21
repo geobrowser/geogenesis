@@ -63,6 +63,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'googleSignIn',
+    label: 'Google sign-in',
+    description:
+      'Offer Google in every sign-in prompt (GEO-3139). Google redirects, so an action queued before signing in is dropped. Google must also be enabled in the Privy dashboard.',
+    enabledByDefault: false,
+  },
+  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
