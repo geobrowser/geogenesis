@@ -27,6 +27,7 @@ afterEach(() => {
   cleanup();
   clearLocalVotes();
   closeSaveVotesPrompt();
+  vi.clearAllMocks();
 });
 
 describe('GeoConnectButton', () => {
@@ -34,6 +35,37 @@ describe('GeoConnectButton', () => {
     render(<GeoConnectButton />);
 
     expect(screen.getByRole('button', { name: 'Log in' })).toHaveClass('h-7', '!py-0');
+  });
+
+  // GEO-3415. The debate feed's phone bar draws a smaller pill, and keeps a full thumb-sized target.
+  describe('compact', () => {
+    it('draws a 22px pill inside a 44px target', () => {
+      render(<GeoConnectButton compact component="debate_feed_bar" />);
+
+      const button = screen.getByRole('button', { name: 'Log in' });
+      expect(button).toHaveClass('h-11', 'min-w-11');
+      expect(screen.getByText('Log in')).toHaveClass('h-[22px]');
+    });
+
+    it('signs in like the navbar button does', () => {
+      render(<GeoConnectButton compact component="debate_feed_bar" />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+
+      expect(mocks.prepareOnboarding).toHaveBeenCalledWith({ returnTo: null });
+      expect(mocks.login).toHaveBeenCalled();
+    });
+
+    // GEO-3400: like the navbar's, it opens the save sheet centred, named as the bar.
+    it('names the bar as the reason when it opens the save sheet', () => {
+      toggleLocalVote({ responseKind: 'stance', entityId: 'a', spaceId: 's', direction: 'positive', title: 'A' });
+      render(<GeoConnectButton compact component="debate_feed_bar" />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save 1 vote' }));
+
+      expect(readSaveVotesPrompt()).toBe('debate_feed_bar');
+      expect(mocks.privySignIn).not.toHaveBeenCalled();
+    });
   });
 
   // GEO-3214: with votes waiting on this device, the pill is a save prompt. GEO-3400: it opens the

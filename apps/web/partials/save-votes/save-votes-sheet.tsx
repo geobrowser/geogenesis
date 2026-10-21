@@ -23,6 +23,7 @@ import {
 import {
   type SaveVotesPromptReason,
   closeSaveVotesPrompt,
+  isSaveVotesPressReason,
   openSaveVotesPrompt,
   useSaveVotesPrompt,
   useSaveVotesPromptLobbyName,
@@ -118,7 +119,7 @@ export function SaveVotesSheet() {
     closeSaveVotesPrompt();
   }, [authenticated]);
 
-  const centered = codeStep ? codeStep.centered : reason === 'navbar';
+  const centered = codeStep ? codeStep.centered : isSaveVotesPressReason(reason);
   // Centred, the sheet is a modal of its own, which this would find and hide itself behind. Nothing
   // else is modal at the press that opens it, and anything opened later is opened from inside it.
   const isAnyModalOpen = useAnyModalOpen(open && !centered);

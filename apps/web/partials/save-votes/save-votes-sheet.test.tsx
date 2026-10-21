@@ -324,6 +324,18 @@ describe('SaveVotesSheet from the navbar', () => {
     expect(mocks.impression).toHaveBeenCalledWith('navbar', 2);
   });
 
+  // The debate feed's phone bar has the same "Save N votes" pill (GEO-3415), and opens it the same way.
+  it('opens centred from the debate feed’s phone bar too, named as the bar', () => {
+    vote('a');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+    act(() => openSaveVotesPrompt('debate_feed_bar'));
+
+    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toBeInTheDocument();
+    expect(mocks.impression).toHaveBeenCalledWith('debate_feed_bar', 1);
+    expect(readLocalVotes().prompt.shownCount).toBe(0);
+  });
+
   it('is not an automatic ask, so it does not use one up', () => {
     openFromNavbar();
     expect(readLocalVotes().prompt.shownCount).toBe(0);
