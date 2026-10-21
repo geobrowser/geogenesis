@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+
 import { Avatar } from '~/design-system/avatar';
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -113,7 +115,7 @@ export function DebateChallengeDialog({
               type="button"
               onClick={onNotNow}
               disabled={busy}
-              data-geo-analytics-label="Debate challenge dialog not now"
+              {...debateActionAnalyticsAttributes('challenge-dialog', 'Not now')}
               className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
             >
               Not now
@@ -122,7 +124,7 @@ export function DebateChallengeDialog({
               type="button"
               onClick={() => onAccept(shownJoinState.current)}
               disabled={busy}
-              data-geo-analytics-label="Debate challenge dialog explore claims"
+              {...debateActionAnalyticsAttributes('challenge-dialog', 'Explore claims')}
               className={DIALOG_ACTION_BUTTON_CLASS_NAME}
             >
               Explore claims
@@ -132,7 +134,7 @@ export function DebateChallengeDialog({
             type="button"
             onClick={onReject}
             disabled={busy}
-            data-geo-analytics-label="Debate challenge dialog reject"
+            {...debateActionAnalyticsAttributes('challenge-dialog', 'Reject')}
             className="mx-auto -mt-3 px-4 py-1 text-metadata text-grey-04 underline hover:text-text disabled:opacity-50"
           >
             Reject request

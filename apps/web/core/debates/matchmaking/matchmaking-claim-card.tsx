@@ -58,7 +58,11 @@ import type {
   MatchmakingReadiness,
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
-import { type DebateAnalyticsSurface, debateAnalyticsLabel } from './hub-analytics';
+import {
+  type DebateAnalyticsAttributes,
+  type DebateAnalyticsSurface,
+  debateActionAnalyticsAttributes,
+} from './hub-analytics';
 import { hubCardMotion } from './hub-motion';
 import { useHubScrollSelector } from './hub-scroll';
 
@@ -319,7 +323,7 @@ function ClaimHeader({
   isControversial,
   meta,
   onOpenClaim,
-  analyticsLabel,
+  analytics,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
@@ -329,7 +333,7 @@ function ClaimHeader({
   /** Flagged beside the space chip — what kind of claim this is, which is the row's own question. */
   isControversial?: boolean;
   onOpenClaim?: () => void;
-  analyticsLabel?: string;
+  analytics?: DebateAnalyticsAttributes;
 }) {
   const claimTextClassName = 'claim-card-panel-title';
 
@@ -338,7 +342,7 @@ function ClaimHeader({
       <button
         type="button"
         onClick={onOpenClaim}
-        data-geo-analytics-label={analyticsLabel}
+        {...analytics}
         className={`${claimTextClassName} text-left hover:underline`}
       >
         {claim.claim}
@@ -346,7 +350,7 @@ function ClaimHeader({
     ) : (
       <Link
         href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
-        data-geo-analytics-label={analyticsLabel}
+        {...analytics}
         className={`${claimTextClassName} hover:underline`}
       >
         {claim.claim}
@@ -954,7 +958,7 @@ function RespondableControls({
         claim={claim}
         isOnGraph
         onOpenClaim={onOpenClaim}
-        analyticsLabel={analyticsSurface ? debateAnalyticsLabel(analyticsSurface, 'Claim card title') : undefined}
+        analytics={analyticsSurface ? debateActionAnalyticsAttributes(analyticsSurface, 'Claim card title') : undefined}
         isControversial={summary.isControversial}
         meta={headerMeta}
         endSlot={
@@ -1176,7 +1180,7 @@ function UnresolvableControls({
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
-        analyticsLabel={analyticsSurface ? debateAnalyticsLabel(analyticsSurface, 'Claim card title') : undefined}
+        analytics={analyticsSurface ? debateActionAnalyticsAttributes(analyticsSurface, 'Claim card title') : undefined}
         meta={headerMeta}
         endSlot={
           /* The slot stays live even though the graph cannot resolve this claim, because nothing in
@@ -1325,9 +1329,9 @@ export function PositionRow({
             pending={pending}
             title={titleFor?.(true)}
             localOnly={localSide === true}
-            analyticsLabel={
+            analytics={
               analyticsSurface
-                ? debateAnalyticsLabel(analyticsSurface, `Claim card ${copy.positiveAction.toLowerCase()}`)
+                ? debateActionAnalyticsAttributes(analyticsSurface, `Claim card ${copy.positiveAction.toLowerCase()}`)
                 : undefined
             }
           />
@@ -1345,9 +1349,9 @@ export function PositionRow({
             pending={pending}
             title={titleFor?.(false)}
             localOnly={localSide === false}
-            analyticsLabel={
+            analytics={
               analyticsSurface
-                ? debateAnalyticsLabel(analyticsSurface, `Claim card ${copy.negativeAction.toLowerCase()}`)
+                ? debateActionAnalyticsAttributes(analyticsSurface, `Claim card ${copy.negativeAction.toLowerCase()}`)
                 : undefined
             }
           />
@@ -1402,7 +1406,7 @@ function PositionButton({
   pending,
   title,
   localOnly = false,
-  analyticsLabel,
+  analytics,
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
@@ -1415,7 +1419,7 @@ function PositionButton({
   title?: string;
   /** The selection is a vote kept on this device, not yet counted. */
   localOnly?: boolean;
-  analyticsLabel?: string;
+  analytics?: DebateAnalyticsAttributes;
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
@@ -1468,7 +1472,7 @@ function PositionButton({
       aria-disabled={pending || undefined}
       disabled={disabled}
       title={title}
-      data-geo-analytics-label={analyticsLabel}
+      {...analytics}
       onClick={() => {
         if (!pending) onRespond(position);
       }}

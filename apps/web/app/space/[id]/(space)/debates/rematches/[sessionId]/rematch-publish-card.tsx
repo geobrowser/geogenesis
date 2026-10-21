@@ -6,7 +6,7 @@ import type { Debate } from '~/core/debates/api';
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { CameraIcon } from '~/core/debates/debate-room-controls';
 import { DebateUploadProgressBar } from '~/core/debates/debate-upload-progress-bar';
-import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { useServerClock } from '~/core/debates/matchmaking/use-request-countdown';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { debateThankYouDeadlineMs } from '~/core/debates/thank-you-period';
@@ -93,7 +93,7 @@ export function RematchPublishCard({
       data-testid="rematch-publish-card"
       icon={<CameraIcon disabled={false} />}
       onDismiss={dismiss}
-      dismissAnalyticsLabel={debateAnalyticsLabel('rematch', 'Publish card dismiss')}
+      dismissAnalytics={debateActionAnalyticsAttributes('rematch', 'Publish card dismiss')}
       action={
         showsCancel ? (
           <SmallButton

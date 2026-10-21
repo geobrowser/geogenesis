@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+
 import { Text } from '~/design-system/text';
 
 import type { Debate } from './api';
@@ -81,7 +83,10 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
       actionsLayout="split"
       acceptLabel={joining ? 'Joining…' : 'Join debate'}
       rejectLabel={abortDebate.isPending ? 'Declining…' : 'Decline'}
-      analyticsLabels={{ accept: 'Debate ready prompt join', reject: 'Debate ready prompt decline' }}
+      analytics={{
+        accept: debateActionAnalyticsAttributes('debate-ready-prompt', 'Join'),
+        reject: debateActionAnalyticsAttributes('debate-ready-prompt', 'Decline'),
+      }}
       eyebrow={
         <span className="flex min-w-0 items-center justify-center gap-1.5 text-metadata text-grey-04">
           <SpaceChip spaceId={debate.claim.space_id} />
@@ -113,7 +118,7 @@ export function DebateRejoinBar({ debate, openInAnotherTab = false }: { debate: 
       <button
         type="button"
         disabled={joining}
-        data-geo-analytics-label="Debate rejoin bar join"
+        {...debateActionAnalyticsAttributes('rejoin-bar', 'Join')}
         onClick={() => {
           setJoining(true);
           markEnteringDebate(debate.id);

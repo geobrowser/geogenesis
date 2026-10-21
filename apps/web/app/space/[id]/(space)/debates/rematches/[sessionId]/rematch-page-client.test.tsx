@@ -18,7 +18,7 @@ import {
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
-import type { DebateRoomPresenceState } from '~/core/debates/rooms/room-presence';
+import type { DebateRoomPresence, DebateRoomPresenceState } from '~/core/debates/rooms/room-presence';
 
 import { DebateRematchPageClient, resolveLandingTab } from './rematch-page-client';
 
@@ -38,6 +38,8 @@ const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, N
 }));
 
 const mocks = vi.hoisted(() => ({
+  /** Bumped to remount the stubbed header's subtree, the way the real one does as voice connects. */
+  headerEpoch: 0,
   /** GEO-3223. Whether the viewport is a phone's. */
   isPhone: true,
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
@@ -251,7 +253,7 @@ vi.mock('./rematch-voice', () => ({
   // `exiting` is surfaced because that flag is where the header's layout stability is decided, and
   // the bug it exists for was in the wiring here rather than inside the header.
   RematchVoiceHeader: ({ leaveAction, exiting }: { leaveAction?: ReactNode; exiting?: boolean }) => (
-    <div data-testid="rematch-pair-header" data-exiting={exiting ? 'true' : undefined}>
+    <div key={mocks.headerEpoch} data-testid="rematch-pair-header" data-exiting={exiting ? 'true' : undefined}>
       {leaveAction}
     </div>
   ),
@@ -6139,14 +6141,24 @@ describe('inside a debate room', () => {
   // GEO-3433. On 21 Oct a debater pressed Leave twice before their scheduled start, and came straight
   // back both times.
   describe('Leave while the other person is coming or here', () => {
-    const withPresence = (state: DebateRoomPresenceState, children: React.ReactElement) => (
-      <DebateRoomProvider
-        roomId="room-1"
-        presence={{ state, opponentUserId: 'user-remote', opponentPresent: state === 'present' }}
-      >
+    const presenceOf = (state: DebateRoomPresenceState): DebateRoomPresence => ({
+      state,
+      opponentUserId: 'user-remote',
+      opponentPresent: state === 'present',
+    });
+    const inRoomWith = (presence: DebateRoomPresence | null, children: React.ReactElement) => (
+      <DebateRoomProvider roomId="room-1" presence={presence}>
         {children}
       </DebateRoomProvider>
     );
+    const withPresence = (state: DebateRoomPresenceState, children: React.ReactElement) =>
+      inRoomWith(presenceOf(state), children);
+    const page = <DebateRematchPageClient sessionId="rematch-1" />;
+
+    const openLeaveDialog = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+      return screen.findByRole('dialog', { name: 'Leave the room?' });
+    };
 
     it.each([['arrived_early'], ['waiting'], ['waiting_elsewhere'], ['present']] as const)(
       'asks before leaving when %s, and Stay keeps you in the room',
@@ -6177,6 +6189,72 @@ describe('inside a debate room', () => {
 
       expect(mocks.push).toHaveBeenCalledWith('/explore');
       expect(mocks.leaveMutate).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('treats Escape as Stay, and hands focus back to Leave', async () => {
+      render(withPresence('waiting', page));
+      const dialog = await openLeaveDialog();
+
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(mocks.push).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Leave' })).toHaveFocus();
+    });
+
+    // jsdom does no hit-testing, so the structure is pinned as well: the card is the dialog and its
+    // parent is the full-screen layer, which is what makes a press beside the card a press outside.
+    it('treats a press beside the card as Stay', async () => {
+      render(withPresence('waiting', page));
+      const dialog = await openLeaveDialog();
+      const overlay = dialog.parentElement as HTMLElement;
+      expect(overlay).toHaveClass('fixed', 'inset-0');
+
+      // Radix starts listening for outside presses a tick after opening.
+      await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+      fireEvent.pointerDown(overlay, { button: 0 });
+      fireEvent.click(overlay);
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(mocks.push).not.toHaveBeenCalled();
+    });
+
+    // The real header swaps its subtree as voice connects, and remounts it on every reconnect.
+    it('keeps an open dialog mounted when the header remounts', async () => {
+      const { rerender } = render(withPresence('arrived_early', page));
+      const dialog = await openLeaveDialog();
+
+      mocks.headerEpoch += 1;
+      try {
+        rerender(withPresence('arrived_early', page));
+        expect(screen.getByRole('dialog', { name: 'Leave the room?' })).toBe(dialog);
+      } finally {
+        mocks.headerEpoch = 0;
+      }
+    });
+
+    it('closes when the other person leaves while it is open, rather than saying they never came', async () => {
+      const { rerender } = render(withPresence('present', page));
+      await openLeaveDialog();
+
+      rerender(withPresence('left', page));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.queryByText(/hasn’t arrived yet/)).toBeNull();
+      expect(mocks.push).not.toHaveBeenCalled();
+    });
+
+    it('does not reopen by itself when presence drops and comes back', async () => {
+      const { rerender } = render(withPresence('waiting', page));
+      await openLeaveDialog();
+
+      rerender(inRoomWith(null, page));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      rerender(withPresence('waiting', page));
+
+      await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+      expect(screen.queryByRole('dialog')).toBeNull();
     });
 
     // Leaving is what's left to do once they've gone or never came, so it isn't asked.
@@ -6206,6 +6284,16 @@ describe('inside a debate room', () => {
         'Debate rematch Leave dialog leave room'
       );
     });
+  });
+
+  it('labels Back to lobby on the plain picker', () => {
+    rememberLobbyReturnDestination('lobby-1');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Back to lobby' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate rematch Back to lobby'
+    );
   });
 
   // geo-chat expires a `browsing` session after 90s of either party being offline, which is what
@@ -7053,10 +7141,17 @@ describe('click analytics labels in a debate room', () => {
     </DebateRoomProvider>
   );
 
-  /** Every control on the page without a label, described by what it shows. */
+  /**
+   * Every control on the page without a label and an intent, described by what it shows. Both, since
+   * a label that travels without its intent drops out of every query that filters on the intent.
+   */
   function unlabeledControls() {
     return [...document.body.querySelectorAll(CONTROLS)]
-      .filter(control => !control.getAttribute('data-geo-analytics-label')?.trim())
+      .filter(
+        control =>
+          !control.getAttribute('data-geo-analytics-label')?.trim() ||
+          !control.getAttribute('data-geo-analytics-intent')?.trim()
+      )
       .map(control => `<${control.tagName.toLowerCase()}> ${control.textContent?.trim().slice(0, 60)}`);
   }
 

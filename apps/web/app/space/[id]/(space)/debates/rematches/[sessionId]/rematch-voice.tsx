@@ -34,7 +34,7 @@ import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { tokenAllowsCamera } from '~/core/debates/livekit-grant';
 import { useCarriedLobbyChoice } from '~/core/debates/lobbies/lobby-return';
-import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
 import {
   type DebateJoinChoiceSource,
@@ -1155,7 +1155,7 @@ function LocalAudioControls({
         selectedDeviceId={cameraSettings.selectedCameraId}
         framed={isMobile}
         onChange={cameraSettings.onCameraChange}
-        analyticsLabel={debateAnalyticsLabel('rematch', 'Camera option')}
+        analytics={debateActionAnalyticsAttributes('rematch', 'Camera option')}
       />
       {cameraSettings.error && (
         <p role="alert" className="text-metadata text-red-01">

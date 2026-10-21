@@ -13,6 +13,10 @@ import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
 import { useDebateLobbyGuestView } from '~/core/debates/lobbies/lobby-guest-hooks';
 import { DebateLobbyPage } from '~/core/debates/lobbies/lobby-page';
 import {
+  type DebateAnalyticsAttributes,
+  debateActionAnalyticsAttributes,
+} from '~/core/debates/matchmaking/hub-analytics';
+import {
   useDebateRoom,
   useDebateRoomPresence,
   useDebateStatus,
@@ -110,7 +114,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
         action={{
           href: toSignIn({ pathname: debateRoomPath(roomId), via: lobbyLink ? LOBBY_LINK_VIA : 'room' }),
           label: 'Sign in',
-          analyticsLabel: 'Debate room notice sign in',
+          analytics: debateActionAnalyticsAttributes('room', 'Notice sign in'),
         }}
       >
         {lobbyLink ? 'Sign in to join the lobby.' : 'Sign in to join your debate.'}
@@ -134,7 +138,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
         action={{
           href: NavUtils.toExplore(),
           label: ROOM_NOT_YET_OPEN.explore,
-          analyticsLabel: 'Debate room notice not yet open explore',
+          analytics: debateActionAnalyticsAttributes('room', 'Notice not yet open explore'),
         }}
         stacked
       >
@@ -155,7 +159,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
         action={{
           href: NavUtils.toExplore(),
           label: 'Find a debate',
-          analyticsLabel: 'Debate room notice find a debate',
+          analytics: debateActionAnalyticsAttributes('room', 'Notice find a debate'),
         }}
       >
         {ROOM_NO_ACCESS.ended}
@@ -200,8 +204,8 @@ function RoomNotice({
 }: {
   children: React.ReactNode;
   busy?: boolean;
-  /** `analyticsLabel` names the click, since a link's text never reaches the warehouse. */
-  action?: { href: string; label: string; analyticsLabel: string };
+  /** `analytics` names the click, since a link's text never reaches the warehouse. */
+  action?: { href: string; label: string; analytics: DebateAnalyticsAttributes };
   /** Puts the action under the message rather than beside it, for a message long enough to wrap. */
   stacked?: boolean;
 }) {
@@ -218,7 +222,7 @@ function RoomNotice({
         {action && (
           <Link
             href={action.href}
-            data-geo-analytics-label={action.analyticsLabel}
+            {...action.analytics}
             className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white"
           >
             {action.label}

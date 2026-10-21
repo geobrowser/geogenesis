@@ -12,6 +12,7 @@ import { Avatar } from '~/design-system/avatar';
 
 import type { DebateParticipantSummary, DebateRequestParty } from '../api';
 import { speakerLabel } from '../playback-utils';
+import { type DebateAnalyticsAttributes } from './hub-analytics';
 
 /**
  * A claimless challenge carries only the two people — no claim means no side to take, so its
@@ -41,7 +42,7 @@ export function RequestParties({
   showPositions = true,
   overflow,
   profileLinkTarget,
-  profileAnalyticsLabel,
+  profileAnalytics,
 }: {
   viewer: RequestPartyLike | null;
   opponent: RequestPartyLike;
@@ -54,8 +55,8 @@ export function RequestParties({
    * navigation on its own (GEO-2788), so its cards follow the link in place.
    */
   profileLinkTarget?: '_blank';
-  /** The opponent's profile link's click-analytics label. Never their name. */
-  profileAnalyticsLabel?: string;
+  /** The opponent's profile link's click-analytics label and intent. Never their name. */
+  profileAnalytics?: DebateAnalyticsAttributes;
 }) {
   return (
     <div className="flex items-stretch rounded-lg bg-grey-01">
@@ -68,7 +69,7 @@ export function RequestParties({
         trailing={overflow}
         linkToProfile
         linkTarget={profileLinkTarget}
-        analyticsLabel={profileAnalyticsLabel}
+        analytics={profileAnalytics}
       />
     </div>
   );
@@ -93,7 +94,7 @@ function PartySummary({
   trailing,
   linkToProfile = false,
   linkTarget,
-  analyticsLabel,
+  analytics,
 }: {
   party: RequestPartyLike | null;
   label: string;
@@ -101,7 +102,7 @@ function PartySummary({
   trailing?: React.ReactNode;
   linkToProfile?: boolean;
   linkTarget?: '_blank';
-  analyticsLabel?: string;
+  analytics?: DebateAnalyticsAttributes;
 }) {
   // Unlinked when the id is not a space id: an anchor to `/space/undefined` would look identical
   // until it was clicked.
@@ -122,7 +123,7 @@ function PartySummary({
               href={NavUtils.toSpace(profileSpaceId)}
               target={linkTarget}
               rel={linkTarget === '_blank' ? 'noopener noreferrer' : undefined}
-              data-geo-analytics-label={analyticsLabel}
+              {...analytics}
               onClick={() =>
                 personProfileOpened(profileSpaceId, null, { interaction_surface: 'debates_request_parties' })
               }

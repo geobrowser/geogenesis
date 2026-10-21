@@ -4,7 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
-import { type DebateAnalyticsSurface, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
+import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { type MediaDeviceOption, systemDefaultAudioOutput } from '~/core/debates/media-session';
 
 import { Text } from '~/design-system/text';
@@ -57,7 +57,9 @@ export function AudioSettings({
         disabled={devicesLocked}
         framed={framed}
         onChange={onAudioInputChange}
-        analyticsLabel={analyticsSurface ? debateAnalyticsLabel(analyticsSurface, 'Microphone option') : undefined}
+        analytics={
+          analyticsSurface ? debateActionAnalyticsAttributes(analyticsSurface, 'Microphone option') : undefined
+        }
       />
       <div className={framed ? undefined : 'border-t border-grey-02 pt-3'}>
         <DeviceOptionGroup
@@ -67,7 +69,7 @@ export function AudioSettings({
           disabled={!audioOutputSupported}
           framed={framed}
           onChange={onAudioOutputChange}
-          analyticsLabel={analyticsSurface ? debateAnalyticsLabel(analyticsSurface, 'Speaker option') : undefined}
+          analytics={analyticsSurface ? debateActionAnalyticsAttributes(analyticsSurface, 'Speaker option') : undefined}
         />
       </div>
       {error && (

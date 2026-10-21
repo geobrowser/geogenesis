@@ -6,7 +6,7 @@ import cx from 'classnames';
 import { motion } from 'framer-motion';
 
 import type { DebateRematchParticipant, DebateRematchRequest } from '~/core/debates/api';
-import { debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
 import { SpaceChip } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { RequestParties } from '~/core/debates/matchmaking/request-parties';
@@ -85,7 +85,7 @@ export function RematchRequestCard({
         viewer={viewer}
         opponent={opponent}
         profileLinkTarget="_blank"
-        profileAnalyticsLabel={debateAnalyticsLabel('rematch', 'Request card opponent profile')}
+        profileAnalytics={debateActionAnalyticsAttributes('rematch', 'Request card opponent profile')}
       />
 
       {/* The hub never draws an expired request — `useUnexpiredRequests` filters them out before its

@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
@@ -117,7 +119,7 @@ export function ChallengeAcceptedPrompt({
               type="button"
               onClick={onDecline}
               disabled={busy}
-              data-geo-analytics-label="Challenge accepted prompt decline"
+              {...debateActionAnalyticsAttributes('challenge-accepted-prompt', 'Decline')}
               className={`${DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME} h-11!`}
             >
               Decline
@@ -126,7 +128,7 @@ export function ChallengeAcceptedPrompt({
               type="button"
               onClick={onExplore}
               disabled={busy}
-              data-geo-analytics-label="Challenge accepted prompt join room"
+              {...debateActionAnalyticsAttributes('challenge-accepted-prompt', 'Join room')}
               className={`${DIALOG_ACTION_BUTTON_CLASS_NAME} h-11!`}
             >
               Join room

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { type DebateAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Avatar } from '~/design-system/avatar';
@@ -76,10 +77,14 @@ type DebateRequestDialogProps = {
   overflowMenu?: React.ReactNode;
   formatSummaryOnly?: boolean;
   /**
-   * The buttons' click-analytics labels. Per caller, since the same two buttons are Accept/Reject on
+   * The buttons' click-analytics labels and intents. Per caller, since the same two buttons are Accept/Reject on
    * one surface and Join/Decline on another, and their visible text never reaches the warehouse.
    */
-  analyticsLabels?: { accept: string; reject: string; formatAction?: string };
+  analytics?: {
+    accept: DebateAnalyticsAttributes;
+    reject: DebateAnalyticsAttributes;
+    formatAction?: DebateAnalyticsAttributes;
+  };
 };
 
 export function DebateRequestDialog({
@@ -101,7 +106,7 @@ export function DebateRequestDialog({
   formatAction,
   overflowMenu,
   formatSummaryOnly = false,
-  analyticsLabels,
+  analytics,
 }: DebateRequestDialogProps) {
   const titleId = React.useId();
   const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
@@ -202,7 +207,7 @@ export function DebateRequestDialog({
                   type="button"
                   onClick={formatAction.onClick}
                   disabled={busy}
-                  data-geo-analytics-label={analyticsLabels?.formatAction}
+                  {...analytics?.formatAction}
                   className="text-metadata text-grey-04 underline transition-colors hover:text-text disabled:opacity-50"
                 >
                   {formatAction.label}
@@ -262,7 +267,7 @@ export function DebateRequestDialog({
                 type="button"
                 onClick={onReject}
                 disabled={busy}
-                data-geo-analytics-label={analyticsLabels?.reject}
+                {...analytics?.reject}
                 className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
               >
                 {rejectLabel}
@@ -271,7 +276,7 @@ export function DebateRequestDialog({
                 type="button"
                 onClick={accept}
                 disabled={busy}
-                data-geo-analytics-label={analyticsLabels?.accept}
+                {...analytics?.accept}
                 className={DIALOG_ACTION_BUTTON_CLASS_NAME}
               >
                 {acceptLabel}
@@ -283,7 +288,7 @@ export function DebateRequestDialog({
                 type="button"
                 onClick={accept}
                 disabled={busy}
-                data-geo-analytics-label={analyticsLabels?.accept}
+                {...analytics?.accept}
                 className={DIALOG_ACTION_BUTTON_CLASS_NAME}
               >
                 {acceptLabel}
@@ -292,7 +297,7 @@ export function DebateRequestDialog({
                 type="button"
                 onClick={onReject}
                 disabled={busy}
-                data-geo-analytics-label={analyticsLabels?.reject}
+                {...analytics?.reject}
                 className="mx-auto px-4 py-1 text-metadata text-grey-04 hover:text-text disabled:opacity-50"
               >
                 {rejectLabel}

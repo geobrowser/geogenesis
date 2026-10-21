@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
@@ -101,7 +103,7 @@ export function DebateOpenElsewhereScreen({
           <button
             type="button"
             onClick={onOpenHere}
-            data-geo-analytics-label="Debate open elsewhere open here"
+            {...debateActionAnalyticsAttributes('open-elsewhere', 'Open here')}
             className="inline-flex min-h-10 items-center justify-center rounded-full bg-text px-5 text-button text-white hover:bg-text/90"
           >
             Open it here
@@ -109,7 +111,7 @@ export function DebateOpenElsewhereScreen({
           <button
             type="button"
             onClick={onGoBack}
-            data-geo-analytics-label="Debate open elsewhere go back"
+            {...debateActionAnalyticsAttributes('open-elsewhere', 'Go back')}
             className="text-ctaPrimary transition-colors hover:text-ctaHover focus-visible:text-ctaHover"
           >
             <Text as="span" variant="textLinkSemibold" color="current">

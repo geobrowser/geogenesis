@@ -7,7 +7,7 @@ import cx from 'classnames';
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
-import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
@@ -446,7 +446,8 @@ function OpponentCard({
         data-testid="rematch-opponent-card"
         onClick={onOpen}
         aria-label={`Open ${name}’s personal space`}
-        // Not the aria-label, which carries their name.
+        // A fixed label, so the series doesn't split per opponent. The runtime still sends the
+        // aria-label, name included, as `element_aria_label`.
         {...debateActionAnalyticsAttributes('rematch', 'Opponent card')}
         aria-describedby={describedBy}
         className={cx(
@@ -636,7 +637,7 @@ function UnmuteNotice({ opponentName, onUnmute, onDismiss }: PairHeaderNotice & 
       data-testid="rematch-unmute-notice"
       icon={<MicrophoneIcon muted />}
       onDismiss={onDismiss}
-      dismissAnalyticsLabel={debateAnalyticsLabel('rematch', 'Unmute notice dismiss')}
+      dismissAnalytics={debateActionAnalyticsAttributes('rematch', 'Unmute notice dismiss')}
       action={
         <button
           type="button"

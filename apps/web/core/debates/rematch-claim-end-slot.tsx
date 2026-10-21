@@ -10,7 +10,7 @@ import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 import { isDebatePublishableSpace } from './debate-publish-target';
 import { defaultDebateFormatId } from './formats';
 import { useDebateRematchClaims } from './hooks';
-import { debateAnalyticsLabel } from './matchmaking/hub-analytics';
+import { debateActionAnalyticsAttributes } from './matchmaking/hub-analytics';
 import type { RematchPanelContext } from './rematch-panel-context';
 import { RematchRequestControl } from './rematch-request-control';
 
@@ -95,7 +95,7 @@ export function RematchClaimEndSlot({
       variant={variant}
       className={className}
       // The claim's side panel, opened from the picker or the room.
-      analyticsLabel={debateAnalyticsLabel('rematch', 'Panel request debate')}
+      analytics={debateActionAnalyticsAttributes('rematch', 'Panel request debate')}
     />
   );
 }
