@@ -30,29 +30,46 @@ async function pingWithin(baseUrl: string, token: string, timeZone: string): Pro
   if (result === TIMED_OUT) throw new Error('seen ping timed out');
 }
 
+/** After a failed ping, how long before a return to the tab may try again. */
+export const SEEN_RETRY_GAP_MS = 60_000;
+
 /**
  * Tells geo-notifications this signed-in person visited, and their browser's zone (GEO-3371): on
- * every full page load, and when the tab comes back into focus on a new local or UTC day, so someone who
- * keeps one tab open all week still counts as visiting each day they use it. The retention emails
- * are scheduled from it (no program email on a day you visited, What you missed after a week away,
- * the stop after 30 days).
+ * every full page load, and when the tab comes back into focus on a new local or UTC day, so someone
+ * who keeps one tab open all week still counts as visiting each day they use it. The retention
+ * emails are scheduled from it (no program email on a day you visited, What you missed after a week
+ * away, the stop after 30 days).
  *
- * Sends the token Privy stored in the browser straight away, without waiting for Privy to load, and
- * the service accepts it up to a week past expiry, so a visit counts while Privy is slow or down.
- * Only if that is refused does it ask Privy for a fresh one. Mounted once, app-wide; failures are
- * swallowed and retried on the next focus.
+ * Who counts: before Privy is ready, anyone with a token Privy stored in the browser, sent straight
+ * away (the service accepts it up to a week past expiry), so a visit counts while Privy is slow or
+ * down. Once Privy is ready, only someone it reports signed in: a token left behind after a sign-out
+ * doesn't count.
+ *
+ * Privy is never loaded for this. Only when the stored token is refused *and* Privy already reports
+ * them signed in does it ask for a fresh one; otherwise a refused token is done with for the page
+ * load. Mounted once, app-wide. A failure waits at least a minute before a return retries it, and a
+ * 404 (the route isn't there) stops it for the page load.
  */
 export function SeenPing() {
   const { ready, authenticated, getAccessToken } = usePrivy();
-  const getAccessTokenRef = React.useRef(getAccessToken);
-  getAccessTokenRef.current = getAccessToken;
+  const privy = React.useRef({ ready, authenticated, getAccessToken });
+  privy.current = { ready, authenticated, getAccessToken };
   const lastPingedDay = React.useRef<string | null>(null);
   const inFlight = React.useRef(false);
+  /** A stored token the service refused; not sent again. */
+  const refusedToken = React.useRef<string | null>(null);
+  const retryAfter = React.useRef(0);
+  const stopped = React.useRef(false);
 
   const ping = React.useCallback(async () => {
     const baseUrl = geoNotificationsApiUrl();
     const timeZone = browserTimezone();
-    if (!baseUrl || !timeZone) return;
+    if (!baseUrl || !timeZone || stopped.current || Date.now() < retryAfter.current) return;
+    const { ready, authenticated } = privy.current;
+    const signedIn = ready && authenticated;
+    const stored = storedPrivyAccessToken();
+    const usableStored = stored && stored !== refusedToken.current && (!ready || authenticated) ? stored : null;
+    if (!usableStored && !signedIn) return;
     // Once per local day *and* per UTC day: the scheduler decides by local day, but geo-notifications
     // counts visitors per UTC day (to compare with the warehouse), and a local day spans two of them.
     const now = new Date();
@@ -60,40 +77,50 @@ export function SeenPing() {
     if (inFlight.current || lastPingedDay.current === today) return;
     inFlight.current = true;
     try {
-      const stored = storedPrivyAccessToken();
-      if (stored) {
+      if (usableStored) {
         try {
-          await pingWithin(baseUrl, stored, timeZone);
+          await pingWithin(baseUrl, usableStored, timeZone);
           lastPingedDay.current = today;
           return;
         } catch (error) {
-          // Only a refused token is worth a fresh one; anything else waits for the next focus.
-          if (!(error instanceof NotificationsRequestError && error.status === 401)) return;
+          if (!(error instanceof NotificationsRequestError && error.status === 401)) throw error;
+          refusedToken.current = usableStored;
         }
       }
-      const fresh = await resolveWithin(() => getAccessTokenRef.current(), FRESH_TOKEN_TIMEOUT_MS, null).catch(
+      // A fresh token only for someone Privy already has signed in: asking otherwise would load Privy.
+      if (!(privy.current.ready && privy.current.authenticated)) return;
+      const fresh = await resolveWithin(() => privy.current.getAccessToken(), FRESH_TOKEN_TIMEOUT_MS, null).catch(
         () => null
       );
       if (!fresh || fresh === stored) return;
       await pingWithin(baseUrl, fresh, timeZone);
       lastPingedDay.current = today;
-    } catch {
-      // Offline or the service is down: the next focus tries again.
+    } catch (error) {
+      // Offline, the service is down, or the route is missing.
+      if (error instanceof NotificationsRequestError && error.status === 404) stopped.current = true;
+      retryAfter.current = Date.now() + SEEN_RETRY_GAP_MS;
     } finally {
       inFlight.current = false;
     }
   }, []);
 
-  // The page load, and signing in on this page. Signed out with no stored token, there is nobody to count.
+  // The page load, signing in on this page, and Privy becoming ready. A sign-out forgets the day,
+  // so the next account to sign in on this page counts too.
+  const wasSignedIn = React.useRef(false);
   React.useEffect(() => {
-    if (storedPrivyAccessToken() || (ready && authenticated)) void ping();
+    const signedIn = ready && authenticated;
+    if (wasSignedIn.current && !signedIn) {
+      lastPingedDay.current = null;
+      refusedToken.current = null;
+    }
+    wasSignedIn.current = signedIn;
+    void ping();
   }, [ready, authenticated, ping]);
 
-  // Back to the tab: `ping` itself sends nothing on a day it already counted.
+  // Back to the tab: `ping` decides whether there is anything to send.
   React.useEffect(() => {
     const onReturn = () => {
-      if (document.visibilityState !== 'visible') return;
-      if (storedPrivyAccessToken() || authenticated) void ping();
+      if (document.visibilityState === 'visible') void ping();
     };
     document.addEventListener('visibilitychange', onReturn);
     window.addEventListener('focus', onReturn);
@@ -101,7 +128,7 @@ export function SeenPing() {
       document.removeEventListener('visibilitychange', onReturn);
       window.removeEventListener('focus', onReturn);
     };
-  }, [authenticated, ping]);
+  }, [ping]);
 
   return null;
 }

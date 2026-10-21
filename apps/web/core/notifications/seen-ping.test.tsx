@@ -26,7 +26,7 @@ vi.mock('./api', async importOriginal => ({
   sendSeenPing: (...args: unknown[]) => mocks.ping(...args),
 }));
 
-const { SEEN_REQUEST_TIMEOUT_MS, SeenPing } = await import('./seen-ping');
+const { SEEN_REQUEST_TIMEOUT_MS, SEEN_RETRY_GAP_MS, SeenPing } = await import('./seen-ping');
 const { NotificationsRequestError } = await import('./api');
 
 function returnToTab() {
@@ -111,16 +111,35 @@ describe('SeenPing', () => {
     );
   });
 
-  it('tries again on the next return after a failed ping', async () => {
+  it('waits a minute after a failed ping before trying again on a return', async () => {
     mocks.ping = vi.fn(async () => {
       throw new TypeError('offline');
     });
     render(<SeenPing />);
     await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
 
+    returnToTab();
+    await act(async () => undefined);
+    expect(mocks.ping).toHaveBeenCalledTimes(1);
+
     mocks.ping = vi.fn(async () => ({ local_date: '2026-10-25', new_day: true }));
+    vi.setSystemTime(Date.now() + SEEN_RETRY_GAP_MS);
     returnToTab();
     await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
+  });
+
+  it('stops for the page load when the endpoint answers 404', async () => {
+    mocks.ping = vi.fn(async () => {
+      throw new NotificationsRequestError('geo-notifications 404', 404);
+    });
+    render(<SeenPing />);
+    await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
+
+    vi.setSystemTime(Date.now() + 10 * SEEN_RETRY_GAP_MS);
+    returnToTab();
+    await act(async () => undefined);
+    expect(mocks.ping).toHaveBeenCalledTimes(1);
+    expect(mocks.fresh).not.toHaveBeenCalled();
   });
 
   it('does not ask Privy when the service is down rather than refusing the token', async () => {
@@ -148,6 +167,7 @@ describe('SeenPing', () => {
     expect(signal?.aborted).toBe(true);
 
     mocks.ping = vi.fn(async () => ({ local_date: '2026-10-25', new_day: true }));
+    vi.setSystemTime(Date.now() + SEEN_RETRY_GAP_MS);
     returnToTab();
     await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
   });
@@ -160,6 +180,62 @@ describe('SeenPing', () => {
     await act(async () => undefined);
     expect(mocks.ping).not.toHaveBeenCalled();
     expect(mocks.fresh).not.toHaveBeenCalled();
+  });
+
+  it("doesn't count a token left behind once Privy says they are signed out", async () => {
+    mocks.auth = { ready: true, authenticated: false };
+    render(<SeenPing />);
+    returnToTab();
+    await act(async () => undefined);
+    expect(mocks.ping).not.toHaveBeenCalled();
+    expect(mocks.fresh).not.toHaveBeenCalled();
+  });
+
+  it("doesn't load Privy when the stored token is refused before Privy is ready, and doesn't repeat it", async () => {
+    mocks.auth = { ready: false, authenticated: false };
+    mocks.ping = vi.fn(async (_url: string, token: string) => {
+      if (token !== 'fresh-token') throw new NotificationsRequestError('invalid token', 401);
+      return { local_date: '2026-10-25', new_day: true };
+    });
+    const { rerender } = render(<SeenPing />);
+    await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
+    vi.setSystemTime(Date.now() + SEEN_RETRY_GAP_MS);
+    returnToTab();
+    await act(async () => undefined);
+    expect(mocks.ping).toHaveBeenCalledTimes(1);
+    expect(mocks.fresh).not.toHaveBeenCalled();
+
+    // Privy then restores a real session on its own: now a fresh token is worth asking for.
+    mocks.auth = { ready: true, authenticated: true };
+    rerender(<SeenPing />);
+    await waitFor(() =>
+      expect(mocks.ping).toHaveBeenLastCalledWith(
+        'https://n.example',
+        'fresh-token',
+        'America/Los_Angeles',
+        expect.any(AbortSignal)
+      )
+    );
+    expect(mocks.fresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('pings again the same day for the next account after a sign-out', async () => {
+    const { rerender } = render(<SeenPing />);
+    await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
+
+    mocks.stored = null;
+    mocks.auth = { ready: true, authenticated: false };
+    rerender(<SeenPing />);
+    mocks.stored = 'second-account-token';
+    mocks.auth = { ready: true, authenticated: true };
+    rerender(<SeenPing />);
+    await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(2));
+    expect(mocks.ping).toHaveBeenLastCalledWith(
+      'https://n.example',
+      'second-account-token',
+      'America/Los_Angeles',
+      expect.any(AbortSignal)
+    );
   });
 
   it('pings when someone signs in on the page', async () => {
