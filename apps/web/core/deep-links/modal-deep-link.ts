@@ -94,10 +94,16 @@ export function modalVia(params: ReadableParams): string | null {
  * `replaceState` rewrites the whole URL, so a fragment left out here is a fragment thrown away.
  */
 export function urlWithoutModal(pathname: string, params: ReadableParams, hash = ''): string {
+  return urlWithoutParams(pathname, params, [MODAL_PARAM, MODAL_TARGET_PARAM, VIA_PARAM], hash);
+}
+
+/**
+ * The same URL with `keys` removed, every other param and the fragment kept: the clearing half of any
+ * one-shot link, `modal` or not. See `urlWithoutModal` for why the fragment has to be passed in.
+ */
+export function urlWithoutParams(pathname: string, params: ReadableParams, keys: readonly string[], hash = ''): string {
   const next = new URLSearchParams(params?.toString() ?? '');
-  next.delete(MODAL_PARAM);
-  next.delete(MODAL_TARGET_PARAM);
-  next.delete(VIA_PARAM);
+  for (const key of keys) next.delete(key);
   const search = next.toString();
   // Accepts `location.hash` as-is, which already carries the `#`, and tolerates a bare id.
   const fragment = !hash || hash === '#' ? '' : hash.startsWith('#') ? hash : `#${hash}`;

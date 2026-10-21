@@ -35,6 +35,28 @@ describe('turnOnRecordings', () => {
     expect(turnOnRecordings(RENDERED_TURN_SEGMENTS[2]).countdown_start_ms).toBe(128_000);
   });
 
+  it('rebases both original clock endpoints without clamping them to the shortened turn', () => {
+    const turn: DebateMediaTurnSegment = {
+      turn_index: 2,
+      participant_slot: 1,
+      output_start_ms: 100_000,
+      output_end_ms: 197_000,
+      duration_ms: 97_000,
+      source_start_ms: 150_000,
+      source_end_ms: 247_000,
+      countdown_start_ms: 97_000,
+      countdown_end_ms: 217_000,
+      countdown_duration_ms: 120_000,
+    };
+    expect(turnOnRecordings(turn)).toMatchObject({
+      output_start_ms: 150_000,
+      output_end_ms: 247_000,
+      countdown_start_ms: 147_000,
+      countdown_end_ms: 267_000,
+      countdown_duration_ms: 120_000,
+    });
+  });
+
   it('leaves a turn with no source times as it is: a fixed format, where the clocks agree', () => {
     const turn: DebateMediaTurnSegment = {
       turn_index: 0,

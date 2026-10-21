@@ -24,10 +24,12 @@ describe('pushMarketingEvent', () => {
 
   it('clears parameters an earlier push set, since GTM merges pushes into one model', () => {
     pushMarketingEvent('geo_watch_debate', { debate_id: 'd1' });
+    pushMarketingEvent('geo_join_space', { space_id: 's1', space_name: 'Philosophy' });
     pushMarketingEvent('geo_join_space', { space_id: 's1' });
-    const join = (window as DataLayerWindow).dataLayer?.[1];
+    const join = (window as DataLayerWindow).dataLayer?.[2];
     expect(join).toMatchObject({ event: 'geo_join_space', space_id: 's1' });
     expect(join).toHaveProperty('debate_id', undefined);
     expect(join).toHaveProperty('user_id', undefined);
+    expect(join).toHaveProperty('space_name', undefined);
   });
 });

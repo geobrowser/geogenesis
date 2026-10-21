@@ -77,8 +77,8 @@ export function retryEmbeddedWalletSetup() {
  */
 export function useEnsureEmbeddedWallet() {
   const { setActiveWallet } = useSetActiveWallet();
-  const { wallets, ready: walletsReady } = useWallets();
-  const { authenticated, user, isModalOpen } = usePrivy();
+  const { wallets } = useWallets();
+  const { ready, authenticated, user, isModalOpen } = usePrivy();
   const { createWallet } = useCreateWallet();
 
   const createWalletRef = useRef(createWallet);
@@ -93,12 +93,11 @@ export function useEnsureEmbeddedWallet() {
   // completes -- before the connected list has caught up, and before Privy's own `createOnLogin`
   // provisioning has landed.
   //
-  // `walletsReady` alone was not enough. It closes the page-load window, where the list has not
-  // hydrated; it says nothing about a fresh login, where the list is genuinely ready and genuinely
-  // empty because the wallet Privy is creating does not exist yet. Asking again in that window
-  // means either a rejected duplicate on every single login, or -- worse -- a second wallet with
-  // the same `walletClientType`, which `useSmartAccount` picks between with `.find()`. It could
-  // then choose the one the account's smart account and personal space were never derived from.
+  // This, not the connected list, is what decides whether to create. The list is empty on a page
+  // load until it hydrates, and on a fresh login until the wallet Privy is creating exists. Asking
+  // in either window means a rejected duplicate, or -- worse -- a second wallet with the same
+  // `walletClientType`, which `useSmartAccount` picks between with `.find()`. It could then choose
+  // the one the account's smart account and personal space were never derived from.
   const accountHasEmbeddedWallet = (user?.linkedAccounts ?? []).some(
     account => account.type === 'wallet' && account.walletClientType === EMBEDDED_WALLET_TYPE
   );
@@ -144,12 +143,14 @@ export function useEnsureEmbeddedWallet() {
   }, [generation]);
 
   useEffect(() => {
-    // `walletsReady` is the guard that stops this firing at everybody who already has a wallet.
-    // A restored session sets `authenticated` before `wallets` has hydrated, so on every page load
-    // there is a window where the list is empty and the user looks wallet-less. Asking then means
-    // `createWallet` rejecting -- Privy errors when one already exists -- and if hydration outlasts
-    // the retry delay, an existing account can burn all three attempts before its wallet appears.
-    if (!authenticated || !walletsReady || embeddedWallet || accountHasEmbeddedWallet) return;
+    // Privy's `ready` means `user` is the resolved account, so `accountHasEmbeddedWallet` (above) can
+    // be trusted before the connected list has hydrated.
+    //
+    // Not `useWallets().ready` (GEO-3417): only a connector's `connectorInitialized` event sets it,
+    // and with `walletList` cut to `detected_ethereum_wallets` (#2872) a browser with no injected
+    // wallet has no connectors. The flag stayed false for good, and headless sign-ups never got a
+    // wallet. The modal flow never reads it, which is why only inline email sign-ups broke.
+    if (!ready || !authenticated || embeddedWallet || accountHasEmbeddedWallet) return;
     // The modal login flips `authenticated` *before* it provisions the `createOnLogin` wallet: its
     // account-create screen only starts once the user exists, and runs inside the still-open modal.
     // `linkedAccounts` cannot cover that window -- the wallet does not exist yet -- so asking here
@@ -196,7 +197,7 @@ export function useEnsureEmbeddedWallet() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, walletsReady, embeddedWallet, accountHasEmbeddedWallet, isModalOpen, createAttempts]);
+  }, [ready, authenticated, embeddedWallet, accountHasEmbeddedWallet, isModalOpen, createAttempts]);
 
   // `walletToActivate` is read through a ref so that a new object for the same address does not
   // re-run this; the address is the dependency.

@@ -5,11 +5,8 @@ import { useQueries } from '@tanstack/react-query';
 import * as React from 'react';
 
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
-import {
-  claimExploreRowPages,
-  claimExploreRowsQueryKey,
-  fetchClaimExploreRowsPage,
-} from './claim-explore-rows';
+
+import { claimExploreRowPages, claimExploreRowsQueryKey, fetchClaimExploreRowsPage } from './claim-explore-rows';
 
 export { CLAIM_RECORD_PAGE_SIZE, claimExploreRowPages } from './claim-explore-rows';
 

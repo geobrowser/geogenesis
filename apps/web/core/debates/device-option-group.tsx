@@ -4,15 +4,15 @@ import * as RadioGroup from '@radix-ui/react-radio-group';
 
 import cx from 'classnames';
 
-import type { MediaDeviceOption } from '~/core/debates/media-session';
+import type { MediaDeviceOption } from '~/core/media/device-options';
+import { readMediaDevicePreference } from '~/core/media/device-preferences';
 
 import { Check } from '~/design-system/icons/check';
 import { Text } from '~/design-system/text';
 
 /**
- * The device chooser shared by every surface that puts a microphone in the user's hands — the
- * debate pre-join screen and the claim-exploration voice pill. They have to look and behave the
- * same, because the choice made in one carries into the other.
+ * Device choices shared by debate previews, the claim picker and community calls.
+ * Keep keyboard navigation, selected states and disabled rows consistent across those surfaces.
  */
 export function DeviceOptionGroup({
   label,
@@ -42,6 +42,12 @@ export function DeviceOptionGroup({
             <RadioGroup.Item
               key={`${device.kind}:${device.deviceId}`}
               value={device.deviceId}
+              onClick={() => {
+                const remembered = readMediaDevicePreference(device.kind);
+                // Radix does not emit onValueChange for the checked row. An explicit click can
+                // save the first preference or confirm a fallback without restarting a remembered device.
+                if (!disabled && selected && remembered !== device.deviceId) onChange(device.deviceId);
+              }}
               className={cx(
                 'flex w-full items-center justify-between gap-3 rounded-md text-left text-metadata text-text outline-none',
                 // The bottom sheet has the room for the taller rows the designs draw; the pre-join

@@ -10,20 +10,6 @@ import { ChallengeAcceptedPrompt } from './challenge-accepted-prompt';
 import { registerLobbyCapture } from './lobbies/step-out';
 import { clearRematchJoinIntents, readRematchJoinIntent, rememberRematchJoinIntent } from './rematch-join-intent';
 
-const flags = vi.hoisted(() => ({ debateVideo: true, hydrating: false }));
-
-// `hydrating` reproduces the real hook: false on a component's first render, the flag after.
-vi.mock('~/core/state/feature-flags', async () => {
-  const { useHydrated } = await import('~/core/hooks/use-hydrated');
-  return {
-    useFeatureFlag: (id: string) => {
-      const hydrated = useHydrated();
-      if (id !== 'debateVideo') return false;
-      return flags.hydrating ? hydrated && flags.debateVideo : flags.debateVideo;
-    },
-  };
-});
-
 const media = vi.hoisted(() => ({
   releaseSession: vi.fn(),
   beginSession: vi.fn(),
@@ -94,8 +80,6 @@ function renderPrompt(props: Partial<React.ComponentProps<typeof ChallengeAccept
 }
 
 beforeEach(() => {
-  flags.debateVideo = true;
-  flags.hydrating = false;
   clearRematchJoinIntents();
   media.beginSession.mockReset();
   media.releaseSession.mockReset();
@@ -241,19 +225,7 @@ describe('ChallengeAcceptedPrompt', () => {
     expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: false, source: 'card' });
   });
 
-  it('offers the mic alone and saves no camera choice with debateVideo off', async () => {
-    flags.debateVideo = false;
-    rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: true, source: 'card' });
-    renderPrompt();
-
-    expect(await screen.findByText('You’ll join with your mic on.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
-    await waitFor(() => expect(readRematchJoinIntent('rematch-1')).toStrictEqual({ micOn: true, source: 'card' }));
-    expect(media.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ video: true }));
-  });
-
-  it('keeps a remembered camera through the flag reading off on the first render', async () => {
-    flags.hydrating = true;
+  it('keeps a remembered camera', async () => {
     rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: true, source: 'card' });
     renderPrompt();
 

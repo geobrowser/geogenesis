@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { BREAK_CLOCK_SNAP_MS, advanceBreakClock } from './debate-break-cues';
+import { BREAK_CLOCK_SNAP_MS, advanceBreakClock } from './use-playback-animation-clock';
 
 // A 60 fps frame, inside a 2.85 s break.
 const FRAME = 16;

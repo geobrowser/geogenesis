@@ -1,7 +1,5 @@
 'use client';
 
-import { useGeoLogin, usePrivy } from '@geogenesis/auth';
-
 import { useCallback, useRef } from 'react';
 
 import { type ActionContext, withActionContext } from '~/core/action-context';
@@ -9,6 +7,7 @@ import { useActionContext, useActionScope } from '~/core/action-context-provider
 import { type AnalyticsProperties } from '~/core/analytics';
 import { currentAuthAttempt } from '~/core/auth-attempt';
 import { beginPrivyAuth } from '~/core/privy-auth-events';
+import { useGeoLogin, usePrivy } from '~/core/wallet/auth-hooks';
 
 /** Capture attribution at the press; the persistent observer owns completion tracking. */
 export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {

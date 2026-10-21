@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   signInOptions: undefined as { redirectTo?: string; onError?: () => void } | undefined,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated }),
 }));
 vi.mock('next/navigation', () => ({

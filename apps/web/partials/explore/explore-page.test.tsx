@@ -14,6 +14,11 @@ vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: string) => mocks.flags[id] ?? false,
 }));
 
+// Privy still restoring: the state a reader with a wallet cookie is in on first paint.
+vi.mock('~/core/wallet/auth-hooks', () => ({
+  usePrivy: () => ({ ready: false, authenticated: false }),
+  useIdentityToken: () => ({ identityToken: null }),
+}));
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));
 vi.mock('~/core/topics/use-followed-topics', () => ({
   useFollowedTopics: () => ({ topicIds: new Set(['bbbb', 'aaaa']), isLoading: false }),

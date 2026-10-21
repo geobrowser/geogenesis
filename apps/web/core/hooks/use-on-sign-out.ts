@@ -1,8 +1,8 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import { useEffect, useRef } from 'react';
+
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 /**
  * Runs `onSignOut` when this tab goes from signed in to signed out: a logout here, a logout in

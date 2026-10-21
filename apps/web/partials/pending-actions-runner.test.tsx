@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   reportError: vi.fn(),
 }));
 vi.mock('~/core/analytics', () => ({ capture: vi.fn() }));
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: true, authenticated: mocks.privyAuthenticated }),
 }));
 vi.mock('~/core/hooks/use-smart-account', () => ({

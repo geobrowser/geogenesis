@@ -4,8 +4,10 @@ import type { Debate, DebateMediaTurnSegment } from './api';
 import { RENDERED_MEDIA } from './open-rounds-media-fixtures';
 import {
   BREAK_PLAYED_MS,
+  BREAK_SETTLE_MS,
   EARLY_END_HOLD_MS,
   NO_PLAYBACK_BREAKS,
+  breakAnimationPositionMs,
   breakAnnouncesRound,
   breakCueAt,
   breakCuts,
@@ -74,6 +76,35 @@ describe('playbackBreaksFrom', () => {
     expect(playbackBreaksFrom(openRounds(0), { round_results: [] }, older).breaks).toEqual([]);
   });
 
+  it('applies served turn-edge cuts without a cue or moving a round break into trimmed silence', () => {
+    const gap = (kind: 'turn_start' | 'turn_end', turn_index: number, start: number, end: number) => ({
+      kind,
+      turn_index,
+      next_turn_index: turn_index,
+      source_start_ms: start,
+      source_end_ms: end,
+      output_ms: 0,
+      removed_ms: end - start,
+      quiet_kept_ms: 300,
+    });
+    const cuts = [gap('turn_start', 0, 0, 2_700), gap('turn_end', 1, 100_300, 120_000)];
+    const playback = playbackBreaksFrom(openRounds(), { ...RENDERED_MEDIA, early_end_gaps: cuts }, [
+      { ...segments[0], output_start_ms: 2_700 },
+      { ...segments[1], output_end_ms: 100_300 },
+      ...segments.slice(2),
+    ]);
+    expect(breakCuts(playback)).toEqual(
+      expect.arrayContaining([
+        { atMs: 0, toMs: 2_700 },
+        { atMs: 100_300, toMs: 120_000 },
+      ])
+    );
+    expect(earlyEndCueAt(playback.earlyEnds, 2_800)).toBeNull();
+    expect(earlyEndCueAt(playback.earlyEnds, 120_100)).toBeNull();
+    expect(playback.breaks[0].decidingStartMs).toBe(120_000);
+    expect(silentAt(playback, 110_000)).toBe(true);
+  });
+
   it('is nothing for a fixed format or a debate with no media yet', () => {
     expect(playbackBreaksFrom({} as Debate, { round_results: [] }, []).breaks).toEqual([]);
     expect(playbackBreaksFrom(openRounds(), undefined, segments).breaks).toEqual([]);
@@ -88,8 +119,8 @@ describe('breakCueAt', () => {
     expect(cueAt(333_481)).toBeNull();
   });
 
-  // Round 2 (index 1) ended at 218 s; the player plays its first 2.35 s under the stamps, then cuts.
-  it('runs the stamps on the played stretch at the front of the break, with both picks', () => {
+  // Round 2 (index 1) ended at 218 s; the title lasts 2.4 s across an edit at its midpoint.
+  it('runs the title on the played stretch while retaining the saved picks as metadata', () => {
     expect(cueAt(218_500)).toEqual({
       kind: 'extend',
       elapsedMs: 500,
@@ -99,8 +130,12 @@ describe('breakCueAt', () => {
     });
   });
 
-  it('holds the end of the played stretch on a playhead past it, as a scrub or a pause leaves it', () => {
-    expect(cueAt(226_000)).toMatchObject({ elapsedMs: BREAK_PLAYED_MS.extend });
+  it('holds the title in the omitted silence and resumes its clock on the retained tail', () => {
+    expect(cueAt(219_200)).toMatchObject({ elapsedMs: 1_200 });
+    expect(cueAt(226_000)).toMatchObject({ elapsedMs: 1_200 });
+    expect(cueAt(228_750)).toMatchObject({ elapsedMs: 1_200 });
+    expect(cueAt(229_350)).toMatchObject({ elapsedMs: 1_800 });
+    expect(cueAt(229_949)).toMatchObject({ elapsedMs: 2_399 });
   });
 
   it('has no picks for a required round’s lead-in, since nobody picked', () => {
@@ -113,18 +148,69 @@ describe('breakCueAt', () => {
 });
 
 describe('breakCuts', () => {
-  it('cuts each break after its first couple of seconds, and an early end’s quiet at once', () => {
+  it('gives rounds 2 and 3 identical title durations despite their different raw break lengths', () => {
+    const durations = BREAKS.breaks.slice(0, 2).map(entry => {
+      const [cut] = breakCuts({ ...BREAKS, breaks: [entry], earlyEnds: [] });
+      const keptMs = entry.endMs - entry.decidingStartMs - (cut.toMs - cut.atMs);
+      const cue = breakCueAt([entry], [], entry.decidingStartMs)!;
+      return { keptMs, visibleTitleMs: cue.playedMs - BREAK_SETTLE_MS };
+    });
+    expect(durations).toEqual([
+      { keptMs: 2_400, visibleTitleMs: 2_100 },
+      { keptMs: 2_400, visibleTitleMs: 2_100 },
+    ]);
+  });
+
+  it('edits round breaks under the held title, retaining silence for the blend and title exit', () => {
     expect(breakCuts(BREAKS)).toEqual([
-      { atMs: 120_000 + BREAK_PLAYED_MS.lead_in, toMs: 128_000 },
-      { atMs: 218_000 + BREAK_PLAYED_MS.extend, toMs: 229_950 },
+      { atMs: 121_200, toMs: 126_800 },
+      { atMs: 219_200, toMs: 228_750 },
       { atMs: 270_944, toMs: 274_650 },
       { atMs: 321_086 + BREAK_PLAYED_MS.final_end, toMs: 333_481 },
     ]);
   });
 
+  it('makes one seek across a silent tail and the following slow start', () => {
+    const base = BREAKS.earlyEnds[0];
+    expect(
+      breakCuts({
+        breaks: [],
+        picks: [],
+        earlyEnds: [
+          { ...base, kind: 'turn_end', startMs: 40_300, endMs: 60_000 },
+          { ...base, kind: 'turn_start', startMs: 60_000, endMs: 62_700 },
+        ],
+      })
+    ).toEqual([{ atMs: 40_300, toMs: 62_700 }]);
+  });
+
   it('leaves a break shorter than its share whole', () => {
     const short = { ...BREAKS, earlyEnds: [], breaks: [{ ...BREAKS.breaks[0], endMs: 121_000 }] };
     expect(breakCuts(short)).toEqual([]);
+    expect(breakAnimationPositionMs(short.breaks, 120_750)).toBe(120_750);
+  });
+});
+
+describe('breakAnimationPositionMs', () => {
+  it.each(BREAKS.breaks.filter(entry => entry.kind !== 'final_end'))(
+    'keeps the $kind title clock continuous across the cut and completes its exit at the next turn',
+    entry => {
+      const [cut] = breakCuts({ ...BREAKS, breaks: [entry], earlyEnds: [] });
+      const before = breakAnimationPositionMs([entry], cut.atMs);
+      expect(before).toBe(entry.decidingStartMs + 1_200);
+      expect(breakAnimationPositionMs([entry], cut.toMs)).toBe(before);
+      // The 400ms frame blend finishes while the title is still held (exit starts at 2100ms).
+      expect(breakAnimationPositionMs([entry], cut.toMs + 400)).toBe(entry.decidingStartMs + 1_600);
+      expect(breakAnimationPositionMs([entry], entry.endMs - 150)).toBe(entry.decidingStartMs + 2_250);
+      expect(breakAnimationPositionMs([entry], entry.endMs - 1)).toBe(entry.decidingStartMs + 2_399);
+      expect(breakAnimationPositionMs([entry], entry.endMs)).toBe(entry.endMs);
+    }
+  );
+
+  it('leaves turn positions and the final wrap clock unchanged', () => {
+    for (const ms of [119_000, 128_000, 230_000, 321_500]) {
+      expect(breakAnimationPositionMs(BREAKS.breaks, ms)).toBe(ms);
+    }
   });
 });
 
@@ -146,10 +232,17 @@ describe('breakAnnouncesRound', () => {
 
 describe('earlyEndCueAt', () => {
   it('covers the quiet between Preston’s last word and Adam’s first, and a moment past it', () => {
-    expect(earlyEndCueAt(BREAKS.earlyEnds, 270_944)).toEqual({ endedSlot: 1, nextSlot: 2 });
+    expect(earlyEndCueAt(BREAKS.earlyEnds, 270_944)).toEqual({
+      endedSlot: 1,
+      nextSlot: 2,
+      ageMs: 0,
+      durationMs: 4_406,
+    });
     expect(earlyEndCueAt(BREAKS.earlyEnds, 274_650 + EARLY_END_HOLD_MS - 1)).toEqual({
       endedSlot: 1,
       nextSlot: 2,
+      ageMs: 4_405,
+      durationMs: 4_406,
     });
     expect(earlyEndCueAt(BREAKS.earlyEnds, 270_943)).toBeNull();
     expect(earlyEndCueAt(BREAKS.earlyEnds, 274_650 + EARLY_END_HOLD_MS)).toBeNull();

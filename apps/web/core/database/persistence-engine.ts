@@ -18,7 +18,7 @@ export class PersistenceEngine {
   private pendingRelations = new Map<string, Relation>();
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(stream: GeoEventStream) {
+  constructor(private readonly stream: GeoEventStream) {
     stream.on(GeoEventStream.VALUES_CREATED, event => {
       this.enqueue('value', event.value);
     });
@@ -179,6 +179,13 @@ export class PersistenceEngine {
         });
       }
 
+      const entityIds = [
+        ...new Set([
+          ...localValues.map(value => value.entity.id),
+          ...localRelations.map(relation => relation.fromEntity.id),
+        ]),
+      ].filter(Boolean);
+      this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entityIds });
       return true;
     } catch (err) {
       console.warn('[PersistenceEngine] restore failed:', err);

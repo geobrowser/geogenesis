@@ -30,8 +30,6 @@ import { PAIR_PILL } from './rematch-pair-header';
 import { RematchVoiceHeader } from './rematch-voice';
 
 const mocks = vi.hoisted(() => ({
-  debateVideo: true,
-  hydrating: false,
   joinData: null as { token: string; url: string; room_name: string; participant_slot: 1 | 2 } | null,
   joinError: null as Error | null,
   joinLoading: false,
@@ -59,10 +57,10 @@ const mocks = vi.hoisted(() => ({
   changeVideoInput: vi.fn(),
   activeDeviceId: 'mic-a',
   activeSpeakerId: 'speaker-a',
-  setActiveMediaDevice: vi.fn(() => Promise.resolve()),
-  setActiveSpeaker: vi.fn(() => Promise.resolve()),
+  setActiveMediaDevice: vi.fn<(id: string) => Promise<unknown>>(),
+  setActiveSpeaker: vi.fn<(id: string) => Promise<unknown>>(),
   changeAudioInput: vi.fn(),
-  changeAudioOutput: vi.fn(() => Promise.resolve()),
+  changeAudioOutput: vi.fn<(id: string, apply?: (id: string) => Promise<unknown>) => Promise<void>>(),
   remoteParticipants: [] as Array<{ identity: string; getTrackPublication: (source: string) => unknown }>,
   /** What the opponent has published. `undefined` is a peer who joined muted and never opened up. */
   opponentMicPublication: { isMuted: false } as { isMuted: boolean } | undefined,
@@ -152,6 +150,11 @@ vi.mock('@livekit/components-react', () => ({
   useRemoteParticipants: () => mocks.remoteParticipants,
   useRoomContext: () => ({
     disconnect: mocks.disconnect,
+    switchActiveDevice: async (kind: MediaDeviceKind, id: string) => {
+      if (kind === 'audioinput') return mocks.setActiveMediaDevice(id);
+      if (kind === 'audiooutput') return mocks.setActiveSpeaker(id);
+      return mocks.setActiveCamera(id);
+    },
     localParticipant: {
       identity: 'me',
       setMicrophoneEnabled: mocks.setMicrophoneEnabled,
@@ -208,18 +211,6 @@ vi.mock('livekit-client', () => ({
   },
   Track: { Source: { Microphone: 'microphone', Camera: 'camera' } },
 }));
-
-// `hydrating` reproduces the real hook: false on a component's first render, the flag after.
-vi.mock('~/core/state/feature-flags', async () => {
-  const { useHydrated } = await import('~/core/hooks/use-hydrated');
-  return {
-    useFeatureFlag: (id: string) => {
-      const hydrated = useHydrated();
-      if (id !== 'debateVideo') return false;
-      return mocks.hydrating ? hydrated && mocks.debateVideo : mocks.debateVideo;
-    },
-  };
-});
 
 vi.mock('~/core/debates/hooks', () => ({
   debateQueryKeys: {
@@ -350,7 +341,9 @@ async function flushOwnership() {
  * chip), so the ring is the previous sibling of that column rather than of the name itself.
  */
 function avatarFor(name: string) {
-  return screen.getByText(name).closest('div')?.previousElementSibling;
+  return screen
+    .getByTestId(name === 'You' ? 'rematch-you-card' : 'rematch-opponent-card')
+    .querySelector('[data-testid="pair-avatar"]');
 }
 
 function setVisibility(state: DocumentVisibilityState) {
@@ -427,8 +420,6 @@ function stepOutOfLobbyWithMic(on: boolean) {
 }
 
 beforeEach(() => {
-  mocks.debateVideo = true;
-  mocks.hydrating = false;
   stubMicrophoneApis();
   // The settings popover measures its trigger to place itself; jsdom has no ResizeObserver.
   vi.stubGlobal(
@@ -478,7 +469,9 @@ beforeEach(() => {
   mocks.setActiveMediaDevice.mockReset().mockResolvedValue(undefined);
   mocks.setActiveSpeaker.mockReset().mockResolvedValue(undefined);
   mocks.changeAudioInput.mockReset();
-  mocks.changeAudioOutput.mockReset().mockResolvedValue(undefined);
+  mocks.changeAudioOutput.mockReset().mockImplementation(async (id, apply) => {
+    await apply?.(id).catch(() => undefined);
+  });
   mocks.deviceSelectCalls = [];
   mocks.remoteParticipants = [];
   mocks.opponentMicPublication = { isMuted: false };
@@ -519,8 +512,8 @@ describe('RematchVoiceHeader', () => {
       expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
       // The header is the page's header now, not the voice dock: two people are still in this
       // rematch, and the cards are how the page says who. There is just nothing to mute.
-      expect(screen.getByText('You')).toBeInTheDocument();
-      expect(screen.getByText('Salina')).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'You' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /microphone$/ })).toBeNull();
       unmount();
     }
@@ -540,7 +533,7 @@ describe('RematchVoiceHeader', () => {
       );
       await flushOwnership();
       expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
-      expect(screen.getByText('Salina')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toBeInTheDocument();
       // Not even a message: there is no voice to be unavailable, and saying so would invent a
       // problem on a picker that works exactly as it did before voice existed.
       expect(screen.queryByText(/Voice is unavailable/)).toBeNull();
@@ -563,8 +556,8 @@ describe('RematchVoiceHeader', () => {
     await flushOwnership();
     expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
     // The design keeps both names on screen throughout; only the opponent's chip changes.
-    expect(screen.getByText('You')).toBeInTheDocument();
-    expect(screen.getByText('Salina')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'You' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toBeInTheDocument();
     expect(screen.getByTitle('Waiting for Salina to join')).toBeInTheDocument();
     // Auto-join, but muted: the room connects to listen, not to publish.
     expect(mocks.livekitRoomProps[0]?.audio).toBe(false);
@@ -891,6 +884,33 @@ describe('RematchVoiceHeader', () => {
     fireEvent.click(await screen.findByText('USB Microphone'));
 
     expect(mocks.setActiveMediaDevice).toHaveBeenCalledWith('mic-b');
+    await waitFor(() => expect(mocks.changeAudioInput).toHaveBeenCalledWith('mic-b'));
+  });
+
+  it.each(['rejects', 'returns false'])('does not carry a microphone choice when live routing %s', async failure => {
+    if (failure === 'rejects') mocks.setActiveMediaDevice.mockRejectedValue(new Error('No route'));
+    else mocks.setActiveMediaDevice.mockResolvedValue(false);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(await screen.findByText('USB Microphone'));
+    expect(await screen.findByText('Could not switch microphones. Try another device.')).toBeInTheDocument();
+    expect(mocks.changeAudioInput).not.toHaveBeenCalled();
+  });
+
+  it('waits for microphone routing before carrying the preference', async () => {
+    let finish!: () => void;
+    mocks.setActiveMediaDevice.mockReturnValue(
+      new Promise<void>(resolve => {
+        finish = resolve;
+      })
+    );
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(await screen.findByText('USB Microphone'));
+    expect(mocks.changeAudioInput).not.toHaveBeenCalled();
+    await act(async () => finish());
     expect(mocks.changeAudioInput).toHaveBeenCalledWith('mic-b');
   });
 
@@ -901,8 +921,8 @@ describe('RematchVoiceHeader', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
     fireEvent.click(await screen.findByText('AirPods'));
 
-    expect(mocks.setActiveSpeaker).toHaveBeenCalledWith('speaker-b');
-    expect(mocks.changeAudioOutput).toHaveBeenCalledWith('speaker-b');
+    await waitFor(() => expect(mocks.setActiveSpeaker).toHaveBeenCalledWith('speaker-b'));
+    expect(mocks.changeAudioOutput).toHaveBeenCalledWith('speaker-b', expect.any(Function));
   });
 
   // Firefox and Safari enumerate no outputs at all, and an empty list reads as a broken picker.
@@ -1042,7 +1062,7 @@ describe('RematchVoiceHeader', () => {
 
     await waitFor(() => expect(mocks.getUserMedia).toHaveBeenCalledWith({ audio: { deviceId: 'chosen-mic' } }));
     expect(mocks.livekitRoomProps.at(-1)?.options).toMatchObject({
-      audioCaptureDefaults: { deviceId: 'chosen-mic' },
+      audioCaptureDefaults: { deviceId: { ideal: 'chosen-mic' } },
     });
   });
 
@@ -1756,74 +1776,30 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByTitle('Salina is talking')).toHaveTextContent('Talking');
   });
 
-  /** The identity row's three tracks: avatar, the name-and-state column, the corner action. */
-  function cardTracks(card: HTMLElement) {
-    return Array.from((card.firstElementChild as HTMLElement).children) as HTMLElement[];
-  }
-
-  it('pins the corner action to the top of a desktop card and centres it on a phone', async () => {
+  it('keeps the media controls and leave in your card and the profile action in theirs', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
+    const leave = vi.fn();
     render(
       <RematchVoiceHeader
         session={makeSession('browsing')}
         currentUserId="me"
-        leaveAction={<button type="button">Leave debate</button>}
-      />
-    );
-    await flushOwnership();
-
-    const corner = screen.getByRole('button', { name: 'Leave debate' }).parentElement;
-
-    expect(corner?.className).toContain('self-start');
-    expect(corner?.className).toContain('max-sm:self-center');
-  });
-
-  // The two cards sit side by side, so a difference in either one is a difference you read across
-  // the pair. The mute pill had drifted out to the card's left edge while the opponent's chip
-  // stayed indented under their name — invisible in either card alone, impossible to miss between
-  // them. Both are laid out by one component now, and this is what says so.
-  it('lays both cards out the same way, avatar then name over state then the corner action', async () => {
-    mocks.remoteParticipants = [remoteOpponent()];
-    mocks.opponentMicPublication = { isMuted: true };
-    render(
-      <RematchVoiceHeader
-        session={makeSession('browsing')}
-        currentUserId="me"
-        leaveAction={<button type="button">Leave debate</button>}
+        leaveAction={
+          <button type="button" onClick={leave}>
+            Leave debate
+          </button>
+        }
       />
     );
     await flushOwnership();
 
     const you = screen.getByTestId('rematch-you-card');
     const them = screen.getByTestId('rematch-opponent-card');
-
-    // Them, the badge, then you: the home side of a scoreboard, and where a reader's eye lands
-    // last. Order is not decoration here — the cards are identical, so position is the only thing
-    // saying which of them is you.
     expect(them.compareDocumentPosition(you) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(Array.from(them.parentElement!.children).map(child => child.textContent)).toEqual([
-      expect.stringContaining('Salina'),
-      'VS',
-      expect.stringContaining('You'),
-    ]);
-
-    const [youAvatar, youColumn, youAction] = cardTracks(you);
-    const [themAvatar, themColumn, themAction] = cardTracks(them);
-
-    expect(youAvatar.className).toBe(themAvatar.className);
-    expect(youColumn.className).toBe(themColumn.className);
-    expect(youAction.className).toBe(themAction.className);
-
-    // The state belongs to the name, not to the card: the pill is indented past the avatar exactly
-    // as far as the chip is.
-    expect(youColumn).toContainElement(within(you).getByText('You'));
-    expect(youColumn).toContainElement(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ }));
-    expect(themColumn).toContainElement(within(them).getByText('Salina'));
-    expect(themColumn).toContainElement(screen.getByTitle('Salina is muted'));
-
-    // And the corners hold each person's own secondary action, so they line up across the badge.
-    expect(youAction).toContainElement(screen.getByRole('button', { name: 'Leave debate' }));
-    expect(themAction).toHaveTextContent('View profile');
+    expect(within(you).getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeInTheDocument();
+    expect(within(them).queryByRole('button')).toBeNull();
+    expect(them).toHaveAccessibleName('Open Salina’s personal space');
+    fireEvent.click(within(you).getByRole('button', { name: 'Leave debate' }));
+    expect(leave).toHaveBeenCalledOnce();
   });
 
   // Your control and their chip sit at the same height in mirrored cards, so anything they do not
@@ -2023,7 +1999,7 @@ describe('RematchVoiceHeader', () => {
     expect(container.querySelector('[data-testid="livekit-room"]')).toBeNull();
     expect(mocks.getUserMedia).not.toHaveBeenCalled();
     // The pair are still drawn; there is simply no voice to arm.
-    expect(screen.getByText('Salina')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Salina’s personal space' })).toBeInTheDocument();
   });
 
   // The status is not the room. A rematch that ended while this page was still working through
@@ -2766,7 +2742,7 @@ describe('choosing a camera', () => {
     expect(await screen.findByRole('button', { name: 'Turn camera off' })).toHaveTextContent('Camera off');
   });
 
-  it('drops both labels at the same width, not one of them', async () => {
+  it('keeps icon-only media controls labelled for assistive technology', async () => {
     withCameraAllowed();
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
@@ -2774,7 +2750,7 @@ describe('choosing a camera', () => {
     const micLabel = within(screen.getByRole('button', { name: /microphone/i })).getByText(/^(Mute|Unmute)$/);
     const cameraLabel = await screen.findByText('Camera on');
 
-    expect(micLabel.className).toContain('max-[400px]:hidden');
+    expect(micLabel).toHaveClass('sr-only');
     expect(cameraLabel.className).toBe(micLabel.className);
   });
 
@@ -2806,7 +2782,19 @@ describe('choosing a camera', () => {
     fireEvent.click(await screen.findByText('USB Webcam'));
 
     expect(mocks.setActiveCamera).toHaveBeenCalledWith('cam-b');
-    expect(mocks.changeVideoInput).toHaveBeenCalledWith('cam-b');
+    await waitFor(() => expect(mocks.changeVideoInput).toHaveBeenCalledWith('cam-b'));
+  });
+
+  it.each(['rejects', 'returns false'])('does not carry a camera choice when live routing %s', async failure => {
+    withCameraAllowed();
+    if (failure === 'rejects') mocks.setActiveCamera.mockRejectedValue(new Error('No route'));
+    else mocks.setActiveCamera.mockResolvedValue(false);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    fireEvent.click(await screen.findByRole('button', { name: 'Camera settings' }));
+    fireEvent.click(await screen.findByText('USB Webcam'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not switch cameras');
+    expect(mocks.changeVideoInput).not.toHaveBeenCalled();
   });
 
   it('never asks for a camera to fill its own picker', async () => {
@@ -2918,6 +2906,181 @@ describe('video in the header', () => {
     expect(document.querySelector('video')).toBeNull();
   });
 
+  it('scrolls without reformatting the videos or replacing their attached tracks', async () => {
+    mocks.localCameraTrack = cameraTrack();
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentCameraPublication = cameraTrack();
+    render(
+      <div data-rematch-scroll data-testid="picker-scroll">
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </div>
+    );
+    await flushOwnership();
+    const localTrack = mocks.localCameraTrack!.track;
+    const remoteTrack = mocks.opponentCameraPublication!.track;
+    const videos = [...document.querySelectorAll('video')];
+    expect(localTrack.attach).toHaveBeenCalledOnce();
+    expect(remoteTrack.attach).toHaveBeenCalledOnce();
+    const scroller = screen.getByTestId('picker-scroll');
+    scroller.scrollTop = 150;
+    fireEvent.scroll(scroller);
+    expect(screen.queryByRole('button', { name: 'Show full participant videos' })).toBeNull();
+    expect(scroller.scrollTop).toBe(150);
+    expect([...document.querySelectorAll('video')]).toEqual(videos);
+    expect(localTrack.attach).toHaveBeenCalledOnce();
+    expect(remoteTrack.attach).toHaveBeenCalledOnce();
+    expect(localTrack.detach).not.toHaveBeenCalled();
+    expect(remoteTrack.detach).not.toHaveBeenCalled();
+  });
+
+  describe('floating opponent video', () => {
+    let notify: (visible: boolean, bottom?: number) => void;
+    let notifyBatch: (states: { visible: boolean; bottom?: number }[]) => void;
+    let observedAnchor: Element | null;
+    let observedRoot: Element | Document | null | undefined;
+    let disconnect = vi.fn<() => void>();
+
+    beforeEach(() => {
+      observedAnchor = null;
+      disconnect = vi.fn<() => void>();
+      notify = () => {};
+      vi.stubGlobal(
+        'IntersectionObserver',
+        class {
+          constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+            observedRoot = options?.root;
+            notifyBatch = states =>
+              callback(
+                states.map(
+                  ({ visible, bottom = -1 }) =>
+                    ({
+                      isIntersecting: visible,
+                      boundingClientRect: { bottom },
+                      rootBounds: { top: 0 },
+                    }) as IntersectionObserverEntry
+                ),
+                this as unknown as IntersectionObserver
+              );
+            notify = (visible, bottom) => notifyBatch([{ visible, bottom }]);
+          }
+          observe(element: Element) {
+            observedAnchor = element;
+          }
+          disconnect() {
+            disconnect();
+          }
+        }
+      );
+    });
+
+    afterEach(() => vi.unstubAllGlobals());
+
+    async function renderPair() {
+      mocks.remoteParticipants = [remoteOpponent()];
+      mocks.opponentCameraPublication = cameraTrack();
+      mocks.localCameraTrack = cameraTrack();
+      const view = render(
+        <div data-rematch-scroll data-testid="picker-scroll">
+          <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+        </div>
+      );
+      await flushOwnership();
+      return view;
+    }
+
+    it('docks the same video only after its full-size slot scrolls above the picker', async () => {
+      await renderPair();
+      const card = screen.getByTestId('rematch-opponent-card');
+      const video = card.querySelector('video');
+      const anchor = observedAnchor;
+      const localVideo = screen.getByTestId('rematch-you-card').querySelector('video');
+      expect(observedRoot).toBe(screen.getByTestId('picker-scroll'));
+      expect(card).toContainElement(anchor as HTMLElement);
+      act(() => notify(true));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      // A video below the viewport is not a video the user has scrolled past.
+      act(() => notify(false, 600));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      act(() => notify(false));
+      const floating = screen.getByTestId('rematch-floating-opponent-video');
+      expect(floating).toContainElement(video);
+      expect(floating).not.toContainElement(localVideo);
+      expect(observedAnchor).toBe(anchor);
+      expect(mocks.opponentCameraPublication!.track.attach).toHaveBeenCalledOnce();
+      expect(mocks.opponentCameraPublication!.track.detach).not.toHaveBeenCalled();
+      expect(mocks.localCameraTrack!.track.attach).toHaveBeenCalledOnce();
+      act(() => notify(true));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      expect(card.querySelector('video')).toBe(video);
+      expect(mocks.opponentCameraPublication!.track.attach).toHaveBeenCalledOnce();
+    });
+
+    it('uses the latest visibility change when the browser batches scroll transitions', async () => {
+      await renderPair();
+      act(() => notifyBatch([{ visible: false }, { visible: true }]));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      act(() => notifyBatch([{ visible: true }, { visible: false }]));
+      expect(screen.getByTestId('rematch-floating-opponent-video')).toBeInTheDocument();
+    });
+
+    it('lets you dismiss it until you return to the main video', async () => {
+      await renderPair();
+      act(() => notify(false));
+      fireEvent.click(screen.getByRole('button', { name: 'Hide floating video' }));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      expect(mocks.opponentCameraPublication!.track.detach).not.toHaveBeenCalled();
+      expect(mocks.personProfileOpened).not.toHaveBeenCalled();
+      act(() => notify(false));
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      act(() => notifyBatch([{ visible: true }, { visible: false }]));
+      expect(screen.getByTestId('rematch-floating-opponent-video')).toBeInTheDocument();
+    });
+
+    it.each([0, 1])('restores focus to search only for keyboard dismissal (click detail %i)', async detail => {
+      const view = await renderPair();
+      view.rerender(
+        <div data-rematch-scroll>
+          <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+          <input data-rematch-search aria-label="Search claims" />
+        </div>
+      );
+      act(() => notify(false));
+      const close = screen.getByRole('button', { name: 'Hide floating video' });
+      close.focus();
+      fireEvent.click(close, { detail });
+      const search = screen.getByRole('textbox', { name: 'Search claims' });
+      if (detail === 0) expect(search).toHaveFocus();
+      else expect(search).not.toHaveFocus();
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+    });
+
+    it('removes the floating video when the opponent turns their camera off', async () => {
+      const view = await renderPair();
+      act(() => notify(false));
+      expect(screen.getByTestId('rematch-floating-opponent-video')).toBeInTheDocument();
+      mocks.opponentCameraPublication = { ...mocks.opponentCameraPublication!, isMuted: true };
+      view.rerender(
+        <div data-rematch-scroll>
+          <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+        </div>
+      );
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Hide floating video' })).toBeNull();
+      expect(within(screen.getByTestId('rematch-opponent-card')).getByTestId('avatar')).toBeInTheDocument();
+    });
+
+    it('disconnects its visibility observer and releases the same video on exit', async () => {
+      const view = await renderPair();
+      act(() => notify(false));
+      const remoteTrack = mocks.opponentCameraPublication!.track;
+      disconnect.mockClear();
+      view.unmount();
+      expect(disconnect).toHaveBeenCalledOnce();
+      expect(remoteTrack.detach).toHaveBeenCalledOnce();
+      expect(screen.queryByTestId('rematch-floating-opponent-video')).toBeNull();
+    });
+  });
+
   it('hands the track back when the header goes away', async () => {
     mocks.localCameraTrack = cameraTrack();
     const view = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
@@ -2948,10 +3111,7 @@ describe('video in the header', () => {
   });
 
   it('keeps the slot the same size with a camera and without', async () => {
-    const slotSizes = () =>
-      [...document.querySelectorAll('[class*="rounded-full"]')]
-        .map(node => /size-\d+/.exec(node.className)?.[0])
-        .filter(Boolean);
+    const slotSizes = () => screen.getAllByTestId('pair-avatar').map(node => node.className);
 
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
@@ -2963,7 +3123,7 @@ describe('video in the header', () => {
     await flushOwnership();
 
     expect(slotSizes()).toEqual(withoutCamera);
-    expect(withoutCamera).toContain('size-14');
+    expect(withoutCamera).toHaveLength(2);
   });
 });
 
@@ -2992,66 +3152,8 @@ describe('letting the devices go on the way to the debate', () => {
   });
 });
 
-describe('with debateVideo off', () => {
-  beforeEach(() => {
-    mocks.debateVideo = false;
-  });
-
-  it('offers no camera and publishes none, even where the token and a choice allow one', async () => {
-    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
-    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
-    await flushOwnership();
-
-    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
-    expect(mocks.setCameraEnabled).not.toHaveBeenCalled();
-    expect(screen.queryByText('Video isn’t available in this call.')).toBeNull();
-    // Still joins with the mic the choice asked for.
-    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
-  });
-
-  it('carries no camera choice into the debate', async () => {
-    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
-    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
-    await flushOwnership();
-
-    await waitFor(() => expect(readRematchJoinIntent('session-1')).toStrictEqual({ micOn: true, source: 'card' }));
-    // What the ready room reads: the mic, and no camera choice to override its default.
-    carryJoinIntentIntoDebate('session-1', 'debate-9');
-    expect(readRematchJoinIntent('debate-9')).toStrictEqual({ micOn: true, source: 'card' });
-  });
-
-  it('keeps master’s layout: small avatars and a Mute label at every width', async () => {
-    mocks.remoteParticipants = [remoteOpponent()];
-    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
-    await flushOwnership();
-
-    for (const avatar of screen.getAllByTestId('pair-avatar')) {
-      expect(avatar.className).toContain('size-8');
-      expect(avatar.className).not.toContain('size-14');
-    }
-    const label = screen.getByRole('button', { name: /^(Mute|Unmute)( microphone)?$/ }).querySelector('span');
-    expect(label?.className ?? '').not.toContain('max-[400px]:hidden');
-  });
-
-  it('draws avatars, not the other person’s camera', async () => {
-    mocks.remoteParticipants = [remoteOpponent()];
-    mocks.opponentCameraPublication = { track: { attach: vi.fn(), detach: vi.fn() } };
-    mocks.localCameraTrack = { track: { attach: vi.fn(), detach: vi.fn() } };
-    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
-    await flushOwnership();
-
-    expect(document.querySelector('video')).toBeNull();
-    expect(mocks.opponentCameraPublication.track.attach).not.toHaveBeenCalled();
-    expect(screen.getByTestId('rematch-opponent-card').querySelector('[data-testid="avatar"]')).not.toBeNull();
-  });
-});
-
-// The flag reads off on the first render and on once hydrated.
-describe('debateVideo through hydration', () => {
-  it('keeps a remembered camera and turns it on once the flag reads on', async () => {
-    mocks.hydrating = true;
+describe('a remembered camera', () => {
+  it('turns on the camera chosen on the card', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
     rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true, source: 'card' });
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);

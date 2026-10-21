@@ -4,107 +4,141 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { BANNER_CLASS, BANNER_SUB_CLASS, LABEL_FONT, STAMP_CLASS, STAMP_FONT, TAG_CLASS } from './browse/stamp-styles';
+import { PLAYBACK_OUTLINE_STYLE } from './browse/playback-typography';
+import {
+  PLAYER_EXIT_CLASS,
+  PLAYER_EXIT_MS,
+  PLAYER_FADE_CLASS,
+  PLAYER_PICK_CLASS,
+} from './browse/player-overlay-styles';
+import { recordingFont } from './recording-overlay-styles';
 
-/**
- * The recording room's moments in an Open rounds debate, in the stamps design the published player
- * uses (GEO-3315): stamps that land on a tile, and purple banners that roll across one. Every size
- * is in `cqw` of the tile, so the room draws them in the mockup's proportions at any width; the tile
- * and the tiles' grid are size containers for it.
- *
- * Fixed formats keep today's outlined phrases and never draw these.
- */
+export const ROOM_UI_FONT = recordingFont;
+export const ROOM_LABEL_FONT = {
+  fontFamily: 'var(--font-geist-medium), var(--font-calibre), system-ui, sans-serif',
+} as const;
 
-/** A stamp over the middle of its box, landing from 1.3x as it appears. `delayMs` holds it back. */
-export function RoomStamp({
+/** Option 5, Debate room / Open rounds (GEO-3366). The export scales type by .78 and pills by .86. */
+export const ROOM_GLASS_CLASS = 'bg-black/66 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.24)]';
+export const ROOM_WHITE_GLASS_CLASS = 'bg-white text-[#111]';
+export const ROOM_END_TURN_CLASS =
+  'block rounded-full bg-black px-[3.2cqw] py-[2cqw] text-[3cqw] leading-none font-medium text-white transition hover:bg-black/85 disabled:cursor-default disabled:opacity-70';
+
+/** The updated mockup uses a quiet settle for title cards and a larger one for pills/words. */
+export const ROOM_MOMENT_ENTER_CLASS =
+  'animate-[fadeIn_250ms_linear_both] motion-safe:animate-[fadeIn_250ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]';
+export const ROOM_PILL_ENTER_CLASS =
+  'animate-[fadeIn_250ms_linear_both] motion-safe:animate-[fadeIn_250ms_linear_both,roomPillSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]';
+export const ROOM_COUNT_ENTER_CLASS =
+  'animate-[fadeIn_200ms_linear_both] motion-safe:animate-[fadeIn_200ms_linear_both,debatePlayerSettle_250ms_cubic-bezier(0.333333,1,0.666667,1)_both]';
+
+/** White outlined announcements share the merged classic + glass playback treatment. */
+export const ROOM_OUTLINED_STYLE = {
+  ...recordingFont,
+  ...PLAYBACK_OUTLINE_STYLE,
+} as const;
+
+/** A glass pill that fades in with the reference's small settle, without moving across the tile. */
+export function RoomPill({
   children,
-  ink,
-  sizeCqw,
-  tilt,
+  tone = 'dark',
   delayMs = 0,
+  fadeInMs = 250,
   className,
   style,
   ...props
 }: React.ComponentPropsWithoutRef<'span'> & {
-  /** The text colour as a class, which the border takes too. A style's `color` can stand in for it. */
-  ink?: string;
-  sizeCqw: number;
-  tilt: string;
+  tone?: 'dark' | 'white' | 'red' | 'dashed';
   delayMs?: number;
+  fadeInMs?: number;
 }) {
   return (
     <span
       {...props}
-      className={cx(STAMP_CLASS, 'motion-safe:animate-debate-stamp', ink, className)}
+      className={cx(
+        'inline-flex max-w-[92%] items-center rounded-full px-[4.644cqw] py-[2.064cqw] text-[4.816cqw] leading-none font-semibold whitespace-nowrap',
+        ROOM_PILL_ENTER_CLASS,
+        tone === 'white'
+          ? [ROOM_WHITE_GLASS_CLASS, 'shadow-[0_1cqw_3cqw_rgba(0,0,0,0.2)] backdrop-blur-[14px]']
+          : tone === 'red'
+            ? 'bg-[#FF4A26]/90 text-white backdrop-blur-[14px]'
+            : tone === 'dashed'
+              ? PLAYER_PICK_CLASS.none
+              : PLAYER_PICK_CLASS.end,
+        className
+      )}
       style={{
-        ...STAMP_FONT,
-        fontSize: `${sizeCqw}cqw`,
-        transform: `rotate(${tilt})`,
-        animationDelay: delayMs ? `${delayMs}ms` : undefined,
+        ...ROOM_UI_FONT,
+        animationDuration: `${fadeInMs}ms, 250ms`,
+        animationDelay: delayMs ? `${delayMs}ms, ${delayMs}ms` : undefined,
         ...style,
       }}
     >
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }
 
-/** A stamp in the middle of its tile: the pick, "Go!", "Wrap it up", "Turn ended". */
-export function RoomTileStamp(props: React.ComponentProps<typeof RoomStamp>) {
+export function RoomTilePill(props: React.ComponentProps<typeof RoomPill>) {
   return (
     <div className="absolute inset-0 grid place-items-center">
-      <RoomStamp {...props} />
+      <RoomPill {...props} />
     </div>
   );
 }
 
-/** A purple banner rolling in across its box's full width, with an optional smaller second line. */
-export function RoomBanner({
+/** A single outlined announcement, fading in and out in place. */
+export function RoomPhrase({
   children,
-  sub,
   sizeCqw,
-  delayMs = 0,
+  fontWeight = 700,
   className,
   ...props
 }: React.ComponentPropsWithoutRef<'div'> & {
-  sub?: React.ReactNode;
   sizeCqw: number;
-  delayMs?: number;
+  fontWeight?: 600 | 700;
 }) {
   return (
     <div
       {...props}
-      className={cx(BANNER_CLASS, 'motion-safe:animate-debate-banner', className)}
-      style={{ ...LABEL_FONT, fontSize: `${sizeCqw}cqw`, animationDelay: delayMs ? `${delayMs}ms` : undefined }}
+      className={cx(
+        'mx-auto grid w-max max-w-[92%] justify-items-center text-center leading-[0.95] tracking-[-0.02em] text-white',
+        fontWeight === 700 ? 'font-bold' : 'font-semibold',
+        ROOM_PILL_ENTER_CLASS,
+        className
+      )}
+      style={{ ...ROOM_OUTLINED_STYLE, fontSize: `${sizeCqw}cqw` }}
     >
-      <span className="block truncate">{children}</span>
-      {sub && <span className={BANNER_SUB_CLASS}>{sub}</span>}
+      <span className="block whitespace-nowrap">{children}</span>
     </div>
   );
 }
 
-/** A banner across the middle of its box: a tile, or the seam between the two. */
-export function RoomMiddleBanner(props: React.ComponentProps<typeof RoomBanner>) {
+export function RoomMiddlePhrase(props: React.ComponentProps<typeof RoomPhrase>) {
   return (
     <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
-      <RoomBanner {...props} />
+      <RoomPhrase {...props} />
     </div>
   );
 }
 
-/** A small purple label, "Last word" or a round count. */
+/** Small glass round-count label for the cap fallback. */
 export function RoomTag({ className, style, ...props }: React.ComponentPropsWithoutRef<'span'>) {
   return (
     <span
       {...props}
-      className={cx(TAG_CLASS, 'inline-flex items-center uppercase', className)}
-      style={{ ...LABEL_FONT, ...style }}
+      className={cx(
+        ROOM_GLASS_CLASS,
+        'inline-flex items-center rounded-full px-[2.2cqw] py-[1.1cqw] leading-none font-medium tracking-[0.04em] whitespace-nowrap',
+        className
+      )}
+      style={{ ...ROOM_LABEL_FONT, ...style }}
     />
   );
 }
 
 /**
- * The tile under a moment, dimmed as in the mockup so the stamp or banner reads over any picture.
+ * The tile under a moment, dimmed as in the mockup so the graphic reads over any picture.
  * Always there, and faded in and out, so one moment handing over to the next never flashes.
  */
 export function RoomDim({ on }: { on: boolean }) {
@@ -113,24 +147,18 @@ export function RoomDim({ on }: { on: boolean }) {
       aria-hidden="true"
       data-room-dim={on ? 'on' : 'off'}
       className={cx(
-        'pointer-events-none absolute inset-0 z-[15] bg-black/42 transition-opacity duration-300 motion-reduce:transition-none',
+        'pointer-events-none absolute inset-0 z-[15] bg-black/42 transition-opacity duration-250 ease-out',
         on ? 'opacity-100' : 'opacity-0'
       )}
     />
   );
 }
 
-/** How long a moment takes to leave: the banner's roll and the stamps' fade. */
-export const ROOM_EXIT_MS = 300;
+/** How long a moment takes to fade out. Playback also uses this duration for its banner exit. */
+export const ROOM_EXIT_MS = PLAYER_EXIT_MS;
 
-const EXIT_CLASS = {
-  // A banner rolls on out the way it rolled in, as in the mockup.
-  roll: 'motion-safe:animate-debate-banner-out',
-  fade: 'motion-safe:animate-[fadeIn_300ms_linear_reverse_both]',
-} as const;
-
-/** The `fade` exit run forwards: a piece that fades in over `ROOM_EXIT_MS` and out the same way. */
-export const ROOM_ENTER_CLASS = 'motion-safe:animate-[fadeIn_300ms_linear_both]';
+/** Muted indicators and panels share playback's soft entrance. */
+export const ROOM_ENTER_CLASS = PLAYER_FADE_CLASS;
 
 function shown(node: React.ReactNode) {
   return node !== null && node !== undefined && node !== false;
@@ -138,8 +166,8 @@ function shown(node: React.ReactNode) {
 
 /**
  * A moment that leaves rather than vanishing (GEO-3315). While `children` is there it renders as is;
- * when it goes, the last of it stays for `ROOM_EXIT_MS`, rolling or fading out, so the next moment
- * comes in over the last one going rather than after a cut. With reduced motion it simply goes.
+ * when it goes, the last of it stays for `ROOM_EXIT_MS`, fading out, so the next moment
+ * comes in over the last one going rather than after a cut. Reduced motion keeps the fade.
  *
  * The wrapper is always rendered, a box over the whole of its container, so the moment is never
  * remounted on its way out and its entrance does not replay. It takes no pointer events: a moment
@@ -147,17 +175,21 @@ function shown(node: React.ReactNode) {
  *
  * `layout="inline"` drops the box, for a piece that sits in a corner sized to its contents: the
  * turn timer, the muted microphone and End turn (GEO-3347).
+ * `crossfade` keeps the empty wrapper too and transitions its opacity in both directions. Paired
+ * layers can then share one fade without replaying an entrance or snapping on an interrupted exit.
  */
 export function RoomExit({
   children,
-  exit = 'fade',
   layout = 'fill',
   className,
+  crossfade = false,
+  style,
 }: {
   children: React.ReactNode;
-  exit?: keyof typeof EXIT_CLASS;
   layout?: 'fill' | 'inline';
   className?: string;
+  crossfade?: boolean;
+  style?: React.CSSProperties;
 }) {
   const [previous, setPrevious] = React.useState(children);
   const [leaving, setLeaving] = React.useState<React.ReactNode>(null);
@@ -173,7 +205,7 @@ export function RoomExit({
   }, [leaving]);
 
   const content = shown(children) ? children : leaving;
-  if (!shown(content)) return null;
+  if (!shown(content) && !crossfade) return null;
   const isLeaving = !shown(children);
   return (
     <div
@@ -185,9 +217,10 @@ export function RoomExit({
       className={cx(
         'pointer-events-none',
         layout === 'fill' && 'absolute inset-0',
-        isLeaving && [EXIT_CLASS[exit], 'motion-reduce:hidden'],
+        crossfade ? 'transition-opacity duration-300 ease-linear' : isLeaving && PLAYER_EXIT_CLASS,
         className
       )}
+      style={{ ...(crossfade ? { opacity: isLeaving ? 0 : 1 } : null), ...style }}
     >
       {content}
     </div>

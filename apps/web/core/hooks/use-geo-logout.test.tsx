@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   setEditable: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   useLogout: ({ onSuccess }: { onSuccess: () => Promise<void> }) => {
     mocks.logoutSuccess = onSuccess;
   },

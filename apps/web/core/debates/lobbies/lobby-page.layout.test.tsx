@@ -188,7 +188,7 @@ describe('DebateLobbyPage layout on desktop', () => {
 
     expect(screen.getByText('Debates / Lobbies')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Onboarding with Adam' })).toBeInTheDocument();
-    expect(screen.getByText('Hosted by Adam · Voice only · Not recorded')).toBeInTheDocument();
+    expect(screen.getByText('Hosted by Adam · Video on · Not recorded')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'People in the lobby' })).toBeVisible();
     expect(
       within(screen.getByRole('complementary', { name: 'Claims in the room' })).getByTestId('claims')
@@ -283,6 +283,19 @@ describe('DebateLobbyPage layout on a phone', () => {
     expect(screen.getByTestId('claims')).toBeVisible();
     expect(screen.getByTestId('member-room')).not.toBeVisible();
     expect(screen.getByRole('button', { name: 'Lobby options' })).toBeInTheDocument();
+  });
+
+  it('sends a tap on the Claims speaker strip to People, with focus on the People tab', () => {
+    mocks.phone = true;
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Claims' }));
+    const strip = within(screen.getByRole('tabpanel', { name: 'Claims' })).getByTestId('lobby-speaker-strip');
+    fireEvent.click(within(strip).getByRole('button', { name: 'Adam, show people' }));
+
+    const people = screen.getByRole('tab', { name: 'People' });
+    expect(people).toHaveAttribute('aria-selected', 'true');
+    expect(people).toHaveFocus();
   });
 
   it('gives the tabs tab and tabpanel semantics, with arrow keys', () => {
