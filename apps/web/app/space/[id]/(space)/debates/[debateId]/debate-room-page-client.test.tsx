@@ -43,6 +43,8 @@ import { readMediaDevicePreference, rememberMediaDevice } from '~/core/media/dev
 import { DebateRoomPageClient, upcomingTurnLabel } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
+  startVoiceCallTelemetry: vi.fn(),
+  stopVoiceCallTelemetry: vi.fn(),
   currentUserId: 'user-a',
   localSpeaking: { current: false },
   prefetchAllowlist: vi.fn(),
@@ -267,6 +269,7 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
 
 // No factory: the page imports the SDK twice at once, which a factory mock leaks (`__mocks__/livekit-client.ts`).
 vi.mock('livekit-client');
+vi.mock('~/core/debates/use-voice-call-telemetry', () => ({ startVoiceCallTelemetry: mocks.startVoiceCallTelemetry }));
 vi.hoisted(() => {
   (globalThis as { __liveKitClientMock?: unknown }).__liveKitClientMock = {
     createLocalTracks: mocks.createLocalTracks,
@@ -418,6 +421,8 @@ beforeEach(() => {
   mocks.roomConnect.mockReset();
   mocks.roomConstruct.mockReset();
   mocks.roomDisconnect.mockReset();
+  mocks.stopVoiceCallTelemetry.mockReset();
+  mocks.startVoiceCallTelemetry.mockReset().mockReturnValue(mocks.stopVoiceCallTelemetry);
   mocks.publishTrack.mockReset();
   mocks.supportsAudioOutputSelection.mockReset().mockReturnValue(true);
   mocks.selectAudioOutput.mockReset().mockImplementation(({ deviceId }: { deviceId: string }) =>
@@ -875,8 +880,27 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalled());
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
     expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.startVoiceCallTelemetry).toHaveBeenCalledWith(expect.anything(), 'debate', 'debate-1', {
+      debate_id: 'debate-1',
+      participant_slot: 1,
+      call_session_id: expect.any(String),
+    });
     expect(screen.getByText('Not recording')).toBeInTheDocument();
     expect(screen.queryByText('Recording')).not.toBeInTheDocument();
+  });
+
+  it('joins and publishes when telemetry setup throws', async () => {
+    mocks.startVoiceCallTelemetry.mockImplementationOnce(() => {
+      throw new Error('telemetry unavailable');
+    });
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const { unmount } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalled());
+    expect(mocks.roomDisconnect).not.toHaveBeenCalled();
+    expect(screen.queryByText('telemetry unavailable')).not.toBeInTheDocument();
+    unmount();
+    expect(mocks.roomDisconnect).toHaveBeenCalled();
   });
 
   // `installRecordingMocks` matters: without it `MediaRecorder` is undefined in jsdom and
@@ -967,6 +991,10 @@ describe('DebateRoomPageClient', () => {
 
     await waitFor(() => expect(mocks.roomDisconnect).toHaveBeenCalled());
     expect(mocks.roomDisconnect).toHaveBeenCalledWith(false);
+    expect(mocks.stopVoiceCallTelemetry).toHaveBeenCalled();
+    expect(mocks.stopVoiceCallTelemetry.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.roomDisconnect.mock.invocationCallOrder[0]
+    );
   });
 
   // Once ready, the opponent's ready can flip the debate to `connecting` at any moment. The
