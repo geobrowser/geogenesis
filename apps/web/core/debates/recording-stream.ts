@@ -3,6 +3,7 @@ import { db } from '~/core/database/indexeddb';
 import { addTelemetryBreadcrumb, reportEvent } from '~/core/telemetry/logger';
 
 import { GeoChatRequestError, type LocalRecordingPartUrl, type ObjectStoreUpload } from './api';
+import { type RecordingPartUploadContext, trackRecordingPartUpload } from './recording-part-telemetry';
 import { RecordingUploadError, recordingStorageHttpError } from './recording-upload-errors';
 
 /**
@@ -399,6 +400,7 @@ export type RecordingStreamStall = {
 };
 
 export type RecordingPartStreamerOptions = RecordingPartTransport & {
+  telemetry?: RecordingPartUploadContext;
   /**
    * Called before every part. The upload shares the participant's upstream with the live call,
    * so it yields whenever the call is struggling — the bytes are safe in IndexedDB and go out
@@ -719,7 +721,9 @@ export class RecordingPartStreamer {
     if (partNumber === null) return;
     const upload = await this.partUrl(partNumber);
     const { start, end } = partRange(partNumber, multipart.partSize, this.byteSize);
-    await this.options.putPart(upload, await this.ledger.read(start, end, this.options.readDurable));
+    const body = await this.ledger.read(start, end, this.options.readDurable);
+    const put = () => this.options.putPart(upload, body);
+    await trackRecordingPartUpload(this.options.telemetry, partNumber, body.size, put);
     this.uploaded.add(partNumber);
     this.urls.delete(partNumber);
     // Its bytes are safe in object storage now, so this tab need not hold them.
@@ -757,7 +761,7 @@ export class RecordingPartStreamer {
 export async function uploadRemainingParts(
   recording: Blob | RecordingByteSource,
   multipart: StreamedRecordingMultipart,
-  transport: Pick<RecordingPartTransport, 'getPartUrls' | 'putPart'>,
+  transport: Pick<RecordingPartTransport, 'getPartUrls' | 'putPart'> & Pick<RecordingPartStreamerOptions, 'telemetry'>,
   onPartUploaded: (partNumber: number, uploadedBytes: number) => Promise<void> | void
 ): Promise<void> {
   // Read a part at a time: a recording streamed during the debate is never held whole.
@@ -785,7 +789,9 @@ export async function uploadRemainingParts(
         );
       }
       const { start, end } = partRange(partNumber, multipart.partSize, blob.size);
-      await transport.putPart(upload, await bytes.read(start, end));
+      const body = await bytes.read(start, end);
+      const put = () => transport.putPart(upload, body);
+      await trackRecordingPartUpload(transport.telemetry, partNumber, body.size, put);
       uploaded.add(partNumber);
       const uploadedBytes = [...uploaded].reduce((sum, number) => {
         const range = partRange(number, multipart.partSize, blob.size);
@@ -901,6 +907,7 @@ export function startLiveRecordingStream({
   const readDurable: ReadDurableChunks = seqs => readRecordingStreamChunks(id, seqs);
   const streamer = new RecordingPartStreamer({
     ...transport,
+    telemetry: { debate_id: metadata.debateId, recording_started_at_ms: metadata.startedAtMs, upload_phase: 'live' },
     shouldPause,
     ledger,
     readDurable,

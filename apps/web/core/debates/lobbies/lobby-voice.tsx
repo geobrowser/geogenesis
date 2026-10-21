@@ -32,6 +32,8 @@ import {
 } from 'livekit-client';
 
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { withMediaDeviceOptions } from '~/core/media/device-options';
+import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
@@ -122,6 +124,8 @@ export function LobbyVoice({
 }) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const queryClient = useQueryClient();
+  const devices = useInitialMediaDevices();
+  const roomOptions = React.useMemo(() => withMediaDeviceOptions(devices, ROOM_OPTIONS), [devices]);
   const lobbyId = lobby.lobby_id;
   const canPublish = rolePublishes(lobby);
 
@@ -301,7 +305,7 @@ export function LobbyVoice({
     if (unavailable) onUnavailable?.();
   }, [onUnavailable, unavailable]);
 
-  if (notice || !data) {
+  if (notice || !data || !devices.ready) {
     return (
       <>
         <VoiceBar notice={notice ?? { message: 'Connecting voice…' }} />
@@ -318,7 +322,7 @@ export function LobbyVoice({
       connect
       audio={micIntent && !micFailure}
       video={false}
-      options={ROOM_OPTIONS}
+      options={roomOptions}
       onConnected={handleConnected}
       onError={handleError}
       onMediaDeviceFailure={handleMediaDeviceFailure}

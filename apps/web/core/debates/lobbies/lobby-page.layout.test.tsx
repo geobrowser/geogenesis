@@ -17,6 +17,7 @@ const claimList = (entityId: string) => ({
 
 const mocks = vi.hoisted(() => ({
   phone: false,
+  video: false,
   lobby: undefined as DebateLobbyView | undefined,
   highlights: undefined as Pick<DebateLobbyHighlights, 'highlights' | 'room_vote'> | undefined,
   highlightsEnabled: [] as boolean[],
@@ -31,6 +32,14 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
+vi.mock('~/core/state/feature-flags', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/state/feature-flags')>();
+  return {
+    ...actual,
+    useFeatureFlag: (id: keyof typeof actual.defaultFeatureFlags) =>
+      id === 'debateVideo' ? mocks.video : actual.defaultFeatureFlags[id],
+  };
+});
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'acct', getPrivyIdentityToken: vi.fn() }),
@@ -174,6 +183,7 @@ function view(viewer: Partial<DebateLobbyView['viewer']> = {}): DebateLobbyView 
 
 beforeEach(() => {
   mocks.phone = false;
+  mocks.video = false;
   mocks.lobby = view();
   mocks.highlights = { highlights: [], room_vote: null };
   mocks.highlightsEnabled = [];
@@ -283,6 +293,20 @@ describe('DebateLobbyPage layout on a phone', () => {
     expect(screen.getByTestId('claims')).toBeVisible();
     expect(screen.getByTestId('member-room')).not.toBeVisible();
     expect(screen.getByRole('button', { name: 'Lobby options' })).toBeInTheDocument();
+  });
+
+  it('sends a tap on the Claims speaker strip to People, with focus on the People tab', () => {
+    mocks.phone = true;
+    mocks.video = true;
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Claims' }));
+    const strip = within(screen.getByRole('tabpanel', { name: 'Claims' })).getByTestId('lobby-speaker-strip');
+    fireEvent.click(within(strip).getByRole('button', { name: 'Adam, show people' }));
+
+    const people = screen.getByRole('tab', { name: 'People' });
+    expect(people).toHaveAttribute('aria-selected', 'true');
+    expect(people).toHaveFocus();
   });
 
   it('gives the tabs tab and tabpanel semantics, with arrow keys', () => {

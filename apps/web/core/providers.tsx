@@ -9,6 +9,7 @@ import { Provider as JotaiProvider } from 'jotai';
 import { AnalyticsUserIdentifier } from './analytics-user-identifier';
 import { BrowserTimezoneReporter } from './debates/browser-timezone';
 import { NotificationRegistration } from './notifications/hooks';
+import { SeenPing } from './notifications/seen-ping';
 import { PrivyAuthTracker } from './privy-auth-tracker';
 import { ReactQueryProvider } from './query-client';
 import { SentryUserIdentifier } from './sentry-user-identifier';
@@ -29,6 +30,7 @@ export function Providers({ children }: Props) {
       <ReactQueryProvider>
         <AnalyticsUserIdentifier />
         <NotificationRegistration />
+        <SeenPing />
         <BrowserTimezoneReporter />
         <SentryUserIdentifier />
         <JotaiProvider store={store}>

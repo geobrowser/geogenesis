@@ -5,10 +5,21 @@ import { useSyncExternalStore } from 'react';
 /**
  * Whether the "Save your votes" sheet is open, and why (GEO-3214).
  *
- * Module-level rather than an atom for the same reason as `local-votes`: the navbar opens a save
- * sign-in, and its tests mock `jotai` wholesale.
+ * Module-level rather than an atom for the same reason as `local-votes`: the navbar opens the sheet,
+ * and its tests mock `jotai` wholesale.
  */
-export type SaveVotesPromptReason = 'threshold' | 'single_claim' | 'repeat' | 'return_visit' | 'inline_save';
+export type SaveVotesPromptReason =
+  'threshold' | 'single_claim' | 'repeat' | 'return_visit' | 'inline_save' | SaveVotesPressReason;
+
+/**
+ * A "Save N votes" sign-in button: the navbar's, or the debate feed's phone bar (GEO-3415). Pressed,
+ * it opens the sheet as a centred dialog (GEO-3400), and the reason says which button it was.
+ */
+export type SaveVotesPressReason = 'navbar' | 'debate_feed_bar';
+
+export function isSaveVotesPressReason(reason: SaveVotesPromptReason | null): reason is SaveVotesPressReason {
+  return reason === 'navbar' || reason === 'debate_feed_bar';
+}
 
 /**
  * Where a vote was cast. A claim page or a debate's end card has no second claim beside it to vote
