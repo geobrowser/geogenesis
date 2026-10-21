@@ -1387,6 +1387,45 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('radio', { name: 'Studio Speakers' })).toBeInTheDocument();
   });
 
+  it('keeps the audible speaker checked when a newer live route fails', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const devices = await mocks.enumerateDevices();
+    mocks.enumerateDevices.mockResolvedValue([
+      ...devices,
+      { kind: 'audiooutput', deviceId: 'speaker-3', groupId: 'speaker-group-3', label: 'Display Speakers' },
+    ]);
+    mocks.selectAudioOutput.mockImplementation(async ({ deviceId }: { deviceId: string }) => ({ deviceId }));
+    const firstRoute = deferred<boolean>();
+    const secondRoute = deferred<boolean>();
+    mocks.roomSwitchActiveDevice.mockImplementation((_kind: string, id: string) => {
+      if (id === 'speaker-2') return firstRoute.promise;
+      if (id === 'speaker-3') return secondRoute.promise;
+      return Promise.resolve(true);
+    });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await openDeviceSettings('Audio settings');
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    fireEvent.click(await screen.findByRole('radio', { name: 'Studio Speakers' }));
+    await waitFor(() => expect(mocks.roomSwitchActiveDevice).toHaveBeenCalledWith('audiooutput', 'speaker-2'));
+    fireEvent.click(await screen.findByRole('radio', { name: 'Display Speakers' }));
+    await waitFor(() => expect(mocks.selectAudioOutput).toHaveBeenCalledWith({ deviceId: 'speaker-3' }));
+    await act(async () => firstRoute.resolve(true));
+    await waitFor(() => expect(mocks.roomSwitchActiveDevice).toHaveBeenCalledWith('audiooutput', 'speaker-3'));
+    expect(screen.getByRole('radio', { name: 'Studio Speakers' })).toBeChecked();
+    await act(async () => secondRoute.resolve(false));
+
+    expect(
+      await screen.findByText('Could not move audio to that speaker. Sound is still on the previous one.')
+    ).toBeVisible();
+    expect(screen.getByRole('radio', { name: 'Studio Speakers' })).toBeChecked();
+    expect(readMediaDevicePreference('audiooutput')).toBe('speaker-2');
+    expect(mocks.roomSwitchActiveDevice.mock.calls.filter(call => call[1] === 'speaker-2')).toHaveLength(1);
+    expect(mocks.roomSwitchActiveDevice.mock.lastCall).toEqual(['audiooutput', 'speaker-3']);
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+    expect(mocks.roomConstruct).toHaveBeenCalledTimes(1);
+  });
+
   it('ignores an older speaker authorization that finishes after the latest choice', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     mocks.enumerateDevices.mockResolvedValue([

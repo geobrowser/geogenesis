@@ -106,6 +106,22 @@ describe('community-call device choices', () => {
     expect(screen.getByLabelText('Microphone')).toHaveValue('default');
   });
 
+  it.each([
+    { kind: 'audioinput' as const, label: 'Microphone', id: 'usb-mic' },
+    { kind: 'videoinput' as const, label: 'Camera', id: 'usb-camera' },
+  ])('can confirm the current $kind after its saved preference is cleared', async ({ kind, label, id }) => {
+    rememberMediaDevice(kind, id);
+    render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText(label)).toHaveValue(id));
+    act(() => {
+      window.localStorage.clear();
+      window.dispatchEvent(new StorageEvent('storage', { key: null }));
+    });
+    expect(readMediaDevicePreference(kind)).toBeUndefined();
+    fireEvent.click(await screen.findByRole('button', { name: 'Remember current devices' }));
+    expect(readMediaDevicePreference(kind)).toBe(id);
+  });
+
   it('leaves browser-default capture unchanged after enumeration when nobody has picked a device', async () => {
     render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
     await waitFor(() => expect(screen.getByLabelText('Camera').querySelectorAll('option')).toHaveLength(3));

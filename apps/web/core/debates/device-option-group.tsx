@@ -45,8 +45,8 @@ export function DeviceOptionGroup({
               onClick={() => {
                 const remembered = readMediaDevicePreference(device.kind);
                 // Radix does not emit onValueChange for the checked row. An explicit click can
-                // confirm a temporary fallback, without restarting an already-remembered device.
-                if (!disabled && selected && remembered && remembered !== device.deviceId) onChange(device.deviceId);
+                // save the first preference or confirm a fallback without restarting a remembered device.
+                if (!disabled && selected && remembered !== device.deviceId) onChange(device.deviceId);
               }}
               className={cx(
                 'flex w-full items-center justify-between gap-3 rounded-md text-left text-metadata text-text outline-none',

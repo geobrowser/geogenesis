@@ -59,8 +59,8 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
     return subscribeMediaDevicePreferences(refresh);
   }, []);
   const canRememberCurrent =
-    (rememberedInputs.audio && audioDeviceId && rememberedInputs.audio !== audioDeviceId) ||
-    (rememberedInputs.video && videoDeviceId && rememberedInputs.video !== videoDeviceId);
+    (audioDeviceId && rememberedInputs.audio !== audioDeviceId) ||
+    (videoDeviceId && rememberedInputs.video !== videoDeviceId);
   const [permissionError, setPermissionError] = React.useState<string | null>(null);
 
   const onPreviewError = React.useCallback((err: Error) => {

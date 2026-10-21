@@ -201,6 +201,86 @@ describe('live speaker preference commits', () => {
     expect(route.mock.calls.map(call => call[0])).toEqual(['speaker-1', 'speaker-2']);
   });
 
+  it.each([
+    'authorization before routing finishes',
+    'authorization after routing finishes',
+    'routing rejection',
+    'routing refusal',
+  ])('keeps the last successful route selected and remembered when a newer choice fails: %s', async failure => {
+    rememberMediaDevice('audiooutput', 'default');
+    mocks.supportsAudioOutputSelection.mockReturnValue(true);
+    let denySecond!: (error: Error) => void;
+    mocks.selectAudioOutput.mockImplementation(({ deviceId }: { deviceId: string }) => {
+      if (deviceId === 'speaker-2' && failure.startsWith('authorization')) {
+        return new Promise((_resolve, reject) => {
+          denySecond = reject;
+        });
+      }
+      return Promise.resolve({ deviceId });
+    });
+    let finishFirst!: () => void;
+    const firstRoute = new Promise<void>(resolve => {
+      finishFirst = resolve;
+    });
+    let routedSpeaker = 'default';
+    const route = vi.fn(async (id: string) => {
+      if (id === 'speaker-1') await firstRoute;
+      else if (failure === 'routing rejection') throw new Error('No route');
+      else if (failure === 'routing refusal') return false;
+      routedSpeaker = id;
+      return true;
+    });
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness outputRoute={route} />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Select speaker' }));
+    await waitFor(() => expect(route).toHaveBeenCalledWith('speaker-1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Select other speaker' }));
+    await waitFor(() => expect(mocks.selectAudioOutput).toHaveBeenCalledTimes(2));
+    if (failure === 'authorization before routing finishes') {
+      await act(async () => denySecond(new Error('Denied')));
+      expect(screen.getByTestId('audio-output-error')).toHaveTextContent('Could not move audio');
+    }
+    await act(async () => finishFirst());
+    if (failure === 'authorization after routing finishes') {
+      await act(async () => denySecond(new Error('Denied')));
+    }
+    await waitFor(() => expect(screen.getByTestId('audio-output-error')).toHaveTextContent('Could not move audio'));
+    expect(routedSpeaker).toBe('speaker-1');
+    expect(readMediaDevicePreference('audiooutput')).toBe(routedSpeaker);
+    expect(screen.getByTestId('selected-output')).toHaveTextContent(routedSpeaker);
+  });
+
+  it.each(['release', 'new session', 'unmount'])('does not commit a pending route after %s', async cancellation => {
+    rememberMediaDevice('audiooutput', 'default');
+    mocks.supportsAudioOutputSelection.mockReturnValue(true);
+    let finish!: () => void;
+    const route = vi.fn(
+      () =>
+        new Promise<void>(resolve => {
+          finish = resolve;
+        })
+    );
+    const view = render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness outputRoute={route} />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select speaker' }));
+    await waitFor(() => expect(route).toHaveBeenCalledWith('speaker-1'));
+    if (cancellation === 'unmount') view.unmount();
+    else
+      fireEvent.click(
+        screen.getByRole('button', { name: cancellation === 'release' ? 'Release match' : 'Start other match' })
+      );
+    await act(async () => finish());
+    expect(readMediaDevicePreference('audiooutput')).toBe('default');
+    if (cancellation !== 'unmount') expect(screen.getByTestId('selected-output')).toHaveTextContent('default');
+  });
+
   it.each(['rejects', 'returns false'])('preserves the working preference when live routing %s', async failure => {
     rememberMediaDevice('audiooutput', 'default');
     mocks.supportsAudioOutputSelection.mockReturnValue(true);

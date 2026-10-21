@@ -65,6 +65,17 @@ describe('in-call device pickers', () => {
     }
   );
 
+  it.each(['audioinput', 'videoinput', 'audiooutput'] as const)(
+    'saves a first explicit confirmation of the active physical %s',
+    async kind => {
+      mocks.activeDeviceId = 'usb-device';
+      render(<CallDeviceMenu kind={kind} />);
+      chooseUsb();
+      await waitFor(() => expect(readMediaDevicePreference(kind)).toBe('usb-device'));
+      expect(mocks.switchDevice).toHaveBeenCalledExactlyOnceWith(kind, 'usb-device');
+    }
+  );
+
   it.each(['rejects', 'returns false'])('does not save a fallback or failed switch when LiveKit %s', async failure => {
     rememberMediaDevice('audiooutput', 'remembered-speaker');
     if (failure === 'rejects') mocks.switchDevice.mockRejectedValue(new Error('Unavailable'));

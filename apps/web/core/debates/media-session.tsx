@@ -105,6 +105,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   const previewGenerationRef = React.useRef(0);
   const mediaDeviceRefreshGenerationRef = React.useRef(0);
   const audioOutputSelectionGenerationRef = React.useRef(0);
+  const audioOutputSessionGenerationRef = React.useRef(0);
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
   const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
@@ -132,6 +133,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   const stopMedia = React.useCallback(() => {
     previewGenerationRef.current += 1;
     audioOutputSelectionGenerationRef.current += 1;
+    audioOutputSessionGenerationRef.current += 1;
     stopTracks(localTracksRef.current);
     localTracksRef.current = [];
     localMediaStreamRef.current = null;
@@ -435,6 +437,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       audioOutputSupportedRef.current = true;
       setAudioOutputSupported(true);
     }
+    const sessionGeneration = audioOutputSessionGenerationRef.current;
     const generation = audioOutputSelectionGenerationRef.current + 1;
     audioOutputSelectionGenerationRef.current = generation;
     setAudioOutputError(null);
@@ -461,6 +464,15 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           );
         }
         if (!isCurrent()) return;
+        const commitSelection = () => {
+          if (!mountedRef.current || audioOutputSessionGenerationRef.current !== sessionGeneration) return;
+          // A completed live switch is now the audible device, even if another choice is pending.
+          // Keep its preference in sync, but do not clear an error from the newer choice.
+          if (isCurrent()) setAudioOutputError(null);
+          selectedAudioOutputIdRef.current = selectedId;
+          setSelectedAudioOutputId(selectedId);
+          rememberMediaDevice('audiooutput', selectedId);
+        };
         if (apply) {
           // A newer choice must be the last one routed even if an earlier switch is still pending.
           const previousRoute = audioOutputRoutingPromiseRef.current;
@@ -468,15 +480,14 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
             await previousRoute?.catch(() => undefined);
             if (!isCurrent()) return;
             if ((await apply(selectedId)) === false) throw new Error('Device switch failed');
+            // Commit inside the route queue, before a later switch can complete.
+            commitSelection();
           })();
           audioOutputRoutingPromiseRef.current = routing;
           await routing;
-          if (!isCurrent()) return;
+          return;
         }
-        setAudioOutputError(null);
-        selectedAudioOutputIdRef.current = selectedId;
-        setSelectedAudioOutputId(selectedId);
-        rememberMediaDevice('audiooutput', selectedId);
+        commitSelection();
       } catch {
         if (!isCurrent()) return;
         if (apply) {
@@ -545,6 +556,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       previewGenerationRef.current += 1;
       mediaDeviceRefreshGenerationRef.current += 1;
       audioOutputSelectionGenerationRef.current += 1;
+      audioOutputSessionGenerationRef.current += 1;
       stopTracks(localTracksRef.current);
       localTracksRef.current = [];
       localMediaStreamRef.current = null;

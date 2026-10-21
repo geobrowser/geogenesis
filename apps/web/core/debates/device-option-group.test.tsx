@@ -39,6 +39,23 @@ describe('DeviceOptionGroup', () => {
     expect(onChange).toHaveBeenCalledWith('mic-a');
   });
 
+  it.each(['audioinput', 'videoinput', 'audiooutput'] as const)(
+    'confirms the active %s when no preference has been saved',
+    kind => {
+      const onChange = vi.fn();
+      render(
+        <DeviceOptionGroup
+          label="Select device"
+          options={[{ ...devices[0], kind }]}
+          selectedDeviceId="mic-a"
+          onChange={onChange}
+        />
+      );
+      fireEvent.click(screen.getByRole('radio', { name: 'Built-in Microphone' }));
+      expect(onChange).toHaveBeenCalledExactlyOnceWith('mic-a');
+    }
+  );
+
   it('does not restart a device that is already remembered when its checked row is clicked', () => {
     rememberMediaDevice('audioinput', 'mic-a');
     const onChange = vi.fn();
