@@ -10,7 +10,7 @@ The measurement lives outside this repo:
   warehouse.
 - **geobrowser/analytics** holds the warehouse tables and outcome views (migration 113) and the
   reports: `docs/analytics/scheduled-debates.md`, `scheduled-debate-outcomes.sql` (by week) and
-  `scheduled-debate-debaters.sql` (by person).
+  `scheduled-debate-debaters.sql` (by person). Team and test accounts are excluded there.
 
 ## What Genesis sends
 
@@ -20,5 +20,6 @@ in the Requests tab, and "Choose different time" on an invite there. The weekly 
 geo-chat's record and counts reschedules that were started and then abandoned: no move or
 cancellation of that debate within 30 minutes.
 
-The id can come from a link anyone can edit, so only a UUID-shaped value is sent, lowercased. The
-property is optional, so the analytics registry needs no change.
+It is `null` on every other week view. A link's id is already checked by
+`rescheduleRequestIdFromTarget` before it reaches the week. The property is optional, so the
+analytics registry needs no change.

@@ -9,6 +9,19 @@ vi.mock('~/core/analytics', () => ({ capture }));
 
 afterEach(() => capture.mockClear());
 
+const schedule: PeerSchedule = {
+  userId: 'them',
+  viewerTimezone: 'UTC',
+  peerTimezone: 'Europe/Vilnius',
+  viewerHasSchedule: true,
+  peerHasSchedule: true,
+  theirWeekKnown: true,
+  slots: [
+    { start: '2026-10-01T09:00:00Z', end: '2026-10-01T12:00:00Z', viewerIsFree: true },
+    { start: '2026-10-02T09:00:00Z', end: '2026-10-02T09:30:00Z', viewerIsFree: false },
+  ],
+};
+
 describe('schedule analytics', () => {
   it('describes a saved week by its shape, with no times in it', () => {
     const blocks: AvailabilityBlock[] = [
@@ -43,19 +56,6 @@ describe('schedule analytics', () => {
   });
 
   it('measures a week in minutes, so one long range is not outweighed by two short ones', () => {
-    const schedule: PeerSchedule = {
-      userId: 'them',
-      viewerTimezone: 'UTC',
-      peerTimezone: 'Europe/Vilnius',
-      viewerHasSchedule: true,
-      peerHasSchedule: true,
-      theirWeekKnown: true,
-      slots: [
-        { start: '2026-10-01T09:00:00Z', end: '2026-10-01T12:00:00Z', viewerIsFree: true },
-        { start: '2026-10-02T09:00:00Z', end: '2026-10-02T09:30:00Z', viewerIsFree: false },
-      ],
-    };
-
     debateAvailabilityViewed(schedule, { entry: 'availability_link', bookable: true });
 
     expect(capture).toHaveBeenCalledWith('debate_availability_viewed', {
@@ -66,40 +66,25 @@ describe('schedule analytics', () => {
       viewer_has_schedule: true,
       free_minutes: 210,
       mutual_free_minutes: 180,
+      request_id: null,
     });
   });
 
   // GEO-3432: a reschedule names the debate it moves, so one started and abandoned can be found.
-  describe('a week opened to move a debate', () => {
-    const schedule: PeerSchedule = {
-      userId: 'them',
-      viewerTimezone: 'UTC',
-      peerTimezone: 'UTC',
-      viewerHasSchedule: true,
-      peerHasSchedule: true,
-      theirWeekKnown: true,
-      slots: [],
-    };
+  it('names the debate a reschedule moves, and none for a booking', () => {
+    const requestId = '6676b145-0970-4c1c-bfbc-7497d9721b39';
 
-    it('sends the request id, lowercased', () => {
-      debateAvailabilityViewed(schedule, {
-        entry: 'reschedule_link',
-        bookable: true,
-        requestId: '6676B145-0970-4C1C-BFBC-7497D9721B39',
-      });
+    debateAvailabilityViewed(schedule, { entry: 'reschedule_link', bookable: true, requestId });
+    expect(capture).toHaveBeenLastCalledWith(
+      'debate_availability_viewed',
+      expect.objectContaining({ request_id: requestId })
+    );
 
-      expect(capture).toHaveBeenCalledWith(
-        'debate_availability_viewed',
-        expect.objectContaining({ entry: 'reschedule_link', request_id: '6676b145-0970-4c1c-bfbc-7497d9721b39' })
-      );
-    });
-
-    // It can arrive from a link anyone can edit.
-    it.each([[null], [undefined], ['someone@example.com'], ['6676b145']])('sends no request id for %s', requestId => {
-      debateAvailabilityViewed(schedule, { entry: 'reschedule_link', bookable: true, requestId });
-
-      expect(capture.mock.calls.at(-1)?.[1]).not.toHaveProperty('request_id');
-    });
+    debateAvailabilityViewed(schedule, { entry: 'people_schedule', bookable: true });
+    expect(capture).toHaveBeenLastCalledWith(
+      'debate_availability_viewed',
+      expect.objectContaining({ request_id: null })
+    );
   });
 
   // `via` is URL text anyone can edit, so analytics gets a fixed vocabulary rather than the text.
