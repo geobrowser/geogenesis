@@ -1,5 +1,7 @@
 import cx from 'classnames';
 
+import type { AccountStepClasses } from '~/partials/explore/email-capture-account-step';
+
 /**
  * The save-votes sheet's own look (GEO-3439), drawn after Privy's sign-in screens: a heading on
  * normal leading, solid grey subtext, and 44px rounded fields and buttons in place of the email
@@ -80,4 +82,29 @@ export const fineClass = (compact: boolean) =>
   cx('text-[12px] leading-[16px] text-grey-04 mobile:mt-3 mobile:text-[13px]', compact ? 'mt-2.5' : 'mt-3');
 
 /** `red-01` is under 4.5:1 on white at this size; this is the same red, dark enough to read. */
-export const ERROR_CLASS = 'mt-2 text-[13px] leading-[18px] text-[#d92d14] mobile:text-[15px]';
+const ERROR_TEXT_CLASS = 'text-[13px] leading-[18px] text-[#d92d14] mobile:text-[15px] mobile:leading-[20px]';
+
+export const ERROR_CLASS = `mt-2 ${ERROR_TEXT_CLASS}`;
+
+/**
+ * The code step (`AccountStep`) in this sheet's look: the email step's subtext and error styles, a
+ * larger box per digit, and touch-sized links on the phone.
+ */
+export const codeStepClasses = (compact: boolean): AccountStepClasses => ({
+  subtext: subtextClass(compact),
+  address:
+    'mt-0.5 flex flex-wrap items-baseline justify-center gap-x-1.5 text-[14px] leading-[20px] font-medium break-all text-[#151515] mobile:text-[16px] mobile:leading-[22px]',
+  change:
+    'font-normal break-normal text-grey-04 underline underline-offset-2 transition-colors hover:text-text mobile:-my-3 mobile:py-3',
+  stack: cx('mobile:mx-auto mobile:mt-[22px] mobile:max-w-[394px]', compact ? 'mt-4' : 'mt-5'),
+  box: cx(
+    'mobile:h-14 mobile:max-w-[48px] mobile:rounded-lg mobile:text-[24px]',
+    compact ? 'h-12 max-w-[40px] rounded-[10px] text-[20px]' : 'h-[52px] max-w-[44px] rounded-[10px] text-[22px]'
+  ),
+  note: cx(
+    'text-[13px] leading-[18px] text-grey-04 mobile:mt-[18px] mobile:text-[15px] mobile:leading-[20px]',
+    compact ? 'mt-3.5' : 'mt-4'
+  ),
+  error: `mt-3 ${ERROR_TEXT_CLASS}`,
+  resend: 'text-text underline underline-offset-2 disabled:opacity-60 mobile:-my-3 mobile:inline-block mobile:py-3',
+});

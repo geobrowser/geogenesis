@@ -17,30 +17,41 @@ const CODE_LENGTH = 6;
 /** The muted line under the boxes: the resend link, or the verification under way. */
 const NOTE_CLASS = 'mt-2 text-[14px] tracking-[-0.35px] text-[rgba(21,21,21,0.7)]';
 
+/** The step's parts, styled by the card it sits in. */
+export type AccountStepClasses = {
+  subtext: string;
+  /** The save-votes look only: the address on a line of its own, and the "Change" beside it. */
+  address?: string;
+  change?: string;
+  stack: string;
+  box: string;
+  note: string;
+  error: string;
+  resend: string;
+};
+
+/** The Explore email capture's frame. */
+const CAPTURE_CLASSES: AccountStepClasses = {
+  subtext: SUBTEXT_CLASS,
+  stack: FORM_STACK_CLASS,
+  box: 'h-11 max-w-[44px] rounded-lg text-[20px]',
+  note: NOTE_CLASS,
+  error: ERROR_CLASS,
+  resend: 'underline underline-offset-2 disabled:opacity-60',
+};
+
 /**
- * How the step is drawn. `capture` is the Explore email capture's frame. `save-votes` is the
- * save-votes sheet's restyle (GEO-3439), which says how long the code is, names the address on a line
- * of its own beside a way to change it, and draws larger boxes.
+ * `save-votes` is the save-votes sheet's restyle (GEO-3439): it says how long the code is, names the
+ * address on a line of its own beside a way to change it, and takes its classes from the sheet.
  */
-const APPEARANCE = {
-  capture: {
-    subtext: SUBTEXT_CLASS,
-    stack: FORM_STACK_CLASS,
-    box: 'h-11 max-w-[44px] rounded-lg text-[20px]',
-    note: NOTE_CLASS,
-    error: ERROR_CLASS,
-    resend: 'underline underline-offset-2 disabled:opacity-60',
-  },
-  'save-votes': {
-    subtext:
-      'mx-auto mt-1.5 max-w-[290px] text-[14px] leading-[20px] text-grey-04 mobile:max-w-[310px] mobile:text-[16px] mobile:leading-[22px]',
-    stack: 'mt-5 mobile:mx-auto mobile:mt-[22px] mobile:max-w-[394px]',
-    box: 'h-[52px] max-w-[44px] rounded-[10px] text-[22px] mobile:h-14 mobile:max-w-[48px] mobile:rounded-lg mobile:text-[24px]',
-    note: 'mt-4 text-[13px] leading-[18px] text-grey-04 mobile:mt-[18px] mobile:text-[15px] mobile:leading-[20px]',
-    error: 'mt-3 text-[13px] leading-[18px] text-[#d92d14] mobile:text-[15px] mobile:leading-[20px]',
-    resend: 'text-text underline underline-offset-2 disabled:opacity-60 mobile:-my-3 mobile:inline-block mobile:py-3',
-  },
-} as const;
+type AppearanceProps =
+  | { appearance?: 'capture'; classes?: never; onChangeEmail?: never }
+  | {
+      appearance: 'save-votes';
+      classes: AccountStepClasses;
+      /** Offers a "Change" beside the address, for a visitor who typed it wrong. */
+      onChangeEmail?: () => void;
+    };
 
 /**
  * Typing always lands in the next empty box, so a caret is kept at the end of the hidden field rather
@@ -81,7 +92,8 @@ export function AccountStep({
   onGiveUp,
   analytics = ACCOUNT_ANALYTICS,
   analyticsLabel = 'Explore account verification',
-  appearance = 'capture',
+  appearance,
+  classes,
   onChangeEmail,
 }: {
   email: string;
@@ -89,11 +101,8 @@ export function AccountStep({
   /** Whose sign-in this is. Defaults to Explore's email capture, the step's first host. */
   analytics?: AccountStepAnalytics;
   analyticsLabel?: string;
-  appearance?: keyof typeof APPEARANCE;
-  /** Offers a "Change" beside the address, for a visitor who typed it wrong. */
-  onChangeEmail?: () => void;
-}) {
-  const styles = APPEARANCE[appearance];
+} & AppearanceProps) {
+  const styles = classes ?? CAPTURE_CLASSES;
   const savesVotes = appearance === 'save-votes';
   // Headless email completion runs directly after verification, even if authentication has
   // already unmounted this card. Modal completions go through the app-wide PrivyAuthTracker.
@@ -240,7 +249,7 @@ export function AccountStep({
           <p className={styles.subtext}>
             {busy && !verifying ? 'Sending a 6-digit code to' : 'Enter the 6-digit code we sent to'}
           </p>
-          <p className="mt-0.5 flex flex-wrap items-baseline justify-center gap-x-1.5 text-[14px] leading-[20px] font-medium break-all text-[#151515] mobile:text-[16px] mobile:leading-[22px]">
+          <p className={styles.address}>
             <span>{email}</span>
             {onChangeEmail ? (
               <button
@@ -249,7 +258,7 @@ export function AccountStep({
                 aria-label="Change email address"
                 data-geo-analytics-label="save_votes_change_email"
                 data-geo-analytics-intent="navigate"
-                className="font-normal break-normal text-grey-04 underline underline-offset-2 transition-colors hover:text-text mobile:-my-3 mobile:py-3"
+                className={styles.change}
               >
                 Change
               </button>

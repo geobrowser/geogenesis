@@ -24,6 +24,7 @@ import {
 import { useMarkEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
 
 import { SaveVotesSheet } from './save-votes-sheet';
+import { subtextClass } from './save-votes-styles';
 
 /** Stands in for the Explore email capture card, which shares the sheet's corner. */
 function EmailCaptureCard() {
@@ -40,6 +41,7 @@ const mocks = vi.hoisted(() => ({
   anyModalOpen: false,
   isModalOpen: false,
   accountStepMounts: 0,
+  accountStepSubtext: undefined as string | undefined,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
@@ -63,11 +65,20 @@ vi.mock('~/core/save-votes-analytics', () => ({
   }),
 }));
 vi.mock('~/partials/explore/email-capture-account-step', () => ({
-  AccountStep: ({ email, onChangeEmail }: { email: string; onChangeEmail?: () => void }) => {
+  AccountStep: ({
+    email,
+    classes,
+    onChangeEmail,
+  }: {
+    email: string;
+    classes?: { subtext: string };
+    onChangeEmail?: () => void;
+  }) => {
     // Mounting the real step is what mails a code, so a remount is a second email.
     React.useEffect(() => {
       mocks.accountStepMounts += 1;
     }, []);
+    mocks.accountStepSubtext = classes?.subtext;
     return (
       <>
         <p>Enter the code we sent to {email}</p>
@@ -98,6 +109,7 @@ beforeEach(() => {
   mocks.anyModalOpen = false;
   mocks.isModalOpen = false;
   mocks.accountStepMounts = 0;
+  mocks.accountStepSubtext = undefined;
 });
 
 describe('copy', () => {
@@ -305,6 +317,22 @@ describe('SaveVotesSheet', () => {
       expect(readLocalVotes().votes).toHaveLength(2);
     });
 
+    it('draws the code step at the corner card’s size', () => {
+      sendCodeTo('sam@hey.com');
+
+      expect(mocks.accountStepSubtext).toBe(subtextClass(true));
+    });
+
+    it('a fresh ask after leaving mid-edit is the plain email step again', () => {
+      sendCodeTo('sam@hey.con');
+      fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      act(() => openSaveVotesPrompt('repeat'));
+
+      expect(screen.getByRole('button', { name: 'Save votes' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Send code' })).not.toBeInTheDocument();
+    });
+
     it('closing after going back still withdraws the sign-in', () => {
       sendCodeTo('sam@hey.con');
       fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
@@ -430,6 +458,14 @@ describe('SaveVotesSheet from the navbar', () => {
     act(() => openSaveVotesPrompt('navbar'));
     return view;
   };
+
+  it('draws the code step at the centred dialog’s size (GEO-3439)', () => {
+    openFromNavbar();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
+
+    expect(mocks.accountStepSubtext).toBe(subtextClass(false));
+  });
 
   it('stays centred on the way back from the code step (GEO-3439)', () => {
     openFromNavbar();

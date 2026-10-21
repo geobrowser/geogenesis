@@ -5,6 +5,8 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { codeStepClasses } from '~/partials/save-votes/save-votes-styles';
+
 import { AccountStep } from './email-capture-account-step';
 
 const mocks = vi.hoisted(() => ({
@@ -29,8 +31,21 @@ beforeEach(() => {
   mocks.otpState = { status: 'awaiting-code-input' };
 });
 
-async function renderStep(props: Partial<React.ComponentProps<typeof AccountStep>> = {}) {
-  const view = render(<AccountStep email="reader@example.com" onGiveUp={vi.fn()} {...props} />);
+/** The step as the save-votes sheet draws it, or, with no `onChangeEmail`, as the email capture does. */
+async function renderStep(onChangeEmail?: () => void) {
+  const view = render(
+    onChangeEmail ? (
+      <AccountStep
+        email="reader@example.com"
+        onGiveUp={vi.fn()}
+        appearance="save-votes"
+        classes={codeStepClasses(false)}
+        onChangeEmail={onChangeEmail}
+      />
+    ) : (
+      <AccountStep email="reader@example.com" onGiveUp={vi.fn()} />
+    )
+  );
   // Let the send the step makes on mount settle.
   await act(async () => {});
   return view;
@@ -39,7 +54,7 @@ async function renderStep(props: Partial<React.ComponentProps<typeof AccountStep
 describe('AccountStep as the save-votes code step (GEO-3439)', () => {
   it('names the code’s length and the address, with a way to change it', async () => {
     const onChangeEmail = vi.fn();
-    await renderStep({ appearance: 'save-votes', onChangeEmail });
+    await renderStep(onChangeEmail);
 
     expect(screen.getByText('Enter the 6-digit code we sent to')).toBeInTheDocument();
     expect(screen.getByText('reader@example.com')).toBeInTheDocument();
@@ -51,7 +66,7 @@ describe('AccountStep as the save-votes code step (GEO-3439)', () => {
 
   it('offers a new code when the code is wrong', async () => {
     mocks.otpState = { status: 'error' };
-    await renderStep({ appearance: 'save-votes', onChangeEmail: vi.fn() });
+    await renderStep(vi.fn());
 
     expect(screen.getByRole('alert')).toHaveTextContent('That code didn’t work. Send a new code');
   });

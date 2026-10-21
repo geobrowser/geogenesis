@@ -58,6 +58,7 @@ import {
   badgeClass,
   bodyClass,
   chipListClass,
+  codeStepClasses,
   fieldClass,
   fineClass,
   headingClass,
@@ -102,25 +103,21 @@ export function SaveVotesSheet() {
   const [invalid, setInvalid] = React.useState(false);
   /**
    * Once the visitor has asked for a code: the address it went to, and the sheet as it was then.
-   * The code step keeps that presentation and attribution to the end. Moving between the corner card
+   * The sign-in keeps that presentation and attribution to the end. Moving between the corner card
    * and the centred dialog is a different tree, which would remount the step, clear what was typed
    * and mail a second code.
+   *
+   * `editing` is the way back from the code step to fix the address (GEO-3439). The sign-in they
+   * started is still theirs, so it is not withdrawn on the way back; the next send starts it again.
    */
-  const [codeStep, setCodeStep] = React.useState<{
+  const [attempt, setAttempt] = React.useState<{
     email: string;
     centered: boolean;
     reason: SaveVotesPromptReason | null;
+    phase: 'code' | 'editing';
   } | null>(null);
-  const codeEmail = codeStep?.email ?? null;
-  /**
-   * Back from the code step to change the address (GEO-3439): the sheet as it was when the code was
-   * asked for, held until the visitor sends to the new address or leaves. The sign-in they started
-   * is still theirs, so it is not withdrawn on the way back; the next send starts it again.
-   */
-  const [editedFrom, setEditedFrom] = React.useState<{
-    centered: boolean;
-    reason: SaveVotesPromptReason | null;
-  } | null>(null);
+  const codeEmail = attempt?.phase === 'code' ? attempt.email : null;
+  const editing = attempt?.phase === 'editing';
   const emailInputRef = React.useRef<HTMLInputElement>(null);
 
   // Landed from one of our emails: everyone they go to has an account, so this visit's asks are to
@@ -137,7 +134,7 @@ export function SaveVotesSheet() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  const midSignIn = codeEmail !== null || editedFrom !== null;
+  const midSignIn = attempt !== null;
   const open = reason !== null && ready && !authenticated && (count > 0 || midSignIn);
 
   // Every vote taken back: the ask was about votes that are gone, and must not reopen for the next
@@ -149,17 +146,15 @@ export function SaveVotesSheet() {
   // Signed in: the sheet's job is done whichever way they got there, and the saver takes over.
   React.useEffect(() => {
     if (!authenticated) return;
-    setCodeStep(null);
-    setEditedFrom(null);
+    setAttempt(null);
     closeSaveVotesPrompt();
   }, [authenticated]);
 
-  const held = codeStep ?? editedFrom;
-  const centered = held ? held.centered : opensSaveVotesCentered(reason);
+  const centered = attempt ? attempt.centered : opensSaveVotesCentered(reason);
   // Centred, the sheet is a modal of its own, which this would find and hide itself behind. Nothing
   // else is modal at the press that opens it, and anything opened later is opened from inside it.
   const isAnyModalOpen = useAnyModalOpen(open && !centered);
-  const signInProperties = saveVotesSignInProperties('email', count, held ? held.reason : reason);
+  const signInProperties = saveVotesSignInProperties('email', count, attempt ? attempt.reason : reason);
   // The email capture card shares this corner, and is mid-signup if it is still up once votes exist.
   const isEmailCaptureShowing = useIsEmailCaptureShowing();
   // Privy's dialog still comes first, centred or not: it is the visitor's sign-in in progress.
@@ -171,8 +166,7 @@ export function SaveVotesSheet() {
   // saved if it completes, and stay on the device if not.
   React.useEffect(() => {
     if (!centered || !isModalOpen) return;
-    setCodeStep(null);
-    setEditedFrom(null);
+    setAttempt(null);
     closeSaveVotesPrompt();
   }, [centered, isModalOpen]);
   // Read when the dialog closes, which is after the render that closed it.
@@ -188,7 +182,7 @@ export function SaveVotesSheet() {
   const recordedFor = React.useRef<SaveVotesPromptReason | null>(null);
   React.useEffect(() => {
     if (!open) recordedFor.current = null;
-    if (!visible || !reason || held || recordedFor.current === reason) return;
+    if (!visible || !reason || attempt || recordedFor.current === reason) return;
     recordedFor.current = reason;
     if (AUTOMATIC_REASONS.has(reason)) recordSavePromptShown();
     captureSaveVotesImpression(reason, count);
@@ -201,24 +195,22 @@ export function SaveVotesSheet() {
     if (midSignIn) cancelPrivyAuth();
     // Not now, not never: the votes stay on the device and the pills still offer "Save".
     recordSavePromptDismissed();
-    setCodeStep(null);
-    setEditedFrom(null);
+    setAttempt(null);
     closeSaveVotesPrompt();
   }, [midSignIn]);
 
   /** Back to the email step, the address as it was sent, to fix a typo. Unmounting the code step ends it. */
   const changeEmail = React.useCallback(() => {
-    if (!codeStep) return;
-    setEditedFrom({ centered: codeStep.centered, reason: codeStep.reason });
-    setEmail(codeStep.email);
+    if (attempt?.phase !== 'code') return;
+    setEmail(attempt.email);
     setInvalid(false);
-    setCodeStep(null);
-  }, [codeStep]);
+    setAttempt({ ...attempt, phase: 'editing' });
+  }, [attempt]);
 
   // The field takes focus on the way back, so the address can be fixed without reaching for it.
   React.useEffect(() => {
-    if (editedFrom) emailInputRef.current?.focus();
-  }, [editedFrom]);
+    if (editing) emailInputRef.current?.focus();
+  }, [editing]);
 
   const submitEmail = (event: React.FormEvent) => {
     event.preventDefault();
@@ -229,8 +221,7 @@ export function SaveVotesSheet() {
     }
     beginPrivyAuth(signInProperties);
     prepareOnboarding();
-    setCodeStep({ email: trimmed, centered, reason: held ? held.reason : reason });
-    setEditedFrom(null);
+    setAttempt({ email: trimmed, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
   };
 
   if (!open) return null;
@@ -283,6 +274,7 @@ export function SaveVotesSheet() {
             analyticsLabel="Save votes verification"
             onGiveUp={close}
             appearance="save-votes"
+            classes={codeStepClasses(compact)}
             onChangeEmail={changeEmail}
           />
         </div>
@@ -331,7 +323,7 @@ export function SaveVotesSheet() {
             />
           </label>
           <button type="submit" className={primaryButtonClass(compact)}>
-            {editedFrom ? SAVE_VOTES_RESEND_LABEL : saveVotesSubmitLabel(count, logIn)}
+            {editing ? SAVE_VOTES_RESEND_LABEL : saveVotesSubmitLabel(count, logIn)}
           </button>
 
           {invalid ? (
