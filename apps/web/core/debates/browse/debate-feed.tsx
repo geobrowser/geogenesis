@@ -442,7 +442,7 @@ export function DebatesBrowseFeed({
         if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', ' '].includes(event.key))
           lastScrollIntent.current = performance.now();
       }}
-      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
+      className="no-scrollbar [container-type:inline-size] h-full snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
     >
       {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map((debate, index) => (
@@ -536,7 +536,7 @@ export function DebatesBrowseFeed({
   // Keep the feed in the same tree position whether or not a side panel is open, so
   // toggling the claims/comments panel doesn't remount the players and restart playback.
   return (
-    <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh md:bg-white">
+    <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-x-0 md:top-11 md:z-50 md:bg-white">
       <div className="min-w-0 flex-1">{feed}</div>
       {sidePanel}
     </div>
