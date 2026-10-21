@@ -182,6 +182,9 @@ export type DebateMediaTurnSegment = {
   output_end_ms: number;
   duration_ms: number;
   countdown_start_ms?: number;
+  /** Original clock deadline and allowance, independent of trimmed turn edges (GEO-3408). */
+  countdown_end_ms?: number;
+  countdown_duration_ms?: number;
   /** The same turn on the raw recordings' clock (GEO-3293). Absent where the two clocks agree: a
    * fixed format, or a render with no edits. See `recording-clock.ts`. */
   source_start_ms?: number;
@@ -212,6 +215,8 @@ export type DebateMediaCondensedBreak = {
 
 /** An early end inside a round, cut down to a short quiet at `output_ms` (GEO-3276). */
 export type DebateMediaEarlyEndGap = {
+  /** Absent on legacy End turn handoffs. Turn-edge edits have no on-screen cue. */
+  kind?: 'turn_start' | 'turn_end';
   turn_index: number;
   next_turn_index: number;
   output_ms: number;

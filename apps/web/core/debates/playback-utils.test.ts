@@ -169,6 +169,23 @@ describe('turnStateFromSegments (GEO-2949)', () => {
     expect(turnStateFromSegments(segments, 300)?.slot).toBe(2);
   });
 
+  it('uses the original 2:00 clock after trimming 3s at the start and 20s at the end', () => {
+    const turn: DebateMediaTurnSegment = {
+      turn_index: 0,
+      participant_slot: 1,
+      output_start_ms: 0,
+      output_end_ms: 97_000,
+      duration_ms: 97_000,
+      countdown_start_ms: -3_000,
+      countdown_end_ms: 117_000,
+      countdown_duration_ms: 120_000,
+    };
+    expect(turnStateFromSegments([turn], 0)).toMatchObject({ seconds: 117, progress: 3 / 120 });
+    expect(turnStateFromSegments([turn], 50)).toMatchObject({ seconds: 67, progress: 53 / 120 });
+    expect(turnStateFromSegments([turn], 97)).toMatchObject({ seconds: 20, progress: 100 / 120 });
+    expect(turnStateFromSegments([turn], 200)?.seconds).toBe(20);
+  });
+
   it('has no opinion when the render produced no segments', () => {
     expect(turnStateFromSegments([], 12)).toBeNull();
   });
