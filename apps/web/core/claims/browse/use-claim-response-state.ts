@@ -57,6 +57,27 @@ export type ClaimResponseState = {
 };
 
 /**
+ * Which vocabulary a claim uses. There is only one: Agree/Disagree.
+ *
+ * Kept as a function, and still called where a kind is needed, because the thing it guarantees is
+ * worth a name — every claim surface publishes and counts the *same* vote kind. This used to read
+ * geo-chat's row first and the graph's "Is factual" flag second, and the order mattered: resolving
+ * it differently on one surface meant counting one vote kind while publishing another, a bug this
+ * codebase has already had. A constant cannot have that bug.
+ */
+export function resolveClaimResponseKind(): DebateResponseKind {
+  return CLAIM_RESPONSE_KIND;
+}
+
+/**
+ * The claim's text for a surface that has its graph entity and geo-chat's row but draws its own
+ * heading: the entity's name, else geo-chat's copy while the entity is still loading.
+ */
+export function claimTitleFrom({ entity, row }: { entity: Entity | null; row: DebateClaim | null }) {
+  return entity?.name ?? row?.claim;
+}
+
+/**
  * Everything a claim surface needs to draw and publish a response, derived once.
  *
  * Five surfaces render a claim's pills and split — the explore feed, the debates hub, the topic
@@ -72,27 +93,6 @@ export type ClaimResponseState = {
  * viewport observer, the topic page fetches per card because its claims span spaces. What must not
  * differ is what happens to them afterwards, which is all of this.
  */
-/**
- * Which vocabulary a claim uses. There is only one: Agree/Disagree.
- *
- * Kept as a function, and still called where a kind is needed, because the thing it guarantees is
- * worth a name — every claim surface publishes and counts the *same* vote kind. This used to read
- * geo-chat's row first and the graph's "Is factual" flag second, and the order mattered: resolving
- * it differently on one surface meant counting one vote kind while publishing another, a bug this
- * codebase has already had. A constant cannot have that bug.
- */
-/**
- * The claim's text for a surface that has its graph entity and geo-chat's row but draws its own
- * heading: the entity's name, else geo-chat's copy while the entity is still loading.
- */
-export function claimTitleFrom({ entity, row }: { entity: Entity | null; row: DebateClaim | null }) {
-  return entity?.name ?? row?.claim;
-}
-
-export function resolveClaimResponseKind(): DebateResponseKind {
-  return CLAIM_RESPONSE_KIND;
-}
-
 export function useClaimResponseState({
   claimId,
   spaceId,
