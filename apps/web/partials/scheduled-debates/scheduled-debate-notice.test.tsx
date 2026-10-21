@@ -33,6 +33,7 @@ const state = vi.hoisted(() => ({
   rooms: { data: { rooms: [] as unknown[] } },
   late: null as unknown as Mutation,
   cant: null as unknown as Mutation,
+  viewerName: 'Jordan' as string | null,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({ useGeoChatAuth: () => ({ authenticated: true, ready: true }) }));
@@ -44,10 +45,11 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
 vi.mock('~/core/debates/rooms/hooks', () => ({ useUpcomingDebateRooms: () => state.rooms }));
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => VIEWER }));
 vi.mock('~/core/debates/matchmaking/use-geo-chat-user-summaries', () => ({
-  useGeoChatUserSummaries: () => [
-    { user_id: MAYA, profile_space_id: 'maya-space', display_name: 'Maya', avatar_cid: null },
-    { user_id: VIEWER, profile_space_id: 'jordan-space', display_name: 'Jordan', avatar_cid: null },
-  ],
+  useGeoChatUserSummaries: (ids: string[]) =>
+    [
+      { user_id: MAYA, profile_space_id: 'maya-space', display_name: 'Maya', avatar_cid: null },
+      { user_id: VIEWER, profile_space_id: 'jordan-space', display_name: state.viewerName, avatar_cid: null },
+    ].filter(person => ids.includes(person.user_id)),
 }));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -93,9 +95,21 @@ beforeEach(() => {
   };
   state.late = idle();
   state.cant = idle();
+  state.viewerName = 'Jordan';
 });
 
 afterEach(cleanup);
+
+/** A mutation whose `mutate` succeeds at once with `data`, calling the per-call `onSuccess`. */
+function succeedWith(mutation: Mutation, data: unknown) {
+  mutation.mutate.mockImplementation((_variables: unknown, options?: { onSuccess?: (result: unknown) => void }) =>
+    options?.onSuccess?.(data)
+  );
+}
+
+function renderOpen(step: 'decide' | 'late' | 'cant') {
+  return render(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep={step} onClose={vi.fn()} />);
+}
 
 function open(step: 'decide' | 'late' | 'cant', onReschedule?: () => void) {
   const onClose = vi.fn();
@@ -126,7 +140,7 @@ describe('ScheduledDebateNoticeDialog', () => {
     it('offers Join now, Running late and Can’t make it, and says Maya is waiting', () => {
       open('decide', vi.fn());
 
-      expect(screen.getByRole('heading')).toHaveTextContent('Your debate with Maya started 3 minutes ago');
+      expect(screen.getByText('Your debate with Maya started 3 minutes ago')).toBeInTheDocument();
       expect(screen.getByText('Maya is in the room, waiting for you')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Join now' })).toHaveAttribute('href', '/debate/room-1');
       expect(screen.getByRole('button', { name: 'I’m running late' })).toBeInTheDocument();
@@ -158,19 +172,36 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(screen.getByText('“Jordan is running about 15 minutes late. Train is delayed”')).toBeInTheDocument();
 
       await user.click(screen.getByRole('button', { name: 'Tell Maya' }));
-      expect(state.late.mutate).toHaveBeenCalledWith({
-        requestId: REQUEST.replace(/-/g, ''),
-        minutes: 15,
-        note: 'Train is delayed',
-      });
+      expect(state.late.mutate).toHaveBeenCalledWith(
+        { requestId: REQUEST.replace(/-/g, ''), minutes: 15, note: 'Train is delayed' },
+        expect.anything()
+      );
     });
 
-    it('confirms with the time geo-chat will tell Maya, and offers the room', () => {
-      state.late = { ...idle(), isSuccess: true, data: { expected_at: '2026-10-21T17:13:00.000Z', note: null } };
+    it('confirms with the time geo-chat will tell Maya, and offers the room', async () => {
+      succeedWith(state.late, { expected_at: '2026-10-21T17:13:00.000Z', note: null });
       open('late');
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Tell Maya' }));
 
       expect(screen.getByRole('heading')).toHaveTextContent(/^We’ve told Maya you’ll be there by about /);
       expect(screen.getByRole('link', { name: 'Join the room' })).toHaveAttribute('href', '/debate/room-1');
+    });
+
+    // The calendar invite carries the link, so it can be sent the day before.
+    it('offers no Join into a room that is not open yet', async () => {
+      state.rooms = { data: { rooms: [{ room_id: 'room-1', joinable: false, due: false, others_present: false }] } };
+      succeedWith(state.late, { expected_at: '2026-10-22T17:10:00.000Z', note: null });
+      open('late');
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Tell Maya' }));
+
+      expect(screen.getByRole('heading')).toHaveTextContent(/^We’ve told Maya/);
+      expect(screen.queryByRole('link', { name: 'Join the room' })).not.toBeInTheDocument();
+    });
+
+    it('speaks to the viewer in the preview when their own name has not loaded', () => {
+      state.viewerName = null;
+      open('late');
+      expect(screen.getByText('“You’re running about 10 minutes late.”')).toBeInTheDocument();
     });
 
     it('says plainly when the viewer is already in the room', () => {
@@ -187,10 +218,10 @@ describe('ScheduledDebateNoticeDialog', () => {
       await user.type(screen.getByLabelText('Add a note for Maya (optional)'), 'Something came up');
       await user.click(screen.getByRole('button', { name: 'Cancel the debate' }));
 
-      expect(state.cant.mutate).toHaveBeenCalledWith({
-        requestId: REQUEST.replace(/-/g, ''),
-        note: 'Something came up',
-      });
+      expect(state.cant.mutate).toHaveBeenCalledWith(
+        { requestId: REQUEST.replace(/-/g, ''), note: 'Something came up' },
+        expect.anything()
+      );
     });
 
     it('hands the note to Maya’s week to suggest a time instead, cancelling nothing itself', async () => {
@@ -206,10 +237,18 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(state.cant.mutate).not.toHaveBeenCalled();
     });
 
-    it('says it is done once cancelled', () => {
-      state.cant = { ...idle(), isSuccess: true };
-      open('cant');
+    // The cancel refetches the list, which then says the debate is off. That is the news being
+    // confirmed, not a reason to swap the confirmation for "no longer on".
+    it('keeps saying it is cancelled once the list says so too', async () => {
+      succeedWith(state.cant, {});
+      const { rerender } = renderOpen('cant');
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel the debate' }));
       expect(screen.getByRole('heading')).toHaveTextContent('Your debate is cancelled. We’ve let Maya know.');
+
+      state.requests = { data: { requests: [agreed({ status: 'cancelled' })] }, isPending: false, isError: false };
+      rerender(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={vi.fn()} />);
+      expect(screen.getByRole('heading')).toHaveTextContent('Your debate is cancelled. We’ve let Maya know.');
+      expect(screen.queryByText('This debate is no longer on.')).not.toBeInTheDocument();
     });
   });
 

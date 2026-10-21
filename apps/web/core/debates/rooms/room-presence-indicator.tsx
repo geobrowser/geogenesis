@@ -8,7 +8,7 @@ import { Text } from '~/design-system/text';
 
 import { ROOM_LATE_NOTICE, UNNAMED_OPPONENT, roomPresenceLabel, roomPresenceNote } from './room-copy';
 import type { DebateRoomPresence, DebateRoomPresenceState } from './room-presence';
-import { formatClock } from './scheduled-notice';
+import { formatClockTime } from './room-time';
 
 /**
  * Who else is in the room (GEO-2941). Small, because a room is the debate-again page rather than a
@@ -56,7 +56,7 @@ export function DebateRoomPresenceIndicator({
             </Text>
           )}
           <Text as="p" variant="footnote" color="grey-04">
-            {ROOM_LATE_NOTICE.expected(formatClock(late.expectedAt))}
+            {ROOM_LATE_NOTICE.expected(formatClockTime(late.expectedAt))}
           </Text>
         </div>
       )}

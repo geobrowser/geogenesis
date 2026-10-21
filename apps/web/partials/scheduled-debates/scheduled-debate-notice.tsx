@@ -1,55 +1,56 @@
 'use client';
 
-import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
-
 import * as React from 'react';
 
-import cx from 'classnames';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import { type RunningLateMinutes, type UpcomingDebateRoom } from '~/core/debates/api';
+import { RUNNING_LATE_MINUTES, type RunningLateMinutes, type UpcomingDebateRoom } from '~/core/debates/api';
 import { toDebatesPanel } from '~/core/debates/debates-panel-deep-link';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
-import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
+import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
+import { HubPillButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
 import { useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
-import { opponentName, opponentOf } from '~/core/debates/rooms/room-opponent';
+import { SCHEDULED_NOTICE_COPY as COPY } from '~/core/debates/rooms/room-copy';
+import { opponentName, requestById, useRequestOpponent } from '~/core/debates/rooms/room-opponent';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
+import { formatClockTime, startOffset } from '~/core/debates/rooms/room-time';
 import {
-  SCHEDULED_NOTICE_COPY as COPY,
   DEFAULT_LATE_MINUTES,
-  LATE_MINUTE_CHOICES,
   NOTICE_NOTE_MAX,
   type ScheduledNoticeStep,
-  debateTimingHeading,
-  findRequest,
-  formatClock,
-  noticeFailureMessage,
   noticeNote,
   noticeRequestState,
 } from '~/core/debates/rooms/scheduled-notice';
 import { useCantMakeIt, useReportRunningLate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
+import { noticeFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
-import { Z_LAYER_CLASS } from '~/core/z-layers';
 
-import { Close } from '~/design-system/icons/close';
-import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
+import { Notice } from '~/partials/availability/peer-availability';
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
+import { ScheduleDialog } from '~/partials/availability/schedule-dialog';
 
-const PRIMARY =
-  'flex h-12 w-full items-center justify-center rounded-full bg-text px-5 text-button text-white transition-opacity hover:opacity-90 disabled:opacity-50';
-const SECONDARY =
-  'flex h-12 w-full items-center justify-center rounded-full border border-grey-02 bg-white px-5 text-button text-text transition-colors hover:bg-grey-01 disabled:opacity-50';
-const QUIET = 'self-center px-3 py-2 text-metadata text-text underline underline-offset-2 hover:opacity-70';
-
+/** Analytics for a link or quiet button on this dialog, on the scheduling surfaces' label scheme. */
 function analytics(action: string, intent: string) {
   return debateActionAnalyticsAttributes('scheduled-notice', action, intent);
 }
+
+/** The same, as `HubPillButton` takes it. */
+function pill(action: string, intent: string) {
+  return { analyticsLabel: debateAnalyticsLabel('scheduled-notice', action), analyticsIntent: intent };
+}
+
+/**
+ * What happened, held by the dialog rather than the step. The request list refetches on success, and
+ * reading it then would replace the confirmation with "This debate is no longer on."
+ */
+type Outcome = { message: string; joinRoomId: string | null };
 
 type Props = {
   open: boolean;
@@ -69,39 +70,31 @@ type Props = {
 /**
  * Running late and Can't make it (GEO-3427, boards 1b, 2 and 3): what a debater who won't be there
  * on time tells the other one. Reached from a scheduling email's buttons, the calendar invite, and
- * the reschedule link once the room is open.
+ * the reschedule link once the room is open. In the frame the other scheduling dialogs share.
  *
  * Nothing is sent until a confirm press. A link only opens this, because mail scanners open links.
  */
 export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onClose, onReschedule, children }: Props) {
   const [step, setStep] = React.useState<ScheduledNoticeStep>(initialStep);
+  const [outcome, setOutcome] = React.useState<Outcome | null>(null);
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
 
   const { authenticated } = useGeoChatAuth();
   const requests = useScheduledDebates(open && authenticated);
   const rooms = useUpcomingDebateRooms(open && authenticated);
-  const viewerId = useCurrentGeoChatUserId();
-  const request = findRequest(requests.data?.requests, requestId);
-  const opponentUserId = opponentOf(request, viewerId);
-  const ids = React.useMemo(
-    () => [opponentUserId, viewerId].filter((id): id is string => id !== null),
-    [opponentUserId, viewerId]
-  );
-  const people = useGeoChatUserSummaries(ids, ids.length > 0);
-  const opponent = people.find(person => opponentUserId !== null && sameId(person.user_id, opponentUserId)) ?? null;
-  const viewer = people.find(person => viewerId !== null && sameId(person.user_id, viewerId)) ?? null;
+  const request = requestById(requests.data?.requests, requestId);
+  const opponent = useRequestOpponent(request);
   const name = opponentName(opponent);
-  const room = request?.room_id
-    ? (rooms.data?.rooms.find(row => sameId(row.room_id, request.room_id ?? '')) ?? null)
-    : null;
+  const roomId = request?.room_id ?? null;
+  const room = roomId ? (rooms.data?.rooms.find(row => sameId(row.room_id, roomId)) ?? null) : null;
 
-  if (suggesting && request && opponentUserId) {
+  if (suggesting && request && opponent) {
     return (
       <PeerAvailabilityBookingModal
         open={open}
-        userId={opponentUserId}
-        peerName={opponent?.display_name ?? null}
+        userId={opponent.user_id}
+        peerName={opponent.display_name}
         rescheduleRequestId={request.request_id}
         rescheduleNote={suggesting.note}
         entry="cant_make_it"
@@ -110,101 +103,108 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
     );
   }
 
-  const body = (() => {
-    if (children) return children;
-    if (requests.isPending) return <Status busy>{COPY.loading}</Status>;
-    if (requests.isError) return <Status>{COPY.state.error}</Status>;
+  const shell = (title: string, body: React.ReactNode) => (
+    <ScheduleDialog
+      open={open}
+      onOpenChange={next => !next && onClose()}
+      title={title}
+      widthClassName="w-[26rem]"
+      closeButtonProps={analytics('Close', 'close_scheduled_notice')}
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">{body}</div>
+    </ScheduleDialog>
+  );
 
-    const state = noticeRequestState(request);
-    if (state !== 'active' || !request) {
-      return (
-        <div className="flex flex-col gap-4">
-          <Status>{COPY.state[state === 'active' ? 'missing' : state]}</Status>
-          {state === 'moved' && (
+  // Ahead of the request's state: once the refetch lands, the list says the debate is off, which is
+  // the news this confirms rather than a reason to stop showing it.
+  if (outcome) {
+    return shell(
+      outcome.message,
+      <Actions>
+        {outcome.joinRoomId && <JoinRoom roomId={outcome.joinRoomId} onJoin={onClose} label="Join the room" />}
+        <HubPillButton
+          size="large"
+          variant={outcome.joinRoomId ? 'secondary' : 'primary'}
+          className="w-full"
+          onClick={onClose}
+          {...pill('Done', 'close_scheduled_notice')}
+        >
+          {COPY.done}
+        </HubPillButton>
+      </Actions>
+    );
+  }
+
+  if (children) return shell(COPY.title[step], children);
+  if (requests.isPending) return shell(COPY.title[step], <Notice>{COPY.loading}</Notice>);
+  if (requests.isError) return shell(COPY.title[step], <Notice>{COPY.state.error}</Notice>);
+
+  const state = noticeRequestState(request);
+  if (state !== 'active' || !request) {
+    return shell(
+      COPY.title[step],
+      <Notice
+        action={
+          state === 'moved' && (
             <Link
               href={toDebatesPanel({ tab: 'requests' })}
               onClick={onClose}
-              className={SECONDARY}
+              className={hubPillClassName('secondary', 'w-full', 'large')}
               {...analytics('Open Requests', 'open_requests_from_notice')}
             >
               {COPY.state.requests}
             </Link>
-          )}
-        </div>
+          )
+        }
+      >
+        {COPY.state[state === 'active' ? 'missing' : state]}
+      </Notice>
+    );
+  }
+
+  switch (step) {
+    case 'decide':
+      return shell(
+        COPY.title.decide,
+        <DecideStep
+          name={name}
+          startsAt={request.scheduled_start_at}
+          room={room}
+          onLate={() => setStep('late')}
+          onCant={() => setStep('cant')}
+          onReschedule={onReschedule}
+          onJoin={onClose}
+        />
       );
-    }
-
-    switch (step) {
-      case 'decide':
-        return (
-          <DecideStep
-            name={name}
-            startsAt={request.scheduled_start_at}
-            room={room}
-            onLate={() => setStep('late')}
-            onCant={() => setStep('cant')}
-            onReschedule={onReschedule}
-            onJoin={onClose}
-          />
-        );
-      case 'late':
-        return (
-          <LateStep
-            requestId={request.request_id}
-            roomId={request.room_id}
-            name={name}
-            viewerName={viewer?.display_name || null}
-            onCant={() => setStep('cant')}
-            onDone={onClose}
-          />
-        );
-      case 'cant':
-        return (
-          <CantStep
-            requestId={request.request_id}
-            name={name}
-            onLate={() => setStep('late')}
-            onSuggest={note => setSuggesting({ note })}
-            onDone={onClose}
-          />
-        );
-    }
-  })();
-
-  return (
-    <Root open={open} onOpenChange={next => !next && onClose()}>
-      <Portal>
-        <Overlay className={cx('fixed inset-0 bg-text/20', Z_LAYER_CLASS.scheduleDialogBackdrop)} />
-        <Content
-          aria-describedby={undefined}
-          className={cx(
-            'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 focus:outline-hidden md:inset-0 md:translate-x-0 md:translate-y-0',
-            Z_LAYER_CLASS.scheduleDialog
-          )}
-        >
-          <div className="relative flex max-h-[calc(100dvh-2rem)] w-[26rem] max-w-[calc(100vw-2rem)] flex-col gap-5 overflow-y-auto rounded-xl bg-white p-6 shadow-card md:h-dvh md:max-h-dvh md:w-screen md:max-w-none md:rounded-none md:px-4 md:pt-5 md:pb-7">
-            <Title asChild>
-              <span className="sr-only">
-                {step === 'late' ? 'Running late' : step === 'cant' ? 'Can’t make it' : 'Your debate'}
-              </span>
-            </Title>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                aria-label="Close"
-                {...analytics('Close', 'close_scheduled_notice')}
-                onClick={onClose}
-                className="-m-3 grid size-11 place-items-center text-text transition-opacity hover:opacity-70"
-              >
-                <Close />
-              </button>
-            </div>
-            {body}
-          </div>
-        </Content>
-      </Portal>
-    </Root>
-  );
+    case 'late':
+      return shell(
+        COPY.late.title,
+        <LateStep
+          requestId={request.request_id}
+          name={name}
+          onCant={() => setStep('cant')}
+          onSent={expectedAt =>
+            setOutcome({
+              message: COPY.late.sent(name, formatClockTime(expectedAt)),
+              // Only into a room that is open. A late notice can be sent the day before, from the
+              // calendar invite, and Join would land on "the room opens at…".
+              joinRoomId: room?.joinable ? room.room_id : null,
+            })
+          }
+        />
+      );
+    case 'cant':
+      return shell(
+        COPY.cant.title,
+        <CantStep
+          requestId={request.request_id}
+          name={name}
+          onLate={() => setStep('late')}
+          onSuggest={note => setSuggesting({ note })}
+          onSent={() => setOutcome({ message: COPY.cant.sent(name), joinRoomId: null })}
+        />
+      );
+  }
 }
 
 function DecideStep({
@@ -224,10 +224,15 @@ function DecideStep({
   onReschedule?: () => void;
   onJoin: () => void;
 }) {
+  // Re-read each minute, so "started 3 minutes ago" keeps up while the dialog is open.
+  const now = useMinuteNow();
+
   return (
-    <div className="flex flex-1 flex-col gap-6">
+    <>
       <div className="flex flex-col items-center gap-3 text-center">
-        <h2 className="text-mediumTitle">{debateTimingHeading(name, startsAt)}</h2>
+        <Text as="p" variant="mediumTitle">
+          {COPY.decide.heading(name, startOffset(new Date(startsAt).getTime() - now))}
+        </Text>
         {room?.others_present && (
           <span className="inline-flex items-center gap-2 rounded-full border border-grey-02 px-3 py-1.5 text-metadata">
             <span aria-hidden className="size-2 rounded-full bg-green" />
@@ -235,108 +240,66 @@ function DecideStep({
           </span>
         )}
       </div>
-      <div className="flex flex-col gap-2.5">
-        {room?.joinable && (
-          <JoinRoom roomId={room.room_id} onJoin={onJoin} label="Join now">
-            {COPY.decide.join}
-          </JoinRoom>
-        )}
-        <button
-          type="button"
-          className={SECONDARY}
-          onClick={onLate}
-          {...analytics('Running late', 'open_running_late')}
-        >
+      <Actions>
+        {room?.joinable && <JoinRoom roomId={room.room_id} onJoin={onJoin} label="Join now" />}
+        <HubPillButton size="large" className="w-full" onClick={onLate} {...pill('Running late', 'open_running_late')}>
           {COPY.decide.late}
-        </button>
-        <button
-          type="button"
-          className={SECONDARY}
-          onClick={onCant}
-          {...analytics('Cant make it', 'open_cant_make_it')}
-        >
+        </HubPillButton>
+        <HubPillButton size="large" className="w-full" onClick={onCant} {...pill('Cant make it', 'open_cant_make_it')}>
           {COPY.decide.cant}
-        </button>
-      </div>
-      <Text as="p" variant="footnote" color="grey-04" className="text-center">
-        {COPY.decide.explainer(name)}
-      </Text>
-      {onReschedule && (
-        <>
-          <div className="flex-1" />
-          <button
-            type="button"
-            className={QUIET}
-            onClick={onReschedule}
-            {...analytics('Reschedule instead', 'reschedule_scheduled_debate')}
-          >
+        </HubPillButton>
+        <Text as="p" variant="footnote" color="grey-04" className="text-center">
+          {COPY.decide.explainer(name)}
+        </Text>
+        {onReschedule && (
+          <QuietButton onClick={onReschedule} {...analytics('Reschedule instead', 'reschedule_scheduled_debate')}>
             {COPY.decide.reschedule}
-          </button>
-        </>
-      )}
-    </div>
+          </QuietButton>
+        )}
+      </Actions>
+    </>
   );
 }
 
 function LateStep({
   requestId,
-  roomId,
   name,
-  viewerName,
   onCant,
-  onDone,
+  onSent,
 }: {
   requestId: string;
-  roomId: string | null;
   name: string;
-  viewerName: string | null;
   onCant: () => void;
-  onDone: () => void;
+  onSent: (expectedAt: string) => void;
 }) {
   const [minutes, setMinutes] = React.useState<RunningLateMinutes>(DEFAULT_LATE_MINUTES);
   const [note, setNote] = React.useState('');
   const report = useReportRunningLate();
   const noteId = React.useId();
-
-  if (report.isSuccess) {
-    return (
-      <Done message={COPY.late.sent(name, formatClock(report.data.expected_at))} onDone={onDone}>
-        {roomId && (
-          <JoinRoom roomId={roomId} onJoin={onDone} label="Join the room">
-            {COPY.late.join}
-          </JoinRoom>
-        )}
-      </Done>
-    );
-  }
-
+  const viewerId = useCurrentGeoChatUserId();
+  const viewerIds = React.useMemo(() => (viewerId ? [viewerId] : []), [viewerId]);
+  const viewerName = useGeoChatUserSummaries(viewerIds, viewerId !== null)[0]?.display_name || null;
   const sent = noticeNote(note);
+
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <h2 className="text-mediumTitle">{COPY.late.title}</h2>
-        <Text as="p" color="grey-04">
-          {COPY.late.lead(name)}
-        </Text>
-      </div>
+    <>
+      <Text as="p" color="grey-04">
+        {COPY.late.lead(name)}
+      </Text>
       <div role="radiogroup" aria-label={COPY.late.title} className="grid grid-cols-3 gap-2.5">
-        {LATE_MINUTE_CHOICES.map(choice => (
-          <button
+        {RUNNING_LATE_MINUTES.map(choice => (
+          <HubPillButton
             key={choice}
-            type="button"
             role="radio"
             aria-checked={minutes === choice}
+            size="large"
+            variant={minutes === choice ? 'primary' : 'secondary'}
+            className="w-full rounded-xl"
             onClick={() => setMinutes(choice)}
-            {...analytics(`${choice} min`, 'pick_running_late_minutes')}
-            className={cx(
-              'h-14 rounded-xl border text-button transition-colors',
-              minutes === choice
-                ? 'border-text bg-text text-white'
-                : 'border-grey-02 bg-white text-text hover:bg-grey-01'
-            )}
+            {...pill(`${choice} min`, 'pick_running_late_minutes')}
           >
             {COPY.late.minutes(choice)}
-          </button>
+          </HubPillButton>
         ))}
       </div>
       <NoteField id={noteId} label={COPY.late.noteLabel(name)} value={note} onChange={setNote} />
@@ -345,31 +308,29 @@ function LateStep({
           {COPY.late.previewLabel(name)}
         </Text>
         <Text as="p" variant="metadata" color="grey-04">
-          {COPY.late.preview(viewerName || 'You', minutes, sent)}
+          {COPY.late.preview(viewerName, minutes, sent)}
         </Text>
       </div>
       {report.isError && <ErrorLine>{noticeFailureMessage(report.error, 'late')}</ErrorLine>}
-      <div className="flex-1" />
-      <div className="flex flex-col gap-1">
-        <button
-          type="button"
-          className={PRIMARY}
-          disabled={report.isPending}
-          onClick={() => report.mutate({ requestId, minutes, note: sent })}
-          {...analytics('Tell', 'confirm_running_late')}
+      <Actions>
+        <HubPillButton
+          size="large"
+          variant="primary"
+          className="w-full"
+          pending={report.isPending}
+          pendingLabel={COPY.late.sending}
+          onClick={() =>
+            report.mutate({ requestId, minutes, note: sent }, { onSuccess: result => onSent(result.expected_at) })
+          }
+          {...pill('Tell', 'confirm_running_late')}
         >
-          {report.isPending ? COPY.late.sending : COPY.late.send(name)}
-        </button>
-        <button
-          type="button"
-          className={QUIET}
-          onClick={onCant}
-          {...analytics('Cant make it at all', 'open_cant_make_it')}
-        >
+          {COPY.late.send(name)}
+        </HubPillButton>
+        <QuietButton onClick={onCant} {...analytics('Cant make it at all', 'open_cant_make_it')}>
           {COPY.late.cantInstead}
-        </button>
-      </div>
-    </div>
+        </QuietButton>
+      </Actions>
+    </>
   );
 }
 
@@ -378,64 +339,60 @@ function CantStep({
   name,
   onLate,
   onSuggest,
-  onDone,
+  onSent,
 }: {
   requestId: string;
   name: string;
   onLate: () => void;
   onSuggest: (note: string | undefined) => void;
-  onDone: () => void;
+  onSent: () => void;
 }) {
   const [note, setNote] = React.useState('');
   const cancel = useCantMakeIt();
   const noteId = React.useId();
 
-  if (cancel.isSuccess) return <Done message={COPY.cant.sent(name)} onDone={onDone} />;
-
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <h2 className="text-mediumTitle">{COPY.cant.title}</h2>
-        <Text as="p" color="grey-04">
-          {COPY.cant.lead(name)}
-        </Text>
-      </div>
+    <>
+      <Text as="p" color="grey-04">
+        {COPY.cant.lead(name)}
+      </Text>
       <NoteField id={noteId} label={COPY.cant.noteLabel(name)} value={note} onChange={setNote} />
       {cancel.isError && <ErrorLine>{noticeFailureMessage(cancel.error, 'cant')}</ErrorLine>}
-      <div className="flex-1" />
-      <div className="flex flex-col gap-2.5">
-        <button
-          type="button"
-          className={PRIMARY}
-          disabled={cancel.isPending}
-          onClick={() => cancel.mutate({ requestId, note: noticeNote(note) })}
-          {...analytics('Cancel the debate', 'confirm_cant_make_it')}
+      <Actions>
+        <HubPillButton
+          size="large"
+          variant="primary"
+          className="w-full"
+          pending={cancel.isPending}
+          pendingLabel={COPY.cant.confirming}
+          onClick={() => cancel.mutate({ requestId, note: noticeNote(note) }, { onSuccess: onSent })}
+          {...pill('Cancel the debate', 'confirm_cant_make_it')}
         >
-          {cancel.isPending ? COPY.cant.confirming : COPY.cant.confirm}
-        </button>
-        <button
-          type="button"
-          className={SECONDARY}
+          {COPY.cant.confirm}
+        </HubPillButton>
+        <HubPillButton
+          size="large"
+          className="w-full"
           disabled={cancel.isPending}
           onClick={() => onSuggest(noticeNote(note))}
-          {...analytics('Suggest another time', 'suggest_time_cant_make_it')}
+          {...pill('Suggest another time', 'suggest_time_cant_make_it')}
         >
           {COPY.cant.suggest}
-        </button>
+        </HubPillButton>
         <Text as="p" variant="footnote" color="grey-04" className="text-center">
           {COPY.cant.suggestHint(name)}
         </Text>
-        <button
-          type="button"
-          className={QUIET}
-          onClick={onLate}
-          {...analytics('Only running late', 'open_running_late')}
-        >
+        <QuietButton onClick={onLate} {...analytics('Only running late', 'open_running_late')}>
           {COPY.cant.lateInstead}
-        </button>
-      </div>
-    </div>
+        </QuietButton>
+      </Actions>
+    </>
   );
+}
+
+/** The step's buttons, at the bottom of the dialog, where a thumb reaches them on a phone. */
+function Actions({ children }: { children: React.ReactNode }) {
+  return <div className="mt-auto flex flex-col gap-2.5">{children}</div>;
 }
 
 /** Into the room, stepping out of a lobby first as every way into a debate does. */
@@ -443,12 +400,10 @@ function JoinRoom({
   roomId,
   onJoin,
   label,
-  children,
 }: {
   roomId: string;
   onJoin: () => void;
-  label: string;
-  children: React.ReactNode;
+  label: 'Join now' | 'Join the room';
 }) {
   const router = useRouter();
   const path = debateRoomPath(roomId);
@@ -459,11 +414,22 @@ function JoinRoom({
         debateEntryClick(() => router.push(path))(event);
         onJoin();
       }}
-      className={PRIMARY}
+      className={hubPillClassName('primary', 'w-full', 'large')}
       {...analytics(label, 'join_scheduled_debate')}
     >
-      {children}
+      {label === 'Join now' ? COPY.decide.join : COPY.late.join}
     </Link>
+  );
+}
+
+/** The step's way sideways: to the other choice, or to the calendar. */
+function QuietButton(props: React.ComponentProps<'button'>) {
+  return (
+    <button
+      type="button"
+      className="self-center px-3 py-2 text-metadata text-text underline underline-offset-2 hover:opacity-70"
+      {...props}
+    />
   );
 }
 
@@ -491,30 +457,6 @@ function NoteField({
         onChange={event => onChange(event.target.value)}
         className="w-full resize-none rounded-lg border border-grey-02 p-3 text-body focus:border-text focus:outline-hidden"
       />
-    </div>
-  );
-}
-
-function Done({ message, onDone, children }: { message: string; onDone: () => void; children?: React.ReactNode }) {
-  return (
-    <div role="status" className="flex flex-1 flex-col gap-6">
-      <h2 className="text-mediumTitle">{message}</h2>
-      <div className="flex-1" />
-      <div className="flex flex-col gap-2.5">
-        {children}
-        <button type="button" className={children ? SECONDARY : PRIMARY} onClick={onDone}>
-          {COPY.done}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Status({ children, busy = false }: { children: React.ReactNode; busy?: boolean }) {
-  return (
-    <div role="status" className="flex items-center gap-3">
-      {busy && <Spinner />}
-      <Text color="grey-04">{children}</Text>
     </div>
   );
 }

@@ -25,8 +25,9 @@ export type DebateRoomPresence = {
   /** State 3 alone: opens the mic and enables Request debate. */
   opponentPresent: boolean;
   /**
-   * What they said about being late (GEO-3427), while they have not arrived. geo-chat holds the
-   * no-show grace open until a little after `expectedAt`, so this and `no_show` do not overlap.
+   * What they said about being late (GEO-3427), while it is still the news: only in the waiting
+   * states. Once the room calls it a no-show (their estimate and its grace ran out), or they came and
+   * went, the room's own note for that state says more than a stale estimate.
    */
   opponentLate?: { minutes: number | null; expectedAt: string; note: string | null } | null;
 };
@@ -85,21 +86,31 @@ export function debateRoomPresence({
   const { opponentUserId, opponentPresent } = debateRoomOpponent(room, currentUserId);
   if (!opponentUserId) return null;
 
+  const state = presenceState(room, opponentPresent, sawOpponent);
+  const stillWaiting = state === 'waiting' || state === 'waiting_elsewhere' || state === 'arrived_early';
   return {
-    state: presenceState(room, opponentPresent, sawOpponent),
+    state,
     opponentUserId,
     opponentPresent,
-    opponentLate: opponentPresent ? null : lateNotice(room, opponentUserId),
+    opponentLate: stillWaiting ? lateNotice(room, opponentUserId) : null,
   };
+}
+
+/** One participant's notice of one kind (GEO-3427), or `null`. */
+export function noticeFrom(
+  notices: DebateRoomNotice[] | undefined,
+  userId: string | null,
+  kind: DebateRoomNotice['kind']
+): DebateRoomNotice | null {
+  if (!userId) return null;
+  return (notices ?? []).find(notice => notice.kind === kind && sameId(notice.user_id, userId)) ?? null;
 }
 
 function lateNotice(
   room: DebateRoomView,
   opponentUserId: string
 ): NonNullable<DebateRoomPresence['opponentLate']> | null {
-  const notice = (room.notices ?? []).find(
-    (entry: DebateRoomNotice) => entry.kind === 'running_late' && sameId(entry.user_id, opponentUserId)
-  );
+  const notice = noticeFrom(room.notices, opponentUserId, 'running_late');
   if (!notice?.expected_at) return null;
   // The minutes they picked, which the notice carries as times: `expected_at` is exactly that many
   // past the later of when they said it and the start.

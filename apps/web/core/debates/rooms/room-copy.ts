@@ -105,3 +105,68 @@ export const ROOM_NO_ACCESS = {
   denied: 'That debate isn’t yours to join.',
   ended: 'That debate has already finished.',
 } as const;
+
+/**
+ * The Running late and Can't make it dialog (GEO-3427, boards 1b, 2 and 3), from an email, the
+ * calendar invite, or the reschedule link once the room is open.
+ */
+export const SCHEDULED_NOTICE_COPY = {
+  title: { decide: 'Your debate', late: 'Running late', cant: 'Can’t make it' },
+  decide: {
+    /** Board 2's heading: where the debate stands now, from the same minutes the join prompt counts. */
+    heading: (name: string, offset: { in: number } | { ago: number } | 'now' | null) => {
+      if (offset === null) return `Your debate with ${name}`;
+      if (offset === 'now') return `Your debate with ${name} is starting now`;
+      if ('in' in offset)
+        return `Your debate with ${name} starts in ${offset.in} ${offset.in === 1 ? 'minute' : 'minutes'}`;
+      return `Your debate with ${name} started ${offset.ago} ${offset.ago === 1 ? 'minute' : 'minutes'} ago`;
+    },
+    waiting: (name: string) => `${name} is in the room, waiting for you`,
+    join: 'Join now',
+    late: 'I’m running late',
+    cant: 'I can’t make it',
+    explainer: (name: string) =>
+      `Running late and Can’t make it tell ${name} in the room and by email. After Can’t make it you can suggest another time.`,
+    reschedule: 'Reschedule instead',
+  },
+  late: {
+    title: 'How late will you be?',
+    lead: (name: string) => `We’ll tell ${name} now, in the room and by email.`,
+    minutes: (minutes: number) => `${minutes} min`,
+    noteLabel: (name: string) => `Add a note for ${name} (optional)`,
+    previewLabel: (name: string) => `What ${name} sees`,
+    /** In the other debater's words; "You're" when the viewer's own name has not loaded. */
+    preview: (viewer: string | null, minutes: number, note: string | undefined) =>
+      `“${viewer ? `${viewer} is` : 'You’re'} running about ${minutes} minutes late.${note ? ` ${note}` : ''}”`,
+    send: (name: string) => `Tell ${name}`,
+    sending: 'Sending…',
+    cantInstead: 'I can’t make it at all',
+    sent: (name: string, expected: string) => `We’ve told ${name} you’ll be there by about ${expected}.`,
+    join: 'Join the room',
+  },
+  cant: {
+    title: 'Can’t make it?',
+    lead: (name: string) => `We’ll cancel your debate with ${name} and let them know, in the room and by email.`,
+    noteLabel: (name: string) => `Add a note for ${name} (optional)`,
+    confirm: 'Cancel the debate',
+    confirming: 'Cancelling…',
+    suggest: 'Suggest another time instead',
+    suggestHint: (name: string) => `${name} is asked to accept the new time. The old one is cancelled straight away.`,
+    lateInstead: 'I’m only running late',
+    sent: (name: string) => `Your debate is cancelled. We’ve let ${name} know.`,
+  },
+  done: 'Done',
+  signIn: {
+    late: 'Sign in to tell the other debater you’re running late.',
+    cant: 'Sign in to tell the other debater you can’t make it.',
+    action: 'Sign in',
+  },
+  loading: 'Loading your debate…',
+  state: {
+    moved: 'This debate has moved to a new time. You’ll find it under Requests.',
+    over: 'This debate is no longer on.',
+    missing: 'We couldn’t find this debate. It may have been for another account.',
+    error: 'Couldn’t load your debate. Try again in a moment.',
+    requests: 'Open Requests',
+  },
+} as const;

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -13,7 +13,7 @@ const state = vi.hoisted(() => ({
   search: '',
   auth: { ready: true, authenticated: true },
   signIn: vi.fn(),
-  signInOptions: undefined as { redirectTo?: string } | undefined,
+  signInOptions: undefined as { redirectTo?: string; onError?: () => void } | undefined,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -22,7 +22,7 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('~/core/debates/hooks', () => ({ useGeoChatAuth: () => state.auth }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: (_onComplete: unknown, options: { redirectTo?: string }) => {
+  usePrivySignIn: (_onComplete: unknown, options: { redirectTo?: string; onError?: () => void }) => {
     state.signInOptions = options;
     return state.signIn;
   },
@@ -87,6 +87,17 @@ describe('ScheduledDebateNoticeDeepLink', () => {
     expect(state.signInOptions?.redirectTo).toBe(`/explore?modal=cant-make-it&modalTarget=${REQUEST}`);
     // Out of Privy's way while it is up, so the login takes clicks.
     expect(screen.getByTestId('notice')).toHaveAttribute('data-open', 'false');
+  });
+
+  it('comes back with its own Sign in when the sign-in is dismissed, so the link still says what it was for', () => {
+    state.search = `modal=running-late&modalTarget=${REQUEST}`;
+    state.auth = { ready: true, authenticated: false };
+    render(<ScheduledDebateNoticeDeepLink />);
+
+    act(() => state.signInOptions?.onError?.());
+    expect(screen.getByTestId('notice')).toHaveAttribute('data-open', 'true');
+    expect(screen.getByText('Sign in to tell the other debater you’re running late.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 
   it('waits for Privy before deciding whether to ask', () => {

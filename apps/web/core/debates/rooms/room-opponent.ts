@@ -26,16 +26,27 @@ export function requestForRoom(requests: ScheduledDebateRequest[] | undefined, r
   return (requests ?? []).find(request => request.room_id && sameId(request.room_id, roomId));
 }
 
+/** A request by id, which a link writes dashed and the list spells dashless. */
+export function requestById(requests: ScheduledDebateRequest[] | undefined, requestId: string | null) {
+  if (!requestId) return undefined;
+  return (requests ?? []).find(request => sameId(request.request_id, requestId));
+}
+
+/** Who the viewer is debating in a scheduled request, named from the graph. `null` until both land. */
+export function useRequestOpponent(request: ScheduledDebateRequest | undefined): DebateParticipantSummary | null {
+  const viewerId = useCurrentGeoChatUserId();
+  const opponentUserId = opponentOf(request, viewerId);
+  const ids = React.useMemo(() => (opponentUserId ? [opponentUserId] : []), [opponentUserId]);
+  const summaries = useGeoChatUserSummaries(ids, opponentUserId !== null);
+
+  return summaries.find(person => opponentUserId !== null && sameId(person.user_id, opponentUserId)) ?? null;
+}
+
 /**
  * Who the viewer is debating in an upcoming room. A room carries no participants, so this reads
  * the request that booked it, then names them from the graph. `null` until both land.
  */
 export function useUpcomingRoomOpponent(room: UpcomingDebateRoom): DebateParticipantSummary | null {
   const requests = useScheduledDebates();
-  const viewerId = useCurrentGeoChatUserId();
-  const opponentUserId = opponentOf(requestForRoom(requests.data?.requests, room.room_id), viewerId);
-  const ids = React.useMemo(() => (opponentUserId ? [opponentUserId] : []), [opponentUserId]);
-  const summaries = useGeoChatUserSummaries(ids, opponentUserId !== null);
-
-  return summaries.find(person => opponentUserId !== null && sameId(person.user_id, opponentUserId)) ?? null;
+  return useRequestOpponent(requestForRoom(requests.data?.requests, room.room_id));
 }

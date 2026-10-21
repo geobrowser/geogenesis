@@ -10,8 +10,9 @@ import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { useDisagreementCount } from '~/core/debates/matchmaking/use-disagreement-count';
 import { useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
+import { requestById } from '~/core/debates/rooms/room-opponent';
 import { sameId } from '~/core/debates/rooms/room-presence';
-import { findRequest, noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
+import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
 import { useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -244,20 +245,34 @@ export function SharedAvailabilityModal({
 }
 
 /**
- * Whether the debate a reschedule link is about has its room open now: `null` while that is still
- * being read, so the week is not drawn and then swapped. `false` straight away for anything that is
- * not a reschedule, or for a viewer who is signed out, who sees the week's own sign-in first.
+ * Whether the debate a reschedule link is about had its room open when the link was opened: `null`
+ * while that is still being read, so the week is not drawn and then swapped. `false` straight away
+ * for anything that is not a reschedule, or for a viewer who is signed out, who sees the week's own
+ * sign-in first.
+ *
+ * Settled once per arrival. The reads keep polling, and following them would tear the week out
+ * from under someone picking a slot as the room opens, or put the week back over a "cancelled"
+ * confirmation once the cancel lands.
  */
 function useRoomOpenFor(requestId: string | null): boolean | null {
   const requests = useScheduledDebates(requestId !== null);
   const rooms = useUpcomingDebateRooms(requestId !== null);
-  if (requestId === null) return false;
-  // A failed read is no reason to withhold the week the link has always opened.
-  if (requests.isError || rooms.isError) return false;
-  if (requests.isPending || rooms.isPending) return null;
+  const [settled, setSettled] = React.useState<boolean | null>(null);
 
-  const request = findRequest(requests.data.requests, requestId);
-  if (noticeRequestState(request) !== 'active' || !request?.room_id) return false;
-  const roomId = request.room_id;
-  return rooms.data.rooms.some(room => sameId(room.room_id, roomId) && room.joinable);
+  const live = (() => {
+    if (requestId === null) return false;
+    // A failed read is no reason to withhold the week the link has always opened.
+    if (requests.isError || rooms.isError) return false;
+    if (requests.isPending || rooms.isPending) return null;
+    const request = requestById(requests.data.requests, requestId);
+    if (noticeRequestState(request) !== 'active' || !request?.room_id) return false;
+    const roomId = request.room_id;
+    return rooms.data.rooms.some(room => sameId(room.room_id, roomId) && room.joinable);
+  })();
+
+  React.useEffect(() => {
+    if (live !== null) setSettled(current => current ?? live);
+  }, [live]);
+
+  return settled ?? live;
 }

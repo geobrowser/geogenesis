@@ -280,8 +280,9 @@ export function useCantMakeIt() {
 }
 
 /**
- * Running late (GEO-3427). The room view carries the notice the other debater reads, and the request
- * list does not change, so only the room reads are refreshed.
+ * Running late (GEO-3427). The notice lives on the room view, which the other debater's page polls;
+ * the requests list does not change. Only the viewer's own room reads are refreshed, for a second tab
+ * of theirs with the room open.
  */
 export function useReportRunningLate() {
   const getContext = useActionContext('scheduled_debate_notice', 'entity', '');
@@ -292,8 +293,7 @@ export function useReportRunningLate() {
     mutationFn: ({ requestId, minutes, note }: { requestId: string; minutes: RunningLateMinutes; note?: string }) =>
       reportRunningLate(requestId, { minutes, ...(note ? { note } : {}) }, getPrivyIdentityToken, accountKey),
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.roomRoot(accountKey) });
     },
   });
   return useObservedMutation(mutation, 'running_late', ({ requestId }) =>

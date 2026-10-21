@@ -8,7 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { toSignIn } from '~/core/auth/sign-in-deep-link';
 import { GeoChatRequestError } from '~/core/debates/api';
-import type { DebateRoomNotice, DebateRoomView } from '~/core/debates/api';
+import type { DebateRoomView } from '~/core/debates/api';
 import { toDebatesPanel } from '~/core/debates/debates-panel-deep-link';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
@@ -30,7 +30,7 @@ import {
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 import { ROOM_CANT_MAKE_IT, ROOM_NOT_YET_OPEN, ROOM_NO_ACCESS } from '~/core/debates/rooms/room-copy';
 import { opponentName } from '~/core/debates/rooms/room-opponent';
-import { sameId } from '~/core/debates/rooms/room-presence';
+import { noticeFrom, sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { NavUtils } from '~/core/utils/utils';
@@ -105,7 +105,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   // valid, they are just not in this one.
   if (denial) return null;
 
-  if (withdrawal && room) return <RoomWithdrawn {...withdrawal} access={room.access} />;
+  if (withdrawal) return <RoomWithdrawn {...withdrawal} />;
 
   // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest, signed out too.
   // A lobby link opens for everyone, including a brand-new account (GEO-3270).
@@ -168,43 +168,35 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
 }
 
 /**
- * Why this room closed, when a debater said they can't make it: the `cancelled` or `rescheduled`
- * close their Can't make it caused, and the notices that say so. `null` for every other room.
+ * Why this room closed, when a debater said they can't make it (GEO-3427): the `cancelled` or
+ * `rescheduled` close their Can't make it caused. `null` for every other room.
  */
 function withdrawalOf(room: DebateRoomView | null) {
   if (room?.access.status !== 'closed') return null;
   const { reason } = room.access;
   if (reason !== 'cancelled' && reason !== 'rescheduled') return null;
-  const notices = (room.notices ?? []).filter(notice => notice.kind === 'cant_make_it');
-  return notices.length > 0 ? { reason, notices } : null;
+  return (room.notices ?? []).some(notice => notice.kind === 'cant_make_it') ? { reason, room } : null;
 }
 
 /** What the person left in the room is told, naming the one who withdrew and what they wrote. */
-function RoomWithdrawn({
-  reason,
-  notices,
-  access,
-}: {
-  reason: 'cancelled' | 'rescheduled';
-  notices: DebateRoomNotice[];
-  access: DebateRoomView['access'];
-}) {
+function RoomWithdrawn({ reason, room }: { reason: 'cancelled' | 'rescheduled'; room: DebateRoomView }) {
   const router = useRouter();
   const viewerId = useCurrentGeoChatUserId();
+  const otherId = viewerId ? (room.participants.find(userId => !sameId(userId, viewerId)) ?? null) : null;
   // The other debater's. Someone reading the room they called off themselves, from a second tab
   // say, gets the ordinary closed-room page.
-  const notice = (viewerId && notices.find(entry => !sameId(entry.user_id, viewerId))) || null;
+  const notice = noticeFrom(room.notices, otherId, 'cant_make_it');
   const ids = React.useMemo(() => (notice ? [notice.user_id] : []), [notice]);
   const person = useGeoChatUserSummaries(ids, notice !== null)[0] ?? null;
   const own = viewerId !== null && notice === null;
 
   React.useEffect(() => {
     if (!own) return;
-    const denial = roomAccessDenialFor(access);
+    const denial = roomAccessDenialFor(room.access);
     if (denial) router.replace(toRoomAccess(denial));
-  }, [access, own, router]);
+  }, [room.access, own, router]);
 
-  if (!notice) return null;
+  if (!notice) return own ? null : <RoomNotice busy>Opening your debate room…</RoomNotice>;
   const name = opponentName(person);
   const rescheduled = reason === 'rescheduled';
   return (

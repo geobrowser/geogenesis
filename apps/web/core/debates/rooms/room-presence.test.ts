@@ -155,6 +155,21 @@ describe('debateRoomPresence: running late (GEO-3427)', () => {
     ).toBeNull();
   });
 
+  // Past their estimate and its grace the room calls it a no-show, and its own note says more.
+  it('steps aside once the room calls it a no-show', () => {
+    expect(lateOf({ notices: [late()], waiting: { reason: 'no_show' } })).toBeNull();
+  });
+
+  it('steps aside once they came and went', () => {
+    const presence = debateRoomPresence({
+      room: room({ notices: [late()] }),
+      currentUserId: VIEWER_AS_TOKEN_SPELLS_IT,
+      sawOpponent: true,
+    });
+    expect(presence?.state).toBe('left');
+    expect(presence?.opponentLate).toBeNull();
+  });
+
   it('is absent on a geo-chat that sends no notices', () => {
     expect(lateOf({})).toBeNull();
   });

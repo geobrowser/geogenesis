@@ -1,17 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { requestIdFromTarget } from '~/core/availability/availability-deep-link';
+
 import { GeoChatRequestError, type ScheduledDebateRequest } from '../api';
-import {
-  NOTICE_NOTE_MAX,
-  debateTimingHeading,
-  findRequest,
-  noticeFailureMessage,
-  noticeNote,
-  noticeRequestIdFromTarget,
-  noticeRequestState,
-  toCantMakeIt,
-  toRunningLate,
-} from './scheduled-notice';
+import { SCHEDULED_NOTICE_COPY } from './room-copy';
+import { requestById } from './room-opponent';
+import { startOffset } from './room-time';
+import { NOTICE_NOTE_MAX, noticeNote, noticeRequestState, toCantMakeIt, toRunningLate } from './scheduled-notice';
+import { noticeFailureMessage } from './scheduling-refusals';
 
 const DASHED = '6676b145-0970-4c1c-bfbc-7497d9721b39';
 
@@ -40,10 +36,10 @@ describe('the links geo-chat puts in emails', () => {
   });
 
   it('takes a request id dashed or not, and nothing else', () => {
-    expect(noticeRequestIdFromTarget(DASHED)).toBe(DASHED);
-    expect(noticeRequestIdFromTarget(DASHED.replace(/-/g, ''))).toBe(DASHED.replace(/-/g, ''));
-    expect(noticeRequestIdFromTarget('requests')).toBeNull();
-    expect(noticeRequestIdFromTarget(null)).toBeNull();
+    expect(requestIdFromTarget(DASHED)).toBe(DASHED);
+    expect(requestIdFromTarget(DASHED.replace(/-/g, ''))).toBe(DASHED.replace(/-/g, ''));
+    expect(requestIdFromTarget('requests')).toBeNull();
+    expect(requestIdFromTarget(null)).toBeNull();
   });
 });
 
@@ -68,26 +64,21 @@ describe('noticeRequestState', () => {
   });
 
   it('finds the request a dashed link names in a dashless list', () => {
-    expect(findRequest([request()], DASHED)?.request_id).toBe(DASHED.replace(/-/g, ''));
-    expect(findRequest([request()], null)).toBeUndefined();
+    expect(requestById([request()], DASHED)?.request_id).toBe(DASHED.replace(/-/g, ''));
+    expect(requestById([request()], null)).toBeUndefined();
   });
 });
 
-describe('debateTimingHeading', () => {
-  const start = '2026-10-21T17:00:00.000Z';
+describe('the decide heading', () => {
+  const heading = (untilStartMs: number) => SCHEDULED_NOTICE_COPY.decide.heading('Maya', startOffset(untilStartMs));
+
+  // The same minutes the join prompt counts, so the two never disagree about one moment.
   it('says how long ago it started, or how soon it starts', () => {
-    expect(debateTimingHeading('Maya', start, new Date('2026-10-21T17:03:00.000Z'))).toBe(
-      'Your debate with Maya started 3 minutes ago'
-    );
-    expect(debateTimingHeading('Maya', start, new Date('2026-10-21T17:01:00.000Z'))).toBe(
-      'Your debate with Maya started 1 minute ago'
-    );
-    expect(debateTimingHeading('Maya', start, new Date('2026-10-21T16:55:00.000Z'))).toBe(
-      'Your debate with Maya starts in 5 minutes'
-    );
-    expect(debateTimingHeading('Maya', start, new Date('2026-10-21T17:00:10.000Z'))).toBe(
-      'Your debate with Maya is starting now'
-    );
+    expect(heading(-3 * 60_000)).toBe('Your debate with Maya started 3 minutes ago');
+    expect(heading(-60_000)).toBe('Your debate with Maya started 1 minute ago');
+    expect(heading(5 * 60_000)).toBe('Your debate with Maya starts in 5 minutes');
+    expect(heading(-10_000)).toBe('Your debate with Maya is starting now');
+    expect(heading(Number.NaN)).toBe('Your debate with Maya');
   });
 });
 
@@ -97,7 +88,11 @@ describe('noticeFailureMessage', () => {
   it('says geo-chat’s refusals plainly', () => {
     expect(noticeFailureMessage(refusal('already_joined'), 'late')).toMatch(/already in the room/);
     expect(noticeFailureMessage(refusal('request_not_active'), 'late')).toBe('This debate is no longer on.');
-    expect(noticeFailureMessage(refusal('request_not_cancellable'), 'cant')).toBe('This debate is no longer on.');
+    expect(noticeFailureMessage(refusal('running_late_limit'), 'late')).toMatch(/three times/);
+    // Can't make it is a cancel, so it says what the Requests tab's Cancel says.
+    expect(noticeFailureMessage(refusal('request_not_cancellable'), 'cant')).toBe(
+      'This has already been answered, cancelled or expired.'
+    );
     expect(noticeFailureMessage(refusal('debate_already_started'), 'cant')).toMatch(/already started/);
   });
 

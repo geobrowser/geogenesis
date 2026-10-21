@@ -170,6 +170,8 @@ export const debateQueryKeys = {
     ['debates', 'account', accountKey, 'peer-schedule', peerUserId, days] as const,
   /** Viewer-specific: presence is answered from the viewer's own side of the access list. */
   room: (accountKey: string | null, roomId: string) => ['debates', 'account', accountKey, 'room', roomId] as const,
+  /** Every room view this account has read, to invalidate them together. */
+  roomRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'room'] as const,
   upcomingRooms: (accountKey: string | null) => ['debates', 'account', accountKey, 'upcoming-rooms'] as const,
   /** GEO-3133. Patched or refetched on `debate.lobbies_changed`. */
   lobbies: (accountKey: string | null) => ['debates', 'account', accountKey, 'lobbies'] as const,

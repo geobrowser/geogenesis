@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation';
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import {
   type DebateParticipantSummary,
-  GeoChatRequestError,
   type ScheduledDebateRequest,
   type UpcomingDebateRoom,
 } from '~/core/debates/api';
@@ -23,12 +22,14 @@ import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
+import { formatClockTime } from '~/core/debates/rooms/room-time';
 import { useOpenScheduledRequests } from '~/core/debates/rooms/scheduled-awaiting';
 import {
   useCancelScheduledDebate,
   useRespondToScheduledDebate,
   useScheduledDebates,
 } from '~/core/debates/rooms/scheduling-hooks';
+import { cancelFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { normId } from '~/core/utils/norm-id';
 
@@ -332,7 +333,7 @@ function UpcomingRow({
       parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={
         room.due
-          ? `Starting now${scheduledEndAt ? ` · Ends at ${formatTime(scheduledEndAt)}` : ''}`
+          ? `Starting now${scheduledEndAt ? ` · Ends at ${formatClockTime(scheduledEndAt)}` : ''}`
           : scheduledEndAt
             ? formatDebateSlot(room.starts_at, scheduledEndAt)
             : formatDebateTime(room.starts_at)
@@ -342,7 +343,7 @@ function UpcomingRow({
           ? `${opponentName(opponent)} is waiting for you now`
           : room.joinable
             ? 'The room is open'
-            : `Opens at ${formatTime(room.opens_at)}`
+            : `Opens at ${formatClockTime(room.opens_at)}`
       }
       urgent={room.others_present}
       actions={
@@ -605,17 +606,6 @@ function CancelScheduled({
   );
 }
 
-/** geo-chat's two refusals, said plainly; anything else keeps its own message. */
-export function cancelFailureMessage(error: unknown) {
-  if (error instanceof GeoChatRequestError) {
-    if (error.code === 'debate_already_started') {
-      return 'This debate has already started, so it can no longer be cancelled.';
-    }
-    if (error.code === 'request_not_cancellable') return 'This has already been answered, cancelled or expired.';
-  }
-  return error instanceof Error ? error.message : 'Could not cancel. Try again.';
-}
-
 /**
  * When an unanswered request lapses: at its start. Counted down in the final hour, where the
  * instant cards' "Expires in 12m" reads naturally; before that, a minute count days long would not.
@@ -724,7 +714,7 @@ function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
     <ScheduleCard
       testId="upcoming-lobby-card"
       when={Date.parse(row.startsAt) <= now ? 'Starting now' : formatDebateTime(row.startsAt)}
-      status={row.open ? 'The lobby is open' : `Opens at ${formatTime(row.opensAt)}`}
+      status={row.open ? 'The lobby is open' : `Opens at ${formatClockTime(row.opensAt)}`}
       parties={
         <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-grey-01 px-3 py-2.5">
           <Text as="span" variant="footnoteMedium" color="grey-04">
@@ -784,7 +774,7 @@ export function formatDebateTime(iso: string, now = new Date()) {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return iso;
 
-  return `${formatDay(at, now)} at ${formatTime(iso)}`;
+  return `${formatDay(at, now)} at ${formatClockTime(iso)}`;
 }
 
 function formatDay(at: Date, now: Date) {
@@ -803,8 +793,8 @@ export function formatDebateSlot(startIso: string, endIso: string, now = new Dat
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
     return formatDebateTime(startIso, now);
   }
-  const from = formatTime(startIso);
-  const to = formatTime(endIso);
+  const from = formatClockTime(startIso);
+  const to = formatClockTime(endIso);
   // `11:00 – 11:30 AM` rather than `11:00 AM – 11:30 AM`, when both ends share the period.
   const period = /\s?([AP]M)$/i;
   const fromPeriod = from.match(period)?.[1];
@@ -814,9 +804,4 @@ export function formatDebateSlot(startIso: string, endIso: string, now = new Dat
 
 function startOfDay(at: Date) {
   return new Date(at.getFullYear(), at.getMonth(), at.getDate());
-}
-
-function formatTime(iso: string) {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? iso : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }

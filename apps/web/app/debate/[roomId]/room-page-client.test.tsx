@@ -71,7 +71,7 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
       starts_at: '2026-09-24T13:00:00.000Z',
       opens_at: '2026-09-24T12:50:00.000Z',
       scheduled_end_at: null,
-      participants: [],
+      participants: ['jordan', 'maya'],
       occupants: [],
       waiting: null,
       rematch_session_id: 'session-1',
@@ -312,6 +312,16 @@ describe('DebateRoomPageClient: the other debater can’t make it', () => {
       'href',
       expect.stringContaining('modalTarget=requests')
     );
+  });
+
+  it('says it is opening, not a blank page, until it knows who the viewer is', () => {
+    mocks.access = { status: 'closed', reason: 'cancelled' } as typeof mocks.access;
+    mocks.notices = [cantMakeIt('maya')];
+    mocks.viewerId = null;
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Opening your debate room…');
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 
   it('sends whoever said it to the ordinary closed page', () => {

@@ -2,13 +2,14 @@
 
 import * as React from 'react';
 
+import { requestIdFromTarget } from '~/core/availability/availability-deep-link';
 import { useGeoChatAuth } from '~/core/debates/hooks';
-import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+import { debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
+import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
+import { SCHEDULED_NOTICE_COPY as COPY } from '~/core/debates/rooms/room-copy';
 import {
   CANT_MAKE_IT_MODAL,
-  SCHEDULED_NOTICE_COPY as COPY,
   RUNNING_LATE_MODAL,
-  noticeRequestIdFromTarget,
   toCantMakeIt,
   toRunningLate,
 } from '~/core/debates/rooms/scheduled-notice';
@@ -35,7 +36,7 @@ export function ScheduledDebateNoticeDeepLink() {
   const [arrival, setArrival] = React.useState<Arrival | null>(null);
 
   const arrive = (target: string | null, step: Arrival['step']) => {
-    const requestId = noticeRequestIdFromTarget(target);
+    const requestId = requestIdFromTarget(target);
     // A garbled link opens nothing rather than a dialog about no debate.
     if (requestId) setArrival({ requestId, step });
   };
@@ -93,14 +94,16 @@ function SignedInNotice({ arrival, onClose }: { arrival: Arrival; onClose: () =>
       {ready && !authenticated ? (
         <div className="flex flex-col gap-5">
           <Text as="p">{arrival.step === 'late' ? COPY.signIn.late : COPY.signIn.cant}</Text>
-          <button
-            type="button"
+          <HubPillButton
+            size="large"
+            variant="primary"
+            className="w-full"
             onClick={start}
-            {...debateActionAnalyticsAttributes('scheduled-notice', 'Sign in', 'sign_in_for_scheduled_notice')}
-            className="flex h-12 w-full items-center justify-center rounded-full bg-text px-5 text-button text-white transition-opacity hover:opacity-90"
+            analyticsLabel={debateAnalyticsLabel('scheduled-notice', 'Sign in')}
+            analyticsIntent="sign_in_for_scheduled_notice"
           >
             {COPY.signIn.action}
-          </button>
+          </HubPillButton>
         </div>
       ) : undefined}
     </ScheduledDebateNoticeDialog>

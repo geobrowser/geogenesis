@@ -407,6 +407,29 @@ describe('AvailabilityDeepLink', () => {
       expect(screen.getByTestId('booking-modal')).toHaveAttribute('data-reschedule', requestId);
     });
 
+    // Settled once per arrival: the reads keep polling, and following them would swap one dialog for
+    // the other under someone mid-choice.
+    it('keeps the week up when the room opens while it is being read', () => {
+      roomsQuery = { data: { rooms: [{ ...openRoom, joinable: false }] }, isPending: false, isError: false };
+      const { rerender } = render(<AvailabilityDeepLink />);
+      expect(screen.getByTestId('booking-modal')).toBeInTheDocument();
+
+      roomsQuery = { data: { rooms: [openRoom] }, isPending: false, isError: false };
+      rerender(<AvailabilityDeepLink />);
+      expect(screen.getByTestId('booking-modal')).toBeInTheDocument();
+      expect(screen.queryByTestId('scheduled-notice')).not.toBeInTheDocument();
+    });
+
+    it('keeps the choices up once the debate is cancelled from them', () => {
+      const { rerender } = render(<AvailabilityDeepLink />);
+      expect(screen.getByTestId('scheduled-notice')).toBeInTheDocument();
+
+      scheduledQuery = { data: { requests: [{ ...agreed, status: 'cancelled' }] }, isPending: false, isError: false };
+      rerender(<AvailabilityDeepLink />);
+      expect(screen.getByTestId('scheduled-notice')).toBeInTheDocument();
+      expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
+    });
+
     it('opens the week when the debate cannot be read, rather than nothing', () => {
       roomsQuery = { isPending: false, isError: true };
       render(<AvailabilityDeepLink />);
