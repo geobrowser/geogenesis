@@ -6722,6 +6722,11 @@ describe('desktop filter row', () => {
     expect(pill(/^Crypto/)).toHaveAttribute('aria-pressed', 'true');
     expect(pill(/^Governance space/)).toBeNull();
     expect(pill(/^Governance\s?\d/)).toBeNull();
+
+    // The picked pill stays in the row, so un-picking it is the way back, not only "All".
+    fireEvent.click(pill(/^Crypto/)!);
+    await waitFor(() => expect(pill(/^Governance space/)).toBeInTheDocument());
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
   });
 
   it('leaves out a topic every listed claim carries, since it cannot narrow anything', async () => {

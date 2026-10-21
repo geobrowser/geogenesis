@@ -2556,10 +2556,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         ? visibleSections.some(section => section.claims.some(hasRequestTarget))
         : visibleClaims.some(hasRequestTarget)));
 
-  /**
-   * GEO-3223. A desktop draws the space and topic filters as pill rows; a phone keeps the menus, as
-   * the calendar does, because two rows of pills would push the first claim off a phone's screen.
-   */
   const setTopicPicked = (topicId: string) => setTopicIds(current => toggleId(current, topicId));
 
   /**
@@ -2876,7 +2872,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               with no header. */}
           {/* One stack, so the publishing row sits the header's own 12px under the pair and its
               notices, and takes no space at all when there is nothing to draw. */}
-          <div className={'mb-4 flex flex-col gap-3 max-[767px]:mb-1'}>
+          <div className="mb-4 flex flex-col gap-3 max-[767px]:mb-1">
             {session && currentUserId ? (
               <RematchVoiceHeader
                 session={session}
