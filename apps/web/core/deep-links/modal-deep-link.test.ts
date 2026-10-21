@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEEP_LINK_MODALS, modalTarget, modalVia, requestsModal, toModal, urlWithoutModal } from './modal-deep-link';
+import {
+  DEEP_LINK_MODALS,
+  modalTarget,
+  modalVia,
+  requestsModal,
+  toModal,
+  urlWithoutModal,
+  urlWithoutParams,
+} from './modal-deep-link';
 
 const params = (search: string) => new URLSearchParams(search);
 
@@ -62,6 +70,15 @@ describe('modalVia', () => {
   // The whole reason attribution is not `source`: that key is the block link's trigger.
   it('does not read `source`, which belongs to the block link', () => {
     expect(modalVia(params('modal=signin&source=copy_link'))).toBeNull();
+  });
+});
+
+describe('urlWithoutParams', () => {
+  it('clears only the keys it is given, keeping other params and the fragment', () => {
+    expect(urlWithoutParams('/space/s/c', params('side=agree&ref_email=welcome&tab=x'), ['side'], '#comments')).toBe(
+      '/space/s/c?ref_email=welcome&tab=x#comments'
+    );
+    expect(urlWithoutParams('/space/s/c', params('side=agree'), ['side'])).toBe('/space/s/c');
   });
 });
 

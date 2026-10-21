@@ -95,6 +95,8 @@ const mocks = vi.hoisted(() => ({
   isResponseSubmitting: false,
   /** Props the position pills received. */
   positionControl: null as Record<string, unknown> | null,
+  emailVote: null as { kind: 'cast' | 'kept'; position: boolean } | null,
+  viewerPosition: null as boolean | null,
   /**
    * Deliberately not 3.
    *
@@ -227,7 +229,7 @@ vi.mock('./use-claim-response-state', () => ({
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   useClaimPositionControl: () => ({
     optimisticPositions: [],
-    viewerPosition: null,
+    viewerPosition: mocks.viewerPosition,
     respond: () => {},
     canRespond: false,
     actionTitle: () => undefined,
@@ -243,6 +245,7 @@ vi.mock('./claim-position-comment', () => ({
     return <div data-testid="position">{props.positionRowEndSlot as React.ReactNode}</div>;
   },
 }));
+vi.mock('./use-email-vote-link', () => ({ useEmailVoteLink: () => mocks.emailVote }));
 vi.mock('./claim-comment-position', () => ({
   ClaimCommentPositionProvider: (props: Record<string, unknown>) => {
     mocks.commentPosition = props;
@@ -363,6 +366,8 @@ beforeEach(() => {
   mocks.commentPosition = null;
   mocks.isResponsePending = false;
   mocks.isResponseSubmitting = false;
+  mocks.emailVote = null;
+  mocks.viewerPosition = null;
   mocks.positionControl = null;
 });
 
@@ -721,6 +726,17 @@ describe('ClaimPageView position', () => {
   // The claim page is where a confirming response was pressed again and published a retraction.
   // The pills guard against that quietly: the side reads as taken at once, with no note or wait
   // cursor, and only the presses that would undo it are dropped until it lands.
+  it('puts what an email vote link did under the pill it answered (GEO-3374)', () => {
+    mocks.emailVote = { kind: 'cast', position: false };
+    mocks.viewerPosition = false;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const noteFor = mocks.positionControl?.noteFor as (position: boolean) => React.ReactNode;
+    const { container } = render(<>{noteFor(false)}</>);
+    expect(container).toHaveTextContent('Vote counted · Undo');
+    expect(render(<>{noteFor(true)}</>).container).toBeEmptyDOMElement();
+  });
+
   it('marks the pills pending until the response reaches the bundler, without announcing a wait', () => {
     mocks.isResponsePending = true;
     mocks.isResponseSubmitting = true;

@@ -7,7 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 
-import { readRefEmail } from '~/core/claims/browse/email-vote-link';
+import { arrivedFromEmail } from '~/core/deep-links/ref-email';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { isLikelyEmail } from '~/core/newsletter/subscribe-result';
@@ -23,10 +23,8 @@ import {
 } from '~/core/state/local-votes';
 import {
   type SaveVotesPromptReason,
-  arrivedFromEmail,
   closeSaveVotesPrompt,
   isSaveVotesPressReason,
-  markArrivedFromEmail,
   openSaveVotesPrompt,
   useSaveVotesPrompt,
   useSaveVotesPromptLobbyName,
@@ -100,12 +98,9 @@ export function SaveVotesSheet() {
   const codeEmail = codeStep?.email ?? null;
 
   // Landed from one of our emails: everyone they go to has an account, so this visit's asks are to
-  // log in (GEO-3374). Read once, on arrival, from the URL the visit started on.
-  const [logIn, setLogIn] = React.useState(false);
-  React.useEffect(() => {
-    if (readRefEmail(new URLSearchParams(window.location.search))) markArrivedFromEmail();
-    setLogIn(arrivedFromEmail());
-  }, []);
+  // log in (GEO-3374). Read at the first render, so the sign-up wording never paints first; the
+  // landing itself is noted by `SaveVotesGate`, which is mounted long before this sheet is.
+  const [logIn] = React.useState(() => arrivedFromEmail());
 
   // The return-visit ask: once per browser session, for a visitor who arrives with votes waiting.
   // A session in which they voted has already been marked, so this is never the visit they voted in.

@@ -6,15 +6,17 @@ import { usePathname, useSearchParams } from 'next/navigation';
 
 import { withActionContext } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
+import { urlWithoutParams } from '~/core/deep-links/modal-deep-link';
+import { useDeepLinkEffect } from '~/core/deep-links/use-deep-link';
 import { equals } from '~/core/id/normalize';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { openSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
+  EMAIL_VOTE_SIDE_PARAM,
   markEmailVoteLinkHandled,
   readEmailVoteLink,
-  urlWithoutEmailVote,
   wasEmailVoteLinkHandled,
 } from './email-vote-link';
 
@@ -60,6 +62,8 @@ export function useEmailVoteLink({
   // Only the claim the page is for. `ClaimPageView` also renders in the side panel, over a page whose
   // URL belongs to whatever is underneath it.
   const forThisClaim = link !== null && (pathname ?? '').split('/').some(segment => equals(segment, claimId));
+  // Kept through the clearing; see `useDeepLinkParams`.
+  const hash = typeof window === 'undefined' ? '' : window.location.hash;
 
   const { ready: authReady, authenticated } = usePrivy();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
@@ -72,39 +76,34 @@ export function useEmailVoteLink({
   const canDecide = canRespond && (signedOut || (authReady && answersReady && (isConnected || isAccountSetupPending)));
 
   const [outcome, setOutcome] = React.useState<EmailVoteOutcome | null>(null);
-  const handledRef = React.useRef(false);
-  const latest = React.useRef({ viewerPosition, respond, getContext, link, signedOut });
-  latest.current = { viewerPosition, respond, getContext, link, signedOut };
 
-  React.useEffect(() => {
-    if (!forThisClaim || handledRef.current || !canDecide) return;
-    handledRef.current = true;
-    const { viewerPosition, respond, getContext, link, signedOut } = latest.current;
-    if (!link) return;
-
-    // Cleared first, whatever happens next: left in the address bar it fires again on refresh.
-    window.history.replaceState(
-      null,
-      '',
-      urlWithoutEmailVote(window.location.pathname, new URLSearchParams(window.location.search), window.location.hash)
-    );
-
-    if (viewerPosition !== null) {
-      setOutcome({ kind: 'kept', position: viewerPosition });
+  // The shared one-shot protocol: held until the press would mean what it says, then the trigger is
+  // cleared — so a refresh fires nothing — and this runs once per arrival.
+  useDeepLinkEffect({
+    requested: forThisClaim,
+    cleanUrl: urlWithoutParams(pathname ?? '/', searchParams, [EMAIL_VOTE_SIDE_PARAM], hash),
+    enabled: canDecide,
+    run: () => {
+      if (!link) return;
+      if (viewerPosition !== null) {
+        setOutcome({ kind: 'kept', position: viewerPosition });
+        markEmailVoteLinkHandled(claimId, spaceId);
+        return;
+      }
+      // Opened before, and the vote it cast has since been taken back or hasn't indexed yet.
+      if (wasEmailVoteLinkHandled(claimId, spaceId)) return;
       markEmailVoteLinkHandled(claimId, spaceId);
-      return;
-    }
-    // Opened before, and the vote it cast has since been taken back or hasn't indexed yet.
-    if (wasEmailVoteLinkHandled(claimId, spaceId)) return;
-    markEmailVoteLinkHandled(claimId, spaceId);
 
-    // The email the vote came from rides on its analytics, published or kept on the device.
-    const context = getContext();
-    withActionContext(link.refEmail ? { ...context, ref_email: link.refEmail } : context, () => respond(link.position));
-    setOutcome({ kind: 'cast', position: link.position });
-    // The pill's own ask may already be open with sign-up wording; this reader has an account.
-    if (signedOut) openSaveVotesPrompt('email_link');
-  }, [canDecide, claimId, forThisClaim, spaceId]);
+      // The email the vote came from rides on its analytics, published or kept on the device.
+      const context = getContext();
+      withActionContext(link.refEmail ? { ...context, ref_email: link.refEmail } : context, () =>
+        respond(link.position)
+      );
+      setOutcome({ kind: 'cast', position: link.position });
+      // The pill's own ask may already be open with sign-up wording; this reader has an account.
+      if (signedOut) openSaveVotesPrompt('email_link');
+    },
+  });
 
   return outcome;
 }

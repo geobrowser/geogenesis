@@ -1,3 +1,6 @@
+import type { ReadableParams } from '~/core/deep-links/modal-deep-link';
+import { readRefEmail } from '~/core/deep-links/ref-email';
+
 /**
  * A claim link from one of our emails that carries the side the reader picked in the email
  * (GEO-3374):
@@ -11,10 +14,9 @@
  *
  * `side` is the trigger and is cleared once acted on, as every deep link's trigger is
  * (`modal-deep-link`). `ref_email` is attribution, which every link in our emails carries, and is
- * left in the URL for whatever else reads the landing.
+ * left in the URL for whatever else reads the landing (`ref-email`).
  */
 export const EMAIL_VOTE_SIDE_PARAM = 'side';
-export const REF_EMAIL_PARAM = 'ref_email';
 
 export type EmailVoteLink = {
   /** True for `agree`, false for `disagree`. */
@@ -23,33 +25,11 @@ export type EmailVoteLink = {
   refEmail: string | null;
 };
 
-type ReadableParams = Pick<URLSearchParams, 'get' | 'toString'> | null | undefined;
-
-/**
- * A slug, never free text. It ends up on analytics events, and the action context's allowlist exists
- * so that text and email addresses can't get there by way of a URL somebody pasted.
- */
-const REF_EMAIL_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
-
-export function readRefEmail(params: ReadableParams): string | null {
-  const value = params?.get(REF_EMAIL_PARAM)?.trim();
-  return value && REF_EMAIL_PATTERN.test(value) ? value : null;
-}
-
 /** The side a link asks for, or null when it asks for none (or one the page doesn't know). */
 export function readEmailVoteLink(params: ReadableParams): EmailVoteLink | null {
   const side = params?.get(EMAIL_VOTE_SIDE_PARAM)?.trim().toLowerCase();
   if (side !== 'agree' && side !== 'disagree') return null;
   return { position: side === 'agree', refEmail: readRefEmail(params) };
-}
-
-/** The same URL without the trigger, every other param and the fragment kept. */
-export function urlWithoutEmailVote(pathname: string, params: ReadableParams, hash = ''): string {
-  const next = new URLSearchParams(params?.toString() ?? '');
-  next.delete(EMAIL_VOTE_SIDE_PARAM);
-  const search = next.toString();
-  const fragment = !hash || hash === '#' ? '' : hash.startsWith('#') ? hash : `#${hash}`;
-  return `${pathname}${search ? `?${search}` : ''}${fragment}`;
 }
 
 /**

@@ -2,6 +2,7 @@
 
 import { responsePositionLabel } from '~/core/responses/entity-response';
 
+import { VoteNote } from './local-vote-note';
 import type { EmailVoteOutcome } from './use-email-vote-link';
 
 /**
@@ -25,27 +26,13 @@ export function EmailVoteNote({
   onUndo: () => void;
 }) {
   if (!outcome || outcome.position !== position || viewerPosition !== position) return null;
-  const side = responsePositionLabel(position);
-
-  if (outcome.kind === 'kept') {
-    return (
-      <p role="status" className="mt-1 text-center text-footnote text-grey-04">
-        You voted {side}
-      </p>
-    );
-  }
+  if (outcome.kind === 'kept') return <VoteNote announce>You voted {responsePositionLabel(position)}</VoteNote>;
   return (
-    <p role="status" className="mt-1 text-center text-footnote text-grey-04">
-      Vote counted ·{' '}
-      <button
-        type="button"
-        onClick={onUndo}
-        data-geo-analytics-label="email_vote_undo"
-        data-geo-analytics-intent="undo"
-        className="font-medium text-text underline underline-offset-2 hover:text-grey-04"
-      >
-        Undo
-      </button>
-    </p>
+    <VoteNote
+      announce
+      action={{ label: 'Undo', onPress: onUndo, analyticsLabel: 'email_vote_undo', analyticsIntent: 'undo' }}
+    >
+      Vote counted
+    </VoteNote>
   );
 }

@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import {
   saveVotesHeading,
   saveVotesNavLabel,
@@ -110,6 +111,32 @@ describe('copy', () => {
 });
 
 describe('SaveVotesSheet', () => {
+  it('asks a visitor who came from one of our emails to log in, not sign up (GEO-3374)', () => {
+    noteEmailArrival('?ref_email=welcome');
+    vote('a', 'Couples should keep separate finances');
+    markPromptedThisSession();
+    // Pages after the landing: the URL no longer carries `ref_email`, the session still knows.
+    window.history.replaceState(null, '', '/explore');
+    render(<SaveVotesSheet />);
+
+    act(() => openSaveVotesPrompt('email_link'));
+    const region = screen.getByRole('region', { name: 'Save your votes' });
+    expect(region).toHaveTextContent('Log in to save your vote');
+    expect(region).toHaveTextContent('Log in with your email and it counts toward the result.');
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
+    expect(mocks.impression).toHaveBeenCalledWith('email_link', 1);
+  });
+
+  it('keeps the sign-up wording for a visit that did not come from an email', () => {
+    vote('a');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+
+    act(() => openSaveVotesPrompt('single_claim'));
+    expect(screen.getByText('Save your vote')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Log in' })).not.toBeInTheDocument();
+  });
+
   it('stays closed until something asks for it', () => {
     vote('a');
     markPromptedThisSession();

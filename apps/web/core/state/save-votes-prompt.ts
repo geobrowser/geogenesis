@@ -120,29 +120,6 @@ export function savePromptReasonAfterVote({
   return null;
 }
 
-/**
- * Marks the browser session as one that started from one of our emails (GEO-3374). Every email goes
- * to people who already have an account, so for the rest of the visit the sheet asks them to log in
- * rather than to sign up.
- */
-const EMAIL_ARRIVAL_KEY = 'geo:arrived-from-email';
-
-export function markArrivedFromEmail() {
-  try {
-    window.sessionStorage.setItem(EMAIL_ARRIVAL_KEY, '1');
-  } catch {
-    // Storage blocked: the sheet falls back to its sign-up wording.
-  }
-}
-
-export function arrivedFromEmail() {
-  try {
-    return window.sessionStorage.getItem(EMAIL_ARRIVAL_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 export function markPromptedThisSession() {
   try {
     window.sessionStorage.setItem(SESSION_KEY, '1');
