@@ -1,13 +1,12 @@
 'use client';
 
-import { useLoginWithOAuth } from '@geogenesis/auth';
-
 import { useCallback, useEffect } from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
 import { useGoogleSignInEnabled } from '~/core/auth/google-sign-in';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
+import { useLoginWithOAuth } from '~/core/wallet/auth-hooks';
 
 /** Set while `GoogleOAuthCompleter` is mounted. */
 let initGoogleOAuth: (() => Promise<void>) | null = null;

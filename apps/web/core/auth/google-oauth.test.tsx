@@ -11,7 +11,7 @@ import { GoogleOAuthHost, isInAppBrowser } from './google-oauth';
 
 const mocks = vi.hoisted(() => ({ useLoginWithOAuth: vi.fn(() => ({ initOAuth: vi.fn() })) }));
 
-vi.mock('@geogenesis/auth', () => ({ useLoginWithOAuth: mocks.useLoginWithOAuth }));
+vi.mock('~/core/wallet/auth-hooks', () => ({ useLoginWithOAuth: mocks.useLoginWithOAuth }));
 vi.mock('~/core/hooks/use-prepare-onboarding', () => ({ usePrepareOnboarding: () => vi.fn() }));
 
 function renderHost(flag: boolean) {

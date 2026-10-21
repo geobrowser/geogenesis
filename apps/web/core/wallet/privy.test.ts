@@ -29,12 +29,14 @@ describe('Privy login methods', () => {
   it('offers redirect methods only behind the googleSignIn flag', () => {
     const files = appSources();
     const using = (pattern: RegExp) => files.filter(file => pattern.test(file.source)).map(file => file.path);
+    // The wrappers in `auth-hooks.ts` and the Privy chunk that runs the real hooks.
+    const callers = (pattern: RegExp) => using(pattern).filter(path => !AUTH_LAYER.includes(path));
 
-    expect(using(/useGeoLogin\(/)).toEqual(['core/hooks/use-tracked-login.ts']);
+    expect(callers(/useGeoLogin\(/)).toEqual(['core/hooks/use-tracked-login.ts']);
     expect(using(/= useGoogleSignInOptions\(/)).toEqual(['core/hooks/use-tracked-login.ts']);
     expect(using(/useFeatureFlag\('googleSignIn'\)/)).toEqual(['core/auth/google-sign-in.ts']);
-    expect(using(/usePrivyLogin\(/)).toEqual(['core/privy-auth-tracker.tsx']);
-    expect(using(/useLoginWithOAuth|initOAuth/)).toEqual(['core/auth/google-oauth.tsx']);
+    expect(callers(/usePrivyLogin\(/)).toEqual(['core/privy-auth-tracker.tsx']);
+    expect(callers(/useLoginWithOAuth|initOAuth/)).toEqual(['core/auth/google-oauth.tsx']);
     expect(using(/useGoogleSignInEnabled\(/).sort()).toEqual([
       'core/auth/google-oauth.tsx',
       'core/auth/google-sign-in.ts',
@@ -45,6 +47,8 @@ describe('Privy login methods', () => {
     expect(using(/loginMethods/).sort()).toEqual(['core/auth/google-sign-in.ts', 'core/wallet/privy.tsx']);
   });
 });
+
+const AUTH_LAYER = ['core/wallet/auth-hooks.ts', 'core/wallet/privy-host.tsx'];
 
 /** App source files, tests and build output excluded, with paths relative to apps/web. */
 function appSources() {

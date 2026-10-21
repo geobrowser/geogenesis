@@ -12,7 +12,7 @@ import { useTrackedLogin } from './use-tracked-login';
 
 const mocks = vi.hoisted(() => ({ login: vi.fn() }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   useGeoLogin: () => ({ login: mocks.login }),
   usePrivy: () => ({ authenticated: false }),
 }));
