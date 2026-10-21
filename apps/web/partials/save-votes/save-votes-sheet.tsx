@@ -24,8 +24,8 @@ import {
 import {
   type SaveVotesPromptReason,
   closeSaveVotesPrompt,
-  isSaveVotesPressReason,
   openSaveVotesPrompt,
+  opensSaveVotesCentered,
   useSaveVotesPrompt,
   useSaveVotesPromptLobbyName,
   wasPromptedThisSession,
@@ -71,7 +71,8 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
  * entity pages, the debates hub and the debate player as well as Explore.
  *
  * Opened from the navbar's "Save N votes", it is the same card as a centred modal dialog instead
- * (GEO-3400): the visitor asked for it, so it comes forward rather than waiting in the corner.
+ * (GEO-3400): the visitor asked for it, so it comes forward rather than waiting in the corner. An
+ * email's vote link opens it centred too (GEO-3374); see `opensSaveVotesCentered`.
  */
 export function SaveVotesSheet() {
   const { ready, authenticated, isModalOpen } = usePrivy();
@@ -126,7 +127,7 @@ export function SaveVotesSheet() {
     closeSaveVotesPrompt();
   }, [authenticated]);
 
-  const centered = codeStep ? codeStep.centered : isSaveVotesPressReason(reason);
+  const centered = codeStep ? codeStep.centered : opensSaveVotesCentered(reason);
   // Centred, the sheet is a modal of its own, which this would find and hide itself behind. Nothing
   // else is modal at the press that opens it, and anything opened later is opened from inside it.
   const isAnyModalOpen = useAnyModalOpen(open && !centered);
