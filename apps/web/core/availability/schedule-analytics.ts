@@ -94,13 +94,19 @@ export function debateScheduleSaved(
   });
 }
 
+const UUID = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+
 /**
  * Someone's week, loaded and on screen. The step between "opened" and "requested": whether there
  * was anything to pick, and whether any of it suited both of them.
+ *
+ * `requestId` is the scheduled debate being moved, when this week is a reschedule. It joins the
+ * opening to geo-chat's record of that debate, so a reschedule started and then abandoned shows up
+ * (GEO-3432). It can come from a link anyone can edit, so only an id-shaped value is sent.
  */
 export function debateAvailabilityViewed(
   schedule: PeerSchedule,
-  { entry, bookable }: { entry: ScheduleEntry | null; bookable: boolean }
+  { entry, bookable, requestId }: { entry: ScheduleEntry | null; bookable: boolean; requestId?: string | null }
 ) {
   // Minutes rather than slot counts: a wire slot is a range of any length, so counting them would
   // rank one free afternoon below two free half-hours.
@@ -115,6 +121,7 @@ export function debateAvailabilityViewed(
     viewer_has_schedule: schedule.viewerHasSchedule,
     free_minutes: minutes(schedule.slots) || 0,
     mutual_free_minutes: minutes(schedule.slots.filter(slot => slot.viewerIsFree)) || 0,
+    ...(requestId && UUID.test(requestId) ? { request_id: requestId.toLowerCase() } : {}),
   });
 }
 

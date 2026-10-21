@@ -69,6 +69,39 @@ describe('schedule analytics', () => {
     });
   });
 
+  // GEO-3432: a reschedule names the debate it moves, so one started and abandoned can be found.
+  describe('a week opened to move a debate', () => {
+    const schedule: PeerSchedule = {
+      userId: 'them',
+      viewerTimezone: 'UTC',
+      peerTimezone: 'UTC',
+      viewerHasSchedule: true,
+      peerHasSchedule: true,
+      theirWeekKnown: true,
+      slots: [],
+    };
+
+    it('sends the request id, lowercased', () => {
+      debateAvailabilityViewed(schedule, {
+        entry: 'reschedule_link',
+        bookable: true,
+        requestId: '6676B145-0970-4C1C-BFBC-7497D9721B39',
+      });
+
+      expect(capture).toHaveBeenCalledWith(
+        'debate_availability_viewed',
+        expect.objectContaining({ entry: 'reschedule_link', request_id: '6676b145-0970-4c1c-bfbc-7497d9721b39' })
+      );
+    });
+
+    // It can arrive from a link anyone can edit.
+    it.each([[null], [undefined], ['someone@example.com'], ['6676b145']])('sends no request id for %s', requestId => {
+      debateAvailabilityViewed(schedule, { entry: 'reschedule_link', bookable: true, requestId });
+
+      expect(capture.mock.calls.at(-1)?.[1]).not.toHaveProperty('request_id');
+    });
+  });
+
   // `via` is URL text anyone can edit, so analytics gets a fixed vocabulary rather than the text.
   it.each([
     ['share', 'share'],
