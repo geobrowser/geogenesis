@@ -250,8 +250,8 @@ function toHeaderParticipant(participant: DebateRematchParticipant | null): Pair
  * The live voice channel for the rematch picker, drawn as the page's pair header (GEO-2992).
  *
  * The pair lands here from "debate again" or a profile challenge, and this keeps them talking while
- * they browse claims. Audio-only; mute is a local track toggle and the opponent's state comes
- * straight from LiveKit participant events.
+ * they browse claims, on camera where the call allows it. Mute is a local track toggle and the
+ * opponent's state comes straight from LiveKit participant events.
  *
  * Degrades to the cards alone when the backend has no LiveKit config (503), predates the endpoint
  * (404), or the session has left a voice-capable status — the two people are still in a rematch

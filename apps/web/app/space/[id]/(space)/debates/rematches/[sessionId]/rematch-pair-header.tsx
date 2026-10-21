@@ -215,8 +215,8 @@ export const PAIR_PILL = 'flex h-6 shrink-0 items-center gap-1 px-2 text-chatMed
 /**
  * The layout both cards wear.
  *
- * Avatar, then a column holding the name with that person's state directly under it, then that
- * person's secondary action in the corner. One component rather than two similar ones, because
+ * Their video (or avatar) across the top, then one row with the name, that person's state and
+ * their secondary action at the end. One component rather than two similar ones, because
  * these sit side by side: the mute pill drifting out to the card's left edge while the opponent's
  * chip stayed indented under their name was invisible in either card alone and impossible to miss
  * across the pair.
