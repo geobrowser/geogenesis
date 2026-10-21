@@ -34,7 +34,6 @@ import {
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { withMediaDeviceOptions } from '~/core/media/device-options';
 import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
@@ -219,9 +218,8 @@ export function LobbyVoice({
     if (listenOnly) setMicChoice(false);
   }, [listenOnly]);
 
-  // Off with the debateVideo flag, a mic-only token (lobby video off, GEO-3161) or a listen-only one.
-  const videoEnabled = useFeatureFlag('debateVideo');
-  const cameraAllowed = videoEnabled && Boolean(data?.can_publish) && tokenAllowsCamera(data?.token ?? '');
+  // Off with a mic-only token (lobby video off on the server, GEO-3161) or a listen-only one.
+  const cameraAllowed = Boolean(data?.can_publish) && tokenAllowsCamera(data?.token ?? '');
   // Off on join and on every promotion until the speaker turns it on.
   const [cameraIntent, setCameraIntent] = React.useState(false);
   const [cameraFailure, setCameraFailure] = React.useState<MediaDeviceFailure | null>(null);
@@ -615,8 +613,6 @@ const CAMERA_UPDATES = { updateOnlyOn: [RoomEvent.TrackMuted, RoomEvent.TrackUnm
 function useParticipantVoiceStates(connected: boolean) {
   const participants = useParticipants();
   const cameraTracks = useTracks(CAMERA_SOURCES, CAMERA_UPDATES);
-  // Without the debateVideo flag every tile keeps its avatar, whoever else publishes a camera.
-  const videoEnabled = useFeatureFlag('debateVideo');
   return React.useMemo<LobbyVoiceStates>(() => {
     const speaking = new Set<string>();
     const micOn = new Set<string>();
@@ -627,12 +623,12 @@ function useParticipantVoiceStates(connected: boolean) {
       if (participant.isSpeaking) speaking.add(id);
     }
     const cameras = new Map<string, TrackReference>();
-    for (const reference of videoEnabled ? cameraTracks : []) {
+    for (const reference of cameraTracks) {
       if (!reference.publication.track || reference.publication.isMuted) continue;
       cameras.set(dashlessId(reference.participant.identity).toLowerCase(), reference);
     }
     return { speaking, micOn, cameras, connected };
-  }, [cameraTracks, connected, participants, videoEnabled]);
+  }, [cameraTracks, connected, participants]);
 }
 
 /** Holds the roster's voice state; a member room inside overrides it with its own. */
