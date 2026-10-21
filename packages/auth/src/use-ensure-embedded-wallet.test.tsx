@@ -3,6 +3,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  ready: true,
   authenticated: true,
   isModalOpen: false,
   userWallet: undefined as { address: string } | undefined,
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@privy-io/react-auth', () => ({
   usePrivy: () => ({
+    ready: mocks.ready,
     authenticated: mocks.authenticated,
     isModalOpen: mocks.isModalOpen,
     user: { wallet: mocks.userWallet, linkedAccounts: mocks.linkedAccounts },
@@ -32,6 +34,7 @@ import { retryEmbeddedWalletSetup, useEnsureEmbeddedWallet } from './use-ensure-
 const embedded = { address: '0xabc', walletClientType: 'privy' };
 
 beforeEach(() => {
+  mocks.ready = true;
   mocks.authenticated = true;
   mocks.isModalOpen = false;
   mocks.userWallet = undefined;
@@ -72,17 +75,16 @@ describe('useEnsureEmbeddedWallet', () => {
 
   // The case that hits every existing user on every page load. A restored session flips
   // `authenticated` before `wallets` has hydrated, so there is a window where the list is empty and
-  // somebody who has had a wallet for months looks wallet-less. Asking Privy then means a rejection
-  // -- it errors when one already exists -- and if hydration outlasts the retry delay, an existing
-  // account can spend its whole budget before its own wallet turns up.
-  it('waits for the wallet list to hydrate before deciding a session has none', async () => {
+  // somebody who has had a wallet for months looks wallet-less. The account's `linkedAccounts` say
+  // otherwise, so nothing is created, and the wallet is activated once the list catches up.
+  it('does not create a wallet for a restored session whose list has not hydrated', async () => {
     mocks.walletsReady = false;
+    mocks.linkedAccounts = [{ type: 'wallet', walletClientType: 'privy' }];
     const { rerender } = renderHook(() => useEnsureEmbeddedWallet());
 
     await new Promise(resolve => setTimeout(resolve, 30));
     expect(mocks.createWallet).not.toHaveBeenCalled();
 
-    // Hydration finishes and the wallet was there all along.
     mocks.walletsReady = true;
     mocks.wallets = [embedded];
     rerender();
@@ -91,7 +93,28 @@ describe('useEnsureEmbeddedWallet', () => {
     expect(mocks.createWallet).not.toHaveBeenCalled();
   });
 
-  // The window `walletsReady` does not cover. On a fresh login the list is genuinely ready and
+  it('waits for Privy to resolve the session before deciding it has no wallet', async () => {
+    mocks.ready = false;
+    const { rerender } = renderHook(() => useEnsureEmbeddedWallet());
+
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(mocks.createWallet).not.toHaveBeenCalled();
+
+    mocks.ready = true;
+    rerender();
+    await waitFor(() => expect(mocks.createWallet).toHaveBeenCalledTimes(1));
+  });
+
+  // GEO-3417. With no injected wallet in the browser, Privy has no external connectors and
+  // `useWallets().ready` never turns true. A headless sign-up has to get its wallet anyway.
+  it('creates a wallet for a new account even when the wallet list never reports ready', async () => {
+    mocks.walletsReady = false;
+    renderHook(() => useEnsureEmbeddedWallet());
+
+    await waitFor(() => expect(mocks.createWallet).toHaveBeenCalledTimes(1));
+  });
+
+  // The fresh-login window. On a fresh login the list is genuinely ready and
   // genuinely empty, because the wallet Privy's own `createOnLogin` is provisioning has not landed.
   // Asking again there means a rejected duplicate on every login at best, and at worst a second
   // wallet with the same `walletClientType` -- which `useSmartAccount` picks between with `.find()`,
