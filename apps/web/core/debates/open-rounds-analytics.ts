@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { capture } from '~/core/analytics';
+import { captureSafely } from '~/core/analytics-capture-safely';
 
 import type { Debate, OpenRoundPick, OpenRoundResolution, OpenRoundRevealedPick, ParticipantSlot } from './api';
 import { isFinalOpenRound, isOpenRoundsDebate, openRebuttalRoundCount, openRoundRevealedPicks } from './open-rounds';
@@ -204,15 +204,6 @@ export function useOpenRoundsOutcomeAnalytics(debate: Debate | null, participant
       if (properties) sendOnce('completed', () => captureSafely('debate_completed_rounds', properties));
     }
   }, [debate, participantSlot]);
-}
-
-/** Analytics never gets in the way of the debate. */
-function captureSafely(...args: Parameters<typeof capture>) {
-  try {
-    capture(...args);
-  } catch {
-    // Dropped: the room carries on.
-  }
 }
 
 function readSessionFlag(key: string) {
