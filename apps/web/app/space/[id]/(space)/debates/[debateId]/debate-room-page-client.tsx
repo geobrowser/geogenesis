@@ -1315,17 +1315,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
     if (recordingEndedAtRef.current !== null) return;
     setCapturing(false);
-    if (recorder.state === 'inactive') {
-      recordingEndedAtRef.current = serverNowRef.current();
-      return;
-    }
+    // An input failure or the browser may already have called stop(). Inactive does not mean
+    // its final dataavailable/stop events have arrived; the stop listener records that boundary.
     const stopped = new Promise<void>(resolve => {
       recorder.addEventListener('stop', () => resolve(), { once: true });
     });
     recordingStopPromiseRef.current = stopped;
     try {
-      recorder.requestData();
-      recorder.stop();
+      if (recorder.state !== 'inactive') {
+        recorder.requestData();
+        recorder.stop();
+      }
       await stopped;
     } finally {
       if (recordingStopPromiseRef.current === stopped) recordingStopPromiseRef.current = null;

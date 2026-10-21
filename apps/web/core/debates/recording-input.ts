@@ -44,9 +44,22 @@ export function createRecordingInput(source: MediaStream): RecordingInput {
   let audioTrack: MediaStreamTrack | undefined;
   let videoTrack: MediaStreamTrack | undefined;
   let stopped = false;
+  let playback: Promise<void> = Promise.resolve();
+  const waitForPlayback = async () => {
+    // Replacing srcObject can abort an earlier play(). Only the current source's failure is fatal,
+    // and every waiter (including startup's ready) must follow replacements until one settles.
+    while (!stopped) {
+      const pending = playback;
+      try {
+        await pending;
+      } catch (error) {
+        if (!stopped && pending === playback) throw error;
+      }
+      if (pending === playback) return;
+    }
+  };
   const update = async (source: MediaStream) => {
     if (stopped) return;
-    const pending: Promise<void>[] = [];
     const nextAudio = source.getAudioTracks()[0];
     const nextVideo = source.getVideoTracks()[0];
     if (nextAudio !== audioTrack) {
@@ -58,11 +71,15 @@ export function createRecordingInput(source: MediaStream): RecordingInput {
     }
     if (nextVideo !== videoTrack) {
       video.srcObject = nextVideo ? new MediaStream([nextVideo]) : null;
-      if (nextVideo) pending.push(video.play());
+      playback = nextVideo ? video.play() : Promise.resolve();
       videoTrack = nextVideo;
     }
-    pending.push(audio.resume());
-    await Promise.all(pending);
+    await Promise.all([
+      waitForPlayback(),
+      audio.resume().catch(error => {
+        if (!stopped) throw error;
+      }),
+    ]);
   };
   const draw = () => {
     // Black during a camera interruption, rather than repeating the last frame indefinitely.

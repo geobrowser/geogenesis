@@ -255,6 +255,16 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     return { audioInputId: nextAudioInputId, videoInputId: nextVideoInputId, audioChanged, videoChanged };
   }, []);
 
+  // Drain selections queued while we were waiting too. Preview acquisition and input restarts
+  // must not acquire/stop the same capture at the same time.
+  const waitForInputChanges = React.useCallback(async () => {
+    let pending: Promise<void>;
+    do {
+      pending = inputChangePromiseRef.current;
+      await pending.catch(() => undefined);
+    } while (pending !== inputChangePromiseRef.current);
+  }, []);
+
   const ensurePreview = React.useCallback(
     async (
       options: {
@@ -265,9 +275,23 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         video?: boolean;
       } = {}
     ) => {
-      if (!activeSessionKeyRef.current) return [];
+      const lifecycle = mediaLifecycleRef.current;
       const wantAudio = options.audio ?? wantedKindsRef.current.audio;
       const wantVideo = options.video ?? wantedKindsRef.current.video;
+      const inFlight = localPreviewWantRef.current;
+      // Remember a matching acquisition before yielding to the input queue: its refusal belongs
+      // to both callers even if the acquisition has already cleared its ref by the time we resume.
+      const sharedPreview =
+        !options.forceRestart && inFlight?.audio === wantAudio && inFlight.video === wantVideo
+          ? localPreviewPromiseRef.current
+          : null;
+      await waitForInputChanges();
+      if (!mountedRef.current || !activeSessionKeyRef.current || mediaLifecycleRef.current !== lifecycle) return [];
+      if (sharedPreview) {
+        await sharedPreview;
+        await waitForInputChanges();
+        if (!mountedRef.current || !activeSessionKeyRef.current || mediaLifecycleRef.current !== lifecycle) return [];
+      }
       wantedKindsRef.current = { audio: wantAudio, video: wantVideo };
 
       if (localPreviewPromiseRef.current) {
@@ -275,7 +299,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         const sameKinds = inFlight !== null && inFlight.audio === wantAudio && inFlight.video === wantVideo;
         if (!options.forceRestart && sameKinds) return localPreviewPromiseRef.current;
         await localPreviewPromiseRef.current.catch(() => undefined);
-        if (!activeSessionKeyRef.current) return [];
+        await waitForInputChanges();
+        if (!mountedRef.current || !activeSessionKeyRef.current || mediaLifecycleRef.current !== lifecycle) return [];
       }
 
       const liveKinds = new Set(
@@ -365,10 +390,13 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         setPreviewStreamState(stream);
         await refreshMediaDevices();
         if (!isCurrent()) {
-          stopTracks(localTracksRef.current);
-          localTracksRef.current = [];
-          localMediaStreamRef.current = null;
-          setPreviewStreamState(null);
+          // Only release the tracks this acquisition opened, never a replacement session.
+          stopTracks(tracks);
+          if (localTracksRef.current === tracks) {
+            localTracksRef.current = [];
+            localMediaStreamRef.current = null;
+            setPreviewStreamState(null);
+          }
           return [];
         }
         setPreviewState('ready');
@@ -414,7 +442,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         }
       }
     },
-    [refreshMediaDevices]
+    [refreshMediaDevices, waitForInputChanges]
   );
 
   // Serialize input operations: rapid selections and devicechange can otherwise finish in reverse
@@ -431,6 +459,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           const track = localTracksRef.current.find(track => track.mediaStreamTrack.kind === kind);
           // Choosing a device for a disabled kind must not turn it on.
           if (!track?.restartTrack) return;
+          const ownsTrack = () => isCurrent() && localTracksRef.current.includes(track);
           const previousId = localTrackSource(track).getSettings?.().deviceId;
           const previousCapture = track.mediaStreamTrack;
           const restorePreferences = () => {
@@ -445,22 +474,25 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           setPreviewError(null);
           try {
             await track.restartTrack({ deviceId: deviceId || 'default' });
-            if (!isCurrent()) {
+            if (!ownsTrack()) {
               track.stop();
               return;
             }
             updatePreview();
             setPreviewState('ready');
           } catch (error) {
-            if (!isCurrent()) return;
+            if (!ownsTrack()) {
+              track.stop();
+              return;
+            }
             // The SDK stops the old capture before opening the new one. Recover the previous device,
             // or the system default if it disappeared, without discarding the publication.
             try {
               await track.restartTrack({ deviceId: previousId || 'default' });
             } catch {
-              if (isCurrent()) await track.restartTrack({ deviceId: 'default' }).catch(() => undefined);
+              if (ownsTrack()) await track.restartTrack({ deviceId: 'default' }).catch(() => undefined);
             }
-            if (!isCurrent()) {
+            if (!ownsTrack()) {
               track.stop();
               return;
             }
@@ -595,13 +627,16 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       void refreshMediaDevices()
         .then(async selection => {
           if (!selection || localTracksRef.current.length === 0) return;
+          const fallbacks: Promise<void>[] = [];
           for (const kind of ['audio', 'video'] as const) {
             const track = localTracksRef.current.find(track => track.mediaStreamTrack.kind === kind);
             const changed = kind === 'audio' ? selection.audioChanged : selection.videoChanged;
             if (track && (changed || !isLocalTrackLive(track))) {
-              await switchInput(kind, kind === 'audio' ? selection.audioInputId : selection.videoInputId);
+              fallbacks.push(switchInput(kind, kind === 'audio' ? selection.audioInputId : selection.videoInputId));
             }
           }
+          // Queue the whole hardware event before a subsequent manual selection can overtake it.
+          await Promise.all(fallbacks);
         })
         .catch(() => undefined);
     };

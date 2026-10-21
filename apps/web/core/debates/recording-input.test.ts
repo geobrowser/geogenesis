@@ -163,6 +163,73 @@ describe('stable recording inputs', () => {
     input.stop();
   });
 
+  it.each([
+    ['startup', 'rejects'],
+    ['startup', 'resolves'],
+    ['recording', 'rejects'],
+    ['recording', 'resolves'],
+  ])('waits for replacement playback after a superseded play %s / %s', async (phase, outcome) => {
+    let rejectOld!: (error: Error) => void;
+    let finishOld!: () => void;
+    let finishNew!: () => void;
+    const oldPlay = new Promise<void>((resolve, reject) => {
+      finishOld = resolve;
+      rejectOld = reject;
+    });
+    const newPlay = new Promise<void>(resolve => {
+      finishNew = resolve;
+    });
+    if (phase === 'startup') vi.mocked(video.play).mockReturnValueOnce(oldPlay);
+    const input = createRecordingInput(source());
+    if (phase === 'recording') await input.ready;
+    if (phase === 'recording') vi.mocked(video.play).mockReturnValueOnce(oldPlay);
+    const previous = phase === 'startup' ? input.ready : input.update(source());
+    const settled = vi.fn();
+    const observed = previous.then(
+      () => {
+        settled();
+        return 'ready';
+      },
+      error => error
+    );
+    vi.mocked(video.play).mockReturnValueOnce(newPlay);
+    const replacement = input.update(source());
+    if (outcome === 'rejects')
+      rejectOld(Object.assign(new Error('Playback interrupted by a new source'), { name: 'AbortError' }));
+    else finishOld();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).not.toHaveBeenCalled();
+    expect(outputVideo.stop).not.toHaveBeenCalled();
+    finishNew();
+    await replacement;
+    expect(await observed).toBe('ready');
+    expect(outputVideo.stop).not.toHaveBeenCalled();
+    input.stop();
+  });
+
+  it.each(['video', 'audio'])('ignores %s playback failure caused by stopping the input', async kind => {
+    let rejectPlayback!: (error: Error) => void;
+    const pending = new Promise<void>((_resolve, reject) => {
+      rejectPlayback = reject;
+    });
+    if (kind === 'video') vi.mocked(video.play).mockReturnValueOnce(pending);
+    else audioResume.mockReturnValueOnce(pending);
+    const input = createRecordingInput(source());
+    input.stop();
+    rejectPlayback(Object.assign(new Error('Input was stopped'), { name: 'AbortError' }));
+    await expect(input.ready).resolves.toBeUndefined();
+    expect(audioClose).toHaveBeenCalledOnce();
+  });
+
+  it('still rejects a current camera playback failure', async () => {
+    vi.mocked(video.play).mockRejectedValueOnce(
+      Object.assign(new Error('Camera could not play'), { name: 'AbortError' })
+    );
+    const input = createRecordingInput(source());
+    await expect(input.ready).rejects.toThrow('Camera could not play');
+    expect(outputVideo.stop).toHaveBeenCalledOnce();
+  });
+
   it('surfaces playback failure and closes every recording resource', async () => {
     audioResume.mockRejectedValueOnce(new Error('Playback blocked'));
     const input = createRecordingInput(source());

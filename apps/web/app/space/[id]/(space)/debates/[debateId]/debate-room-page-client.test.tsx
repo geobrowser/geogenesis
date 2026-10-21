@@ -5308,6 +5308,53 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
+  it.each(['input failure', 'browser stop'])(
+    'does not save a recorder stopped by %s until final events',
+    async cause => {
+      setHistoryLength(2);
+      const recorders = installRecordingMocks();
+      vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:15.000Z'));
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce());
+      const recorder = recorders[0] as EventTarget & {
+        state: RecordingState;
+        stop: () => void;
+        ondataavailable: ((event: BlobEvent) => void) | null;
+      };
+      recorder.stop = () => {
+        recorder.state = 'inactive';
+      };
+      if (cause === 'input failure') {
+        mocks.recordingInputUpdate.mockRejectedValueOnce(new Error('Input playback failed'));
+        mocks.enumerateDevices.mockResolvedValue([
+          { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
+          { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+        ]);
+        await act(async () => mocks.deviceChangeHandler?.());
+        await waitFor(() => expect(recorder.state).toBe('inactive'));
+      } else {
+        recorder.state = 'inactive';
+        act(() => recorder.dispatchEvent(new Event('error')));
+      }
+      mocks.getRecording.mockClear();
+      mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+      mocks.rematch = rematchSession('ended', { localConsented: true, remoteConsented: false });
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.getRecording).toHaveBeenCalled());
+      expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+      expect(mocks.back).not.toHaveBeenCalled();
+      const finalChunk = new Blob(['final chunk']);
+      act(() => {
+        recorder.ondataavailable?.({ data: finalChunk } as BlobEvent);
+        recorder.dispatchEvent(new Event('stop'));
+      });
+      await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+      expect(mocks.enqueueRecording.mock.calls[0]?.[0]?.recording.size).toBe(finalChunk.size);
+      expect(mocks.liveStreamAppend).toHaveBeenCalledWith(finalChunk, expect.any(Number));
+      await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    }
+  );
+
   it('waits for a disconnect stop to deliver its final chunks before saving on completion', async () => {
     setHistoryLength(2);
     const recorders = installRecordingMocks();
