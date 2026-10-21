@@ -81,6 +81,14 @@ export type ClaimResponseState = {
  * it differently on one surface meant counting one vote kind while publishing another, a bug this
  * codebase has already had. A constant cannot have that bug.
  */
+/**
+ * The claim's text for a surface that has its graph entity and geo-chat's row but draws its own
+ * heading: the entity's name, else geo-chat's copy while the entity is still loading.
+ */
+export function claimTitleFrom({ entity, row }: { entity: Entity | null; row: DebateClaim | null }) {
+  return entity?.name ?? row?.claim;
+}
+
 export function resolveClaimResponseKind(): DebateResponseKind {
   return CLAIM_RESPONSE_KIND;
 }
@@ -100,7 +108,11 @@ export function useClaimResponseState({
   row: DebateClaim | null;
   /** The claim on the graph, which carries the factual flag geo-chat's row would otherwise report. */
   entity: Entity | null;
-  /** The claim's text, where the caller has it. Surfaces that draw their own title pass nothing. */
+  /**
+   * The claim's text. Not only for drawing: a vote kept on this device is saved under it, and the
+   * save sheet shows a reminder chip only for a vote that has one. A surface that draws its own title
+   * still passes it, through `claimTitleFrom` (GEO-3374, GEO-3437).
+   */
   title?: string;
   description?: string | null;
   /** False to hold the response reads back — a feed card below the fold. */
