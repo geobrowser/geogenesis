@@ -2901,6 +2901,40 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledWith({ automatic: true }));
   });
 
+  it("stops listening to the opponent's audio once the room is torn down (GEO-3407)", async () => {
+    const contexts = installSpeechAnalysisMocks();
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    const remoteAudio = { kind: 'audio', id: 'remote-audio' } as unknown as MediaStreamTrack;
+    const element = document.createElement('audio');
+    act(() =>
+      emitRoomEvent('trackSubscribed', {
+        kind: 'audio',
+        mediaStreamTrack: remoteAudio,
+        attach: () => element,
+        detach: vi.fn(() => [element]),
+      })
+    );
+    const listening = () => contexts.filter(context => context.tracks.includes(remoteAudio));
+    await waitFor(() => expect(listening()).toHaveLength(1));
+    expect(listening()[0]?.close).not.toHaveBeenCalled();
+
+    // Torn down without a reconnect, and without the old room ever unsubscribing the track: the
+    // same as handing the room to another tab.
+    act(() => emitRoomEvent('disconnected', 2));
+    expect(await screen.findByText('This debate is active in another tab or device.')).toBeInTheDocument();
+    expect(mocks.roomConnect).toHaveBeenCalledOnce();
+    await waitFor(() => expect(listening()[0]?.close).toHaveBeenCalled());
+  });
+
   it('refuses an automatic takeover from a tab no nearer the viewer, and honours an explicit one', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
@@ -7360,6 +7394,47 @@ function installRecordingMocks() {
   );
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
   return recorders;
+}
+
+/** A Web Audio stand-in for the speech detectors: each context remembers which tracks it reads. */
+function installSpeechAnalysisMocks() {
+  const contexts: Array<{ tracks: MediaStreamTrack[]; close: ReturnType<typeof vi.fn> }> = [];
+  vi.stubGlobal(
+    'MediaStream',
+    class {
+      constructor(readonly tracks: MediaStreamTrack[] = []) {}
+
+      getAudioTracks() {
+        return this.tracks;
+      }
+    }
+  );
+  vi.stubGlobal(
+    'AudioContext',
+    class {
+      readonly record = { tracks: [] as MediaStreamTrack[], close: vi.fn(() => Promise.resolve()) };
+      close = this.record.close;
+
+      constructor() {
+        contexts.push(this.record);
+      }
+
+      createMediaStreamSource(stream: { tracks: MediaStreamTrack[] }) {
+        this.record.tracks.push(...stream.tracks);
+        return { connect: () => undefined, disconnect: () => undefined };
+      }
+
+      createAnalyser() {
+        return {
+          fftSize: 256,
+          getFloatTimeDomainData: (samples: Float32Array) => samples.fill(0),
+          connect: () => undefined,
+          disconnect: () => undefined,
+        };
+      }
+    }
+  );
+  return contexts;
 }
 
 function createLocalAudioTrack() {

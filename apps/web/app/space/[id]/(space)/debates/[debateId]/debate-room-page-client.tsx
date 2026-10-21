@@ -763,7 +763,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   });
   const remoteFinishingSince = useTurnOverrun({
     track: remoteAudioTrack,
-    listening: remoteAudioTrack !== null,
+    // As for our own microphone: only while connected. A teardown that hands the room elsewhere
+    // ignores the old room's unsubscribe events, so the track alone would keep this listening.
+    listening: roomState === 'connected' && remoteAudioTrack !== null,
     turnActive:
       countdown.effectiveStatus === 'in_progress' &&
       countdown.activeSlot !== null &&
