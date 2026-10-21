@@ -5,7 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
@@ -71,8 +70,6 @@ export function LobbyPeople({
   ownAvailable: boolean | undefined;
   disagreements: DebateLobbyClaims['disagreements'];
 }) {
-  // GEO-3399: with lobby video on, speakers become a video grid. Off, the tiles stay as they were.
-  const video = useFeatureFlag('debateVideo');
   const pairs = lobby.debate_pairs ?? [];
   const inPairs = new Set(pairs.flatMap(pair => pair.people.map(person => dashlessId(person.user_id))));
   const roster = rosterOrder(lobby.members).filter(member => !inPairs.has(dashlessId(member.user_id)));
@@ -103,20 +100,7 @@ export function LobbyPeople({
   return (
     <>
       <LobbyDebatePairs pairs={pairs} members={lobby.members} />
-      {speakers.length > 0 && video ? (
-        <SpeakerVideoGrid speakers={speakers} personProps={personProps} />
-      ) : speakers.length > 0 ? (
-        <section className="flex flex-col gap-2.5 md:gap-2" aria-label="Speakers">
-          <SectionHeading>Speakers · {speakers.length}</SectionHeading>
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3 md:grid-cols-3 md:gap-2">
-            {speakers.map(member => (
-              <li key={member.user_id} className="min-w-0">
-                <SpeakerTile {...personProps(member)} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      {speakers.length > 0 ? <SpeakerVideoGrid speakers={speakers} personProps={personProps} /> : null}
       {listeners.length + guests > 0 ? (
         <section className="flex flex-col gap-2.5 md:gap-2" aria-label="Listening">
           <SectionHeading>Listening · {listeners.length + guests}</SectionHeading>
@@ -202,9 +186,9 @@ function SpeakerPicture({
 }
 
 /**
- * A speaker's tile. Without lobby video, the round avatar with the name and status centred under it.
- * In the video grid (GEO-3399, `grid`), the same tile with a 16:9 frame (4:3 on a phone) in place of
- * the avatar and the name and status left-aligned; `compact` is the 4-across desktop size.
+ * A speaker's tile (GEO-3399): their camera in a 16:9 frame (4:3 on a phone), or their avatar in the
+ * same frame with it off, and the name and status left-aligned under it. `compact` is the 4-across
+ * desktop size, which takes the phone's smaller name and one status line.
  */
 function SpeakerTile({
   lobby,
@@ -213,36 +197,14 @@ function SpeakerTile({
   viewerId,
   status,
   disagreements,
-  voice: givenVoice,
-  grid,
-}: PersonProps & { voice?: SpeakerVoice; grid?: { compact: boolean } }) {
+  voice,
+  compact,
+}: PersonProps & { voice: SpeakerVoice; compact: boolean }) {
   const phone = useIsPhoneLayout();
-  const states = useLobbyVoiceStates();
-  const voice = givenVoice ?? speakerVoice(states, member);
-  const small = phone || Boolean(grid?.compact);
-  // The phone's one status line: on a phone, or in the compact 4-across desktop tiles.
-  const oneLine = phone || Boolean(grid?.compact);
+  // The phone's smaller name and one status line: on a phone, or in the compact desktop tiles.
+  const small = phone || compact;
   const name = personName(member);
   const label = personLabel(member, isSelf);
-  const you =
-    isSelf && !phone ? (
-      <Text as="span" variant="footnote" color="grey-04" className={cx('shrink-0', grid && 'ml-auto pl-2')}>
-        You
-      </Text>
-    ) : null;
-  const statusLine = (
-    <TileStatus
-      lobby={lobby}
-      member={member}
-      status={status}
-      speaking={voice.speaking}
-      muted={voice.micShown && !voice.micOn}
-      disagreements={disagreements}
-      line={grid?.compact}
-      align={grid ? 'start' : 'center'}
-      trigger={!grid}
-    />
-  );
 
   // The person button stretches over the whole tile, so a press anywhere opens the person menu; the
   // disagreements trigger sits above it, beside the button rather than inside it.
@@ -253,8 +215,7 @@ function SpeakerTile({
       data-testid="lobby-speaker-tile"
       data-speaking={voice.speaking || undefined}
       className={cx(
-        'relative flex w-full min-w-0 flex-col gap-2 rounded-xl border bg-white transition-colors hover:border-grey-03 has-[[data-person-trigger][data-state=open]]:border-text md:gap-1',
-        grid ? 'p-1.5 pb-2 md:p-1 md:pb-1.5' : 'items-center px-3 py-4 text-center md:px-1.5 md:py-2.5',
+        'relative flex w-full min-w-0 flex-col gap-2 rounded-xl border bg-white p-1.5 pb-2 transition-colors hover:border-grey-03 has-[[data-person-trigger][data-state=open]]:border-text md:gap-1 md:p-1 md:pb-1.5',
         voice.speaking ? 'border-green' : 'border-grey-02'
       )}
     >
@@ -271,54 +232,29 @@ function SpeakerTile({
           aria-label={label}
           {...personMenuAnalyticsAttributes(lobby, member, isSelf)}
           data-person-trigger
-          className={cx(
-            'flex w-full min-w-0 flex-col gap-2 after:absolute after:inset-0 after:rounded-xl md:gap-1',
-            grid ? 'text-left' : 'items-center'
-          )}
+          className="flex w-full min-w-0 flex-col gap-2 text-left after:absolute after:inset-0 after:rounded-xl md:gap-1"
         >
-          {grid ? (
-            <span
-              data-testid="lobby-speaker-frame"
-              className={cx(
-                'grid w-full place-items-center overflow-hidden bg-grey-01',
-                phone ? 'aspect-[4/3] rounded-md' : 'aspect-video rounded-lg'
-              )}
-            >
-              <SpeakerPicture
-                member={member}
-                camera={voice.camera}
-                mirrored={isSelf}
-                avatarSize={small ? 40 : 56}
-                data-testid="lobby-speaker-video"
-              />
-            </span>
-          ) : (
-            <span
-              className={cx(
-                'size-14 shrink-0 overflow-hidden rounded-full md:size-11 [&>svg]:size-full',
-                voice.speaking && 'ring-2 ring-successTertiary'
-              )}
-            >
-              {voice.camera ? (
-                <TrackVideo
-                  track={voice.camera.publication.track}
-                  mirrored={isSelf}
-                  data-testid="lobby-speaker-video"
-                />
-              ) : (
-                <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={56} />
-              )}
-            </span>
-          )}
+          <span
+            data-testid="lobby-speaker-frame"
+            className={cx(
+              'grid w-full place-items-center overflow-hidden bg-grey-01',
+              phone ? 'aspect-[4/3] rounded-md' : 'aspect-video rounded-lg'
+            )}
+          >
+            <SpeakerPicture
+              member={member}
+              camera={voice.camera}
+              mirrored={isSelf}
+              avatarSize={small ? 40 : 56}
+              data-testid="lobby-speaker-video"
+            />
+          </span>
           <span
             className={cx(
-              'flex max-w-full min-w-0 items-center',
-              grid && 'px-1',
-              !grid
-                ? 'gap-1.5 text-[17px] leading-[22px] font-semibold md:gap-1 md:text-[15px] md:leading-[18px] md:font-medium'
-                : small
-                  ? 'gap-1 text-[15px] leading-[18px] font-medium'
-                  : 'gap-1.5 text-[17px] leading-[22px] font-semibold'
+              'flex max-w-full min-w-0 items-center px-1',
+              small
+                ? 'gap-1 text-[15px] leading-[18px] font-medium'
+                : 'gap-1.5 text-[17px] leading-[22px] font-semibold'
             )}
           >
             <span className="truncate">{name}</span>
@@ -326,85 +262,66 @@ function SpeakerTile({
           </span>
         </button>
       </LobbyPersonMenu>
-      {grid ? (
-        <div className="flex min-w-0 items-center px-1">
-          {statusLine}
-          {disagreements !== null ? (
-            // One place in the tree for both layouts; only the look changes (see TileStatus).
-            <span className={cx('flex min-w-0', !oneLine && 'ml-auto shrink-0 pl-2')}>
-              <LobbyDisagreementsTrigger
-                lobby={lobby}
-                member={member}
-                count={disagreements}
-                variant={oneLine ? 'line' : 'pill'}
-                hidden={oneLine && voice.speaking}
-              />
-            </span>
-          ) : null}
-          {you}
-        </div>
-      ) : (
-        <>
-          {statusLine}
-          {you}
-        </>
-      )}
+      <div className="flex min-w-0 items-center px-1">
+        <TileStatus
+          member={member}
+          status={status}
+          speaking={voice.speaking}
+          muted={voice.micShown && !voice.micOn}
+          disagreements={disagreements}
+          oneLine={small}
+        />
+        {disagreements !== null ? (
+          // One place in the tree for both sizes, so switching between them (9 to 10 speakers, a
+          // resize across the phone breakpoint) does not remount it and close its popup.
+          <span className={cx('flex min-w-0', !small && 'ml-auto shrink-0 pl-2')}>
+            <LobbyDisagreementsTrigger
+              lobby={lobby}
+              member={member}
+              count={disagreements}
+              variant={small ? 'line' : 'pill'}
+              hidden={small && voice.speaking}
+            />
+          </span>
+        ) : null}
+        {isSelf && !phone ? (
+          <Text as="span" variant="footnote" color="grey-04" className="ml-auto shrink-0 pl-2">
+            You
+          </Text>
+        ) : null}
+      </div>
     </div>
   );
 }
 
 /**
- * Desktop: speaking bars, or the full status with a mic-off mark. Phone: one short line. Either way
- * the line keeps one height, so a tile does not jump when its speaker starts or stops talking.
- *
- * Video tiles (GEO-3399) left-align it under the picture, and the compact 4-across desktop tiles
- * take the phone's one line, where "Disagrees on N" is text rather than a pill.
+ * The status line under a tile's name. Full: speaking bars, or the full status with a mic-off mark.
+ * One line (a phone, or a compact tile): the short status, or "Speaking", left empty where the
+ * tile's "Disagrees on N" stands in for it. Either way it keeps one height, so a tile does not jump
+ * when its speaker starts or stops talking.
  */
 function TileStatus({
-  lobby,
   member,
   status,
   speaking,
   muted,
   disagreements,
-  line: oneLine = false,
-  align = 'center',
-  trigger = true,
+  oneLine,
 }: {
-  lobby: LobbyPageView;
   member: DebateLobbyMember;
   status: LobbyMemberStatus | null;
   speaking: boolean;
   muted: boolean;
   disagreements: number | null;
-  /** The phone's one short line, wherever the tile is. */
-  line?: boolean;
-  align?: 'center' | 'start';
-  /**
-   * Draw the disagreements trigger here. Video tiles draw it themselves, at one place in the tile,
-   * so switching between the one-line and full layouts does not remount it and close its popup.
-   */
-  trigger?: boolean;
+  oneLine: boolean;
 }) {
-  const phone = useIsPhoneLayout();
-  const justify = align === 'start' ? 'justify-start' : 'justify-center';
-  if (phone || oneLine) {
+  if (oneLine) {
     const line = member.stepped_out ? 'Stepped out' : status ? SHORT_STATUS_LABEL[status] : null;
     return (
       <span
         data-testid="lobby-tile-status"
-        className={cx('flex h-[13px] max-w-full min-w-0 items-center text-[11px] leading-[13px]', justify)}
+        className="flex h-[13px] max-w-full min-w-0 items-center text-[11px] leading-[13px]"
       >
-        {/* Mounted while they speak too: the trigger owns the sheet, which must not close mid-read. */}
-        {trigger && disagreements !== null ? (
-          <LobbyDisagreementsTrigger
-            lobby={lobby}
-            member={member}
-            count={disagreements}
-            variant="line"
-            hidden={speaking}
-          />
-        ) : null}
         {speaking ? (
           <span className="truncate text-[#127A5B]">Speaking</span>
         ) : disagreements === null && line ? (
@@ -423,25 +340,20 @@ function TileStatus({
         ? STATUS_LABEL[status]
         : null;
   return (
-    <>
-      <span data-testid="lobby-tile-status" className={cx('flex h-[18px] max-w-full min-w-0 items-center', justify)}>
-        {speaking ? (
-          <SpeakingBars />
-        ) : full ? (
-          <span className="flex max-w-full min-w-0 items-center gap-1 text-[14px] leading-[18px] text-grey-04">
-            {muted ? (
-              <span role="img" aria-label="Muted" className="shrink-0 [&>svg]:size-3">
-                <MicrophoneIcon muted />
-              </span>
-            ) : null}
-            <span className="truncate">{full}</span>
-          </span>
-        ) : null}
-      </span>
-      {trigger && disagreements !== null ? (
-        <LobbyDisagreementsTrigger lobby={lobby} member={member} count={disagreements} variant="pill" />
+    <span data-testid="lobby-tile-status" className="flex h-[18px] max-w-full min-w-0 items-center">
+      {speaking ? (
+        <SpeakingBars />
+      ) : full ? (
+        <span className="flex max-w-full min-w-0 items-center gap-1 text-[14px] leading-[18px] text-grey-04">
+          {muted ? (
+            <span role="img" aria-label="Muted" className="shrink-0 [&>svg]:size-3">
+              <MicrophoneIcon muted />
+            </span>
+          ) : null}
+          <span className="truncate">{full}</span>
+        </span>
       ) : null}
-    </>
+    </span>
   );
 }
 
@@ -455,9 +367,9 @@ function SpeakingBars() {
   );
 }
 
-function PersonTags({ member, small = false }: { member: DebateLobbyMember; small?: boolean }) {
-  // The phone size everywhere when the name beside it is at the phone size (compact video tiles).
-  const size = small ? 'text-[12px]' : 'text-[14px] md:text-[12px]';
+function PersonTags({ member, small }: { member: DebateLobbyMember; small: boolean }) {
+  // The phone's size beside a name at the phone's size (a phone, or a compact tile).
+  const size = small ? 'text-[12px]' : 'text-[14px]';
   return (
     <>
       {isHosting(member) ? (
@@ -584,7 +496,7 @@ function FocusHold({
 type GridPerson = { member: DebateLobbyMember; props: PersonProps; voice: SpeakerVoice };
 
 /**
- * Speakers as video (GEO-3399, behind `debateVideo`): a tile per speaker up to the cap, the rest in
+ * Speakers as video (GEO-3399): a tile per speaker up to the cap, the rest in
  * a "More speakers" row, and on a phone a thumbnail strip drawn into the Claims tab. Who holds a
  * tile, and where, is `nextVideoGrid`'s call; it is kept here between renders so tiles stay put.
  */
@@ -658,7 +570,7 @@ function SpeakerVideoGrid({
         {tiles.map(({ member, props, voice }) => (
           <li key={member.user_id} className="min-w-0">
             <FocusHold id={member.user_id} owner="tile" hold={hold}>
-              <SpeakerTile {...props} voice={voice} grid={{ compact }} />
+              <SpeakerTile {...props} voice={voice} compact={compact} />
             </FocusHold>
           </li>
         ))}
