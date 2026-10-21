@@ -146,7 +146,15 @@ export function ClaimPageView({
   // spaces geo-chat does not index, which have no row at all.
   const rowQuery = useDebateClaims(spaceId, [entityId], true);
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
-  const state = useClaimResponseState({ claimId: entityId, spaceId, row, entity: entity ?? null });
+  const state = useClaimResponseState({
+    claimId: entityId,
+    spaceId,
+    row,
+    entity: entity ?? null,
+    // Not drawn from this (the page has its own heading), but a vote kept on this device is saved
+    // under it: without it the save sheet had no reminder chip for a vote cast here (GEO-3374).
+    title: entity?.name ?? row?.claim,
+  });
   const { responseKind, summary } = state;
   // Explore's rule for drawing the verdict column at all: counts that answered, and at least one.
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;

@@ -96,6 +96,7 @@ const mocks = vi.hoisted(() => ({
   /** Props the position pills received. */
   positionControl: null as Record<string, unknown> | null,
   emailVote: null as { kind: 'cast' | 'kept'; position: boolean } | null,
+  responseStateArgs: null as Record<string, unknown> | null,
   viewerPosition: null as boolean | null,
   /**
    * Deliberately not 3.
@@ -204,24 +205,27 @@ vi.mock('~/core/debates/hooks', () => ({
 }));
 
 vi.mock('./use-claim-response-state', () => ({
-  useClaimResponseState: () => ({
-    responseKind: 'stance',
-    summary: {
-      isLoading: mocks.summaryLoading,
-      hasCounts: mocks.hasCounts,
-      total: mocks.responseTotal,
-      isControversial: mocks.isControversial,
-      viewerDirection: 'positive',
-      viewerSpaceId: 'viewer-space',
-      isViewerResponseLoading: true,
-    },
-    claim: null,
-    positions: [],
-    readiness: { response_kind: 'stance' },
-    isResponseKindResolved: true,
-    isViewerResponseResolved: true,
-    responseBlockedReason: null,
-  }),
+  useClaimResponseState: (args: Record<string, unknown>) => {
+    mocks.responseStateArgs = args;
+    return {
+      responseKind: 'stance',
+      summary: {
+        isLoading: mocks.summaryLoading,
+        hasCounts: mocks.hasCounts,
+        total: mocks.responseTotal,
+        isControversial: mocks.isControversial,
+        viewerDirection: 'positive',
+        viewerSpaceId: 'viewer-space',
+        isViewerResponseLoading: true,
+      },
+      claim: null,
+      positions: [],
+      readiness: { response_kind: 'stance' },
+      isResponseKindResolved: true,
+      isViewerResponseResolved: true,
+      responseBlockedReason: null,
+    };
+  },
 }));
 
 // The page's modules each reach for the sync engine, geo-chat or Privy. None of them is what this
@@ -726,6 +730,12 @@ describe('ClaimPageView position', () => {
   // The claim page is where a confirming response was pressed again and published a retraction.
   // The pills guard against that quietly: the side reads as taken at once, with no note or wait
   // cursor, and only the presses that would undo it are dropped until it lands.
+  it('names the claim for the vote control, so a vote kept on the device has a save-sheet chip', () => {
+    mocks.entity = claimEntity(null);
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    expect(mocks.responseStateArgs?.title).toBe('Pineapple belongs on pizza');
+  });
+
   it('puts what an email vote link did under the pill it answered (GEO-3374)', () => {
     mocks.emailVote = { kind: 'cast', position: false };
     mocks.viewerPosition = false;
