@@ -6,8 +6,9 @@ import cx from 'classnames';
 
 import { Text } from '~/design-system/text';
 
-import { UNNAMED_OPPONENT, roomPresenceLabel, roomPresenceNote } from './room-copy';
+import { ROOM_LATE_NOTICE, UNNAMED_OPPONENT, roomPresenceLabel, roomPresenceNote } from './room-copy';
 import type { DebateRoomPresence, DebateRoomPresenceState } from './room-presence';
+import { formatClock } from './scheduled-notice';
 
 /**
  * Who else is in the room (GEO-2941). Small, because a room is the debate-again page rather than a
@@ -23,7 +24,9 @@ export function DebateRoomPresenceIndicator({
   presence: DebateRoomPresence;
   opponentName?: string;
 }) {
-  const note = roomPresenceNote(presence.state, opponentName);
+  const late = presence.opponentLate;
+  // What they said beats what the room can guess: no "may still be on their way" under a stated time.
+  const note = late ? null : roomPresenceNote(presence.state, opponentName);
 
   return (
     <div
@@ -41,6 +44,22 @@ export function DebateRoomPresenceIndicator({
           {roomPresenceLabel(presence.state, opponentName)}
         </Text>
       </div>
+
+      {late && (
+        <div className="flex max-w-full flex-col gap-1 rounded-lg border border-grey-02 bg-white px-4 py-3 text-center">
+          <Text as="p" variant="metadataMedium">
+            {ROOM_LATE_NOTICE.title(opponentName, late.minutes)}
+          </Text>
+          {late.note && (
+            <Text as="p" variant="footnote" color="grey-04">
+              “{late.note}”
+            </Text>
+          )}
+          <Text as="p" variant="footnote" color="grey-04">
+            {ROOM_LATE_NOTICE.expected(formatClock(late.expectedAt))}
+          </Text>
+        </div>
+      )}
 
       {note && (
         <div className="max-w-full rounded-lg border border-grey-02 bg-white px-3 py-2 text-center">

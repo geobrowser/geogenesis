@@ -1,4 +1,4 @@
-import type { DebateRoomView } from '../api';
+import type { DebateRoomNotice, DebateRoomView } from '../api';
 
 /**
  * Indicator states (GEO-2941). Read off the server's `waiting` reason and `occupants`, so the
@@ -24,6 +24,11 @@ export type DebateRoomPresence = {
   opponentUserId: string | null;
   /** State 3 alone: opens the mic and enables Request debate. */
   opponentPresent: boolean;
+  /**
+   * What they said about being late (GEO-3427), while they have not arrived. geo-chat holds the
+   * no-show grace open until a little after `expectedAt`, so this and `no_show` do not overlap.
+   */
+  opponentLate?: { minutes: number | null; expectedAt: string; note: string | null } | null;
 };
 
 export type DebateRoomPresenceInput = {
@@ -80,7 +85,31 @@ export function debateRoomPresence({
   const { opponentUserId, opponentPresent } = debateRoomOpponent(room, currentUserId);
   if (!opponentUserId) return null;
 
-  return { state: presenceState(room, opponentPresent, sawOpponent), opponentUserId, opponentPresent };
+  return {
+    state: presenceState(room, opponentPresent, sawOpponent),
+    opponentUserId,
+    opponentPresent,
+    opponentLate: opponentPresent ? null : lateNotice(room, opponentUserId),
+  };
+}
+
+function lateNotice(
+  room: DebateRoomView,
+  opponentUserId: string
+): NonNullable<DebateRoomPresence['opponentLate']> | null {
+  const notice = (room.notices ?? []).find(
+    (entry: DebateRoomNotice) => entry.kind === 'running_late' && sameId(entry.user_id, opponentUserId)
+  );
+  if (!notice?.expected_at) return null;
+  // The minutes they picked, which the notice carries as times: `expected_at` is exactly that many
+  // past the later of when they said it and the start.
+  const from = Math.max(new Date(notice.at).getTime(), new Date(room.starts_at).getTime());
+  const minutes = Math.round((new Date(notice.expected_at).getTime() - from) / 60_000);
+  return {
+    minutes: Number.isFinite(minutes) && minutes > 0 ? minutes : null,
+    expectedAt: notice.expected_at,
+    note: notice.note,
+  };
 }
 
 function presenceState(room: DebateRoomView, opponentPresent: boolean, sawOpponent: boolean): DebateRoomPresenceState {

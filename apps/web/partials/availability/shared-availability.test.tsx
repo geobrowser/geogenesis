@@ -55,6 +55,22 @@ vi.mock('~/core/debates/matchmaking/use-disagreement-count', () => ({
   },
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => setToast }));
+// GEO-3427: a reschedule link whose room is open shows the three choices first. Reads stubbed per
+// test; the default is nothing booked, which keeps every other test on the week.
+type StubQuery<T> = { data?: T; isPending: boolean; isError: boolean };
+let scheduledQuery: StubQuery<{ requests: unknown[] }> = { data: { requests: [] }, isPending: false, isError: false };
+let roomsQuery: StubQuery<{ rooms: unknown[] }> = { data: { rooms: [] }, isPending: false, isError: false };
+vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({ useScheduledDebates: () => scheduledQuery }));
+vi.mock('~/core/debates/rooms/hooks', () => ({ useUpcomingDebateRooms: () => roomsQuery }));
+vi.mock('~/partials/scheduled-debates/scheduled-debate-notice', () => ({
+  ScheduledDebateNoticeDialog: ({ initialStep, onReschedule }: { initialStep: string; onReschedule?: () => void }) => (
+    <div data-testid="scheduled-notice" data-step={initialStep}>
+      <button type="button" onClick={onReschedule}>
+        Reschedule instead
+      </button>
+    </div>
+  ),
+}));
 vi.mock('./own-schedule-modal', () => ({
   OwnScheduleModal: ({ open }: { open: boolean }) => (open ? <div data-testid="own-schedule-modal" /> : null),
 }));
@@ -110,6 +126,8 @@ beforeEach(() => {
   pathname = '/space/profile-space';
   spaceQuery = { space: personSpace, isError: false };
   setToast.mockClear();
+  scheduledQuery = { data: { requests: [] }, isPending: false, isError: false };
+  roomsQuery = { data: { rooms: [] }, isPending: false, isError: false };
   personalSpaceId = null;
   signInOptions = undefined;
   profileCalls.length = 0;
@@ -341,6 +359,60 @@ describe('AvailabilityDeepLink', () => {
       'data-reschedule',
       '6676b145-0970-4c1c-bfbc-7497d9721b39'
     );
+  });
+
+  describe('once the room is open (GEO-3427)', () => {
+    const requestId = '6676b145-0970-4c1c-bfbc-7497d9721b39';
+    // geo-chat lists ids dashless and links them dashed; the two have to meet.
+    const agreed = {
+      request_id: requestId.replace(/-/g, ''),
+      status: 'accepted',
+      room_id: 'aaaabbbbccccddddeeeeffff00001111',
+    };
+    const openRoom = { room_id: agreed.room_id, joinable: true, due: true, others_present: true };
+
+    beforeEach(() => {
+      search = `modal=availability&modalTarget=${requestId}`;
+      profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
+      scheduledQuery = { data: { requests: [agreed] }, isPending: false, isError: false };
+      roomsQuery = { data: { rooms: [openRoom] }, isPending: false, isError: false };
+    });
+
+    it('offers Join, Running late and Can’t make it before any calendar', () => {
+      render(<AvailabilityDeepLink />);
+
+      expect(screen.getByTestId('scheduled-notice')).toHaveAttribute('data-step', 'decide');
+      expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
+    });
+
+    it('keeps the calendar one press away', async () => {
+      render(<AvailabilityDeepLink />);
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Reschedule instead' }));
+
+      expect(screen.getByTestId('booking-modal')).toHaveAttribute('data-reschedule', requestId);
+    });
+
+    it('draws nothing until it knows whether the room is open, so the week never swaps out', () => {
+      scheduledQuery = { isPending: true, isError: false };
+      render(<AvailabilityDeepLink />);
+
+      expect(screen.queryByTestId('booking-modal')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('scheduled-notice')).not.toBeInTheDocument();
+    });
+
+    it('opens the week as before while the room is still shut', () => {
+      roomsQuery = { data: { rooms: [{ ...openRoom, joinable: false }] }, isPending: false, isError: false };
+      render(<AvailabilityDeepLink />);
+
+      expect(screen.getByTestId('booking-modal')).toHaveAttribute('data-reschedule', requestId);
+    });
+
+    it('opens the week when the debate cannot be read, rather than nothing', () => {
+      roomsQuery = { isPending: false, isError: true };
+      render(<AvailabilityDeepLink />);
+
+      expect(screen.getByTestId('booking-modal')).toBeInTheDocument();
+    });
   });
 
   it('opens an ordinary booking week when the link names no request', () => {

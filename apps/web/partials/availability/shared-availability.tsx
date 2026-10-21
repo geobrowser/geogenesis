@@ -9,6 +9,10 @@ import { isDebateProfileMissing } from '~/core/debates/api';
 import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { useDisagreementCount } from '~/core/debates/matchmaking/use-disagreement-count';
+import { useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
+import { sameId } from '~/core/debates/rooms/room-presence';
+import { findRequest, noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
+import { useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -16,6 +20,8 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Spaces } from '~/core/utils/space';
+
+import { ScheduledDebateNoticeDialog } from '~/partials/scheduled-debates/scheduled-debate-notice';
 
 import { OwnScheduleModal } from './own-schedule-modal';
 import { Notice } from './peer-availability';
@@ -166,10 +172,28 @@ export function SharedAvailabilityModal({
     })
   );
 
+  const roomOpen = useRoomOpenFor(open && authenticated && !isSelf ? rescheduleRequestId : null);
+  const [calendarAnyway, setCalendarAnyway] = React.useState(false);
+
   if (isSelf) {
     return <OwnScheduleModal open={open} onOpenChange={next => !next && onClose()} surface="availability_link" />;
   }
-  if (!whoseKnown) return null;
+  if (!whoseKnown || roomOpen === null) return null;
+
+  // GEO-3427, board 2. Once the room is open, "Choose different time" is mostly opened by someone who
+  // is late or not coming, and a week of slots is the wrong answer to both. They get the three
+  // choices first, and the week is still one press away.
+  if (roomOpen && rescheduleRequestId && !calendarAnyway) {
+    return (
+      <ScheduledDebateNoticeDialog
+        open={open}
+        requestId={rescheduleRequestId}
+        initialStep="decide"
+        onClose={onClose}
+        onReschedule={() => setCalendarAnyway(true)}
+      />
+    );
+  }
 
   const notice = (() => {
     if (peer === 'error') return <Notice className="flex-1">Couldn&rsquo;t load their availability.</Notice>;
@@ -217,4 +241,23 @@ export function SharedAvailabilityModal({
       {notice}
     </PeerAvailabilityBookingModal>
   );
+}
+
+/**
+ * Whether the debate a reschedule link is about has its room open now: `null` while that is still
+ * being read, so the week is not drawn and then swapped. `false` straight away for anything that is
+ * not a reschedule, or for a viewer who is signed out, who sees the week's own sign-in first.
+ */
+function useRoomOpenFor(requestId: string | null): boolean | null {
+  const requests = useScheduledDebates(requestId !== null);
+  const rooms = useUpcomingDebateRooms(requestId !== null);
+  if (requestId === null) return false;
+  // A failed read is no reason to withhold the week the link has always opened.
+  if (requests.isError || rooms.isError) return false;
+  if (requests.isPending || rooms.isPending) return null;
+
+  const request = findRequest(requests.data.requests, requestId);
+  if (noticeRequestState(request) !== 'active' || !request?.room_id) return false;
+  const roomId = request.room_id;
+  return rooms.data.rooms.some(room => sameId(room.room_id, roomId) && room.joinable);
 }

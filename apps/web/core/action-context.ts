@@ -21,6 +21,7 @@ export const ACTION_COMPONENTS = [
   'join_space_button',
   'bounty_interest',
   'debate_matchmaking',
+  'scheduled_debate_notice',
   'search',
   'ai_assistant',
   'create_space',
@@ -51,6 +52,8 @@ export type ActionKind =
   | 'bounty_interest'
   | 'start_debate'
   | 'join_debate'
+  | 'running_late'
+  | 'cant_make_it'
   | 'search'
   | 'search_result'
   | 'assistant_message'

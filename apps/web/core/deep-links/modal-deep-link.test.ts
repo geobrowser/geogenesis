@@ -13,6 +13,8 @@ describe('DEEP_LINK_MODALS', () => {
       debates: 'debates',
       roomAccess: 'room-access',
       availability: 'availability',
+      runningLate: 'running-late',
+      cantMakeIt: 'cant-make-it',
     });
   });
 

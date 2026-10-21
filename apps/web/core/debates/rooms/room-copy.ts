@@ -44,6 +44,25 @@ export function roomPresenceNote(state: DebateRoomPresenceState, opponentName: s
   }
 }
 
+/** What the waiting debater reads once the other said they are running late (GEO-3427, board 6b). */
+export const ROOM_LATE_NOTICE = {
+  title: (opponentName: string, minutes: number | null) =>
+    minutes ? `${opponentName} is running about ${minutes} minutes late` : `${opponentName} is running late`,
+  expected: (time: string) => `Expected by about ${time}`,
+} as const;
+
+/**
+ * Why a room someone was waiting in closed (GEO-3427): the other debater said they can't make it. A
+ * `rescheduled` room closed because they proposed a new time with it.
+ */
+export const ROOM_CANT_MAKE_IT = {
+  cancelled: (opponentName: string) => `${opponentName} can’t make it, so the debate is cancelled.`,
+  rescheduled: (opponentName: string) =>
+    `${opponentName} can’t make it and proposed a new time. You’ll find it under Requests.`,
+  findSomeone: 'Find someone else',
+  seeNewTime: 'See the new time',
+} as const;
+
 /**
  * The banner that tells someone elsewhere on Geo their room has opened. Whether the opponent is in
  * comes from the server's `others_present` on the upcoming-rooms row.

@@ -49,7 +49,9 @@ export type ScheduleEntry =
   /** A time beside someone who disagrees with the viewer, in the calendar's Claims panel (GEO-3220). */
   | 'calendar_claim_match'
   /** A row's chips or Schedule in the calendar's People panel (GEO-3220). */
-  | 'calendar_people_panel';
+  | 'calendar_people_panel'
+  /** Can't make it's "Suggest another time instead" (GEO-3427). */
+  | 'cant_make_it';
 
 /** Which control opened the viewer's own schedule editor. */
 export type ScheduleEditorSurface =

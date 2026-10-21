@@ -8,10 +8,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { toSignIn } from '~/core/auth/sign-in-deep-link';
 import { GeoChatRequestError } from '~/core/debates/api';
+import type { DebateRoomNotice, DebateRoomView } from '~/core/debates/api';
+import { toDebatesPanel } from '~/core/debates/debates-panel-deep-link';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
 import { useDebateLobbyGuestView } from '~/core/debates/lobbies/lobby-guest-hooks';
 import { DebateLobbyPage } from '~/core/debates/lobbies/lobby-page';
+import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
 import {
   useDebateRoom,
   useDebateRoomPresence,
@@ -25,8 +28,11 @@ import {
   toRoomAccess,
 } from '~/core/debates/rooms/room-access-deep-link';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
-import { ROOM_NOT_YET_OPEN, ROOM_NO_ACCESS } from '~/core/debates/rooms/room-copy';
+import { ROOM_CANT_MAKE_IT, ROOM_NOT_YET_OPEN, ROOM_NO_ACCESS } from '~/core/debates/rooms/room-copy';
+import { opponentName } from '~/core/debates/rooms/room-opponent';
+import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
+import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Spinner } from '~/design-system/spinner';
@@ -51,13 +57,18 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   // Read the body's own verdict first, and consult the transport only when there is no room to go
   // on. React Query keeps the last payload through a failed refetch, and `retry: false` means one
   // 404 on one 3s poll would otherwise redirect everyone currently sitting in the room.
-  const denial = isLobby
-    ? null
-    : room
-      ? roomAccessDenialFor(room.access)
-      : roomQuery.error instanceof GeoChatRequestError
-        ? roomAccessDenialForStatus(roomQuery.error.status)
-        : null;
+  // GEO-3427: the other debater said they can't make it, which is what closed the room. The person
+  // waiting in it is told that here, with what they wrote, rather than sent to a generic "closed".
+  const withdrawal = withdrawalOf(room);
+
+  const denial =
+    isLobby || withdrawal
+      ? null
+      : room
+        ? roomAccessDenialFor(room.access)
+        : roomQuery.error instanceof GeoChatRequestError
+          ? roomAccessDenialForStatus(roomQuery.error.status)
+          : null;
 
   React.useEffect(() => {
     if (!denial) return;
@@ -93,6 +104,8 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   // Nothing renders for someone not in this room: not a degraded room, and not a 404 — the link is
   // valid, they are just not in this one.
   if (denial) return null;
+
+  if (withdrawal && room) return <RoomWithdrawn {...withdrawal} access={room.access} />;
 
   // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest, signed out too.
   // A lobby link opens for everyone, including a brand-new account (GEO-3270).
@@ -151,6 +164,65 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
     <DebateRoomProvider roomId={roomId} presence={presence} rejoin={rejoin}>
       <DebateRematchPageClient sessionId={room.rematch_session_id} />
     </DebateRoomProvider>
+  );
+}
+
+/**
+ * Why this room closed, when a debater said they can't make it: the `cancelled` or `rescheduled`
+ * close their Can't make it caused, and the notices that say so. `null` for every other room.
+ */
+function withdrawalOf(room: DebateRoomView | null) {
+  if (room?.access.status !== 'closed') return null;
+  const { reason } = room.access;
+  if (reason !== 'cancelled' && reason !== 'rescheduled') return null;
+  const notices = (room.notices ?? []).filter(notice => notice.kind === 'cant_make_it');
+  return notices.length > 0 ? { reason, notices } : null;
+}
+
+/** What the person left in the room is told, naming the one who withdrew and what they wrote. */
+function RoomWithdrawn({
+  reason,
+  notices,
+  access,
+}: {
+  reason: 'cancelled' | 'rescheduled';
+  notices: DebateRoomNotice[];
+  access: DebateRoomView['access'];
+}) {
+  const router = useRouter();
+  const viewerId = useCurrentGeoChatUserId();
+  // The other debater's. Someone reading the room they called off themselves, from a second tab
+  // say, gets the ordinary closed-room page.
+  const notice = (viewerId && notices.find(entry => !sameId(entry.user_id, viewerId))) || null;
+  const ids = React.useMemo(() => (notice ? [notice.user_id] : []), [notice]);
+  const person = useGeoChatUserSummaries(ids, notice !== null)[0] ?? null;
+  const own = viewerId !== null && notice === null;
+
+  React.useEffect(() => {
+    if (!own) return;
+    const denial = roomAccessDenialFor(access);
+    if (denial) router.replace(toRoomAccess(denial));
+  }, [access, own, router]);
+
+  if (!notice) return null;
+  const name = opponentName(person);
+  const rescheduled = reason === 'rescheduled';
+  return (
+    <RoomNotice
+      stacked
+      action={
+        rescheduled
+          ? { href: toDebatesPanel({ tab: 'requests' }), label: ROOM_CANT_MAKE_IT.seeNewTime }
+          : { href: toDebatesPanel({ tab: 'people' }), label: ROOM_CANT_MAKE_IT.findSomeone }
+      }
+    >
+      {rescheduled ? ROOM_CANT_MAKE_IT.rescheduled(name) : ROOM_CANT_MAKE_IT.cancelled(name)}
+      {notice.note && (
+        <>
+          <br />“{notice.note}”
+        </>
+      )}
+    </RoomNotice>
   );
 }
 

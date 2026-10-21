@@ -25,6 +25,14 @@ const mocks = vi.hoisted(() => ({
     fetchStatus: string;
   },
   guestViewEnabled: [] as boolean[],
+  notices: [] as unknown[],
+  viewerId: 'jordan' as string | null,
+}));
+
+vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.viewerId }));
+vi.mock('~/core/debates/matchmaking/use-geo-chat-user-summaries', () => ({
+  useGeoChatUserSummaries: (ids: string[]) =>
+    ids.map(id => ({ user_id: id, profile_space_id: `${id}-space`, display_name: 'Maya', avatar_cid: null })),
 }));
 
 vi.mock('~/core/debates/lobbies/lobby-guest-hooks', () => ({
@@ -67,6 +75,7 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
       occupants: [],
       waiting: null,
       rematch_session_id: 'session-1',
+      notices: mocks.notices,
     },
     error: null,
     isError: false,
@@ -98,6 +107,8 @@ afterEach(() => {
   mocks.search = new URLSearchParams();
   mocks.guestView = { data: undefined, isPending: true, fetchStatus: 'idle' };
   mocks.guestViewEnabled = [];
+  mocks.notices = [];
+  mocks.viewerId = 'jordan';
 });
 
 describe('DebateRoomPageClient', () => {
@@ -264,5 +275,60 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient roomId="room-1" />);
 
     expect(screen.getByText('picker for session-1')).toBeInTheDocument();
+  });
+});
+
+// GEO-3427: whoever was waiting is told why the room closed, rather than sent to "closed".
+describe('DebateRoomPageClient: the other debater can’t make it', () => {
+  const cantMakeIt = (userId: string, note: string | null = 'Something came up, sorry!') => ({
+    user_id: userId,
+    kind: 'cant_make_it',
+    at: '2026-09-24T13:02:00.000Z',
+    expected_at: null,
+    note,
+  });
+
+  it('says they can’t make it, with what they wrote, and offers someone else', () => {
+    mocks.access = { status: 'closed', reason: 'cancelled' } as typeof mocks.access;
+    mocks.notices = [cantMakeIt('maya')];
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Maya can’t make it, so the debate is cancelled.');
+    expect(screen.getByRole('status')).toHaveTextContent('“Something came up, sorry!”');
+    expect(screen.getByRole('link', { name: 'Find someone else' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('modal=debates&modalTarget=people')
+    );
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('points at the new time when they proposed one', () => {
+    mocks.access = { status: 'closed', reason: 'rescheduled' } as typeof mocks.access;
+    mocks.notices = [cantMakeIt('maya', null)];
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Maya can’t make it and proposed a new time.');
+    expect(screen.getByRole('link', { name: 'See the new time' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('modalTarget=requests')
+    );
+  });
+
+  it('sends whoever said it to the ordinary closed page', () => {
+    mocks.access = { status: 'closed', reason: 'cancelled' } as typeof mocks.access;
+    mocks.notices = [cantMakeIt('jordan')];
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.queryByText(/can’t make it/)).not.toBeInTheDocument();
+    expect(mocks.replace).toHaveBeenCalled();
+  });
+
+  it('leaves a room closed for any other reason to the closed page', () => {
+    mocks.access = { status: 'closed', reason: 'no_show' } as typeof mocks.access;
+    mocks.notices = [cantMakeIt('maya')];
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.queryByText(/can’t make it/)).not.toBeInTheDocument();
+    expect(mocks.replace).toHaveBeenCalled();
   });
 });

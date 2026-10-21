@@ -609,7 +609,7 @@ function CancelScheduled({
 export function cancelFailureMessage(error: unknown) {
   if (error instanceof GeoChatRequestError) {
     if (error.code === 'debate_already_started') {
-      return 'Someone has already joined this debate, so it can no longer be cancelled.';
+      return 'This debate has already started, so it can no longer be cancelled.';
     }
     if (error.code === 'request_not_cancellable') return 'This has already been answered, cancelled or expired.';
   }

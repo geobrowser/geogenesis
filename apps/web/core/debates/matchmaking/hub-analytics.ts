@@ -10,6 +10,7 @@ export type DebateActionAnalyticsSurface =
   | 'schedule-editor'
   | 'peer-availability'
   | 'availability-link'
+  | 'scheduled-notice'
   | 'room-join-prompt';
 
 const ACTION_SURFACE_ANALYTICS = {
@@ -48,6 +49,11 @@ const ACTION_SURFACE_ANALYTICS = {
   'availability-link': {
     labelPrefix: 'Availability link',
     actionIntent: 'availability_link_action',
+  },
+  // GEO-3427: Running late and Can't make it, from an email or the reschedule link.
+  'scheduled-notice': {
+    labelPrefix: 'Scheduled debate notice',
+    actionIntent: 'scheduled_debate_notice_action',
   },
   'room-join-prompt': {
     labelPrefix: 'Scheduled debate prompt',
