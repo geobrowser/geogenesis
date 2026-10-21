@@ -9,9 +9,9 @@ import { Track } from 'livekit-client';
 import { formatFullDate, formatTimeRange } from '~/core/community-calls/format';
 import { Occurrence } from '~/core/community-calls/types';
 import {
-  availableMediaInputId,
   readMediaDevicePreference,
   rememberMediaDevice,
+  resolveActiveMediaDevice,
   subscribeMediaDevicePreferences,
 } from '~/core/media/device-preferences';
 import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
@@ -48,6 +48,14 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
     audio: [],
     video: [],
   });
+  const preferredInputsRef = React.useRef<{ audio?: string; video?: string } | null>(null);
+  const previousDevicesRef = React.useRef<{ audio: MediaDeviceInfo[]; video: MediaDeviceInfo[] }>({
+    audio: [],
+    video: [],
+  });
+  const pendingInputsRef = React.useRef<
+    Partial<Record<'audio' | 'video', { id: string; previousTrack?: MediaStreamTrack }>>
+  >({});
   const [rememberedInputs, setRememberedInputs] = React.useState<{ audio?: string; video?: string }>({});
   React.useEffect(() => {
     const refresh = () =>
@@ -64,7 +72,10 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
   const [permissionError, setPermissionError] = React.useState<string | null>(null);
 
   const onPreviewError = React.useCallback((err: Error) => {
-    // Never join claiming tracks that were denied or could not be opened.
+    // Never save a failed choice or join claiming tracks that could not be opened.
+    pendingInputsRef.current = {};
+    setAudioDeviceId(preferredInputsRef.current?.audio);
+    setVideoDeviceId(preferredInputsRef.current?.video);
     setAudioEnabled(false);
     setVideoEnabled(false);
     setPermissionError(
@@ -82,6 +93,52 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
     },
     onPreviewError
   );
+
+  React.useEffect(() => {
+    if (initialDevices.ready && !preferredInputsRef.current) {
+      preferredInputsRef.current = {
+        audio: readMediaDevicePreference('audioinput'),
+        video: readMediaDevicePreference('videoinput'),
+      };
+    }
+  }, [initialDevices.ready]);
+
+  const rememberInput = React.useCallback((kind: 'audio' | 'video', id: string) => {
+    preferredInputsRef.current ??= {};
+    preferredInputsRef.current[kind] = id;
+    delete pendingInputsRef.current[kind];
+    rememberMediaDevice(kind === 'audio' ? 'audioinput' : 'videoinput', id);
+  }, []);
+
+  const chooseInput = (kind: 'audio' | 'video', id: string) => {
+    const enabled = kind === 'audio' ? audioEnabled : videoEnabled;
+    const current = tracks?.find(track => track.kind === kind)?.mediaStreamTrack;
+    const currentId = kind === 'audio' ? audioDeviceId : videoDeviceId;
+    if (!enabled || current?.getSettings().deviceId === id || (id === 'default' && current && currentId === id)) {
+      // A disabled kind is an explicit choice for later; it must not open capture just to save it.
+      rememberInput(kind, id);
+    } else {
+      pendingInputsRef.current[kind] = { id, previousTrack: current };
+    }
+    if (kind === 'audio') setAudioDeviceId(id);
+    else setVideoDeviceId(id);
+  };
+
+  React.useEffect(() => {
+    for (const kind of ['audio', 'video'] as const) {
+      const pending = pendingInputsRef.current[kind];
+      const current = tracks?.find(track => track.kind === kind)?.mediaStreamTrack;
+      if (!pending || !current || current === pending.previousTrack) continue;
+      const actualId = current.getSettings().deviceId;
+      if (pending.id === 'default' || actualId === pending.id) {
+        rememberInput(kind, pending.id);
+      } else if (actualId) {
+        delete pendingInputsRef.current[kind];
+        if (kind === 'audio') setAudioDeviceId(actualId);
+        else setVideoDeviceId(actualId);
+      }
+    }
+  }, [tracks, rememberInput]);
 
   const videoTrack = tracks?.find(t => t.kind === Track.Kind.Video);
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -107,10 +164,17 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
         const video = list.filter(d => d.kind === 'videoinput' && d.deviceId);
         setDevices({ audio, video });
         // Update effective selections only. A disconnected device stays remembered in storage.
-        const preferredAudio = readMediaDevicePreference('audioinput') ?? audioDeviceId;
-        const preferredVideo = readMediaDevicePreference('videoinput') ?? videoDeviceId;
-        if (audio.length && preferredAudio) setAudioDeviceId(availableMediaInputId(preferredAudio, audio));
-        if (video.length && preferredVideo) setVideoDeviceId(availableMediaInputId(preferredVideo, video));
+        const preferredAudio = pendingInputsRef.current.audio?.id ?? preferredInputsRef.current?.audio ?? audioDeviceId;
+        const preferredVideo = pendingInputsRef.current.video?.id ?? preferredInputsRef.current?.video ?? videoDeviceId;
+        if (audio.length && preferredAudio)
+          setAudioDeviceId(
+            resolveActiveMediaDevice(preferredAudio, audioDeviceId ?? '', audio, previousDevicesRef.current.audio)
+          );
+        if (video.length && preferredVideo)
+          setVideoDeviceId(
+            resolveActiveMediaDevice(preferredVideo, videoDeviceId ?? '', video, previousDevicesRef.current.video)
+          );
+        previousDevicesRef.current = { audio, video };
       } catch {
         // Keep the preview usable if enumeration is unavailable.
       }
@@ -176,20 +240,14 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
         <div className="mt-3 flex items-center gap-2">
           <Select
             value={audioDeviceId}
-            onChange={id => {
-              setAudioDeviceId(id);
-              rememberMediaDevice('audioinput', id);
-            }}
+            onChange={id => chooseInput('audio', id)}
             options={deviceOptions(devices.audio)}
             placeholder="Microphone"
             className="flex-1"
           />
           <Select
             value={videoDeviceId}
-            onChange={id => {
-              setVideoDeviceId(id);
-              rememberMediaDevice('videoinput', id);
-            }}
+            onChange={id => chooseInput('video', id)}
             options={deviceOptions(devices.video)}
             placeholder="Camera"
             className="flex-1"
@@ -207,8 +265,8 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
             type="button"
             className="mt-2 text-metadata text-grey-04 underline"
             onClick={() => {
-              if (audioDeviceId) rememberMediaDevice('audioinput', audioDeviceId);
-              if (videoDeviceId) rememberMediaDevice('videoinput', videoDeviceId);
+              if (audioDeviceId) chooseInput('audio', audioDeviceId);
+              if (videoDeviceId) chooseInput('video', videoDeviceId);
             }}
           >
             Remember current devices

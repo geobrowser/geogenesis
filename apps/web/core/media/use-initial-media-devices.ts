@@ -5,7 +5,7 @@ import * as React from 'react';
 import { supportsAudioOutputSelection } from 'livekit-client';
 
 import type { MediaDeviceIds } from './device-options';
-import { availableMediaDeviceId, availableMediaInputId, readMediaDevicePreference } from './device-preferences';
+import { readMediaDevicePreference, resolveMediaDevicePreference } from './device-preferences';
 
 type InitialMediaDevices = MediaDeviceIds & { ready: boolean };
 
@@ -35,7 +35,7 @@ export function useInitialMediaDevices(fallback: MediaDeviceIds = {}) {
       // then; capture uses ideal constraints and falls back without a second permission request.
       const input = (kind: 'audioinput' | 'videoinput', preferred: string | undefined) =>
         preferred
-          ? availableMediaInputId(
+          ? resolveMediaDevicePreference(
               preferred,
               list.filter(device => device.kind === kind)
             ) || undefined
@@ -46,7 +46,7 @@ export function useInitialMediaDevices(fallback: MediaDeviceIds = {}) {
         videoInputId: input('videoinput', videoInputId),
         audioOutputId:
           audioOutputId && typeof supportsAudioOutputSelection === 'function' && supportsAudioOutputSelection()
-            ? availableMediaDeviceId(
+            ? resolveMediaDevicePreference(
                 audioOutputId,
                 list.filter(device => device.kind === 'audiooutput')
               ) || 'default'

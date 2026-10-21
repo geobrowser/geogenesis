@@ -96,6 +96,17 @@ describe('initial devices for lobby, claim-picker and community-call rooms', () 
     expect(result.current.videoInputId).toBe('usb-camera');
   });
 
+  it.each([{ outputs: [] }, { outputs: [{ kind: 'audiooutput', deviceId: 'default', label: '' }] }])(
+    'retains the saved speaker when outputs are hidden before permission: $outputs',
+    async ({ outputs }) => {
+      rememberMediaDevice('audiooutput', 'headphones');
+      mocks.enumerate.mockResolvedValue(outputs);
+      const { result } = renderHook(() => useInitialMediaDevices());
+      await waitFor(() => expect(result.current.ready).toBe(true));
+      expect(result.current.audioOutputId).toBe('headphones');
+    }
+  );
+
   it('keeps capture usable with hidden inputs and disables unsupported speaker routing', async () => {
     rememberMediaDevice('audioinput', 'usb-mic');
     rememberMediaDevice('audiooutput', 'headphones');

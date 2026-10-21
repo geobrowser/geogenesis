@@ -54,10 +54,38 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+function mockSuccessfulPreview() {
+  const cache = new Map<string, unknown[]>();
+  mocks.preview.mockImplementation(
+    (options: {
+      audio: boolean | { deviceId: { ideal: string } };
+      video: boolean | { deviceId: { ideal: string } };
+    }) => {
+      const key = JSON.stringify(options);
+      if (!cache.has(key)) {
+        cache.set(
+          key,
+          (['audio', 'video'] as const).flatMap(kind => {
+            const option = options[kind];
+            if (!option) return [];
+            const deviceId =
+              typeof option === 'object' ? option.deviceId.ideal : kind === 'audio' ? 'default' : 'camera';
+            return [
+              { kind, mediaStreamTrack: { getSettings: () => ({ deviceId }) }, attach: vi.fn(), detach: vi.fn() },
+            ];
+          })
+        );
+      }
+      return cache.get(key);
+    }
+  );
+}
+
 const occurrence = { startMs: 1_792_512_000_000, endMs: 1_792_515_600_000 };
 
 describe('community-call device choices', () => {
   it('uses debate preferences for preview, saves picks, and hands the effective devices into the call', async () => {
+    mockSuccessfulPreview();
     rememberMediaDevice('audioinput', 'usb-mic');
     rememberMediaDevice('videoinput', 'usb-camera');
     const onJoin = vi.fn();
@@ -86,6 +114,7 @@ describe('community-call device choices', () => {
   });
 
   it('can explicitly remember current fallbacks when the saved inputs are disconnected', async () => {
+    mockSuccessfulPreview();
     rememberMediaDevice('audioinput', 'disconnected-mic');
     rememberMediaDevice('videoinput', 'disconnected-camera');
     const view = render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
@@ -110,6 +139,7 @@ describe('community-call device choices', () => {
     { kind: 'audioinput' as const, label: 'Microphone', id: 'usb-mic' },
     { kind: 'videoinput' as const, label: 'Camera', id: 'usb-camera' },
   ])('can confirm the current $kind after its saved preference is cleared', async ({ kind, label, id }) => {
+    mockSuccessfulPreview();
     rememberMediaDevice(kind, id);
     render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
     await waitFor(() => expect(screen.getByLabelText(label)).toHaveValue(id));
@@ -120,6 +150,78 @@ describe('community-call device choices', () => {
     expect(readMediaDevicePreference(kind)).toBeUndefined();
     fireEvent.click(await screen.findByRole('button', { name: 'Remember current devices' }));
     expect(readMediaDevicePreference(kind)).toBe(id);
+  });
+
+  it.each([
+    { kind: 'audioinput' as const, label: 'Microphone', id: 'usb-mic', trackKind: 'audio', oldId: 'default' },
+    { kind: 'videoinput' as const, label: 'Camera', id: 'usb-camera', trackKind: 'video', oldId: 'camera' },
+  ])(
+    'preserves the saved $kind when a new preview capture fails and saves a successful retry',
+    async ({ kind, label, id, trackKind, oldId }) => {
+      rememberMediaDevice(kind, oldId);
+      const oldTrack = {
+        kind: trackKind,
+        mediaStreamTrack: { getSettings: () => ({ deviceId: oldId }) },
+        attach: vi.fn(),
+        detach: vi.fn(),
+      };
+      mocks.preview.mockReturnValue([oldTrack]);
+      const view = render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
+      await waitFor(() => expect(screen.getByLabelText(label)).toHaveValue(oldId));
+      if (kind === 'audioinput') fireEvent.click(screen.getByRole('button', { name: 'Audio off' }));
+      fireEvent.change(screen.getByLabelText(label), { target: { value: id } });
+      expect(readMediaDevicePreference(kind)).toBe(oldId);
+      act(() => mocks.preview.mock.lastCall?.[1](new Error('Device unavailable')));
+      expect(readMediaDevicePreference(kind)).toBe(oldId);
+      expect(screen.getByLabelText(label)).toHaveValue(oldId);
+      fireEvent.click(screen.getByRole('button', { name: kind === 'audioinput' ? 'Audio off' : 'Video off' }));
+      fireEvent.change(screen.getByLabelText(label), { target: { value: id } });
+      expect(readMediaDevicePreference(kind)).toBe(oldId);
+      const newTrack = { ...oldTrack, mediaStreamTrack: { getSettings: () => ({ deviceId: id }) } };
+      mocks.preview.mockReturnValue([newTrack]);
+      view.rerender(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
+      await waitFor(() => expect(readMediaDevicePreference(kind)).toBe(id));
+    }
+  );
+
+  it('does not save an unavailable camera when preview substitutes the default device', async () => {
+    rememberMediaDevice('videoinput', 'usb-camera');
+    mocks.enumerate.mockResolvedValue([
+      ...devices,
+      { kind: 'videoinput', deviceId: 'other-camera', label: 'Other camera' },
+    ]);
+    const track = (id: string) => ({
+      kind: 'video',
+      mediaStreamTrack: { getSettings: () => ({ deviceId: id }) },
+      attach: vi.fn(),
+      detach: vi.fn(),
+    });
+    mocks.preview.mockReturnValue([track('usb-camera')]);
+    const view = render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Camera')).toHaveValue('usb-camera'));
+    fireEvent.change(screen.getByLabelText('Camera'), { target: { value: 'camera' } });
+    mocks.preview.mockReturnValue([track('other-camera')]);
+    view.rerender(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Camera')).toHaveValue('other-camera'));
+    await act(async () => mocks.listeners.get('devicechange')?.());
+    expect(screen.getByLabelText('Camera')).toHaveValue('other-camera');
+    expect(readMediaDevicePreference('videoinput')).toBe('usb-camera');
+  });
+
+  it('does not follow preferences from another surface on devicechange during preview', async () => {
+    rememberMediaDevice('audioinput', 'default');
+    rememberMediaDevice('videoinput', 'camera');
+    mocks.enumerate.mockResolvedValue(devices.filter(device => !device.deviceId.startsWith('usb-')));
+    render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Camera')).toHaveValue('camera'));
+    act(() => {
+      rememberMediaDevice('audioinput', 'usb-mic');
+      rememberMediaDevice('videoinput', 'usb-camera');
+    });
+    mocks.enumerate.mockResolvedValue(devices);
+    await act(async () => mocks.listeners.get('devicechange')?.());
+    expect(screen.getByLabelText('Microphone')).toHaveValue('default');
+    expect(screen.getByLabelText('Camera')).toHaveValue('camera');
   });
 
   it('leaves browser-default capture unchanged after enumeration when nobody has picked a device', async () => {

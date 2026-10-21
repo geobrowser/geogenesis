@@ -50,12 +50,33 @@ export function availableMediaDeviceId(preferred: string | undefined, devices: {
   return devices.find(device => device.deviceId === 'default')?.deviceId || devices[0]?.deviceId || '';
 }
 
-/** Hidden labels mean permission has not exposed the full input list yet. */
-export function availableMediaInputId(
+/** Hidden labels mean permission has not exposed the full device list yet. */
+export function resolveMediaDevicePreference(
   preferred: string | undefined,
   devices: Pick<MediaDeviceInfo, 'deviceId' | 'label'>[]
 ) {
   const available = devices.filter(device => device.deviceId);
   if (preferred && !available.some(device => device.label)) return preferred;
   return availableMediaDeviceId(preferred, available);
+}
+
+/** Keep a working current device unless the session's preferred hardware has just returned. */
+export function resolveActiveMediaDevice(
+  preferred: string | undefined,
+  current: string,
+  devices: Pick<MediaDeviceInfo, 'deviceId' | 'label'>[],
+  previousDevices: Pick<MediaDeviceInfo, 'deviceId'>[]
+) {
+  const preferredReturned =
+    preferred &&
+    devices.some(device => device.deviceId === preferred) &&
+    !previousDevices.some(device => device.deviceId === preferred);
+  if (
+    devices.some(device => device.label) &&
+    devices.some(device => device.deviceId === current) &&
+    !preferredReturned
+  ) {
+    return current;
+  }
+  return resolveMediaDevicePreference(preferred, devices);
 }
