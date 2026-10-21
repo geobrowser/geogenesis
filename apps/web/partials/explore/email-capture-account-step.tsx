@@ -9,10 +9,23 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { beginPrivyAuth, completePrivyAuth } from '~/core/privy-auth-events';
 import { useLoginWithEmail } from '~/core/wallet/auth-hooks';
 
-import { ERROR_CLASS, FORM_STACK_CLASS, PRIMARY_BUTTON_CLASS, SUBTEXT_CLASS, fieldClass } from './email-capture-styles';
+import { ERROR_CLASS, FORM_STACK_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
 
 /** Privy's OTP is six digits. */
 const CODE_LENGTH = 6;
+
+/** The muted line under the boxes: the resend link, or the verification under way. */
+const NOTE_CLASS = 'mt-2 text-[14px] tracking-[-0.35px] text-[rgba(21,21,21,0.7)]';
+
+/**
+ * Typing always lands in the next empty box, so a caret is kept at the end of the hidden field rather
+ * than wherever a tap on a box put it. A selection is left alone: select-all then paste must replace
+ * a half-typed code, not be appended to it and submit the first six digits of the two.
+ */
+function keepCaretAtEnd(input: HTMLInputElement) {
+  const end = input.value.length;
+  if (input.selectionStart === input.selectionEnd && input.selectionStart !== end) input.setSelectionRange(end, end);
+}
 
 // The headless attempt and its modal fallback belong to the same signup surface.
 export const ACCOUNT_ANALYTICS = {
@@ -32,9 +45,11 @@ export type AccountStepAnalytics = { readonly component: string } & Readonly<Rec
 /**
  * The code step, driven by Privy's own flow state rather than a second copy of it kept here.
  *
- * One field rather than six boxes: paste works without per-box splitting, screen readers get one
- * labelled control instead of six unlabelled ones, and the code arrives by mail, so pasting is what
- * most people actually do.
+ * Six boxes on screen, one field underneath (GEO-3400): the boxes are drawn from the field's value
+ * and the field lies transparent over them. So paste works without per-box splitting, screen readers
+ * get one labelled control instead of six unlabelled ones, and `one-time-code` autofill fills it in
+ * one go — the reasons this was one field — while it reads and types like Privy's own code step. A
+ * complete code submits itself, as Privy's does.
  */
 export function AccountStep({
   email,
@@ -73,6 +88,7 @@ export function AccountStep({
     onError: () => giveUpRef.current(),
   });
   const [code, setCode] = React.useState('');
+  const [focused, setFocused] = React.useState(false);
 
   const openPrivyModalRef = React.useRef(openPrivyModal);
   openPrivyModalRef.current = openPrivyModal;
@@ -136,18 +152,17 @@ export function AccountStep({
   }, [requestCode]);
 
   const submitCode = React.useCallback(
-    async (event: React.FormEvent) => {
-      event.preventDefault();
-      if (code.length !== CODE_LENGTH) return;
+    async (value: string) => {
+      if (value.length !== CODE_LENGTH) return;
       try {
-        await loginWithCode({ code });
+        await loginWithCode({ code: value });
         // Nothing to do on success. `authenticated` flips, the guard in the parent unmounts this,
         // and onboarding picks up a new account with no profile on its own.
       } catch {
         // Privy puts the reason in `otpState`, which the markup below reads.
       }
     },
-    [code, loginWithCode]
+    [loginWithCode]
   );
 
   // `autoFocus` cannot do this job. The field renders enabled for one frame, takes focus, and is
@@ -164,12 +179,31 @@ export function AccountStep({
     if (!busy) codeInputRef.current?.focus();
   }, [busy]);
 
+  // A wrong code empties the boxes for the next try, as Privy's step does.
+  React.useEffect(() => {
+    if (failed) setCode('');
+  }, [failed]);
+
+  const resendButton = (label: string) => (
+    <button
+      type="button"
+      onClick={() => void requestCode()}
+      disabled={busy}
+      className="underline underline-offset-2 disabled:opacity-60"
+    >
+      {label}
+    </button>
+  );
+
   return (
     <form
       data-geo-analytics-label={analyticsLabel}
       data-geo-analytics-type="account"
       data-geo-analytics-intent="signup"
-      onSubmit={submitCode}
+      onSubmit={event => {
+        event.preventDefault();
+        void submitCode(code);
+      }}
       noValidate
     >
       {/* The card's own subtext style, shared from the popup so the two states are one design
@@ -182,63 +216,81 @@ export function AccountStep({
       {/* The subscribe row's layout after the restyle: a column, same spacing and width, so the
           card does not change shape when it swaps to this step. */}
       <div className={FORM_STACK_CLASS}>
-        <input
-          // `text` with a numeric `inputMode`, not `type="number"`: a number input drops leading
-          // zeros, accepts `e` and `-`, and puts a spinner on a field that is not a quantity.
-          ref={codeInputRef}
-          type="text"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          // Lets iOS and Chrome offer the code straight from the message, which is the whole reason
-          // `one-time-code` exists and the fastest path through this step.
-          //
-          // No `maxLength`: the browser enforces it on the raw input, before `onChange` ever sees
-          // it. Pasting "123 456" from a mail client would be cut to "123 45" and only then have
-          // its spaces stripped, leaving five digits and a step that cannot be completed — while
-          // looking, to the reader, like they pasted the wrong thing. The slice below does the same
-          // job on the normalized value, which is the only place it is correct.
-          pattern="\d*"
-          value={code}
-          onChange={event => setCode(event.currentTarget.value.replace(/\D/g, '').slice(0, CODE_LENGTH))}
-          placeholder="123456"
-          aria-label="Verification code"
-          aria-invalid={failed}
-          disabled={busy}
-          className={cx(
-            fieldClass(failed),
-            'text-center tracking-[0.2em] placeholder:tracking-[0.2em] placeholder:text-[#b6b6b6]'
-          )}
-        />
-        <button type="submit" disabled={busy || code.length !== CODE_LENGTH} className={PRIMARY_BUTTON_CLASS}>
-          {verifying ? 'Verifying…' : 'Continue'}
-        </button>
+        <div className="relative">
+          {/* What the reader sees: a box per digit, the next one to fill outlined while they type. */}
+          <div aria-hidden className="flex justify-center gap-2">
+            {Array.from({ length: CODE_LENGTH }, (_, index) => (
+              <span
+                key={index}
+                data-testid="code-box"
+                className={cx(
+                  'flex h-11 max-w-[44px] min-w-0 flex-1 basis-0 items-center justify-center rounded-lg border bg-white text-[20px] leading-none font-medium text-[#151515] transition-colors',
+                  failed && code.length === 0
+                    ? 'border-red-01'
+                    : focused && !busy && index === Math.min(code.length, CODE_LENGTH - 1)
+                      ? 'border-text ring-1 ring-text'
+                      : 'border-grey-02',
+                  busy && 'text-grey-04'
+                )}
+              >
+                {code[index] ?? ''}
+              </span>
+            ))}
+          </div>
+          <input
+            // `text` with a numeric `inputMode`, not `type="number"`: a number input drops leading
+            // zeros, accepts `e` and `-`, and puts a spinner on a field that is not a quantity.
+            ref={codeInputRef}
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            // Lets iOS and Chrome offer the code straight from the message, which is the whole reason
+            // `one-time-code` exists and the fastest path through this step.
+            //
+            // No `maxLength`: the browser enforces it on the raw input, before `onChange` ever sees
+            // it. Pasting "123 456" from a mail client would be cut to "123 45" and only then have
+            // its spaces stripped, leaving five digits and a step that cannot be completed — while
+            // looking, to the reader, like they pasted the wrong thing. The slice below does the same
+            // job on the normalized value, which is the only place it is correct.
+            pattern="\d*"
+            value={code}
+            onChange={event => {
+              const next = event.currentTarget.value.replace(/\D/g, '').slice(0, CODE_LENGTH);
+              setCode(next);
+              // The sixth digit is the submit: typed, pasted or filled in from the message. From the
+              // change itself rather than an effect on the code, which would also fire as a failed
+              // verification hands the field back — sending the wrong code a second time.
+              void submitCode(next);
+            }}
+            onFocus={event => {
+              setFocused(true);
+              keepCaretAtEnd(event.currentTarget);
+            }}
+            onBlur={() => setFocused(false)}
+            onSelect={event => keepCaretAtEnd(event.currentTarget)}
+            aria-label="Verification code"
+            aria-invalid={failed}
+            disabled={busy}
+            // Over the boxes and invisible, but a real, focusable field: transparent rather than
+            // `opacity-0` or off-screen, which some autofill and password managers skip. 16px so iOS
+            // does not zoom into it.
+            className="absolute inset-0 h-full w-full cursor-text appearance-none border-0 bg-transparent text-[16px] text-transparent caret-transparent outline-hidden selection:bg-transparent"
+          />
+        </div>
       </div>
 
-      {failed ? (
+      {verifying ? (
+        // In the resend line's place, so the card keeps its height while the code is checked.
+        // No role of its own: both hosts wrap this step in a `status` region, which announces it.
+        <p className={NOTE_CLASS}>Verifying…</p>
+      ) : failed ? (
         <p role="alert" className={ERROR_CLASS}>
-          That code did not work.{' '}
-          <button
-            type="button"
-            onClick={() => void requestCode()}
-            disabled={busy}
-            className="underline underline-offset-2 disabled:opacity-60"
-          >
-            Send a new one
-          </button>
+          That code did not work. {resendButton('Send a new one')}
         </p>
       ) : (
         // Always reachable, not only after a failure: a code can simply not arrive, and Privy
         // retires one after five wrong attempts, at which point the only way forward is a new code.
-        <p className="mt-2 text-[14px] tracking-[-0.35px] text-[rgba(21,21,21,0.7)]">
-          <button
-            type="button"
-            onClick={() => void requestCode()}
-            disabled={busy}
-            className="underline underline-offset-2 disabled:opacity-60"
-          >
-            Send a new code
-          </button>
-        </p>
+        <p className={NOTE_CLASS}>{resendButton('Send a new code')}</p>
       )}
     </form>
   );

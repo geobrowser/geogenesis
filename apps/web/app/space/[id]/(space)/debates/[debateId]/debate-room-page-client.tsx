@@ -2175,6 +2175,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       endedAtMs: serverClock.now(),
     };
     setRoomError(null);
+    // Close both the source and published tracks at the press, before the request or React's
+    // next effect. The recorder holds these same tracks, and a deliberate yield has no overrun.
+    setLocalTrackPreferences(
+      localTracksRef.current,
+      { audioEnabled: false, videoEnabled },
+      sourceMediaStreamTracksRef.current
+    );
     setPendingTurnYield(pendingYield);
     try {
       await endDebateTurn.mutateAsync({
@@ -2197,9 +2204,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     countdown.turnIndex,
     endDebateTurn,
     localSlot,
+    localTracksRef,
     pendingTurnYield,
     refetchDebate,
     serverClock,
+    videoEnabled,
   ]);
 
   const toggleNoiseFilter = React.useCallback(async () => {
@@ -4309,17 +4318,19 @@ function disconnectConnectingRoom(connectingRoomRef: React.MutableRefObject<Room
 }
 
 function useDebateCountdown(debate: Debate | null, serverNow: () => number): DebateCountdown {
-  const [now, setNow] = React.useState(serverNow);
+  const [, refresh] = React.useReducer(tick => tick + 1, 0);
+  // Ticks schedule renders; they must not cache the clock. A yield can be confirmed between
+  // ticks, and evaluating its timestamp against the previous tick would hand the turn back.
+  const now = serverNow();
   const countdownWindow = debate ? countdownWindowForDebate(debate, now) : null;
   const boundaryAtMs = countdownWindow?.targetMs ?? null;
 
   React.useEffect(() => {
     const currentNow = serverNow();
-    setNow(currentNow);
-    const timer = window.setInterval(() => setNow(serverNow()), 500);
+    const timer = window.setInterval(refresh, 500);
     const boundaryTimer =
       boundaryAtMs !== null && boundaryAtMs > currentNow
-        ? window.setTimeout(() => setNow(serverNow()), boundaryAtMs - currentNow + 1)
+        ? window.setTimeout(refresh, boundaryAtMs - currentNow + 1)
         : null;
     return () => {
       window.clearInterval(timer);

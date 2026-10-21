@@ -1,5 +1,7 @@
 'use client';
 
+import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -7,7 +9,6 @@ import { useAtomValue } from 'jotai';
 
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
-import { useSaveVotesSignIn } from '~/core/hooks/use-save-votes-sign-in';
 import { isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
 import { captureSaveVotesImpression, saveVotesSignInProperties } from '~/core/save-votes-analytics';
@@ -22,12 +23,14 @@ import {
 import {
   type SaveVotesPromptReason,
   closeSaveVotesPrompt,
+  isSaveVotesPressReason,
   openSaveVotesPrompt,
   useSaveVotesPrompt,
   useSaveVotesPromptLobbyName,
   wasPromptedThisSession,
 } from '~/core/state/save-votes-prompt';
 import { usePrivy } from '~/core/wallet/auth-hooks';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
@@ -36,6 +39,7 @@ import { AccountStep } from '~/partials/explore/email-capture-account-step';
 import { useIsEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
 import {
   CARD_CLASS,
+  CENTERED_CARD_CLASS,
   CLOSE_BUTTON_CLASS,
   ERROR_CLASS,
   FORM_STACK_CLASS,
@@ -63,6 +67,9 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
  * The Explore email capture's card and code step, given new content: a corner card on desktop, a
  * bottom sheet on phones. Mounted app-wide, because the controls that open it are on the claim page,
  * entity pages, the debates hub and the debate player as well as Explore.
+ *
+ * Opened from the navbar's "Save N votes", it is the same card as a centred modal dialog instead
+ * (GEO-3400): the visitor asked for it, so it comes forward rather than waiting in the corner.
  */
 export function SaveVotesSheet() {
   const { ready, authenticated, isModalOpen } = usePrivy();
@@ -72,12 +79,21 @@ export function SaveVotesSheet() {
   const count = votes.length;
   const isChatOpen = useAtomValue(isChatOpenAtom);
   const prepareOnboarding = usePrepareOnboarding();
-  const saveSignIn = useSaveVotesSignIn();
 
   const [email, setEmail] = React.useState('');
   const [invalid, setInvalid] = React.useState(false);
-  /** The address the code was sent to, once the visitor has asked for one. */
-  const [codeEmail, setCodeEmail] = React.useState<string | null>(null);
+  /**
+   * Once the visitor has asked for a code: the address it went to, and the sheet as it was then.
+   * The code step keeps that presentation and attribution to the end. Moving between the corner card
+   * and the centred dialog is a different tree, which would remount the step, clear what was typed
+   * and mail a second code.
+   */
+  const [codeStep, setCodeStep] = React.useState<{
+    email: string;
+    centered: boolean;
+    reason: SaveVotesPromptReason | null;
+  } | null>(null);
+  const codeEmail = codeStep?.email ?? null;
 
   // The return-visit ask: once per browser session, for a visitor who arrives with votes waiting.
   // A session in which they voted has already been marked, so this is never the visit they voted in.
@@ -99,22 +115,43 @@ export function SaveVotesSheet() {
   // Signed in: the sheet's job is done whichever way they got there, and the saver takes over.
   React.useEffect(() => {
     if (!authenticated) return;
-    setCodeEmail(null);
+    setCodeStep(null);
     closeSaveVotesPrompt();
   }, [authenticated]);
 
-  const isAnyModalOpen = useAnyModalOpen(open);
+  const centered = codeStep ? codeStep.centered : isSaveVotesPressReason(reason);
+  // Centred, the sheet is a modal of its own, which this would find and hide itself behind. Nothing
+  // else is modal at the press that opens it, and anything opened later is opened from inside it.
+  const isAnyModalOpen = useAnyModalOpen(open && !centered);
+  const signInProperties = saveVotesSignInProperties('email', count, codeStep ? codeStep.reason : reason);
   // The email capture card shares this corner, and is mid-signup if it is still up once votes exist.
   const isEmailCaptureShowing = useIsEmailCaptureShowing();
-  const overlayOpen = isModalOpen || isChatOpen || isAnyModalOpen || isEmailCaptureShowing;
+  // Privy's dialog still comes first, centred or not: it is the visitor's sign-in in progress.
+  const overlayOpen = centered ? isModalOpen : isModalOpen || isChatOpen || isAnyModalOpen || isEmailCaptureShowing;
+
+  // Privy's dialog over the centred sheet is the code step's fallback (a send it could not make).
+  // The sheet's modal would hold focus and pointer events away from it, so it steps aside instead,
+  // as "Other ways to sign in" once did: the attempt Privy resumes is still a save, so the votes are
+  // saved if it completes, and stay on the device if not.
+  React.useEffect(() => {
+    if (!centered || !isModalOpen) return;
+    setCodeStep(null);
+    closeSaveVotesPrompt();
+  }, [centered, isModalOpen]);
+  // Read when the dialog closes, which is after the render that closed it.
+  const isModalOpenRef = React.useRef(isModalOpen);
+  isModalOpenRef.current = isModalOpen;
+  /** What had focus when the centred dialog opened, to hand it back to: it has no Radix trigger. */
+  const openerRef = React.useRef<HTMLElement | null>(null);
   const visible = open && !overlayOpen;
 
   // Counted and measured once per opening, and only once the visitor can see it: an ask that waits
-  // behind an overlay and is never shown neither uses up an ask nor reports an impression.
+  // behind an overlay and is never shown neither uses up an ask nor reports an impression. Not once
+  // a code is out, either: a new reason then changes nothing on screen.
   const recordedFor = React.useRef<SaveVotesPromptReason | null>(null);
   React.useEffect(() => {
     if (!open) recordedFor.current = null;
-    if (!visible || !reason || recordedFor.current === reason) return;
+    if (!visible || !reason || codeStep || recordedFor.current === reason) return;
     recordedFor.current = reason;
     if (AUTOMATIC_REASONS.has(reason)) recordSavePromptShown();
     captureSaveVotesImpression(reason, count);
@@ -127,7 +164,7 @@ export function SaveVotesSheet() {
     if (codeEmail !== null) cancelPrivyAuth();
     // Not now, not never: the votes stay on the device and the pills still offer "Save".
     recordSavePromptDismissed();
-    setCodeEmail(null);
+    setCodeStep(null);
     closeSaveVotesPrompt();
   }, [codeEmail]);
 
@@ -138,14 +175,9 @@ export function SaveVotesSheet() {
       setInvalid(true);
       return;
     }
-    beginPrivyAuth(saveVotesSignInProperties('email', count));
+    beginPrivyAuth(signInProperties);
     prepareOnboarding();
-    setCodeEmail(trimmed);
-  };
-
-  const otherWays = () => {
-    void saveSignIn('other_sign_in', count);
-    closeSaveVotesPrompt();
+    setCodeStep({ email: trimmed, centered, reason });
   };
 
   if (!open) return null;
@@ -155,16 +187,9 @@ export function SaveVotesSheet() {
 
   const returnVisit = reason === 'return_visit';
 
-  return (
-    <div
-      hidden={overlayOpen}
-      role="region"
-      aria-label={lobbyName ? 'Join the discussion' : 'Save your votes'}
-      onKeyDown={event => {
-        if (event.key === 'Escape') close();
-      }}
-      className={CARD_CLASS}
-    >
+  const label = lobbyName ? 'Join the discussion' : 'Save your votes';
+  const content = (
+    <>
       <button
         type="button"
         onClick={close}
@@ -183,7 +208,7 @@ export function SaveVotesSheet() {
             <p className={HEADING_CLASS}>Check your email</p>
             <AccountStep
               email={codeEmail}
-              analytics={saveVotesSignInProperties('email', count)}
+              analytics={signInProperties}
               analyticsLabel="Save votes verification"
               onGiveUp={close}
             />
@@ -210,7 +235,7 @@ export function SaveVotesSheet() {
                 <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, returnVisit)}</p>
               </>
             )}
-            <VoteChips votes={votes} className={lobbyName ? 'mt-1.5' : undefined} />
+            <VoteChips votes={votes} rows={centered ? 2 : 1} className={lobbyName ? 'mt-1.5' : undefined} />
 
             <div className={FORM_STACK_CLASS}>
               <input
@@ -237,17 +262,63 @@ export function SaveVotesSheet() {
                 That does not look like an email address.
               </p>
             ) : null}
-
-            <button
-              type="button"
-              onClick={otherWays}
-              className="mt-[10px] text-[13px] text-grey-04 transition-colors hover:text-text"
-            >
-              Other ways to sign in
-            </button>
           </form>
         )}
       </div>
+    </>
+  );
+
+  if (centered) {
+    return (
+      <Root
+        open
+        onOpenChange={next => {
+          if (!next) close();
+        }}
+      >
+        <Portal>
+          {/* The card inside its backdrop, Radix's own pattern for a centred dialog: a press beside
+              the card is then outside the dialog's content, which is what dismisses it. */}
+          <Overlay
+            hidden={overlayOpen}
+            className={cx(
+              'fixed inset-0 flex animate-fade-in items-center justify-center bg-text/20 p-4 mobile:items-end mobile:p-0',
+              Z_LAYER_CLASS.saveVotesDialog
+            )}
+          >
+            <Content
+              aria-describedby={undefined}
+              onOpenAutoFocus={() => {
+                openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+              }}
+              onCloseAutoFocus={event => {
+                // Radix would return focus to a trigger, and there is none. Not while Privy's dialog
+                // is taking over, which owns focus then.
+                event.preventDefault();
+                if (!isModalOpenRef.current) openerRef.current?.focus();
+              }}
+              className={cx(CENTERED_CARD_CLASS, 'focus:outline-hidden')}
+            >
+              <Title className="sr-only">{label}</Title>
+              {content}
+            </Content>
+          </Overlay>
+        </Portal>
+      </Root>
+    );
+  }
+
+  return (
+    <div
+      hidden={overlayOpen}
+      role="region"
+      aria-label={label}
+      onKeyDown={event => {
+        if (event.key === 'Escape') close();
+      }}
+      className={CARD_CLASS}
+    >
+      {content}
     </div>
   );
 }
@@ -260,12 +331,15 @@ function chipLabel(vote: LocalVote) {
 const CHIP_CLASS =
   'flex items-center rounded-full border border-grey-02 bg-grey-01 px-2 py-[3px] text-[12px] leading-[14px] text-text';
 
-/** Up to two of the visitor's votes, then how many more: a reminder of what closing this leaves behind. */
-function VoteChips({ votes, className }: { votes: LocalVote[]; className?: string }) {
+/**
+ * The visitor's latest votes, two to a row, then how many more: a reminder of what closing this
+ * leaves behind. One row in the corner card; the centred dialog has room for a second.
+ */
+function VoteChips({ votes, rows, className }: { votes: LocalVote[]; rows: 1 | 2; className?: string }) {
   const shown = [...votes]
     .reverse()
     .filter(vote => vote.title)
-    .slice(0, 2);
+    .slice(0, rows * 2);
   const more = votes.length - shown.length;
   if (shown.length === 0) return null;
   return (
@@ -273,7 +347,8 @@ function VoteChips({ votes, className }: { votes: LocalVote[]; className?: strin
       {shown.map(vote => (
         <li
           key={`${vote.entityId}:${vote.spaceId}:${vote.responseKind}`}
-          className={cx(CHIP_CLASS, 'max-w-[132px] gap-1')}
+          // A touch narrower over two rows, so the "+N" closes the second instead of wrapping to a third.
+          className={cx(CHIP_CLASS, rows === 2 ? 'max-w-[128px]' : 'max-w-[132px]', 'gap-1')}
         >
           <span aria-hidden className="shrink-0">
             <ResponsePositionIcon responseKind={vote.responseKind} position={vote.direction === 'positive'} selected />
