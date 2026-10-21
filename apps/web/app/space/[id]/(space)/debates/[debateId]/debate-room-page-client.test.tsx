@@ -1636,7 +1636,7 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.createLocalTracks).not.toHaveBeenCalled();
   });
 
-  // A picker without debateVideo records no camera; the room keeps its own default for it.
+  // A mic-only choice (saved before the picker offered a camera) keeps the room's own camera default.
   it('keeps its default camera when the picker recorded only the mic', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     rememberRematchJoinIntent('debate-1', { micOn: false, source: 'card' });

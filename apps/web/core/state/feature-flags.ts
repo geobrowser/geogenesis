@@ -56,12 +56,6 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'debateVideo',
-    label: 'Video in the claim picker and lobbies',
-    description: 'Camera and video tiles in the claim picker and in live debate lobbies (GEO-3165, GEO-3307).',
-    enabledByDefault: false,
-  },
-  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
@@ -73,11 +67,11 @@ export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
 export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // Claims and debates shipped to everyone, so `questionsTab` (and `debatesTab`, the id it was
 // renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too, nor
-// `lobbyJoining`, since finding and joining lobbies did (GEO-3306). All of them are still sitting in
-// browsers' stored flag objects; normalizing drops them on the next write rather than reading them
-// back.
+// `lobbyJoining`, since finding and joining lobbies did (GEO-3306), nor `debateVideo`, since video in
+// the claim picker and lobbies did (GEO-3414). All of them are still sitting in browsers' stored flag
+// objects; normalizing drops them on the next write rather than reading them back.
 type StoredFeatureFlags = Partial<
-  Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability' | 'lobbyJoining', boolean>
+  Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability' | 'lobbyJoining' | 'debateVideo', boolean>
 >;
 
 /**

@@ -7,7 +7,6 @@ import cx from 'classnames';
 import { useActionContext } from '~/core/action-context-provider';
 import { copyShareLink } from '~/core/sharing/share-handoff';
 import { createShareLink } from '~/core/sharing/share-link';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Text } from '~/design-system/text';
@@ -39,10 +38,10 @@ export const LOBBY_HEADER_COPY = {
   raisedHands: (count: number) => `Raised hands · ${count}`,
 } as const;
 
-/** "Hosted by Adam and Priya · Voice only · Not recorded"; "Video on" with lobby video (GEO-3399). */
-export function lobbyMetaLabel(lobby: Pick<LobbyPageView, 'members'>, video = false) {
+/** "Hosted by Adam and Priya · Video on · Not recorded". */
+export function lobbyMetaLabel(lobby: Pick<LobbyPageView, 'members'>) {
   const hosts = hostsLabel(lobby.members.filter(isHosting));
-  return [hosts ? `Hosted by ${hosts}` : 'No host here', video ? 'Video on' : 'Voice only', 'Not recorded'].join(' · ');
+  return [hosts ? `Hosted by ${hosts}` : 'No host here', 'Video on', 'Not recorded'].join(' · ');
 }
 
 function useCopyLink(lobbyId: string) {
@@ -75,7 +74,6 @@ export function LobbyHeader({
 }) {
   const memberLobby = isMemberView(lobby) && lobby.viewer.hosting ? lobby : null;
   const hostLists = memberLobby ? <LobbyHostListsChip lobby={memberLobby} /> : null;
-  const video = useFeatureFlag('debateVideo');
 
   if (phone) {
     return (
@@ -105,7 +103,7 @@ export function LobbyHeader({
           <LivePill lobby={lobby} />
         </div>
         <Text as="p" variant="metadata" color="grey-04">
-          {lobbyMetaLabel(lobby, video)}
+          {lobbyMetaLabel(lobby)}
         </Text>
       </div>
       <div className="flex flex-wrap items-center gap-2">

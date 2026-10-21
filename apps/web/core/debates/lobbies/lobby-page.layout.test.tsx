@@ -17,7 +17,6 @@ const claimList = (entityId: string) => ({
 
 const mocks = vi.hoisted(() => ({
   phone: false,
-  video: false,
   lobby: undefined as DebateLobbyView | undefined,
   highlights: undefined as Pick<DebateLobbyHighlights, 'highlights' | 'room_vote'> | undefined,
   highlightsEnabled: [] as boolean[],
@@ -32,14 +31,6 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
-vi.mock('~/core/state/feature-flags', async importOriginal => {
-  const actual = await importOriginal<typeof import('~/core/state/feature-flags')>();
-  return {
-    ...actual,
-    useFeatureFlag: (id: keyof typeof actual.defaultFeatureFlags) =>
-      id === 'debateVideo' ? mocks.video : actual.defaultFeatureFlags[id],
-  };
-});
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'acct', getPrivyIdentityToken: vi.fn() }),
@@ -183,7 +174,6 @@ function view(viewer: Partial<DebateLobbyView['viewer']> = {}): DebateLobbyView 
 
 beforeEach(() => {
   mocks.phone = false;
-  mocks.video = false;
   mocks.lobby = view();
   mocks.highlights = { highlights: [], room_vote: null };
   mocks.highlightsEnabled = [];
@@ -198,7 +188,7 @@ describe('DebateLobbyPage layout on desktop', () => {
 
     expect(screen.getByText('Debates / Lobbies')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Onboarding with Adam' })).toBeInTheDocument();
-    expect(screen.getByText('Hosted by Adam · Voice only · Not recorded')).toBeInTheDocument();
+    expect(screen.getByText('Hosted by Adam · Video on · Not recorded')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'People in the lobby' })).toBeVisible();
     expect(
       within(screen.getByRole('complementary', { name: 'Claims in the room' })).getByTestId('claims')
@@ -297,7 +287,6 @@ describe('DebateLobbyPage layout on a phone', () => {
 
   it('sends a tap on the Claims speaker strip to People, with focus on the People tab', () => {
     mocks.phone = true;
-    mocks.video = true;
     render(<DebateLobbyPage lobbyId="lobby1" />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Claims' }));
