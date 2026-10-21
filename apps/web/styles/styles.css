@@ -444,6 +444,16 @@
   initial-value: 360deg;
 }
 
+/* A tile whose speaker is still finishing past the buzzer (GEO-3407): its sound bars. */
+@keyframes turnFinishingBar {
+  from {
+    scale: 1 0.3;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+
 @keyframes roomPillSettle {
   from {
     scale: 1.06;

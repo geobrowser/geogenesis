@@ -14,22 +14,42 @@ import { decibelsFromSamples, initialSpeechGateState, stepSpeechGate } from './s
  * Reads the track directly rather than LiveKit's `isSpeaking`, which is derived from what the SFU
  * receives and is therefore subject to publication, and is exactly what gets switched off at the
  * buzzer. This has to observe the source, because the whole question is whether to keep publishing.
- *
- * Returns a ref rather than state on purpose. It changes several times a second, and the only
- * consumer is a gate read during render — driving re-renders from it would re-render the debate
- * room continuously for the entire debate.
  */
-export function useLocalSpeechActivity(stream: MediaStream | null, enabled: boolean): React.RefObject<boolean> {
+export function useLocalSpeechActivity(
+  stream: MediaStream | null,
+  enabled: boolean,
+  onChange?: (speaking: boolean) => void
+): React.RefObject<boolean> {
+  return useSpeechActivity(stream?.getAudioTracks()[0] ?? null, enabled, onChange);
+}
+
+/**
+ * Whether a track carries speech right now, through the same gate as the microphone meter.
+ *
+ * Returns a ref rather than state on purpose. It changes several times a second, and driving
+ * re-renders from it would re-render the debate room continuously for the entire debate. A caller
+ * that has to act the moment speech stops — closing a microphone, or no longer showing one as open
+ * (GEO-3407) — passes `onChange`, which fires only when the gate flips, and decides for itself
+ * whether that is worth a render.
+ */
+export function useSpeechActivity(
+  track: MediaStreamTrack | null,
+  enabled: boolean,
+  onChange?: (speaking: boolean) => void
+): React.RefObject<boolean> {
   const speakingRef = React.useRef(false);
+  const onChangeRef = React.useRef(onChange);
+  onChangeRef.current = onChange;
 
   React.useEffect(() => {
-    if (!enabled || !stream || typeof window === 'undefined') {
-      speakingRef.current = false;
-      return;
-    }
-    const track = stream.getAudioTracks()[0];
-    if (!track) {
-      speakingRef.current = false;
+    const setSpeaking = (speaking: boolean) => {
+      if (speakingRef.current === speaking) return;
+      speakingRef.current = speaking;
+      onChangeRef.current?.(speaking);
+    };
+
+    if (!enabled || !track || typeof window === 'undefined') {
+      setSpeaking(false);
       return;
     }
 
@@ -39,7 +59,7 @@ export function useLocalSpeechActivity(stream: MediaStream | null, enabled: bool
 
     const dispose = () => {
       disposed = true;
-      speakingRef.current = false;
+      setSpeaking(false);
       if (frame !== null) cancelAnimationFrame(frame);
       frame = null;
       void context?.close().catch(() => undefined);
@@ -69,13 +89,13 @@ export function useLocalSpeechActivity(stream: MediaStream | null, enabled: bool
       if (disposed) return;
       analyser.getFloatTimeDomainData(samples);
       gate = stepSpeechGate(gate, decibelsFromSamples(samples), timestamp);
-      speakingRef.current = gate.open;
+      setSpeaking(gate.open);
       frame = requestAnimationFrame(measure);
     };
     frame = requestAnimationFrame(measure);
 
     return dispose;
-  }, [enabled, stream]);
+  }, [enabled, track]);
 
   return speakingRef;
 }

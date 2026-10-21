@@ -130,8 +130,13 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { readRematchJoinIntent, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
+import { useRemoteTurnOverrun } from '~/core/debates/remote-turn-overrun';
 import { joinStateNeedsOpening, kindsForJoinState, resolveJoinChoice } from '~/core/debates/request-join-state';
-import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
+import {
+  SERVER_CLOCK_RETRY_DELAYS_MS,
+  createLocalServerClock,
+  synchronizeServerClock,
+} from '~/core/debates/server-clock';
 import { isDebateInThankYouPeriod } from '~/core/debates/thank-you-period';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
 import { useLocalSpeechActivity } from '~/core/debates/use-local-speech-activity';
@@ -207,6 +212,7 @@ const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
 
 type RemoteTrackLike = {
   kind: string;
+  mediaStreamTrack?: MediaStreamTrack;
   attach: () => HTMLElement;
   detach: () => HTMLMediaElement[];
 };
@@ -500,6 +506,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * a narrow surface over the parts of LiveKit this room uses.
    */
   const subscribedRemoteTracksRef = React.useRef<Set<RemoteTrackLike>>(new Set());
+  // The opponent's audio as it reaches us, listened to so their tile can say whether they can still
+  // be heard past the buzzer (GEO-3407).
+  const [remoteAudioTrack, setRemoteAudioTrack] = React.useState<MediaStreamTrack | null>(null);
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
   const roomRef = React.useRef<RoomLike | null>(null);
   const connectingRoomRef = React.useRef<RoomLike | null>(null);
@@ -726,6 +735,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // dependency of the effect below, which fires on the turn changing and nothing else.
   const pendingTurnYieldRef = React.useRef(pendingTurnYield);
   pendingTurnYieldRef.current = pendingTurnYield;
+  // Reads the microphone's own signal, so it still answers after the published track is gated --
+  // which is the entire question the overrun has to settle. GEO-3407: the overrun ends the moment
+  // the gate closes, and for good. Read only at render, the 500 ms countdown tick let the mic stay
+  // live up to half a second past the end of the sentence, and a later breath could reopen it.
+  const localSpeakingRef = useLocalSpeechActivity(previewStream, roomState === 'connected', speaking => {
+    if (!speaking) setLocalTurnEndedAt(null);
+  });
   React.useEffect(() => {
     const active = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot;
     const wasActive = localSlotWasActiveRef.current;
@@ -738,14 +754,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // Their turn just ended. A deliberate yield means they chose to stop, so there is nothing to
     // rescue and the mic closes at once as before.
     if (pendingTurnYieldRef.current) return;
+    // Not talking at the buzzer: the clean cut they always had.
+    if (!localSpeakingRef.current) return;
     setLocalTurnEndedAt(Date.now());
     const timer = window.setTimeout(() => setLocalTurnEndedAt(null), MIC_OVERRUN_MAX_MS);
     return () => window.clearTimeout(timer);
-  }, [countdown.activeSlot, countdown.effectiveStatus, localSlot]);
-
-  // Reads the microphone's own signal, so it still answers after the published track is gated --
-  // which is the entire question the overrun has to settle.
-  const localSpeakingRef = useLocalSpeechActivity(previewStream, roomState === 'connected');
+  }, [countdown.activeSlot, countdown.effectiveStatus, localSlot, localSpeakingRef]);
   const localTurnStartsIn = debate ? localTurnStartsInSeconds(debate, countdown, localSlot) : null;
   const revealHold = debate
     ? openRoundThankingHold({
@@ -770,6 +784,24 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     openRoundResultHeld: revealHoldsExit,
   };
   const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
+  // GEO-3407. Both tiles say "finishing" rather than "muted" for exactly as long as the speaker can
+  // be heard past the buzzer: ours from our own gate, theirs from the audio that reaches us.
+  const localFinishingSince =
+    localAudioEnabled && localTurnEndedAt !== null && countdown.activeSlot !== localSlot ? localTurnEndedAt : null;
+  const overrunPossible =
+    countdown.effectiveStatus === 'in_progress' &&
+    countdown.openRounds?.phase !== 'deciding' &&
+    countdown.openRounds?.phase !== 'result' &&
+    !revealHoldsExit;
+  const remoteFinishingSince = useRemoteTurnOverrun({
+    audioTrack: remoteAudioTrack,
+    turnActive:
+      countdown.effectiveStatus === 'in_progress' &&
+      countdown.activeSlot !== null &&
+      localSlot !== null &&
+      countdown.activeSlot !== localSlot,
+    overrunPossible,
+  });
   // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
   // turn. Reading preferences through a ref keeps that write consistent with the reconciliation
   // effect below, which can otherwise run first against a still-empty `localTracksRef` and be
@@ -1588,14 +1620,32 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       remoteMediaRef.current?.replaceChildren();
       subscribedRemoteTracksRef.current.clear();
-      void synchronizeServerClock(getServerTime)
-        .then(clock => {
-          if (isCurrent()) setServerClock(clock);
-        })
-        .catch(() => null)
-        .finally(() => {
-          if (isCurrent()) setServerClockSettled(true);
-        });
+      setRemoteAudioTrack(null);
+      // GEO-3407. A failed sync leaves this room on the computer's own clock, which can be seconds
+      // off the other debater's, so the room settles on that at once rather than waiting, and keeps
+      // trying in the background.
+      const syncServerClock = (attempt: number) => {
+        void synchronizeServerClock(getServerTime)
+          .then(clock => {
+            if (isCurrent()) setServerClock(clock);
+          })
+          .catch(error => {
+            if (!isCurrent()) return;
+            const retryInMs = SERVER_CLOCK_RETRY_DELAYS_MS[attempt];
+            if (retryInMs === undefined) {
+              console.warn("[DebateRoom] Could not sync the debate clock; using this computer's clock.", error);
+              return;
+            }
+            // A bare timer, as in `server-clock`: it may fire after a test's jsdom is torn down.
+            setTimeout(() => {
+              if (isCurrent()) syncServerClock(attempt + 1);
+            }, retryInMs);
+          })
+          .finally(() => {
+            if (attempt === 0 && isCurrent()) setServerClockSettled(true);
+          });
+      };
+      syncServerClock(0);
 
       try {
         const token = await liveKitJoin.mutateAsync();
@@ -1622,6 +1672,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
           const track = payload as RemoteTrackLike;
           subscribedRemoteTracksRef.current.add(track);
+          if (track.kind === 'audio' && track.mediaStreamTrack) setRemoteAudioTrack(track.mediaStreamTrack);
           setRemotePresence('present');
           attachRemoteTrack(track);
           void refetchDebate();
@@ -1633,6 +1684,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
           const track = payload as RemoteTrackLike;
           subscribedRemoteTracksRef.current.delete(track);
+          if (track.kind === 'audio') {
+            setRemoteAudioTrack(current => (current === track.mediaStreamTrack ? null : current));
+          }
           for (const element of track.detach()) element.remove();
           if (track.kind === 'video') setRemoteVideoReady(false);
         });
@@ -3171,6 +3225,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 currentUserId={currentUserId}
                 endTurnPending={pendingTurnYield !== null}
                 onEndTurn={endLocalTurn}
+                localFinishingSince={localFinishingSince}
+                remoteFinishingSince={remoteFinishingSince}
                 onPickOpenRound={pickOpenRound}
                 remoteDisconnected={remotePresence === 'left'}
                 onRetryFinalization={retryLiveDebateFinalization}
@@ -3213,6 +3269,8 @@ function DebateRecordingModal({
   currentUserId,
   endTurnPending,
   onEndTurn,
+  localFinishingSince,
+  remoteFinishingSince,
   onPickOpenRound,
   remoteDisconnected,
   onRetryFinalization,
@@ -3244,6 +3302,9 @@ function DebateRecordingModal({
   currentUserId: string | null;
   endTurnPending: boolean;
   onEndTurn: () => void;
+  /** GEO-3407: see `DebateVideoTile`'s `finishingSince`. */
+  localFinishingSince: number | null;
+  remoteFinishingSince: number | null;
   onPickOpenRound: (
     roundIndex: number,
     pick: OpenRoundPick,
@@ -3466,6 +3527,7 @@ function DebateRecordingModal({
       openRounds={openRoundsStyle}
       dimmed={tilesDimmed}
       finalSeconds={finalSeconds && countdown.activeSlot === localSlot}
+      finishingSince={localFinishingSince}
     >
       <video ref={setLocalVideoElement} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
     </DebateVideoTile>
@@ -3508,6 +3570,7 @@ function DebateRecordingModal({
       dimmed={tilesDimmed}
       finalSeconds={finalSeconds && countdown.activeSlot === remoteParticipant?.participant_slot}
       nextTurnName={remoteTurnIsNext ? remoteName : null}
+      finishingSince={remoteFinishingSince}
     >
       <div
         ref={setRemoteMediaElement}

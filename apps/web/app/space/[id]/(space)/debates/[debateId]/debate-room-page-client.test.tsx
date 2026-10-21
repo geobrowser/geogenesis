@@ -3098,6 +3098,23 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
+  it('keeps trying to sync the debate clock after a failed sync rather than staying on the local clock (GEO-3407)', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('offline'));
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'preflight',
+      preflight_ends_at: new Date(Date.now() + 60_000).toISOString(),
+      started_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.getServerTime).toHaveBeenCalledTimes(3));
+
+    mocks.getServerTime.mockImplementation(() => Promise.resolve({ server_time_ms: Date.now() }));
+    // The first retry, one sample per request as before.
+    await waitFor(() => expect(mocks.getServerTime).toHaveBeenCalledTimes(6), { timeout: 4_000 });
+  });
+
   it('does not hand off a stale preflight after the first turn has started locally', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:09.000Z'));
     const monotonicNow = vi.spyOn(performance, 'now').mockReturnValue(1_000);

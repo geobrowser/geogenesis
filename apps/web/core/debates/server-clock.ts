@@ -13,6 +13,13 @@ type FetchServerTime = () => Promise<{ server_time_ms: number }>;
 
 const defaultRequestTimeoutMs = 2_000;
 
+/**
+ * When the debate room tries again after a clock sync fails, after each failure in turn (GEO-3407).
+ * Until one succeeds the room runs on the computer's own clock, which can be whole seconds off the
+ * other debater's — enough that one sees a turn end while the other is still hearing it.
+ */
+export const SERVER_CLOCK_RETRY_DELAYS_MS = [2_000, 5_000, 15_000, 30_000];
+
 export function createLocalServerClock(): ServerClock {
   return {
     now: () => Date.now(),
