@@ -17,8 +17,15 @@ describe('voiceSampleMetrics (GEO-3340)', () => {
     const metrics = voiceSampleMetrics(
       { packets: 1_100, packetsLost: 110, roundTripTime: 0.085, jitter: 0.012 },
       { packets: 100, packetsLost: 10 },
-      receivers([['remote-a', { packets: 900, packetsLost: 100, samples: 48_000, concealedSamples: 4_800 }]]),
-      receivers([['remote-a', { packets: 0, packetsLost: 0, samples: 0, concealedSamples: 0 }]])
+      receivers([
+        [
+          'remote-a',
+          { packets: 900, packetsLost: 100, samples: 48_000, concealedSamples: 4_800, silentConcealedSamples: 0 },
+        ],
+      ]),
+      receivers([
+        ['remote-a', { packets: 0, packetsLost: 0, samples: 0, concealedSamples: 0, silentConcealedSamples: 0 }],
+      ])
     );
     // 100 lost of the 1,000 sent: `packetsSent` already includes what was lost, so this is 10%, not
     // 100 of 1,100.
@@ -133,18 +140,92 @@ describe('voiceSampleMetrics (GEO-3340)', () => {
       {},
       undefined,
       receivers([
-        ['remote-a', { packets: 2_000, packetsLost: 0, samples: 96_000, concealedSamples: 0 }],
-        ['remote-new', { packets: 500, packetsLost: 0, samples: 24_000, concealedSamples: 2_400 }],
+        [
+          'remote-a',
+          { packets: 2_000, packetsLost: 0, samples: 96_000, concealedSamples: 0, silentConcealedSamples: 0 },
+        ],
+        [
+          'remote-new',
+          { packets: 500, packetsLost: 0, samples: 24_000, concealedSamples: 2_400, silentConcealedSamples: 0 },
+        ],
       ]),
       receivers([
-        ['remote-a', { packets: 1_000, packetsLost: 0, samples: 48_000, concealedSamples: 0 }],
-        ['remote-gone', { packets: 9_000, packetsLost: 900, samples: 400_000, concealedSamples: 40_000 }],
+        [
+          'remote-a',
+          { packets: 1_000, packetsLost: 0, samples: 48_000, concealedSamples: 0, silentConcealedSamples: 0 },
+        ],
+        [
+          'remote-gone',
+          { packets: 9_000, packetsLost: 900, samples: 400_000, concealedSamples: 40_000, silentConcealedSamples: 0 },
+        ],
       ])
     );
     expect(metrics.recv_tracks).toBe(2);
     expect(metrics.recv_loss_pct).toBe(0);
     // 2,400 concealed of 48,000 + 24,000 heard.
     expect(metrics.recv_concealed_pct).toBe(3.3);
+  });
+
+  it.each(
+    (['packets', 'packetsLost', 'samples', 'concealedSamples'] as const).flatMap(counter =>
+      (['current', 'previous'] as const).map(read => [counter, read] as const)
+    )
+  )('keeps aggregate ratios unknown when %s is missing from one track in the %s read', (counter, read) => {
+    const complete = {
+      packets: 900,
+      packetsLost: 100,
+      samples: 48_000,
+      concealedSamples: 4_800,
+      silentConcealedSamples: 0,
+    };
+    const partial: ReceiverSnapshot = {
+      packets: 9_000,
+      packetsLost: 0,
+      samples: 480_000,
+      concealedSamples: 0,
+      silentConcealedSamples: 0,
+    };
+    const before: ReceiverSnapshot = {
+      packets: 0,
+      packetsLost: 0,
+      samples: 0,
+      concealedSamples: 0,
+      silentConcealedSamples: 0,
+    };
+    delete (read === 'current' ? partial : before)[counter];
+    const metrics = voiceSampleMetrics(
+      {},
+      undefined,
+      receivers([
+        ['a', complete],
+        ['b', partial],
+      ]),
+      receivers([
+        ['a', { packets: 0, packetsLost: 0, samples: 0, concealedSamples: 0, silentConcealedSamples: 0 }],
+        ['b', before],
+      ])
+    );
+    if (counter === 'packets' || counter === 'packetsLost') {
+      expect(metrics.recv_loss_pct).toBeNull();
+      expect(metrics.recv_concealed_pct).not.toBeNull();
+    } else {
+      expect(metrics.recv_concealed_pct).toBeNull();
+      expect(metrics.recv_loss_pct).toBe(1);
+    }
+  });
+
+  it.each([
+    [undefined, undefined],
+    [undefined, 0],
+    [0, undefined],
+  ] as const)('keeps audible concealment unknown for silent counters %s after %s', (current, previous) => {
+    const metrics = voiceSampleMetrics(
+      {},
+      undefined,
+      receivers([['a', { samples: 48_000, concealedSamples: 4_800, silentConcealedSamples: current }]]),
+      receivers([['a', { samples: 0, concealedSamples: 0, silentConcealedSamples: previous }]])
+    );
+    expect(metrics.recv_concealed_pct).toBeNull();
   });
 
   it('reports nothing it could not measure', () => {

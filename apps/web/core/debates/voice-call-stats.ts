@@ -85,8 +85,14 @@ function growth(current: number | undefined, previous: number | undefined, readB
 }
 
 function sum(values: (number | null)[]) {
-  const present = values.filter((value): value is number => value !== null);
-  return present.length === 0 ? null : present.reduce((total, value) => total + value, 0);
+  // A ratio's numerator and denominator must cover the same tracks. A partial
+  // total would make an unmeasured stream look like a healthy one.
+  let total = 0;
+  for (const value of values) {
+    if (value === null) return null;
+    total += value;
+  }
+  return values.length === 0 ? null : total;
 }
 
 function percent(part: number | null, whole: number | null) {
@@ -124,7 +130,7 @@ export function voiceSampleMetrics(
   const concealed = across((current, previous) => {
     const all = growth(current.concealedSamples, previous?.concealedSamples, previous !== undefined);
     const silent = growth(current.silentConcealedSamples, previous?.silentConcealedSamples, previous !== undefined);
-    return all === null ? null : Math.max(0, all - (silent ?? 0));
+    return all === null || silent === null ? null : Math.max(0, all - silent);
   });
   const jitters = tracks.flatMap(([, current]) => (current.jitter === undefined ? [] : [current.jitter]));
 

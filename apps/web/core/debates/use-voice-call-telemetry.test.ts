@@ -121,6 +121,7 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
         packetsLost: 0,
         totalSamplesReceived: 480_000,
         concealedSamples: 0,
+        silentConcealedSamples: 0,
       },
     ];
     renderHook(() => useVoiceCallTelemetry(call.room, 'picker', 'session-1'));
@@ -155,6 +156,7 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
         packetsLost: 100,
         totalSamplesReceived: 1_920_000,
         concealedSamples: 144_000,
+        silentConcealedSamples: 0,
       },
     ];
     await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
@@ -537,5 +539,27 @@ describe('debate room call telemetry (GEO-3411)', () => {
     stop();
     expect(events('debate_voice_changed').at(-1)).toMatchObject({ change: 'disconnected', cause: 'client' });
     expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'disconnected' })]);
+  });
+  it('does not inflate the worst audible concealment when silence counters disappear', async () => {
+    const call = fakeRoom();
+    const stop = startVoiceCallTelemetry(call.room, 'debate', 'd');
+    call.remote.stats = [
+      {
+        type: 'inbound-rtp',
+        kind: 'audio',
+        totalSamplesReceived: 48_000,
+        concealedSamples: 4_800,
+        silentConcealedSamples: 0,
+      },
+    ];
+    await vi.advanceTimersByTimeAsync(VOICE_FIRST_SAMPLE_MS);
+    expect(events('debate_voice_sampled')[0].recv_concealed_pct).toBe(10);
+    call.remote.stats = [
+      { type: 'inbound-rtp', kind: 'audio', totalSamplesReceived: 96_000, concealedSamples: 48_000 },
+    ];
+    await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS);
+    expect(events('debate_voice_sampled')[1].recv_concealed_pct).toBeNull();
+    stop();
+    expect(events('debate_voice_ended')[0].worst_recv_concealed_pct).toBe(10);
   });
 });
