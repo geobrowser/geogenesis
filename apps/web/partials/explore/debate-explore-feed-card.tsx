@@ -30,6 +30,7 @@ import { FullscreenLink } from '~/design-system/fullscreen-link';
 
 import { DebateExploreMetaRow } from './debate-explore-meta-row';
 import { ExploreCardTitle } from './explore-card-title';
+import { ExploreCardTopicFollow } from './explore-card-topic-follow';
 import { openExploreDebateClaimsPanelAtom } from '~/atoms';
 
 /** Visible fraction at which a card takes over playback, and the one it must fall back to
@@ -419,7 +420,8 @@ export function DebateExploreFeedCard({
           hideJoinButton={hideJoinButton}
           compact={compactChrome}
           endSlot={
-            <div className="ml-auto flex shrink-0 items-center gap-1">
+            <div className="ml-auto flex min-w-0 items-center gap-1">
+              <ExploreCardTopicFollow topics={item.topics} className="mr-2" />
               {endSlot}
               <FullscreenLink
                 requiresFullPage

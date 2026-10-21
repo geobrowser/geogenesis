@@ -2,9 +2,15 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { describe, expect, it } from 'vitest';
 
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
-import { type ExploreCardEntity, buildExploreFeedRows, debateClaimFromEntity } from './explore-card-item';
+import {
+  type ExploreCardEntity,
+  buildExploreFeedRows,
+  debateClaimFromEntity,
+  topicsFromRelations,
+} from './explore-card-item';
 
 const DEBATE_SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
 const OTHER_SPACE = 'aa11bb22cc33dd44ee55ff6677889900';
@@ -199,5 +205,44 @@ describe('buildExploreFeedRows', () => {
     );
 
     expect(row.debateClaim).toBeNull();
+  });
+});
+
+describe('topicsFromRelations', () => {
+  const topic = (id: string, name: string | null, extra: Partial<RelationFixture> = {}): RelationFixture => ({
+    typeId: TOPICS_PROPERTY_ID,
+    toEntity: { id, name },
+    ...extra,
+  });
+
+  it('reads every named topic, in the order the graph returned them', () => {
+    expect(topicsFromRelations(relations(topic('topic-b', 'Finance'), topic('topic-a', 'Climate')))).toEqual([
+      { id: 'topic-b', name: 'Finance' },
+      { id: 'topic-a', name: 'Climate' },
+    ]);
+  });
+
+  it('skips deleted, unnamed and repeated topics, and other relations', () => {
+    const topics = topicsFromRelations(
+      relations(
+        topic('topic-a', 'Climate'),
+        topic('topic-b', 'Finance', { isDeleted: true }),
+        topic('topic-c', '  '),
+        topic('TOPIC-A', 'Climate'),
+        { typeId: DEBATE_CLAIMS_PROPERTY_ID, toEntity: { id: 'claim-1', name: CLAIM } }
+      )
+    );
+
+    expect(topics).toEqual([{ id: 'topic-a', name: 'Climate' }]);
+  });
+
+  it('puts the display space’s topics on the row, and none from another space', () => {
+    const [row] = buildExploreFeedRows(
+      [debateEntity(relations(topic('topic-a', 'Climate'), topic('topic-b', 'Finance', { spaceId: OTHER_SPACE })))],
+      new Set([DEBATE_SPACE]),
+      new Set()
+    );
+
+    expect(row.topics).toEqual([{ id: 'topic-a', name: 'Climate' }]);
   });
 });

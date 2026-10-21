@@ -28,6 +28,7 @@ import { Text } from '~/design-system/text';
 import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
+import { ExploreCardTopicFollow } from './explore-card-topic-follow';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
 
@@ -276,15 +277,18 @@ export function ClaimExploreFeedCard({
           extraSegments={extraSegments}
           compactOnMobile={matchesDebatePanelOnMobile}
           endSlot={
-            <ClaimEndSlot
-              claimId={item.entityId}
-              spaceId={item.spaceId}
-              activeDebate={row?.active_debate}
-              enabled={nearViewport}
-              // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
-              viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
-              className="ml-auto"
-            />
+            <div className="ml-auto flex min-w-0 items-center">
+              <ExploreCardTopicFollow topics={item.topics} />
+              <ClaimEndSlot
+                claimId={item.entityId}
+                spaceId={item.spaceId}
+                activeDebate={row?.active_debate}
+                enabled={nearViewport}
+                // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
+                viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
+                className="ml-3 empty:ml-0"
+              />
+            </div>
           }
           className="col-start-1 row-start-1 mb-3 claim-card-narrow:mb-0"
         />

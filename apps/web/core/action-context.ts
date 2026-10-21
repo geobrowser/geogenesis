@@ -30,6 +30,7 @@ export const ACTION_COMPONENTS = [
   'debate_end_card',
   'debate_claims_panel',
   'topic_follow_button',
+  'explore_card_topic_follow',
   'person_follow_button',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
