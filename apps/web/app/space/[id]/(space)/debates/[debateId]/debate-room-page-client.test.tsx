@@ -882,6 +882,20 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Recording')).not.toBeInTheDocument();
   });
 
+  it('joins and publishes when telemetry setup throws', async () => {
+    mocks.startVoiceCallTelemetry.mockImplementationOnce(() => {
+      throw new Error('telemetry unavailable');
+    });
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const { unmount } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalled());
+    expect(mocks.roomDisconnect).not.toHaveBeenCalled();
+    expect(screen.queryByText('telemetry unavailable')).not.toBeInTheDocument();
+    unmount();
+    expect(mocks.roomDisconnect).toHaveBeenCalled();
+  });
+
   // `installRecordingMocks` matters: without it `MediaRecorder` is undefined in jsdom and
   // `startLocalRecorder` returns on its first line, so this asserted nothing. The debate is also
   // given a recording window, leaving the status gate as the only thing holding capture back.

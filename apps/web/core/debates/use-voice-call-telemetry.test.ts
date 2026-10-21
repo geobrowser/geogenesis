@@ -28,13 +28,14 @@ function fakeRoom() {
     stats: [] as Record<string, unknown>[],
     /** The browser refuses the next stats read. */
     rejects: false,
+    hold: null as Promise<void> | null,
   };
   const remote = {
     stats: [] as Record<string, unknown>[],
     /** Holds the next stats read open until the test lets it go. */
     hold: null as Promise<void> | null,
   };
-  const camera = { stats: [] as Record<string, unknown>[], rejects: false };
+  const camera = { stats: [] as Record<string, unknown>[], rejects: false, hold: null as Promise<void> | null };
   const room = {
     state: ConnectionState.Connected as ConnectionState,
     on: on(roomListeners),
@@ -49,6 +50,7 @@ function fakeRoom() {
           ? {
               track: {
                 getRTCStatsReport: async () => {
+                  if (camera.hold) await camera.hold;
                   if (camera.rejects) throw new Error('video stats unavailable');
                   return new Map(camera.stats.map((entry, index) => [`v${index}`, entry]));
                 },
@@ -58,6 +60,7 @@ function fakeRoom() {
               track: {
                 mediaStreamTrack: { label: mic.label },
                 getRTCStatsReport: async () => {
+                  if (mic.hold) await mic.hold;
                   if (mic.rejects) throw new Error('stats unavailable');
                   return new Map(mic.stats.map((entry, index) => [`s${index}`, entry]));
                 },
@@ -235,13 +238,13 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
 
     let letGo: () => void = () => undefined;
     call.remote.hold = new Promise(resolve => (letGo = resolve));
-    call.mic.stats = level(0.4, 40);
-    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
+    call.mic.stats = level(0.3, 30);
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS - VOICE_FIRST_SAMPLE_MS)));
     act(() => call.emitLocal(ParticipantEvent.TrackMuted, { source: 'microphone' }));
     call.remote.hold = null;
     await act(async () => letGo());
 
-    call.mic.stats = level(0.4, 70);
+    call.mic.stats = level(0.3, 60);
     await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
     const [, second, third] = events('debate_voice_sampled');
     expect(second).toEqual(expect.objectContaining({ mic_level_db: -20 }));
@@ -446,6 +449,64 @@ describe('debate room call telemetry (GEO-3411)', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+  });
+
+  it.each(['mic', 'remote', 'camera'] as const)(
+    'recovers after a stalled %s stats read and ignores its late result',
+    async track => {
+      const call = fakeRoom();
+      let release = () => {};
+      call[track].hold = new Promise<void>(resolve => (release = resolve));
+      const stop = startVoiceCallTelemetry(call.room, 'debate', 'd');
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(events('debate_voice_sampled')).toHaveLength(track === 'camera' ? 1 : 0);
+      call[track].hold = null;
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(events('debate_voice_sampled').at(-1)).toEqual(expect.objectContaining({ seconds_connected: 30 }));
+      const count = events('debate_voice_sampled').length;
+      release();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(events('debate_voice_sampled')).toHaveLength(count);
+      stop();
+      expect(vi.getTimerCount()).toBe(0);
+    }
+  );
+
+  it('preserves the last committed counters and mute change when a sample times out', async () => {
+    const call = fakeRoom();
+    const sender = (packets: number, energy: number, seconds: number) => [
+      { type: 'outbound-rtp', kind: 'audio', packetsSent: packets },
+      { type: 'media-source', kind: 'audio', totalAudioEnergy: energy, totalSamplesDuration: seconds },
+    ];
+    call.mic.stats = sender(100, 0.1, 10);
+    const stop = startVoiceCallTelemetry(call.room, 'debate', 'd');
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    call.remote.hold = new Promise<void>(() => {});
+    call.mic.stats = sender(300, 0.3, 30);
+    call.emitLocal(ParticipantEvent.TrackMuted, { source: 'microphone' });
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(events('debate_voice_sampled')).toHaveLength(1);
+
+    call.remote.hold = null;
+    call.mic.stats = sender(600, 0.6, 60);
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(events('debate_voice_sampled').at(-1)).toEqual(
+      expect.objectContaining({ seconds_connected: 60, sent_packets: 500, mic_level_db: null })
+    );
+    stop();
+  });
+
+  it('removes partial registrations when telemetry setup throws', () => {
+    const call = fakeRoom();
+    vi.spyOn(call.raw.localParticipant, 'on').mockImplementation(() => {
+      throw new Error('participant listener unavailable');
+    });
+    expect(() => startVoiceCallTelemetry(call.room, 'debate', 'd')).toThrow();
+    for (const listeners of call.roomListeners.values()) expect(listeners.size).toBe(0);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('attributes quality history, poor time and encoder limits to the debater and connection attempt', async () => {

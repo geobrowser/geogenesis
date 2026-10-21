@@ -18,6 +18,7 @@ import {
 
 import { captureSafely } from '~/core/analytics-capture-safely';
 import { disconnectCause, disconnectReasonName } from '~/core/livekit/disconnect-reason';
+import { resolveWithin } from '~/core/utils/resolve-within';
 
 import { type VideoSnapshot, videoSampleMetrics } from './video-call-stats';
 import {
@@ -145,7 +146,7 @@ export function startVoiceCallTelemetry(
       noteMicKind();
       // A refused read throws out of the sample, which is dropped: an empty snapshot taken as the
       // baseline would make the next sample report the whole call as one interval.
-      const senderEntries = statsEntries(await micTrack()?.getRTCStatsReport());
+      const senderEntries = await readStats(micTrack());
       const sender = readSenderReport(senderEntries);
       let sentOver = readTransport(senderEntries);
       spansMuteChange = muteChanged;
@@ -157,7 +158,7 @@ export function startVoiceCallTelemetry(
         for (const publication of participant.audioTrackPublications.values()) {
           const remote = publication.track as RemoteAudioTrack | undefined;
           if (!remote || !publication.trackSid) continue;
-          const entries = statsEntries(await remote.getRTCStatsReport());
+          const entries = await readStats(remote);
           const received = readReceiverReport(entries);
           // By stream as well as track: a resubscribed track is a new stream whose counters restart.
           receivers.set(`${publication.trackSid}:${received.streamId ?? ''}`, received);
@@ -171,7 +172,7 @@ export function startVoiceCallTelemetry(
       if (surface === 'debate') {
         const camera = local.getTrackPublication(Track.Source.Camera)?.track as LocalVideoTrack | undefined;
         try {
-          const entries = statsEntries(await camera?.getRTCStatsReport());
+          const entries = await readStats(camera);
           video = videoSampleMetrics(entries, previousVideo);
           sentOver ??= readTransport(entries);
         } catch {
@@ -323,18 +324,27 @@ export function startVoiceCallTelemetry(
     if (publication.source === Track.Source.Microphone) muteChanged = true;
   };
 
-  room.on(RoomEvent.ConnectionStateChanged, onConnectionState);
-  room.on(RoomEvent.Disconnected, onDisconnected);
-  room.on(RoomEvent.ActiveDeviceChanged, onActiveDevice);
-  room.on(RoomEvent.LocalTrackPublished, noteMicKind);
-  local.on(ParticipantEvent.ConnectionQualityChanged, onQuality);
-  local.on(ParticipantEvent.TrackMuted, onMuteChange);
-  local.on(ParticipantEvent.TrackUnmuted, onMuteChange);
-  window.addEventListener('pagehide', onPageHide);
+  try {
+    room.on(RoomEvent.ConnectionStateChanged, onConnectionState);
+    room.on(RoomEvent.Disconnected, onDisconnected);
+    room.on(RoomEvent.ActiveDeviceChanged, onActiveDevice);
+    room.on(RoomEvent.LocalTrackPublished, noteMicKind);
+    local.on(ParticipantEvent.ConnectionQualityChanged, onQuality);
+    local.on(ParticipantEvent.TrackMuted, onMuteChange);
+    local.on(ParticipantEvent.TrackUnmuted, onMuteChange);
+    window.addEventListener('pagehide', onPageHide);
 
-  if (connectedAt !== null) {
-    startSampling();
-    if (surface === 'debate') reportChange({ change: 'quality', connection_quality: quality, previous_quality: null });
+    if (connectedAt !== null) {
+      startSampling();
+      if (surface === 'debate')
+        reportChange({ change: 'quality', connection_quality: quality, previous_quality: null });
+    }
+  } catch (error) {
+    // Setup can fail after registering only some listeners. Leave none behind when the
+    // optional debate integration falls back to a no-op (or a hook reports the error).
+    ended = true;
+    cleanup();
+    throw error;
   }
 
   function cleanup() {
@@ -350,6 +360,14 @@ export function startVoiceCallTelemetry(
     window.removeEventListener('pagehide', onPageHide);
   }
   return () => finish('left');
+}
+
+/** Bound each read separately so a late browser result cannot commit an expired sample. */
+async function readStats(track: Pick<LocalAudioTrack, 'getRTCStatsReport'> | undefined) {
+  const report = await resolveWithin(async () => track?.getRTCStatsReport(), 5_000, null);
+  // An absent track is a valid unmeasured report; a timed-out track drops this interval.
+  if (report === null) throw new Error('RTC stats read timed out');
+  return statsEntries(report);
 }
 
 /** The larger of two readings, either of which may be missing. */

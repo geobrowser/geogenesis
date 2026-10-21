@@ -52,6 +52,7 @@ import {
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
 import { ROOM_END_TURN_CLASS, ROOM_UI_FONT, RoomExit } from '~/core/debates/debate-room-stamps';
+import { loadDebateRoomTelemetry } from '~/core/debates/debate-room-telemetry';
 import { DebateRoundIndicator } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
@@ -138,6 +139,7 @@ import { useLocalSpeechActivity } from '~/core/debates/use-local-speech-activity
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
+import { disconnectReasonName } from '~/core/livekit/disconnect-reason';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useFeatureFlag } from '~/core/state/feature-flags';
@@ -1603,11 +1605,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setJoinResponse(token);
 
         connectionStage = 'sdk_import';
-        const [livekit, { startVoiceCallTelemetry }, { disconnectReasonName }] = await Promise.all([
-          import('livekit-client'),
-          import('~/core/debates/use-voice-call-telemetry'),
-          import('~/core/livekit/disconnect-reason'),
-        ]);
+        const [livekit, startTelemetry] = await Promise.all([import('livekit-client'), loadDebateRoomTelemetry()]);
         if (!isCurrent()) return;
         connectionStage = 'audio_output';
         await audioOutputSelectionPromiseRef.current;
@@ -1793,14 +1791,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
         connectingRoomRef.current = null;
         roomRef.current = room;
-        roomTelemetryStops.set(
-          room,
-          startVoiceCallTelemetry(room as unknown as Room, 'debate', debateId, {
-            debate_id: debateId,
-            participant_slot: token.participant_slot,
-            call_session_id: crypto.randomUUID(),
-          })
-        );
+        roomTelemetryStops.set(room, startTelemetry(room as unknown as Room, debateId, token.participant_slot));
         // Whoever joins second finds the other already there, and no arrival event will fire.
         if ((room.remoteParticipants?.size ?? 0) > 0) setRemotePresence('present');
 
