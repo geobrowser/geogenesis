@@ -38,7 +38,7 @@ describe('DebateVideoTile', () => {
           <div />
         </DebateVideoTile>
       );
-      expect(screen.getByRole('img', { name: 'Finishing their sentence' })).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Microphone still open' })).toBeInTheDocument();
       expect(tile.querySelector('[data-muted-indicator]')).not.toBeInTheDocument();
       expect(tile).toHaveAttribute('data-turn-finishing', 'true');
       // Still outlined as the one being heard.

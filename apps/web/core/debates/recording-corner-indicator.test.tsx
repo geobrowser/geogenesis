@@ -69,11 +69,11 @@ describe('RecordingCornerIndicator', () => {
     const view = render(
       <RecordingCornerIndicator participant="remote" muted={false} countdown={null} finishingSince={Date.now()} />
     );
-    expect(screen.getByRole('img', { name: 'Finishing their sentence' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Microphone still open' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Microphone muted')).not.toBeInTheDocument();
 
     view.rerender(<RecordingCornerIndicator participant="remote" muted countdown={null} finishingSince={null} />);
     expect(screen.getByLabelText('Microphone muted')).toBeInTheDocument();
-    expect(screen.queryByRole('img', { name: 'Finishing their sentence' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Microphone still open' })).not.toBeInTheDocument();
   });
 });

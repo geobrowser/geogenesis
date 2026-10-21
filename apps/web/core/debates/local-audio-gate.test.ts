@@ -5,6 +5,7 @@ import {
   MIC_OVERRUN_MAX_MS,
   MIC_PREARM_BEFORE_TURN_MS,
   shouldEnableLocalAudio,
+  turnOverrunPossible,
 } from './local-audio-gate';
 
 const speaking: LocalAudioGateInput = {
@@ -114,5 +115,14 @@ describe('local audio gate', () => {
     const outgoing = gate({ activeSlot: 2, localSlot: 1, msSinceTurnEnded: 200, stillSpeaking: true });
     const incoming = gate({ activeSlot: 1, localSlot: 2, msUntilTurnStarts: 200 });
     expect([outgoing, incoming]).toEqual([true, true]);
+  });
+
+  it('has an overrun only where turn-taking follows the turn (GEO-3407)', () => {
+    const overrun = { effectiveStatus: 'in_progress', openRoundsPhase: null, openRoundResultHeld: false } as const;
+    expect(turnOverrunPossible(overrun)).toBe(true);
+    expect(turnOverrunPossible({ ...overrun, effectiveStatus: 'thanking' })).toBe(false);
+    expect(turnOverrunPossible({ ...overrun, openRoundsPhase: 'deciding' })).toBe(false);
+    expect(turnOverrunPossible({ ...overrun, openRoundsPhase: 'result' })).toBe(false);
+    expect(turnOverrunPossible({ ...overrun, openRoundResultHeld: true })).toBe(false);
   });
 });

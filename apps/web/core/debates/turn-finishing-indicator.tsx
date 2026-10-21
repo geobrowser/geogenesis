@@ -5,7 +5,12 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { MIC_OVERRUN_MAX_MS } from './local-audio-gate';
-import { turnTimerRimMask } from './recording-countdown-ring';
+import {
+  TURN_TIMER_FACE_BACKGROUND,
+  TURN_TIMER_FINAL_RIM_MASK,
+  turnTimerRimGradient,
+  turnTimerRimMask,
+} from './recording-countdown-ring';
 
 const BAR_DELAYS_MS = [0, 180, 90, 270];
 
@@ -29,18 +34,18 @@ export function TurnFinishingIndicator({ startedAt, openRounds = false }: { star
     const frame = requestAnimationFrame(() => setDraining(true));
     return () => cancelAnimationFrame(frame);
   }, []);
-  const rimMask = turnTimerRimMask(openRounds ? '0.55cqw' : '3px');
+  const rimMask = openRounds ? TURN_TIMER_FINAL_RIM_MASK : turnTimerRimMask('3px');
 
   return (
     <div
       role="img"
-      aria-label="Finishing their sentence"
+      aria-label="Microphone still open"
       data-turn-finishing="true"
       className="relative grid shrink-0 place-items-center rounded-full"
       style={{
         width: openRounds ? '9cqw' : 51,
         height: openRounds ? '9cqw' : 51,
-        backgroundImage: 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.25))',
+        backgroundImage: TURN_TIMER_FACE_BACKGROUND,
       }}
     >
       <span
@@ -51,7 +56,7 @@ export function TurnFinishingIndicator({ startedAt, openRounds = false }: { star
           {
             '--turn-timer-rim': `${draining ? 0 : initial.degrees}deg`,
             transition: `--turn-timer-rim ${draining ? initial.remainingMs : 0}ms linear`,
-            backgroundImage: 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.28) 0deg)',
+            backgroundImage: turnTimerRimGradient(0.28),
             maskImage: rimMask,
             WebkitMaskImage: rimMask,
           } as React.CSSProperties

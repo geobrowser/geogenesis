@@ -5,26 +5,13 @@ import * as React from 'react';
 import { decibelsFromSamples, initialSpeechGateState, stepSpeechGate } from './speech-activity';
 
 /**
- * Whether the local speaker is talking right now, from their own microphone signal.
- *
- * GEO-2915 needs this to decide when a turn's overrun has finished. A fixed window cannot work:
- * sentences are not all the same length, so any number is too short for some speakers and adds
- * dead air for the rest. The signal itself knows.
- *
- * Reads the track directly rather than LiveKit's `isSpeaking`, which is derived from what the SFU
- * receives and is therefore subject to publication, and is exactly what gets switched off at the
- * buzzer. This has to observe the source, because the whole question is whether to keep publishing.
- */
-export function useLocalSpeechActivity(
-  stream: MediaStream | null,
-  enabled: boolean,
-  onChange?: (speaking: boolean) => void
-): React.RefObject<boolean> {
-  return useSpeechActivity(stream?.getAudioTracks()[0] ?? null, enabled, onChange);
-}
-
-/**
  * Whether a track carries speech right now, through the same gate as the microphone meter.
+ *
+ * GEO-2915 reads the speaker's own microphone with this to decide when a turn's overrun has
+ * finished: a fixed window is too short for some sentences and adds dead air to the rest. It reads
+ * the track directly rather than LiveKit's `isSpeaking`, which is derived from what the SFU receives
+ * and is exactly what gets switched off at the buzzer. GEO-3407 reads the opponent's incoming track
+ * with it too, so their tile shows what the listener actually hears.
  *
  * Returns a ref rather than state on purpose. It changes several times a second, and driving
  * re-renders from it would re-render the debate room continuously for the entire debate. A caller

@@ -81,7 +81,12 @@ import {
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
 import { useCarriedLobbyChoice, useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
-import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
+import {
+  type LocalAudioGateInput,
+  MIC_OVERRUN_MAX_MS,
+  shouldEnableLocalAudio,
+  turnOverrunPossible,
+} from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
   DebateMediaSessionBoundary,
@@ -130,16 +135,11 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { readRematchJoinIntent, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
-import { useRemoteTurnOverrun } from '~/core/debates/remote-turn-overrun';
 import { joinStateNeedsOpening, kindsForJoinState, resolveJoinChoice } from '~/core/debates/request-join-state';
-import {
-  SERVER_CLOCK_RETRY_DELAYS_MS,
-  createLocalServerClock,
-  synchronizeServerClock,
-} from '~/core/debates/server-clock';
+import { createLocalServerClock, keepServerClockSynchronized } from '~/core/debates/server-clock';
 import { isDebateInThankYouPeriod } from '~/core/debates/thank-you-period';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
-import { useLocalSpeechActivity } from '~/core/debates/use-local-speech-activity';
+import { REMOTE_OVERRUN_WINDOW_MS, useTurnOverrun } from '~/core/debates/turn-overrun';
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
@@ -726,40 +726,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     thankingRecordingCancelled,
   ]);
   React.useLayoutEffect(() => () => setThankingDebate(null), [setThankingDebate]);
-  // GEO-2915. The mic has to outlive the turn, or the speaker's last words are never recorded --
-  // the `MediaRecorder` holds the very track the gate disables. Held as a timestamp rather than a
-  // flag so the threshold lives in one place, in `local-audio-gate`, where it is tested.
-  const [localTurnEndedAt, setLocalTurnEndedAt] = React.useState<number | null>(null);
-  const localSlotWasActiveRef = React.useRef(false);
-  // Read through a ref: a deliberate yield must suppress the overrun, but it must not be a
-  // dependency of the effect below, which fires on the turn changing and nothing else.
-  const pendingTurnYieldRef = React.useRef(pendingTurnYield);
-  pendingTurnYieldRef.current = pendingTurnYield;
-  // Reads the microphone's own signal, so it still answers after the published track is gated --
-  // which is the entire question the overrun has to settle. GEO-3407: the overrun ends the moment
-  // the gate closes, and for good. Read only at render, the 500 ms countdown tick let the mic stay
-  // live up to half a second past the end of the sentence, and a later breath could reopen it.
-  const localSpeakingRef = useLocalSpeechActivity(previewStream, roomState === 'connected', speaking => {
-    if (!speaking) setLocalTurnEndedAt(null);
-  });
-  React.useEffect(() => {
-    const active = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot;
-    const wasActive = localSlotWasActiveRef.current;
-    localSlotWasActiveRef.current = active;
-    if (active) {
-      setLocalTurnEndedAt(null);
-      return;
-    }
-    if (!wasActive) return;
-    // Their turn just ended. A deliberate yield means they chose to stop, so there is nothing to
-    // rescue and the mic closes at once as before.
-    if (pendingTurnYieldRef.current) return;
-    // Not talking at the buzzer: the clean cut they always had.
-    if (!localSpeakingRef.current) return;
-    setLocalTurnEndedAt(Date.now());
-    const timer = window.setTimeout(() => setLocalTurnEndedAt(null), MIC_OVERRUN_MAX_MS);
-    return () => window.clearTimeout(timer);
-  }, [countdown.activeSlot, countdown.effectiveStatus, localSlot, localSpeakingRef]);
   const localTurnStartsIn = debate ? localTurnStartsInSeconds(debate, countdown, localSlot) : null;
   const revealHold = debate
     ? openRoundThankingHold({
@@ -772,36 +738,51 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     : null;
   // The final board holds both microphones and the exit on the same room clock.
   const revealHoldsExit = Boolean(revealHold?.maxReached || revealHold?.wrapHeld);
-  const localAudioGate: LocalAudioGateInput = {
-    effectiveStatus: debate ? countdown.effectiveStatus : null,
-    activeSlot: countdown.activeSlot,
-    localSlot,
-    audioMuted: audioMuted || pendingTurnYield !== null,
-    msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
-    stillSpeaking: localSpeakingRef.current,
-    msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
+  // GEO-2915. The mic has to outlive the turn, or the speaker's last words are never recorded --
+  // the `MediaRecorder` holds the very track the gate disables. GEO-3407: the listener's room asks
+  // the same question of the opponent's incoming audio, so both tiles say "finishing" rather than
+  // "muted" for exactly as long as the speaker can be heard past the buzzer.
+  const overrunPossible = turnOverrunPossible({
+    effectiveStatus: countdown.effectiveStatus,
     openRoundsPhase: countdown.openRounds?.phase ?? null,
     openRoundResultHeld: revealHoldsExit,
-  };
-  const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
-  // GEO-3407. Both tiles say "finishing" rather than "muted" for exactly as long as the speaker can
-  // be heard past the buzzer: ours from our own gate, theirs from the audio that reaches us.
-  const localFinishingSince =
-    localAudioEnabled && localTurnEndedAt !== null && countdown.activeSlot !== localSlot ? localTurnEndedAt : null;
-  const overrunPossible =
-    countdown.effectiveStatus === 'in_progress' &&
-    countdown.openRounds?.phase !== 'deciding' &&
-    countdown.openRounds?.phase !== 'result' &&
-    !revealHoldsExit;
-  const remoteFinishingSince = useRemoteTurnOverrun({
-    audioTrack: remoteAudioTrack,
+  });
+  const localTurnEndedAt = useTurnOverrun({
+    // Reads the microphone's own signal, so it still answers after the published track is gated --
+    // which is the entire question the overrun has to settle.
+    track: previewStream?.getAudioTracks()[0] ?? null,
+    listening: roomState === 'connected',
+    turnActive: countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot,
+    overrunPossible,
+    yielded: pendingTurnYield !== null,
+    windowMs: MIC_OVERRUN_MAX_MS,
+  });
+  const remoteFinishingSince = useTurnOverrun({
+    track: remoteAudioTrack,
+    listening: remoteAudioTrack !== null,
     turnActive:
       countdown.effectiveStatus === 'in_progress' &&
       countdown.activeSlot !== null &&
       localSlot !== null &&
       countdown.activeSlot !== localSlot,
     overrunPossible,
+    windowMs: REMOTE_OVERRUN_WINDOW_MS,
   });
+  const localAudioGate: LocalAudioGateInput = {
+    effectiveStatus: debate ? countdown.effectiveStatus : null,
+    activeSlot: countdown.activeSlot,
+    localSlot,
+    audioMuted: audioMuted || pendingTurnYield !== null,
+    msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
+    // `useTurnOverrun` ends the overrun the moment they stop, so one that is running means they are
+    // still talking.
+    stillSpeaking: localTurnEndedAt !== null,
+    msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
+    openRoundsPhase: countdown.openRounds?.phase ?? null,
+    openRoundResultHeld: revealHoldsExit,
+  };
+  const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
+  const localFinishingSince = localAudioEnabled ? localTurnEndedAt : null;
   // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
   // turn. Reading preferences through a ref keeps that write consistent with the reconciliation
   // effect below, which can otherwise run first against a still-empty `localTracksRef` and be
@@ -1621,31 +1602,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       remoteMediaRef.current?.replaceChildren();
       subscribedRemoteTracksRef.current.clear();
       setRemoteAudioTrack(null);
-      // GEO-3407. A failed sync leaves this room on the computer's own clock, which can be seconds
-      // off the other debater's, so the room settles on that at once rather than waiting, and keeps
-      // trying in the background.
-      const syncServerClock = (attempt: number) => {
-        void synchronizeServerClock(getServerTime)
-          .then(clock => {
-            if (isCurrent()) setServerClock(clock);
-          })
-          .catch(error => {
-            if (!isCurrent()) return;
-            const retryInMs = SERVER_CLOCK_RETRY_DELAYS_MS[attempt];
-            if (retryInMs === undefined) {
-              console.warn("[DebateRoom] Could not sync the debate clock; using this computer's clock.", error);
-              return;
-            }
-            // A bare timer, as in `server-clock`: it may fire after a test's jsdom is torn down.
-            setTimeout(() => {
-              if (isCurrent()) syncServerClock(attempt + 1);
-            }, retryInMs);
-          })
-          .finally(() => {
-            if (attempt === 0 && isCurrent()) setServerClockSettled(true);
-          });
-      };
-      syncServerClock(0);
+      keepServerClockSynchronized(getServerTime, {
+        isCurrent,
+        onSynchronized: setServerClock,
+        onFirstAttemptSettled: () => setServerClockSettled(true),
+      });
 
       try {
         const token = await liveKitJoin.mutateAsync();
