@@ -6,8 +6,8 @@ export function GeoLogoLarge() {
       preserveAspectRatio="none"
       overflow="visible"
       style={{ display: 'block' }}
-      width="25.8662"
-      height="30"
+      width="17.2441"
+      height="20"
       viewBox="0 0 25.8662 30"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
