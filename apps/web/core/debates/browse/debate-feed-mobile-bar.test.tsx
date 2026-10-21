@@ -8,7 +8,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
 import { DebateFeedMobileBarActions } from './debate-feed-mobile-bar-actions';
 
-const mocks = vi.hoisted(() => ({ authenticated: false }));
+const mocks = vi.hoisted(() => ({ authenticated: false, isPhone: true }));
+
+vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPhone }));
 
 // The real link prefetches through the sync engine, which this test has no provider for.
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -31,6 +33,7 @@ vi.mock('../matchmaking/debates-hub-button', () => ({
 afterEach(() => {
   cleanup();
   mocks.authenticated = false;
+  mocks.isPhone = true;
 });
 
 describe('DebateFeedMobileBar', () => {
@@ -45,6 +48,23 @@ describe('DebateFeedMobileBar', () => {
     render(<DebateFeedMobileBar />);
 
     expect(screen.getByRole('banner')).toHaveClass('hidden', 'md:flex', 'h-11');
+  });
+
+  it('mounts the account controls on phones', async () => {
+    render(<DebateFeedMobileBar />);
+
+    expect(await screen.findByTestId('account')).toBeInTheDocument();
+  });
+
+  // Hidden by CSS alone, a desktop copy would run beside the app navbar's: a second ⌘E listener, a
+  // second edit mode tip.
+  it('does not mount them where the bar is hidden', async () => {
+    mocks.isPhone = false;
+    render(<DebateFeedMobileBar />);
+
+    // Let the client-only chunk resolve, so absence is not just "not loaded yet".
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByTestId('account')).not.toBeInTheDocument();
   });
 
   it('sets "Geo" in the share video’s face', () => {

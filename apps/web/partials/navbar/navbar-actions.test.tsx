@@ -488,6 +488,39 @@ describe('NavbarActions profile menu', () => {
       expect(connect).not.toHaveAttribute('data-component');
     });
 
+    // The app navbar stays mounted under the bar and owns ⌘E. A second listener toggled once but
+    // reported the switch twice.
+    it('leaves the edit mode shortcut to the app navbar', () => {
+      mocks.spaceId = 'space-1';
+      mocks.canEdit = true;
+      render(<NavbarActions compact />);
+
+      expect(mocks.shortcutCallback).toBeNull();
+    });
+
+    it('still registers the shortcut in the app navbar', () => {
+      mocks.spaceId = 'space-1';
+      mocks.canEdit = true;
+      render(<NavbarActions />);
+
+      expect(mocks.shortcutCallback).not.toBeNull();
+    });
+
+    // The navbar's phone layout starts at 639px; the bar shows up to 767px. Between the two the
+    // toggle (and its first-run tip) would otherwise sit in the bar beside the avatar.
+    it('keeps the edit mode toggle in the menu up to the bar’s edge', async () => {
+      mocks.spaceId = 'space-1';
+      mocks.isMobileNavbar = false;
+      const user = userEvent.setup();
+      render(<NavbarActions compact />);
+
+      expect(screen.queryByTestId('edit-toggle')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+      expect(
+        within(screen.getByTestId('profile-menu')).getByRole('switch', { name: 'Edit mode off' })
+      ).toBeInTheDocument();
+    });
+
     it('gives the avatar a 44px target at every phone width', () => {
       render(<NavbarActions compact />);
 

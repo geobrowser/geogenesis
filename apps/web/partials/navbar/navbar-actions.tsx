@@ -115,7 +115,9 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
   const { user, authenticated } = usePrivy();
   // Signed in with no smart account is not signed out (GEO-3245): Log in does nothing for it.
   const walletStall = useWalletStall({ authenticated, address: resolvedAddress, error: smartAccountError });
-  const isMobileNavbar = useIsMobileNavbar();
+  // The compact bar only exists on phones, so it always takes the phone layout: the edit mode toggle
+  // in the menu, not beside the avatar, even between 640px and the bar's 767px edge.
+  const isMobileNavbar = useIsMobileNavbar() || compact;
   const spaceId = useSpaceId();
   const { canCreateInSpace, createEntity, createProperty, createSpace } = useCreateEntityActions(spaceId);
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
@@ -204,7 +206,14 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
 
     return (
       <div key="navbar-content" className="flex items-center gap-4">
-        <ModeToggle isMobile={isMobileNavbar} isProfileMenuOpen={open} spaceId={spaceId}>
+        <ModeToggle
+          isMobile={isMobileNavbar}
+          isProfileMenuOpen={open}
+          spaceId={spaceId}
+          // The app navbar stays mounted under the compact bar and already owns ⌘E; a second
+          // listener would toggle once but report it twice.
+          registerShortcut={!compact}
+        >
           {({ navbar, menu }) => (
             <>
               {navbar}
@@ -474,11 +483,13 @@ function ModeToggle({
   isMobile,
   isProfileMenuOpen,
   spaceId,
+  registerShortcut = true,
   children,
 }: {
   isMobile: boolean;
   isProfileMenuOpen: boolean;
   spaceId: string | null | undefined;
+  registerShortcut?: boolean;
   children: (slots: ModeToggleSlots) => React.ReactNode;
 }) {
   const controls = useAnimation();
@@ -572,14 +583,17 @@ function ModeToggle({
   ]);
 
   const memoizedShortcuts = React.useMemo(
-    () => [
-      // Toggle edit mode when ⌘ + e is pressed
-      {
-        key: 'e',
-        callback: onToggle,
-      },
-    ],
-    [onToggle]
+    () =>
+      registerShortcut
+        ? [
+            // Toggle edit mode when ⌘ + e is pressed
+            {
+              key: 'e',
+              callback: onToggle,
+            },
+          ]
+        : [],
+    [onToggle, registerShortcut]
   );
 
   useKeyboardShortcuts(memoizedShortcuts);
