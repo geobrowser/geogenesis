@@ -19,6 +19,7 @@ import { useSpaceId } from '~/core/hooks/use-space-id';
 import { geoNotificationsApiUrl } from '~/core/notifications/api';
 import { useEditable } from '~/core/state/editable-store';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import type { SaveVotesPressReason } from '~/core/state/save-votes-prompt';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 import { useLogout, usePrivy } from '~/core/wallet/auth-hooks';
@@ -88,7 +89,7 @@ type NavbarActionsProps = {
    */
   compact?: boolean;
   /** Where a sign-in from here was started, for its analytics; the navbar's own when left out. */
-  signInComponent?: string;
+  signInComponent?: SaveVotesPressReason;
 };
 
 export function NavbarActions({ compact = false, signInComponent }: NavbarActionsProps = {}) {

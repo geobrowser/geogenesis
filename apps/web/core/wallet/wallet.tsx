@@ -10,16 +10,16 @@ import {
 } from '~/design-system/button';
 
 import { usePrepareOnboarding } from '../hooks/use-prepare-onboarding';
-import { useSaveVotesSignIn } from '../hooks/use-save-votes-sign-in';
 import { useTrackedLogin } from '../hooks/use-tracked-login';
 import { saveVotesNavLabel } from '../save-votes-copy';
 import { useLocalVoteCount } from '../state/local-votes';
+import { type SaveVotesPressReason, openSaveVotesPrompt } from '../state/save-votes-prompt';
 
 type ConnectButtonProps = {
   /** The debate feed's phone bar (GEO-3415): the smaller pill, in a full 44px target. */
   compact?: boolean;
-  /** Where the sign-in was started, for its analytics. */
-  component?: string;
+  /** Where the sign-in was started, for its analytics, and the save sheet's reason when votes wait. */
+  component?: SaveVotesPressReason;
 };
 
 function PrivyConnectButton({ compact = false, component = 'navbar' }: ConnectButtonProps) {
@@ -29,14 +29,14 @@ function PrivyConnectButton({ compact = false, component = 'navbar' }: ConnectBu
   const prepareOnboarding = usePrepareOnboarding();
 
   const { login } = useTrackedLogin({});
-  // With votes waiting on this device, this is a save prompt (GEO-3214): it names them, and the
-  // sign-in it starts saves them. Returns to this page, since the votes were cast here.
+  // With votes waiting on this device, this is a save prompt (GEO-3214): it names them, and opens
+  // the save sheet centred rather than Privy's own dialog, so the votes are in front of the visitor
+  // as they sign in (GEO-3400). The sheet's sign-ins save them.
   const localVoteCount = useLocalVoteCount();
-  const saveSignIn = useSaveVotesSignIn();
 
   const onLogin = () => {
     if (localVoteCount > 0) {
-      void saveSignIn(component, localVoteCount);
+      openSaveVotesPrompt(component);
       return;
     }
     prepareOnboarding({ returnTo: null });
