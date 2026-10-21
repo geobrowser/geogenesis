@@ -5,7 +5,7 @@ import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
 import * as React from 'react';
 
 import cx from 'classnames';
-import type { RoomConnectOptions, RoomOptions } from 'livekit-client';
+import type { Room, RoomConnectOptions, RoomOptions } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
@@ -1603,7 +1603,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setJoinResponse(token);
 
         connectionStage = 'sdk_import';
-        const livekit = await import('livekit-client');
+        const [livekit, { startVoiceCallTelemetry }] = await Promise.all([
+          import('livekit-client'),
+          import('~/core/debates/use-voice-call-telemetry'),
+        ]);
         if (!isCurrent()) return;
         connectionStage = 'audio_output';
         await audioOutputSelectionPromiseRef.current;
@@ -1787,6 +1790,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
         connectingRoomRef.current = null;
         roomRef.current = room;
+        startVoiceCallTelemetry(room as unknown as Room, 'debate', debateId, {
+          debate_id: debateId,
+          participant_slot: token.participant_slot,
+          call_session_id: crypto.randomUUID(),
+        });
         // Whoever joins second finds the other already there, and no arrival event will fire.
         if ((room.remoteParticipants?.size ?? 0) > 0) setRemotePresence('present');
 

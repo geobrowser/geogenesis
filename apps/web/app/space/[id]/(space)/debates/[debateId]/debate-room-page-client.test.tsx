@@ -42,6 +42,7 @@ import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-polic
 import { DebateRoomPageClient, upcomingTurnLabel } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
+  startVoiceCallTelemetry: vi.fn(),
   currentUserId: 'user-a',
   prefetchAllowlist: vi.fn(),
   warmRelatedClaims: vi.fn(),
@@ -261,6 +262,7 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
 
 // No factory: the page imports the SDK twice at once, which a factory mock leaks (`__mocks__/livekit-client.ts`).
 vi.mock('livekit-client');
+vi.mock('~/core/debates/use-voice-call-telemetry', () => ({ startVoiceCallTelemetry: mocks.startVoiceCallTelemetry }));
 vi.hoisted(() => {
   (globalThis as { __liveKitClientMock?: unknown }).__liveKitClientMock = {
     createLocalTracks: mocks.createLocalTracks,
@@ -868,6 +870,11 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalled());
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
     expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.startVoiceCallTelemetry).toHaveBeenCalledWith(expect.anything(), 'debate', 'debate-1', {
+      debate_id: 'debate-1',
+      participant_slot: 1,
+      call_session_id: expect.any(String),
+    });
     expect(screen.getByText('Not recording')).toBeInTheDocument();
     expect(screen.queryByText('Recording')).not.toBeInTheDocument();
   });
