@@ -114,8 +114,8 @@ describe('useEnsureEmbeddedWallet', () => {
     await waitFor(() => expect(mocks.createWallet).toHaveBeenCalledTimes(1));
   });
 
-  // The fresh-login window. On a fresh login the list is genuinely ready and
-  // genuinely empty, because the wallet Privy's own `createOnLogin` is provisioning has not landed.
+  // The fresh-login window. The list is genuinely empty, because the wallet Privy's own
+  // `createOnLogin` is provisioning has not landed.
   // Asking again there means a rejected duplicate on every login at best, and at worst a second
   // wallet with the same `walletClientType` -- which `useSmartAccount` picks between with `.find()`,
   // so it can choose the one the account's smart account was never derived from.
@@ -177,11 +177,10 @@ describe('useEnsureEmbeddedWallet', () => {
     const { rerender } = renderHook(() => useEnsureEmbeddedWallet());
     await waitFor(() => expect(mocks.createWallet).toHaveBeenCalledTimes(1));
 
-    // Something refreshes the wallet list while the create is still in flight.
-    mocks.wallets = [];
-    mocks.walletsReady = false;
+    // A dependency changes while the create is still in flight, which re-runs the effect.
+    mocks.ready = false;
     rerender();
-    mocks.walletsReady = true;
+    mocks.ready = true;
     rerender();
     await new Promise(resolve => setTimeout(resolve, 20));
 

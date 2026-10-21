@@ -143,16 +143,13 @@ export function useEnsureEmbeddedWallet() {
   }, [generation]);
 
   useEffect(() => {
-    // Privy's `ready` (the session is resolved, so `user` is the real account) plus
-    // `accountHasEmbeddedWallet` is what stops this firing at everybody who already has a wallet: a
-    // restored session arrives with its `linkedAccounts`, before the connected list has hydrated.
+    // Privy's `ready` means `user` is the resolved account, so `accountHasEmbeddedWallet` (above) can
+    // be trusted before the connected list has hydrated.
     //
-    // Not `useWallets().ready` (GEO-3417). That also waits for Privy's external wallet connectors,
-    // and only a connector's `connectorInitialized` event sets it. Since `walletList` was cut to
-    // `detected_ethereum_wallets` (#2872), a browser with no injected wallet has no connectors, the
-    // event never fires, and the flag stays false for good -- so a headless sign-up never got a
-    // wallet and the navbar sat on Reconnect. The modal flow does not read the flag, which is why
-    // only the inline email sign-ups broke.
+    // Not `useWallets().ready` (GEO-3417): only a connector's `connectorInitialized` event sets it,
+    // and with `walletList` cut to `detected_ethereum_wallets` (#2872) a browser with no injected
+    // wallet has no connectors. The flag stayed false for good, and headless sign-ups never got a
+    // wallet. The modal flow never reads it, which is why only inline email sign-ups broke.
     if (!ready || !authenticated || embeddedWallet || accountHasEmbeddedWallet) return;
     // The modal login flips `authenticated` *before* it provisions the `createOnLogin` wallet: its
     // account-create screen only starts once the user exists, and runs inside the still-open modal.
