@@ -190,7 +190,7 @@ describe('DebateRequestMediaPreview', () => {
     mount({ onJoinStateChange });
 
     expect(await screen.findByText('Joining with mic and camera on')).toBeInTheDocument();
-    expect(onJoinStateChange).toHaveBeenLastCalledWith({ micOn: true, cameraOn: true });
+    await waitFor(() => expect(onJoinStateChange).toHaveBeenLastCalledWith({ micOn: true, cameraOn: true }));
     expect(mocks.ensurePreview).toHaveBeenCalledWith({ audio: false, video: true });
     expect(mocks.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
     // What the room it is handed to starts with, the lobby's mic included.
@@ -204,7 +204,7 @@ describe('DebateRequestMediaPreview', () => {
     mount({ onJoinStateChange });
 
     expect(await screen.findByText('Joining muted')).toBeInTheDocument();
-    expect(onJoinStateChange).toHaveBeenLastCalledWith({ micOn: false, cameraOn: true });
+    await waitFor(() => expect(onJoinStateChange).toHaveBeenLastCalledWith({ micOn: false, cameraOn: true }));
   });
 
   it('follows the lobby mic while the card is open', async () => {
@@ -227,6 +227,7 @@ describe('DebateRequestMediaPreview', () => {
     mount({ initialJoinState: { micOn: true, cameraOn: false }, onJoinStateChange });
 
     expect(await screen.findByText('Joining with mic on, camera off')).toBeInTheDocument();
+    await waitFor(() => expect(onJoinStateChange).toHaveBeenCalledWith({ micOn: true, cameraOn: false }));
     expect(onJoinStateChange).not.toHaveBeenCalledWith(expect.objectContaining({ micOn: false }));
     expect(mocks.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
   });

@@ -15,6 +15,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'debateDeviceSwitchRecording',
+    label: 'Debate recording: device switching experiment',
+    description:
+      'Record through canvas and Web Audio to follow device changes. Pending iPhone and background-tab validation (GEO-3404).',
+    enabledByDefault: false,
+  },
+  {
     id: 'debateFormatSelector',
     label: 'Debate format selector',
     description: 'Allow the first matched debater to choose a format before accepting.',

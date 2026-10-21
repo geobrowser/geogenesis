@@ -57,10 +57,10 @@ const mocks = vi.hoisted(() => ({
   changeVideoInput: vi.fn(),
   activeDeviceId: 'mic-a',
   activeSpeakerId: 'speaker-a',
-  setActiveMediaDevice: vi.fn(() => Promise.resolve()),
-  setActiveSpeaker: vi.fn(() => Promise.resolve()),
+  setActiveMediaDevice: vi.fn<(id: string) => Promise<unknown>>(),
+  setActiveSpeaker: vi.fn<(id: string) => Promise<unknown>>(),
   changeAudioInput: vi.fn(),
-  changeAudioOutput: vi.fn(() => Promise.resolve()),
+  changeAudioOutput: vi.fn<(id: string, apply?: (id: string) => Promise<unknown>) => Promise<void>>(),
   remoteParticipants: [] as Array<{ identity: string; getTrackPublication: (source: string) => unknown }>,
   /** What the opponent has published. `undefined` is a peer who joined muted and never opened up. */
   opponentMicPublication: { isMuted: false } as { isMuted: boolean } | undefined,
@@ -150,6 +150,11 @@ vi.mock('@livekit/components-react', () => ({
   useRemoteParticipants: () => mocks.remoteParticipants,
   useRoomContext: () => ({
     disconnect: mocks.disconnect,
+    switchActiveDevice: async (kind: MediaDeviceKind, id: string) => {
+      if (kind === 'audioinput') return mocks.setActiveMediaDevice(id);
+      if (kind === 'audiooutput') return mocks.setActiveSpeaker(id);
+      return mocks.setActiveCamera(id);
+    },
     localParticipant: {
       identity: 'me',
       setMicrophoneEnabled: mocks.setMicrophoneEnabled,
@@ -464,7 +469,9 @@ beforeEach(() => {
   mocks.setActiveMediaDevice.mockReset().mockResolvedValue(undefined);
   mocks.setActiveSpeaker.mockReset().mockResolvedValue(undefined);
   mocks.changeAudioInput.mockReset();
-  mocks.changeAudioOutput.mockReset().mockResolvedValue(undefined);
+  mocks.changeAudioOutput.mockReset().mockImplementation(async (id, apply) => {
+    await apply?.(id).catch(() => undefined);
+  });
   mocks.deviceSelectCalls = [];
   mocks.remoteParticipants = [];
   mocks.opponentMicPublication = { isMuted: false };
@@ -877,6 +884,33 @@ describe('RematchVoiceHeader', () => {
     fireEvent.click(await screen.findByText('USB Microphone'));
 
     expect(mocks.setActiveMediaDevice).toHaveBeenCalledWith('mic-b');
+    await waitFor(() => expect(mocks.changeAudioInput).toHaveBeenCalledWith('mic-b'));
+  });
+
+  it.each(['rejects', 'returns false'])('does not carry a microphone choice when live routing %s', async failure => {
+    if (failure === 'rejects') mocks.setActiveMediaDevice.mockRejectedValue(new Error('No route'));
+    else mocks.setActiveMediaDevice.mockResolvedValue(false);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(await screen.findByText('USB Microphone'));
+    expect(await screen.findByText('Could not switch microphones. Try another device.')).toBeInTheDocument();
+    expect(mocks.changeAudioInput).not.toHaveBeenCalled();
+  });
+
+  it('waits for microphone routing before carrying the preference', async () => {
+    let finish!: () => void;
+    mocks.setActiveMediaDevice.mockReturnValue(
+      new Promise<void>(resolve => {
+        finish = resolve;
+      })
+    );
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(await screen.findByText('USB Microphone'));
+    expect(mocks.changeAudioInput).not.toHaveBeenCalled();
+    await act(async () => finish());
     expect(mocks.changeAudioInput).toHaveBeenCalledWith('mic-b');
   });
 
@@ -887,8 +921,8 @@ describe('RematchVoiceHeader', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
     fireEvent.click(await screen.findByText('AirPods'));
 
-    expect(mocks.setActiveSpeaker).toHaveBeenCalledWith('speaker-b');
-    expect(mocks.changeAudioOutput).toHaveBeenCalledWith('speaker-b');
+    await waitFor(() => expect(mocks.setActiveSpeaker).toHaveBeenCalledWith('speaker-b'));
+    expect(mocks.changeAudioOutput).toHaveBeenCalledWith('speaker-b', expect.any(Function));
   });
 
   // Firefox and Safari enumerate no outputs at all, and an empty list reads as a broken picker.
@@ -1028,7 +1062,7 @@ describe('RematchVoiceHeader', () => {
 
     await waitFor(() => expect(mocks.getUserMedia).toHaveBeenCalledWith({ audio: { deviceId: 'chosen-mic' } }));
     expect(mocks.livekitRoomProps.at(-1)?.options).toMatchObject({
-      audioCaptureDefaults: { deviceId: 'chosen-mic' },
+      audioCaptureDefaults: { deviceId: { ideal: 'chosen-mic' } },
     });
   });
 
@@ -2748,7 +2782,19 @@ describe('choosing a camera', () => {
     fireEvent.click(await screen.findByText('USB Webcam'));
 
     expect(mocks.setActiveCamera).toHaveBeenCalledWith('cam-b');
-    expect(mocks.changeVideoInput).toHaveBeenCalledWith('cam-b');
+    await waitFor(() => expect(mocks.changeVideoInput).toHaveBeenCalledWith('cam-b'));
+  });
+
+  it.each(['rejects', 'returns false'])('does not carry a camera choice when live routing %s', async failure => {
+    withCameraAllowed();
+    if (failure === 'rejects') mocks.setActiveCamera.mockRejectedValue(new Error('No route'));
+    else mocks.setActiveCamera.mockResolvedValue(false);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    fireEvent.click(await screen.findByRole('button', { name: 'Camera settings' }));
+    fireEvent.click(await screen.findByText('USB Webcam'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not switch cameras');
+    expect(mocks.changeVideoInput).not.toHaveBeenCalled();
   });
 
   it('never asks for a camera to fill its own picker', async () => {
