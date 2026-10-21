@@ -5,7 +5,8 @@
  */
 export type RecordingInput = {
   stream: MediaStream;
-  update: (source: MediaStream) => void;
+  ready: Promise<void>;
+  update: (source: MediaStream) => Promise<void>;
   stop: () => void;
 };
 
@@ -24,37 +25,55 @@ export function createRecordingInput(source: MediaStream): RecordingInput {
   try {
     canvasStream = canvas.captureStream(settings?.frameRate || 30);
   } catch (error) {
-    void audio.close();
+    void audio.close().catch(() => undefined);
     throw error;
   }
-  const destination = audio.createMediaStreamDestination();
-  const stream = new MediaStream([...canvasStream.getVideoTracks(), ...destination.stream.getAudioTracks()]);
+  const ownedTracks = canvasStream.getTracks();
+  let destination: MediaStreamAudioDestinationNode;
+  let stream: MediaStream;
+  try {
+    destination = audio.createMediaStreamDestination();
+    ownedTracks.push(...destination.stream.getAudioTracks());
+    stream = new MediaStream(ownedTracks);
+  } catch (error) {
+    for (const track of ownedTracks) track.stop();
+    void audio.close().catch(() => undefined);
+    throw error;
+  }
   let audioSource: MediaStreamAudioSourceNode | null = null;
   let audioTrack: MediaStreamTrack | undefined;
   let videoTrack: MediaStreamTrack | undefined;
   let stopped = false;
-  const update = (source: MediaStream) => {
+  const update = async (source: MediaStream) => {
     if (stopped) return;
+    const pending: Promise<void>[] = [];
     const nextAudio = source.getAudioTracks()[0];
     const nextVideo = source.getVideoTracks()[0];
     if (nextAudio !== audioTrack) {
+      const nextSource = nextAudio ? audio.createMediaStreamSource(new MediaStream([nextAudio])) : null;
+      nextSource?.connect(destination);
       audioSource?.disconnect();
-      audioSource = nextAudio ? audio.createMediaStreamSource(new MediaStream([nextAudio])) : null;
-      audioSource?.connect(destination);
+      audioSource = nextSource;
       audioTrack = nextAudio;
     }
     if (nextVideo !== videoTrack) {
       video.srcObject = nextVideo ? new MediaStream([nextVideo]) : null;
-      if (nextVideo) void video.play().catch(() => undefined);
+      if (nextVideo) pending.push(video.play());
       videoTrack = nextVideo;
     }
-    void audio.resume().catch(() => undefined);
+    pending.push(audio.resume());
+    await Promise.all(pending);
   };
   const draw = () => {
     // Black during a camera interruption, rather than repeating the last frame indefinitely.
     context.fillStyle = '#000';
     context.fillRect(0, 0, canvas.width, canvas.height);
-    if (videoTrack?.readyState === 'live' && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    if (
+      videoTrack?.readyState === 'live' &&
+      video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+      video.videoWidth > 0 &&
+      video.videoHeight > 0
+    ) {
       const ratio = Math.min(canvas.width / video.videoWidth, canvas.height / video.videoHeight);
       const width = video.videoWidth * ratio;
       const height = video.videoHeight * ratio;
@@ -69,15 +88,16 @@ export function createRecordingInput(source: MediaStream): RecordingInput {
     video.pause();
     video.srcObject = null;
     audioSource?.disconnect();
-    for (const track of stream.getTracks()) track.stop();
-    void audio.close();
+    for (const track of ownedTracks) track.stop();
+    void audio.close().catch(() => undefined);
   };
-  try {
-    update(source);
-    draw();
-  } catch (error) {
-    stop();
-    throw error;
-  }
-  return { stream, update, stop };
+  const ready = update(source)
+    .then(() => {
+      if (!stopped) draw();
+    })
+    .catch(error => {
+      stop();
+      throw error;
+    });
+  return { stream, ready, update, stop };
 }

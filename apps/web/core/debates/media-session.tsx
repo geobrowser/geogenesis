@@ -28,6 +28,20 @@ export type LocalTrackLike = {
   detach?: () => void;
 };
 
+/** The capture source can differ from mediaStreamTrack when Krisp supplies processed audio. */
+export function localTrackSource(track: LocalTrackLike) {
+  return track.mediaStream?.getTracks()[0] ?? track.mediaStreamTrack;
+}
+
+export function isLocalTrackLive(track: LocalTrackLike) {
+  return localTrackSource(track).readyState !== 'ended';
+}
+
+export function setLocalTrackEnabled(track: LocalTrackLike, enabled: boolean, source?: MediaStreamTrack) {
+  track.mediaStreamTrack.enabled = enabled;
+  (source ?? localTrackSource(track)).enabled = enabled;
+}
+
 export const systemDefaultAudioOutput: MediaDeviceOption = {
   deviceId: 'default',
   groupId: 'default',
@@ -264,8 +278,10 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         if (!activeSessionKeyRef.current) return [];
       }
 
-      const liveKinds = new Set(localTracksRef.current.map(track => track.mediaStreamTrack.kind));
-      const hasLivePreview = localTracksRef.current.length > 0 && localMediaStreamRef.current !== null;
+      const liveKinds = new Set(
+        localTracksRef.current.filter(isLocalTrackLive).map(track => track.mediaStreamTrack.kind)
+      );
+      const hasLivePreview = liveKinds.size > 0 && localMediaStreamRef.current !== null;
       const haveEveryWantedKind = (!wantAudio || liveKinds.has('audio')) && (!wantVideo || liveKinds.has('video'));
 
       const hasUnwantedKind = (!wantAudio && liveKinds.has('audio')) || (!wantVideo && liveKinds.has('video'));
@@ -415,12 +431,11 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           const track = localTracksRef.current.find(track => track.mediaStreamTrack.kind === kind);
           // Choosing a device for a disabled kind must not turn it on.
           if (!track?.restartTrack) return;
-          const previousId = track.mediaStream?.getTracks()[0]?.getSettings?.().deviceId;
+          const previousId = localTrackSource(track).getSettings?.().deviceId;
           const previousCapture = track.mediaStreamTrack;
           const restorePreferences = () => {
             // Toggles and turn changes can happen while capture is reopening.
-            track.mediaStreamTrack.enabled = previousCapture.enabled;
-            for (const source of track.mediaStream?.getTracks() ?? []) source.enabled = previousCapture.enabled;
+            setLocalTrackEnabled(track, previousCapture.enabled);
           };
           const updatePreview = () => {
             restorePreferences();
@@ -450,7 +465,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
               return;
             }
             updatePreview();
-            const recoveredId = track.mediaStream?.getTracks()[0]?.getSettings?.().deviceId ?? previousId ?? '';
+            const recoveredId = isLocalTrackLive(track) ? (localTrackSource(track).getSettings?.().deviceId ?? '') : '';
+            setPreviewState(isLocalTrackLive(track) ? 'ready' : 'error');
             if (kind === 'audio' && selectedAudioInputIdRef.current === deviceId) {
               selectedAudioInputIdRef.current = recoveredId;
               setSelectedAudioInputId(recoveredId);
@@ -496,8 +512,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       for (const track of tracks) {
         const previous = previewStream?.getTracks().find(previous => previous.kind === track.mediaStreamTrack.kind);
         if (previous) {
-          track.mediaStreamTrack.enabled = previous.enabled;
-          for (const source of track.mediaStream?.getTracks() ?? []) source.enabled = previous.enabled;
+          setLocalTrackEnabled(track, previous.enabled);
         }
       }
       setPreviewStream(new MediaStream(tracks.map(track => track.mediaStreamTrack)));
@@ -583,8 +598,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           for (const kind of ['audio', 'video'] as const) {
             const track = localTracksRef.current.find(track => track.mediaStreamTrack.kind === kind);
             const changed = kind === 'audio' ? selection.audioChanged : selection.videoChanged;
-            const source = track?.mediaStream?.getTracks()[0] ?? track?.mediaStreamTrack;
-            if (track && (changed || source?.readyState === 'ended')) {
+            if (track && (changed || !isLocalTrackLive(track))) {
               await switchInput(kind, kind === 'audio' ? selection.audioInputId : selection.videoInputId);
             }
           }

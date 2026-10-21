@@ -35,18 +35,20 @@ let video: HTMLVideoElement;
 let canvas: HTMLCanvasElement;
 let outputAudio: MediaStreamTrack;
 let outputVideo: MediaStreamTrack;
+const createDestination = vi.fn();
 
 beforeEach(() => {
   vi.useFakeTimers();
   vi.stubGlobal('MediaStream', TestStream);
   audioSources = [];
+  createDestination.mockReset().mockImplementation(() => ({ stream: new MediaStream([outputAudio]) }));
   outputAudio = track('audio');
   outputVideo = track('video');
   vi.stubGlobal(
     'AudioContext',
     class {
       createMediaStreamDestination() {
-        return { stream: new MediaStream([outputAudio]) };
+        return createDestination();
       }
       createMediaStreamSource() {
         const node = { connect: vi.fn(), disconnect: vi.fn() };
@@ -141,6 +143,43 @@ describe('stable recording inputs', () => {
     expect(video.srcObject).toBeNull();
     expect(vi.getTimerCount()).toBe(0);
     for (const callTrack of original.getTracks()) expect(callTrack.stop).not.toHaveBeenCalled();
+  });
+
+  it('does not report ready until audio playback has resumed', async () => {
+    let resume!: () => void;
+    audioResume.mockReturnValueOnce(
+      new Promise<void>(resolve => {
+        resume = resolve;
+      })
+    );
+    const input = createRecordingInput(source());
+    const ready = vi.fn();
+    void input.ready.then(ready);
+    await Promise.resolve();
+    expect(ready).not.toHaveBeenCalled();
+    resume();
+    await input.ready;
+    expect(ready).toHaveBeenCalledOnce();
+    input.stop();
+  });
+
+  it('surfaces playback failure and closes every recording resource', async () => {
+    audioResume.mockRejectedValueOnce(new Error('Playback blocked'));
+    const input = createRecordingInput(source());
+    await expect(input.ready).rejects.toThrow('Playback blocked');
+    expect(audioClose).toHaveBeenCalledOnce();
+    expect(outputVideo.stop).toHaveBeenCalledOnce();
+    expect(outputAudio.stop).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('releases canvas capture if the audio destination cannot be constructed', () => {
+    createDestination.mockImplementationOnce(() => {
+      throw new Error('Audio setup failed');
+    });
+    expect(() => createRecordingInput(source())).toThrow('Audio setup failed');
+    expect(outputVideo.stop).toHaveBeenCalledOnce();
+    expect(audioClose).toHaveBeenCalledOnce();
   });
 
   it('closes the audio context if canvas capture cannot start', () => {

@@ -289,6 +289,24 @@ describe('input changes on existing LocalTracks', () => {
     expect(video.restartTrack).not.toHaveBeenCalled();
   });
 
+  it('does not mark an ended microphone ready after all recovery attempts fail, and retries only that kind', async () => {
+    const { audio, video } = await startInputs();
+    audio.restartTrack.mockImplementation(async () => {
+      audio.mediaStreamTrack.readyState = 'ended';
+      throw new Error('No microphone available');
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('error'));
+    expect(video.restartTrack).not.toHaveBeenCalled();
+    expect(video.stop).not.toHaveBeenCalled();
+    const replacement = restartableTrack('audio', 'mic-1');
+    mocks.createLocalTracks.mockResolvedValueOnce([replacement]);
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure both' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    expect(mocks.createLocalTracks).toHaveBeenLastCalledWith({ audio: true, video: false });
+    expect(video.stop).not.toHaveBeenCalled();
+  });
+
   it('stops a restarted capture that finishes after release, and skips queued selections', async () => {
     const { audio } = await startInputs();
     let finish!: () => void;

@@ -87,7 +87,9 @@ import {
   DebateMediaSessionBoundary,
   type LocalTrackLike,
   debateMediaSessionKey,
+  isLocalTrackLive,
   preJoinMediaFailure,
+  setLocalTrackEnabled,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
 import { OpenRoundPickCard, type OpenRoundPickContext } from '~/core/debates/open-round-pick-card';
@@ -556,9 +558,23 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * Publications survive device restarts. Track newly opened kinds separately so they can join
    * the existing connection without rebuilding the room.
    */
+  const [publishingMedia, setPublishingMedia] = React.useState(false);
   const publishedTracksRef = React.useRef<Set<LocalTrackLike>>(new Set());
   const publishingTracksRef = React.useRef<Promise<void>>(Promise.resolve());
   const recordingInputRef = React.useRef<RecordingInput | null>(null);
+  const recordingStopPromiseRef = React.useRef<Promise<void> | null>(null);
+  const recordingStartAttemptRef = React.useRef(0);
+  const recordingStartingRef = React.useRef(false);
+  const releaseRecordingInput = React.useCallback((input = recordingInputRef.current) => {
+    if (recordingInputRef.current === input) recordingInputRef.current = null;
+    input?.stop();
+  }, []);
+  const reportRecorderFailure = React.useCallback((failure: Parameters<typeof reportDebateRecorderFailure>[0]) => {
+    const key = `${failure.debateId}:${failure.stage}`;
+    if (reportedRecorderFailuresRef.current.has(key)) return;
+    reportedRecorderFailuresRef.current.add(key);
+    reportDebateRecorderFailure(failure);
+  }, []);
   const postJoinRecoveryAttemptsRef = React.useRef(0);
   const postJoinRecoveryTimerRef = React.useRef<number | null>(null);
   const connectRef = React.useRef<(options?: { takeover?: boolean; automatic?: boolean }) => Promise<void>>(() =>
@@ -1033,8 +1049,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // old stream.
   React.useEffect(() => {
     bindLocalVideo(localVideoRef.current, localMediaStreamRef.current);
-    if (localMediaStreamRef.current) recordingInputRef.current?.update(localMediaStreamRef.current);
-  }, [bindLocalVideo, localMediaStreamRef, previewStream]);
+    const input = recordingInputRef.current;
+    if (localMediaStreamRef.current && input) {
+      void input.update(localMediaStreamRef.current).catch(error => {
+        if (recordingInputRef.current !== input) return;
+        reportRecorderFailure({ debateId, stage: 'runtime', mimeType: recorderRef.current?.mimeType ?? '', error });
+        const recorder = recorderRef.current;
+        if (recorder && recorder.state !== 'inactive') recorder.stop();
+        setCapturing(false);
+        releaseRecordingInput(input);
+      });
+    }
+  }, [bindLocalVideo, debateId, localMediaStreamRef, previewStream, releaseRecordingInput, reportRecorderFailure]);
 
   const attachRemoteTrack = React.useCallback((track: RemoteTrackLike) => {
     const element = track.attach();
@@ -1173,146 +1199,138 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, []);
 
-  const startLocalRecorder = React.useCallback((source: MediaStream) => {
-    if (recordingStartedAtRef.current !== null) return;
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') return;
-    const debateId = debateIdRef.current;
-    if (typeof MediaRecorder === 'undefined') {
-      const key = `${debateId}:unsupported`;
-      if (!reportedRecorderFailuresRef.current.has(key)) {
-        reportedRecorderFailuresRef.current.add(key);
-        reportDebateRecorderFailure({ debateId, stage: 'unsupported', mimeType: '' });
-      }
-      return;
-    }
-    let input: RecordingInput;
-    try {
-      input = createRecordingInput(source);
-    } catch (error) {
-      const key = `${debateId}:construct`;
-      if (!reportedRecorderFailuresRef.current.has(key)) {
-        reportedRecorderFailuresRef.current.add(key);
-        reportDebateRecorderFailure({ debateId, stage: 'construct', mimeType: '', error });
-      }
-      return;
-    }
-    recordingInputRef.current = input;
-    const stream = input.stream;
-    // GEO-2843. Any failure is reported and leaves no recorder behind — the state an unsupported
-    // browser has always left: the pill never lights and there is nothing to persist. The calling
-    // effect re-runs on every debate refresh, so each stage is reported once per debate.
-    const started = startDebateRecorder({
-      stream,
-      debateId,
-      timesliceMs: 1_000,
-      report: failure => {
-        const key = `${failure.debateId}:${failure.stage}`;
-        if (reportedRecorderFailuresRef.current.has(key)) return;
-        reportedRecorderFailuresRef.current.add(key);
-        reportDebateRecorderFailure(failure);
-      },
-      wire: (recorder, mimeType) => {
-        recordingChunksRef.current = [];
-        recordingEndedAtRef.current = null;
-        recorder.addEventListener(
-          'start',
-          () => {
-            recordingStartedAtRef.current = serverNowRef.current();
-            const userId = currentUserIdRef.current;
-            if (userId) {
-              liveRecordingStreamRef.current = startRoomRecordingStream({
-                debateId: debateIdRef.current,
-                userId,
-                auth: geoChatAuthRef.current,
-                recorder,
-                stream,
-                mimeType: recorder.mimeType || mimeType || 'video/webm',
-                startedAtMs: recordingStartedAtRef.current,
-                // Why, not just whether: a stream that stands down says which of these held it.
-                shouldPause: () => {
-                  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
-                  if (roomStateRef.current !== 'connected') return 'room_not_connected';
-                  if (callConnectionPoorRef.current) return 'connection_poor';
-                  return null;
-                },
-              });
-            }
-            // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
-            // clock waits on it. `/ready` fires after a camera *preview* exists and `/joined` fires on
-            // room connection, both before LiveKit has published the tracks this recorder consumes —
-            // so the window used to open while one participant was still acquiring a device, costing
-            // 20-50s off the head of their recording, permanently.
-            //
-            // Fire-and-forget: the mutation retries itself, and a failure must not stop a recorder
-            // that is already running. The worst case is the server waiting out its grace, which is
-            // the old behaviour rather than a new one.
-            markCapturingRef.current();
-            // GEO-2819. The recording pill is driven from here rather than from the debate status, so
-            // what it claims and what is on disk cannot drift apart.
-            setCapturing(true);
-          },
-          { once: true }
-        );
-        // End recording resources and the indicator together, including browser-initiated stops.
-        recorder.addEventListener(
-          'stop',
-          () => {
-            setCapturing(false);
-            input.stop();
-            if (recordingInputRef.current === input) recordingInputRef.current = null;
-          },
-          { once: true }
-        );
-        // `startDebateRecorder` reports the `error` itself; this only clears the pill.
-        recorder.addEventListener(
-          'error',
-          () => {
-            setCapturing(false);
-            input.stop();
-          },
-          { once: true }
-        );
-        recorder.ondataavailable = event => {
-          if (event.data.size === 0) return;
-          // One home per recording, decided when it started: the stream if there is one, which lets
-          // go of each timeslice once it is uploaded, or this tab's own list, as before streaming.
-          const live = liveRecordingStreamRef.current;
-          if (live) live.append(event.data, serverNowRef.current());
-          else recordingChunksRef.current.push(event.data);
-        };
-      },
-    });
-    if (started) recorderRef.current = started.recorder;
-    else {
-      input.stop();
-      if (recordingInputRef.current === input) recordingInputRef.current = null;
-    }
-  }, []);
+  const startLocalRecorder = React.useCallback(
+    async (source: MediaStream) => {
+      if (recordingStartedAtRef.current !== null || recordingStartingRef.current) return;
+      if (recorderRef.current && recorderRef.current.state !== 'inactive') return;
+      const attempt = ++recordingStartAttemptRef.current;
+      const connection = connectionGenerationRef.current;
+      const isCurrent = () =>
+        mountedRef.current &&
+        recordingStartAttemptRef.current === attempt &&
+        connectionGenerationRef.current === connection;
+      recordingStartingRef.current = true;
+      let input: RecordingInput | null = null;
+      const started = await startDebateRecorder({
+        stream: source,
+        debateId: debateIdRef.current,
+        timesliceMs: 1_000,
+        prepareStream: async source => {
+          input = createRecordingInput(source);
+          recordingInputRef.current = input;
+          await input.ready;
+          return input.stream;
+        },
+        isCurrent,
+        report: reportRecorderFailure,
+        wire: (recorder, mimeType) => {
+          const stream = input?.stream ?? source;
+          recordingChunksRef.current = [];
+          recordingEndedAtRef.current = null;
+          recorder.addEventListener(
+            'start',
+            () => {
+              recordingStartedAtRef.current = serverNowRef.current();
+              const userId = currentUserIdRef.current;
+              if (userId) {
+                liveRecordingStreamRef.current = startRoomRecordingStream({
+                  debateId: debateIdRef.current,
+                  userId,
+                  auth: geoChatAuthRef.current,
+                  recorder,
+                  stream,
+                  mimeType: recorder.mimeType || mimeType || 'video/webm',
+                  startedAtMs: recordingStartedAtRef.current,
+                  // Why, not just whether: a stream that stands down says which of these held it.
+                  shouldPause: () => {
+                    if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
+                    if (roomStateRef.current !== 'connected') return 'room_not_connected';
+                    if (callConnectionPoorRef.current) return 'connection_poor';
+                    return null;
+                  },
+                });
+              }
+              // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
+              // clock waits on it. `/ready` fires after a camera *preview* exists and `/joined` fires on
+              // room connection, both before LiveKit has published the tracks this recorder consumes —
+              // so the window used to open while one participant was still acquiring a device, costing
+              // 20-50s off the head of their recording, permanently.
+              //
+              // Fire-and-forget: the mutation retries itself, and a failure must not stop a recorder
+              // that is already running. The worst case is the server waiting out its grace, which is
+              // the old behaviour rather than a new one.
+              markCapturingRef.current();
+              // GEO-2819. The recording pill is driven from here rather than from the debate status, so
+              // what it claims and what is on disk cannot drift apart.
+              setCapturing(true);
+            },
+            { once: true }
+          );
+          // End recording resources and the indicator together, including browser-initiated stops.
+          recorder.addEventListener(
+            'stop',
+            () => {
+              setCapturing(false);
+              recordingEndedAtRef.current ??= serverNowRef.current();
+              releaseRecordingInput(input);
+            },
+            { once: true }
+          );
+          // `startDebateRecorder` reports the `error` itself; this only clears the pill.
+          recorder.addEventListener(
+            'error',
+            () => {
+              setCapturing(false);
+              releaseRecordingInput(input);
+            },
+            { once: true }
+          );
+          recorder.ondataavailable = event => {
+            if (event.data.size === 0) return;
+            // One home per recording, decided when it started: the stream if there is one, which lets
+            // go of each timeslice once it is uploaded, or this tab's own list, as before streaming.
+            const live = liveRecordingStreamRef.current;
+            if (live) live.append(event.data, serverNowRef.current());
+            else recordingChunksRef.current.push(event.data);
+          };
+        },
+      });
+      if (recordingStartAttemptRef.current === attempt) recordingStartingRef.current = false;
+      if (started && isCurrent()) recorderRef.current = started.recorder;
+      else releaseRecordingInput(input);
+    },
+    [releaseRecordingInput, reportRecorderFailure]
+  );
 
   const stopLocalRecorder = React.useCallback(async () => {
+    recordingStartAttemptRef.current += 1;
+    recordingStartingRef.current = false;
+    // A second exit can arrive after stop() has made the recorder inactive but before its final
+    // dataavailable/stop events. Both exits must await the same final chunks before saving.
+    if (recordingStopPromiseRef.current) return recordingStopPromiseRef.current;
     const recorder = recorderRef.current;
-    if (!recorder) return;
+    if (!recorder) {
+      releaseRecordingInput();
+      return;
+    }
     if (recordingEndedAtRef.current !== null) return;
-
     setCapturing(false);
+    if (recorder.state === 'inactive') {
+      recordingEndedAtRef.current = serverNowRef.current();
+      return;
+    }
     const stopped = new Promise<void>(resolve => {
-      recorder.addEventListener(
-        'stop',
-        () => {
-          recordingEndedAtRef.current = serverNowRef.current();
-          resolve();
-        },
-        { once: true }
-      );
+      recorder.addEventListener('stop', () => resolve(), { once: true });
     });
-    if (recorder.state !== 'inactive') {
+    recordingStopPromiseRef.current = stopped;
+    try {
       recorder.requestData();
       recorder.stop();
       await stopped;
-      return;
+    } finally {
+      if (recordingStopPromiseRef.current === stopped) recordingStopPromiseRef.current = null;
     }
-    recordingEndedAtRef.current = serverNowRef.current();
-  }, []);
+  }, [releaseRecordingInput]);
 
   const performStoppedLocalRecordingPersistence = React.useCallback(async () => {
     if (persistedRecordingDebateIdRef.current === debate?.id) return true;
@@ -1457,12 +1475,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * streamed during it and the chunks saved locally go too.
    */
   const discardLocalRecorder = React.useCallback(async () => {
+    recordingStartAttemptRef.current += 1;
+    recordingStartingRef.current = false;
     clearRecordingTimers();
     setCapturing(false);
     void liveRecordingStreamRef.current?.abort();
     liveRecordingStreamRef.current = null;
     const recorder = recorderRef.current;
     if (!recorder) {
+      releaseRecordingInput();
       recordingChunksRef.current = [];
       recordingStartedAtRef.current = null;
       recordingEndedAtRef.current = null;
@@ -1473,13 +1494,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
 
-    const stopped = new Promise<void>(resolve => {
-      recorder.addEventListener('stop', () => resolve(), { once: true });
-    });
-    if (recorder.state !== 'inactive') {
-      recorder.stop();
-      await stopped;
-    }
+    await stopLocalRecorder();
     recorderRef.current = null;
     recordingChunksRef.current = [];
     recordingStartedAtRef.current = null;
@@ -1488,7 +1503,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingPersistenceStartedRef.current = null;
     recordingPersistencePromiseRef.current = null;
     persistedRecordingDebateIdRef.current = null;
-  }, [clearRecordingTimers]);
+  }, [clearRecordingTimers, releaseRecordingInput, stopLocalRecorder]);
 
   /**
    * This tab is letting go of a recording it could not finish, after a dropped connection or an
@@ -2094,8 +2109,65 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     };
   }, [connectionConflictSource, roomState]);
 
+  // Input restarts keep their LocalTrack/publication. A previously disabled kind opened in the
+  // intro is new, though, and must be published on the existing connection, never by rejoining.
+  const syncLocalPublications = React.useCallback(() => {
+    if (roomStateRef.current !== 'connected') return Promise.resolve();
+    const room = roomRef.current;
+    if (!room) return Promise.resolve();
+    const generation = connectionGenerationRef.current;
+    const isCurrent = () => roomRef.current === room && connectionGenerationRef.current === generation;
+    if (localTracksRef.current.some(track => !publishedTracksRef.current.has(track))) setPublishingMedia(true);
+    publishingTracksRef.current = publishingTracksRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (!isCurrent()) return;
+        const tracks = localTracksRef.current;
+        for (const track of publishedTracksRef.current) {
+          if (!tracks.includes(track)) {
+            await room.localParticipant.unpublishTrack?.(track, false);
+            if (!isCurrent()) return;
+            publishedTracksRef.current.delete(track);
+          }
+        }
+        const added = tracks.filter(track => !publishedTracksRef.current.has(track));
+        setLocalTrackPreferences(
+          tracks,
+          localTrackPreferencesRef.current(localSlot),
+          sourceMediaStreamTracksRef.current
+        );
+        for (const track of added) {
+          await publishTrackWithRetry(room, track, isCurrent);
+          if (!isCurrent()) return;
+          publishedTracksRef.current.add(track);
+        }
+        if (added.some(track => track.mediaStreamTrack.kind === 'audio')) {
+          await initializeNoiseFilter(tracks, isCurrent);
+          if (isCurrent()) setPreviewStream(new MediaStream(tracks.map(track => track.mediaStreamTrack)));
+        }
+      })
+      .catch(error => {
+        if (isCurrent())
+          setRoomError(error instanceof Error ? error.message : 'Could not publish the selected device.');
+        throw error;
+      })
+      .finally(() => {
+        if (isCurrent()) setPublishingMedia(false);
+      });
+    return publishingTracksRef.current;
+  }, [initializeNoiseFilter, localSlot, localTracksRef, setPreviewStream]);
+
+  React.useEffect(() => {
+    if (roomState !== 'connected') {
+      setPublishingMedia(false);
+      return;
+    }
+    if (previewBusy) return;
+    void syncLocalPublications().catch(() => undefined);
+  }, [previewBusy, previewStream, roomState, syncLocalPublications]);
+
   const liveKindsNow = React.useCallback(
-    () => mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind),
+    () => mediaSession.localTracksRef.current.filter(isLocalTrackLive).map(track => track.mediaStreamTrack.kind),
     [mediaSession.localTracksRef]
   );
 
@@ -2595,11 +2667,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // the preview's error and a Try again that asks for both.
     if (!(await openForJoinState({ audioMuted: false, videoEnabled: true }, { retry: true }))) return;
     try {
+      await syncLocalPublications();
       await markReady.mutateAsync();
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not mark you ready.');
     }
-  }, [markReady, openForJoinState]);
+  }, [markReady, openForJoinState, syncLocalPublications]);
 
   const publishRematchLeave = React.useCallback(async () => {
     if (rematchLeavePublishedRef.current) return;
@@ -2863,48 +2936,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     void connect();
   }, [connect, connectionConflictSource, debate, previewBusy, previewState, roomState]);
 
-  // Input restarts keep their LocalTrack/publication. A previously disabled kind opened in the
-  // intro is new, though, and must be published on the existing connection, never by rejoining.
-  React.useEffect(() => {
-    if (roomState !== 'connected' || previewBusy) return;
-    const room = roomRef.current;
-    if (!room) return;
-    const generation = connectionGenerationRef.current;
-    const isCurrent = () => roomRef.current === room && connectionGenerationRef.current === generation;
-    publishingTracksRef.current = publishingTracksRef.current
-      .catch(() => undefined)
-      .then(async () => {
-        if (!isCurrent()) return;
-        const tracks = localTracksRef.current;
-        for (const track of publishedTracksRef.current) {
-          if (!tracks.includes(track)) {
-            await room.localParticipant.unpublishTrack?.(track, false);
-            if (!isCurrent()) return;
-            publishedTracksRef.current.delete(track);
-          }
-        }
-        const added = tracks.filter(track => !publishedTracksRef.current.has(track));
-        setLocalTrackPreferences(
-          tracks,
-          localTrackPreferencesRef.current(localSlot),
-          sourceMediaStreamTracksRef.current
-        );
-        for (const track of added) {
-          await publishTrackWithRetry(room, track, isCurrent);
-          if (!isCurrent()) return;
-          publishedTracksRef.current.add(track);
-        }
-        if (added.some(track => track.mediaStreamTrack.kind === 'audio')) {
-          await initializeNoiseFilter(tracks, isCurrent);
-          if (isCurrent()) setPreviewStream(new MediaStream(tracks.map(track => track.mediaStreamTrack)));
-        }
-      })
-      .catch(error => {
-        if (isCurrent())
-          setRoomError(error instanceof Error ? error.message : 'Could not publish the selected device.');
-      });
-  }, [initializeNoiseFilter, localSlot, localTracksRef, previewBusy, previewStream, roomState, setPreviewStream]);
-
   // Deferred `/joined` for a room joined during the intro — see `reportJoinedForConnecting`.
   React.useEffect(() => {
     if (debate?.status !== 'connecting' || roomState !== 'connected') return;
@@ -2957,7 +2988,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // large misses on record are unaffected. Those need the clock to stop being armed by `/joined`,
     // which is the rest of GEO-2644; this is the prerequisite that makes that possible without
     // deadlocking capture against the clock it would then be waiting on.
-    startLocalRecorder(stream);
+    void startLocalRecorder(stream);
     // GEO-3175. An Open rounds debate has no end until a round resolves End or the cap round is
     // appended, so there is no stop timer yet. This effect re-runs on every row update, which is
     // when the end becomes known, and arms the timer then.
@@ -3180,7 +3211,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             devicesLocked={
               Boolean(preScreenLocalParticipant?.ready_at) || roomState === 'connecting' || roomState === 'reconnecting'
             }
-            connectionSettling={roomState === 'connecting' || roomState === 'reconnecting'}
+            connectionSettling={roomState === 'connecting' || roomState === 'reconnecting' || publishingMedia}
             canRetryConnection={roomState === 'idle' && roomError !== null && !connectionConflict}
             onRetryConnection={retryConnection}
             canTakeOverConnection={connectionConflict && canTakeOverConnection}
@@ -4103,16 +4134,16 @@ function setLocalTrackPreferences(
 ) {
   for (const track of tracks) {
     if (track.mediaStreamTrack.kind === 'audio') {
-      const sourceMediaStreamTrack = track.mediaStream?.getAudioTracks()[0] ?? sourceMediaStreamTracks?.get(track);
-      if (sourceMediaStreamTrack && sourceMediaStreamTrack !== track.mediaStreamTrack) {
-        sourceMediaStreamTrack.enabled = preferences.audioEnabled;
-      }
-      track.mediaStreamTrack.enabled = preferences.audioEnabled;
+      setLocalTrackEnabled(
+        track,
+        preferences.audioEnabled,
+        track.mediaStream?.getAudioTracks()[0] ?? sourceMediaStreamTracks?.get(track)
+      );
     }
     if (track.mediaStreamTrack.kind === 'video') {
       // Disabling sends black frames while keeping capture warm; muting through the SDK would
       // release and reacquire the camera on every toggle.
-      track.mediaStreamTrack.enabled = preferences.videoEnabled;
+      setLocalTrackEnabled(track, preferences.videoEnabled);
     }
   }
 }

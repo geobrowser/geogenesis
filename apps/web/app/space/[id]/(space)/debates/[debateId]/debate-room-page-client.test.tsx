@@ -69,6 +69,10 @@ const mocks = vi.hoisted(() => ({
   requestPersistentStorage: vi.fn(),
   estimateStorage: vi.fn(),
   mediaRecorderStart: vi.fn(),
+  recordingInputCreated: vi.fn(),
+  recordingInputReady: null as Promise<void> | null,
+  recordingInputUpdate: vi.fn(),
+  recordingInputStop: vi.fn(),
   mediaRecorderConstruct: vi.fn(),
   readyMutateAsync: vi.fn(),
   capturingMutateAsync: vi.fn().mockResolvedValue(undefined),
@@ -115,7 +119,15 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/debates/recording-input', () => ({
-  createRecordingInput: (stream: MediaStream) => ({ stream, update: vi.fn(), stop: vi.fn() }),
+  createRecordingInput: (stream: MediaStream) => {
+    mocks.recordingInputCreated();
+    return {
+      stream,
+      ready: mocks.recordingInputReady ?? Promise.resolve(),
+      update: mocks.recordingInputUpdate,
+      stop: mocks.recordingInputStop,
+    };
+  },
 }));
 
 vi.mock('next/navigation', () => ({
@@ -408,6 +420,11 @@ beforeEach(() => {
   mocks.requestPersistentStorage.mockReset();
   mocks.estimateStorage.mockReset();
   mocks.mediaRecorderStart.mockReset();
+  mocks.capturingMutateAsync.mockReset().mockResolvedValue(undefined);
+  mocks.recordingInputCreated.mockReset();
+  mocks.recordingInputReady = null;
+  mocks.recordingInputUpdate.mockReset().mockResolvedValue(undefined);
+  mocks.recordingInputStop.mockReset();
   mocks.mediaRecorderConstruct.mockReset();
   mocks.readyMutateAsync.mockReset();
   mocks.liveKitJoinMutateAsync.mockReset();
@@ -1975,6 +1992,37 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
     expect(mocks.createLocalTracks).toHaveBeenCalledWith(expect.objectContaining({ video: false }));
     expect(mocks.roomConnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds readiness while a newly enabled camera is still publishing', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const audioTrack = createLocalAudioTrack();
+    const videoTrack = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn() };
+    mocks.createLocalTracks.mockResolvedValueOnce([audioTrack]);
+    const view = render(
+      <DebateMediaSessionProvider>
+        <MicOnlyHandover />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('1'));
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <MicOnlyHandover />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeEnabled());
+    mocks.createLocalTracks.mockResolvedValueOnce([videoTrack]);
+    const publishing = deferred<void>();
+    mocks.publishTrack.mockImplementation(track => (track === videoTrack ? publishing.promise : Promise.resolve()));
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalledWith(videoTrack));
+    expect(screen.getByRole('button', { name: 'Connecting…' })).toBeDisabled();
+    expect(mocks.readyMutateAsync).not.toHaveBeenCalled();
+    await act(async () => publishing.resolve());
+    await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled());
+    expect(mocks.roomConnect).toHaveBeenCalledOnce();
   });
 
   it('keeps the mic and the controls when the camera turned on beside it fails', async () => {
@@ -3686,6 +3734,51 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Recording')).not.toBeInTheDocument();
   });
 
+  it('does not announce recording until its stable media input is ready', async () => {
+    const ready = deferred<void>();
+    mocks.recordingInputReady = ready.promise;
+    installRecordingMocks();
+    await renderLiveDebate();
+    await waitFor(() => expect(mocks.recordingInputCreated).toHaveBeenCalledOnce());
+    expect(mocks.mediaRecorderConstruct).not.toHaveBeenCalled();
+    expect(mocks.capturingMutateAsync).not.toHaveBeenCalled();
+    await act(async () => ready.resolve());
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce());
+    expect(mocks.capturingMutateAsync).toHaveBeenCalled();
+  });
+
+  it('cancels a pending recording startup when the room unmounts', async () => {
+    const ready = deferred<void>();
+    mocks.recordingInputReady = ready.promise;
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.recordingInputCreated).toHaveBeenCalledOnce());
+    view.unmount();
+    await act(async () => ready.resolve());
+    expect(mocks.mediaRecorderConstruct).not.toHaveBeenCalled();
+    expect(mocks.capturingMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('reports a recording input failure after a device change instead of silently recording black or silence', async () => {
+    installRecordingMocks();
+    await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce());
+    mocks.recordingInputUpdate.mockRejectedValueOnce(new Error('Playback blocked'));
+    mocks.enumerateDevices.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
+      { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+    ]);
+    await act(async () => mocks.deviceChangeHandler?.());
+    await waitFor(() =>
+      expect(mocks.capture).toHaveBeenCalledWith(
+        'debate_recorder_failed',
+        expect.objectContaining({ stage: 'runtime', error_message: 'Playback blocked' })
+      )
+    );
+    expect(await screen.findByText('Not recording')).toBeInTheDocument();
+    expect(mocks.recordingInputStop).toHaveBeenCalled();
+  });
+
   it('enables Krisp by default and records the processed microphone track', async () => {
     const audioTrack = createLocalAudioTrack();
     mocks.createLocalTracks.mockResolvedValue([
@@ -5213,6 +5306,36 @@ describe('DebateRoomPageClient', () => {
     // Fifteen seconds left. No tick is advanced here: the redirect has to come from the session, not
     // from the clock running out.
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('waits for a disconnect stop to deliver its final chunks before saving on completion', async () => {
+    setHistoryLength(2);
+    const recorders = installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:15.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    const recorder = recorders[0] as EventTarget & {
+      state: RecordingState;
+      stop: () => void;
+      ondataavailable: ((event: BlobEvent) => void) | null;
+    };
+    recorder.stop = () => {
+      recorder.state = 'inactive';
+    };
+    act(() => emitRoomEvent('disconnected', 99));
+    mocks.getRecording.mockClear();
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.rematch = rematchSession('ended', { localConsented: true, remoteConsented: false });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.getRecording).toHaveBeenCalled());
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
+    act(() => {
+      recorder.ondataavailable?.({ data: new Blob(['final chunk']) } as BlobEvent);
+      recorder.dispatchEvent(new Event('stop'));
+    });
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
   });
 
   // Copilot on #2853: a dropped call tears the room down without saving, so a tab that held it can
