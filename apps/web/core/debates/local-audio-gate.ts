@@ -59,8 +59,8 @@ export type LocalAudioGateInput = {
 /**
  * Whether the moment after a turn can carry its overrun at all. Voting opens both microphones and
  * the result, the final board and anything after the debate close or open them regardless, so only
- * the turn-taking itself has an overrun. The listener's room asks the same question of the opponent
- * (GEO-3407), so this is the one place it is answered.
+ * the turn-taking itself has an overrun. `useTurnOverrun` asks it for both ends of the overrun
+ * (GEO-3407). It restates the early returns of `shouldEnableLocalAudio` below: change them together.
  */
 export function turnOverrunPossible({
   effectiveStatus,
@@ -106,14 +106,7 @@ export function shouldEnableLocalAudio({
   if (activeSlot === localSlot) return true;
   // Past the buzzer: hold only while they are genuinely still talking, and never past the cap.
   // Someone who stopped on time keeps the clean cut they always had — no dead air is added.
-  if (
-    turnOverrunPossible({ effectiveStatus, openRoundsPhase, openRoundResultHeld }) &&
-    stillSpeaking &&
-    msSinceTurnEnded !== null &&
-    msSinceTurnEnded < MIC_OVERRUN_MAX_MS
-  ) {
-    return true;
-  }
+  if (stillSpeaking && msSinceTurnEnded !== null && msSinceTurnEnded < MIC_OVERRUN_MAX_MS) return true;
   if (msUntilTurnStarts !== null && msUntilTurnStarts <= MIC_PREARM_BEFORE_TURN_MS) return true;
   return false;
 }

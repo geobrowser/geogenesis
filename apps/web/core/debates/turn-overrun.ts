@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import type { Debate, ParticipantSlot } from './api';
 import { MIC_OVERRUN_MAX_MS } from './local-audio-gate';
 import { useSpeechActivity } from './use-speech-activity';
 
@@ -14,6 +15,31 @@ import { useSpeechActivity } from './use-speech-activity';
  * the moment they go quiet, so it never adds a visible delay.
  */
 export const REMOTE_OVERRUN_WINDOW_MS = MIC_OVERRUN_MAX_MS + 1_500;
+
+/**
+ * The opponent's side of `useTurnOverrun`, from this room's countdown: whether they hold the turn,
+ * and whether it is ending because they pressed End turn. A yielded turn goes to `activeSlot: null`
+ * with `yieldingSlot` set, the moment the yield reaches this room. Their microphone closed when they
+ * pressed it, so whatever is still arriving then is the tail of a word they chose to cut, not an
+ * overrun (GEO-3407).
+ */
+export function opponentTurnState({
+  effectiveStatus,
+  activeSlot,
+  yieldingSlot,
+  localSlot,
+}: {
+  effectiveStatus: Debate['status'] | null;
+  activeSlot: ParticipantSlot | null;
+  yieldingSlot: ParticipantSlot | null;
+  localSlot: ParticipantSlot | null;
+}): { turnActive: boolean; yielded: boolean } {
+  if (localSlot === null) return { turnActive: false, yielded: false };
+  return {
+    turnActive: effectiveStatus === 'in_progress' && activeSlot !== null && activeSlot !== localSlot,
+    yielded: yieldingSlot !== null && yieldingSlot !== localSlot,
+  };
+}
 
 /**
  * When a speaker's turn ended (`Date.now()`) while they were still talking, for as long as they go
@@ -79,6 +105,12 @@ export function useTurnOverrun({
       stop();
     }
   });
+
+  // The speech reading goes quiet without reporting it when listening stops, so a running overrun is
+  // ended here: a room that is no longer connected has nothing to hold open or show (GEO-3407).
+  React.useEffect(() => {
+    if (!listening) stop();
+  }, [listening, stop]);
 
   const wasActiveRef = React.useRef(false);
   React.useEffect(() => {

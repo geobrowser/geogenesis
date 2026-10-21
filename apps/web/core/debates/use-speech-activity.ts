@@ -35,8 +35,11 @@ export function useSpeechActivity(
       onChangeRef.current?.(speaking);
     };
 
+    // Not listening says nothing about whether they are talking, so it resets the reading without
+    // reporting a change: only the gate itself reports one. A mid-sentence track swap (a processor
+    // attaching, a device change) must not read as the sentence ending (GEO-3407).
     if (!enabled || !track || typeof window === 'undefined') {
-      setSpeaking(false);
+      speakingRef.current = false;
       return;
     }
 
@@ -46,7 +49,7 @@ export function useSpeechActivity(
 
     const dispose = () => {
       disposed = true;
-      setSpeaking(false);
+      speakingRef.current = false;
       if (frame !== null) cancelAnimationFrame(frame);
       frame = null;
       void context?.close().catch(() => undefined);

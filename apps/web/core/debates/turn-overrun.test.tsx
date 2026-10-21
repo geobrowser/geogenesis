@@ -2,7 +2,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { REMOTE_OVERRUN_WINDOW_MS, useTurnOverrun } from './turn-overrun';
+import { REMOTE_OVERRUN_WINDOW_MS, opponentTurnState, useTurnOverrun } from './turn-overrun';
 
 const speech = vi.hoisted(() => ({
   ref: { current: false },
@@ -25,14 +25,20 @@ function setSpeaking(speaking: boolean) {
   });
 }
 
-type Props = { turnActive: boolean; overrunPossible?: boolean; yielded?: boolean; startsLate?: boolean };
+type Props = {
+  turnActive: boolean;
+  overrunPossible?: boolean;
+  yielded?: boolean;
+  startsLate?: boolean;
+  listening?: boolean;
+};
 
 function renderOverrun(initial: Props) {
   return renderHook(
-    ({ turnActive, overrunPossible = true, yielded = false, startsLate = false }: Props) =>
+    ({ turnActive, overrunPossible = true, yielded = false, startsLate = false, listening = true }: Props) =>
       useTurnOverrun({
         track,
-        listening: true,
+        listening,
         turnActive,
         overrunPossible,
         yielded,
@@ -149,10 +155,44 @@ describe('useTurnOverrun', () => {
     });
   });
 
+  it('ends a running overrun when listening stops, which the speech reading no longer reports', () => {
+    const view = renderOverrun({ turnActive: true });
+    setSpeaking(true);
+    view.rerender({ turnActive: false });
+    expect(view.result.current).not.toBeNull();
+
+    view.rerender({ turnActive: false, listening: false });
+    expect(view.result.current).toBeNull();
+  });
+
   it('keeps our own microphone to the clean cut when we were silent at the buzzer', () => {
     const view = renderOverrun({ turnActive: true });
     view.rerender({ turnActive: false });
     setSpeaking(true);
     expect(view.result.current).toBeNull();
+  });
+});
+
+describe('opponentTurnState', () => {
+  const state = (overrides: Partial<Parameters<typeof opponentTurnState>[0]>) =>
+    opponentTurnState({
+      effectiveStatus: 'in_progress',
+      activeSlot: 2,
+      yieldingSlot: null,
+      localSlot: 1,
+      ...overrides,
+    });
+
+  it('follows the opponent holding the turn', () => {
+    expect(state({})).toEqual({ turnActive: true, yielded: false });
+    expect(state({ activeSlot: 1 })).toEqual({ turnActive: false, yielded: false });
+    expect(state({ activeSlot: null })).toEqual({ turnActive: false, yielded: false });
+    expect(state({ effectiveStatus: 'thanking' })).toEqual({ turnActive: false, yielded: false });
+  });
+
+  it('marks a turn the opponent ended themselves, so the tail of their last word is not an overrun', () => {
+    expect(state({ activeSlot: null, yieldingSlot: 2 })).toEqual({ turnActive: false, yielded: true });
+    // Our own End turn is not theirs.
+    expect(state({ activeSlot: null, yieldingSlot: 1 })).toEqual({ turnActive: false, yielded: false });
   });
 });

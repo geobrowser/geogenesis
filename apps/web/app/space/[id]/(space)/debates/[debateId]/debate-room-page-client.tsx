@@ -139,7 +139,7 @@ import { joinStateNeedsOpening, kindsForJoinState, resolveJoinChoice } from '~/c
 import { createLocalServerClock, keepServerClockSynchronized } from '~/core/debates/server-clock';
 import { isDebateInThankYouPeriod } from '~/core/debates/thank-you-period';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
-import { REMOTE_OVERRUN_WINDOW_MS, useTurnOverrun } from '~/core/debates/turn-overrun';
+import { REMOTE_OVERRUN_WINDOW_MS, opponentTurnState, useTurnOverrun } from '~/core/debates/turn-overrun';
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
@@ -766,11 +766,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // As for our own microphone: only while connected. A teardown that hands the room elsewhere
     // ignores the old room's unsubscribe events, so the track alone would keep this listening.
     listening: roomState === 'connected' && remoteAudioTrack !== null,
-    turnActive:
-      countdown.effectiveStatus === 'in_progress' &&
-      countdown.activeSlot !== null &&
-      localSlot !== null &&
-      countdown.activeSlot !== localSlot,
+    ...opponentTurnState({
+      effectiveStatus: countdown.effectiveStatus,
+      activeSlot: countdown.activeSlot,
+      yieldingSlot: countdown.yieldingSlot,
+      localSlot,
+    }),
     overrunPossible,
     startsLate: true,
     windowMs: REMOTE_OVERRUN_WINDOW_MS,
