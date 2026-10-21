@@ -200,19 +200,25 @@ export function debateScheduledRequestAnswered({
 export function debateAvailabilityLinkOpened({
   viewer,
   peer,
-  rescheduling,
+  rescheduleRequestId,
   via,
 }: {
   viewer: 'signed_out' | 'self' | 'other';
   /** `bookable` when the week can be shown; otherwise why not. */
   peer: 'bookable' | 'no_debate_profile' | 'error' | null;
-  rescheduling: boolean;
+  /**
+   * The request a scheduling email's link moves, or null for a booking link. Sent here as well as
+   * on `debate_availability_viewed`, because this fires even when the week never loads (signed out,
+   * an error), so a reschedule abandoned there is still seen (GEO-3432).
+   */
+  rescheduleRequestId: string | null;
   via: string | null;
 }) {
   capture('debate_availability_link_opened', {
     viewer,
     peer: peer ?? 'unknown',
-    rescheduling,
+    rescheduling: rescheduleRequestId !== null,
+    request_id: rescheduleRequestId,
     link_source: availabilityLinkSource(via),
   });
 }

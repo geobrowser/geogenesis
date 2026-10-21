@@ -93,7 +93,7 @@ describe('schedule analytics', () => {
     [null, 'none'],
     ['someone@example.com', 'other'],
   ] as const)('records a link that came via %s as %s', (via, linkSource) => {
-    debateAvailabilityLinkOpened({ viewer: 'signed_out', peer: 'bookable', rescheduling: false, via });
+    debateAvailabilityLinkOpened({ viewer: 'signed_out', peer: 'bookable', rescheduleRequestId: null, via });
 
     expect(capture).toHaveBeenCalledWith(
       'debate_availability_link_opened',

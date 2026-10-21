@@ -15,7 +15,8 @@ The measurement lives outside this repo:
 ## What Genesis sends
 
 `debate_availability_viewed` carries `request_id` when the week was opened to move an existing
-debate. That covers a scheduling email's "Choose different time", Reschedule on an accepted debate
+debate. So does `debate_availability_link_opened` for an email's link, because it fires even when
+the week never loads (signed out, an error). That covers a scheduling email's "Choose different time", Reschedule on an accepted debate
 in the Requests tab, and "Choose different time" on an invite there. The weekly report joins it to
 geo-chat's record and counts reschedules that were started and then abandoned: no move or
 cancellation of that debate within 30 minutes.
