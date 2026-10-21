@@ -17,9 +17,11 @@ export function DebateFeedMobileBarActions() {
   const { authenticated } = usePrivy();
 
   return (
-    <div className="flex items-center">
+    // `-mr-2` takes back the last target's padding, so the visible pill or avatar lines up with the
+    // feed's 16px edge.
+    <div className="-mr-2 flex items-center">
       {authenticated ? <DebatesHubButton compact /> : null}
-      <NavbarActions compact />
+      <NavbarActions compact signInComponent="debate_feed_bar" />
     </div>
   );
 }

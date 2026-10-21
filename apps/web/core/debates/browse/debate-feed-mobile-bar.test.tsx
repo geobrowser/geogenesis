@@ -16,7 +16,9 @@ vi.mock('~/design-system/prefetch-link', () => ({
 }));
 vi.mock('~/core/wallet/auth-hooks', () => ({ usePrivy: () => ({ authenticated: mocks.authenticated }) }));
 vi.mock('~/partials/navbar/navbar-actions', () => ({
-  NavbarActions: ({ compact }: { compact?: boolean }) => <div data-testid="account" data-compact={String(compact)} />,
+  NavbarActions: ({ compact, signInComponent }: { compact?: boolean; signInComponent?: string }) => (
+    <div data-testid="account" data-compact={String(compact)} data-sign-in-component={signInComponent} />
+  ),
 }));
 vi.mock('../matchmaking/debates-hub-button', () => ({
   DebatesHubButton: ({ compact }: { compact?: boolean }) => (
@@ -48,7 +50,7 @@ describe('DebateFeedMobileBar', () => {
   it('sets "Geo" in the share video’s face', () => {
     render(<DebateFeedMobileBar />);
 
-    expect(screen.getByText('Geo').style.fontFamily).toContain('var(--font-geist-medium)');
+    expect(screen.getByText('Geo')).toHaveClass('font-[family-name:var(--font-geist-medium)]');
   });
 });
 
@@ -57,6 +59,7 @@ describe('DebateFeedMobileBarActions', () => {
     render(<DebateFeedMobileBarActions />);
 
     expect(screen.getByTestId('account')).toHaveAttribute('data-compact', 'true');
+    expect(screen.getByTestId('account')).toHaveAttribute('data-sign-in-component', 'debate_feed_bar');
     expect(screen.queryByRole('button', { name: 'Debate' })).not.toBeInTheDocument();
   });
 

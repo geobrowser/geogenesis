@@ -1,6 +1,13 @@
 'use client';
 
-import { Button, PILL_BUTTON_CLASS_NAME } from '~/design-system/button';
+import cx from 'classnames';
+
+import {
+  Button,
+  COMPACT_PILL_CLASS_NAME,
+  COMPACT_PILL_TARGET_CLASS_NAME,
+  PILL_BUTTON_CLASS_NAME,
+} from '~/design-system/button';
 
 import { usePrepareOnboarding } from '../hooks/use-prepare-onboarding';
 import { useSaveVotesSignIn } from '../hooks/use-save-votes-sign-in';
@@ -8,12 +15,12 @@ import { useTrackedLogin } from '../hooks/use-tracked-login';
 import { saveVotesNavLabel } from '../save-votes-copy';
 import { useLocalVoteCount } from '../state/local-votes';
 
-/**
- * `compact`: the debate feed's phone bar (GEO-3415). The pill draws smaller than the navbar's, 22px
- * against 28, but the button around it is a full 44px target; the visible size is what was asked to
- * shrink, not the thing a thumb has to hit.
- */
-type ConnectButtonProps = { compact?: boolean; component?: string };
+type ConnectButtonProps = {
+  /** The debate feed's phone bar (GEO-3415): the smaller pill, in a full 44px target. */
+  compact?: boolean;
+  /** Where the sign-in was started, for its analytics. */
+  component?: string;
+};
 
 function PrivyConnectButton({ compact = false, component = 'navbar' }: ConnectButtonProps) {
   // `null` rather than the current path: this button is a sign-in from anywhere in the app, not a
@@ -40,14 +47,8 @@ function PrivyConnectButton({ compact = false, component = 'navbar' }: ConnectBu
 
   if (compact) {
     return (
-      <button
-        type="button"
-        onClick={onLogin}
-        className="group -mx-2 flex h-11 min-w-11 shrink-0 items-center justify-center px-2 focus-visible:outline-none"
-      >
-        <span className="flex h-[22px] items-center rounded-full bg-[#151515] px-2 text-[13px] leading-none tracking-[-0.2px] whitespace-nowrap text-white group-focus-visible:ring-2 group-focus-visible:ring-text group-focus-visible:ring-offset-2">
-          {label}
-        </span>
+      <button type="button" onClick={onLogin} className={cx(COMPACT_PILL_TARGET_CLASS_NAME, 'px-2')}>
+        <span className={cx(COMPACT_PILL_CLASS_NAME, 'bg-[#151515] px-2 text-white')}>{label}</span>
       </button>
     );
   }

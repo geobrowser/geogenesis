@@ -279,14 +279,6 @@ function Avatar({
   return <div style={style}>{initials(data.author.name).toUpperCase()}</div>;
 }
 
-/**
- * The Geo mark. `color` so it can sit on a dark ground as well as a light one — the debate share
- * card's footer is `#111111` (GEO-2755). Defaults to black, which is every existing caller.
- */
-export function GeoLogoIcon({ size, color = 'black' }: { size: number; color?: string }) {
-  return <GeoMark size={size} color={color} />;
-}
-
 function BrandMark({ variant, scale }: { variant: RankingOgVariant; scale: number }) {
   const isStory = variant === 'story';
   const iconSize = scaled(isStory ? 63 : 37, scale);
@@ -303,7 +295,7 @@ function BrandMark({ variant, scale }: { variant: RankingOgVariant; scale: numbe
         lineHeight: 1,
       }}
     >
-      <GeoLogoIcon size={iconSize} />
+      <GeoMark size={iconSize} color="black" />
       <div>Geo</div>
     </div>
   );

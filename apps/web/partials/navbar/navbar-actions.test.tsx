@@ -468,10 +468,10 @@ describe('NavbarActions profile menu', () => {
 
   // GEO-3415. The debate feed's phone bar reuses these controls at its smaller size.
   describe('compact', () => {
-    it('asks for the small Log in, attributed to the bar', () => {
+    it('asks for the small Log in, attributed to whoever placed it', () => {
       mocks.hasSmartAccount = false;
       mocks.authenticated = false;
-      render(<NavbarActions compact />);
+      render(<NavbarActions compact signInComponent="debate_feed_bar" />);
 
       const connect = screen.getByRole('button', { name: 'Connect' });
       expect(connect).toHaveAttribute('data-compact', 'true');

@@ -36,13 +36,9 @@ export function DebateFeedMobileBar() {
         <span aria-hidden className="flex">
           <GeoMark size={20} />
         </span>
-        <span className="text-[26px] leading-none" style={GEO_WORDMARK_FONT}>
-          Geo
-        </span>
+        <span className="font-[family-name:var(--font-geist-medium)] text-[26px] leading-none">Geo</span>
       </Link>
       <DebateFeedMobileBarActions />
     </header>
   );
 }
-
-const GEO_WORDMARK_FONT = { fontFamily: 'var(--font-geist-medium), var(--font-calibre), sans-serif' } as const;
