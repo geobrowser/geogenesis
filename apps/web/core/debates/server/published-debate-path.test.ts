@@ -17,10 +17,13 @@ const debateEntity = (extra: { types?: { id: string }[]; values?: unknown[] } = 
   values: extra.values ?? [],
 });
 
-const path = (
-  fetchEntity: (entityId: string, spaceId: string) => Promise<unknown>,
-  searchParams: Record<string, string | string[] | undefined> = {}
-) => publishedDebatePath(SPACE_ID, DEBATE_ID, searchParams, fetchEntity as Parameters<typeof publishedDebatePath>[3]);
+const path = (fetchEntity: (entityId: string, spaceId: string) => Promise<unknown>, query = '') =>
+  publishedDebatePath(
+    SPACE_ID,
+    DEBATE_ID,
+    new URLSearchParams(query),
+    fetchEntity as Parameters<typeof publishedDebatePath>[3]
+  );
 
 describe('publishedDebatePath (GEO-3435)', () => {
   it('opens the debate page once the debate is on the graph, asking for it in its space', async () => {
@@ -52,8 +55,8 @@ describe('publishedDebatePath (GEO-3435)', () => {
   it('carries the link’s query over, repeated keys included', async () => {
     const fetchEntity = vi.fn().mockResolvedValue(debateEntity());
 
-    await expect(
-      path(fetchEntity, { t: '42', ref_email: 'debate_ready', tag: ['a', 'b'], empty: undefined })
-    ).resolves.toBe(`${DEBATE_PAGE}?t=42&ref_email=debate_ready&tag=a&tag=b`);
+    await expect(path(fetchEntity, 't=42&ref_email=debate_ready&tag=a&tag=b')).resolves.toBe(
+      `${DEBATE_PAGE}?t=42&ref_email=debate_ready&tag=a&tag=b`
+    );
   });
 });

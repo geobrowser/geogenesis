@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+import { publishedDebatePath } from '~/core/debates/server/published-debate-path';
 import { isPossibleSpacePath } from '~/core/utils/space-url';
 
 /**
@@ -43,9 +44,10 @@ import { isPossibleSpacePath } from '~/core/utils/space-url';
  * file's own comment says, the crawlers that honour robots were never the whole
  * problem.
  */
-export default function proxy(request: NextRequest) {
+export default function proxy(request: NextRequest): NextResponse | Promise<NextResponse> {
   if (isPossibleSpacePath(request.nextUrl.pathname)) {
-    return NextResponse.next();
+    const recording = request.nextUrl.pathname.match(DEBATE_RECORDING_PATH);
+    return recording ? openPublishedDebate(request, recording[1], recording[2]) : NextResponse.next();
   }
 
   if (!isBrowserNavigation(request)) {
@@ -53,6 +55,21 @@ export default function proxy(request: NextRequest) {
   }
 
   return NextResponse.rewrite(new URL('/_not-found', request.url), { status: 404 });
+}
+
+/** `/space/<space>/debates/<debate>/recording`, the link geo-chat's "Your debate is ready" email sends. */
+const DEBATE_RECORDING_PATH = /^\/space\/([^/]+)\/debates\/([^/]+)\/recording\/?$/;
+
+/**
+ * A debate's recording link opens the debate's own page once the debate is on the graph (GEO-3435),
+ * as a real 307 here: the recording route streams, so a redirect from the page would only arrive
+ * after "Loading the recording…" had painted (the same reason the 404s above live here). Until it's
+ * published, or if the graph can't be reached, the recording page renders as before. Only recording
+ * links pay for the graph lookup; every other `/space` URL stays synchronous.
+ */
+async function openPublishedDebate(request: NextRequest, spaceId: string, debateId: string): Promise<NextResponse> {
+  const debatePage = await publishedDebatePath(spaceId, debateId, request.nextUrl.searchParams);
+  return debatePage ? NextResponse.redirect(new URL(debatePage, request.url), 307) : NextResponse.next();
 }
 
 /**
