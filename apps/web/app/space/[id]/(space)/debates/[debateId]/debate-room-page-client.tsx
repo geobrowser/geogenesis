@@ -141,6 +141,7 @@ import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
 import { disconnectReasonName } from '~/core/livekit/disconnect-reason';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { switchMediaDevice } from '~/core/media/device-options';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { reportError } from '~/core/telemetry/logger';
@@ -504,6 +505,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const subscribedRemoteTracksRef = React.useRef<Set<RemoteTrackLike>>(new Set());
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
   const roomRef = React.useRef<RoomLike | null>(null);
+  const appliedAudioOutputRef = React.useRef<{ room: RoomLike; id: string } | null>(null);
+  const audioOutputRouteRef = React.useRef<Promise<void> | null>(null);
   const connectingRoomRef = React.useRef<RoomLike | null>(null);
   // Marks the start of an in-flight LiveKit reconnect episode so telemetry can report how long
   // recovery took (Reconnected) or how long we retried before giving up (Disconnected). Episodes
@@ -976,6 +979,30 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRemoteMediaAudioEnabled(remoteMediaRef, remoteAudioEnabled);
   }, [remoteAudioEnabled]);
 
+  const routeAudioOutput = React.useCallback((room: RoomLike, id: string) => {
+    const previous = audioOutputRouteRef.current;
+    const routing = (async () => {
+      await previous?.catch(() => undefined);
+      if (roomRef.current !== room) throw new Error('Room changed during speaker selection');
+      await switchMediaDevice(room, 'audiooutput', id);
+      appliedAudioOutputRef.current = { room, id };
+    })();
+    audioOutputRouteRef.current = routing;
+    return routing;
+  }, []);
+
+  const selectAudioOutput = React.useCallback(
+    (id: string) => {
+      return changeAudioOutput(id, async selectedId => {
+        // Authorization can outlive the intro's room creation. Read the room afterwards so a
+        // preview choice cannot be committed ahead of a live route that appeared in the meantime.
+        const room = roomRef.current;
+        if (room?.switchActiveDevice) await routeAudioOutput(room, selectedId);
+      });
+    },
+    [changeAudioOutput, routeAudioOutput]
+  );
+
   /**
    * `debateRoomOptions` applies the speaker at room construction, which now happens during the
    * intro, so a speaker picked afterwards has to be pushed to the live room.
@@ -984,19 +1011,23 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!audioOutputSupported || !selectedAudioOutputId) return;
     // Only a connected room can route: this effect also runs on `reconnecting`, where the engine
     // is closed and the switch rejects for a speaker the user never touched.
-    if (roomState !== 'connected') return;
+    if (roomState !== 'connected') {
+      appliedAudioOutputRef.current = null;
+      return;
+    }
     const room = roomRef.current;
     if (!room?.switchActiveDevice) return;
+    if (appliedAudioOutputRef.current?.room === room && appliedAudioOutputRef.current.id === selectedAudioOutputId)
+      return;
     // Reported rather than swallowed: `changeAudioOutput` surfaces its own failures, so a silent
     // one here left the picker showing a speaker that nothing was being played through. Cleared on
     // success for the same reason — the retry after a blip has to be able to take the notice back.
-    void room
-      .switchActiveDevice('audiooutput', selectedAudioOutputId)
+    void routeAudioOutput(room, selectedAudioOutputId)
       .then(() => reportAudioOutputFailure(null))
       .catch(() => {
         reportAudioOutputFailure('Could not move audio to that speaker. Sound is still on the previous one.');
       });
-  }, [audioOutputSupported, reportAudioOutputFailure, roomState, selectedAudioOutputId]);
+  }, [audioOutputSupported, reportAudioOutputFailure, roomState, routeAudioOutput, selectedAudioOutputId]);
 
   /**
    * The intro and the debate room own separate media elements and the status flip swaps them while
@@ -3093,7 +3124,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             audioOutputSupported={audioOutputSupported}
             audioOutputError={audioOutputError}
             onAudioInputChange={changeAudioInput}
-            onAudioOutputChange={changeAudioOutput}
+            onAudioOutputChange={selectAudioOutput}
             onVideoInputChange={changeVideoInput}
             onRetryMedia={retryMedia}
             devicesLocked={
