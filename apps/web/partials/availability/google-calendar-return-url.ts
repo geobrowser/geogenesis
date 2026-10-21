@@ -1,4 +1,4 @@
-import { type ReadableParams, urlWithoutModal } from '~/core/deep-links/modal-deep-link';
+import { type ReadableParams, urlWithoutModal, urlWithoutParams } from '~/core/deep-links/modal-deep-link';
 
 const CALENDAR_PARAM = 'calendar';
 const REASON_PARAM = 'reason';
@@ -20,8 +20,5 @@ export function urlWithoutCalendarReturn(pathname: string, params: ReadableParam
   const next = new URLSearchParams(params?.toString() ?? '');
   next.delete(CALENDAR_PARAM);
   next.delete(REASON_PARAM);
-  if (dropModal) return urlWithoutModal(pathname, next, hash);
-  const search = next.toString();
-  const fragment = !hash || hash === '#' ? '' : hash.startsWith('#') ? hash : `#${hash}`;
-  return `${pathname}${search ? `?${search}` : ''}${fragment}`;
+  return dropModal ? urlWithoutModal(pathname, next, hash) : urlWithoutParams(pathname, next, [], hash);
 }
