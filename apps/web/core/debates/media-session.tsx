@@ -4,14 +4,23 @@ import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
 
 import * as React from 'react';
 
+import {
+  type MediaDeviceOption,
+  authorizeAudioOutput,
+  systemDefaultAudioOutput,
+  toMediaDeviceOptions,
+} from '~/core/media/device-options';
+import {
+  readMediaDevicePreference,
+  rememberMediaDevice,
+  resolveActiveMediaDevice,
+  subscribeMediaDevicePreferences,
+} from '~/core/media/device-preferences';
+
 import type { DebateJoinChoice } from './request-join-state';
 
-export type MediaDeviceOption = {
-  deviceId: string;
-  groupId: string;
-  kind: 'audioinput' | 'audiooutput' | 'videoinput';
-  label: string;
-};
+export { systemDefaultAudioOutput } from '~/core/media/device-options';
+export type { MediaDeviceOption } from '~/core/media/device-options';
 
 export type PreJoinMediaState = 'idle' | 'requesting' | 'ready' | 'denied' | 'unavailable' | 'error';
 
@@ -21,13 +30,6 @@ export type LocalTrackLike = {
   stopProcessor?: () => Promise<void>;
   stop: () => void;
   detach?: () => void;
-};
-
-export const systemDefaultAudioOutput: MediaDeviceOption = {
-  deviceId: 'default',
-  groupId: 'default',
-  kind: 'audiooutput',
-  label: 'System default',
 };
 
 export type DebateMediaSession = {
@@ -69,11 +71,12 @@ export type DebateMediaSession = {
     video?: boolean;
   }) => Promise<LocalTrackLike[]>;
   changeAudioInput: (deviceId: string) => void;
-  changeAudioOutput: (deviceId: string) => Promise<void>;
+  changeAudioOutput: (deviceId: string, apply?: (authorizedDeviceId: string) => Promise<unknown>) => Promise<void>;
   /**
    * Report that audio could not be routed to the selected speaker. `changeAudioOutput` handles the
    * picker's own failures; this is for the caller that owns a live room, where the route is applied
-   * separately and can fail on its own.
+   * while connecting or restoring devices. Explicit selections pass a routing callback to
+   * `changeAudioOutput`, which saves only after that callback succeeds.
    */
   /** `null` clears the reported failure, so a successful retry can take the notice back. */
   reportAudioOutputFailure: (message: string | null) => void;
@@ -101,6 +104,12 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   const previewGenerationRef = React.useRef(0);
   const mediaDeviceRefreshGenerationRef = React.useRef(0);
   const audioOutputSelectionGenerationRef = React.useRef(0);
+  const mediaSessionGenerationRef = React.useRef(0);
+  // Freeze restoration preferences per session; another tab must not move a live call's devices.
+  const sessionPreferencesRef = React.useRef<Partial<Record<MediaDeviceKind, string>>>({});
+  const pendingInputsRef = React.useRef<Partial<Record<MediaDeviceKind, string>>>({});
+  const previousDevicesRef = React.useRef<MediaDeviceInfo[]>([]);
+  const inputSelectionGenerationRef = React.useRef({ audioinput: 0, videoinput: 0 });
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
   const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
@@ -118,6 +127,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
    */
   const wantedKindsRef = React.useRef({ audio: true, video: true });
   const audioOutputSelectionPromiseRef = React.useRef<Promise<void> | null>(null);
+  const audioOutputRoutingPromiseRef = React.useRef<Promise<void> | null>(null);
   const selectedAudioInputIdRef = React.useRef('');
   const selectedAudioOutputIdRef = React.useRef(systemDefaultAudioOutput.deviceId);
   const selectedVideoInputIdRef = React.useRef('');
@@ -127,12 +137,16 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   const stopMedia = React.useCallback(() => {
     previewGenerationRef.current += 1;
     audioOutputSelectionGenerationRef.current += 1;
+    mediaSessionGenerationRef.current += 1;
+    pendingInputsRef.current = {};
+    previousDevicesRef.current = [];
     stopTracks(localTracksRef.current);
     localTracksRef.current = [];
     localMediaStreamRef.current = null;
     localPreviewPromiseRef.current = null;
     localPreviewWantRef.current = null;
     audioOutputSelectionPromiseRef.current = null;
+    audioOutputRoutingPromiseRef.current = null;
     setPreviewStreamState(null);
     setPreviewState('requesting');
     setPreviewBusy(true);
@@ -143,6 +157,17 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     (sessionKey: string) => {
       if (activeSessionKeyRef.current === sessionKey) return;
       stopMedia();
+      selectedAudioInputIdRef.current = readMediaDevicePreference('audioinput') ?? selectedAudioInputIdRef.current;
+      selectedVideoInputIdRef.current = readMediaDevicePreference('videoinput') ?? selectedVideoInputIdRef.current;
+      selectedAudioOutputIdRef.current = readMediaDevicePreference('audiooutput') ?? selectedAudioOutputIdRef.current;
+      setSelectedAudioInputId(selectedAudioInputIdRef.current);
+      setSelectedVideoInputId(selectedVideoInputIdRef.current);
+      setSelectedAudioOutputId(selectedAudioOutputIdRef.current);
+      sessionPreferencesRef.current = {
+        audioinput: selectedAudioInputIdRef.current,
+        videoinput: selectedVideoInputIdRef.current,
+        audiooutput: selectedAudioOutputIdRef.current,
+      };
       // A new surface has chosen nothing yet. `promoteSession` deliberately leaves this alone: a
       // hand-off keeps the choice the card made.
       wantedKindsRef.current = { audio: true, video: true };
@@ -184,40 +209,29 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     if (!mountedRef.current || !activeSessionKeyRef.current || mediaDeviceRefreshGenerationRef.current !== generation) {
       return;
     }
-    const audioInputs = devices
-      .filter(device => device.kind === 'audioinput')
-      .map((device, index) => ({
-        deviceId: device.deviceId,
-        groupId: device.groupId,
-        kind: 'audioinput' as const,
-        label: device.label || `Microphone ${index + 1}`,
-      }));
+    const audioInputs = toMediaDeviceOptions(devices.filter(device => device.kind === 'audioinput'));
     const audioOutputs = audioOutputSupportedRef.current
-      ? devices
-          .filter(device => device.kind === 'audiooutput')
-          .map((device, index) => ({
-            deviceId: device.deviceId,
-            groupId: device.groupId,
-            kind: 'audiooutput' as const,
-            label: device.label || `Speaker ${index + 1}`,
-          }))
+      ? toMediaDeviceOptions(devices.filter(device => device.kind === 'audiooutput'))
       : [systemDefaultAudioOutput];
-    const videoInputs = devices
-      .filter(device => device.kind === 'videoinput')
-      .map((device, index) => ({
-        deviceId: device.deviceId,
-        groupId: device.groupId,
-        kind: 'videoinput' as const,
-        label: device.label || `Camera ${index + 1}`,
-      }));
+    const videoInputs = toMediaDeviceOptions(devices.filter(device => device.kind === 'videoinput'));
 
     const availableOutputs = audioOutputs.length > 0 ? audioOutputs : [systemDefaultAudioOutput];
     setAudioInputDevices(current => (sameMediaDeviceOptions(current, audioInputs) ? current : audioInputs));
     setAudioOutputDevices(current => (sameMediaDeviceOptions(current, availableOutputs) ? current : availableOutputs));
     setVideoInputDevices(current => (sameMediaDeviceOptions(current, videoInputs) ? current : videoInputs));
-    const nextAudioInputId = retainOrPreferDefaultDevice(selectedAudioInputIdRef.current, audioInputs);
-    const nextAudioOutputId = retainOrPreferDefaultDevice(selectedAudioOutputIdRef.current, availableOutputs);
-    const nextVideoInputId = retainOrPreferDefaultDevice(selectedVideoInputIdRef.current, videoInputs);
+    const resolve = (kind: MediaDeviceKind, current: string) =>
+      resolveActiveMediaDevice(
+        pendingInputsRef.current[kind] ?? sessionPreferencesRef.current[kind] ?? current,
+        current,
+        devices.filter(device => device.kind === kind),
+        previousDevicesRef.current.filter(device => device.kind === kind)
+      );
+    const nextAudioInputId = resolve('audioinput', selectedAudioInputIdRef.current);
+    const nextAudioOutputId = audioOutputSupportedRef.current
+      ? resolve('audiooutput', selectedAudioOutputIdRef.current)
+      : systemDefaultAudioOutput.deviceId;
+    const nextVideoInputId = resolve('videoinput', selectedVideoInputIdRef.current);
+    previousDevicesRef.current = devices;
 
     selectedAudioInputIdRef.current = nextAudioInputId;
     selectedAudioOutputIdRef.current = nextAudioOutputId;
@@ -389,37 +403,71 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     [refreshMediaDevices]
   );
 
-  const changeAudioInput = React.useCallback(
-    (deviceId: string) => {
-      selectedAudioInputIdRef.current = deviceId;
-      setSelectedAudioInputId(deviceId);
-      void ensurePreview({
-        forceRestart: true,
-        audioInputId: deviceId,
-        videoInputId: selectedVideoInputIdRef.current,
-      }).catch(() => undefined);
-    },
-    [ensurePreview]
-  );
-
-  const changeVideoInput = React.useCallback(
-    (deviceId: string) => {
-      selectedVideoInputIdRef.current = deviceId;
-      setSelectedVideoInputId(deviceId);
+  const changeInput = React.useCallback(
+    (kind: 'audioinput' | 'videoinput', deviceId: string) => {
+      const generation = mediaSessionGenerationRef.current;
+      const selection = ++inputSelectionGenerationRef.current[kind];
+      const isCurrent = () =>
+        mountedRef.current &&
+        mediaSessionGenerationRef.current === generation &&
+        inputSelectionGenerationRef.current[kind] === selection;
+      const selectedRef = kind === 'audioinput' ? selectedAudioInputIdRef : selectedVideoInputIdRef;
+      const setSelected = kind === 'audioinput' ? setSelectedAudioInputId : setSelectedVideoInputId;
+      const select = (id: string) => {
+        selectedRef.current = id;
+        setSelected(id);
+      };
+      pendingInputsRef.current[kind] = deviceId;
+      select(deviceId);
+      const commit = () => {
+        if (!isCurrent()) return;
+        delete pendingInputsRef.current[kind];
+        sessionPreferencesRef.current[kind] = deviceId;
+        rememberMediaDevice(kind, deviceId);
+      };
+      // Claim pickers have already switched their live room before carrying the choice here.
+      if (!activeSessionKeyRef.current) {
+        commit();
+        return;
+      }
       void ensurePreview({
         forceRestart: true,
         audioInputId: selectedAudioInputIdRef.current,
-        videoInputId: deviceId,
-      }).catch(() => undefined);
+        videoInputId: selectedVideoInputIdRef.current,
+      })
+        .then(tracks => {
+          if (!isCurrent()) return;
+          const mediaKind = kind === 'audioinput' ? 'audio' : 'video';
+          const actualId = tracks
+            .find(track => track.mediaStreamTrack.kind === mediaKind)
+            ?.mediaStreamTrack.getSettings?.().deviceId;
+          if (actualId && deviceId !== 'default' && actualId !== deviceId) {
+            // Ideal constraints can silently substitute hardware. Keep the saved preference, and
+            // describe the device that actually opened rather than saving the unavailable request.
+            delete pendingInputsRef.current[kind];
+            select(actualId);
+            return;
+          }
+          commit();
+        })
+        .catch(() => {
+          if (!isCurrent()) return;
+          delete pendingInputsRef.current[kind];
+          select(sessionPreferencesRef.current[kind] ?? '');
+          void refreshMediaDevices().catch(() => undefined);
+        });
     },
-    [ensurePreview]
+    [ensurePreview, refreshMediaDevices]
   );
+
+  const changeAudioInput = React.useCallback((deviceId: string) => changeInput('audioinput', deviceId), [changeInput]);
+  const changeVideoInput = React.useCallback((deviceId: string) => changeInput('videoinput', deviceId), [changeInput]);
 
   const reportAudioOutputFailure = React.useCallback((message: string | null) => {
     setAudioOutputError(message);
   }, []);
 
-  const changeAudioOutput = React.useCallback(async (deviceId: string) => {
+  const changeAudioOutput = React.useCallback(async (deviceId: string, apply?: (id: string) => Promise<unknown>) => {
     // `ensurePreview` is what normally primes this, but the claim-exploration voice dock picks a
     // speaker without ever building a preview. Probe on demand there rather than silently dropping
     // the user's choice — and never re-probe once a selection has actually failed.
@@ -433,6 +481,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       audioOutputSupportedRef.current = true;
       setAudioOutputSupported(true);
     }
+    const sessionGeneration = mediaSessionGenerationRef.current;
     const generation = audioOutputSelectionGenerationRef.current + 1;
     audioOutputSelectionGenerationRef.current = generation;
     setAudioOutputError(null);
@@ -440,11 +489,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       const isCurrent = () => mountedRef.current && audioOutputSelectionGenerationRef.current === generation;
       try {
         let selectedId = deviceId;
-        const mediaDevices = navigator.mediaDevices as MediaDevices & {
-          selectAudioOutput?: (options: { deviceId: string }) => Promise<MediaDeviceInfo>;
-        };
-        if (deviceId !== systemDefaultAudioOutput.deviceId && mediaDevices.selectAudioOutput) {
-          const authorizedDevice = await mediaDevices.selectAudioOutput({ deviceId });
+        const authorizedDevice = await authorizeAudioOutput(deviceId);
+        if (authorizedDevice) {
           if (!isCurrent()) return;
           selectedId = authorizedDevice.deviceId;
           setAudioOutputDevices(current =>
@@ -462,10 +508,37 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           );
         }
         if (!isCurrent()) return;
-        selectedAudioOutputIdRef.current = selectedId;
-        setSelectedAudioOutputId(selectedId);
+        const commitSelection = () => {
+          if (!mountedRef.current || mediaSessionGenerationRef.current !== sessionGeneration) return;
+          // A completed live switch is now the audible device, even if another choice is pending.
+          // Keep its preference in sync, but do not clear an error from the newer choice.
+          if (isCurrent()) setAudioOutputError(null);
+          selectedAudioOutputIdRef.current = selectedId;
+          setSelectedAudioOutputId(selectedId);
+          sessionPreferencesRef.current.audiooutput = selectedId;
+          rememberMediaDevice('audiooutput', selectedId);
+        };
+        if (apply) {
+          // A newer choice must be the last one routed even if an earlier switch is still pending.
+          const previousRoute = audioOutputRoutingPromiseRef.current;
+          const routing = (async () => {
+            await previousRoute?.catch(() => undefined);
+            if (!isCurrent()) return;
+            if ((await apply(selectedId)) === false) throw new Error('Device switch failed');
+            // Commit inside the route queue, before a later switch can complete.
+            commitSelection();
+          })();
+          audioOutputRoutingPromiseRef.current = routing;
+          await routing;
+          return;
+        }
+        commitSelection();
       } catch {
         if (!isCurrent()) return;
+        if (apply) {
+          setAudioOutputError('Could not move audio to that speaker. Sound is still on the previous one.');
+          return;
+        }
         audioOutputSelectionFailedRef.current = true;
         audioOutputSupportedRef.current = false;
         selectedAudioOutputIdRef.current = systemDefaultAudioOutput.deviceId;
@@ -504,6 +577,23 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     return () => mediaDevices.removeEventListener('devicechange', handleDeviceChange);
   }, [activeSessionKey, ensurePreview, refreshMediaDevices]);
 
+  React.useEffect(
+    () =>
+      subscribeMediaDevicePreferences(() => {
+        if (activeSessionKeyRef.current) return;
+        const audio = readMediaDevicePreference('audioinput') ?? '';
+        const video = readMediaDevicePreference('videoinput') ?? '';
+        const output = readMediaDevicePreference('audiooutput') ?? 'default';
+        selectedAudioInputIdRef.current = audio;
+        selectedVideoInputIdRef.current = video;
+        selectedAudioOutputIdRef.current = output;
+        setSelectedAudioInputId(audio);
+        setSelectedVideoInputId(video);
+        setSelectedAudioOutputId(output);
+      }),
+    []
+  );
+
   React.useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -511,6 +601,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       previewGenerationRef.current += 1;
       mediaDeviceRefreshGenerationRef.current += 1;
       audioOutputSelectionGenerationRef.current += 1;
+      mediaSessionGenerationRef.current += 1;
       stopTracks(localTracksRef.current);
       localTracksRef.current = [];
       localMediaStreamRef.current = null;
@@ -619,11 +710,6 @@ export function debateRematchMediaSessionKey(sessionId: string) {
 
 export function debateRequestMediaSessionKey(requestId: string) {
   return `debate-request:${requestId}`;
-}
-
-function retainOrPreferDefaultDevice(current: string, devices: MediaDeviceOption[]) {
-  if (current && devices.some(device => device.deviceId === current)) return current;
-  return devices.find(device => device.deviceId === 'default')?.deviceId ?? devices[0]?.deviceId ?? '';
 }
 
 function sameMediaDeviceOptions(current: MediaDeviceOption[], next: MediaDeviceOption[]) {
