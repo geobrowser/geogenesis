@@ -114,6 +114,10 @@ const mocks = vi.hoisted(() => ({
   } as Record<string, boolean>,
 }));
 
+vi.mock('~/core/debates/recording-input', () => ({
+  createRecordingInput: (stream: MediaStream) => ({ stream, update: vi.fn(), stop: vi.fn() }),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ back: mocks.back, push: mocks.push, replace: mocks.replace, prefetch: mocks.routePrefetch }),
 }));
@@ -936,21 +940,27 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Video settings' })).toBeEnabled());
   });
 
-  // `disconnect()` defaults to stopping every published track, and `localTracksRef` still holds
-  // them — a retry from a live room would republish ended tracks and send nothing.
-  it('keeps the published tracks alive when a retry replaces a live room', async () => {
-    const videoTrack = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() };
-    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack(), videoTrack]);
+  it('switches a camera on its publication without disconnecting or restarting the microphone', async () => {
+    const audioTrack = createLocalAudioTrack();
+    const videoTrack = {
+      mediaStreamTrack: { kind: 'video', enabled: true },
+      restartTrack: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn(),
+      detach: vi.fn(),
+    };
+    mocks.createLocalTracks.mockResolvedValue([audioTrack, videoTrack]);
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await openDeviceSettings('Video settings');
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
-
     fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
 
-    await waitFor(() => expect(mocks.roomDisconnect).toHaveBeenCalled());
-    expect(mocks.roomDisconnect).toHaveBeenCalledWith(false);
+    await waitFor(() => expect(videoTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'camera-2' }));
+    expect(mocks.roomConnect).toHaveBeenCalledTimes(1);
+    expect(mocks.roomDisconnect).not.toHaveBeenCalled();
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+    expect(audioTrack.stop).not.toHaveBeenCalled();
   });
 
   // Once ready, the opponent's ready can flip the debate to `connecting` at any moment. The
@@ -1206,6 +1216,13 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('lets participants choose microphone and camera devices from desktop settings menus', async () => {
+    const audioTrack = createLocalAudioTrack();
+    const videoTrack = {
+      mediaStreamTrack: { kind: 'video', enabled: true },
+      restartTrack: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn(),
+    };
+    mocks.createLocalTracks.mockResolvedValue([audioTrack, videoTrack]);
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
@@ -1223,12 +1240,7 @@ describe('DebateRoomPageClient', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
 
-    await waitFor(() => {
-      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
-        audio: { deviceId: 'mic-2' },
-        video: { deviceId: 'camera-1' },
-      });
-    });
+    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
 
     await openDeviceSettings('Video settings');
@@ -1236,12 +1248,9 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('dialog', { name: 'Video settings' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
 
-    await waitFor(() => {
-      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
-        audio: { deviceId: 'mic-2' },
-        video: { deviceId: 'camera-2' },
-      });
-    });
+    await waitFor(() => expect(videoTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'camera-2' }));
+    expect(mocks.roomConnect).toHaveBeenCalledTimes(1);
+    expect(mocks.roomDisconnect).not.toHaveBeenCalled();
   });
 
   it('shows the designed permission recovery state and retries access', async () => {
@@ -1356,6 +1365,11 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('falls back to System default when speaker authorization is rejected', async () => {
+    const audioTrack = createLocalAudioTrack();
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn() },
+    ]);
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     mocks.selectAudioOutput.mockRejectedValueOnce(Object.assign(new Error('Not allowed'), { name: 'NotAllowedError' }));
 
@@ -1370,7 +1384,8 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
-    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
     expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
   });
@@ -1457,46 +1472,46 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('supports keyboard device selection without closing the desktop menu', async () => {
+    const videoTrack = {
+      mediaStreamTrack: { kind: 'video', enabled: true },
+      restartTrack: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn(),
+    };
+    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack(), videoTrack]);
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
-
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await openDeviceSettings('Video settings');
     const selectedCamera = screen.getByRole('radio', { name: 'HD Pro Webcam' });
     selectedCamera.focus();
-
     fireEvent.keyDown(selectedCamera, { key: 'ArrowDown' });
-
-    await waitFor(() =>
-      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
-        audio: { deviceId: 'mic-1' },
-        video: { deviceId: 'camera-2' },
-      })
-    );
+    await waitFor(() => expect(videoTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'camera-2' }));
     expect(screen.getByRole('dialog', { name: 'Video settings' })).toBeInTheDocument();
   });
 
-  it('keeps the desktop menu open while a selected input is restarting', async () => {
+  it('keeps the desktop menu open and the camera visible while a microphone is restarting', async () => {
+    const audioTrack = createLocalAudioTrack();
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn() },
+    ]);
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
-
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await openDeviceSettings('Audio settings');
-    const pendingTracks =
-      deferred<
-        Array<ReturnType<typeof createLocalAudioTrack> | { mediaStreamTrack: { kind: string }; stop: () => void }>
-      >();
-    mocks.createLocalTracks.mockReturnValueOnce(pendingTracks.promise);
-
+    const localVideo = debateVideoTile('local').querySelector('video')!;
+    const cameraStream = localVideo.srcObject;
+    const pending = deferred<void>();
+    audioTrack.restartTrack.mockReturnValueOnce(pending.promise);
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
-
+    await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeDisabled());
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeDisabled();
-
-    pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
-    await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
-    expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
+    expect(screen.queryByText('Switching device…')).not.toBeInTheDocument();
+    act(() => pending.resolve());
+    await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled());
+    expect(localVideo.srcObject).toBe(cameraStream);
+    expect(mocks.roomDisconnect).not.toHaveBeenCalled();
   });
 
-  it('opens mobile video settings as a bottom sheet using the existing preview stream', async () => {
+  it('opens mobile video settings as a bottom sheet using the existing camera capture', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     setMobileLayout(true);
 
@@ -1506,7 +1521,9 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('dialog', { name: 'Video settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
     const videos = document.querySelectorAll('video');
     expect(videos).toHaveLength(2);
-    expect(videos[0]?.srcObject).toBe(videos[1]?.srcObject);
+    expect((videos[0]?.srcObject as MediaStream).getVideoTracks()).toEqual(
+      (videos[1]?.srcObject as MediaStream).getVideoTracks()
+    );
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
   });
 
@@ -1539,41 +1556,40 @@ describe('DebateRoomPageClient', () => {
     expect(trigger).toHaveFocus();
   });
 
-  it('preserves valid device selections and restarts capture when a selected device is removed', async () => {
+  it('moves only the missing microphone to the fallback without dropping the call', async () => {
+    const audioTrack = createLocalAudioTrack();
+    const cameraStop = vi.fn();
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: cameraStop },
+    ]);
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
-
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await openDeviceSettings('Audio settings');
-    fireEvent.click(await screen.findByRole('radio', { name: 'Studio Mic' }));
-    await waitFor(() =>
-      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
-        audio: { deviceId: 'mic-2' },
-        video: { deviceId: 'camera-1' },
-      })
-    );
-    const callCountWithValidSelection = mocks.createLocalTracks.mock.calls.length;
-
-    act(() => mocks.deviceChangeHandler?.());
-    await waitFor(() => expect(mocks.enumerateDevices).toHaveBeenCalled());
-    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(callCountWithValidSelection);
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
+    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    audioTrack.restartTrack.mockClear();
+    await act(async () => mocks.deviceChangeHandler?.());
+    expect(audioTrack.restartTrack).not.toHaveBeenCalled();
 
     mocks.enumerateDevices.mockResolvedValue([
       { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
-      { kind: 'audiooutput', deviceId: 'default', groupId: 'speaker-group-1', label: 'System default' },
       { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
-      { kind: 'videoinput', deviceId: 'camera-2', groupId: 'camera-group-2', label: 'Desk Camera' },
     ]);
-    act(() => mocks.deviceChangeHandler?.());
-
-    await waitFor(() =>
-      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
-        audio: { deviceId: 'mic-1' },
-        video: { deviceId: 'camera-1' },
-      })
-    );
+    await act(async () => mocks.deviceChangeHandler?.());
+    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-1' }));
+    expect(mocks.roomConnect).toHaveBeenCalledTimes(1);
+    expect(mocks.roomDisconnect).not.toHaveBeenCalled();
+    expect(cameraStop).not.toHaveBeenCalled();
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
   });
 
   it('ignores stale device enumeration results during rapid hardware changes', async () => {
+    const audioTrack = createLocalAudioTrack();
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn() },
+    ]);
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
@@ -1588,12 +1604,7 @@ describe('DebateRoomPageClient', () => {
     act(() => mocks.deviceChangeHandler?.());
     act(() => mocks.deviceChangeHandler?.());
 
-    await waitFor(() =>
-      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
-        audio: { deviceId: 'mic-2' },
-        video: { deviceId: 'camera-1' },
-      })
-    );
+    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
 
     act(() =>
       olderEnumeration.resolve([
@@ -1963,7 +1974,7 @@ describe('DebateRoomPageClient', () => {
     });
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
     expect(mocks.createLocalTracks).toHaveBeenCalledWith(expect.objectContaining({ video: false }));
-    expect(mocks.roomConnect).toHaveBeenCalledTimes(2);
+    expect(mocks.roomConnect).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the mic and the controls when the camera turned on beside it fails', async () => {
@@ -2371,28 +2382,6 @@ describe('DebateRoomPageClient', () => {
     expect(videoTrack.mute).not.toHaveBeenCalled();
     expect(videoTrack.unmute).not.toHaveBeenCalled();
     expect(videoTrack.stop).not.toHaveBeenCalled();
-  });
-
-  // Restarting the preview stops the tracks the intro room is publishing, and nothing republishes
-  // them — so the connection is rebuilt around the new devices instead.
-  it('republishes the intro connection when a camera is chosen mid-intro', async () => {
-    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
-
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await openDeviceSettings('Video settings');
-    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
-
-    fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
-
-    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
-    // The stale session is let go of first, or LiveKit evicts the new one on duplicate identity.
-    expect(mocks.roomDisconnect.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.roomConnect.mock.invocationCallOrder[1]
-    );
-    // And it settles: the guard that stops this reconnecting on every countdown tick.
-    await new Promise(resolve => setTimeout(resolve, 60));
-    expect(mocks.roomConnect).toHaveBeenCalledTimes(2);
-    expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
   });
 
   // The budget is spent across the whole connecting window, not per invocation. Depending on the
@@ -3171,6 +3160,23 @@ describe('DebateRoomPageClient', () => {
     act(() => emitRoomEvent('trackUnsubscribed', track));
     expect(track.detach).toHaveBeenCalled();
     expect(document.body.contains(remoteVideo)).toBe(false);
+  });
+
+  it('keeps new opponent video visible when the old session unsubscribes and leaves late', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+    const oldVideo = document.createElement('video');
+    const newVideo = document.createElement('video');
+    const oldTrack = { kind: 'video', attach: () => oldVideo, detach: () => [oldVideo] };
+    const newTrack = { kind: 'video', attach: () => newVideo, detach: () => [newVideo] };
+    act(() => emitRoomEvent('trackSubscribed', oldTrack));
+    act(() => emitRoomEvent('trackSubscribed', newTrack));
+    act(() => emitRoomEvent('trackUnsubscribed', oldTrack));
+    act(() => emitRoomEvent('participantDisconnected', {}));
+    expect(document.body.contains(newVideo)).toBe(true);
+    expect(screen.queryByText('Waiting for video')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bri left the room.')).not.toBeInTheDocument();
   });
 
   // GEO-2602, reported as "audio but no video from opponent". Reconnecting cleared the remote
@@ -7515,6 +7521,7 @@ function createLocalAudioTrack() {
     stopProcessor: vi.fn(async () => {
       processor = null;
     }),
+    restartTrack: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn(),
     detach: vi.fn(),
   };

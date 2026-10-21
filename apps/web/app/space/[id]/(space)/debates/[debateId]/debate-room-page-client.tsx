@@ -113,6 +113,7 @@ import {
 } from '~/core/debates/open-rounds';
 import { captureOpenRoundPickSet, useOpenRoundsOutcomeAnalytics } from '~/core/debates/open-rounds-analytics';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
+import { type RecordingInput, createRecordingInput } from '~/core/debates/recording-input';
 import {
   type LiveRecordingStream,
   type RecordingPauseReason,
@@ -215,6 +216,7 @@ type RoomLike = {
   connect: (url: string, token: string, options?: RoomConnectOptions) => Promise<void>;
   disconnect: (stopTracks?: boolean) => void;
   localParticipant: {
+    unpublishTrack?: (track: unknown, stopOnUnpublish?: boolean) => Promise<unknown>;
     publishTrack: (track: unknown) => Promise<unknown>;
   };
   on: (event: string, callback: (...payload: unknown[]) => void) => void;
@@ -551,10 +553,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
   const reportJoinedRef = React.useRef<() => Promise<void>>(() => Promise.resolve());
   /**
-   * The stream this tab last published. Changing camera or microphone builds a new one, and during
-   * the intro that has to be noticed — see the reconnect effect below.
+   * Publications survive device restarts. Track newly opened kinds separately so they can join
+   * the existing connection without rebuilding the room.
    */
-  const publishedStreamRef = React.useRef<MediaStream | null>(null);
+  const publishedTracksRef = React.useRef<Set<LocalTrackLike>>(new Set());
+  const publishingTracksRef = React.useRef<Promise<void>>(Promise.resolve());
+  const recordingInputRef = React.useRef<RecordingInput | null>(null);
   const postJoinRecoveryAttemptsRef = React.useRef(0);
   const postJoinRecoveryTimerRef = React.useRef<number | null>(null);
   const connectRef = React.useRef<(options?: { takeover?: boolean; automatic?: boolean }) => Promise<void>>(() =>
@@ -633,11 +637,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const preScreenRemoteParticipant =
     debate?.participants.find(participant => participant.user_id !== preScreenLocalParticipant?.user_id) ?? null;
   /**
-   * A ready preview that went busy again: a device swap is replacing the tracks in place. The
-   * pickers deliberately stay open and arrowable across this — see the device-swap reconnect
-   * effect for what serialises the restart against the republish.
+   * Only hide the local tile if capture has no stream. A mic switch keeps the camera visible.
    */
-  const replacingPreview = previewBusy && previewState === 'ready';
+  const replacingPreview = previewBusy && previewState === 'ready' && localMediaStreamRef.current === null;
   const localSlot = joinResponse?.participant_slot ?? null;
   const recordingCancelledBy = debate?.recording_cancelled_by ?? null;
   const opponentCancelledRecording = recordingCancelledBy !== null && recordingCancelledBy !== currentUserId;
@@ -957,7 +959,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       { audioEnabled: localAudioEnabled, videoEnabled },
       sourceMediaStreamTracksRef.current
     );
-  }, [localAudioEnabled, localTracksRef, videoEnabled]);
+  }, [localAudioEnabled, localTracksRef, previewStream, videoEnabled]);
 
   React.useEffect(() => {
     if (!pendingTurnYield) return;
@@ -1003,9 +1005,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    */
   const bindLocalVideo = React.useCallback((video: HTMLVideoElement | null, stream: MediaStream | null) => {
     if (!video) return;
-    if (video.srcObject !== stream) video.srcObject = stream;
+    const current = video.srcObject instanceof MediaStream ? video.srcObject : null;
+    const currentVideo = current?.getVideoTracks() ?? [];
+    const nextVideo = stream?.getVideoTracks() ?? [];
+    const sameVideo =
+      current !== null &&
+      currentVideo.length === nextVideo.length &&
+      currentVideo.every((track, index) => track === nextVideo[index]);
+    // Rebinding for an audio-only change briefly blanks some browsers' video elements.
+    if (!sameVideo && video.srcObject !== stream) {
+      video.srcObject = stream;
+      if (stream) void video.play().catch(() => undefined);
+    }
     video.muted = true;
-    if (stream) void video.play().catch(() => undefined);
   }, []);
 
   const setLocalVideoElement = React.useCallback(
@@ -1021,6 +1033,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // old stream.
   React.useEffect(() => {
     bindLocalVideo(localVideoRef.current, localMediaStreamRef.current);
+    if (localMediaStreamRef.current) recordingInputRef.current?.update(localMediaStreamRef.current);
   }, [bindLocalVideo, localMediaStreamRef, previewStream]);
 
   const attachRemoteTrack = React.useCallback((track: RemoteTrackLike) => {
@@ -1031,7 +1044,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (element instanceof HTMLVideoElement) {
       element.className = 'h-full w-full object-contain';
       element.playsInline = true;
-      setRemoteVideoReady(true);
     } else if (element instanceof HTMLAudioElement) {
       element.className = 'hidden';
     }
@@ -1044,6 +1056,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
     remoteMediaRef.current.appendChild(element);
+    if (element instanceof HTMLVideoElement) setRemoteVideoReady(true);
   }, []);
 
   /**
@@ -1160,10 +1173,31 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, []);
 
-  const startLocalRecorder = React.useCallback((stream: MediaStream) => {
+  const startLocalRecorder = React.useCallback((source: MediaStream) => {
     if (recordingStartedAtRef.current !== null) return;
     if (recorderRef.current && recorderRef.current.state !== 'inactive') return;
     const debateId = debateIdRef.current;
+    if (typeof MediaRecorder === 'undefined') {
+      const key = `${debateId}:unsupported`;
+      if (!reportedRecorderFailuresRef.current.has(key)) {
+        reportedRecorderFailuresRef.current.add(key);
+        reportDebateRecorderFailure({ debateId, stage: 'unsupported', mimeType: '' });
+      }
+      return;
+    }
+    let input: RecordingInput;
+    try {
+      input = createRecordingInput(source);
+    } catch (error) {
+      const key = `${debateId}:construct`;
+      if (!reportedRecorderFailuresRef.current.has(key)) {
+        reportedRecorderFailuresRef.current.add(key);
+        reportDebateRecorderFailure({ debateId, stage: 'construct', mimeType: '', error });
+      }
+      return;
+    }
+    recordingInputRef.current = input;
+    const stream = input.stream;
     // GEO-2843. Any failure is reported and leaves no recorder behind — the state an unsupported
     // browser has always left: the pill never lights and there is nothing to persist. The calling
     // effect re-runs on every debate refresh, so each stage is reported once per debate.
@@ -1219,12 +1253,25 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           },
           { once: true }
         );
-        // A recorder can end without `stopLocalRecorder`: `disconnectRoom` stops the local tracks,
-        // the stream goes inactive and the recorder stops itself. `capturing` outlives the modal, so
-        // clear it from the recorder's own events or the pill keeps claiming to record.
-        recorder.addEventListener('stop', () => setCapturing(false), { once: true });
+        // End recording resources and the indicator together, including browser-initiated stops.
+        recorder.addEventListener(
+          'stop',
+          () => {
+            setCapturing(false);
+            input.stop();
+            if (recordingInputRef.current === input) recordingInputRef.current = null;
+          },
+          { once: true }
+        );
         // `startDebateRecorder` reports the `error` itself; this only clears the pill.
-        recorder.addEventListener('error', () => setCapturing(false), { once: true });
+        recorder.addEventListener(
+          'error',
+          () => {
+            setCapturing(false);
+            input.stop();
+          },
+          { once: true }
+        );
         recorder.ondataavailable = event => {
           if (event.data.size === 0) return;
           // One home per recording, decided when it started: the stream if there is one, which lets
@@ -1236,6 +1283,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       },
     });
     if (started) recorderRef.current = started.recorder;
+    else {
+      input.stop();
+      if (recordingInputRef.current === input) recordingInputRef.current = null;
+    }
   }, []);
 
   const stopLocalRecorder = React.useCallback(async () => {
@@ -1555,7 +1606,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         return;
       }
 
-      // An intro device change reconnects from a live room, and leaving the old session up evicts
+      // A retry replaces a live room, and leaving the old session up evicts
       // the new one on duplicate identity. Null the ref first so the Disconnected handler does not
       // read our own teardown as a dropped call.
       // `disconnect(false)` because the default stops every published track while `localTracksRef`
@@ -1621,6 +1672,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           // reject only a different room here rather than a not-yet-set one.
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
           const track = payload as RemoteTrackLike;
+          if (subscribedRemoteTracksRef.current.has(track)) {
+            for (const element of track.detach()) element.remove();
+          }
           subscribedRemoteTracksRef.current.add(track);
           setRemotePresence('present');
           attachRemoteTrack(track);
@@ -1634,7 +1688,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           const track = payload as RemoteTrackLike;
           subscribedRemoteTracksRef.current.delete(track);
           for (const element of track.detach()) element.remove();
-          if (track.kind === 'video') setRemoteVideoReady(false);
+          setRemoteVideoReady(Boolean(remoteMediaRef.current?.querySelector('video')));
         });
         room.on(livekit.RoomEvent.ParticipantConnected, () => {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
@@ -1650,8 +1704,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // last frame. Tracks are dropped by TrackUnsubscribed above; this is about the person.
         room.on(livekit.RoomEvent.ParticipantDisconnected, () => {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
+          // Late departure events from an old session must not hide the new session's video.
+          if (room.remoteParticipants?.size || subscribedRemoteTracksRef.current.size > 0) return;
           setRemotePresence('left');
-          setRemoteVideoReady(false);
+          setRemoteVideoReady(Boolean(remoteMediaRef.current?.querySelector('video')));
           void refetchDebate();
         });
         // LiveKit runs its own ICE-restart reconnection; surface it so a debater whose connection
@@ -1732,6 +1788,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
           // call room.disconnect() a second time and could re-enter this handler.
           roomRef.current = null;
+          void stopLocalRecorder();
           disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
           noiseFilterProcessorRef.current = null;
           ownershipRef.current?.release();
@@ -1866,7 +1923,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // mounted picks it up. A receive-only intro leaves the preview empty, so a device opened
         // later reads as a new stream and republishes.
         if (tracks.length > 0) setPreviewStream(stream);
-        publishedStreamRef.current = stream;
+        publishedTracksRef.current = new Set(tracks);
 
         if (!isCurrent()) {
           room.disconnect();
@@ -1957,6 +2014,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       selectedAudioOutputIdRef,
       selectedVideoInputIdRef,
       setPreviewStream,
+      stopLocalRecorder,
     ]
   );
 
@@ -2805,19 +2863,47 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     void connect();
   }, [connect, connectionConflictSource, debate, previewBusy, previewState, roomState]);
 
-  /**
-   * Picking a different camera or microphone restarts the preview, which stops the tracks the room
-   * is publishing, and nothing republishes them. Nothing is recorded or timed during the intro, so
-   * the connection is rebuilt around the new devices.
-   */
+  // Input restarts keep their LocalTrack/publication. A previously disabled kind opened in the
+  // intro is new, though, and must be published on the existing connection, never by rejoining.
   React.useEffect(() => {
-    if (debate?.status !== 'ready' || roomState !== 'connected') return;
-    // `previewBusy` and not just `previewState`: a forced restart holds the state at `ready`, so
-    // it is the only signal that `ensurePreview` still has the camera.
-    if (previewState !== 'ready' || previewBusy || !previewStream) return;
-    if (publishedStreamRef.current === null || publishedStreamRef.current === previewStream) return;
-    void connect();
-  }, [connect, debate?.status, previewBusy, previewState, previewStream, roomState]);
+    if (roomState !== 'connected' || previewBusy) return;
+    const room = roomRef.current;
+    if (!room) return;
+    const generation = connectionGenerationRef.current;
+    const isCurrent = () => roomRef.current === room && connectionGenerationRef.current === generation;
+    publishingTracksRef.current = publishingTracksRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (!isCurrent()) return;
+        const tracks = localTracksRef.current;
+        for (const track of publishedTracksRef.current) {
+          if (!tracks.includes(track)) {
+            await room.localParticipant.unpublishTrack?.(track, false);
+            if (!isCurrent()) return;
+            publishedTracksRef.current.delete(track);
+          }
+        }
+        const added = tracks.filter(track => !publishedTracksRef.current.has(track));
+        setLocalTrackPreferences(
+          tracks,
+          localTrackPreferencesRef.current(localSlot),
+          sourceMediaStreamTracksRef.current
+        );
+        for (const track of added) {
+          await publishTrackWithRetry(room, track, isCurrent);
+          if (!isCurrent()) return;
+          publishedTracksRef.current.add(track);
+        }
+        if (added.some(track => track.mediaStreamTrack.kind === 'audio')) {
+          await initializeNoiseFilter(tracks, isCurrent);
+          if (isCurrent()) setPreviewStream(new MediaStream(tracks.map(track => track.mediaStreamTrack)));
+        }
+      })
+      .catch(error => {
+        if (isCurrent())
+          setRoomError(error instanceof Error ? error.message : 'Could not publish the selected device.');
+      });
+  }, [initializeNoiseFilter, localSlot, localTracksRef, previewBusy, previewStream, roomState, setPreviewStream]);
 
   // Deferred `/joined` for a room joined during the intro — see `reportJoinedForConnecting`.
   React.useEffect(() => {
@@ -3077,7 +3163,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             previewState={previewState}
             previewBusy={previewBusy}
             switchingDevice={replacingPreview}
-            error={roomError ?? deviceError?.message ?? null}
+            error={roomError ?? deviceError?.message ?? (previewState === 'ready' ? previewError : null)}
             mediaError={previewError}
             audioInputDevices={audioInputDevices}
             audioOutputDevices={audioOutputDevices}
@@ -4017,18 +4103,15 @@ function setLocalTrackPreferences(
 ) {
   for (const track of tracks) {
     if (track.mediaStreamTrack.kind === 'audio') {
-      const sourceMediaStreamTrack = sourceMediaStreamTracks?.get(track);
+      const sourceMediaStreamTrack = track.mediaStream?.getAudioTracks()[0] ?? sourceMediaStreamTracks?.get(track);
       if (sourceMediaStreamTrack && sourceMediaStreamTrack !== track.mediaStreamTrack) {
         sourceMediaStreamTrack.enabled = preferences.audioEnabled;
       }
       track.mediaStreamTrack.enabled = preferences.audioEnabled;
     }
     if (track.mediaStreamTrack.kind === 'video') {
-      // `enabled`, never LiveKit's `mute()`. For a camera track LiveKit stops the underlying
-      // MediaStreamTrack on mute and acquires a replacement on unmute, but the preview and the
-      // `MediaRecorder` hold a MediaStream captured at publish time — they would keep the stopped
-      // track and the debate would record without video. Disabling sends black frames instead,
-      // which keeps one live track for the whole recording.
+      // Disabling sends black frames while keeping capture warm; muting through the SDK would
+      // release and reacquire the camera on every toggle.
       track.mediaStreamTrack.enabled = preferences.videoEnabled;
     }
   }
