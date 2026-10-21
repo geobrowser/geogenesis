@@ -25,17 +25,18 @@ function setSpeaking(speaking: boolean) {
   });
 }
 
-type Props = { turnActive: boolean; overrunPossible?: boolean; yielded?: boolean };
+type Props = { turnActive: boolean; overrunPossible?: boolean; yielded?: boolean; startsLate?: boolean };
 
 function renderOverrun(initial: Props) {
   return renderHook(
-    ({ turnActive, overrunPossible = true, yielded = false }: Props) =>
+    ({ turnActive, overrunPossible = true, yielded = false, startsLate = false }: Props) =>
       useTurnOverrun({
         track,
         listening: true,
         turnActive,
         overrunPossible,
         yielded,
+        startsLate,
         windowMs: REMOTE_OVERRUN_WINDOW_MS,
       }),
     { initialProps: initial }
@@ -111,6 +112,47 @@ describe('useTurnOverrun', () => {
     setSpeaking(true);
     view.rerender({ turnActive: true, yielded: true });
     view.rerender({ turnActive: false, yielded: true });
+    expect(view.result.current).toBeNull();
+  });
+
+  describe('the opponent, heard over the network (startsLate)', () => {
+    it('shows them finishing when their speech reaches us after our buzzer', () => {
+      const view = renderOverrun({ turnActive: true, startsLate: true });
+      view.rerender({ turnActive: false, startsLate: true });
+      expect(view.result.current).toBeNull();
+
+      act(() => vi.advanceTimersByTime(400));
+      setSpeaking(true);
+      // Drains from our buzzer, not from when the audio arrived.
+      expect(view.result.current).toBe(Date.parse('2026-10-20T12:00:00.000Z'));
+
+      setSpeaking(false);
+      expect(view.result.current).toBeNull();
+      setSpeaking(true);
+      expect(view.result.current).toBeNull();
+    });
+
+    it('waits no longer than the window for late speech', () => {
+      const view = renderOverrun({ turnActive: true, startsLate: true });
+      view.rerender({ turnActive: false, startsLate: true });
+      act(() => vi.advanceTimersByTime(REMOTE_OVERRUN_WINDOW_MS));
+      setSpeaking(true);
+      expect(view.result.current).toBeNull();
+    });
+
+    it('never waits on a speaker who ended their own turn', () => {
+      const view = renderOverrun({ turnActive: true, startsLate: true });
+      view.rerender({ turnActive: true, yielded: true, startsLate: true });
+      view.rerender({ turnActive: false, yielded: true, startsLate: true });
+      setSpeaking(true);
+      expect(view.result.current).toBeNull();
+    });
+  });
+
+  it('keeps our own microphone to the clean cut when we were silent at the buzzer', () => {
+    const view = renderOverrun({ turnActive: true });
+    view.rerender({ turnActive: false });
+    setSpeaking(true);
     expect(view.result.current).toBeNull();
   });
 });

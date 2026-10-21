@@ -3809,6 +3809,27 @@ describe('DebateRoomPageClient', () => {
     expect(warning).toHaveBeenCalledWith('[DebateNoiseFilter] Krisp could not change state.', expect.any(Error));
   });
 
+  it('measures a recording on the clock it started on when a clock retry lands mid-capture (GEO-3407)', async () => {
+    installRecordingMocks();
+    // The first sync fails, so capture starts on this computer's clock (frozen at 00:00:20)...
+    mocks.getServerTime.mockRejectedValue(new Error('offline'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce());
+    // ...then a retry succeeds against a server ten seconds ahead of it.
+    mocks.getServerTime.mockImplementation(() => Promise.resolve({ server_time_ms: Date.now() + 10_000 }));
+    await waitFor(() => expect(mocks.getServerTime).toHaveBeenCalledTimes(6), { timeout: 4_000 });
+    await act(async () => undefined);
+
+    mocks.debate = completedDebateOutsideThankYou();
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+    const recording = mocks.enqueueRecording.mock.calls[0]?.[0];
+    // No time passed on the frozen clock, so not the ten seconds the correction would add.
+    expect(recording.endedAtMs - recording.startedAtMs).toBe(0);
+    expect(recording.durationSeconds).toBe(1);
+  });
+
   it('hides debate controls while the terminal recording is being saved', async () => {
     const persistence = deferred<void>();
     mocks.featureFlags.debateDebugging = true;

@@ -36,6 +36,7 @@ export function useTurnOverrun({
   turnActive,
   overrunPossible,
   yielded = false,
+  startsLate = false,
   windowMs,
 }: {
   /** The speaker's audio: their own microphone, or their incoming track. */
@@ -47,37 +48,58 @@ export function useTurnOverrun({
   overrunPossible: boolean;
   /** They ended the turn themselves, so there is nothing to rescue. */
   yielded?: boolean;
+  /**
+   * The opponent's audio reaches the listener after their own buzzer: on the network, and later
+   * still when the speaker's clock runs behind. So speech that arrives within the window starts the
+   * overrun too, timed from the buzzer. Never for our own microphone, where silence at the buzzer
+   * is the clean cut and a sound after it must not reopen anything.
+   */
+  startsLate?: boolean;
   windowMs: number;
 }): number | null {
   const [since, setSince] = React.useState<number | null>(null);
   // Read through refs: the speech gate flips several times a second for the whole debate, and only
   // the flip that ends a running overrun matters. A yield must suppress the overrun, but must not be
   // a dependency of the effect below, which fires on the turn changing and nothing else.
-  const overrunningRef = React.useRef(false);
+  // `waiting`: the turn ended in silence, but speech may yet arrive (`startsLate` only).
+  const phaseRef = React.useRef<'idle' | 'waiting' | 'running'>('idle');
+  const endedAtRef = React.useRef(0);
   const yieldedRef = React.useRef(yielded);
   yieldedRef.current = yielded;
   const stop = React.useCallback(() => {
-    overrunningRef.current = false;
+    phaseRef.current = 'idle';
     setSince(null);
   }, []);
 
   const speakingRef = useSpeechActivity(track, listening, speaking => {
-    if (!speaking && overrunningRef.current) stop();
+    if (speaking && phaseRef.current === 'waiting') {
+      phaseRef.current = 'running';
+      setSince(endedAtRef.current);
+    } else if (!speaking && phaseRef.current === 'running') {
+      stop();
+    }
   });
 
   const wasActiveRef = React.useRef(false);
   React.useEffect(() => {
     const wasActive = wasActiveRef.current;
     wasActiveRef.current = turnActive;
-    if (!wasActive || turnActive || !overrunPossible || yieldedRef.current || !speakingRef.current) {
+    if (!wasActive || turnActive || !overrunPossible || yieldedRef.current) {
       if (turnActive || !overrunPossible) stop();
       return;
     }
-    overrunningRef.current = true;
-    setSince(Date.now());
+    endedAtRef.current = Date.now();
+    if (speakingRef.current) {
+      phaseRef.current = 'running';
+      setSince(endedAtRef.current);
+    } else if (startsLate) {
+      phaseRef.current = 'waiting';
+    } else {
+      return;
+    }
     const timer = window.setTimeout(stop, windowMs);
     return () => window.clearTimeout(timer);
-  }, [overrunPossible, speakingRef, stop, turnActive, windowMs]);
+  }, [overrunPossible, speakingRef, startsLate, stop, turnActive, windowMs]);
 
   return since;
 }

@@ -540,6 +540,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // struggles. Set from LiveKit's own quality reports for the local participant.
   const callConnectionPoorRef = React.useRef(false);
   const recordingStartedAtRef = React.useRef<number | null>(null);
+  // GEO-3407. The clock a recording was started on, for its whole capture. A clock sync retry can
+  // replace the room's clock mid-debate; a recording that read the new one at its end would measure
+  // its length across two clocks and be off by the whole correction, as would its streamed chunks.
+  const recordingClockRef = React.useRef<(() => number) | null>(null);
   const recordingEndedAtRef = React.useRef<number | null>(null);
   const recordingStopTimerRef = React.useRef<number | null>(null);
   const autoConnectAttemptedRef = React.useRef<string | null>(null);
@@ -766,6 +770,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       localSlot !== null &&
       countdown.activeSlot !== localSlot,
     overrunPossible,
+    startsLate: true,
     windowMs: REMOTE_OVERRUN_WINDOW_MS,
   });
   const localAudioGate: LocalAudioGateInput = {
@@ -1173,83 +1178,89 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, []);
 
-  const startLocalRecorder = React.useCallback((stream: MediaStream) => {
-    if (recordingStartedAtRef.current !== null) return;
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') return;
-    const debateId = debateIdRef.current;
-    // GEO-2843. Any failure is reported and leaves no recorder behind — the state an unsupported
-    // browser has always left: the pill never lights and there is nothing to persist. The calling
-    // effect re-runs on every debate refresh, so each stage is reported once per debate.
-    const started = startDebateRecorder({
-      stream,
-      debateId,
-      timesliceMs: 1_000,
-      report: failure => {
-        const key = `${failure.debateId}:${failure.stage}`;
-        if (reportedRecorderFailuresRef.current.has(key)) return;
-        reportedRecorderFailuresRef.current.add(key);
-        reportDebateRecorderFailure(failure);
-      },
-      wire: (recorder, mimeType) => {
-        recordingChunksRef.current = [];
-        recordingEndedAtRef.current = null;
-        recorder.addEventListener(
-          'start',
-          () => {
-            recordingStartedAtRef.current = serverNowRef.current();
-            const userId = currentUserIdRef.current;
-            if (userId) {
-              liveRecordingStreamRef.current = startRoomRecordingStream({
-                debateId: debateIdRef.current,
-                userId,
-                auth: geoChatAuthRef.current,
-                recorder,
-                stream,
-                mimeType: recorder.mimeType || mimeType || 'video/webm',
-                startedAtMs: recordingStartedAtRef.current,
-                // Why, not just whether: a stream that stands down says which of these held it.
-                shouldPause: () => {
-                  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
-                  if (roomStateRef.current !== 'connected') return 'room_not_connected';
-                  if (callConnectionPoorRef.current) return 'connection_poor';
-                  return null;
-                },
-              });
-            }
-            // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
-            // clock waits on it. `/ready` fires after a camera *preview* exists and `/joined` fires on
-            // room connection, both before LiveKit has published the tracks this recorder consumes —
-            // so the window used to open while one participant was still acquiring a device, costing
-            // 20-50s off the head of their recording, permanently.
-            //
-            // Fire-and-forget: the mutation retries itself, and a failure must not stop a recorder
-            // that is already running. The worst case is the server waiting out its grace, which is
-            // the old behaviour rather than a new one.
-            markCapturingRef.current();
-            // GEO-2819. The recording pill is driven from here rather than from the debate status, so
-            // what it claims and what is on disk cannot drift apart.
-            setCapturing(true);
-          },
-          { once: true }
-        );
-        // A recorder can end without `stopLocalRecorder`: `disconnectRoom` stops the local tracks,
-        // the stream goes inactive and the recorder stops itself. `capturing` outlives the modal, so
-        // clear it from the recorder's own events or the pill keeps claiming to record.
-        recorder.addEventListener('stop', () => setCapturing(false), { once: true });
-        // `startDebateRecorder` reports the `error` itself; this only clears the pill.
-        recorder.addEventListener('error', () => setCapturing(false), { once: true });
-        recorder.ondataavailable = event => {
-          if (event.data.size === 0) return;
-          // One home per recording, decided when it started: the stream if there is one, which lets
-          // go of each timeslice once it is uploaded, or this tab's own list, as before streaming.
-          const live = liveRecordingStreamRef.current;
-          if (live) live.append(event.data, serverNowRef.current());
-          else recordingChunksRef.current.push(event.data);
-        };
-      },
-    });
-    if (started) recorderRef.current = started.recorder;
-  }, []);
+  const recordingNow = React.useCallback(() => (recordingClockRef.current ?? serverNowRef.current)(), []);
+
+  const startLocalRecorder = React.useCallback(
+    (stream: MediaStream) => {
+      if (recordingStartedAtRef.current !== null) return;
+      if (recorderRef.current && recorderRef.current.state !== 'inactive') return;
+      const debateId = debateIdRef.current;
+      // GEO-2843. Any failure is reported and leaves no recorder behind — the state an unsupported
+      // browser has always left: the pill never lights and there is nothing to persist. The calling
+      // effect re-runs on every debate refresh, so each stage is reported once per debate.
+      const started = startDebateRecorder({
+        stream,
+        debateId,
+        timesliceMs: 1_000,
+        report: failure => {
+          const key = `${failure.debateId}:${failure.stage}`;
+          if (reportedRecorderFailuresRef.current.has(key)) return;
+          reportedRecorderFailuresRef.current.add(key);
+          reportDebateRecorderFailure(failure);
+        },
+        wire: (recorder, mimeType) => {
+          recordingChunksRef.current = [];
+          recordingEndedAtRef.current = null;
+          recorder.addEventListener(
+            'start',
+            () => {
+              recordingClockRef.current = serverNowRef.current;
+              recordingStartedAtRef.current = recordingClockRef.current();
+              const userId = currentUserIdRef.current;
+              if (userId) {
+                liveRecordingStreamRef.current = startRoomRecordingStream({
+                  debateId: debateIdRef.current,
+                  userId,
+                  auth: geoChatAuthRef.current,
+                  recorder,
+                  stream,
+                  mimeType: recorder.mimeType || mimeType || 'video/webm',
+                  startedAtMs: recordingStartedAtRef.current,
+                  // Why, not just whether: a stream that stands down says which of these held it.
+                  shouldPause: () => {
+                    if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
+                    if (roomStateRef.current !== 'connected') return 'room_not_connected';
+                    if (callConnectionPoorRef.current) return 'connection_poor';
+                    return null;
+                  },
+                });
+              }
+              // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
+              // clock waits on it. `/ready` fires after a camera *preview* exists and `/joined` fires on
+              // room connection, both before LiveKit has published the tracks this recorder consumes —
+              // so the window used to open while one participant was still acquiring a device, costing
+              // 20-50s off the head of their recording, permanently.
+              //
+              // Fire-and-forget: the mutation retries itself, and a failure must not stop a recorder
+              // that is already running. The worst case is the server waiting out its grace, which is
+              // the old behaviour rather than a new one.
+              markCapturingRef.current();
+              // GEO-2819. The recording pill is driven from here rather than from the debate status, so
+              // what it claims and what is on disk cannot drift apart.
+              setCapturing(true);
+            },
+            { once: true }
+          );
+          // A recorder can end without `stopLocalRecorder`: `disconnectRoom` stops the local tracks,
+          // the stream goes inactive and the recorder stops itself. `capturing` outlives the modal, so
+          // clear it from the recorder's own events or the pill keeps claiming to record.
+          recorder.addEventListener('stop', () => setCapturing(false), { once: true });
+          // `startDebateRecorder` reports the `error` itself; this only clears the pill.
+          recorder.addEventListener('error', () => setCapturing(false), { once: true });
+          recorder.ondataavailable = event => {
+            if (event.data.size === 0) return;
+            // One home per recording, decided when it started: the stream if there is one, which lets
+            // go of each timeslice once it is uploaded, or this tab's own list, as before streaming.
+            const live = liveRecordingStreamRef.current;
+            if (live) live.append(event.data, recordingNow());
+            else recordingChunksRef.current.push(event.data);
+          };
+        },
+      });
+      if (started) recorderRef.current = started.recorder;
+    },
+    [recordingNow]
+  );
 
   const stopLocalRecorder = React.useCallback(async () => {
     const recorder = recorderRef.current;
@@ -1261,7 +1272,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       recorder.addEventListener(
         'stop',
         () => {
-          recordingEndedAtRef.current = serverNowRef.current();
+          recordingEndedAtRef.current = recordingNow();
           resolve();
         },
         { once: true }
@@ -1273,8 +1284,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       await stopped;
       return;
     }
-    recordingEndedAtRef.current = serverNowRef.current();
-  }, []);
+    recordingEndedAtRef.current = recordingNow();
+  }, [recordingNow]);
 
   const performStoppedLocalRecordingPersistence = React.useCallback(async () => {
     if (persistedRecordingDebateIdRef.current === debate?.id) return true;
@@ -1379,6 +1390,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingChunksRef.current = [];
     stoppedRecordingRef.current = null;
     recordingStartedAtRef.current = null;
+    recordingClockRef.current = null;
     recordingEndedAtRef.current = null;
     return true;
   }, [currentUserId, debate, joinResponse?.participant_slot, localMediaStreamRef, stopLocalRecorder]);
@@ -1427,6 +1439,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!recorder) {
       recordingChunksRef.current = [];
       recordingStartedAtRef.current = null;
+      recordingClockRef.current = null;
       recordingEndedAtRef.current = null;
       stoppedRecordingRef.current = null;
       recordingPersistenceStartedRef.current = null;
@@ -1445,6 +1458,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recorderRef.current = null;
     recordingChunksRef.current = [];
     recordingStartedAtRef.current = null;
+    recordingClockRef.current = null;
     recordingEndedAtRef.current = null;
     stoppedRecordingRef.current = null;
     recordingPersistenceStartedRef.current = null;
