@@ -2,6 +2,7 @@ import { firstName } from '~/partials/profile/claim-response-tag';
 
 import type {
   Debate,
+  DebateMediaEarlyEndGap,
   DebateMediaResponse,
   DebateMediaRoundPick,
   DebateMediaTurnSegment,
@@ -10,6 +11,9 @@ import type {
   ParticipantSlot,
 } from './api';
 import { isOpenRoundsDebate, openRoundsRequiredRebuttalRounds } from './open-rounds';
+import { type BreakCut, mergeBreakCuts } from './playback-timeline';
+
+export type { BreakCut } from './playback-timeline';
 
 /**
  * The breaks between Open rounds in a published debate (GEO-3277), on the web player's clock.
@@ -68,7 +72,7 @@ export type PlayerBreak = {
 type PlayerEarlyEnd = {
   turnIndex: number;
   nextTurnIndex: number;
-  kind?: 'turn_start' | 'turn_end';
+  kind?: DebateMediaEarlyEndGap['kind'];
   startMs: number;
   endMs: number;
   /** Who ended their turn early, and who speaks next; null where the media lacks either turn. */
@@ -231,13 +235,6 @@ export function breakAnimationPositionMs(breaks: readonly PlayerBreak[], playhea
   return current ? current.decidingStartMs + breakElapsedMs(current, playheadMs) : playheadMs;
 }
 
-export type BreakCut = {
-  /** When to cut: midway through a round title's hold, or at an early end's quiet. */
-  atMs: number;
-  /** Where to: the silent tail before the next turn, or the end after the final End. */
-  toMs: number;
-};
-
 /**
  * Every cut the player makes, in order. Round breaks retain the front and tail of the silence,
  * cutting midway through the announcement so the frame blend finishes before its exit. An early
@@ -245,20 +242,11 @@ export type BreakCut = {
  * the next speaker's first, is cut straight away, as the rendered video cuts it.
  */
 export function breakCuts(breaks: PlaybackBreaks): BreakCut[] {
-  const cuts = [
+  // Adjacent tail/start cuts seek once, without briefly showing an intermediate timer.
+  return mergeBreakCuts([
     ...breaks.breaks.map(cutForBreak),
     ...breaks.earlyEnds.map(entry => ({ atMs: entry.startMs, toMs: entry.endMs })),
-  ]
-    .filter(cut => cut.toMs > cut.atMs)
-    .sort((a, b) => a.atMs - b.atMs);
-  // An outgoing tail and the next turn's slow start meet at the original handoff. Seek once,
-  // without briefly landing in the second cut and showing an intermediate timer value.
-  return cuts.reduce<BreakCut[]>((merged, cut) => {
-    const previous = merged.at(-1);
-    if (previous && cut.atMs <= previous.toMs) previous.toMs = Math.max(previous.toMs, cut.toMs);
-    else merged.push({ ...cut });
-    return merged;
-  }, []);
+  ]);
 }
 
 /**

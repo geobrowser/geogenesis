@@ -1,19 +1,27 @@
-import type { BreakCut } from './playback-breaks';
+export type BreakCut = {
+  /** When to cut: midway through a round title's hold, or at an early end's quiet. */
+  atMs: number;
+  /** Where to: the silent tail before the next turn, or the end after the final End. */
+  toMs: number;
+};
+
+/** Normalize source cuts once for both automatic seeks and the viewer-facing scrubber. */
+export function mergeBreakCuts(cuts: readonly BreakCut[]): BreakCut[] {
+  const merged: BreakCut[] = [];
+  for (const cut of cuts.filter(cut => cut.toMs > cut.atMs).sort((a, b) => a.atMs - b.atMs)) {
+    const previous = merged.at(-1);
+    if (previous && cut.atMs <= previous.toMs) previous.toMs = Math.max(previous.toMs, cut.toMs);
+    else merged.push({ ...cut });
+  }
+  return merged;
+}
 
 /** A viewer-facing timeline that excludes the silent intervals skipped by automatic edits. */
 export function playbackTimeline(cuts: readonly BreakCut[], sourceDurationMs: number) {
   const sourceDuration = Math.max(0, sourceDurationMs);
   const boundSource = (ms: number) => Math.max(0, Math.min(sourceDuration, ms));
-  // Clip and merge so a partial/overlapping metadata interval cannot subtract time twice.
-  const removed: BreakCut[] = [];
-  for (const cut of cuts
-    .map(cut => ({ atMs: boundSource(cut.atMs), toMs: boundSource(cut.toMs) }))
-    .filter(cut => cut.toMs > cut.atMs)
-    .sort((a, b) => a.atMs - b.atMs)) {
-    const last = removed[removed.length - 1];
-    if (last && cut.atMs <= last.toMs) last.toMs = Math.max(last.toMs, cut.toMs);
-    else removed.push(cut);
-  }
+  // Clip before merging so out-of-range metadata cannot subtract time twice.
+  const removed = mergeBreakCuts(cuts.map(cut => ({ atMs: boundSource(cut.atMs), toMs: boundSource(cut.toMs) })));
   const durationMs = sourceDuration - removed.reduce((sum, cut) => sum + cut.toMs - cut.atMs, 0);
   return {
     durationMs,

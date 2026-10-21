@@ -213,7 +213,7 @@ export type DebateMediaCondensedBreak = {
   speed: number;
 };
 
-/** An early end inside a round, cut down to a short quiet at `output_ms` (GEO-3276). */
+/** A served turn-edge silence cut (GEO-3408), or a legacy End turn handoff (GEO-3276). */
 export type DebateMediaEarlyEndGap = {
   /** Absent on legacy End turn handoffs. Turn-edge edits have no on-screen cue. */
   kind?: 'turn_start' | 'turn_end';

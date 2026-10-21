@@ -186,6 +186,22 @@ describe('turnStateFromSegments (GEO-2949)', () => {
     expect(turnStateFromSegments([turn], 200)?.seconds).toBe(20);
   });
 
+  it('holds the original allowance before the clock starts and at zero through an overrun', () => {
+    const turn: DebateMediaTurnSegment = {
+      turn_index: 1,
+      participant_slot: 2,
+      output_start_ms: 10_000,
+      output_end_ms: 76_500,
+      duration_ms: 66_500,
+      countdown_start_ms: 15_000,
+      countdown_end_ms: 75_000,
+      countdown_duration_ms: 60_000,
+    };
+    expect(turnStateFromSegments([turn], 12)).toMatchObject({ seconds: 60, progress: 0 });
+    expect(turnStateFromSegments([turn], 45)).toMatchObject({ seconds: 30, progress: 0.5 });
+    expect(turnStateFromSegments([turn], 76)).toMatchObject({ seconds: 0, progress: 1 });
+  });
+
   it('has no opinion when the render produced no segments', () => {
     expect(turnStateFromSegments([], 12)).toBeNull();
   });

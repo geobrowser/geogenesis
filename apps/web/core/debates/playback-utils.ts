@@ -135,25 +135,23 @@ export function turnStateFromSegments(segments: DebateMediaTurnSegment[], second
     (ms >= segments[segments.length - 1].output_end_ms ? segments[segments.length - 1] : null);
   if (!active) return null;
 
-  const originalClock = active.countdown_end_ms !== undefined && active.countdown_duration_ms !== undefined;
+  const { countdown_end_ms: originalEndMs, countdown_duration_ms: originalDurationMs } = active;
+  const originalClock = originalEndMs !== undefined && originalDurationMs !== undefined;
   const countdownStartMs = originalClock
     ? (active.countdown_start_ms ?? active.output_start_ms)
     : Math.min(
         Math.max(active.countdown_start_ms ?? active.output_start_ms, active.output_start_ms),
         active.output_end_ms
       );
-  const countdownEndMs = originalClock ? active.countdown_end_ms! : active.output_end_ms;
-  const clockMs = Math.max(1, originalClock ? active.countdown_duration_ms! : countdownEndMs - countdownStartMs);
+  const countdownEndMs = originalClock ? originalEndMs : active.output_end_ms;
+  const clockMs = Math.max(1, originalClock ? originalDurationMs : countdownEndMs - countdownStartMs);
   // A paused final frame holds the value at the retained turn's end.
-  const positionMs = originalClock ? Math.min(ms, active.output_end_ms) : ms;
+  const positionMs = originalClock ? Math.max(countdownStartMs, Math.min(ms, active.output_end_ms)) : ms;
 
   return {
     slot: active.participant_slot,
     progress: Math.max(0, Math.min(1, (positionMs - countdownStartMs) / clockMs)),
-    seconds: Math.max(
-      0,
-      (countdownEndMs - (originalClock ? Math.max(positionMs, countdownStartMs) : positionMs)) / 1_000
-    ),
+    seconds: Math.max(0, (countdownEndMs - positionMs) / 1_000),
   };
 }
 
