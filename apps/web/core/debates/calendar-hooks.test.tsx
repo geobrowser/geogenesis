@@ -134,7 +134,7 @@ describe('calendar mutations', () => {
     expect(invalidatedKeys(invalidate)).toEqual(expect.arrayContaining(affected));
   });
 
-  it('counts a refresh only when it went through', async () => {
+  it('counts a refresh by its sync outcome, and not at all when refused', async () => {
     mocks.refreshGoogleCalendar.mockResolvedValueOnce({ google: null });
     mocks.refreshGoogleCalendar.mockRejectedValueOnce(new GeoChatRequestError('Slow down', 'rate_limited', 429));
 
@@ -142,7 +142,28 @@ describe('calendar mutations', () => {
     await act(() => result.current.mutateAsync());
     await act(() => result.current.mutateAsync().catch(() => undefined));
 
-    expect(capture.mock.calls).toEqual([['calendar_refreshed', { provider: 'google' }]]);
+    expect(capture.mock.calls).toEqual([['calendar_refreshed', { provider: 'google', outcome: 'error' }]]);
+  });
+
+  it('shows a refresh whose sync failed straight away', async () => {
+    const failed = {
+      google: {
+        account_email: 'ada@example.com',
+        status: 'needs_reconnect' as const,
+        stale: true,
+        last_success_at: null,
+        last_error: 'invalid_grant' as const,
+      },
+    };
+    mocks.refreshGoogleCalendar.mockResolvedValue(failed);
+    // The refetch that follows never lands, so only the refresh's own answer can update the cache.
+    mocks.getCalendarConnections.mockReturnValue(new Promise(() => {}));
+
+    const { result } = renderHook(() => useRefreshGoogleCalendar(), { wrapper });
+    await act(() => result.current.mutateAsync());
+
+    expect(client.getQueryData(debateQueryKeys.calendarConnections('user-a'))).toEqual(failed);
+    expect(capture).toHaveBeenCalledWith('calendar_refreshed', { provider: 'google', outcome: 'needs_reconnect' });
   });
 
   it('counts a disconnect once it went through', async () => {

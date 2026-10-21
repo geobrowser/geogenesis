@@ -89,14 +89,21 @@ export function useConnectGoogleCalendar() {
   });
 }
 
-/** Settled rather than success: a refusal (404, 429) also means the state on screen may be stale. */
+/**
+ * The answer is the connection after the sync, failed or not, so it shows at once. Settled rather
+ * than success: a refusal (404, 429) also means the state on screen may be stale.
+ */
 export function useRefreshGoogleCalendar() {
+  const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const invalidate = useInvalidateCalendarReads();
 
   return useMutation<CalendarConnections, Error, void>({
     mutationFn: () => refreshGoogleCalendar(getPrivyIdentityToken, accountKey),
-    onSuccess: () => calendarRefreshed('google'),
+    onSuccess: connections => {
+      queryClient.setQueryData(debateQueryKeys.calendarConnections(accountKey), connections);
+      calendarRefreshed('google', connections.google);
+    },
     onSettled: invalidate,
   });
 }

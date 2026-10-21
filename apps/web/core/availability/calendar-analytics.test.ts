@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { GeoChatRequestError } from '~/core/debates/api';
+import { GeoChatRequestError, type GoogleCalendarConnection } from '~/core/debates/api';
 
 import {
   calendarConnectCallbackFailed,
@@ -56,13 +56,33 @@ describe('calendar analytics', () => {
 
   it('reports the remaining outcomes with the provider only', () => {
     calendarConnected('google');
-    calendarRefreshed('google');
     calendarDisconnected('google');
 
     expect(capture.mock.calls).toEqual([
       ['calendar_connected', { provider: 'google' }],
-      ['calendar_refreshed', { provider: 'google' }],
       ['calendar_disconnected', { provider: 'google' }],
+    ]);
+  });
+
+  it('reports a refresh by how its sync went, a missing connection as an error', () => {
+    const connection = (status: GoogleCalendarConnection['status']): GoogleCalendarConnection => ({
+      account_email: 'ada@example.com',
+      status,
+      stale: false,
+      last_success_at: null,
+      last_error: null,
+    });
+
+    calendarRefreshed('google', connection('ok'));
+    calendarRefreshed('google', connection('error'));
+    calendarRefreshed('google', connection('needs_reconnect'));
+    calendarRefreshed('google', null);
+
+    expect(capture.mock.calls).toEqual([
+      ['calendar_refreshed', { provider: 'google', outcome: 'ok' }],
+      ['calendar_refreshed', { provider: 'google', outcome: 'error' }],
+      ['calendar_refreshed', { provider: 'google', outcome: 'needs_reconnect' }],
+      ['calendar_refreshed', { provider: 'google', outcome: 'error' }],
     ]);
   });
 });
