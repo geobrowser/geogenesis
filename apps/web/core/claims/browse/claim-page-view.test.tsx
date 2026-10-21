@@ -95,6 +95,9 @@ const mocks = vi.hoisted(() => ({
   isResponseSubmitting: false,
   /** Props the position pills received. */
   positionControl: null as Record<string, unknown> | null,
+  emailVote: null as { kind: 'cast' | 'kept'; position: boolean } | null,
+  responseStateArgs: null as Record<string, unknown> | null,
+  viewerPosition: null as boolean | null,
   /**
    * Deliberately not 3.
    *
@@ -108,6 +111,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mocks.pathname,
+  useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('~/core/state/editor/editor-provider', () => ({ useActiveTabIdForEditor: () => null }));
 
@@ -201,24 +205,27 @@ vi.mock('~/core/debates/hooks', () => ({
 }));
 
 vi.mock('./use-claim-response-state', () => ({
-  useClaimResponseState: () => ({
-    responseKind: 'stance',
-    summary: {
-      isLoading: mocks.summaryLoading,
-      hasCounts: mocks.hasCounts,
-      total: mocks.responseTotal,
-      isControversial: mocks.isControversial,
-      viewerDirection: 'positive',
-      viewerSpaceId: 'viewer-space',
-      isViewerResponseLoading: true,
-    },
-    claim: null,
-    positions: [],
-    readiness: { response_kind: 'stance' },
-    isResponseKindResolved: true,
-    isViewerResponseResolved: true,
-    responseBlockedReason: null,
-  }),
+  useClaimResponseState: (args: Record<string, unknown>) => {
+    mocks.responseStateArgs = args;
+    return {
+      responseKind: 'stance',
+      summary: {
+        isLoading: mocks.summaryLoading,
+        hasCounts: mocks.hasCounts,
+        total: mocks.responseTotal,
+        isControversial: mocks.isControversial,
+        viewerDirection: 'positive',
+        viewerSpaceId: 'viewer-space',
+        isViewerResponseLoading: true,
+      },
+      claim: null,
+      positions: [],
+      readiness: { response_kind: 'stance' },
+      isResponseKindResolved: true,
+      isViewerResponseResolved: true,
+      responseBlockedReason: null,
+    };
+  },
 }));
 
 // The page's modules each reach for the sync engine, geo-chat or Privy. None of them is what this
@@ -226,7 +233,7 @@ vi.mock('./use-claim-response-state', () => ({
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   useClaimPositionControl: () => ({
     optimisticPositions: [],
-    viewerPosition: null,
+    viewerPosition: mocks.viewerPosition,
     respond: () => {},
     canRespond: false,
     actionTitle: () => undefined,
@@ -242,6 +249,7 @@ vi.mock('./claim-position-comment', () => ({
     return <div data-testid="position">{props.positionRowEndSlot as React.ReactNode}</div>;
   },
 }));
+vi.mock('./use-email-vote-link', () => ({ useEmailVoteLink: () => mocks.emailVote }));
 vi.mock('./claim-comment-position', () => ({
   ClaimCommentPositionProvider: (props: Record<string, unknown>) => {
     mocks.commentPosition = props;
@@ -362,6 +370,8 @@ beforeEach(() => {
   mocks.commentPosition = null;
   mocks.isResponsePending = false;
   mocks.isResponseSubmitting = false;
+  mocks.emailVote = null;
+  mocks.viewerPosition = null;
   mocks.positionControl = null;
 });
 
@@ -720,6 +730,34 @@ describe('ClaimPageView position', () => {
   // The claim page is where a confirming response was pressed again and published a retraction.
   // The pills guard against that quietly: the side reads as taken at once, with no note or wait
   // cursor, and only the presses that would undo it are dropped until it lands.
+  it('names the claim for the vote control, so a vote kept on the device has a save-sheet chip', () => {
+    mocks.entity = claimEntity(null);
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    expect(mocks.responseStateArgs?.title).toBe('Pineapple belongs on pizza');
+  });
+
+  it('puts what an email vote link did under the pill it answered (GEO-3374)', () => {
+    mocks.emailVote = { kind: 'cast', position: false };
+    mocks.viewerPosition = false;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const noteFor = mocks.positionControl?.noteFor as (position: boolean) => React.ReactNode;
+    const { container } = render(<>{noteFor(false)}</>);
+    expect(container).toHaveTextContent('Vote counted · Undo');
+    expect(render(<>{noteFor(true)}</>).container).toBeEmptyDOMElement();
+  });
+
+  it('holds the email vote’s Undo while the pills are pending', () => {
+    mocks.emailVote = { kind: 'cast', position: true };
+    mocks.viewerPosition = true;
+    mocks.isResponseSubmitting = true;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const noteFor = mocks.positionControl?.noteFor as (position: boolean) => React.ReactNode;
+    render(<>{noteFor(true)}</>);
+    expect(screen.getByRole('button', { name: 'Undo' })).toHaveAttribute('aria-disabled', 'true');
+  });
+
   it('marks the pills pending until the response reaches the bundler, without announcing a wait', () => {
     mocks.isResponsePending = true;
     mocks.isResponseSubmitting = true;

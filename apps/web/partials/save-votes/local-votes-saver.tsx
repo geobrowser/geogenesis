@@ -137,8 +137,13 @@ export function LocalVotesSaver() {
 
   if (!next) return null;
   return (
-    // Saved votes are told apart from votes cast signed in by this list id on `action_completed`.
-    <ActionContextProvider value={{ list_id: LOCAL_VOTES_LIST_ID }}>
+    // Saved votes are told apart from votes cast signed in by this list id on `action_completed`, and
+    // one an email's vote link cast still names that email (GEO-3374).
+    <ActionContextProvider
+      value={
+        next.refEmail ? { list_id: LOCAL_VOTES_LIST_ID, ref_email: next.refEmail } : { list_id: LOCAL_VOTES_LIST_ID }
+      }
+    >
       <LocalVoteWriter
         key={`${next.entityId}:${next.spaceId}:${next.responseKind}:${next.direction}`}
         vote={next}
@@ -205,7 +210,9 @@ function LocalVoteWriter({
         // and publishes its own side. Neither outcome below may follow: publishing would overwrite
         // the newer press, and "already held" would remove whatever is there now.
         if (!isLocalVoteCurrent(vote)) return;
-        if (held === vote.direction) {
+        // A vote an email's link cast never changes a side the account already holds (GEO-3374): it
+        // was the email's suggestion, made on a device that couldn't see the account's answer.
+        if (held === vote.direction || (vote.refEmail && held != null)) {
           latest.current.onSaved('already_held');
           return;
         }

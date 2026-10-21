@@ -38,7 +38,15 @@ export function castLocalVote({
   /** The pressed control's own action context, which also names the target. */
   attribution: ActionContext;
 }): LocalVoteChange {
-  const change = toggleLocalVote({ entityId, spaceId, responseKind, direction, title });
+  const change = toggleLocalVote({
+    entityId,
+    spaceId,
+    responseKind,
+    direction,
+    title,
+    // Cast by an email's vote link rather than a press (GEO-3374).
+    ...(attribution.ref_email ? { refEmail: attribution.ref_email } : {}),
+  });
   // The visit they voted in is not the "return visit" the sheet waits for.
   markPromptedThisSession();
   try {

@@ -15,6 +15,7 @@ import { DebateMediaSessionProvider } from '~/core/debates/media-session';
 import { PlaybackDiagnostics } from '~/core/debates/playback-diagnostics';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
 import { requestsAnyModal } from '~/core/deep-links/modal-deep-link';
+import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
@@ -213,6 +214,9 @@ function ReviewChangesGate() {
 
 // Also shows itself to a signed-out visitor who already has local votes (the return-visit prompt).
 function SaveVotesGate() {
+  // The sheet mounts only once there is something to ask, often pages after the landing, so whether
+  // the visit came from one of our emails is noted here, on arrival (GEO-3374).
+  React.useEffect(() => noteEmailArrival(), []);
   const prompt = useSaveVotesPrompt();
   const { votes } = useLocalVotes();
   const { ready, authenticated } = usePrivy();
