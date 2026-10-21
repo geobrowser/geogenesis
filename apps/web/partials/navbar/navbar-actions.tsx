@@ -19,6 +19,7 @@ import { useSpaceId } from '~/core/hooks/use-space-id';
 import { geoNotificationsApiUrl } from '~/core/notifications/api';
 import { useEditable } from '~/core/state/editable-store';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import type { SaveVotesPressReason } from '~/core/state/save-votes-prompt';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 import { useLogout, usePrivy } from '~/core/wallet/auth-hooks';
@@ -81,7 +82,17 @@ const PROFILE_MENU_ACTION_CLASS =
   'flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none mobile:min-h-11';
 const PROFILE_MENU_DIVIDED_ACTION_CLASS = cx(PROFILE_MENU_ACTION_CLASS, 'border-t border-grey-02');
 
-export function NavbarActions() {
+type NavbarActionsProps = {
+  /**
+   * The debate feed's phone bar (GEO-3415): the same account states and profile menu, with the smaller
+   * Log in pill and a 44px avatar target at every phone width rather than only below 640px.
+   */
+  compact?: boolean;
+  /** Where a sign-in from here was started, for its analytics; the navbar's own when left out. */
+  signInComponent?: SaveVotesPressReason;
+};
+
+export function NavbarActions({ compact = false, signInComponent }: NavbarActionsProps = {}) {
   const [open, onOpenChange] = React.useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = React.useState(false);
   // Mounted from the first open onward rather than always: the dialog's hooks read
@@ -105,7 +116,9 @@ export function NavbarActions() {
   const { user, authenticated } = usePrivy();
   // Signed in with no smart account is not signed out (GEO-3245): Log in does nothing for it.
   const walletStall = useWalletStall({ authenticated, address: resolvedAddress, error: smartAccountError });
-  const isMobileNavbar = useIsMobileNavbar();
+  // The compact bar only exists on phones, so it always takes the phone layout: the edit mode toggle
+  // in the menu, not beside the avatar, even between 640px and the bar's 767px edge.
+  const isMobileNavbar = useIsMobileNavbar() || compact;
   const spaceId = useSpaceId();
   const { canCreateInSpace, createEntity, createProperty, createSpace } = useCreateEntityActions(spaceId);
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
@@ -176,7 +189,7 @@ export function NavbarActions() {
     }
 
     if (state === 'signed_out' || !address) {
-      return <GeoConnectButton key="navbar-content" />;
+      return <GeoConnectButton key="navbar-content" compact={compact} component={signInComponent} />;
     }
 
     // Optimistic identity: while the personal space is being created in the
@@ -194,7 +207,14 @@ export function NavbarActions() {
 
     return (
       <div key="navbar-content" className="flex items-center gap-4">
-        <ModeToggle isMobile={isMobileNavbar} isProfileMenuOpen={open} spaceId={spaceId}>
+        <ModeToggle
+          isMobile={isMobileNavbar}
+          isProfileMenuOpen={open}
+          spaceId={spaceId}
+          // The app navbar stays mounted under the compact bar and already owns ⌘E; a second
+          // listener would toggle once but report it twice.
+          registerShortcut={!compact}
+        >
           {({ navbar, menu }) => (
             <>
               {navbar}
@@ -206,7 +226,13 @@ export function NavbarActions() {
                   // only way to a profile, personal space or sign out on mobile, which it had no way to
                   // reach at all until this change. Not applied to the rest of the row: those controls
                   // were already on phones and belong to GEO-2970's sweep.
-                  <button type="button" className="flex items-center justify-center p-0 mobile:h-11 mobile:w-11">
+                  <button
+                    type="button"
+                    className={cx(
+                      'flex items-center justify-center p-0',
+                      compact ? 'h-11 w-11' : 'mobile:h-11 mobile:w-11'
+                    )}
+                  >
                     {/* The trigger is an image and nothing else: `FallbackImage` has an empty alt and
                         `Avatar` carries no label, so Radix's button announced as nothing at all. It is
                         the only way to a profile, personal space or sign out on a phone. Named the way
@@ -458,11 +484,13 @@ function ModeToggle({
   isMobile,
   isProfileMenuOpen,
   spaceId,
+  registerShortcut = true,
   children,
 }: {
   isMobile: boolean;
   isProfileMenuOpen: boolean;
   spaceId: string | null | undefined;
+  registerShortcut?: boolean;
   children: (slots: ModeToggleSlots) => React.ReactNode;
 }) {
   const controls = useAnimation();
@@ -556,14 +584,17 @@ function ModeToggle({
   ]);
 
   const memoizedShortcuts = React.useMemo(
-    () => [
-      // Toggle edit mode when ⌘ + e is pressed
-      {
-        key: 'e',
-        callback: onToggle,
-      },
-    ],
-    [onToggle]
+    () =>
+      registerShortcut
+        ? [
+            // Toggle edit mode when ⌘ + e is pressed
+            {
+              key: 'e',
+              callback: onToggle,
+            },
+          ]
+        : [],
+    [onToggle, registerShortcut]
   );
 
   useKeyboardShortcuts(memoizedShortcuts);

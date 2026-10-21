@@ -42,11 +42,11 @@ vi.mock('./hooks', () => ({
   useDebateRequests: () => ({ data: undefined, isLoading: false, error: null }),
 }));
 
-function renderButton() {
+function renderButton({ compact = false }: { compact?: boolean } = {}) {
   const store = createStore();
   return render(
     <Provider store={store}>
-      <DebatesHubButton />
+      <DebatesHubButton compact={compact} />
     </Provider>
   );
 }
@@ -252,6 +252,40 @@ describe('DebatesHubButton', () => {
 
       expect(screen.getByText('Live · 14').className).toContain('mobile:hidden');
       expect(screen.getByTestId('live-lobby-dot').className).toContain('mobile:block');
+    });
+  });
+
+  // GEO-3415. The debate feed's phone bar, which has room the phone navbar does not.
+  describe('compact', () => {
+    it('leaves the reminder replay to the navbar button, so it runs once', () => {
+      replay.mockClear();
+      renderButton({ compact: true });
+      expect(replay).not.toHaveBeenCalled();
+    });
+
+    it('keeps the word and a 44px target on a phone', () => {
+      renderButton({ compact: true });
+
+      const button = screen.getByRole('button', { name: 'Debate' });
+      expect(button).toHaveClass('h-11', 'min-w-11');
+      expect(screen.getByText('Debate').className).not.toContain('mobile:hidden');
+    });
+
+    it('shows the pending count', () => {
+      mocks.incomingRequestCount = 2;
+      renderButton({ compact: true });
+
+      expect(screen.getByRole('button', { name: 'Debate, 2 pending requests' })).toBeInTheDocument();
+      expect(screen.getByText('2')).toBeInTheDocument();
+    });
+
+    it('keeps the live chip rather than dropping to a dot', () => {
+      lineup.live = [{ lobby_id: 'lobby-1', headcount: 14 }];
+      renderButton({ compact: true });
+
+      expect(screen.getByRole('button', { name: 'Debate, a lobby is live' })).toBeInTheDocument();
+      expect(screen.getByText('Live · 14').className).not.toContain('mobile:hidden');
+      expect(screen.queryByTestId('live-lobby-dot')).not.toBeInTheDocument();
     });
   });
 });
