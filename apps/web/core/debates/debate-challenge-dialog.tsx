@@ -113,6 +113,7 @@ export function DebateChallengeDialog({
               type="button"
               onClick={onNotNow}
               disabled={busy}
+              data-geo-analytics-label="Debate challenge dialog not now"
               className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
             >
               Not now
@@ -121,6 +122,7 @@ export function DebateChallengeDialog({
               type="button"
               onClick={() => onAccept(shownJoinState.current)}
               disabled={busy}
+              data-geo-analytics-label="Debate challenge dialog explore claims"
               className={DIALOG_ACTION_BUTTON_CLASS_NAME}
             >
               Explore claims
@@ -130,6 +132,7 @@ export function DebateChallengeDialog({
             type="button"
             onClick={onReject}
             disabled={busy}
+            data-geo-analytics-label="Debate challenge dialog reject"
             className="mx-auto -mt-3 px-4 py-1 text-metadata text-grey-04 underline hover:text-text disabled:opacity-50"
           >
             Reject request

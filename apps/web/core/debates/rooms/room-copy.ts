@@ -86,3 +86,22 @@ export const ROOM_NO_ACCESS = {
   denied: 'That debate isn’t yours to join.',
   ended: 'That debate has already finished.',
 } as const;
+
+/**
+ * Leave, asked once while the other person is on their way or already here (GEO-3433). On 21 Oct a
+ * debater left a scheduled room for Explore twice in two minutes and came straight back both times.
+ */
+export const ROOM_LEAVE_CONFIRM = {
+  title: 'Leave the room?',
+  body: (state: DebateRoomPresenceState, opponentName: string) =>
+    state === 'present'
+      ? `${opponentName} is here. If you leave, they’ll be left waiting.`
+      : `${opponentName} hasn’t arrived yet. If you leave, they’ll find the room empty.`,
+  stay: 'Stay',
+  leave: 'Leave room',
+} as const;
+
+/** Whether Leave asks first: only while someone is coming or here. After they left or never came, it doesn't. */
+export function roomLeaveNeedsConfirm(state: DebateRoomPresenceState | null | undefined): boolean {
+  return state === 'arrived_early' || state === 'waiting' || state === 'waiting_elsewhere' || state === 'present';
+}

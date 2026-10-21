@@ -15,6 +15,7 @@ export function DebateNotice({
   children,
   action,
   onDismiss,
+  dismissAnalyticsLabel,
   'data-testid': testId,
 }: {
   icon: React.ReactNode;
@@ -23,6 +24,8 @@ export function DebateNotice({
   action?: React.ReactNode;
   /** Omitted while there is something the viewer still has to see through. */
   onDismiss?: () => void;
+  /** The dismiss button's click-analytics label, which its bare "Dismiss" cannot tell apart. */
+  dismissAnalyticsLabel?: string;
   'data-testid'?: string;
 }) {
   return (
@@ -38,6 +41,7 @@ export function DebateNotice({
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss"
+          data-geo-analytics-label={dismissAnalyticsLabel}
           className="grid size-7 shrink-0 place-items-center rounded-full text-grey-04 transition-colors hover:text-text"
         >
           <CloseSmall />

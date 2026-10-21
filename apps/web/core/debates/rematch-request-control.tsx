@@ -29,6 +29,7 @@ export function RematchRequestControl({
   requestError,
   variant,
   className,
+  analyticsLabel,
 }: {
   session: DebateRematchSession | null;
   claimId: string;
@@ -46,6 +47,7 @@ export function RematchRequestControl({
   requestError?: string | null;
   variant?: React.ComponentProps<typeof RequestDebateControl>['variant'];
   className?: string;
+  analyticsLabel?: string;
 }) {
   const gate = debateRequestGate({
     chatPosition,
@@ -90,6 +92,7 @@ export function RematchRequestControl({
       }
       variant={variant}
       className={className}
+      analyticsLabel={analyticsLabel}
     />
   );
 }

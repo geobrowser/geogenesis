@@ -51,6 +51,7 @@ export function RequestDebateControl({
   note,
   variant = 'inline',
   className,
+  analyticsLabel,
 }: {
   onRequest: () => void;
   disabled?: boolean;
@@ -72,6 +73,8 @@ export function RequestDebateControl({
    */
   variant?: 'inline' | 'block';
   className?: string;
+  /** The button's click-analytics label. Visible text never reaches the warehouse. */
+  analyticsLabel?: string;
 }) {
   const base = claimSlotPillClass(variant);
   const aside = cx('text-footnote', variant === 'block' ? 'text-left' : 'text-right');
@@ -80,6 +83,7 @@ export function RequestDebateControl({
     <button
       type="button"
       onClick={onRequest}
+      data-geo-analytics-label={analyticsLabel}
       disabled={disabled || isRequesting || pending}
       aria-busy={isRequesting || pending ? true : undefined}
       className={cx(

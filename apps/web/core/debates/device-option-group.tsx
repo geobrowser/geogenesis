@@ -22,6 +22,7 @@ export function DeviceOptionGroup({
   /** Draws a border around the list. The bottom sheet has no popover chrome to sit inside. */
   framed = false,
   onChange,
+  analyticsLabel,
 }: {
   label: string;
   options: MediaDeviceOption[];
@@ -29,6 +30,8 @@ export function DeviceOptionGroup({
   disabled?: boolean;
   framed?: boolean;
   onChange: (deviceId: string) => void;
+  /** Every row's click-analytics label. One for the group: a device's name is not for analytics. */
+  analyticsLabel?: string;
 }) {
   return (
     <RadioGroup.Root aria-label={label} value={selectedDeviceId} disabled={disabled} onValueChange={onChange}>
@@ -42,6 +45,7 @@ export function DeviceOptionGroup({
             <RadioGroup.Item
               key={`${device.kind}:${device.deviceId}`}
               value={device.deviceId}
+              data-geo-analytics-label={analyticsLabel}
               onClick={() => {
                 const remembered = readMediaDevicePreference(device.kind);
                 // Radix does not emit onValueChange for the checked row. An explicit click can

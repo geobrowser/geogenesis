@@ -93,6 +93,8 @@ export function RematchClaimEndSlot({
       requestError={error}
       variant={variant}
       className={className}
+      // The claim's side panel, opened from the picker or the room.
+      analyticsLabel="Debate rematch panel request debate"
     />
   );
 }

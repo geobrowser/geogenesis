@@ -92,7 +92,14 @@ import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { carryJoinIntentIntoDebate } from '~/core/debates/rematch-join-intent';
 import { useRegisterRematchPanelContext } from '~/core/debates/rematch-panel-context';
 import { RematchRequestControl } from '~/core/debates/rematch-request-control';
-import { useDebateRoomContext, useInDebateRoom, useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
+import {
+  useDebateRoomContext,
+  useInDebateRoom,
+  useRoomAnalyticsPrefix,
+  useRoomOpponentPresent,
+} from '~/core/debates/rooms/room-context';
+import { UNNAMED_OPPONENT, roomLeaveNeedsConfirm } from '~/core/debates/rooms/room-copy';
+import { RoomLeaveDialog } from '~/core/debates/rooms/room-leave-dialog';
 import { DebateRoomPresenceIndicator } from '~/core/debates/rooms/room-presence-indicator';
 import {
   type TaggedClaimFilters,
@@ -289,6 +296,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // The room owns this session rather than the other way round, so two of the page's exits change
   // shape inside one: see the terminal-status effect and `leave` below.
   const inDebateRoom = useInDebateRoom();
+  const analyticsPrefix = useRoomAnalyticsPrefix();
   const roomPresence = useDebateRoomContext()?.presence ?? null;
   const roomRejoin = useDebateRoomContext()?.rejoin;
   const rejoinedForRef = React.useRef<string | null>(null);
@@ -2516,12 +2524,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     }
   }, [forgetEndedRematch, inDebateRoom, rejoinRetry, returnFromSession, roomRejoin, router, session]);
 
+  const [confirmingLeave, setConfirmingLeave] = React.useState(false);
+  const leaveButtonRef = React.useRef<HTMLButtonElement>(null);
+  const leaveRoom = () => router.push(NavUtils.toExplore());
+
   const leave = () => {
     // `leaveDebateRematch` ends the session for *both* people and puts both on a cooldown. In a
     // room that is the wrong verb: leaving is per person and the room stays open to come back to,
     // so this walks out and lets `useRoomPresence` report the departure on unmount.
     if (inDebateRoom) {
-      router.push(NavUtils.toExplore());
+      // GEO-3433: asked first while the other person is on their way or here.
+      if (roomLeaveNeedsConfirm(roomPresence?.state)) setConfirmingLeave(true);
+      else leaveRoom();
       return;
     }
     leaveRequestedRef.current = true;
@@ -2839,14 +2853,36 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // and with the "Debate again?" step gone this is the only one the pair have. The design system's
   // secondary pill, so it reads as a plain action beside the dark Request debate buttons.
   const leaveButton = (
-    <SmallButton
-      type="button"
-      onClick={leave}
-      disabled={leaveSession.isPending}
-      className={cx(PILL_BUTTON_SECONDARY_CLASS_NAME, 'max-[767px]:h-11')}
-    >
-      {returnsToLobby && !inDebateRoom ? 'Back to lobby' : 'Leave'}
-    </SmallButton>
+    <>
+      <SmallButton
+        ref={leaveButtonRef}
+        type="button"
+        onClick={leave}
+        disabled={leaveSession.isPending}
+        data-geo-analytics-label={
+          inDebateRoom ? 'Debate room leave' : returnsToLobby ? 'Debate rematch back to lobby' : 'Debate rematch leave'
+        }
+        className={cx(PILL_BUTTON_SECONDARY_CLASS_NAME, 'max-[767px]:h-11')}
+      >
+        {returnsToLobby && !inDebateRoom ? 'Back to lobby' : 'Leave'}
+      </SmallButton>
+      {inDebateRoom && roomPresence && (
+        <RoomLeaveDialog
+          open={confirmingLeave}
+          onOpenChange={setConfirmingLeave}
+          state={roomPresence.state}
+          opponentName={remoteParticipant?.display_name?.trim().split(/\s+/)[0] || UNNAMED_OPPONENT}
+          onLeave={() => {
+            setConfirmingLeave(false);
+            leaveRoom();
+          }}
+          onCloseAutoFocus={event => {
+            event.preventDefault();
+            leaveButtonRef.current?.focus();
+          }}
+        />
+      )}
+    </>
   );
 
   return (
@@ -3126,6 +3162,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   key={section.id}
                   name={section.name}
                   count={section.claims.length}
+                  // Not the section's name, which a curator wrote.
+                  analyticsLabel={`${analyticsPrefix} recommended section toggle`}
                   onOpenChange={open => reportSectionOpen(recommendedSectionKey(section.id), open)}
                 >
                   <HubCardList>{section.claims.map(claim => renderClaimCard(claim))}</HubCardList>
@@ -3225,6 +3263,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               count={visibleDebatedClaims.length}
               defaultOpen={false}
               showCount
+              analyticsLabel={`${analyticsPrefix} already debated toggle`}
               onOpenChange={open => reportSectionOpen(ALREADY_DEBATED_SECTION, open)}
             >
               <HubCardList>{visibleDebatedClaims.map(claim => renderClaimCard(claim, true))}</HubCardList>
@@ -3251,6 +3290,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           }
           onAccept={() => acceptRequest.mutate(incomingRequest.id)}
           onReject={() => rejectRequest.mutate(incomingRequest.id)}
+          analyticsLabels={{
+            accept: `${analyticsPrefix} request dialog accept`,
+            reject: `${analyticsPrefix} request dialog reject`,
+          }}
         />
       )}
     </div>
@@ -3416,6 +3459,7 @@ function RematchClaimCard({
         : inFlightResponse === 'positive';
 
   const openClaim = useOpenClaimInSidePanel();
+  const analyticsPrefix = useRoomAnalyticsPrefix();
 
   const positions = React.useMemo(() => rematchPositionSummaries(claim, session), [claim, session]);
 
@@ -3448,6 +3492,7 @@ function RematchClaimCard({
       positions={positions}
       readiness={readiness}
       headerMeta={headerMeta}
+      analyticsLabelPrefix={`${analyticsPrefix} claim card`}
       // The card's own offer is replaced rather than hidden. A rematch request is its own mutation
       // with its own gating, but it is the same offer to the reader — so it wears the same control
       // in the same place instead of a footer button of its own (GEO-2825). Nothing to watch here
@@ -3472,6 +3517,7 @@ function RematchClaimCard({
           recentlyRejected={claim.recently_rejected}
           previouslyDebated={previouslyDebated}
           onRequest={onRequest}
+          analyticsLabel={`${analyticsPrefix} request debate`}
         />
       }
       // The refusal stays in a full-width row rather than riding the control into the header. The
@@ -3565,11 +3611,14 @@ function RecommendedSection({
   count,
   defaultOpen = true,
   showCount = false,
+  analyticsLabel,
   onOpenChange,
   children,
 }: {
   name: string;
   count: number;
+  /** The toggle's click-analytics label. The name can carry a person's or curator's words. */
+  analyticsLabel: string;
   defaultOpen?: boolean;
   /** Draw the count beside the name. A closed section otherwise gives no hint of what is in it. */
   showCount?: boolean;
@@ -3595,6 +3644,7 @@ function RecommendedSection({
         aria-expanded={open}
         aria-controls={contentId}
         onClick={() => setOpen(current => !current)}
+        data-geo-analytics-label={analyticsLabel}
         className="mb-2 flex w-full items-center gap-2 text-left"
       >
         <Text as="h2" variant="smallTitle" color="text">

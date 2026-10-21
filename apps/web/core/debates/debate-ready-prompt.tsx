@@ -81,6 +81,7 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
       actionsLayout="split"
       acceptLabel={joining ? 'Joining…' : 'Join debate'}
       rejectLabel={abortDebate.isPending ? 'Declining…' : 'Decline'}
+      analyticsLabels={{ accept: 'Debate ready prompt join', reject: 'Debate ready prompt decline' }}
       eyebrow={
         <span className="flex min-w-0 items-center justify-center gap-1.5 text-metadata text-grey-04">
           <SpaceChip spaceId={debate.claim.space_id} />
@@ -112,6 +113,7 @@ export function DebateRejoinBar({ debate, openInAnotherTab = false }: { debate: 
       <button
         type="button"
         disabled={joining}
+        data-geo-analytics-label="Debate rejoin bar join"
         onClick={() => {
           setJoining(true);
           markEnteringDebate(debate.id);

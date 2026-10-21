@@ -110,6 +110,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
         action={{
           href: toSignIn({ pathname: debateRoomPath(roomId), via: lobbyLink ? LOBBY_LINK_VIA : 'room' }),
           label: 'Sign in',
+          analyticsLabel: 'Debate room notice sign in',
         }}
       >
         {lobbyLink ? 'Sign in to join the lobby.' : 'Sign in to join your debate.'}
@@ -129,7 +130,14 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   // rather than bouncing someone who is merely early.
   if (room.access.status === 'not_yet_open') {
     return (
-      <RoomNotice action={{ href: NavUtils.toExplore(), label: ROOM_NOT_YET_OPEN.explore }} stacked>
+      <RoomNotice
+        action={{
+          href: NavUtils.toExplore(),
+          label: ROOM_NOT_YET_OPEN.explore,
+          analyticsLabel: 'Debate room notice not yet open explore',
+        }}
+        stacked
+      >
         {ROOM_NOT_YET_OPEN.message(formatTime(room.access.opens_at), leadMinutes(room.starts_at, room.access.opens_at))}
       </RoomNotice>
     );
@@ -143,7 +151,15 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
 
   if (debateFinished) {
     return (
-      <RoomNotice action={{ href: NavUtils.toExplore(), label: 'Find a debate' }}>{ROOM_NO_ACCESS.ended}</RoomNotice>
+      <RoomNotice
+        action={{
+          href: NavUtils.toExplore(),
+          label: 'Find a debate',
+          analyticsLabel: 'Debate room notice find a debate',
+        }}
+      >
+        {ROOM_NO_ACCESS.ended}
+      </RoomNotice>
     );
   }
 
@@ -184,7 +200,8 @@ function RoomNotice({
 }: {
   children: React.ReactNode;
   busy?: boolean;
-  action?: { href: string; label: string };
+  /** `analyticsLabel` names the click, since a link's text never reaches the warehouse. */
+  action?: { href: string; label: string; analyticsLabel: string };
   /** Puts the action under the message rather than beside it, for a message long enough to wrap. */
   stacked?: boolean;
 }) {
@@ -199,7 +216,11 @@ function RoomNotice({
         {busy && <Spinner />}
         <Text color="grey-04">{children}</Text>
         {action && (
-          <Link href={action.href} className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white">
+          <Link
+            href={action.href}
+            data-geo-analytics-label={action.analyticsLabel}
+            className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white"
+          >
             {action.label}
           </Link>
         )}

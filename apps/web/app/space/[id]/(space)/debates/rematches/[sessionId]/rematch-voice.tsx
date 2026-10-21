@@ -42,7 +42,7 @@ import {
   rememberRematchJoinIntent,
 } from '~/core/debates/rematch-join-intent';
 import { resolveJoinChoice } from '~/core/debates/request-join-state';
-import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
+import { useDebateRoomContext, useRoomAnalyticsPrefix } from '~/core/debates/rooms/room-context';
 import { TrackVideo } from '~/core/debates/track-video';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { switchMediaDevice, toMediaDeviceOptions, withMediaDeviceOptions } from '~/core/media/device-options';
@@ -1137,6 +1137,7 @@ function LocalAudioControls({
   const settings = useVoiceAudioSettings(room, micFailure);
   const cameraSettings = useVoiceCameraSettings(room);
   const cameraPrimary = !cameraOn;
+  const analyticsPrefix = useRoomAnalyticsPrefix();
 
   const [cameraPanelOpen, setCameraPanelOpen] = React.useState(false);
   const cameraTriggerRef = React.useRef<HTMLButtonElement | null>(null);
@@ -1154,6 +1155,7 @@ function LocalAudioControls({
         selectedDeviceId={cameraSettings.selectedCameraId}
         framed={isMobile}
         onChange={cameraSettings.onCameraChange}
+        analyticsLabel={`${analyticsPrefix} camera option`}
       />
       {cameraSettings.error && (
         <p role="alert" className="text-metadata text-red-01">
@@ -1170,6 +1172,7 @@ function LocalAudioControls({
       data-media-settings
       aria-label="Camera settings"
       title="Camera settings"
+      data-geo-analytics-label={`${analyticsPrefix} camera settings`}
       aria-expanded={cameraPanelOpen}
       onClick={isMobile ? () => setCameraPanelOpen(current => !current) : undefined}
       className={cx(
@@ -1206,6 +1209,7 @@ function LocalAudioControls({
       data-media-settings
       aria-label="Audio settings"
       title="Audio settings"
+      data-geo-analytics-label={`${analyticsPrefix} audio settings`}
       aria-expanded={open}
       onClick={isMobile ? () => setOpen(current => !current) : undefined}
       className={cx(
@@ -1232,6 +1236,7 @@ function LocalAudioControls({
         // `isMicrophoneEnabled` instead lets a failed microphone announce "Mute microphone" while
         // showing a slashed icon on a button that cannot be pressed.
         aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
+        data-geo-analytics-label={`${analyticsPrefix} ${muted ? 'unmute' : 'mute'} microphone`}
         title={micFailure ? micFailureMessage(micFailure) : muted ? 'Unmute microphone' : 'Mute microphone'}
         onClick={onToggle}
         disabled={Boolean(micFailure)}
@@ -1266,7 +1271,7 @@ function LocalAudioControls({
           )}
           {settingsTrigger}
           <MobileSettingsSheet title="Audio settings" open={open} onOpenChange={setOpen} returnFocusRef={triggerRef}>
-            <AudioSettings {...settings} framed />
+            <AudioSettings {...settings} framed analyticsLabelPrefix={analyticsPrefix} />
           </MobileSettingsSheet>
         </>
       ) : (
@@ -1277,7 +1282,7 @@ function LocalAudioControls({
           triggerRef={triggerRef}
           label="Audio settings"
         >
-          <AudioSettings {...settings} />
+          <AudioSettings {...settings} analyticsLabelPrefix={analyticsPrefix} />
         </DesktopSettingsPopover>
       )}
       {cameraAllowed && (
@@ -1287,6 +1292,7 @@ function LocalAudioControls({
             data-media-toggle
             aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
             title={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+            data-geo-analytics-label={`${analyticsPrefix} ${cameraOn ? 'turn camera off' : 'turn camera on'}`}
             onClick={onToggleCamera}
             className={cx(
               PAIR_PILL,

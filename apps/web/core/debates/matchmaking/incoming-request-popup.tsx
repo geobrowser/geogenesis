@@ -8,6 +8,7 @@ import { requestOpenRounds } from '../format-details';
 import { debateRequestMediaSessionKey } from '../media-session';
 import { speakerLabel } from '../playback-utils';
 import { useAcceptDebateRequest, useBlockDebateUser, useDismissDebateRequest } from './hooks';
+import { debateAnalyticsLabel } from './hub-analytics';
 import { SpaceChip } from './matchmaking-claim-card';
 import { RequestOverflowMenu } from './request-overflow-menu';
 import { useAnswerOnce } from './use-answer-once';
@@ -60,6 +61,11 @@ export function IncomingRequestPopup({
       error={error?.message ?? null}
       actionsLayout="split"
       rejectLabel="Not now"
+      analyticsLabels={{
+        accept: debateAnalyticsLabel('request-popup', 'Accept'),
+        reject: debateAnalyticsLabel('request-popup', 'Not now'),
+        formatAction: debateAnalyticsLabel('request-popup', 'Dismiss forever'),
+      }}
       eyebrow={
         <span className="flex min-w-0 items-center justify-center gap-1.5 text-metadata text-grey-04">
           <SpaceChip spaceId={request.claim.space_id} />

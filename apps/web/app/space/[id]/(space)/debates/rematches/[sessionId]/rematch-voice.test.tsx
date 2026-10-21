@@ -3163,3 +3163,46 @@ describe('a remembered camera', () => {
     expect(readRematchJoinIntent('session-1')).toEqual({ micOn: true, cameraOn: true, source: 'card' });
   });
 });
+
+/** GEO-3433. The header's controls in a room, each named for click analytics rather than by its text. */
+describe('click analytics labels in the room header', () => {
+  const CONTROLS = 'button, a[href], [role="button"], [role="menuitem"], [role="radio"]';
+  const unlabeledControls = () =>
+    [...document.body.querySelectorAll(CONTROLS)]
+      .filter(control => !control.getAttribute('data-geo-analytics-label')?.trim())
+      .map(control => control.getAttribute('aria-label') ?? control.textContent?.trim());
+
+  async function renderInRoom() {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    render(
+      <DebateRoomProvider
+        roomId="room-1"
+        presence={{ state: 'present', opponentUserId: 'them', opponentPresent: true }}
+      >
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+    await flushOwnership();
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate room turn camera on'
+    );
+  }
+
+  it('labels the media controls and the audio settings', async () => {
+    await renderInRoom();
+    expect(unlabeledControls()).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    expect(await screen.findAllByRole('radio')).not.toHaveLength(0);
+    expect(unlabeledControls()).toEqual([]);
+  });
+
+  it('labels the camera settings', async () => {
+    await renderInRoom();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
+    expect(await screen.findByText('USB Webcam')).toBeInTheDocument();
+    expect(unlabeledControls()).toEqual([]);
+  });
+});

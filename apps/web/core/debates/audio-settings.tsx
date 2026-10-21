@@ -27,6 +27,7 @@ export function AudioSettings({
   devicesLocked = false,
   onAudioInputChange,
   onAudioOutputChange,
+  analyticsLabelPrefix,
 }: {
   audioInputDevices: MediaDeviceOption[];
   audioOutputDevices: MediaDeviceOption[];
@@ -43,6 +44,8 @@ export function AudioSettings({
   devicesLocked?: boolean;
   onAudioInputChange: (deviceId: string) => void;
   onAudioOutputChange: (deviceId: string) => void;
+  /** Names the rows for click analytics: "<prefix> microphone option", "<prefix> speaker option". */
+  analyticsLabelPrefix?: string;
 }) {
   return (
     <div className="space-y-3">
@@ -53,6 +56,7 @@ export function AudioSettings({
         disabled={devicesLocked}
         framed={framed}
         onChange={onAudioInputChange}
+        analyticsLabel={analyticsLabelPrefix ? `${analyticsLabelPrefix} microphone option` : undefined}
       />
       <div className={framed ? undefined : 'border-t border-grey-02 pt-3'}>
         <DeviceOptionGroup
@@ -62,6 +66,7 @@ export function AudioSettings({
           disabled={!audioOutputSupported}
           framed={framed}
           onChange={onAudioOutputChange}
+          analyticsLabel={analyticsLabelPrefix ? `${analyticsLabelPrefix} speaker option` : undefined}
         />
       </div>
       {error && (

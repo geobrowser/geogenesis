@@ -166,6 +166,11 @@ type Props = {
    * gallery — and left unset where the pills should stay disabled signed out.
    */
   allowsSignedOutVotes?: boolean;
+  /**
+   * Names the card's clicks for analytics, e.g. "Debate room claim card" gives "Debate room claim
+   * card agree". Unset, the card's controls carry no label, as before.
+   */
+  analyticsLabelPrefix?: string;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -211,6 +216,7 @@ export function MatchmakingClaimCard({
   allowsSignedOutVotes = false,
   hideEndSlot,
   endSlot,
+  analyticsLabelPrefix,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -258,6 +264,7 @@ export function MatchmakingClaimCard({
           claim={claim}
           positions={positions}
           readiness={readiness}
+          analyticsLabelPrefix={analyticsLabelPrefix}
           activeDebate={activeDebate}
           answersReady={answersReady}
           answersMayComeFromIndex={answersMayComeFromIndex}
@@ -277,6 +284,7 @@ export function MatchmakingClaimCard({
         <UnresolvableControls
           positions={positions}
           readiness={readiness}
+          analyticsLabelPrefix={analyticsLabelPrefix}
           claim={claim}
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
@@ -310,6 +318,7 @@ function ClaimHeader({
   isControversial,
   meta,
   onOpenClaim,
+  analyticsLabel,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
@@ -319,17 +328,24 @@ function ClaimHeader({
   /** Flagged beside the space chip — what kind of claim this is, which is the row's own question. */
   isControversial?: boolean;
   onOpenClaim?: () => void;
+  analyticsLabel?: string;
 }) {
   const claimTextClassName = 'claim-card-panel-title';
 
   const openable = isOnGraph ? (
     onOpenClaim ? (
-      <button type="button" onClick={onOpenClaim} className={`${claimTextClassName} text-left hover:underline`}>
+      <button
+        type="button"
+        onClick={onOpenClaim}
+        data-geo-analytics-label={analyticsLabel}
+        className={`${claimTextClassName} text-left hover:underline`}
+      >
         {claim.claim}
       </button>
     ) : (
       <Link
         href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
+        data-geo-analytics-label={analyticsLabel}
         className={`${claimTextClassName} hover:underline`}
       >
         {claim.claim}
@@ -765,6 +781,7 @@ function RespondableControls({
   headerMeta,
   hasFooter,
   noteFor,
+  analyticsLabelPrefix,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -799,6 +816,7 @@ function RespondableControls({
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
   headerMeta?: React.ReactNode;
+  analyticsLabelPrefix?: string;
 }) {
   // One read for the card, and now the second half of what the card draws from. The header flags a
   // contested claim, the footer reports the split, and — since GEO-2823 — the viewer's own response
@@ -935,6 +953,7 @@ function RespondableControls({
         claim={claim}
         isOnGraph
         onOpenClaim={onOpenClaim}
+        analyticsLabel={analyticsLabelPrefix ? `${analyticsLabelPrefix} title` : undefined}
         isControversial={summary.isControversial}
         meta={headerMeta}
         endSlot={
@@ -965,6 +984,7 @@ function RespondableControls({
         titleFor={actionTitle}
         noteFor={noteFor}
         localSide={localVoteSide}
+        analyticsLabelPrefix={analyticsLabelPrefix}
       />
       {responseError ? (
         <div role="alert" className="mt-2">
@@ -1137,12 +1157,14 @@ function UnresolvableControls({
   hideEndSlot,
   endSlot,
   headerMeta,
+  analyticsLabelPrefix,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: Debate | boolean | null;
   onOpenClaim?: () => void;
+  analyticsLabelPrefix?: string;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
   headerMeta?: React.ReactNode;
@@ -1153,6 +1175,7 @@ function UnresolvableControls({
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
+        analyticsLabel={analyticsLabelPrefix ? `${analyticsLabelPrefix} title` : undefined}
         meta={headerMeta}
         endSlot={
           /* The slot stays live even though the graph cannot resolve this claim, because nothing in
@@ -1207,6 +1230,7 @@ export function PositionRow({
   localSide = null,
   endSlot,
   showParticipants = true,
+  analyticsLabelPrefix,
 }: {
   positions: DebateClaimPositionSummary[];
   responseKind: ResponseKind;
@@ -1246,6 +1270,8 @@ export function PositionRow({
    * apart, and the nearer one reads as the voters.
    */
   showParticipants?: boolean;
+  /** Names the two pills for click analytics: the prefix and the pill's own word, lowercased. */
+  analyticsLabelPrefix?: string;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
   const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
@@ -1298,6 +1324,9 @@ export function PositionRow({
             pending={pending}
             title={titleFor?.(true)}
             localOnly={localSide === true}
+            analyticsLabel={
+              analyticsLabelPrefix ? `${analyticsLabelPrefix} ${copy.positiveAction.toLowerCase()}` : undefined
+            }
           />
           {localSide === true ? <LocalVoteNote /> : noteFor?.(true)}
         </div>
@@ -1313,6 +1342,9 @@ export function PositionRow({
             pending={pending}
             title={titleFor?.(false)}
             localOnly={localSide === false}
+            analyticsLabel={
+              analyticsLabelPrefix ? `${analyticsLabelPrefix} ${copy.negativeAction.toLowerCase()}` : undefined
+            }
           />
           {localSide === false ? <LocalVoteNote /> : noteFor?.(false)}
         </div>
@@ -1365,6 +1397,7 @@ function PositionButton({
   pending,
   title,
   localOnly = false,
+  analyticsLabel,
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
@@ -1377,6 +1410,7 @@ function PositionButton({
   title?: string;
   /** The selection is a vote kept on this device, not yet counted. */
   localOnly?: boolean;
+  analyticsLabel?: string;
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
@@ -1429,6 +1463,7 @@ function PositionButton({
       aria-disabled={pending || undefined}
       disabled={disabled}
       title={title}
+      data-geo-analytics-label={analyticsLabel}
       onClick={() => {
         if (!pending) onRespond(position);
       }}

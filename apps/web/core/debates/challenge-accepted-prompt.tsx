@@ -117,6 +117,7 @@ export function ChallengeAcceptedPrompt({
               type="button"
               onClick={onDecline}
               disabled={busy}
+              data-geo-analytics-label="Challenge accepted prompt decline"
               className={`${DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME} h-11!`}
             >
               Decline
@@ -125,6 +126,7 @@ export function ChallengeAcceptedPrompt({
               type="button"
               onClick={onExplore}
               disabled={busy}
+              data-geo-analytics-label="Challenge accepted prompt join room"
               className={`${DIALOG_ACTION_BUTTON_CLASS_NAME} h-11!`}
             >
               Join room
