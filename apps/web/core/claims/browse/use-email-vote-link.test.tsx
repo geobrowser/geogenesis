@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   ready: true,
   authenticated: true,
   setupPending: false,
+  userId: 'did:privy:a',
   openPrompt: vi.fn(),
 }));
 
@@ -22,7 +23,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 vi.mock('~/core/wallet/auth-hooks', () => ({
-  usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated }),
+  usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, user: { id: mocks.userId } }),
 }));
 vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => ({ isPending: mocks.setupPending }),
@@ -70,6 +71,7 @@ beforeEach(() => {
   mocks.ready = true;
   mocks.authenticated = true;
   mocks.setupPending = false;
+  mocks.userId = 'did:privy:a';
   mocks.openPrompt.mockReset();
   arriveAt(`/space/${SPACE}/${CLAIM}?side=disagree&ref_email=welcome`);
 });
@@ -130,12 +132,19 @@ describe('useEmailVoteLink', () => {
   });
 
   it('casts nothing when the same email is opened again after the vote was undone', () => {
-    markEmailVoteLinkHandled(CLAIM, SPACE);
+    markEmailVoteLinkHandled({ viewerId: 'did:privy:a', claimId: CLAIM, spaceId: SPACE });
     const { result } = render();
 
     expect(pressed).toEqual([]);
     expect(result.current).toBeNull();
     expect(window.location.search).toBe('?ref_email=welcome');
+  });
+
+  it('still casts for another account on a browser where one already answered this link', () => {
+    markEmailVoteLinkHandled({ viewerId: 'did:privy:a', claimId: CLAIM, spaceId: SPACE });
+    mocks.userId = 'did:privy:b';
+    render();
+    expect(pressed).toEqual([{ position: false, refEmail: 'welcome' }]);
   });
 
   it('casts nothing on a reload, once the trigger is gone', () => {

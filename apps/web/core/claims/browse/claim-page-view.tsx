@@ -736,6 +736,7 @@ function ClaimPositionSection({
             outcome={emailVote}
             position={position}
             viewerPosition={control.viewerPosition}
+            pending={control.isResponseSubmitting}
             onUndo={() => control.respond(position)}
           />
         )}

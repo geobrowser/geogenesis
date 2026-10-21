@@ -36,12 +36,24 @@ export function readEmailVoteLink(params: ReadableParams): EmailVoteLink | null 
  * Claims this browser has already answered a vote link for. Clearing the trigger stops a reload; this
  * stops the same email being opened again from casting a second time — after the reader undid the
  * vote, or before the first one has indexed and the page can see it.
+ *
+ * Per viewer as well as per claim: on a shared browser, a link one account answered must not stop the
+ * next account's own link for the same claim. A signed-out visit is its own viewer, so its device vote
+ * never blocks the account that later signs in there (the saver decides what happens to that vote).
  */
 const HANDLED_STORAGE_KEY = 'geo:email-vote-links:v1';
 const HANDLED_TTL_MS = 60 * 24 * 60 * 60 * 1000;
 const HANDLED_CAP = 200;
 
-const handledKey = (claimId: string, spaceId: string) => `${spaceId}:${claimId}`;
+export type EmailVoteLinkKey = {
+  /** The signed-in account's id, or null for a signed-out visit. */
+  viewerId: string | null;
+  claimId: string;
+  spaceId: string;
+};
+
+const handledKey = ({ viewerId, claimId, spaceId }: EmailVoteLinkKey) =>
+  `${viewerId ?? 'signed-out'}:${spaceId}:${claimId}`;
 
 function readHandled(now = Date.now()): Record<string, number> {
   try {
@@ -56,12 +68,12 @@ function readHandled(now = Date.now()): Record<string, number> {
   }
 }
 
-export function wasEmailVoteLinkHandled(claimId: string, spaceId: string): boolean {
-  return readHandled()[handledKey(claimId, spaceId)] !== undefined;
+export function wasEmailVoteLinkHandled(key: EmailVoteLinkKey): boolean {
+  return readHandled()[handledKey(key)] !== undefined;
 }
 
-export function markEmailVoteLinkHandled(claimId: string, spaceId: string, now = Date.now()) {
-  const entries = Object.entries({ ...readHandled(now), [handledKey(claimId, spaceId)]: now })
+export function markEmailVoteLinkHandled(key: EmailVoteLinkKey, now = Date.now()) {
+  const entries = Object.entries({ ...readHandled(now), [handledKey(key)]: now })
     .sort((a, b) => a[1] - b[1])
     .slice(-HANDLED_CAP);
   try {

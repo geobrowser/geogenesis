@@ -16,6 +16,17 @@ describe('EmailVoteNote', () => {
     expect(onUndo).toHaveBeenCalledTimes(1);
   });
 
+  it('holds Undo while the vote is still on its way to the bundler, as the pills do', () => {
+    const onUndo = vi.fn();
+    render(
+      <EmailVoteNote outcome={{ kind: 'cast', position: true }} position viewerPosition pending onUndo={onUndo} />
+    );
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    expect(undo).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(undo);
+    expect(onUndo).not.toHaveBeenCalled();
+  });
+
   it('names the side the reader already held, with nothing to press', () => {
     render(
       <EmailVoteNote

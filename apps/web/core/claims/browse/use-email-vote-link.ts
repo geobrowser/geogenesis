@@ -65,7 +65,7 @@ export function useEmailVoteLink({
   // Kept through the clearing; see `useDeepLinkParams`.
   const hash = typeof window === 'undefined' ? '' : window.location.hash;
 
-  const { ready: authReady, authenticated } = usePrivy();
+  const { ready: authReady, authenticated, user } = usePrivy();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const getContext = useActionContext('claim_position_control', 'claim', claimId);
 
@@ -85,14 +85,15 @@ export function useEmailVoteLink({
     enabled: canDecide,
     run: () => {
       if (!link) return;
+      const handled = { viewerId: authenticated ? (user?.id ?? null) : null, claimId, spaceId };
       if (viewerPosition !== null) {
         setOutcome({ kind: 'kept', position: viewerPosition });
-        markEmailVoteLinkHandled(claimId, spaceId);
+        markEmailVoteLinkHandled(handled);
         return;
       }
       // Opened before, and the vote it cast has since been taken back or hasn't indexed yet.
-      if (wasEmailVoteLinkHandled(claimId, spaceId)) return;
-      markEmailVoteLinkHandled(claimId, spaceId);
+      if (wasEmailVoteLinkHandled(handled)) return;
+      markEmailVoteLinkHandled(handled);
 
       // The email the vote came from rides on its analytics, published or kept on the device.
       const context = getContext();

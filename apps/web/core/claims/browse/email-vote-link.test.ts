@@ -20,15 +20,23 @@ describe('readEmailVoteLink', () => {
 describe('handled links', () => {
   beforeEach(() => window.localStorage.clear());
 
+  const key = { viewerId: 'did:privy:a', claimId: 'claim', spaceId: 'space' };
+
   it('remembers a claim per space', () => {
-    expect(wasEmailVoteLinkHandled('claim', 'space')).toBe(false);
-    markEmailVoteLinkHandled('claim', 'space');
-    expect(wasEmailVoteLinkHandled('claim', 'space')).toBe(true);
-    expect(wasEmailVoteLinkHandled('claim', 'other-space')).toBe(false);
+    expect(wasEmailVoteLinkHandled(key)).toBe(false);
+    markEmailVoteLinkHandled(key);
+    expect(wasEmailVoteLinkHandled(key)).toBe(true);
+    expect(wasEmailVoteLinkHandled({ ...key, spaceId: 'other-space' })).toBe(false);
+  });
+
+  it('keeps one viewer’s answered link from blocking another’s on a shared browser', () => {
+    markEmailVoteLinkHandled(key);
+    expect(wasEmailVoteLinkHandled({ ...key, viewerId: 'did:privy:b' })).toBe(false);
+    expect(wasEmailVoteLinkHandled({ ...key, viewerId: null })).toBe(false);
   });
 
   it('forgets a claim after sixty days', () => {
-    markEmailVoteLinkHandled('claim', 'space', Date.now() - 61 * 24 * 60 * 60 * 1000);
-    expect(wasEmailVoteLinkHandled('claim', 'space')).toBe(false);
+    markEmailVoteLinkHandled(key, Date.now() - 61 * 24 * 60 * 60 * 1000);
+    expect(wasEmailVoteLinkHandled(key)).toBe(false);
   });
 });

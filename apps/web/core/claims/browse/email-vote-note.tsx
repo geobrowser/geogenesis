@@ -17,12 +17,15 @@ export function EmailVoteNote({
   outcome,
   position,
   viewerPosition,
+  pending = false,
   onUndo,
 }: {
   outcome: EmailVoteOutcome | null;
   /** The pill this note sits under. */
   position: boolean;
   viewerPosition: boolean | null;
+  /** The cast vote hasn't reached the bundler yet, so Undo would be ignored; see `VoteNote`. */
+  pending?: boolean;
   onUndo: () => void;
 }) {
   if (!outcome || outcome.position !== position || viewerPosition !== position) return null;
@@ -30,7 +33,7 @@ export function EmailVoteNote({
   return (
     <VoteNote
       announce
-      action={{ label: 'Undo', onPress: onUndo, analyticsLabel: 'email_vote_undo', analyticsIntent: 'undo' }}
+      action={{ label: 'Undo', onPress: onUndo, analyticsLabel: 'email_vote_undo', analyticsIntent: 'undo', pending }}
     >
       Vote counted
     </VoteNote>

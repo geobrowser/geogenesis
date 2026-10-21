@@ -737,6 +737,17 @@ describe('ClaimPageView position', () => {
     expect(render(<>{noteFor(true)}</>).container).toBeEmptyDOMElement();
   });
 
+  it('holds the email vote’s Undo while the pills are pending', () => {
+    mocks.emailVote = { kind: 'cast', position: true };
+    mocks.viewerPosition = true;
+    mocks.isResponseSubmitting = true;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const noteFor = mocks.positionControl?.noteFor as (position: boolean) => React.ReactNode;
+    render(<>{noteFor(true)}</>);
+    expect(screen.getByRole('button', { name: 'Undo' })).toHaveAttribute('aria-disabled', 'true');
+  });
+
   it('marks the pills pending until the response reaches the bundler, without announcing a wait', () => {
     mocks.isResponsePending = true;
     mocks.isResponseSubmitting = true;

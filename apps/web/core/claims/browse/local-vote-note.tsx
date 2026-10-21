@@ -2,6 +2,8 @@
 
 import type * as React from 'react';
 
+import cx from 'classnames';
+
 import { openSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
 /**
@@ -14,7 +16,17 @@ export function VoteNote({
   announce = false,
 }: {
   children: React.ReactNode;
-  action?: { label: string; onPress: () => void; analyticsLabel: string; analyticsIntent: string };
+  action?: {
+    label: string;
+    onPress: () => void;
+    analyticsLabel: string;
+    analyticsIntent: string;
+    /**
+     * The vote it acts on is still on its way to the bundler, when the pills ignore presses. The action
+     * says so the way the pills do — `aria-disabled` and a wait cursor — rather than looking live.
+     */
+    pending?: boolean;
+  };
   /** Read out when it appears: for a note about something the page just did, not one already there. */
   announce?: boolean;
 }) {
@@ -27,10 +39,16 @@ export function VoteNote({
           ·{' '}
           <button
             type="button"
-            onClick={action.onPress}
+            onClick={() => {
+              if (!action.pending) action.onPress();
+            }}
+            aria-disabled={action.pending || undefined}
             data-geo-analytics-label={action.analyticsLabel}
             data-geo-analytics-intent={action.analyticsIntent}
-            className="font-medium text-text underline underline-offset-2 hover:text-grey-04"
+            className={cx(
+              'font-medium text-text underline underline-offset-2',
+              action.pending ? 'cursor-progress' : 'hover:text-grey-04'
+            )}
           >
             {action.label}
           </button>
