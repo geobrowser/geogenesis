@@ -627,11 +627,12 @@ export const ImportPreviewTable = React.forwardRef<ImportPreviewTableHandle, Pro
                               <span className="truncate">Upload failed: {cellFlag.error}</span>
                             </span>
                           ) : isImageColumn && value && isImageUrl(value) ? (
-                            <div className="overflow-hidden rounded" style={{ width: 60 }}>
+                            <div className="relative h-[60px] w-[60px] shrink-0 overflow-hidden rounded">
                               <NativeGeoImage
                                 value={value}
                                 alt={`Image for ${col.propertyName ?? 'column'}`}
-                                className="h-auto w-[60px] object-cover"
+                                displayWidth={60}
+                                className="h-full w-full object-cover"
                               />
                             </div>
                           ) : isRelation && value ? (
