@@ -45,7 +45,7 @@ import { resolveJoinChoice } from '~/core/debates/request-join-state';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { TrackVideo } from '~/core/debates/track-video';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
-import { toMediaDeviceOptions, withMediaDeviceOptions } from '~/core/media/device-options';
+import { switchMediaDevice, toMediaDeviceOptions, withMediaDeviceOptions } from '~/core/media/device-options';
 import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
@@ -1175,6 +1175,11 @@ function LocalAudioControls({
         framed={isMobile}
         onChange={cameraSettings.onCameraChange}
       />
+      {cameraSettings.error && (
+        <p role="alert" className="text-metadata text-red-01">
+          {cameraSettings.error}
+        </p>
+      )}
     </div>
   );
 
@@ -1382,6 +1387,7 @@ function DesktopSettingsPopover({
  */
 function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null) {
   const { changeAudioInput, changeAudioOutput, audioOutputError } = useDebateMediaSession();
+  const [inputError, setInputError] = React.useState<string | null>(null);
   // `requestPermissions` defaults to true, and enumerating with it calls `getUserMedia` whenever a
   // device label is blank — which is exactly the state a denied microphone leaves them in. That
   // second prompt has no user gesture behind it, so it fails, and its rejection empties the list:
@@ -1392,13 +1398,14 @@ function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null
   const speakers = useMediaDeviceSelect({ kind: 'audiooutput', room, requestPermissions: false });
 
   const selectMicrophone = (deviceId: string) => {
-    void microphones.setActiveMediaDevice(deviceId);
-    changeAudioInput(deviceId);
+    setInputError(null);
+    void switchMediaDevice(room, 'audioinput', deviceId)
+      .then(() => changeAudioInput(deviceId))
+      .catch(() => setInputError('Could not switch microphones. Try another device.'));
   };
 
   const selectSpeaker = (deviceId: string) => {
-    void speakers.setActiveMediaDevice(deviceId);
-    void changeAudioOutput(deviceId);
+    void changeAudioOutput(deviceId, selectedId => switchMediaDevice(room, 'audiooutput', selectedId));
   };
 
   // Browsers without `setSinkId` enumerate no outputs at all; show the same disabled "System
@@ -1412,7 +1419,7 @@ function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null
     selectedAudioOutputId: speakers.activeDeviceId,
     audioOutputSupported,
     // The panel is where someone goes to fix their audio, so it is where the failures belong.
-    error: micFailure ? micFailureMessage(micFailure) : audioOutputError,
+    error: inputError ?? (micFailure ? micFailureMessage(micFailure) : audioOutputError),
     onAudioInputChange: selectMicrophone,
     onAudioOutputChange: selectSpeaker,
   };
@@ -1420,14 +1427,18 @@ function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null
 
 function useVoiceCameraSettings(room: Room) {
   const { changeVideoInput } = useDebateMediaSession();
+  const [error, setError] = React.useState<string | null>(null);
   const cameras = useMediaDeviceSelect({ kind: 'videoinput', room, requestPermissions: false });
 
   return {
     cameraDevices: toMediaDeviceOptions(cameras.devices),
     selectedCameraId: cameras.activeDeviceId,
+    error,
     onCameraChange: (deviceId: string) => {
-      void cameras.setActiveMediaDevice(deviceId);
-      changeVideoInput(deviceId);
+      setError(null);
+      void switchMediaDevice(room, 'videoinput', deviceId)
+        .then(() => changeVideoInput(deviceId))
+        .catch(() => setError('Could not switch cameras. Try another device.'));
     },
   };
 }

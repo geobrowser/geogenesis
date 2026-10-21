@@ -72,11 +72,12 @@ export type DebateMediaSession = {
     video?: boolean;
   }) => Promise<LocalTrackLike[]>;
   changeAudioInput: (deviceId: string) => void;
-  changeAudioOutput: (deviceId: string) => Promise<void>;
+  changeAudioOutput: (deviceId: string, apply?: (authorizedDeviceId: string) => Promise<unknown>) => Promise<void>;
   /**
    * Report that audio could not be routed to the selected speaker. `changeAudioOutput` handles the
    * picker's own failures; this is for the caller that owns a live room, where the route is applied
-   * separately and can fail on its own.
+   * while connecting or restoring devices. Explicit selections pass a routing callback to
+   * `changeAudioOutput`, which saves only after that callback succeeds.
    */
   /** `null` clears the reported failure, so a successful retry can take the notice back. */
   reportAudioOutputFailure: (message: string | null) => void;
@@ -121,6 +122,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
    */
   const wantedKindsRef = React.useRef({ audio: true, video: true });
   const audioOutputSelectionPromiseRef = React.useRef<Promise<void> | null>(null);
+  const audioOutputRoutingPromiseRef = React.useRef<Promise<void> | null>(null);
   const selectedAudioInputIdRef = React.useRef('');
   const selectedAudioOutputIdRef = React.useRef(systemDefaultAudioOutput.deviceId);
   const selectedVideoInputIdRef = React.useRef('');
@@ -136,6 +138,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     localPreviewPromiseRef.current = null;
     localPreviewWantRef.current = null;
     audioOutputSelectionPromiseRef.current = null;
+    audioOutputRoutingPromiseRef.current = null;
     setPreviewStreamState(null);
     setPreviewState('requesting');
     setPreviewBusy(true);
@@ -418,7 +421,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     setAudioOutputError(message);
   }, []);
 
-  const changeAudioOutput = React.useCallback(async (deviceId: string) => {
+  const changeAudioOutput = React.useCallback(async (deviceId: string, apply?: (id: string) => Promise<unknown>) => {
     // `ensurePreview` is what normally primes this, but the claim-exploration voice dock picks a
     // speaker without ever building a preview. Probe on demand there rather than silently dropping
     // the user's choice — and never re-probe once a selection has actually failed.
@@ -458,11 +461,28 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           );
         }
         if (!isCurrent()) return;
+        if (apply) {
+          // A newer choice must be the last one routed even if an earlier switch is still pending.
+          const previousRoute = audioOutputRoutingPromiseRef.current;
+          const routing = (async () => {
+            await previousRoute?.catch(() => undefined);
+            if (!isCurrent()) return;
+            if ((await apply(selectedId)) === false) throw new Error('Device switch failed');
+          })();
+          audioOutputRoutingPromiseRef.current = routing;
+          await routing;
+          if (!isCurrent()) return;
+        }
+        setAudioOutputError(null);
         selectedAudioOutputIdRef.current = selectedId;
         setSelectedAudioOutputId(selectedId);
         rememberMediaDevice('audiooutput', selectedId);
       } catch {
         if (!isCurrent()) return;
+        if (apply) {
+          setAudioOutputError('Could not move audio to that speaker. Sound is still on the previous one.');
+          return;
+        }
         audioOutputSelectionFailedRef.current = true;
         audioOutputSupportedRef.current = false;
         selectedAudioOutputIdRef.current = systemDefaultAudioOutput.deviceId;

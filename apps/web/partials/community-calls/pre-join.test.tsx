@@ -85,6 +85,27 @@ describe('community-call device choices', () => {
     });
   });
 
+  it('can explicitly remember current fallbacks when the saved inputs are disconnected', async () => {
+    rememberMediaDevice('audioinput', 'disconnected-mic');
+    rememberMediaDevice('videoinput', 'disconnected-camera');
+    const view = render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Camera')).toHaveValue('camera'));
+    expect(readMediaDevicePreference('audioinput')).toBe('disconnected-mic');
+    expect(readMediaDevicePreference('videoinput')).toBe('disconnected-camera');
+    fireEvent.click(await screen.findByRole('button', { name: 'Remember current devices' }));
+    expect(readMediaDevicePreference('audioinput')).toBe('default');
+    expect(readMediaDevicePreference('videoinput')).toBe('camera');
+    view.unmount();
+    mocks.enumerate.mockResolvedValue([
+      ...devices,
+      { kind: 'audioinput', deviceId: 'disconnected-mic', label: 'Returned mic' },
+      { kind: 'videoinput', deviceId: 'disconnected-camera', label: 'Returned camera' },
+    ]);
+    render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Camera')).toHaveValue('camera'));
+    expect(screen.getByLabelText('Microphone')).toHaveValue('default');
+  });
+
   it('leaves browser-default capture unchanged after enumeration when nobody has picked a device', async () => {
     render(<PreJoin spaceName="Geo" occurrence={occurrence} joining={false} onJoin={vi.fn()} />);
     await waitFor(() => expect(screen.getByLabelText('Camera').querySelectorAll('option')).toHaveLength(3));

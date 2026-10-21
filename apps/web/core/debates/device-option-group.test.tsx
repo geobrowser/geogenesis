@@ -3,6 +3,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { rememberMediaDevice } from '~/core/media/device-preferences';
+
 import { DeviceOptionGroup } from './device-option-group';
 
 const devices = [
@@ -12,6 +14,7 @@ const devices = [
 
 afterEach(() => {
   cleanup();
+  window.localStorage.clear();
 });
 
 describe('DeviceOptionGroup', () => {
@@ -23,6 +26,27 @@ describe('DeviceOptionGroup', () => {
 
     fireEvent.click(screen.getByText('USB Microphone'));
     expect(onChange).toHaveBeenCalledWith('mic-b');
+  });
+
+  it('confirms an already-selected fallback when the remembered device differs', () => {
+    rememberMediaDevice('audioinput', 'disconnected-mic');
+    const onChange = vi.fn();
+    render(
+      <DeviceOptionGroup label="Select a microphone" options={devices} selectedDeviceId="mic-a" onChange={onChange} />
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Built-in Microphone' }));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('mic-a');
+  });
+
+  it('does not restart a device that is already remembered when its checked row is clicked', () => {
+    rememberMediaDevice('audioinput', 'mic-a');
+    const onChange = vi.fn();
+    render(
+      <DeviceOptionGroup label="Select a microphone" options={devices} selectedDeviceId="mic-a" onChange={onChange} />
+    );
+    fireEvent.click(screen.getByRole('radio', { name: 'Built-in Microphone' }));
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('takes no input while disabled', () => {

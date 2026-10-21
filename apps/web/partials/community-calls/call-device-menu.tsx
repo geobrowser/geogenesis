@@ -11,6 +11,7 @@ import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import {
   authorizeAudioOutput,
   mediaDeviceLabels,
+  switchMediaDevice,
   systemDefaultAudioOutput,
   toMediaDeviceOptions,
 } from '~/core/media/device-options';
@@ -34,11 +35,7 @@ export function CallDeviceMenu({ kind }: { kind: MediaDeviceKind }) {
     try {
       const authorized = kind === 'audiooutput' ? await authorizeAudioOutput(id) : undefined;
       const selectedId = authorized?.deviceId ?? id;
-      // The selector hook drops the result. An unavailable concrete device must not be saved.
-      // A default input can return false because getSettings reports its physical ID instead of
-      // the 'default' alias; a rejected request still reaches the catch below.
-      const switched = await room.switchActiveDevice(kind, selectedId);
-      if (!switched && selectedId !== systemDefaultAudioOutput.deviceId) throw new Error('Device switch failed');
+      await switchMediaDevice(room, kind, selectedId);
       rememberMediaDevice(kind, selectedId);
       setOpen(false);
     } catch {

@@ -5,6 +5,7 @@ import * as RadioGroup from '@radix-ui/react-radio-group';
 import cx from 'classnames';
 
 import type { MediaDeviceOption } from '~/core/media/device-options';
+import { readMediaDevicePreference } from '~/core/media/device-preferences';
 
 import { Check } from '~/design-system/icons/check';
 import { Text } from '~/design-system/text';
@@ -41,6 +42,12 @@ export function DeviceOptionGroup({
             <RadioGroup.Item
               key={`${device.kind}:${device.deviceId}`}
               value={device.deviceId}
+              onClick={() => {
+                const remembered = readMediaDevicePreference(device.kind);
+                // Radix does not emit onValueChange for the checked row. An explicit click can
+                // confirm a temporary fallback, without restarting an already-remembered device.
+                if (!disabled && selected && remembered && remembered !== device.deviceId) onChange(device.deviceId);
+              }}
               className={cx(
                 'flex w-full items-center justify-between gap-3 rounded-md text-left text-metadata text-text outline-none',
                 // The bottom sheet has the room for the taller rows the designs draw; the pre-join

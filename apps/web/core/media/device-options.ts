@@ -55,3 +55,17 @@ export async function authorizeAudioOutput(deviceId: string): Promise<MediaDevic
     return mediaDevices.selectAudioOutput({ deviceId });
   }
 }
+
+/** LiveKit can resolve false instead of rejecting a device that was not actually selected. */
+export async function switchMediaDevice(
+  room: { switchActiveDevice?: (kind: MediaDeviceKind, deviceId: string) => Promise<unknown> },
+  kind: MediaDeviceKind,
+  deviceId: string
+) {
+  if (!room.switchActiveDevice) throw new Error('Device routing unavailable');
+  const switched = await room.switchActiveDevice(kind, deviceId);
+  // A default input can report its physical ID instead of the requested alias.
+  if (switched === false && !(kind !== 'audiooutput' && deviceId === 'default')) {
+    throw new Error('Device switch failed');
+  }
+}

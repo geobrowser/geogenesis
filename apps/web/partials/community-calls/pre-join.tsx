@@ -8,7 +8,12 @@ import { Track } from 'livekit-client';
 
 import { formatFullDate, formatTimeRange } from '~/core/community-calls/format';
 import { Occurrence } from '~/core/community-calls/types';
-import { availableMediaInputId, readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
+import {
+  availableMediaInputId,
+  readMediaDevicePreference,
+  rememberMediaDevice,
+  subscribeMediaDevicePreferences,
+} from '~/core/media/device-preferences';
 import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 
 import { Button } from '~/design-system/button';
@@ -43,6 +48,19 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
     audio: [],
     video: [],
   });
+  const [rememberedInputs, setRememberedInputs] = React.useState<{ audio?: string; video?: string }>({});
+  React.useEffect(() => {
+    const refresh = () =>
+      setRememberedInputs({
+        audio: readMediaDevicePreference('audioinput'),
+        video: readMediaDevicePreference('videoinput'),
+      });
+    refresh();
+    return subscribeMediaDevicePreferences(refresh);
+  }, []);
+  const canRememberCurrent =
+    (rememberedInputs.audio && audioDeviceId && rememberedInputs.audio !== audioDeviceId) ||
+    (rememberedInputs.video && videoDeviceId && rememberedInputs.video !== videoDeviceId);
   const [permissionError, setPermissionError] = React.useState<string | null>(null);
 
   const onPreviewError = React.useCallback((err: Error) => {
@@ -184,6 +202,18 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
             {joining ? 'Joining…' : 'Join community call'}
           </Button>
         </div>
+        {canRememberCurrent && (
+          <button
+            type="button"
+            className="mt-2 text-metadata text-grey-04 underline"
+            onClick={() => {
+              if (audioDeviceId) rememberMediaDevice('audioinput', audioDeviceId);
+              if (videoDeviceId) rememberMediaDevice('videoinput', videoDeviceId);
+            }}
+          >
+            Remember current devices
+          </button>
+        )}
       </div>
     </div>
   );

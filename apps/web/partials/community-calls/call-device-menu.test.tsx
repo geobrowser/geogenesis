@@ -54,6 +54,17 @@ describe('in-call device pickers', () => {
     }
   );
 
+  it.each(['audioinput', 'videoinput', 'audiooutput'] as const)(
+    'can remember the already-selected %s fallback',
+    async kind => {
+      rememberMediaDevice(kind, 'disconnected-device');
+      render(<CallDeviceMenu kind={kind} />);
+      fireEvent.click(screen.getByRole('button'));
+      fireEvent.click(screen.getByRole('radio', { name: 'System default' }));
+      await waitFor(() => expect(readMediaDevicePreference(kind)).toBe('default'));
+    }
+  );
+
   it.each(['rejects', 'returns false'])('does not save a fallback or failed switch when LiveKit %s', async failure => {
     rememberMediaDevice('audiooutput', 'remembered-speaker');
     if (failure === 'rejects') mocks.switchDevice.mockRejectedValue(new Error('Unavailable'));

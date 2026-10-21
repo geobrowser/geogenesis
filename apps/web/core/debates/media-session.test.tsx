@@ -147,6 +147,77 @@ describe('remembered devices across debate sessions', () => {
   });
 });
 
+describe('live speaker preference commits', () => {
+  it('waits for successful routing before remembering the authorized speaker', async () => {
+    rememberMediaDevice('audiooutput', 'default');
+    mocks.supportsAudioOutputSelection.mockReturnValue(true);
+    let finish!: (result: boolean) => void;
+    const route = vi.fn(
+      () =>
+        new Promise<boolean>(resolve => {
+          finish = resolve;
+        })
+    );
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness outputRoute={route} />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Select speaker' }));
+    await waitFor(() => expect(route).toHaveBeenCalledWith('speaker-1'));
+    expect(readMediaDevicePreference('audiooutput')).toBe('default');
+    fireEvent.click(screen.getByRole('button', { name: 'Report earlier route failure' }));
+    await act(async () => finish(true));
+    await waitFor(() => expect(readMediaDevicePreference('audiooutput')).toBe('speaker-1'));
+    expect(screen.getByTestId('audio-output-error')).toHaveTextContent('none');
+  });
+
+  it('serializes live routes so the newest speaker is applied and remembered last', async () => {
+    rememberMediaDevice('audiooutput', 'default');
+    mocks.supportsAudioOutputSelection.mockReturnValue(true);
+    mocks.selectAudioOutput.mockImplementation(async ({ deviceId }: { deviceId: string }) => ({ deviceId }));
+    let finishFirst!: () => void;
+    const route = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>(resolve => {
+            finishFirst = resolve;
+          })
+      )
+      .mockResolvedValue(true);
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness outputRoute={route} />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Select speaker' }));
+    await waitFor(() => expect(route).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Select other speaker' }));
+    await waitFor(() => expect(mocks.selectAudioOutput).toHaveBeenCalledTimes(2));
+    expect(route).toHaveBeenCalledTimes(1);
+    await act(async () => finishFirst());
+    await waitFor(() => expect(readMediaDevicePreference('audiooutput')).toBe('speaker-2'));
+    expect(route.mock.calls.map(call => call[0])).toEqual(['speaker-1', 'speaker-2']);
+  });
+
+  it.each(['rejects', 'returns false'])('preserves the working preference when live routing %s', async failure => {
+    rememberMediaDevice('audiooutput', 'default');
+    mocks.supportsAudioOutputSelection.mockReturnValue(true);
+    const route =
+      failure === 'rejects' ? vi.fn().mockRejectedValue(new Error('No route')) : vi.fn().mockResolvedValue(false);
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness outputRoute={route} />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Select speaker' }));
+    await waitFor(() => expect(screen.getByTestId('audio-output-error')).toHaveTextContent('Could not move audio'));
+    expect(readMediaDevicePreference('audiooutput')).toBe('default');
+    expect(screen.getByTestId('selected-output')).toHaveTextContent('default');
+  });
+});
+
 describe('DebateMediaSessionProvider restarts it starts itself', () => {
   it('keeps the camera shut through a device change over a mic-only session', async () => {
     mocks.enumerateDevices.mockResolvedValue([
@@ -767,7 +838,7 @@ function streamId(stream: MediaStream | null) {
   return `stream-${streamIds.get(stream)}`;
 }
 
-function MediaSessionHarness() {
+function MediaSessionHarness({ outputRoute }: { outputRoute?: (id: string) => Promise<unknown> } = {}) {
   const media = useDebateMediaSession();
 
   return (
@@ -787,6 +858,9 @@ function MediaSessionHarness() {
       </button>
       <div data-testid="preview-state">{media.previewState}</div>
       <div data-testid="audio-output-supported">{media.audioOutputSupported ? 'yes' : 'no'}</div>
+      <button type="button" onClick={() => media.reportAudioOutputFailure('Earlier route failed')}>
+        Report earlier route failure
+      </button>
       <div data-testid="audio-output-error">{media.audioOutputError ?? 'none'}</div>
       <div data-testid="selected-devices">
         {media.selectedAudioInputId}/{media.selectedVideoInputId}
@@ -827,7 +901,10 @@ function MediaSessionHarness() {
       <button type="button" onClick={() => media.promoteSession('match:match-1', 'debate:debate-1')}>
         Promote debate
       </button>
-      <button type="button" onClick={() => void media.changeAudioOutput('speaker-1')}>
+      <button type="button" onClick={() => void media.changeAudioOutput('speaker-2', outputRoute)}>
+        Select other speaker
+      </button>
+      <button type="button" onClick={() => void media.changeAudioOutput('speaker-1', outputRoute)}>
         Select speaker
       </button>
       <button type="button" onClick={() => media.releaseSession('match:match-1')}>

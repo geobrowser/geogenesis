@@ -38,6 +38,7 @@ import {
 import { clearRematchJoinIntents, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { DebateRequestMediaPreview } from '~/core/debates/request-media-preview';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
 
 import { DebateRoomPageClient, upcomingTurnLabel } from './debate-room-page-client';
 
@@ -901,6 +902,21 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('Waiting for video')).toBeInTheDocument();
   });
 
+  it('does not replace the saved speaker when the connected debate refuses the chosen route', async () => {
+    rememberMediaDevice('audiooutput', 'default');
+    mocks.roomSwitchActiveDevice.mockImplementation(async (_kind: string, id: string) => {
+      if (id === 'speaker-2') throw new Error('No route');
+      return true;
+    });
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await openDeviceSettings('Audio settings');
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    fireEvent.click(await screen.findByRole('radio', { name: 'Studio Speakers' }));
+    expect(await screen.findByText(/Could not move audio to that speaker/)).toBeInTheDocument();
+    expect(readMediaDevicePreference('audiooutput')).toBe('default');
+  });
+
   it('reports a speaker the live room refuses to route to', async () => {
     mocks.roomSwitchActiveDevice.mockRejectedValue(new Error('no route'));
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
@@ -1349,7 +1365,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled();
   });
 
-  it('falls back to System default when speaker authorization is rejected', async () => {
+  it('keeps the working speaker selectable when live speaker authorization is rejected', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     mocks.selectAudioOutput.mockRejectedValueOnce(Object.assign(new Error('Not allowed'), { name: 'NotAllowedError' }));
 
@@ -1358,15 +1374,17 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
 
-    await waitFor(() => expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled());
+    expect(
+      await screen.findByText('Could not move audio to that speaker. Sound is still on the previous one.')
+    ).toBeVisible();
     expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
-    expect(screen.getByText('This browser could not route audio to that speaker. Using System default.')).toBeVisible();
+    expect(screen.getByRole('radio', { name: 'System default' })).not.toBeDisabled();
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
     await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
-    expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'System default' })).not.toBeDisabled();
+    expect(screen.getByRole('radio', { name: 'Studio Speakers' })).toBeInTheDocument();
   });
 
   it('ignores an older speaker authorization that finishes after the latest choice', async () => {
