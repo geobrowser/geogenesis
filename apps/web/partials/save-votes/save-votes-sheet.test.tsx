@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -215,17 +215,24 @@ describe('SaveVotesSheet', () => {
     expect(readLocalVotes().prompt.shownCount).toBe(1);
   });
 
-  it('rejects an address that is not an email', () => {
+  it('keeps Save off until the address looks like an email', () => {
     vote('a');
     markPromptedThisSession();
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('single_claim'));
+    const field = screen.getByRole('textbox', { name: 'Email address' });
+    const save = screen.getByRole('button', { name: 'Save vote' });
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save vote' }));
-
-    expect(screen.getByRole('alert')).toHaveTextContent('That does not look like an email address.');
+    expect(save).toBeDisabled();
+    fireEvent.change(field, { target: { value: 'sam@hey' } });
+    expect(save).toBeDisabled();
+    // Enter in the field submits the form even with the button off; that must not send either.
+    fireEvent.submit(field.closest('form')!);
     expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: 'sam@hey.com' } });
+    expect(save).toBeEnabled();
   });
 
   it('starts a save sign-in with the email and moves to the code step', () => {
@@ -441,6 +448,8 @@ describe('SaveVotesSheet', () => {
     act(() => openSaveVotesPrompt('threshold'));
 
     const chips = screen.getByRole('list', { name: 'Your votes' });
+    // One row in the corner card, the "+1" on it.
+    expect(Array.from(chips.children).map(row => row.textContent)).toEqual(['Agree:Third claimAgree:Second claim+1']);
     expect(chips).toHaveTextContent('Third claim');
     expect(chips).toHaveTextContent('Second claim');
     expect(chips).not.toHaveTextContent('First claim');
@@ -530,13 +539,18 @@ describe('SaveVotesSheet from the navbar', () => {
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('navbar'));
 
-    const chips = screen.getByRole('list', { name: 'Your votes' });
-    expect(Array.from(chips.children).map(chip => chip.textContent)).toEqual([
+    const chips = within(screen.getByRole('list', { name: 'Your votes' }));
+    expect(chips.getAllByRole('listitem').map(chip => chip.textContent)).toEqual([
       'Agree:Claim f',
       'Agree:Claim e',
       'Agree:Claim d',
       'Agree:Claim c',
       '+2',
+    ]);
+    // Two rows of two, the "+2" closing the second rather than starting a third.
+    expect(Array.from(screen.getByRole('list', { name: 'Your votes' }).children).map(row => row.textContent)).toEqual([
+      'Agree:Claim fAgree:Claim e',
+      'Agree:Claim dAgree:Claim c+2',
     ]);
   });
 

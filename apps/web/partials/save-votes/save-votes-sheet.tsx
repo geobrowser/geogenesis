@@ -50,8 +50,9 @@ import { useIsEmailCaptureShowing } from '~/partials/explore/email-capture-prese
 import {
   CENTERED_CARD_CLASS,
   CHIP_CLASS,
+  CHIP_ROW_CLASS,
   CORNER_CARD_CLASS,
-  ERROR_CLASS,
+  HEADING_CLASS,
   ICON_BUTTON_CLASS,
   INPUT_CLASS,
   TOP_BAR_CLASS,
@@ -61,7 +62,6 @@ import {
   codeStepClasses,
   fieldClass,
   fineClass,
-  headingClass,
   primaryButtonClass,
   subtextClass,
 } from './save-votes-styles';
@@ -100,7 +100,6 @@ export function SaveVotesSheet() {
   const prepareOnboarding = usePrepareOnboarding();
 
   const [email, setEmail] = React.useState('');
-  const [invalid, setInvalid] = React.useState(false);
   /**
    * Once the visitor has asked for a code: the address it went to, and the sheet as it was then.
    * The sign-in keeps that presentation and attribution to the end. Moving between the corner card
@@ -203,7 +202,6 @@ export function SaveVotesSheet() {
   const changeEmail = React.useCallback(() => {
     if (attempt?.phase !== 'code') return;
     setEmail(attempt.email);
-    setInvalid(false);
     setAttempt({ ...attempt, phase: 'editing' });
   }, [attempt]);
 
@@ -212,16 +210,16 @@ export function SaveVotesSheet() {
     if (editing) emailInputRef.current?.focus();
   }, [editing]);
 
+  const trimmedEmail = email.trim();
+  // The button waits for an address that looks like one, so there is no rejection to show.
+  const canSend = isLikelyEmail(trimmedEmail);
+
   const submitEmail = (event: React.FormEvent) => {
     event.preventDefault();
-    const trimmed = email.trim();
-    if (!isLikelyEmail(trimmed)) {
-      setInvalid(true);
-      return;
-    }
+    if (!canSend) return;
     beginPrivyAuth(signInProperties);
     prepareOnboarding();
-    setAttempt({ email: trimmed, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
+    setAttempt({ email: trimmedEmail, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
   };
 
   if (!open) return null;
@@ -267,7 +265,7 @@ export function SaveVotesSheet() {
           <div aria-hidden className={badgeClass(compact)}>
             <Mail size={compact ? 20 : 22} />
           </div>
-          <p className={headingClass(compact)}>Check your email</p>
+          <p className={HEADING_CLASS}>Check your email</p>
           <AccountStep
             email={codeEmail}
             analytics={signInProperties}
@@ -287,7 +285,7 @@ export function SaveVotesSheet() {
         >
           {lobbyName ? (
             <>
-              <p className={headingClass(compact)}>Join the discussion</p>
+              <p className={HEADING_CLASS}>Join the discussion</p>
               <p className={subtextClass(compact)}>
                 Create an account to vote on claims, speak and debate. You’ll stay in{' '}
                 <span className="font-medium text-text">{lobbyName}</span>, and your audio keeps playing.
@@ -296,13 +294,13 @@ export function SaveVotesSheet() {
             </>
           ) : (
             <>
-              <p className={headingClass(compact)}>{saveVotesHeading(count, returnVisit, logIn)}</p>
+              <p className={HEADING_CLASS}>{saveVotesHeading(count, returnVisit, logIn)}</p>
               <p className={subtextClass(compact)}>{saveVotesSubtext(count, logIn)}</p>
             </>
           )}
           <VoteChips votes={votes} rows={centered ? 2 : 1} />
 
-          <label className={fieldClass(compact, invalid)}>
+          <label className={fieldClass(compact)}>
             <span aria-hidden className="shrink-0">
               <Mail size={compact ? 16 : 18} />
             </span>
@@ -314,23 +312,16 @@ export function SaveVotesSheet() {
               value={email}
               onChange={event => {
                 setEmail(event.currentTarget.value);
-                setInvalid(false);
               }}
               placeholder="your@email.com"
               aria-label="Email address"
-              aria-invalid={invalid}
               className={INPUT_CLASS}
             />
           </label>
-          <button type="submit" className={primaryButtonClass(compact)}>
+          <button type="submit" disabled={!canSend} className={primaryButtonClass(compact)}>
             {editing ? SAVE_VOTES_RESEND_LABEL : saveVotesSubmitLabel(count, logIn)}
           </button>
 
-          {invalid ? (
-            <p role="alert" className={ERROR_CLASS}>
-              That does not look like an email address.
-            </p>
-          ) : null}
           <p className={fineClass(compact)}>{SAVE_VOTES_FINE_PRINT}</p>
         </form>
       )}
@@ -399,7 +390,8 @@ function chipLabel(vote: LocalVote) {
 
 /**
  * The visitor's latest votes, two to a row, then how many more: a reminder of what closing this
- * leaves behind. One row in the corner card; the centred dialog has room for a second.
+ * leaves behind. One row in the corner card; the centred dialog has room for a second. The "+N" closes
+ * the last row rather than wrapping onto a line of its own, so the chips in a row shrink to fit.
  */
 function VoteChips({ votes, rows }: { votes: LocalVote[]; rows: 1 | 2 }) {
   const shown = [...votes]
@@ -408,22 +400,35 @@ function VoteChips({ votes, rows }: { votes: LocalVote[]; rows: 1 | 2 }) {
     .slice(0, rows * 2);
   const more = votes.length - shown.length;
   if (shown.length === 0) return null;
+  const lines = Array.from({ length: Math.ceil(shown.length / 2) }, (_, line) => shown.slice(line * 2, line * 2 + 2));
   return (
-    <ul className={chipListClass(rows === 1)} aria-label="Your votes">
-      {shown.map(vote => (
-        <li
-          key={`${vote.entityId}:${vote.spaceId}:${vote.responseKind}`}
-          // A touch narrower over two rows, so the "+N" closes the second instead of wrapping to a third.
-          className={cx(CHIP_CLASS, rows === 2 ? 'max-w-[128px]' : 'max-w-[132px]', 'gap-1')}
-        >
-          <span aria-hidden className="shrink-0">
-            <ResponsePositionIcon responseKind={vote.responseKind} position={vote.direction === 'positive'} selected />
-          </span>
-          <span className="sr-only">{chipLabel(vote)}</span>
-          <span className="truncate">{vote.title}</span>
-        </li>
+    <div role="list" aria-label="Your votes" className={chipListClass(rows === 1)}>
+      {lines.map((line, index) => (
+        <div key={index} className={CHIP_ROW_CLASS}>
+          {line.map(vote => (
+            <div
+              key={`${vote.entityId}:${vote.spaceId}:${vote.responseKind}`}
+              role="listitem"
+              className={cx(CHIP_CLASS, 'max-w-[132px] min-w-0 gap-1')}
+            >
+              <span aria-hidden className="shrink-0">
+                <ResponsePositionIcon
+                  responseKind={vote.responseKind}
+                  position={vote.direction === 'positive'}
+                  selected
+                />
+              </span>
+              <span className="sr-only">{chipLabel(vote)}</span>
+              <span className="truncate">{vote.title}</span>
+            </div>
+          ))}
+          {more > 0 && index === lines.length - 1 ? (
+            <div role="listitem" className={cx(CHIP_CLASS, 'shrink-0')}>
+              +{more}
+            </div>
+          ) : null}
+        </div>
       ))}
-      {more > 0 ? <li className={CHIP_CLASS}>+{more}</li> : null}
-    </ul>
+    </div>
   );
 }

@@ -34,16 +34,15 @@ export const TOP_BAR_CLASS = '-mx-2 flex h-7 items-center justify-between mobile
 export const ICON_BUTTON_CLASS =
   'flex size-7 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text mobile:size-11 mobile:text-text';
 
-export const headingClass = (compact: boolean) =>
-  cx(
-    'font-medium text-balance text-[#151515] mobile:text-[22px] mobile:leading-[28px] mobile:tracking-[-0.45px]',
-    compact ? 'text-[18px] leading-[24px] tracking-[-0.3px]' : 'mt-0.5 text-[20px] leading-[26px] tracking-[-0.4px]'
-  );
+/** The email capture's 24px heading size, on leading that holds a wrapped line (26px on the phone). */
+export const HEADING_CLASS =
+  'text-[24px] leading-[28px] font-medium tracking-[-0.72px] text-balance text-[#151515] mobile:text-[26px] mobile:leading-[30px] mobile:tracking-[-0.78px]';
 
+/** Set close under the heading: its leading already gives the two lines room. */
 export const subtextClass = (compact: boolean) =>
   cx(
-    'mx-auto text-[14px] leading-[20px] text-grey-04 mobile:mt-1.5 mobile:max-w-[310px] mobile:text-[16px] mobile:leading-[22px]',
-    compact ? 'mt-1 max-w-[270px]' : 'mt-1.5 max-w-[290px]'
+    'mx-auto mt-0.5 text-[14px] leading-[20px] text-grey-04 mobile:mt-1 mobile:max-w-[310px] mobile:text-[16px] mobile:leading-[22px]',
+    compact ? 'max-w-[270px]' : 'max-w-[290px]'
   );
 
 /** The code step's mail badge, above its heading. */
@@ -57,16 +56,17 @@ export const CHIP_CLASS =
   'flex h-6 items-center rounded-full bg-grey-01 px-2 text-[12px] leading-[14px] text-text mobile:h-7 mobile:text-[13px]';
 
 export const chipListClass = (compact: boolean) =>
-  cx('flex flex-wrap justify-center gap-1.5', compact ? 'mt-3.5' : 'mt-4');
+  cx('flex flex-col items-center gap-1.5', compact ? 'mt-3.5' : 'mt-4');
 
-/** A field with the mail glyph inside it; red-bordered while what is in it was rejected. */
-export function fieldClass(compact: boolean, invalid: boolean) {
-  return cx(
-    'flex w-full items-center gap-2.5 rounded-lg border bg-white px-3.5 text-grey-04 transition-colors mobile:mx-auto mobile:mt-5 mobile:h-12 mobile:max-w-[394px]',
-    compact ? 'mt-4 h-10' : 'mt-5 h-11',
-    invalid ? 'border-red-01' : 'border-grey-02 focus-within:border-text focus-within:ring-1 focus-within:ring-text'
+/** One row of chips. It never wraps: the chips shrink, so a "+N" stays on the row it closes. */
+export const CHIP_ROW_CLASS = 'flex max-w-full min-w-0 justify-center gap-1.5';
+
+/** A field with the mail glyph inside it. */
+export const fieldClass = (compact: boolean) =>
+  cx(
+    'flex w-full items-center gap-2.5 rounded-lg border border-grey-02 bg-white px-3.5 text-grey-04 transition-colors focus-within:border-text focus-within:ring-1 focus-within:ring-text mobile:mx-auto mobile:mt-5 mobile:h-12 mobile:max-w-[394px]',
+    compact ? 'mt-4 h-10' : 'mt-5 h-11'
   );
-}
 
 /** 16px so a phone does not zoom in on focus. */
 export const INPUT_CLASS =
@@ -74,7 +74,7 @@ export const INPUT_CLASS =
 
 export const primaryButtonClass = (compact: boolean) =>
   cx(
-    'mt-2 inline-flex w-full items-center justify-center rounded-lg bg-[#151515] text-[16px] font-medium whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60 mobile:mx-auto mobile:flex mobile:h-12 mobile:max-w-[394px] mobile:text-[17px]',
+    'mt-2 inline-flex w-full items-center justify-center rounded-full bg-[#151515] text-[16px] font-medium whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-50 mobile:mx-auto mobile:flex mobile:h-12 mobile:max-w-[394px] mobile:text-[17px]',
     compact ? 'h-10' : 'h-11'
   );
 
@@ -84,11 +84,9 @@ export const fineClass = (compact: boolean) =>
 /** `red-01` is under 4.5:1 on white at this size; this is the same red, dark enough to read. */
 const ERROR_TEXT_CLASS = 'text-[13px] leading-[18px] text-[#d92d14] mobile:text-[15px] mobile:leading-[20px]';
 
-export const ERROR_CLASS = `mt-2 ${ERROR_TEXT_CLASS}`;
-
 /**
- * The code step (`AccountStep`) in this sheet's look: the email step's subtext and error styles, a
- * larger box per digit, and touch-sized links on the phone.
+ * The code step (`AccountStep`) in this sheet's look: the email step's subtext, a larger box per
+ * digit, a readable red, and touch-sized links on the phone.
  */
 export const codeStepClasses = (compact: boolean): AccountStepClasses => ({
   subtext: subtextClass(compact),
