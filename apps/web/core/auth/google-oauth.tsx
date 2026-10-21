@@ -1,12 +1,14 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
 import { useGoogleSignInEnabled, useGoogleSignInOffered } from '~/core/auth/google-sign-in';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
-import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
+import { useSetToast } from '~/core/hooks/use-toast';
+import { beginPrivyAuth, cancelPrivyAuth, failRedirectedPrivyAuth } from '~/core/privy-auth-events';
 import { useLoginWithOAuth } from '~/core/wallet/auth-hooks';
+import { isReturningFromPrivyRedirect } from '~/core/wallet/privy-session';
 
 /** Set while `GoogleOAuthCompleter` is mounted. */
 let initGoogleOAuth: (() => Promise<void>) | null = null;
@@ -24,13 +26,28 @@ export function GoogleOAuthHost() {
  * so exactly one is mounted app-wide; a second would race the code exchange.
  */
 function GoogleOAuthCompleter() {
-  const { initOAuth } = useLoginWithOAuth();
+  const { initOAuth, state } = useLoginWithOAuth();
+  const setToast = useSetToast();
+  // Privy strips the return's parameters once it is done, so remember whether this load was one.
+  const [isReturn] = useState(isReturningFromPrivyRedirect);
+  // Settled once the return has failed or a new sign-in starts from this page.
+  const settled = useRef(false);
   useEffect(() => {
-    initGoogleOAuth = () => initOAuth({ provider: 'google' });
+    initGoogleOAuth = () => {
+      settled.current = true;
+      return initOAuth({ provider: 'google' });
+    };
     return () => {
       initGoogleOAuth = null;
     };
   }, [initOAuth]);
+  // A failed start rejects to its caller; only a failed return is reported here, once.
+  useEffect(() => {
+    if (!isReturn || settled.current || state.status !== 'error') return;
+    settled.current = true;
+    failRedirectedPrivyAuth();
+    setToast(<>Google sign-in didn't complete. Try again.</>);
+  }, [isReturn, state.status, setToast]);
   return null;
 }
 

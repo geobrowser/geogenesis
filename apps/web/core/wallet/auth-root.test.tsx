@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   geoLoginParams: [] as unknown[],
   initOAuth: vi.fn(async () => undefined),
   oauthHookMounts: 0,
+  oauthState: { status: 'initial' } as { status: string; error?: Error },
 }));
 
 // The real Privy, wagmi and connectors are what these tests keep out of the page; stand-ins record
@@ -55,7 +56,7 @@ vi.mock('@geogenesis/auth', async () => {
       React.useEffect(() => {
         mocks.oauthHookMounts += 1;
       }, []);
-      return { initOAuth: mocks.initOAuth, state: { status: 'initial' }, loading: false };
+      return { initOAuth: mocks.initOAuth, state: mocks.oauthState, loading: false };
     },
     useAccountEffect: vi.fn(),
     useEnsureEmbeddedWallet: vi.fn(),
@@ -100,6 +101,7 @@ beforeEach(() => {
   mocks.geoLoginParams.length = 0;
   mocks.initOAuth.mockClear();
   mocks.oauthHookMounts = 0;
+  mocks.oauthState = { status: 'initial' };
   localStorage.clear();
   resetAuthStore();
 });
@@ -271,5 +273,24 @@ describe('Google sign-in', () => {
     await waitFor(() => expect(mocks.oauthHookMounts).toBe(1));
     expect(mocks.providerMounts).toBe(1);
     expect(getState().requested).toBe(false);
+  });
+
+  it("passes Privy's OAuth flow state through, so a failed return can be seen", async () => {
+    mocks.oauthState = { status: 'error', error: new Error('invalid code') };
+    window.history.replaceState({}, '', '/explore?privy_oauth_code=c&privy_oauth_state=s&privy_oauth_provider=google');
+    resetAuthStore();
+    function StatePage() {
+      return <span data-testid="oauth">{useLoginWithOAuth().state.status}</span>;
+    }
+
+    render(
+      <>
+        <AuthRoot />
+        <StatePage />
+      </>
+    );
+
+    expect(screen.getByTestId('oauth')).toHaveTextContent('initial');
+    await waitFor(() => expect(screen.getByTestId('oauth')).toHaveTextContent('error'));
   });
 });

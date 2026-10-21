@@ -220,6 +220,11 @@ export function openAuthAttempt(properties: AnalyticsProperties = { auth_trigger
   save(attempt);
   captureAuthEvent('auth_prompt_viewed', attemptProperties(attempt));
 }
+/** On a redirect's return, takes over this tab's open attempt so the return can end it as its starter would. */
+export function claimRedirectedAuthAttempt() {
+  const attempt = currentAuthAttempt();
+  if (attempt && !attempt.endedAt) ownedAttemptId = attempt.id;
+}
 /** Outcomes only the document that started the attempt can record: the visitor left this one. */
 const ENDED_BY_LEAVING: ReadonlySet<AuthAttemptOutcome> = new Set([
   'closed',

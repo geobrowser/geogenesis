@@ -59,7 +59,7 @@ vi.mock('~/core/wallet/auth-hooks', () => ({
       state: mocks.otpState,
     };
   },
-  useLoginWithOAuth: () => ({ initOAuth: mocks.initOAuth }),
+  useLoginWithOAuth: () => ({ initOAuth: mocks.initOAuth, state: { status: 'initial' } }),
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
