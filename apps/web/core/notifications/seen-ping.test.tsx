@@ -26,7 +26,7 @@ vi.mock('./api', async importOriginal => ({
   sendSeenPing: (...args: unknown[]) => mocks.ping(...args),
 }));
 
-const { SeenPing } = await import('./seen-ping');
+const { SEEN_REQUEST_TIMEOUT_MS, SeenPing } = await import('./seen-ping');
 const { NotificationsRequestError } = await import('./api');
 
 function returnToTab() {
@@ -37,7 +37,8 @@ function returnToTab() {
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
-  vi.setSystemTime(new Date('2026-10-25T18:00:00'));
+  // Offsets are Los Angeles (the mocked browser zone), so the day boundaries don't depend on the runner's zone.
+  vi.setSystemTime(new Date('2026-10-25T18:00:00-07:00'));
   mocks.auth = { ready: true, authenticated: true };
   mocks.stored = 'stored-token';
   mocks.fresh = vi.fn(async () => 'fresh-token');
@@ -54,7 +55,12 @@ describe('SeenPing', () => {
     mocks.auth = { ready: false, authenticated: false };
     render(<SeenPing />);
     await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
-    expect(mocks.ping).toHaveBeenCalledWith('https://n.example', 'stored-token', 'America/Los_Angeles');
+    expect(mocks.ping).toHaveBeenCalledWith(
+      'https://n.example',
+      'stored-token',
+      'America/Los_Angeles',
+      expect.any(AbortSignal)
+    );
     expect(mocks.fresh).not.toHaveBeenCalled();
   });
 
@@ -62,12 +68,12 @@ describe('SeenPing', () => {
     render(<SeenPing />);
     await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
 
-    vi.setSystemTime(new Date('2026-10-25T23:30:00'));
+    vi.setSystemTime(new Date('2026-10-25T23:30:00-07:00'));
     returnToTab();
     await act(async () => undefined);
     expect(mocks.ping).toHaveBeenCalledTimes(1);
 
-    vi.setSystemTime(new Date('2026-10-26T08:00:00'));
+    vi.setSystemTime(new Date('2026-10-26T08:00:00-07:00'));
     returnToTab();
     await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(2));
   });
@@ -79,7 +85,12 @@ describe('SeenPing', () => {
     });
     render(<SeenPing />);
     await waitFor(() =>
-      expect(mocks.ping).toHaveBeenCalledWith('https://n.example', 'fresh-token', 'America/Los_Angeles')
+      expect(mocks.ping).toHaveBeenCalledWith(
+        'https://n.example',
+        'fresh-token',
+        'America/Los_Angeles',
+        expect.any(AbortSignal)
+      )
     );
   });
 
@@ -105,6 +116,25 @@ describe('SeenPing', () => {
     expect(mocks.fresh).not.toHaveBeenCalled();
   });
 
+  it('gives up on a ping that hangs, so the next return can retry', async () => {
+    let signal: AbortSignal | undefined;
+    mocks.ping = vi.fn((_url: string, _token: string, _zone: string, s?: AbortSignal) => {
+      signal = s;
+      return new Promise(() => undefined);
+    });
+    render(<SeenPing />);
+    await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      vi.advanceTimersByTime(SEEN_REQUEST_TIMEOUT_MS);
+    });
+    expect(signal?.aborted).toBe(true);
+
+    mocks.ping = vi.fn(async () => ({ local_date: '2026-10-25', new_day: true }));
+    returnToTab();
+    await waitFor(() => expect(mocks.ping).toHaveBeenCalledTimes(1));
+  });
+
   it('does nothing for a signed-out reader', async () => {
     mocks.stored = null;
     mocks.auth = { ready: true, authenticated: false };
@@ -122,7 +152,12 @@ describe('SeenPing', () => {
     mocks.auth = { ready: true, authenticated: true };
     rerender(<SeenPing />);
     await waitFor(() =>
-      expect(mocks.ping).toHaveBeenCalledWith('https://n.example', 'fresh-token', 'America/Los_Angeles')
+      expect(mocks.ping).toHaveBeenCalledWith(
+        'https://n.example',
+        'fresh-token',
+        'America/Los_Angeles',
+        expect.any(AbortSignal)
+      )
     );
   });
 });

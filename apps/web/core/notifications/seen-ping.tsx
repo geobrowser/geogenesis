@@ -12,6 +12,23 @@ import { NotificationsRequestError, geoNotificationsApiUrl, sendSeenPing } from 
 
 /** How long to wait for Privy to hand out a fresh token before giving up on this ping. */
 const FRESH_TOKEN_TIMEOUT_MS = 5_000;
+/**
+ * How long one ping may take, response included. A request that hangs past it is aborted and
+ * counts as failed, so it can't hold the in-flight guard and block the next focus from retrying.
+ */
+export const SEEN_REQUEST_TIMEOUT_MS = 10_000;
+
+const TIMED_OUT = Symbol('timed out');
+
+/** One ping under the deadline; throws on timeout like any other failure. */
+async function pingWithin(baseUrl: string, token: string, timeZone: string): Promise<void> {
+  const result = await resolveWithin(
+    signal => sendSeenPing(baseUrl, token, timeZone, signal),
+    SEEN_REQUEST_TIMEOUT_MS,
+    TIMED_OUT
+  );
+  if (result === TIMED_OUT) throw new Error('seen ping timed out');
+}
 
 /**
  * Tells geo-notifications this signed-in person visited, and their browser's zone (GEO-3371): on
@@ -43,7 +60,7 @@ export function SeenPing() {
       const stored = storedPrivyAccessToken();
       if (stored) {
         try {
-          await sendSeenPing(baseUrl, stored, timeZone);
+          await pingWithin(baseUrl, stored, timeZone);
           lastPingedDay.current = today;
           return;
         } catch (error) {
@@ -55,7 +72,7 @@ export function SeenPing() {
         () => null
       );
       if (!fresh || fresh === stored) return;
-      await sendSeenPing(baseUrl, fresh, timeZone);
+      await pingWithin(baseUrl, fresh, timeZone);
       lastPingedDay.current = today;
     } catch {
       // Offline or the service is down: the next focus tries again.

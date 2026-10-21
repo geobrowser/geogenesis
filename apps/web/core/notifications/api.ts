@@ -42,7 +42,7 @@ async function notificationsRequest<T>(
   baseUrl: string,
   path: string,
   accessToken: string,
-  init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; keepalive?: boolean } = {}
+  init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; keepalive?: boolean; signal?: AbortSignal } = {}
 ): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     method: init.method ?? 'GET',
@@ -52,6 +52,7 @@ async function notificationsRequest<T>(
     },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     keepalive: init.keepalive,
+    signal: init.signal,
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => null);
@@ -94,10 +95,11 @@ export function updateNotificationPreferences(
  * even when Privy is too slow to hand out a fresh one. `keepalive` so it survives the page being
  * hidden or closed right after it fires.
  */
-export function sendSeenPing(baseUrl: string, accessToken: string, timeZone: string) {
+export function sendSeenPing(baseUrl: string, accessToken: string, timeZone: string, signal?: AbortSignal) {
   return notificationsRequest<{ local_date: string; new_day: boolean }>(baseUrl, '/me/seen', accessToken, {
     method: 'POST',
     body: { time_zone: timeZone },
     keepalive: true,
+    signal,
   });
 }
