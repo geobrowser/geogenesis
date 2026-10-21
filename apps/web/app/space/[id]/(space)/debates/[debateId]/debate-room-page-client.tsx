@@ -1933,11 +1933,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           return;
         }
         connectionStage = 'local_preview';
-        const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
+        // A hand-off can finish opening another kind while publication/Krisp is pending.
+        const previewTracks = localTracksRef.current;
+        const stream = new MediaStream(previewTracks.map(track => track.mediaStreamTrack));
         // `bindLocalVideo` runs off this and off the element callback ref, so whichever tile is
         // mounted picks it up. A receive-only intro leaves the preview empty, so a device opened
         // later reads as a new stream and republishes.
-        if (tracks.length > 0) setPreviewStream(stream);
+        if (previewTracks.length > 0) setPreviewStream(stream);
         publishedTracksRef.current = new Set(tracks);
 
         if (!isCurrent()) {
@@ -2143,7 +2145,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
         if (added.some(track => track.mediaStreamTrack.kind === 'audio')) {
           await initializeNoiseFilter(tracks, isCurrent);
-          if (isCurrent()) setPreviewStream(new MediaStream(tracks.map(track => track.mediaStreamTrack)));
+          // Publication/processing may have yielded while another input was enabled.
+          if (isCurrent())
+            setPreviewStream(new MediaStream(localTracksRef.current.map(track => track.mediaStreamTrack)));
         }
       })
       .catch(error => {

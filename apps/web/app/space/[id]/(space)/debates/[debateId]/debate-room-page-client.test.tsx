@@ -1994,6 +1994,81 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.roomConnect).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['publication', 'processing'] as const)(
+    'keeps a newly enabled camera when earlier microphone %s finishes',
+    async stage => {
+      mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+      const audio = createLocalAudioTrack();
+      const video = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn() };
+      const pending = deferred<void>();
+      const observePreview = vi.fn();
+      if (stage === 'publication') mocks.publishTrack.mockReturnValueOnce(pending.promise);
+      else mocks.krispSetEnabled.mockReturnValueOnce(pending.promise);
+      mocks.createLocalTracks.mockResolvedValueOnce([audio]).mockResolvedValueOnce([video]);
+      const content = (room: boolean) => (
+        <DebateMediaSessionProvider>
+          <ListeningOnlyHandover />
+          <MediaPreviewObserver onChange={observePreview} />
+          {room && <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />}
+        </DebateMediaSessionProvider>
+      );
+      const view = render(content(false));
+      await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('0'));
+      view.rerender(content(true));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeEnabled());
+      fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+      await waitFor(() =>
+        expect(stage === 'publication' ? mocks.publishTrack : mocks.krispSetEnabled).toHaveBeenCalled()
+      );
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeEnabled());
+      fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+      await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('2'));
+      const localVideo = () => document.querySelector('video.object-cover') as HTMLVideoElement;
+      expect((localVideo().srcObject as MediaStream).getVideoTracks()).toEqual([video.mediaStreamTrack]);
+      await act(async () => pending.resolve());
+      await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled());
+      expect((localVideo().srcObject as MediaStream).getVideoTracks()).toEqual([video.mediaStreamTrack]);
+      const preview = observePreview.mock.calls.at(-1)?.[0] as MediaStream;
+      expect(preview.getVideoTracks()).toEqual([video.mediaStreamTrack]);
+      expect(preview.getAudioTracks()).toEqual([audio.mediaStreamTrack]);
+      expect(mocks.publishTrack.mock.calls.map(call => call[0])).toEqual([audio, video]);
+      expect(mocks.roomConnect).toHaveBeenCalledOnce();
+    }
+  );
+
+  it('keeps the handed-over camera when initial microphone processing finishes', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const audio = createLocalAudioTrack();
+    const video = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn() };
+    const camera = deferred<unknown[]>();
+    const processing = deferred<void>();
+    const observePreview = vi.fn();
+    mocks.createLocalTracks.mockResolvedValueOnce([audio]).mockReturnValueOnce(camera.promise);
+    mocks.krispSetEnabled.mockReturnValueOnce(processing.promise);
+    const content = (room: boolean) => (
+      <DebateMediaSessionProvider>
+        <CameraAddedHandover />
+        <MediaPreviewObserver onChange={observePreview} />
+        {room && <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />}
+      </DebateMediaSessionProvider>
+    );
+    const view = render(content(false));
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2));
+    view.rerender(content(true));
+    await waitFor(() => expect(mocks.krispSetEnabled).toHaveBeenCalledOnce());
+    await act(async () => camera.resolve([video]));
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('2'));
+    await act(async () => processing.resolve());
+    await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled());
+    const localVideo = document.querySelector('video.object-cover') as HTMLVideoElement;
+    expect((localVideo.srcObject as MediaStream).getVideoTracks()).toEqual([video.mediaStreamTrack]);
+    const preview = observePreview.mock.calls.at(-1)?.[0] as MediaStream;
+    expect(preview.getVideoTracks()).toEqual([video.mediaStreamTrack]);
+    expect(preview.getAudioTracks()).toEqual([audio.mediaStreamTrack]);
+    expect(mocks.publishTrack.mock.calls.map(call => call[0])).toEqual([audio, video]);
+    expect(mocks.roomConnect).toHaveBeenCalledOnce();
+  });
+
   it('holds readiness while a newly enabled camera is still publishing', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     const audioTrack = createLocalAudioTrack();
@@ -7695,6 +7770,12 @@ function createLocalAudioTrack() {
     stop: vi.fn(),
     detach: vi.fn(),
   };
+}
+
+function MediaPreviewObserver({ onChange }: { onChange: (stream: MediaStream | null) => void }) {
+  const { previewStream } = useDebateMediaSession();
+  React.useEffect(() => onChange(previewStream), [onChange, previewStream]);
+  return null;
 }
 
 function deferred<T>() {

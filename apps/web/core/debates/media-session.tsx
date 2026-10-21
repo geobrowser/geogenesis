@@ -538,21 +538,23 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   // LiveKit also reacquires capture after an OS interruption. Keep preview/recording consumers
   // pointed at its current processed tracks, including restarts initiated by the SDK itself.
   React.useEffect(() => {
-    const tracks = localTracksRef.current;
-    const update = () => {
-      if (localTracksRef.current !== tracks) return;
-      for (const track of tracks) {
-        const previous = previewStream?.getTracks().find(previous => previous.kind === track.mediaStreamTrack.kind);
-        if (previous) {
-          setLocalTrackEnabled(track, previous.enabled);
+    const cleanups = localTracksRef.current.map(restartedTrack => {
+      const update = () => {
+        // Adding another kind can replace the array without replacing this LocalTrack.
+        const tracks = localTracksRef.current;
+        if (!tracks.includes(restartedTrack)) return;
+        for (const track of tracks) {
+          const previous = previewStream?.getTracks().find(previous => previous.kind === track.mediaStreamTrack.kind);
+          if (previous) {
+            setLocalTrackEnabled(track, previous.enabled);
+          }
         }
-      }
-      setPreviewStream(new MediaStream(tracks.map(track => track.mediaStreamTrack)));
-    };
-    for (const track of tracks) track.on?.('restarted', update);
-    return () => {
-      for (const track of tracks) track.off?.('restarted', update);
-    };
+        setPreviewStream(new MediaStream(tracks.map(track => track.mediaStreamTrack)));
+      };
+      restartedTrack.on?.('restarted', update);
+      return () => restartedTrack.off?.('restarted', update);
+    });
+    return () => cleanups.forEach(cleanup => cleanup());
   }, [previewStream, setPreviewStream]);
 
   const reportAudioOutputFailure = React.useCallback((message: string | null) => {

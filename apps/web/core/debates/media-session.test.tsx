@@ -442,6 +442,46 @@ describe('input changes on existing LocalTracks', () => {
     expect(audio.mediaStreamTrack.enabled).toBe(false);
   });
 
+  it.each([
+    ['audio', 'pending'],
+    ['audio', 'failed'],
+    ['video', 'pending'],
+    ['video', 'failed'],
+  ] as const)('follows an owned %s restart while adding the other input is %s', async (kind, phase) => {
+    const track = restartableTrack(kind, 'original');
+    mocks.createLocalTracks.mockResolvedValueOnce([track]);
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: kind === 'audio' ? 'Ensure mic only' : 'Ensure camera only' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    track.mediaStreamTrack.enabled = false;
+    let reject!: (error: Error) => void;
+    mocks.createLocalTracks.mockReturnValueOnce(
+      new Promise((_resolve, refuse) => {
+        reject = refuse;
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure both' }));
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2));
+    if (phase === 'failed') {
+      await act(async () => reject(new Error('Other input unavailable')));
+      await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('error'));
+    }
+    await act(async () => track.restartTrack({ deviceId: 'replacement' }));
+    expect(screen.getByTestId('preview-devices')).toHaveTextContent(`${kind}:replacement`);
+    expect(track.mediaStreamTrack.enabled).toBe(false);
+    expect(track.stop).not.toHaveBeenCalled();
+    if (phase === 'pending') {
+      await act(async () => reject(new Error('Other input unavailable')));
+      await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('error'));
+      expect(screen.getByTestId('preview-devices')).toHaveTextContent(`${kind}:replacement`);
+    }
+  });
+
   it('recovers an ended track even when enumeration still reports the same device', async () => {
     const { audio, video } = await startInputs();
     audio.mediaStreamTrack.readyState = 'ended';
@@ -987,6 +1027,12 @@ function MediaSessionHarness() {
   return (
     <>
       <div data-testid="preview-stream">{streamId(media.previewStream)}</div>
+      <div data-testid="preview-devices">
+        {media.previewStream
+          ?.getTracks()
+          .map(track => `${track.kind}:${track.getSettings?.().deviceId}`)
+          .join(',')}
+      </div>
       <div data-testid="session-key">{media.activeSessionKey ?? 'none'}</div>
       <div data-testid="join-choice">{JSON.stringify(media.joinChoiceRef.current)}</div>
       <button type="button" onClick={() => (media.joinChoiceRef.current = { micOn: true, cameraOn: false })}>
