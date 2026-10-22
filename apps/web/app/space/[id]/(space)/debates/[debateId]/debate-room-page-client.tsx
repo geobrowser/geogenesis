@@ -770,11 +770,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // the `MediaRecorder` holds the very track the gate disables. GEO-3407: the listener's room asks
   // the same question of the opponent's incoming audio, so both tiles say "finishing" rather than
   // "muted" for exactly as long as the speaker can be heard past the buzzer.
-  const overrunPossible = turnOverrunPossible({
-    effectiveStatus: countdown.effectiveStatus,
-    openRoundsPhase: countdown.openRounds?.phase ?? null,
-    openRoundResultHeld: revealHoldsExit,
-  });
+  const overrunPossible = turnOverrunPossible({ effectiveStatus: countdown.effectiveStatus });
   const localTurnEndedAt = useTurnOverrun({
     // Reads the microphone's own signal, so it still answers after the published track is gated --
     // which is the entire question the overrun has to settle.

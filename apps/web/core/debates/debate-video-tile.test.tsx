@@ -45,4 +45,21 @@ describe('DebateVideoTile', () => {
       expect(tile.className).toContain('outline-[3px]');
     }
   );
+
+  it('shows the second speaker finishing over the round transition that forces the muted icon (GEO-3407)', () => {
+    const view = render(
+      <DebateVideoTile
+        participantPosition={null}
+        active={false}
+        inactiveIndicatorId="remote"
+        openRounds
+        showMutedIndicator
+        finishingSince={Date.now()}
+      >
+        <div />
+      </DebateVideoTile>
+    );
+    expect(screen.getByRole('img', { name: 'Microphone still open' })).toBeInTheDocument();
+    expect(view.container.querySelector('[data-muted-indicator]')).not.toBeInTheDocument();
+  });
 });
