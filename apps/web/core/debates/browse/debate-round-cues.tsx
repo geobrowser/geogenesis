@@ -4,32 +4,21 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { RoundCue } from '~/core/debates/round-cues';
+import { ROUND_CARD_MS, type RoundCue } from '~/core/debates/round-cues';
 
-import { BANNER_CLASS, LABEL_FONT, TAG_CLASS } from './stamp-styles';
-
-/**
- * An outline in every direction rather than the four corners the recording room uses.
- *
- * Its `recordingOverlayTextShadow` is sized for the 7.5rem count-in, where corner copies of a
- * stroke that thick overlap into a continuous edge. At smaller sizes they do not, and the gaps
- * land on the cardinal points — the top of an "R", the side of a "1" — which reads as a broken
- * outline rather than a thin one. Eight copies close it for the cost of four more shadows.
- *
- * In `em` rather than pixels, because this card is sized as a fraction of the player and so spans
- * something like 60px on a phone to 180px on a wide one. A fixed 2px outline is right at the
- * bottom of that range and invisible at the top; a proportional one is the same outline at every
- * width, which is the whole point of sizing the card this way.
- *
- * Black, and white type inside it, which is the opposite of the phrase treatment the debaters see.
- * That one is dark type in a white outline and it works because it sits mid-frame over a face; the
- * seam is where the top tile's scrim has run all the way to black, so dark type there leaves the
- * outline holding an empty shape.
- */
-const roundCardTextShadow = {
-  textShadow:
-    '-0.035em -0.035em 0 #000, 0 -0.035em 0 #000, 0.035em -0.035em 0 #000, 0.035em 0 0 #000, 0.035em 0.035em 0 #000, 0 0.035em 0 #000, -0.035em 0.035em 0 #000, -0.035em 0 0 #000, 0 0.05em 0.16em rgba(0,0,0,0.55)',
-};
+import {
+  PLAYBACK_ROUND_EYEBROW_CLASS,
+  PLAYBACK_ROUND_HEADLINE_CLASS,
+  PLAYBACK_OUTLINE_STYLE as roundCardTextShadow,
+} from './playback-typography';
+import {
+  PLAYER_ENTER_CLASS,
+  PLAYER_EXIT_CLASS,
+  PLAYER_EXIT_MS,
+  PLAYER_FURNITURE_OPACITY,
+  PLAYER_TITLE_STYLE,
+} from './player-overlay-styles';
+import { heldAt, usePlaybackAnimationClock } from './use-playback-animation-clock';
 
 /**
  * How wide the round's name is drawn, as a share of the player.
@@ -94,28 +83,7 @@ export function DebateRoundCard({ cue }: { cue: RoundCue | null }) {
       // part-way through an animation that started when the element mounted.
       style={{ opacity: cue.opacity }}
     >
-      {/* The round takes the headline itself where the format names no role — a lone eyebrow over
-          the seam would read as a stray caption rather than as a card. */}
-      <span
-        className={cx('block', cue.role ? 'font-semibold text-white/85' : 'font-bold tracking-[-0.02em] text-white')}
-        style={{
-          ...roundCardTextShadow,
-          fontSize: `${cue.role ? ROUND_CQW : NAME_CQW}cqw`,
-          // Set tight, the way display type wants to be: the default line box leaves a gap at this
-          // size that reads as two separate captions rather than as one card.
-          lineHeight: 1,
-        }}
-      >
-        {cue.round}
-      </span>
-      {cue.role && (
-        <span
-          className="block font-bold tracking-[-0.02em] text-white"
-          style={{ ...roundCardTextShadow, fontSize: `${NAME_CQW}cqw`, lineHeight: 0.95 }}
-        >
-          {cue.role}
-        </span>
-      )}
+      <RoundTitleLines round={cue.round} role={cue.role} />
     </div>
   );
 }
@@ -153,9 +121,9 @@ export function DebateRoundBadge({
   rightPx,
 }: {
   cue: RoundCue | null;
-  /** Open rounds: a square purple tag in the breaks' type, as the stamps design has it (GEO-3314). */
+  /** Synchronize Open rounds visibility with the shared announcement fade. */
   stamped?: boolean;
-  /** Its distance from the tile's right edge, where a growing turn timer needs it to make room. */
+  /** Optional distance from the tile's right edge. */
   rightPx?: number;
 }) {
   if (!cue) return null;
@@ -163,58 +131,100 @@ export function DebateRoundBadge({
   return (
     <div
       data-round-badge={cue.label}
-      className={cx(
-        'pointer-events-none absolute top-3 right-13 z-10 flex h-8 max-w-[calc(100%-6rem)] items-center leading-none font-medium text-white transition-[right] duration-300',
-        !stamped && 'rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem]'
-      )}
-      style={{ opacity: cue.opacity, ...(rightPx !== undefined && { right: rightPx }) }}
+      className="pointer-events-none absolute top-3 right-13 z-10 flex h-8 max-w-[calc(100%-6rem)] items-center rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem] leading-none font-medium text-white transition-[right] duration-300"
+      style={{
+        opacity: stamped ? PLAYER_FURNITURE_OPACITY : cue.opacity,
+        ...(rightPx !== undefined && { right: rightPx }),
+      }}
     >
       <span className="sr-only">{cue.role ? `${cue.round}, ${cue.role}` : cue.round}</span>
-      {/* Truncating rather than wrapping: the badge is one line beside a 32px circle, and a second
-          line would push it off the top of the tile. Open rounds' tag is the mockup's: sized to the
-          player, centred against the timer. */}
-      <span
-        aria-hidden
-        data-round-tag={stamped || undefined}
-        className={cx('truncate', stamped && cx(TAG_CLASS, 'text-[2.8cqw] uppercase'))}
-        style={stamped ? LABEL_FONT : undefined}
-      >
+      {/* Both formats use the existing label beside the 32px timer, truncating to one line. */}
+      <span aria-hidden data-round-tag={stamped || undefined} className="truncate">
         {cue.label}
       </span>
     </div>
   );
 }
 
-/**
- * The round card's Open rounds form (GEO-3314): the breaks' purple banner across the seam, "Round 1 ·
- * Opening", rolling in, holding and rolling out over the card's own run. In practice it announces
- * only the opening, since every later round is announced by its break.
- *
- * A CSS animation rather than one driven by the playhead's samples, which arrive about four times a
- * second: started from where the playhead stood when the banner went up, so one that appears part
- * way in (a scrub, a late first sample) picks up at the right point, then runs on its own.
- */
-export function DebateRoundBanner({ cue }: { cue: RoundCue | null }) {
+/** The Open rounds opening: stacked outlined type, fading in place on the playhead. */
+export function DebateRoundBanner({
+  cue,
+  playing = false,
+  clock,
+  sharedClock = false,
+}: {
+  cue: RoundCue | null;
+  playing?: boolean;
+  sharedClock?: boolean;
+  clock?: { positionMs: () => number | null; originMs: number };
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  usePlaybackAnimationClock(
+    ref,
+    cue && !sharedClock ? { elapsedMs: cue.ageMs ?? 0, playedMs: ROUND_CARD_MS } : null,
+    playing,
+    clock
+  );
   if (!cue) return null;
-  return <RoundBannerRun key={cue.label} label={cue.label} startAgeMs={cue.ageMs ?? 0} />;
-}
-
-function RoundBannerRun({ label, startAgeMs }: { label: string; startAgeMs: number }) {
-  // Fixed at mount: re-reading the age from each sample would step the roll back and forth.
-  const [delayMs] = React.useState(() => -startAgeMs);
   return (
     <div
       aria-hidden
-      data-round-banner={label}
-      className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] -translate-y-1/2"
+      ref={ref}
+      data-round-banner={cue.label}
+      className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] -translate-y-1/2 text-center"
     >
-      <div
-        // 1800ms is `ROUND_CARD_MS`: Tailwind reads class names from source, so it is written out.
-        className={cx(BANNER_CLASS, 'truncate text-[5cqw] motion-safe:animate-[debateBannerInOut_1800ms_linear_both]')}
-        style={{ ...LABEL_FONT, animationDelay: `${delayMs}ms` }}
-      >
-        {label}
+      <div data-round-banner-out className={PLAYER_EXIT_CLASS} style={heldAt(ROUND_CARD_MS - PLAYER_EXIT_MS)}>
+        <div className={PLAYER_ENTER_CLASS} style={heldAt(0)}>
+          <PlayerRoundTitle round={cue.round} role={cue.role} />
+        </div>
       </div>
     </div>
+  );
+}
+
+/** Opening and next-round announcements use the same type weights and outline as fixed formats. */
+export function PlayerRoundTitle({ round, role, scale = 1 }: { round: string; role: string | null; scale?: number }) {
+  return (
+    <div className="mx-auto grid w-max max-w-[92%] justify-items-center text-center text-white">
+      <RoundTitleLines round={round} role={role} style={PLAYER_TITLE_STYLE} scale={scale} />
+    </div>
+  );
+}
+
+/** Shared lines preserve the type hierarchy and per-line em outlines across formats and surfaces. */
+function RoundTitleLines({
+  round,
+  role,
+  style = roundCardTextShadow,
+  scale = 1,
+}: {
+  round: string;
+  role: string | null;
+  style?: React.CSSProperties;
+  scale?: number;
+}) {
+  return (
+    <>
+      {/* A round with no role takes the headline size itself. Apply the outline to each sized
+          line; inheriting em lengths from a smaller wrapper would make the stroke too thin. */}
+      <span
+        className={cx('block', role ? PLAYBACK_ROUND_EYEBROW_CLASS : PLAYBACK_ROUND_HEADLINE_CLASS)}
+        style={{
+          ...style,
+          fontSize: `${Number(((role ? ROUND_CQW : NAME_CQW) * scale).toFixed(3))}cqw`,
+          lineHeight: 1,
+        }}
+      >
+        {round}
+      </span>
+      {role && (
+        <span
+          className={cx('block', PLAYBACK_ROUND_HEADLINE_CLASS)}
+          style={{ ...style, fontSize: `${Number((NAME_CQW * scale).toFixed(3))}cqw`, lineHeight: 0.95 }}
+        >
+          {role}
+        </span>
+      )}
+    </>
   );
 }

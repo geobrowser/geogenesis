@@ -1,6 +1,5 @@
 'use client';
 
-import { useLogout } from '@geogenesis/auth';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { useSetAtom } from 'jotai';
@@ -11,6 +10,7 @@ import { resetGeoChatSession } from '~/core/debates/api';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useEditable } from '~/core/state/editable-store';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
+import { useLogout } from '~/core/wallet/auth-hooks';
 
 import {
   avatarAtom,
@@ -19,7 +19,7 @@ import {
   spaceIdAtom,
   stepAtom,
   topicIdAtom,
-} from '~/partials/onboarding/dialog';
+} from '~/partials/onboarding/onboarding-atoms';
 
 import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
 

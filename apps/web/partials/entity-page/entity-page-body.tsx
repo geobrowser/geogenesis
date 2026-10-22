@@ -139,6 +139,31 @@ function EditorFooter({
 }
 
 /**
+ * What the claim and topic views add beneath themselves while editing.
+ *
+ * The read views leave out the generic page's "Referenced by" list; it is an editor's tool there,
+ * so it comes back in edit mode only. Unlike the property toggle it ignores `hideProperties`,
+ * matching the generic `EditorFooter`, which shows backlinks in the side panel too.
+ */
+function CustomViewEditFooter({
+  entityId,
+  spaceId,
+  hideProperties = false,
+}: {
+  entityId: string;
+  spaceId: string;
+  hideProperties?: boolean;
+}) {
+  return (
+    <>
+      {hideProperties ? null : <ToggleEntityPage id={entityId} spaceId={spaceId} />}
+      <Spacer height={40} />
+      <EntityBacklinks entityId={entityId} />
+    </>
+  );
+}
+
+/**
  * Which custom read view this entity gets, if any.
  *
  * Claims keep their custom surface while editing, matching personal-space profiles: product-owned
@@ -212,6 +237,9 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   // Claim and Topic both return before the generic EditorFooter, so keeping initialization there
   // makes both custom routes self-blocking. Side panels own their edit intent and do not use this.
   const routeEditInitializer = props.variant === 'route' ? <AutomaticModeToggle /> : null;
+  const customViewFooter = isEditing ? (
+    <CustomViewEditFooter entityId={entityId} spaceId={spaceId} hideProperties={props.hideProperties} />
+  ) : undefined;
 
   if (customView === 'claim') {
     const showClaimMedia = props.variant === 'sidePanel' || props.showCover !== false;
@@ -244,7 +272,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
           isEditing={isEditing}
-          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
+          footer={customViewFooter}
         />
       </>
     );
@@ -276,7 +304,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
           isEditing={isEditing}
-          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
+          footer={customViewFooter}
         />
       </>
     );

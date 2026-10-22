@@ -4,6 +4,10 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { copyShareLink } from '~/core/sharing/share-handoff';
+import { createShareLink } from '~/core/sharing/share-link';
+
 import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Text } from '~/design-system/text';
 
@@ -34,17 +38,18 @@ export const LOBBY_HEADER_COPY = {
   raisedHands: (count: number) => `Raised hands · ${count}`,
 } as const;
 
-/** "Hosted by Adam and Priya · Voice only · Not recorded". */
+/** "Hosted by Adam and Priya · Video on · Not recorded". */
 export function lobbyMetaLabel(lobby: Pick<LobbyPageView, 'members'>) {
   const hosts = hostsLabel(lobby.members.filter(isHosting));
-  return [hosts ? `Hosted by ${hosts}` : 'No host here', 'Voice only', 'Not recorded'].join(' · ');
+  return [hosts ? `Hosted by ${hosts}` : 'No host here', 'Video on', 'Not recorded'].join(' · ');
 }
 
 function useCopyLink(lobbyId: string) {
+  const getContext = useActionContext('share_dialog', 'lobby', lobbyId);
   const [copied, setCopied] = React.useState(false);
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(lobbyShareUrl(lobbyId));
+      await copyShareLink(createShareLink(lobbyShareUrl(lobbyId), 'lobby', lobbyId, 'copy_link'), getContext());
       setCopied(true);
     } catch {
       setCopied(false);

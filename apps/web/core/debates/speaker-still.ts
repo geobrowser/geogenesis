@@ -1,4 +1,5 @@
-import { type DebateMediaArtifact, getGeoChatApiBaseUrl } from './api';
+import type { DebateMediaArtifact } from './api';
+import { getGeoChatApiBaseUrl } from './geo-chat-public-base-url';
 
 /**
  * The still frame geo-chat's media job cuts from each debater's own recording, ten seconds into
@@ -16,7 +17,30 @@ export function speakerStillUrl(
   if (slot !== 1 && slot !== 2) return null;
   const kind = `speaker_still_slot_${slot}` as const;
   if (!artifacts?.some(artifact => artifact.kind === kind)) return null;
+  return speakerStillContentUrl(debateId, slot);
+}
+
+/**
+ * The durable content route for a slot's still, whether or not the artifact list is in hand. The
+ * explore feed may hand the card a presigned storage URL instead (it saves a redirect); this is what
+ * the card falls back to when that one has lapsed.
+ */
+export function speakerStillContentUrl(debateId: string, slot: 1 | 2): string {
+  const kind = `speaker_still_slot_${slot}` as const;
   // The durable content route, not a presigned URL: it is unauthenticated and 302s to a fresh
   // presigned GET, so a poster painted late in a long session does not 403 on an expired signature.
-  return `${getGeoChatApiBaseUrl()}/debates/${encodeURIComponent(debateId)}/media/artifacts/${kind}/content`;
+  // One spelling of the id whoever builds it: geo-chat returns `debate.id` without hyphens, the feed
+  // derives it hyphenated from the entity id, and two spellings are two images to the browser.
+  const id = debateId.replace(/-/g, '').toLowerCase();
+  return `${getGeoChatApiBaseUrl()}/debates/${encodeURIComponent(id)}/media/artifacts/${kind}/content`;
+}
+
+/**
+ * An `onError` for a still painted from a presigned storage URL: once it has lapsed (a tab left open
+ * for hours) it is swapped, once, for the durable route, which signs afresh.
+ */
+export function fallBackToDurableStill(fallback: string) {
+  return (event: { currentTarget: HTMLImageElement }) => {
+    if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
+  };
 }

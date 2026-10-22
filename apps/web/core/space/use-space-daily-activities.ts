@@ -1,6 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
@@ -37,6 +36,7 @@ import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { mergeRelations } from '~/core/sync/orm';
 import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 // A stable empty list, so the memo below is not rebuilt on every render.
 const NO_RELATIONS: Relation[] = [];

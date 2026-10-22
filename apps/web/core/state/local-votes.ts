@@ -27,6 +27,12 @@ export type LocalVote = {
   /** The claim's sentence or the entity's name, for the save sheet's reminder chips. */
   title: string;
   votedAt: number;
+  /**
+   * The email whose vote link cast it (GEO-3374). Such a vote is the email's suggestion rather than a
+   * press, so saving it never switches a side the account already holds, and its save carries the
+   * email's attribution.
+   */
+  refEmail?: string;
 };
 
 export type LocalVotesState = {
@@ -44,6 +50,8 @@ export type LocalVotesState = {
 export const LOCAL_VOTES_STORAGE_KEY = 'geo:local-votes:v1';
 /** Past this the oldest vote is dropped. One transaction per vote on save, so this bounds that too. */
 export const LOCAL_VOTES_CAP = 50;
+/** The action-context list id of votes published from this device's signed-out votes. */
+export const LOCAL_VOTES_LIST_ID = 'local_votes';
 export const LOCAL_VOTE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const EMPTY: LocalVotesState = { votes: [], prompt: { shownCount: 0, dismissCount: 0 }, save: null };
@@ -106,7 +114,11 @@ function parse(raw: string | null, now = Date.now()): LocalVotesState {
     const votes = (Array.isArray(parsed.votes) ? parsed.votes : [])
       .map(withoutLegacyShape)
       .filter(isVote)
-      .map(vote => ({ ...vote, title: typeof vote.title === 'string' ? vote.title : '' }))
+      .map(vote => ({
+        ...vote,
+        title: typeof vote.title === 'string' ? vote.title : '',
+        refEmail: typeof vote.refEmail === 'string' ? vote.refEmail : undefined,
+      }))
       .filter(vote => now - vote.votedAt < LOCAL_VOTE_TTL_MS);
     const state: LocalVotesState = {
       votes,

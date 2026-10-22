@@ -12,6 +12,24 @@ const mocks = vi.hoisted(() => ({
   dismiss: vi.fn(),
   dismissIsError: false,
   block: vi.fn(),
+  promoteSession: vi.fn(),
+  releaseSession: vi.fn(),
+}));
+
+vi.mock('../media-session', async importOriginal => ({
+  ...(await importOriginal<typeof import('../media-session')>()),
+  useOptionalDebateMediaSession: () => ({
+    promoteSession: mocks.promoteSession,
+    beginSession: vi.fn(),
+    releaseSession: mocks.releaseSession,
+    stopMedia: vi.fn(),
+    ensurePreview: vi.fn(async () => []),
+    previewStream: null,
+    previewState: 'idle',
+    previewError: null,
+    localTracksRef: { current: [] },
+    joinChoiceRef: { current: null },
+  }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -83,6 +101,8 @@ const request: DebateRequest = {
 beforeEach(() => {
   mocks.accept.mockReset();
   mocks.dismiss.mockReset();
+  mocks.promoteSession.mockReset();
+  mocks.releaseSession.mockReset();
   mocks.dismissIsError = false;
   mocks.block.mockReset();
 
@@ -226,5 +246,23 @@ describe('IncomingRequestPopup answers', () => {
 
     expect(mocks.accept).toHaveBeenCalledTimes(1);
     expect(mocks.dismiss).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The hand-off the room depends on.
+ *
+ * This card holds its devices under `debate-request:<id>`, because no debate exists until the
+ * accept returns one. The room then calls `beginSession('debate:<id>')`, and `beginSession` stops
+ * the media it finds under any other key.
+ */
+describe('IncomingRequestPopup media hand-off', () => {
+  it('leaves the hand-off to the mutation rather than a callback of its own', () => {
+    render(<IncomingRequestPopup request={request} currentUserId="me" onNotNow={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    expect(mocks.accept).toHaveBeenCalledWith({ requestId: 'request-1' }, expect.anything());
+    expect(mocks.accept.mock.calls[0][1]?.onSuccess).toBeUndefined();
   });
 });

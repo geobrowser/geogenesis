@@ -1,6 +1,5 @@
 'use client';
 
-import { useLogout } from '@geogenesis/auth';
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import { useQueryClient } from '@tanstack/react-query';
@@ -11,7 +10,6 @@ import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
 import { trackAuthOnboarding } from '~/core/auth-attempt';
@@ -32,6 +30,7 @@ import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { SearchResult } from '~/core/types';
 import { devLog } from '~/core/utils/dev-log';
 import { NavUtils, validateEntityId } from '~/core/utils/utils';
+import { useLogout } from '~/core/wallet/auth-hooks';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import {
@@ -54,20 +53,9 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
+import { avatarAtom, nameAtom, selectedTopicIdsAtom, stepAtom, topicIdAtom } from './onboarding-atoms';
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
-
-export const nameAtom = atomWithStorage<string>('onboardingName', '');
-export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
-export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
-export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
-
-/**
- * Topic picks from the 'interested-in' step. Onboarding no longer blocks on space
- * creation, so these are persisted for the background PendingPersonalSpaceRunner,
- * which applies them (membership proposals) once a real spaceId exists, then clears them.
- */
-export const selectedTopicIdsAtom = atomWithStorage<string[]>('onboardingSelectedTopics', []);
 
 type Step = OnboardingStep;
 
@@ -80,10 +68,6 @@ const stepByOrder = Object.fromEntries(Object.entries(stepOrder).map(([step, ord
   number,
   Step
 >;
-
-// 'enter-profile' and 'create-space' linger in the type only to normalize
-// values persisted by an older version of the flow — see effectiveStep.
-export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
 // How long the completion screen shows before we route the user onward. The

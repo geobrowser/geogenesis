@@ -4,7 +4,7 @@ import { act, cleanup, createEvent, fireEvent, render, screen } from '@testing-l
 
 import * as React from 'react';
 
-import { Provider, useAtomValue } from 'jotai';
+import { Provider, useAtomValue, useSetAtom } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
@@ -15,7 +15,8 @@ import { lockMobileSheetDocumentOverscroll } from '~/core/utils/mobile-sheet-dra
 import { NavUtils } from '~/core/utils/utils';
 
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
-import { entityCommentsPanelAtom, entitySidePanelAtom } from '~/atoms';
+import { ExploreDebateClaimsPanelHost } from './explore-debate-claims-panel-host';
+import { entityCommentsPanelAtom, entitySidePanelAtom, openEntitySidePanelAtom } from '~/atoms';
 
 // Reached through the claims panel, which now carries the shared response controls. The module's
 // top-level `atomWithStorage` runs on import, and under Node's own webstorage — which shadows
@@ -59,6 +60,8 @@ let observers: ObserverRecord[] = [];
 
 vi.mock('~/core/state/feature-flags', () => ({}));
 
+vi.mock('next/navigation', () => ({ usePathname: () => '/root/explore' }));
+
 vi.mock('~/core/debates/hooks', () => ({
   useDebate: () => mocks.debateQuery,
   useDebateMedia: () => mocks.mediaQuery,
@@ -92,12 +95,16 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
     DebateFeedPlayer: ({
       debate,
       active,
+      buffer,
       releaseMedia,
+      holdFullPlayback,
       reducedOverlays,
     }: {
       debate: Debate;
       active: boolean;
+      buffer?: boolean;
       releaseMedia?: boolean;
+      holdFullPlayback?: boolean;
       reducedOverlays?: boolean;
     }) => (
       <>
@@ -107,6 +114,8 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
           data-debate={debate.id}
           data-active={active}
           data-release-media={releaseMedia ? 'true' : 'false'}
+          data-buffer={buffer ? 'true' : 'false'}
+          data-hold-full-playback={holdFullPlayback ? 'true' : 'false'}
           data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
           onClick={mocks.playerToggle}
         />
@@ -272,7 +281,15 @@ function intersectAll(ratio: number) {
     for (const record of observers) {
       for (const element of record.elements) {
         record.callback(
-          [{ target: element, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry],
+          [
+            {
+              target: element,
+              isIntersecting: ratio > 0,
+              intersectionRatio: ratio,
+              boundingClientRect: { top: 0 },
+              rootBounds: null,
+            } as unknown as IntersectionObserverEntry,
+          ],
           record.instance
         );
       }
@@ -289,7 +306,37 @@ function intersectOnScreen(ratio: number) {
     for (const record of observers.filter(candidate => !candidate.options?.rootMargin)) {
       for (const element of record.elements) {
         record.callback(
-          [{ target: element, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry],
+          [
+            {
+              target: element,
+              isIntersecting: ratio > 0,
+              intersectionRatio: ratio,
+              boundingClientRect: { top: 0 },
+              rootBounds: null,
+            } as unknown as IntersectionObserverEntry,
+          ],
+          record.instance
+        );
+      }
+    }
+  });
+}
+
+/** Only the up-next observer: the card at `top` px from the top of an 800px-high screen. */
+function intersectUpNext(top: number | null) {
+  act(() => {
+    for (const record of observers.filter(candidate => candidate.options?.rootMargin === '0px 0px 100% 0px')) {
+      for (const element of record.elements) {
+        record.callback(
+          [
+            {
+              target: element,
+              isIntersecting: top !== null,
+              intersectionRatio: top === null ? 0 : 1,
+              boundingClientRect: { top: top ?? 0 },
+              rootBounds: { height: 800 },
+            } as unknown as IntersectionObserverEntry,
+          ],
           record.instance
         );
       }
@@ -328,6 +375,7 @@ function CardHarness({
     <QueryClientProvider client={client}>
       <Provider>
         {allowedId === undefined ? card : <DebatePlaybackGate allowedId={allowedId}>{card}</DebatePlaybackGate>}
+        <ExploreDebateClaimsPanelHost />
         <PanelProbe />
         <CommentsPanelProbe />
       </Provider>
@@ -361,6 +409,23 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByRole('link', { name: 'Watch this debate full screen' })).toBeDefined();
     expect(screen.queryByTestId('player')).toBeNull();
     expect(screen.queryByTestId('fallback')).toBeNull();
+  });
+
+  // GEO-3280. The feed's lead debate arrives with its stills, so the card paints them at once.
+  it("paints the feed's stills in place of the placeholders until the player takes over", () => {
+    const posters = { slot1: 'https://chat.test/still-1', slot2: 'https://chat.test/still-2' };
+    const { container } = renderCard({ item: { ...item, debatePosters: posters } });
+
+    const stills = [...container.querySelectorAll<HTMLImageElement>('img[data-debate-poster]')];
+    expect(stills.map(img => img.getAttribute('src'))).toEqual([posters.slot1, posters.slot2]);
+    expect(stills.every(img => img.getAttribute('fetchpriority') === 'high')).toBe(true);
+    expect(container.querySelector('.animate-pulse')).toBeNull();
+
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    intersectAll(0.7);
+    expect(screen.getByTestId('player')).toBeDefined();
+    expect(container.querySelector('img[data-debate-poster]')).toBeNull();
   });
 
   it('keeps compact Activity chrome to one metadata row and two title lines', async () => {
@@ -415,6 +480,16 @@ describe('DebateExploreFeedCard', () => {
 
     intersectAll(0.4);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  // The lead card used to stream both full recordings on arrival: 76.5 MB of an idle visit's 84 MB.
+  it('holds the full recordings until the viewer starts one', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+    intersectAll(0.7);
+
+    expect(screen.getByTestId('player').getAttribute('data-hold-full-playback')).toBe('true');
   });
 
   describe('releasing media nobody can see', () => {
@@ -485,6 +560,30 @@ describe('DebateExploreFeedCard', () => {
 
       intersectOnScreen(0.2);
       expect(releaseMedia()).toBe('false');
+    });
+
+    it('on a phone, keeps the card up next loaded and asks it to buffer, until it is passed', () => {
+      mocks.isMobileLayout = true;
+      renderOnScreen();
+      const player = () => screen.getByTestId('player');
+
+      // Scrolled back so this card sits just below the screen: it is the one coming next.
+      intersectOnScreen(0);
+      intersectUpNext(900);
+      expect(player().getAttribute('data-release-media')).toBe('false');
+      expect(player().getAttribute('data-buffer')).toBe('true');
+
+      // Reached: active, so the player's own autoplay takes over from the buffer.
+      intersectOnScreen(0.7);
+      intersectUpNext(100);
+      expect(player().getAttribute('data-active')).toBe('true');
+      expect(player().getAttribute('data-buffer')).toBe('false');
+
+      // Scrolled past, out through the top: neither up next nor kept on a phone.
+      intersectOnScreen(0);
+      intersectUpNext(null);
+      expect(player().getAttribute('data-buffer')).toBe('false');
+      expect(player().getAttribute('data-release-media')).toBe('true');
     });
 
     it('keeps an off-screen card loaded on desktop, where the look-ahead keeps the next card instant', () => {
@@ -687,6 +786,104 @@ describe('DebateExploreFeedCard', () => {
     // Re-entering the look-ahead band restores a warm, inactive player before it is visible.
     intersectAll(0.1);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  // One shared claims panel for the feed — opening Claims on a second card must replace the first,
+  // not stack a second identical overlay behind it.
+  it('replaces the open claims panel when a second card opens one', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+
+    render(
+      <QueryClientProvider client={client}>
+        <Provider>
+          <DebateExploreFeedCard item={item} fallback={<div />} />
+          <DebateExploreFeedCard item={{ ...item, entityId: 'debate-two' }} fallback={<div />} />
+          <ExploreDebateClaimsPanelHost />
+        </Provider>
+      </QueryClientProvider>
+    );
+    intersectAll(0.7);
+
+    // Both cards offer the control, which is the precondition the bug needed.
+    const claimsButtons = screen.queryAllByRole('button', { name: /^Claims/ });
+    expect(claimsButtons).toHaveLength(2);
+
+    fireEvent.click(claimsButtons[0]);
+    expect(screen.queryAllByTestId('claims-panel')).toHaveLength(1);
+
+    fireEvent.click(claimsButtons[1]);
+    expect(screen.queryAllByTestId('claims-panel')).toHaveLength(1);
+  });
+
+  // And closing it leaves the feed with none, rather than uncovering the one it replaced.
+  it('leaves no claims panel open after closing the one that replaced another', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+
+    render(
+      <QueryClientProvider client={client}>
+        <Provider>
+          <DebateExploreFeedCard item={item} fallback={<div />} />
+          <DebateExploreFeedCard item={{ ...item, entityId: 'debate-two' }} fallback={<div />} />
+          <ExploreDebateClaimsPanelHost />
+        </Provider>
+      </QueryClientProvider>
+    );
+    intersectAll(0.7);
+
+    for (const button of screen.queryAllByRole('button', { name: /^Claims/ })) fireEvent.click(button);
+    fireEvent.click(screen.getByText('Close'));
+
+    expect(screen.queryAllByTestId('claims-panel')).toHaveLength(0);
+  });
+
+  /*
+   * A debate card can sit inside the entity side panel (a profile's activity). Claims there must
+   * replace the side panel with the claims panel: not stack on it, and not close the side panel and
+   * take the card, and the panel it drew, with it.
+   */
+  it('replaces the entity side panel when a card inside it opens Claims', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+
+    function SidePanel() {
+      const target = useAtomValue(entitySidePanelAtom);
+      return target ? (
+        <aside data-testid="entity-side-panel">
+          <DebateExploreFeedCard item={item} fallback={<div />} />
+        </aside>
+      ) : null;
+    }
+    function OpenSidePanel() {
+      const open = useSetAtom(openEntitySidePanelAtom);
+      React.useEffect(
+        () => open({ entityId: 'person-1', spaceId: 'space-1', openedWithMainViewEditing: false }),
+        [open]
+      );
+      return null;
+    }
+
+    render(
+      <QueryClientProvider client={client}>
+        <Provider>
+          <OpenSidePanel />
+          <SidePanel />
+          <ExploreDebateClaimsPanelHost />
+        </Provider>
+      </QueryClientProvider>
+    );
+    intersectAll(0.7);
+    const openPanels = () =>
+      screen.queryAllByTestId('entity-side-panel').length + screen.queryAllByTestId('claims-panel').length;
+    expect(openPanels()).toBe(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Claims/ }));
+    expect(screen.queryAllByTestId('claims-panel')).toHaveLength(1);
+    expect(openPanels()).toBe(1);
+
+    fireEvent.click(screen.getByText('Close'));
+    expect(openPanels()).toBe(0);
   });
 
   /**

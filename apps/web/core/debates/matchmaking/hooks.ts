@@ -8,6 +8,11 @@ import { useRouter } from 'next/navigation';
 
 import { useActionContext } from '~/core/action-context-provider';
 import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
+import {
+  debateMediaSessionKey,
+  debateRequestMediaSessionKey,
+  useOptionalDebateMediaSession,
+} from '~/core/debates/media-session';
 import { useParticipantAvatars, withRowParticipantAvatars } from '~/core/debates/participant-avatars';
 import { withQueryData } from '~/core/debates/with-query-data';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
@@ -452,6 +457,8 @@ export function useAcceptDebateRequest() {
   const router = useRouter();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
+  const mediaSession = useOptionalDebateMediaSession();
+
   const mutation = useMutation({
     mutationFn: ({ requestId, formatId }: { requestId: string; formatId?: string }) =>
       acceptDebateRequest(requestId, getPrivyIdentityToken, accountKey, formatId),
@@ -461,8 +468,12 @@ export function useAcceptDebateRequest() {
     // socket event, mid-round-trip, and prompts us to join what we are already accepting (GEO-2604).
     onMutate: () => ({ releaseEntry: markEnteringPendingDebate() }),
     onSettled: (_result, _error, _variables, context) => context?.releaseEntry(),
-    onSuccess: result => {
+    onSuccess: (result, variables) => {
       if (result.debate) {
+        mediaSession?.promoteSession(
+          debateRequestMediaSessionKey(variables.requestId),
+          debateMediaSessionKey(result.debate.id)
+        );
         queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate);
         // Before the push, and before the invalidation below: the room is a server segment with no
         // `loading` boundary, so this page stays up while activity comes back reporting a debate
@@ -471,6 +482,8 @@ export function useAcceptDebateRequest() {
         markEnteringDebate(result.debate.id);
         const path = debatePath(result.debate);
         routeIntoDebate(() => router.push(path));
+      } else {
+        mediaSession?.releaseSession(debateRequestMediaSessionKey(variables.requestId));
       }
       void invalidateDebatesOutsideRematchClaims(queryClient);
     },

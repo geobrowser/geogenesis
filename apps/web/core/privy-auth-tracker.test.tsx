@@ -43,7 +43,7 @@ function useSubscription(handlers: Handlers) {
   }, [handlers]);
   return { login: mocks.login };
 }
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({
     ready: true,
     authenticated: mocks.authenticated,
@@ -67,7 +67,7 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/explore',
   useSearchParams: () => new URLSearchParams(''),
 }));
-vi.mock('~/partials/onboarding/dialog', async () => {
+vi.mock('~/partials/onboarding/onboarding-atoms', async () => {
   const { atom } = await import('jotai');
   return {
     nameAtom: atom(''),

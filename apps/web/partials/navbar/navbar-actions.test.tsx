@@ -48,7 +48,7 @@ const mocks = vi.hoisted(() => ({
   } as Record<string, unknown> | null,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   useLogout: () => ({ logout: mocks.logout }),
   usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: mocks.privyUser }),
 }));
@@ -102,10 +102,10 @@ vi.mock('~/partials/hints/edit-mode-toggle-tip', () => ({
   EditModeToggleTip: () => null,
   useEditModeToggleTip: () => ({ open: false, dismiss: vi.fn(), isActive: false }),
 }));
-vi.mock('~/partials/create-space/create-space-dialog', () => ({
+vi.mock('~/partials/create-space/create-space-state', () => ({
   useOpenCreateSpaceDialog: () => mocks.openCreateSpaceDialog,
 }));
-vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));
+vi.mock('~/partials/onboarding/onboarding-atoms', () => ({ avatarAtom: {} }));
 // The real dialog pulls in the whole publish chain (which needs an unmocked
 // jotai). The navbar's job is only to mount it, so assert on that.
 vi.mock('~/partials/profile/edit-profile-dialog', () => ({
@@ -118,7 +118,13 @@ vi.mock('~/partials/profile/edit-profile-dialog', () => ({
     return open ? <div data-testid="edit-profile-dialog" /> : null;
   },
 }));
-vi.mock('~/core/wallet', () => ({ GeoConnectButton: () => <button>Connect</button> }));
+vi.mock('~/core/wallet', () => ({
+  GeoConnectButton: ({ compact, component }: { compact?: boolean; component?: string }) => (
+    <button data-compact={String(Boolean(compact))} data-component={component}>
+      Connect
+    </button>
+  ),
+}));
 vi.mock('~/design-system/fallback-image', () => ({
   FallbackImage: ({ value }: { value: string }) => <img src={value} alt="" />,
 }));
@@ -457,6 +463,68 @@ describe('NavbarActions profile menu', () => {
       render(<NavbarActions />);
 
       expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    });
+  });
+
+  // GEO-3415. The debate feed's phone bar reuses these controls at its smaller size.
+  describe('compact', () => {
+    it('asks for the small Log in, attributed to whoever placed it', () => {
+      mocks.hasSmartAccount = false;
+      mocks.authenticated = false;
+      render(<NavbarActions compact signInComponent="debate_feed_bar" />);
+
+      const connect = screen.getByRole('button', { name: 'Connect' });
+      expect(connect).toHaveAttribute('data-compact', 'true');
+      expect(connect).toHaveAttribute('data-component', 'debate_feed_bar');
+    });
+
+    it('keeps the navbar’s own Log in as it was', () => {
+      mocks.hasSmartAccount = false;
+      mocks.authenticated = false;
+      render(<NavbarActions />);
+
+      const connect = screen.getByRole('button', { name: 'Connect' });
+      expect(connect).toHaveAttribute('data-compact', 'false');
+      expect(connect).not.toHaveAttribute('data-component');
+    });
+
+    // The app navbar stays mounted under the bar and owns ⌘E. A second listener toggled once but
+    // reported the switch twice.
+    it('leaves the edit mode shortcut to the app navbar', () => {
+      mocks.spaceId = 'space-1';
+      mocks.canEdit = true;
+      render(<NavbarActions compact />);
+
+      expect(mocks.shortcutCallback).toBeNull();
+    });
+
+    it('still registers the shortcut in the app navbar', () => {
+      mocks.spaceId = 'space-1';
+      mocks.canEdit = true;
+      render(<NavbarActions />);
+
+      expect(mocks.shortcutCallback).not.toBeNull();
+    });
+
+    // The navbar's phone layout starts at 639px; the bar shows up to 767px. Between the two the
+    // toggle (and its first-run tip) would otherwise sit in the bar beside the avatar.
+    it('keeps the edit mode toggle in the menu up to the bar’s edge', async () => {
+      mocks.spaceId = 'space-1';
+      mocks.isMobileNavbar = false;
+      const user = userEvent.setup();
+      render(<NavbarActions compact />);
+
+      expect(screen.queryByTestId('edit-toggle')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+      expect(
+        within(screen.getByTestId('profile-menu')).getByRole('switch', { name: 'Edit mode off' })
+      ).toBeInTheDocument();
+    });
+
+    it('gives the avatar a 44px target at every phone width', () => {
+      render(<NavbarActions compact />);
+
+      expect(screen.getByRole('button', { name: 'Open profile menu' })).toHaveClass('h-11', 'w-11');
     });
   });
 

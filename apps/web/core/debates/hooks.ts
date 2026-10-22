@@ -1,6 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import {
   type Query,
   type QueryClient,
@@ -21,6 +20,7 @@ import { fromPayload, localTimezone, toPayload } from '~/core/availability/block
 import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
 import { type ScheduleEditorSurface, debateScheduleSaved } from '~/core/availability/schedule-analytics';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
   type CreateDebateChallengeBody,
@@ -92,7 +92,6 @@ import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
-import type { RecordingPlaybackVariant } from './mobile-rendition';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -105,7 +104,9 @@ import {
   refreshRematchClaimBatches,
   rematchClaimBatchesWithClaim,
 } from './rematch-claims-query-key';
+import { markRematchAnswered } from './rematch-join-intent';
 import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
+import type { RecordingUrlVariant } from './stream-playback';
 import { withQueryData } from './with-query-data';
 
 export const debateQueryNetworkOptions = {
@@ -145,7 +146,7 @@ export const debateQueryKeys = {
     debateId: string,
     filename: string,
     accountKey: string | null,
-    variant: RecordingPlaybackVariant | 'original' = 'original'
+    variant: RecordingUrlVariant | 'original' = 'original'
   ) => ['debates', 'recording-url', debateId, filename, accountKey, variant] as const,
   transcript: (debateId: string, format: TranscriptFormat) =>
     ['debates', 'transcript', dashlessId(debateId), format] as const,
@@ -1408,6 +1409,7 @@ export function useAcceptDebateChallenge() {
     mutationFn: (challengeId: string) => acceptDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
     onSuccess: result => {
       if (result.session) {
+        markRematchAnswered(result.session.id);
         queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
@@ -1490,8 +1492,8 @@ export function useCompleteLocalRecordingUpload(debateId: string) {
  */
 export const RECORDING_URL_STALE_MS = 5 * 60 * 1000;
 
-/** `variant: 'mobile'` signs the recording's mobile rendition (GEO-3118) instead of the file itself. */
-type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingPlaybackVariant };
+/** `variant: 'mobile'` signs the recording's feed rendition (GEO-3118, still named `mobile`) instead of the file itself. */
+type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingUrlVariant };
 
 /**
  * The signed playback URL for one debate recording, cached.

@@ -2,6 +2,7 @@ import { firstName } from '~/partials/profile/claim-response-tag';
 
 import type {
   Debate,
+  DebateMediaEarlyEndGap,
   DebateMediaResponse,
   DebateMediaRoundPick,
   DebateMediaTurnSegment,
@@ -10,17 +11,20 @@ import type {
   ParticipantSlot,
 } from './api';
 import { isOpenRoundsDebate, openRoundsRequiredRebuttalRounds } from './open-rounds';
+import { type BreakCut, mergeBreakCuts } from './playback-timeline';
+
+export type { BreakCut } from './playback-timeline';
 
 /**
  * The breaks between Open rounds in a published debate (GEO-3277), on the web player's clock.
  *
  * The player plays the raw recordings, where every break runs at its real length: the pick window
  * after a round, then the reveal and the opener's count-in, or a required round's lead-in, eight to
- * twelve seconds of people looking at their screens. So the player plays only the first couple of
- * seconds of each, silent (nobody holds a turn; both mics are open between rounds since #2838),
- * under the approved "stamps" graphic — "Keep debating?", each pick stamped onto its debater, then
- * a banner with the next round or "That's a wrap" — and then cuts to the next speaker, the graphic
- * covering the jump (GEO-3277). The cue is a function of the playhead, like `round-cues.ts`, so a
+ * twelve seconds of people looking at their screens. The player keeps a couple of seconds around
+ * an edit in the middle of the round title's hold, silent (nobody holds a turn; both mics are open
+ * between rounds since #2838). The frame blend finishes under the title before it fades into the
+ * next speaker; a final "That's a wrap" holds through the end-card handoff (GEO-3277).
+ * The cue is a function of the playhead, like `round-cues.ts`, so a
  * viewer who scrubs in finds it where it would be.
  */
 
@@ -28,33 +32,26 @@ import { isOpenRoundsDebate, openRoundsRequiredRebuttalRounds } from './open-rou
 export const EARLY_END_HOLD_MS = 700;
 
 /**
- * How long a break shows only its dim before anything moves. The player learns where the playhead is
- * about four times a second, so its first sample of a break lands up to a quarter of a second in;
- * motion that started at once lost its opening, which made the banner seem to appear and roll out.
+ * Wait before the dim and title enter together. The first playhead sample can land up to a quarter
+ * of a second into a break; waiting lets both mount before their shared entrance starts.
  */
 export const BREAK_SETTLE_MS = 300;
 
-/** How long "Keep debating?" is up before the first pick is stamped. */
-export const BREAK_QUESTION_MS = 800;
-
-/** How long after the first stamp the second lands. */
+/** Recording room only: how long after the first stamp the second lands. */
 export const BREAK_STAMP_GAP_MS = 280;
 
-/** When the banner wipes in after a pick: both stamps landed and settled. */
-const BREAK_BANNER_AT_MS = BREAK_SETTLE_MS + BREAK_QUESTION_MS + 750;
-
 /**
- * How much of each break the player plays before cutting to what follows it: about two seconds,
- * close to the rendered video's own catch-ups (1.6 s, 2.4 s and 2 s), and long enough for each step
- * to read. The final End's holds "That's a wrap" a little longer, since nothing has to start after it.
+ * How much of each break the player keeps around its edit: about two seconds,
+ * with the same title-only pacing for required and optional rounds. The final End holds
+ * "That's a wrap" a little longer, since nothing has to start after it.
  */
 export const BREAK_PLAYED_MS: Record<'lead_in' | 'extend' | 'final_end', number> = {
   lead_in: BREAK_SETTLE_MS + 2_100,
-  extend: BREAK_BANNER_AT_MS + 1_300,
-  final_end: BREAK_BANNER_AT_MS + 1_500,
+  extend: BREAK_SETTLE_MS + 2_100,
+  final_end: BREAK_SETTLE_MS + 2_300,
 };
 
-/** A debater as the break graphics name them: their first name, which keeps the banner's opener line short. */
+/** A debater's first name for the early-end next-speaker label. */
 export function breakFirstName(participant: Pick<DebateParticipant, 'display_name'> | null | undefined) {
   return firstName(participant?.display_name) ?? 'Debater';
 }
@@ -75,6 +72,7 @@ export type PlayerBreak = {
 type PlayerEarlyEnd = {
   turnIndex: number;
   nextTurnIndex: number;
+  kind?: DebateMediaEarlyEndGap['kind'];
   startMs: number;
   endMs: number;
   /** Who ended their turn early, and who speaks next; null where the media lacks either turn. */
@@ -113,8 +111,14 @@ export function playbackBreaksFrom(
 
   // The round ended when its last turn did; the pick window runs from there. Falls back to the
   // break's own start, which is where a render that never cut the window put it.
-  const roundEndMs = (roundIndex: number, fallbackMs: number) =>
-    segments.find(segment => segment.turn_index === roundIndex * 2 + 1)?.output_end_ms ?? fallbackMs;
+  const roundEndMs = (roundIndex: number, fallbackMs: number) => {
+    const lastTurn = roundIndex * 2 + 1;
+    return (
+      media.early_end_gaps?.find(gap => gap.kind === 'turn_end' && gap.turn_index === lastTurn)?.source_end_ms ??
+      segments.find(segment => segment.turn_index === lastTurn)?.output_end_ms ??
+      fallbackMs
+    );
+  };
 
   const breaks: PlayerBreak[] = (media.condensed_breaks ?? []).map(entry => ({
     kind: entry.kind,
@@ -161,6 +165,7 @@ export function playbackBreaksFrom(
   return {
     breaks: breaks.sort((a, b) => a.decidingStartMs - b.decidingStartMs),
     earlyEnds: (media.early_end_gaps ?? []).map(gap => ({
+      ...(gap.kind && { kind: gap.kind }),
       turnIndex: gap.turn_index,
       nextTurnIndex: gap.next_turn_index,
       startMs: gap.source_start_ms,
@@ -176,9 +181,9 @@ export type BreakPicks = Record<ParticipantSlot, OpenRoundPick | null>;
 
 export type BreakCue = {
   kind: PlayerBreak['kind'];
-  /** How far into the played stretch the playhead is; past it, only a scrub or a pause, it holds at the end. */
+  /** Progress through the kept footage; the omitted middle holds at the cut's progress on a scrub. */
   elapsedMs: number;
-  /** The played stretch: how long the graphic runs before the player cuts. */
+  /** Total kept duration, including the footage on both sides of a mid-title cut. */
   playedMs: number;
   /** Each debater's pick for the round that ended; `null` for a lead-in, where nobody picked. */
   picks: BreakPicks | null;
@@ -197,21 +202,11 @@ export function breakCueAt(
   const playedMs = playedLengthMs(current);
   return {
     kind: current.kind,
-    elapsedMs: Math.min(playheadMs - current.decidingStartMs, playedMs),
+    elapsedMs: breakElapsedMs(current, playheadMs),
     playedMs,
     picks: current.kind === 'lead_in' ? null : finalPicks(picks, current.roundIndex),
     nextRoundIndex: current.nextRoundIndex,
   };
-}
-
-/** When the banner rolls in: once both picks are stamped, or as the dim settles before a required round nobody picked for. */
-export function breakBannerAtMs(cue: Pick<BreakCue, 'picks'>) {
-  return cue.picks ? BREAK_BANNER_AT_MS : BREAK_SETTLE_MS;
-}
-
-/** Whether the banner is across the seam: from its roll-in until the cut to the next speaker. */
-export function breakBannerShown(cue: BreakCue | null) {
-  return cue !== null && cue.elapsedMs >= breakBannerAtMs(cue);
 }
 
 /** How much of a break plays: its share, or all of it when it is shorter than that. */
@@ -219,25 +214,39 @@ function playedLengthMs(entry: PlayerBreak) {
   return Math.min(BREAK_PLAYED_MS[entry.kind], entry.endMs - entry.decidingStartMs);
 }
 
-export type BreakCut = {
-  /** When to cut: the end of the played stretch at the front of the break, or of an early end's quiet. */
-  atMs: number;
-  /** Where to: the next turn, or the end of the debate after the final End. */
-  toMs: number;
-};
+function cutForBreak(entry: PlayerBreak): BreakCut {
+  const playedMs = playedLengthMs(entry);
+  // Keep half the announcement on either side of the edit. The incoming frame is still in the
+  // silent count-in, so the blend finishes under the held title without hiding any spoken words.
+  // A final wrap has no incoming round and keeps its existing end-card handoff.
+  const beforeMs = entry.kind === 'final_end' ? playedMs : playedMs / 2;
+  return { atMs: entry.decidingStartMs + beforeMs, toMs: entry.endMs - (playedMs - beforeMs) };
+}
+
+function breakElapsedMs(entry: PlayerBreak, playheadMs: number) {
+  const cut = cutForBreak(entry);
+  const skippedMs = Math.max(0, Math.min(playheadMs - cut.atMs, cut.toMs - cut.atMs));
+  return Math.min(playedLengthMs(entry), playheadMs - entry.decidingStartMs - skippedMs);
+}
+
+/** The announcement's media clock, continuous across the automatic edit in the middle of its hold. */
+export function breakAnimationPositionMs(breaks: readonly PlayerBreak[], playheadMs: number) {
+  const current = breaks.find(entry => playheadMs >= entry.decidingStartMs && playheadMs < entry.endMs);
+  return current ? current.decidingStartMs + breakElapsedMs(current, playheadMs) : playheadMs;
+}
 
 /**
- * Every cut the player makes, in order. A break plays its first couple of seconds under its graphic
- * and cuts to what follows it; an early end's quiet, from the last word of the turn that ended to
+ * Every cut the player makes, in order. Round breaks retain the front and tail of the silence,
+ * cutting midway through the announcement so the frame blend finishes before its exit. An early
+ * end's quiet, from the last word of the turn that ended to
  * the next speaker's first, is cut straight away, as the rendered video cuts it.
  */
 export function breakCuts(breaks: PlaybackBreaks): BreakCut[] {
-  return [
-    ...breaks.breaks.map(entry => ({ atMs: entry.decidingStartMs + playedLengthMs(entry), toMs: entry.endMs })),
+  // Adjacent tail/start cuts seek once, without briefly showing an intermediate timer.
+  return mergeBreakCuts([
+    ...breaks.breaks.map(cutForBreak),
     ...breaks.earlyEnds.map(entry => ({ atMs: entry.startMs, toMs: entry.endMs })),
-  ]
-    .filter(cut => cut.toMs > cut.atMs)
-    .sort((a, b) => a.atMs - b.atMs);
+  ]);
 }
 
 /**
@@ -266,30 +275,23 @@ export type EarlyEndCue = {
   /** Who ended their turn early, and who speaks next. */
   endedSlot: ParticipantSlot;
   nextSlot: ParticipantSlot;
+  /** The cue's playhead clock, so delayed labels survive pauses and scrubs. */
+  ageMs: number;
+  durationMs: number;
 };
 
 /** "Ended early" and whose turn it is, over an early end's quiet and a moment past it. */
 export function earlyEndCueAt(earlyEnds: readonly PlayerEarlyEnd[], playheadMs: number): EarlyEndCue | null {
-  const current = earlyEnds.find(entry => playheadMs >= entry.startMs && playheadMs < entry.endMs + EARLY_END_HOLD_MS);
+  const current = earlyEnds.find(
+    entry => !entry.kind && playheadMs >= entry.startMs && playheadMs < entry.endMs + EARLY_END_HOLD_MS
+  );
   if (!current?.endedSlot || !current.nextSlot) return null;
-  return { endedSlot: current.endedSlot, nextSlot: current.nextSlot };
-}
-
-/**
- * The debater with the last word: the speaker of a round's closing turn when a pick follows it, for
- * as long as that turn runs. In the design mockup the player tags them "Last word" (GEO-3277).
- * `segments` on the player's clock.
- */
-export function lastWordSlotAt(
-  breaks: PlaybackBreaks,
-  segments: readonly DebateMediaTurnSegment[],
-  playheadMs: number
-): ParticipantSlot | null {
-  const turn = segments.find(segment => playheadMs >= segment.output_start_ms && playheadMs < segment.output_end_ms);
-  if (!turn || turn.turn_index % 2 !== 1) return null;
-  const round = (turn.turn_index - 1) / 2;
-  const picked = breaks.breaks.some(entry => entry.kind !== 'lead_in' && entry.roundIndex === round);
-  return picked ? turn.participant_slot : null;
+  return {
+    endedSlot: current.endedSlot,
+    nextSlot: current.nextSlot,
+    ageMs: playheadMs - current.startMs,
+    durationMs: current.endMs + EARLY_END_HOLD_MS - current.startMs,
+  };
 }
 
 /**

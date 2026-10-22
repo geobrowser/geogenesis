@@ -2,6 +2,7 @@
 
 import type { ActionContext } from '~/core/action-context';
 import { recordAction } from '~/core/analytics-operations';
+import { pushMarketingEvent } from '~/core/marketing-events';
 import { type ResponseKind, voteOutcomeProperties } from '~/core/responses/entity-response';
 
 import { type LocalVoteChange, type LocalVoteDirection, readLocalVotes, toggleLocalVote } from './local-votes';
@@ -37,7 +38,15 @@ export function castLocalVote({
   /** The pressed control's own action context, which also names the target. */
   attribution: ActionContext;
 }): LocalVoteChange {
-  const change = toggleLocalVote({ entityId, spaceId, responseKind, direction, title });
+  const change = toggleLocalVote({
+    entityId,
+    spaceId,
+    responseKind,
+    direction,
+    title,
+    // Cast by an email's vote link rather than a press (GEO-3374).
+    ...(attribution.ref_email ? { refEmail: attribution.ref_email } : {}),
+  });
   // The visit they voted in is not the "return visit" the sheet waits for.
   markPromptedThisSession();
   try {
@@ -54,6 +63,9 @@ export function castLocalVote({
     });
   } catch {
     /* Never fail a vote over analytics. */
+  }
+  if (change.action !== 'remove') {
+    pushMarketingEvent('geo_vote_anonymous', { target_id: entityId, space_id: spaceId, vote_kind: responseKind });
   }
   // Only casts count toward an ask: removing or switching a vote doesn't make anyone more invested.
   if (change.action === 'cast') {

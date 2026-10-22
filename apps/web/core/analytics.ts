@@ -7,6 +7,7 @@ import { notifyActionPageView, pageContext } from './action-context';
 import { analyticsRuntime, isAnalyticsEnabled } from './analytics-context';
 import type { AnalyticsEventName } from './analytics-events';
 import { withSignupVisitor } from './auth/signup-visitor';
+import { pushMarketingEvent } from './marketing-events';
 
 export type { AnalyticsEventName } from './analytics-events';
 
@@ -31,6 +32,7 @@ type AnalyticsIdentity = string | number | AnalyticsProperties;
 
 type GeoAnalyticsRuntime = {
   getContext?: () => AnalyticsProperties;
+  getIdentity?: () => AnalyticsProperties | null;
   measurementContextRevision?: () => number;
   reconcileAnonymousIdentity?: () => void;
   bindIdentity?: (accessToken: string) => Promise<boolean>;
@@ -133,7 +135,7 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-57eb31cbb455.js';
+const analyticsScriptSrc = '/geo-analytics-7150c34e6803.js';
 
 /**
  * Amplitude autocapture, as `true` would enable it, minus "[Amplitude] Viewport Content Updated".
@@ -284,7 +286,7 @@ function loadAnalyticsScript() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-V+sxy7RVYf4GqdINSdi2aJLgykgQW9+QIhc/tLQDXKw=';
+  script.integrity = 'sha256-cVDDTmgDnglfo3O1W097gMuMKwe5uLf22s+2aozvG9o=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;
@@ -638,6 +640,7 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
     sessionRestored(identity, authProperties);
   } else if (params.isNewUser) {
     signedUp(identity, authProperties);
+    pushMarketingEvent('geo_account_created', { user_id: identity.user_id as string });
   } else {
     loggedIn(identity, authProperties);
   }

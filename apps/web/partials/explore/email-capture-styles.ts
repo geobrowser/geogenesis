@@ -41,13 +41,15 @@ export const CONTROL_LABEL_CLASS = 'text-[16px] leading-none tracking-[-0.35px] 
 
 /**
  * The card itself: a 308px corner card on desktop, a full-width sheet on the phone's bottom edge.
- * Shared with the save-votes sheet, which is this card with other content (GEO-3214).
+ * The save-votes sheet has its own restyle of it (`partials/save-votes/save-votes-styles`, GEO-3439).
  *
  * `z-1101` is one above the chat launcher's `z-1100`, which shares this corner. Rises 5px into place
  * as it fades in each time it mounts; with reduced motion it only fades.
  */
-export const CARD_CLASS =
-  'fixed right-4 bottom-4 z-1101 w-[308px] animate-rise-in overflow-clip rounded-xl border border-grey-02 bg-white shadow-lg motion-reduce:animate-fade-in mobile:inset-x-0 mobile:bottom-0 mobile:w-auto mobile:rounded-none mobile:rounded-t-xl mobile:shadow-none';
+const CARD_SURFACE_CLASS =
+  'animate-rise-in overflow-clip rounded-xl border border-grey-02 bg-white shadow-lg motion-reduce:animate-fade-in mobile:rounded-none mobile:rounded-t-xl mobile:shadow-none';
+
+export const CARD_CLASS = `${CARD_SURFACE_CLASS} fixed right-4 bottom-4 z-1101 w-[308px] mobile:inset-x-0 mobile:bottom-0 mobile:w-auto`;
 
 /**
  * The 12px close glyph, 11px in from the top-right corner, padded to a 20px target (a touch-sized
