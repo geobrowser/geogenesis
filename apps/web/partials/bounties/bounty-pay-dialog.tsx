@@ -5,7 +5,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as React from 'react';
 
 import { formatPoints, parseWholePoints } from '~/core/bounties/payout';
-import type { DirectPayoutOutcome, PayoutRecipient, PendingCredit } from '~/core/bounties/use-direct-payout';
+import type { DirectPayoutOutcome, PayoutRecipient, PendingPayout } from '~/core/bounties/use-direct-payout';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -20,21 +20,30 @@ type Props = {
   /** Spendable points in the bounty space; null while loading or unreadable. */
   balance: number | null;
   balanceLoading: boolean;
-  /** Set when a payout was published but its ledger credit still has to go through. */
-  pendingCredit: PendingCredit | null;
+  /** A payout that started but didn't finish; the dialog then only offers to finish it. */
+  pendingPayout: PendingPayout | null;
   busy: boolean;
   onPay: (amount: number) => Promise<DirectPayoutOutcome>;
-  onRetryCredit: () => Promise<DirectPayoutOutcome>;
+  onFinish: () => Promise<DirectPayoutOutcome>;
 };
+
+/** What is left to do on an unfinished payout, in one sentence (shared with the Curators notice). */
+export function describePendingPayout(pending: PendingPayout): string {
+  const who = pending.recipient.name ?? 'a curator';
+  const points = formatPoints(pending.amount);
+  return pending.stage === 'credit'
+    ? `A payout of ${points} points to ${who} was started, but the points ledger didn't confirm it.`
+    : `${points} points were paid to ${who}, but the payout record isn't published yet.`;
+}
 
 /** First problem with the amount, or null. */
 export function validatePayoutAmount(raw: string, balance: number | null): string | null {
   if (!raw.trim()) return 'Enter an amount.';
   const amount = parseWholePoints(raw);
   if (amount == null) return 'Amount must be a positive whole number of points.';
-  // An unknown balance is not "no limit": the ledger would refuse an unfunded payout after it is published.
-  if (balance == null) return "The space's balance couldn't be read, so you can't pay yet.";
-  if (amount > balance) return `This space only has ${formatPoints(balance)} points.`;
+  // A courtesy check against the last balance read; the ledger re-checks atomically and
+  // refuses an unfunded payout before anything is published, so an unknown balance is fine.
+  if (balance != null && amount > balance) return `This space only has ${formatPoints(balance)} points.`;
   return null;
 }
 
@@ -50,10 +59,10 @@ export function BountyPayDialog({
   recipientLabel,
   balance,
   balanceLoading,
-  pendingCredit,
+  pendingPayout,
   busy,
   onPay,
-  onRetryCredit,
+  onFinish,
 }: Props) {
   const [amount, setAmount] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
@@ -69,17 +78,19 @@ export function BountyPayDialog({
     if (outcome.status === 'paid') {
       onOpenChange(false);
     } else if (outcome.status === 'not-paid') {
-      setError(outcome.message);
-    } else if (outcome.status === 'publish-failed') {
-      setError('The payout could not be published. Nothing was paid.');
+      setError(`Nothing was paid: ${outcome.message}`);
+    } else if (outcome.status === 'credit-unconfirmed') {
+      setError(
+        `The points ledger didn't confirm the payout (${outcome.message}). Finish it to retry — it won't pay twice.`
+      );
     } else {
-      setError(`The payout was published, but crediting the points failed: ${outcome.message}`);
+      setError('The points were paid, but the payout record could not be published. Finish it to retry.');
     }
   };
 
   const submit = async () => {
-    if (pendingCredit) {
-      handleOutcome(await onRetryCredit());
+    if (pendingPayout) {
+      handleOutcome(await onFinish());
       return;
     }
     const problem = validatePayoutAmount(amount, balance);
@@ -95,7 +106,7 @@ export function BountyPayDialog({
     <Dialog.Root
       open={open}
       onOpenChange={next => {
-        // Closing mid-publish would hide the outcome of a points transfer.
+        // Closing mid-payout would hide the outcome of a points transfer.
         if (!busy) onOpenChange(next);
       }}
     >
@@ -112,7 +123,7 @@ export function BountyPayDialog({
               <div>
                 <Dialog.Title asChild>
                   <Text as="h2" variant="mediumTitle">
-                    Pay {pendingCredit ? pendingCredit.recipient.name || recipientLabel : recipientLabel}
+                    Pay {pendingPayout ? pendingPayout.recipient.name || recipientLabel : recipientLabel}
                   </Text>
                 </Dialog.Title>
                 <Text variant="metadata" color="grey-04">
@@ -124,10 +135,10 @@ export function BountyPayDialog({
               </Dialog.Close>
             </div>
 
-            {pendingCredit ? (
+            {pendingPayout ? (
               <Text variant="metadata">
-                A payout of {formatPoints(pendingCredit.amount)} points was published, but the points have not been
-                credited yet. Retry to finish it. This won&apos;t create a second payout.
+                {describePendingPayout(pendingPayout)} Finish it now. This won&apos;t pay twice or create a second
+                payout.
               </Text>
             ) : (
               <label className="flex flex-col gap-1">
@@ -164,12 +175,8 @@ export function BountyPayDialog({
                   Cancel
                 </Button>
               </Dialog.Close>
-              <Button
-                variant="primary"
-                disabled={busy || (!pendingCredit && (!recipient || balance == null))}
-                onClick={() => void submit()}
-              >
-                {busy ? 'Paying…' : pendingCredit ? 'Retry credit' : 'Pay'}
+              <Button variant="primary" disabled={busy || (!pendingPayout && !recipient)} onClick={() => void submit()}>
+                {busy ? 'Paying…' : pendingPayout ? 'Finish payout' : 'Pay'}
               </Button>
             </div>
           </Dialog.Content>

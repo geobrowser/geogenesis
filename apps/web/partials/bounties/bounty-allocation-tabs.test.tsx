@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BountyDetail } from '~/core/bounties/fetch-bounty-detail';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
+import type { PendingPayout } from '~/core/bounties/use-direct-payout';
 
 import { BountyAllocationTabs as Tabs } from './bounty-allocation-tabs';
 
@@ -32,16 +33,12 @@ const mocks = vi.hoisted(() => ({
   // Person entity → personal space, as the graph resolves pages to spaces.
   spaceByPerson: new Map<string, string>(),
   lookupFails: false,
-  pendingCredit: null as null | {
-    payoutRelationId: string;
-    recipient: { spaceId: string; name: string | null };
-    amount: number;
-  },
+  pendingPayout: null as PendingPayout | null,
   searchPick: null as { spaceId: string; personId: string; name: string | null } | null,
 }));
 
 vi.mock('~/core/bounties/use-direct-payout', () => ({
-  useDirectPayout: () => ({ pay: mocks.pay, retryCredit: vi.fn(), pendingCredit: mocks.pendingCredit, busy: false }),
+  useDirectPayout: () => ({ pay: mocks.pay, finish: vi.fn(), pendingPayout: mocks.pendingPayout, busy: false }),
   useSpaceBalance: () => ({ data: 6880, isLoading: false }),
 }));
 vi.mock('~/core/io/subgraph/fetch-personal-spaces-by-page-ids', () => ({
@@ -137,7 +134,7 @@ beforeEach(() => {
   mocks.pay.mockClear();
   mocks.spaceByPerson = new Map();
   mocks.lookupFails = false;
-  mocks.pendingCredit = null;
+  mocks.pendingPayout = null;
   mocks.searchPick = null;
 });
 afterEach(cleanup);
@@ -272,13 +269,20 @@ describe('BountyAllocationTabs', () => {
     expect(mocks.remove).toHaveBeenCalledWith({ id: PERSON_SPACE, targetIds: [PERSON, PERSON_SPACE] });
   });
 
-  it('offers to finish a payout a previous visit published but never credited', async () => {
-    mocks.pendingCredit = { payoutRelationId: 'p1', recipient: { spaceId: BOB, name: 'Bob' }, amount: 250 };
+  it('offers to finish a payout a previous visit left unfinished', async () => {
+    mocks.pendingPayout = {
+      stage: 'publish',
+      payoutRelationId: 'p1',
+      recipient: { spaceId: BOB, name: 'Bob' },
+      amount: 250,
+      values: [],
+      relations: [],
+    };
     render(<BountyAllocationTabs detail={detail} roles={{ ...viewer, isEditor: true }} />);
-    expect(screen.getByTestId('pending-credit-notice')).toHaveTextContent(
-      "A payout of 250 points to Bob was published but its points haven't moved yet."
+    expect(screen.getByTestId('pending-payout-notice')).toHaveTextContent(
+      "250 points were paid to Bob, but the payout record isn't published yet."
     );
     fireEvent.click(screen.getByRole('button', { name: 'Finish payout' }));
-    expect(await screen.findByRole('button', { name: 'Retry credit' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog')).toHaveTextContent("won't pay twice");
   });
 });

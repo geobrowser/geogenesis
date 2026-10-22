@@ -1,13 +1,16 @@
 /**
  * The ledger half of a payout. curator-backend keeps the curator points ledger
  * (a space's balance, a curator's rewards) outside the graph; publishing a
- * Payout relation alone moves no points. After the relation lands, an editor's
- * call to `POST /space/:spaceId/payout` debits the space and credits the
- * recipient. The backend is idempotent on `payoutEntityId` (a ProcessedPayout
- * row), so retrying a credit never pays twice.
+ * Payout relation alone moves no points. An editor's call to
+ * `POST /space/:spaceId/payout` debits the space and credits the recipient in
+ * one statement that also checks the balance, and is idempotent on
+ * `payoutEntityId` (a uniquely-constrained ProcessedPayout row): two payouts
+ * can't both spend the same points, and retrying one never pays twice. It
+ * never reads the Payout from the graph, so it can run before the publish.
  *
- * Mirrors curator-app's `recordPayoutCredit` (utils/manual-payout.ts),
- * including passing the outer Payout Recipient relation id as `payoutEntityId`.
+ * Same endpoint and payload as curator-app's `recordPayoutCredit`
+ * (utils/manual-payout.ts), including the outer Payout Recipient relation id
+ * as `payoutEntityId`.
  */
 import { uuidToHex } from '~/core/id/normalize';
 
@@ -18,11 +21,22 @@ const CREDIT_RETRY_DELAYS_MS = [0, 750, 1500, 3000] as const;
 export class PayoutCreditError extends Error {
   constructor(
     message: string,
-    readonly status: number | null
+    readonly status: number | null,
+    /**
+     * True when the ledger turned the payout down and no earlier attempt could
+     * have gone through — so certainly no points moved. False after any attempt
+     * whose outcome is unknown (network error, 5xx).
+     */
+    readonly refused = false
   ) {
     super(message);
     this.name = 'PayoutCreditError';
   }
+}
+
+/** The ledger certainly did not move any points for this payout. */
+export function isLedgerRefusal(error: unknown): boolean {
+  return error instanceof PayoutCreditError && error.refused;
 }
 
 /** Network failures and 5xx are worth retrying; a 4xx (not an editor, bad amount, low balance) is not. */
@@ -59,12 +73,13 @@ export async function recordPayoutCredit(
   const fetchImpl = options.fetchImpl ?? fetch;
   const wait = options.wait ?? (ms => new Promise<void>(resolve => setTimeout(resolve, ms)));
   let lastError: unknown = null;
+  // Set once an attempt fails without a clear answer: it may have been applied.
+  let outcomeUnknown = false;
 
   for (const delay of CREDIT_RETRY_DELAYS_MS) {
     if (delay > 0) await wait(delay);
     try {
-      // The backend reads the new Payout from the graph, which can lag the
-      // publish by a moment — hence retrying 5xx briefly.
+      // Transient failures are retried briefly; idempotency makes that safe.
       const response = await fetchImpl(`${CURATOR_API_URL}/space/${uuidToHex(input.spaceId)}/payout`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${input.identityToken}` },
@@ -75,12 +90,16 @@ export async function recordPayoutCredit(
           recipientEntityId: uuidToHex(input.recipientEntityId),
         }),
       });
-      if (!response.ok) throw new PayoutCreditError(await messageFrom(response), response.status);
+      if (!response.ok) {
+        const refused = response.status < 500 && !outcomeUnknown;
+        throw new PayoutCreditError(await messageFrom(response), response.status, refused);
+      }
       const body = (await response.json()) as { newBalance?: unknown };
       return { newBalance: Number(body.newBalance ?? 0) };
     } catch (error) {
       lastError = error;
       if (!isRetryableCreditError(error)) break;
+      outcomeUnknown = true;
     }
   }
 

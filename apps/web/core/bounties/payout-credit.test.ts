@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { PayoutCreditError, fetchSpaceBalance, isRetryableCreditError, recordPayoutCredit } from './payout-credit';
+import {
+  PayoutCreditError,
+  fetchSpaceBalance,
+  isLedgerRefusal,
+  isRetryableCreditError,
+  recordPayoutCredit,
+} from './payout-credit';
 
 const input = {
   spaceId: '3be38bb9-22bc-80c6-a650-3fbbba28d2b0',
@@ -47,6 +53,23 @@ describe('recordPayoutCredit', () => {
       'Only space editors can create payouts'
     );
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks a first-attempt 4xx as a refusal: certainly no points moved', async () => {
+    const fetchImpl = vi.fn(async () => json(400, { message: 'Insufficient balance or space not found' }));
+    const error = await recordPayoutCredit(input, { fetchImpl, wait: noWait }).catch(e => e);
+    expect(isLedgerRefusal(error)).toBe(true);
+  });
+
+  it('does not call a 4xx a refusal after an attempt whose outcome is unknown', async () => {
+    // The 503 may have been applied before the response failed; the 4xx then proves nothing.
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(json(503, {}))
+      .mockResolvedValueOnce(json(401, { message: 'expired' }));
+    const error = await recordPayoutCredit(input, { fetchImpl, wait: noWait }).catch(e => e);
+    expect(error).toBeInstanceOf(PayoutCreditError);
+    expect(isLedgerRefusal(error)).toBe(false);
   });
 
   it('gives up after four attempts on a network failure', async () => {

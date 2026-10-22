@@ -5,11 +5,19 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { BountyPayDialog, validatePayoutAmount } from './bounty-pay-dialog';
+import { BountyPayDialog, describePendingPayout, validatePayoutAmount } from './bounty-pay-dialog';
 
 afterEach(cleanup);
 
 const recipient = { spaceId: 'b30570f0d43db28e6582e57eb9d5267c', name: 'Ibrahim Hassan' };
+const pending = (stage: 'credit' | 'publish') => ({
+  stage,
+  payoutRelationId: 'p1',
+  recipient,
+  amount: 250,
+  values: [],
+  relations: [],
+});
 
 function renderDialog(overrides: Partial<React.ComponentProps<typeof BountyPayDialog>> = {}) {
   const props: React.ComponentProps<typeof BountyPayDialog> = {
@@ -20,10 +28,10 @@ function renderDialog(overrides: Partial<React.ComponentProps<typeof BountyPayDi
     recipientLabel: 'Ibrahim Hassan',
     balance: 6880,
     balanceLoading: false,
-    pendingCredit: null,
+    pendingPayout: null,
     busy: false,
     onPay: vi.fn(async () => ({ status: 'paid' as const })),
-    onRetryCredit: vi.fn(async () => ({ status: 'paid' as const })),
+    onFinish: vi.fn(async () => ({ status: 'paid' as const })),
     ...overrides,
   };
   render(<BountyPayDialog {...props} />);
@@ -37,7 +45,8 @@ describe('validatePayoutAmount', () => {
     expect(validatePayoutAmount('0', 100)).toMatch(/whole number/);
     expect(validatePayoutAmount('101', 100)).toBe('This space only has 100 points.');
     expect(validatePayoutAmount('100', 100)).toBeNull();
-    expect(validatePayoutAmount('500', null)).toMatch(/balance couldn't be read/);
+    // An unknown balance is left to the ledger, which checks atomically before anything is published.
+    expect(validatePayoutAmount('500', null)).toBeNull();
   });
 });
 
@@ -60,27 +69,33 @@ describe('BountyPayDialog', () => {
     expect(props.onPay).not.toHaveBeenCalled();
   });
 
-  it('says the payout was published when only the credit failed, and stays open', async () => {
-    const props = renderDialog({
-      onPay: vi.fn(async () => ({ status: 'credit-failed' as const, message: 'ledger down' })),
-    });
+  it.each([
+    [{ status: 'credit-unconfirmed' as const, message: 'ledger down' }, /didn't confirm the payout \(ledger down\)/],
+    [{ status: 'publish-failed' as const }, /points were paid, but the payout record could not be published/],
+  ])('explains an unfinished payout and stays open (%o)', async (outcome, text) => {
+    const props = renderDialog({ onPay: vi.fn(async () => outcome) });
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Pay' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      /published, but crediting the points failed: ledger down/
-    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(text);
     expect(props.onOpenChange).not.toHaveBeenCalled();
   });
 
-  it('offers only a credit retry while a published payout is uncredited', async () => {
-    const props = renderDialog({
-      pendingCredit: { payoutRelationId: 'p1', recipient, amount: 250 },
-    });
+  it('offers only to finish while a payout is unfinished', async () => {
+    const props = renderDialog({ pendingPayout: pending('publish') });
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
-    expect(screen.getByText(/won't create a second payout/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry credit' }));
-    await waitFor(() => expect(props.onRetryCredit).toHaveBeenCalled());
+    expect(screen.getByText(/won't pay twice or create a second payout/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish payout' }));
+    await waitFor(() => expect(props.onFinish).toHaveBeenCalled());
     expect(props.onPay).not.toHaveBeenCalled();
+  });
+
+  it('describes what is left of an unfinished payout by stage', () => {
+    expect(describePendingPayout(pending('credit'))).toBe(
+      "A payout of 250 points to Ibrahim Hassan was started, but the points ledger didn't confirm it."
+    );
+    expect(describePendingPayout(pending('publish'))).toBe(
+      "250 points were paid to Ibrahim Hassan, but the payout record isn't published yet."
+    );
   });
 
   it('is the card itself inside the full-screen overlay, so the backdrop dismisses', () => {
@@ -90,10 +105,12 @@ describe('BountyPayDialog', () => {
     expect(dialog.parentElement?.className).toMatch(/fixed inset-0/);
   });
 
-  it('will not pay while the space balance is unknown', () => {
-    renderDialog({ balance: null });
+  it('lets the ledger decide when the space balance is unknown', async () => {
+    const props = renderDialog({ balance: null });
     expect(screen.getByText('Space balance unavailable')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Pay' })).toBeDisabled();
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Pay' }));
+    await waitFor(() => expect(props.onPay).toHaveBeenCalledWith(5));
   });
 
   it('shows why a payout was refused before anything was published', async () => {
@@ -102,7 +119,7 @@ describe('BountyPayDialog', () => {
     });
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Pay' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('This space only has 10 points.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nothing was paid: This space only has 10 points.');
     expect(props.onOpenChange).not.toHaveBeenCalled();
   });
 });

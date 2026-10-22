@@ -7,12 +7,12 @@ import * as React from 'react';
 import { getCachedIdentityToken } from '~/core/auth/identity-token';
 import { publishOnce } from '~/core/hooks/publish-once';
 import { usePublish } from '~/core/hooks/use-publish';
+import type { Relation, Value } from '~/core/types';
 
 import type { BountyDetail } from './fetch-bounty-detail';
-import { formatPoints } from './payout';
-import { fetchSpaceBalance, recordPayoutCredit } from './payout-credit';
+import { fetchSpaceBalance, isLedgerRefusal, recordPayoutCredit } from './payout-credit';
 import { buildPayoutOps } from './payout-ops';
-import { loadPendingCredit, savePendingCredit } from './pending-credit-storage';
+import { loadPendingPayout, savePendingPayout } from './pending-payout-storage';
 import { bountyQueryKeys, useInvalidateSoon } from './use-bounties';
 
 export type PayoutRecipient = {
@@ -21,19 +21,29 @@ export type PayoutRecipient = {
   name: string | null;
 };
 
-/** A payout whose relation is published but whose ledger credit has not gone through yet. */
-export type PendingCredit = {
+/** A payout that has started but not finished. */
+export type PendingPayout = {
+  /**
+   * `credit`: the ledger has not confirmed the points moved (they may have).
+   * `publish`: the points moved; the Payout record is not in the graph yet.
+   */
+  stage: 'credit' | 'publish';
   payoutRelationId: string;
   recipient: PayoutRecipient;
   amount: number;
+  /** The exact Payout ops, so finishing publishes the ids the ledger recorded. */
+  values: Value[];
+  relations: Relation[];
 };
 
 export type DirectPayoutOutcome =
   | { status: 'paid' }
-  /** Refused before anything was published — nothing to undo. */
+  /** The ledger turned it down; nothing happened anywhere. */
   | { status: 'not-paid'; message: string }
-  | { status: 'publish-failed' }
-  | { status: 'credit-failed'; message: string };
+  /** The ledger didn't confirm; the points may or may not have moved. Safe to retry. */
+  | { status: 'credit-unconfirmed'; message: string }
+  /** The points moved but the Payout record isn't published yet. Safe to retry. */
+  | { status: 'publish-failed' };
 
 export function spaceBalanceQueryKey(spaceId: string) {
   return [...bountyQueryKeys.all, 'space-balance', spaceId] as const;
@@ -52,26 +62,29 @@ export function useSpaceBalance(spaceId: string | null | undefined, enabled = tr
 /**
  * Pays an allocated curator directly — no review, no linked proposal — for
  * work done outside the bounty space (e.g. in the curator's personal space).
- * Two steps, as in curator-app: publish the Payout relation into the bounty's
- * DAO space (editor FAST path), then credit the points ledger. If the credit
- * fails after the publish, the payout is kept as `pendingCredit` (also in
- * localStorage, so it survives a reload) and `retryCredit` finishes it without
- * publishing a second Payout.
+ *
+ * Ledger first, then graph. The ledger checks the balance and records the
+ * payout id atomically, so it decides — race-free — whether the payout happens
+ * at all; only then is the Payout relation published into the bounty's DAO
+ * space (editor FAST path). Each step is safe to repeat (idempotent payout id,
+ * same publish ids), so a payout interrupted at either step is kept as
+ * `pendingPayout` — in localStorage too, to survive a reload — and `finish`
+ * completes it.
  */
 export function useDirectPayout(detail: BountyDetail | null | undefined) {
   const { makeProposal } = usePublish();
   const queryClient = useQueryClient();
   const [busy, setBusy] = React.useState(false);
   const bountyId = detail?.bounty.id ?? null;
-  const [pendingCredit, setPendingCreditState] = React.useState<PendingCredit | null>(null);
-  // Pick up a credit a previous visit left unfinished, so the dialog can offer to retry it.
+  const [pendingPayout, setPendingPayoutState] = React.useState<PendingPayout | null>(null);
+  // Pick up a payout a previous visit left unfinished, so the editor can finish it.
   React.useEffect(() => {
-    setPendingCreditState(bountyId ? loadPendingCredit(bountyId) : null);
+    setPendingPayoutState(bountyId ? loadPendingPayout(bountyId) : null);
   }, [bountyId]);
-  const setPendingCredit = React.useCallback(
-    (pending: PendingCredit | null) => {
-      setPendingCreditState(pending);
-      if (bountyId) savePendingCredit(bountyId, pending);
+  const setPendingPayout = React.useCallback(
+    (pending: PendingPayout | null) => {
+      setPendingPayoutState(pending);
+      if (bountyId) savePendingPayout(bountyId, pending);
     },
     [bountyId]
   );
@@ -81,59 +94,74 @@ export function useDirectPayout(detail: BountyDetail | null | undefined) {
     [queryClient]
   );
   const invalidateSoon = useInvalidateSoon(invalidate);
-  const refresh = React.useCallback(() => {
-    void invalidate();
-    invalidateSoon();
-  }, [invalidate, invalidateSoon]);
 
-  const credit = React.useCallback(
-    async (pending: PendingCredit): Promise<DirectPayoutOutcome> => {
-      if (!detail) return { status: 'credit-failed', message: 'Bounty not loaded.' };
-      const identityToken = await getCachedIdentityToken();
-      if (!identityToken) {
-        return { status: 'credit-failed', message: 'Your sign-in expired. Sign in again, then retry the credit.' };
+  /**
+   * Moves a pending payout forward from its stage. `firstAttempt` is true only
+   * for a brand-new payout: then a ledger refusal (or no sign-in) means nothing
+   * happened, and the payout is dropped instead of left pending.
+   */
+  const advance = React.useCallback(
+    async (pending: PendingPayout, firstAttempt: boolean): Promise<DirectPayoutOutcome> => {
+      if (!detail) return { status: 'credit-unconfirmed', message: 'Bounty not loaded.' };
+      let current = pending;
+
+      if (current.stage === 'credit') {
+        const identityToken = await getCachedIdentityToken();
+        if (!identityToken) {
+          const message = 'Your sign-in expired. Sign in again, then pay.';
+          if (firstAttempt) {
+            setPendingPayout(null);
+            return { status: 'not-paid', message };
+          }
+          return { status: 'credit-unconfirmed', message };
+        }
+        try {
+          await recordPayoutCredit({
+            spaceId: detail.bounty.spaceId,
+            bountyId: detail.bounty.id,
+            payoutEntityId: current.payoutRelationId,
+            recipientEntityId: current.recipient.spaceId,
+            amount: current.amount,
+            identityToken,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Could not reach the points ledger.';
+          if (firstAttempt && isLedgerRefusal(error)) {
+            setPendingPayout(null);
+            void invalidate(); // the balance the dialog showed was evidently stale
+            return { status: 'not-paid', message };
+          }
+          return { status: 'credit-unconfirmed', message };
+        }
+        current = { ...current, stage: 'publish' };
+        setPendingPayout(current);
+        void invalidate();
       }
-      try {
-        await recordPayoutCredit({
-          spaceId: detail.bounty.spaceId,
-          bountyId: detail.bounty.id,
-          payoutEntityId: pending.payoutRelationId,
-          recipientEntityId: pending.recipient.spaceId,
-          amount: pending.amount,
-          identityToken,
-        });
-        setPendingCredit(null);
-        return { status: 'paid' };
-      } catch (error) {
-        return {
-          status: 'credit-failed',
-          message: error instanceof Error ? error.message : 'Could not credit the points ledger.',
-        };
-      }
+
+      const published = await publishOnce(makeProposal, {
+        values: current.values,
+        relations: current.relations,
+        spaceId: detail.bounty.spaceId,
+        name: `Payout: ${detail.bounty.name}`,
+      });
+      if (!published) return { status: 'publish-failed' };
+
+      setPendingPayout(null);
+      void invalidate();
+      invalidateSoon();
+      return { status: 'paid' };
     },
-    [detail, setPendingCredit]
+    [detail, invalidate, invalidateSoon, makeProposal, setPendingPayout]
   );
 
   const pay = React.useCallback(
     async (recipient: PayoutRecipient, amount: number): Promise<DirectPayoutOutcome> => {
-      // An unfinished credit must be retried, not paid over with a second Payout.
-      if (!detail || pendingCredit) return { status: 'publish-failed' };
+      // An unfinished payout must be finished, not paid over with a second one.
+      if (!detail || pendingPayout)
+        return { status: 'not-paid', message: 'Finish the payout already in progress first.' };
       setBusy(true);
       try {
-        // The publish can't be taken back, and the ledger refuses (for good, a 4xx)
-        // a payout it can't fund or an editor it can't authenticate. Check both
-        // first, against a fresh balance rather than the dialog's cached one.
-        if (!(await getCachedIdentityToken())) {
-          return { status: 'not-paid', message: 'Your sign-in expired. Sign in again, then pay.' };
-        }
-        const balance = await fetchSpaceBalance(detail.bounty.spaceId);
-        if (balance == null) {
-          return { status: 'not-paid', message: "Couldn't read the space's balance, so nothing was paid. Try again." };
-        }
-        if (balance < amount) {
-          return { status: 'not-paid', message: `This space only has ${formatPoints(balance)} points.` };
-        }
-
+        // Ids are minted now so the ledger and the graph record the same payout.
         const payout = buildPayoutOps({
           spaceId: detail.bounty.spaceId,
           bounty: { id: detail.bounty.id, name: detail.bounty.name },
@@ -141,36 +169,34 @@ export function useDirectPayout(detail: BountyDetail | null | undefined) {
           amount,
           proposalIds: [],
         });
-        const published = await publishOnce(makeProposal, {
+        const pending: PendingPayout = {
+          stage: 'credit',
+          payoutRelationId: payout.payoutRelationId,
+          recipient,
+          amount,
           values: payout.values,
           relations: payout.relations,
-          spaceId: detail.bounty.spaceId,
-          name: `Payout: ${detail.bounty.name}`,
-        });
-        if (!published) return { status: 'publish-failed' };
-
-        const pending: PendingCredit = { payoutRelationId: payout.payoutRelationId, recipient, amount };
-        setPendingCredit(pending);
-        refresh();
-        return await credit(pending);
+        };
+        // Recorded before the ledger call: if the tab dies mid-request, the
+        // points may have moved and this is what lets the editor finish.
+        setPendingPayout(pending);
+        return await advance(pending, true);
       } finally {
         setBusy(false);
       }
     },
-    [credit, detail, makeProposal, pendingCredit, refresh, setPendingCredit]
+    [advance, detail, pendingPayout, setPendingPayout]
   );
 
-  const retryCredit = React.useCallback(async (): Promise<DirectPayoutOutcome> => {
-    if (!pendingCredit) return { status: 'paid' };
+  const finish = React.useCallback(async (): Promise<DirectPayoutOutcome> => {
+    if (!pendingPayout) return { status: 'paid' };
     setBusy(true);
     try {
-      const outcome = await credit(pendingCredit);
-      if (outcome.status === 'paid') refresh();
-      return outcome;
+      return await advance(pendingPayout, false);
     } finally {
       setBusy(false);
     }
-  }, [credit, pendingCredit, refresh]);
+  }, [advance, pendingPayout]);
 
-  return { pay, retryCredit, pendingCredit, busy };
+  return { pay, finish, pendingPayout, busy };
 }

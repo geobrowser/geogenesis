@@ -5,7 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { type BountyDetail, distinctInterestedIds } from '~/core/bounties/fetch-bounty-detail';
-import { formatPoints } from '~/core/bounties/payout';
 import { useBountyAllocationActions } from '~/core/bounties/use-bounty-actions';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
 import { type PayoutRecipient, useDirectPayout, useSpaceBalance } from '~/core/bounties/use-direct-payout';
@@ -18,7 +17,7 @@ import { SmallButton } from '~/design-system/button';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-import { BountyPayDialog } from './bounty-pay-dialog';
+import { BountyPayDialog, describePendingPayout } from './bounty-pay-dialog';
 import { CuratorSearch } from './curator-search';
 
 type Props = {
@@ -91,20 +90,17 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
         ) : null}
       </div>
 
-      {roles.isEditor && payout.pendingCredit ? (
+      {roles.isEditor && payout.pendingPayout ? (
         <div
           role="status"
           className="flex items-center justify-between gap-3 rounded-md border border-grey-02 px-3 py-2"
-          data-testid="pending-credit-notice"
+          data-testid="pending-payout-notice"
         >
-          <Text variant="metadata">
-            A payout of {formatPoints(payout.pendingCredit.amount)} points to{' '}
-            {payout.pendingCredit.recipient.name ?? 'a curator'} was published but its points haven&apos;t moved yet.
-          </Text>
+          <Text variant="metadata">{describePendingPayout(payout.pendingPayout)}</Text>
           <SmallButton
             disabled={payout.busy}
             onClick={() => {
-              const { recipient } = payout.pendingCredit!;
+              const { recipient } = payout.pendingPayout!;
               setPaying({ recipient, label: recipient.name ?? label(recipient.spaceId) });
             }}
           >
@@ -193,12 +189,14 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
           recipientLabel={paying?.label ?? 'curator'}
           balance={balance.data ?? null}
           balanceLoading={balance.isLoading}
-          pendingCredit={payout.pendingCredit}
+          pendingPayout={payout.pendingPayout}
           busy={payout.busy}
           onPay={amount =>
-            paying ? payout.pay(paying.recipient, amount) : Promise.resolve({ status: 'publish-failed' })
+            paying
+              ? payout.pay(paying.recipient, amount)
+              : Promise.resolve({ status: 'not-paid', message: 'No curator selected.' })
           }
-          onRetryCredit={payout.retryCredit}
+          onFinish={payout.finish}
         />
       ) : null}
     </section>
