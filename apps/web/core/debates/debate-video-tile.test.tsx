@@ -62,4 +62,22 @@ describe('DebateVideoTile', () => {
     expect(screen.getByRole('img', { name: 'Microphone still open' })).toBeInTheDocument();
     expect(view.container.querySelector('[data-muted-indicator]')).not.toBeInTheDocument();
   });
+
+  it('keeps its outline and badges in a stacking context of their own, under the vote card (GEO-3407)', () => {
+    // The outline is z-50 inside the tile and the vote card z-40 across both tiles; without the
+    // tile's own context the outline of a speaker finishing into the vote painted over the card.
+    const view = render(
+      <DebateVideoTile
+        participantPosition={null}
+        active={false}
+        inactiveIndicatorId="remote"
+        openRounds
+        finishingSince={Date.now()}
+      >
+        <div />
+      </DebateVideoTile>
+    );
+    expect(view.container.querySelector('section')).toHaveClass('isolate');
+    expect(view.container.querySelector('[data-room-speaker-outline]')).toHaveClass('z-50');
+  });
 });

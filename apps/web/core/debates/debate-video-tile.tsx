@@ -213,7 +213,10 @@ export function DebateVideoTile({
       data-turn-finishing={finishing ? 'true' : undefined}
       style={openRounds ? ROOM_UI_FONT : undefined}
       className={cx(
-        'relative min-h-0 overflow-hidden bg-black shadow-card',
+        // Its own stacking context: the outline and badges inside are z-indexed against each other,
+        // and must stay under what the room lays across both tiles, like the vote card. A finishing
+        // speaker's outline, up during the vote (GEO-3407), otherwise painted over the card.
+        'relative isolate min-h-0 overflow-hidden bg-black shadow-card',
         openRounds ? '@container aspect-[8/5] rounded-[3cqw] text-white' : 'aspect-[5/3] rounded-lg',
         outlined && ['outline-[3px]', openRounds ? '-outline-offset-3' : 'outline-offset-0'],
         outlined && (openRounds ? (finalSeconds ? 'outline-[#FF4A26]' : 'outline-white') : 'outline-purple')
