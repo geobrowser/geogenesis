@@ -27,7 +27,9 @@ describe('feature flags', () => {
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
     expect(defaultFeatureFlags.lobbyHosting).toBe(false);
-    expect(defaultFeatureFlags.debateVideo).toBe(false);
+    expect(defaultFeatureFlags.debateDeviceSwitchRecording).toBe(false);
+    expect(defaultFeatureFlags.googleSignIn).toBe(false);
+    expect(defaultFeatureFlags.googleCalendar).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
@@ -37,12 +39,14 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
-      debateVideo: false,
+      debateDeviceSwitchRecording: false,
+      googleSignIn: false,
+      googleCalendar: false,
       bountiesTab: true,
     });
   });
 
-  // Claims, debates, scheduling and lobby joining shipped to everyone. Every browser that ever
+  // Claims, debates, scheduling, lobby joining and debate video shipped to everyone. Every browser that ever
   // opened the flags dialog still has the retired ids in storage, and they must not survive
   // normalization — a stray `questionsTab` reaching the dialog would render a checkbox for a flag
   // nothing reads.
@@ -53,6 +57,7 @@ describe('feature flags', () => {
         debatesTab: true,
         peerAvailability: true,
         lobbyJoining: true,
+        debateVideo: true,
         debateDebugging: true,
       })
     ).toEqual({
@@ -63,7 +68,9 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
-      debateVideo: false,
+      debateDeviceSwitchRecording: false,
+      googleSignIn: false,
+      googleCalendar: false,
       bountiesTab: true,
     });
   });
@@ -91,7 +98,9 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
-      debateVideo: false,
+      debateDeviceSwitchRecording: false,
+      googleSignIn: false,
+      googleCalendar: false,
       bountiesTab: true,
     });
   });

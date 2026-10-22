@@ -1,6 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import { Analytics } from '@vercel/analytics/react';
 
 import * as React from 'react';
@@ -16,6 +15,7 @@ import { DebateMediaSessionProvider } from '~/core/debates/media-session';
 import { PlaybackDiagnostics } from '~/core/debates/playback-diagnostics';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
 import { requestsAnyModal } from '~/core/deep-links/modal-deep-link';
+import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
@@ -32,6 +32,7 @@ import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
 import { Persistence } from '~/core/state/persistence';
 import { useSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 import { useStatusBar } from '~/core/state/status-bar-store';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { SlideUpBodyState } from '~/design-system/slide-up-body-state';
@@ -51,7 +52,12 @@ import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
-import { entitySidePanelWantsEditAtom, rankingFullscreenActiveAtom, rankingFullscreenFocusTargetAtom } from '~/atoms';
+import {
+  entitySidePanelWantsEditAtom,
+  exploreDebateClaimsPanelAtom,
+  rankingFullscreenActiveAtom,
+  rankingFullscreenFocusTargetAtom,
+} from '~/atoms';
 import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
@@ -67,6 +73,13 @@ const EntitySidePanel = dynamic(
 );
 const EntityCommentsPanelHost = dynamic(
   () => import('~/partials/comments/entity-comments-panel-host').then(m => ({ default: m.EntityCommentsPanelHost })),
+  { ssr: false }
+);
+const ExploreDebateClaimsPanelHost = dynamic(
+  () =>
+    import('~/partials/explore/explore-debate-claims-panel-host').then(m => ({
+      default: m.ExploreDebateClaimsPanelHost,
+    })),
   { ssr: false }
 );
 const FeatureFlagsDialog = dynamic(
@@ -161,6 +174,11 @@ function EntityCommentsPanelGate() {
   return useSticky(commentsTarget !== null) ? <EntityCommentsPanelHost /> : null;
 }
 
+function ExploreDebateClaimsPanelGate() {
+  const target = useAtomValue(exploreDebateClaimsPanelAtom);
+  return useSticky(target !== null) ? <ExploreDebateClaimsPanelHost /> : null;
+}
+
 // Opens from /feature-flags or Cmd/Ctrl+Shift+F. The listener lives in the dialog once it is loaded;
 // until then this one catches the first press and hands the dialog an open state to start from.
 function FeatureFlagsGate() {
@@ -205,6 +223,9 @@ function ReviewChangesGate() {
 
 // Also shows itself to a signed-out visitor who already has local votes (the return-visit prompt).
 function SaveVotesGate() {
+  // The sheet mounts only once there is something to ask, often pages after the landing, so whether
+  // the visit came from one of our emails is noted here, on arrival (GEO-3374).
+  React.useEffect(() => noteEmailArrival(), []);
   const prompt = useSaveVotesPrompt();
   const { votes } = useLocalVotes();
   const { ready, authenticated } = usePrivy();
@@ -327,6 +348,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <EntitySidePanelGate />
         <PlaybackDiagnostics />
         <EntityCommentsPanelGate />
+        <ExploreDebateClaimsPanelGate />
         {/* Client-side rendered due to `window.localStorage` usage */}
         <ClientOnly>
           {/* Suspense: onboarding preparation reads `useSearchParams`. */}

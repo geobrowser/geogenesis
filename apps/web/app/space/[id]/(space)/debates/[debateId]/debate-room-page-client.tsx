@@ -5,7 +5,7 @@ import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
 import * as React from 'react';
 
 import cx from 'classnames';
-import type { RoomConnectOptions, RoomOptions } from 'livekit-client';
+import type { DisconnectReason, Room, RoomConnectOptions, RoomOptions } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
@@ -33,7 +33,7 @@ import {
 import { DebateRecordingStatusPill } from '~/core/debates/debate-recording-status-pill';
 import {
   CameraIcon,
-  LeaveIcon,
+  DebateLeaveButton,
   MicrophoneIcon,
   RecordingCircleButton,
   SpeakerIcon,
@@ -43,6 +43,7 @@ import {
   DebateRoomHoldingScreen,
   DebateRoomLoadingState,
 } from '~/core/debates/debate-room-holding-screens';
+import { DebateRoomNotice, DebateRoomNoticeAction } from '~/core/debates/debate-room-notice';
 import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
@@ -50,7 +51,8 @@ import {
   debateRoomTabPriority,
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
-import { RoomExit, RoomTag } from '~/core/debates/debate-room-stamps';
+import { ROOM_END_TURN_CLASS, ROOM_UI_FONT, RoomExit } from '~/core/debates/debate-room-stamps';
+import { loadDebateRoomTelemetry } from '~/core/debates/debate-room-telemetry';
 import { DebateRoundIndicator } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
@@ -61,7 +63,7 @@ import {
   useHoldDebateTabClaim,
   writeDebateTabClaim,
 } from '~/core/debates/debate-tab-claims';
-import { DebateTileChip, DebateVideoTile, tileChipSurface } from '~/core/debates/debate-video-tile';
+import { DebateVideoTile } from '~/core/debates/debate-video-tile';
 import {
   useAbortDebate,
   useClearDebateActivity,
@@ -79,19 +81,21 @@ import {
   useMarkDebateReady,
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
-import { useCarriedLobbyChoice, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
+import { useCarriedLobbyChoice, useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
   DebateMediaSessionBoundary,
   type LocalTrackLike,
   debateMediaSessionKey,
+  isLocalTrackLive,
   preJoinMediaFailure,
+  setLocalTrackEnabled,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
 import { OpenRoundPickCard, type OpenRoundPickContext } from '~/core/debates/open-round-pick-card';
 import {
-  OpenRoundPickStamp,
+  OpenRoundPickPill,
   OpenRoundResultOverlay,
   openRoundThankingHold,
   useOpenRoundReveal,
@@ -112,6 +116,7 @@ import {
 } from '~/core/debates/open-rounds';
 import { captureOpenRoundPickSet, useOpenRoundsOutcomeAnalytics } from '~/core/debates/open-rounds-analytics';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
+import { type RecordingInput, createRecordingInput } from '~/core/debates/recording-input';
 import {
   type LiveRecordingStream,
   type RecordingPauseReason,
@@ -137,7 +142,9 @@ import { useLocalSpeechActivity } from '~/core/debates/use-local-speech-activity
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
+import { disconnectReasonName } from '~/core/livekit/disconnect-reason';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { switchMediaDevice } from '~/core/media/device-options';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { reportError } from '~/core/telemetry/logger';
@@ -214,6 +221,7 @@ type RoomLike = {
   connect: (url: string, token: string, options?: RoomConnectOptions) => Promise<void>;
   disconnect: (stopTracks?: boolean) => void;
   localParticipant: {
+    unpublishTrack?: (track: unknown, stopOnUnpublish?: boolean) => Promise<unknown>;
     publishTrack: (track: unknown) => Promise<unknown>;
   };
   on: (event: string, callback: (...payload: unknown[]) => void) => void;
@@ -357,7 +365,8 @@ export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClient
 
 function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const router = useRouter();
-  const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
+  const deviceSwitchRecordingEnabled = useFeatureFlag('debateDeviceSwitchRecording');
+  const { consume: consumeDebateReturnDestination, returnsToLobby } = useDebateReturnNavigation();
   const mediaSession = useDebateMediaSession();
   const mediaSessionKey = debateMediaSessionKey(debateId);
   const {
@@ -501,6 +510,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const subscribedRemoteTracksRef = React.useRef<Set<RemoteTrackLike>>(new Set());
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
   const roomRef = React.useRef<RoomLike | null>(null);
+  const appliedAudioOutputRef = React.useRef<{ room: RoomLike; id: string } | null>(null);
+  const audioOutputRouteRef = React.useRef<Promise<void> | null>(null);
   const connectingRoomRef = React.useRef<RoomLike | null>(null);
   // Marks the start of an in-flight LiveKit reconnect episode so telemetry can report how long
   // recovery took (Reconnected) or how long we retried before giving up (Disconnected). Episodes
@@ -550,10 +561,26 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
   const reportJoinedRef = React.useRef<() => Promise<void>>(() => Promise.resolve());
   /**
-   * The stream this tab last published. Changing camera or microphone builds a new one, and during
-   * the intro that has to be noticed — see the reconnect effect below.
+   * Publications survive device restarts. Track newly opened kinds separately so they can join
+   * the existing connection without rebuilding the room.
    */
-  const publishedStreamRef = React.useRef<MediaStream | null>(null);
+  const [publishingMedia, setPublishingMedia] = React.useState(false);
+  const publishedTracksRef = React.useRef<Set<LocalTrackLike>>(new Set());
+  const publishingTracksRef = React.useRef<Promise<void>>(Promise.resolve());
+  const recordingInputRef = React.useRef<RecordingInput | null>(null);
+  const recordingStopPromiseRef = React.useRef<Promise<void> | null>(null);
+  const recordingStartAttemptRef = React.useRef(0);
+  const recordingStartingRef = React.useRef(false);
+  const releaseRecordingInput = React.useCallback((input = recordingInputRef.current) => {
+    if (recordingInputRef.current === input) recordingInputRef.current = null;
+    input?.stop();
+  }, []);
+  const reportRecorderFailure = React.useCallback((failure: Parameters<typeof reportDebateRecorderFailure>[0]) => {
+    const key = `${failure.debateId}:${failure.stage}`;
+    if (reportedRecorderFailuresRef.current.has(key)) return;
+    reportedRecorderFailuresRef.current.add(key);
+    reportDebateRecorderFailure(failure);
+  }, []);
   const postJoinRecoveryAttemptsRef = React.useRef(0);
   const postJoinRecoveryTimerRef = React.useRef<number | null>(null);
   const connectRef = React.useRef<(options?: { takeover?: boolean; automatic?: boolean }) => Promise<void>>(() =>
@@ -632,11 +659,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const preScreenRemoteParticipant =
     debate?.participants.find(participant => participant.user_id !== preScreenLocalParticipant?.user_id) ?? null;
   /**
-   * A ready preview that went busy again: a device swap is replacing the tracks in place. The
-   * pickers deliberately stay open and arrowable across this — see the device-swap reconnect
-   * effect for what serialises the restart against the republish.
+   * Only hide the local tile if capture has no stream. A mic switch keeps the camera visible.
    */
-  const replacingPreview = previewBusy && previewState === 'ready';
+  const replacingPreview = previewBusy && previewState === 'ready' && localMediaStreamRef.current === null;
   const localSlot = joinResponse?.participant_slot ?? null;
   const recordingCancelledBy = debate?.recording_cancelled_by ?? null;
   const opponentCancelledRecording = recordingCancelledBy !== null && recordingCancelledBy !== currentUserId;
@@ -746,6 +771,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // which is the entire question the overrun has to settle.
   const localSpeakingRef = useLocalSpeechActivity(previewStream, roomState === 'connected');
   const localTurnStartsIn = debate ? localTurnStartsInSeconds(debate, countdown, localSlot) : null;
+  const revealHold = debate
+    ? openRoundThankingHold({
+        debate,
+        phase: countdown.openRounds,
+        effectiveStatus: countdown.effectiveStatus,
+        elapsedMs: countdown.elapsedMs,
+        remainingSeconds: countdown.remainingSeconds,
+      })
+    : null;
+  // The final board holds both microphones and the exit on the same room clock.
+  const revealHoldsExit = Boolean(revealHold?.maxReached || revealHold?.wrapHeld);
   const localAudioGate: LocalAudioGateInput = {
     effectiveStatus: debate ? countdown.effectiveStatus : null,
     activeSlot: countdown.activeSlot,
@@ -754,7 +790,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
     stillSpeaking: localSpeakingRef.current,
     msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
-    betweenRounds: isBetweenOpenRounds(countdown.openRounds),
+    openRoundsPhase: countdown.openRounds?.phase ?? null,
+    openRoundResultHeld: revealHoldsExit,
   };
   const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
   // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
@@ -809,18 +846,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * room is hidden through the handoff (GEO-3301), so sitting out the rest of the period would be up
    * to 20 seconds of blank screen. Both the exit and its Retry save read this one answer.
    */
-  const revealHold = debate
-    ? openRoundThankingHold({
-        debate,
-        phase: countdown.openRounds,
-        effectiveStatus: countdown.effectiveStatus,
-        elapsedMs: countdown.elapsedMs,
-        remainingSeconds: countdown.remainingSeconds,
-      })
-    : null;
   // An Open rounds debate's last result ("That's the max", "That's a wrap") is still up in the first
   // moments of thanking, which both rooms' immediate consent would otherwise cut short.
-  const revealHoldsExit = Boolean(revealHold?.maxReached || revealHold?.wrapHeld);
   const handoffSettled =
     !revealHoldsExit && (rematchReady || (countdown.effectiveStatus === 'thanking' && rematchSessionClosed));
 
@@ -954,7 +981,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       { audioEnabled: localAudioEnabled, videoEnabled },
       sourceMediaStreamTracksRef.current
     );
-  }, [localAudioEnabled, localTracksRef, videoEnabled]);
+  }, [localAudioEnabled, localTracksRef, previewStream, videoEnabled]);
 
   React.useEffect(() => {
     if (!pendingTurnYield) return;
@@ -971,6 +998,30 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRemoteMediaAudioEnabled(remoteMediaRef, remoteAudioEnabled);
   }, [remoteAudioEnabled]);
 
+  const routeAudioOutput = React.useCallback((room: RoomLike, id: string) => {
+    const previous = audioOutputRouteRef.current;
+    const routing = (async () => {
+      await previous?.catch(() => undefined);
+      if (roomRef.current !== room) throw new Error('Room changed during speaker selection');
+      await switchMediaDevice(room, 'audiooutput', id);
+      appliedAudioOutputRef.current = { room, id };
+    })();
+    audioOutputRouteRef.current = routing;
+    return routing;
+  }, []);
+
+  const selectAudioOutput = React.useCallback(
+    (id: string) => {
+      return changeAudioOutput(id, async selectedId => {
+        // Authorization can outlive the intro's room creation. Read the room afterwards so a
+        // preview choice cannot be committed ahead of a live route that appeared in the meantime.
+        const room = roomRef.current;
+        if (room?.switchActiveDevice) await routeAudioOutput(room, selectedId);
+      });
+    },
+    [changeAudioOutput, routeAudioOutput]
+  );
+
   /**
    * `debateRoomOptions` applies the speaker at room construction, which now happens during the
    * intro, so a speaker picked afterwards has to be pushed to the live room.
@@ -979,19 +1030,23 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!audioOutputSupported || !selectedAudioOutputId) return;
     // Only a connected room can route: this effect also runs on `reconnecting`, where the engine
     // is closed and the switch rejects for a speaker the user never touched.
-    if (roomState !== 'connected') return;
+    if (roomState !== 'connected') {
+      appliedAudioOutputRef.current = null;
+      return;
+    }
     const room = roomRef.current;
     if (!room?.switchActiveDevice) return;
+    if (appliedAudioOutputRef.current?.room === room && appliedAudioOutputRef.current.id === selectedAudioOutputId)
+      return;
     // Reported rather than swallowed: `changeAudioOutput` surfaces its own failures, so a silent
     // one here left the picker showing a speaker that nothing was being played through. Cleared on
     // success for the same reason — the retry after a blip has to be able to take the notice back.
-    void room
-      .switchActiveDevice('audiooutput', selectedAudioOutputId)
+    void routeAudioOutput(room, selectedAudioOutputId)
       .then(() => reportAudioOutputFailure(null))
       .catch(() => {
         reportAudioOutputFailure('Could not move audio to that speaker. Sound is still on the previous one.');
       });
-  }, [audioOutputSupported, reportAudioOutputFailure, roomState, selectedAudioOutputId]);
+  }, [audioOutputSupported, reportAudioOutputFailure, roomState, routeAudioOutput, selectedAudioOutputId]);
 
   /**
    * The intro and the debate room own separate media elements and the status flip swaps them while
@@ -1000,9 +1055,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    */
   const bindLocalVideo = React.useCallback((video: HTMLVideoElement | null, stream: MediaStream | null) => {
     if (!video) return;
-    if (video.srcObject !== stream) video.srcObject = stream;
+    const current = video.srcObject instanceof MediaStream ? video.srcObject : null;
+    const currentVideo = current?.getVideoTracks() ?? [];
+    const nextVideo = stream?.getVideoTracks() ?? [];
+    const sameVideo =
+      current !== null &&
+      currentVideo.length === nextVideo.length &&
+      currentVideo.every((track, index) => track === nextVideo[index]);
+    // Rebinding for an audio-only change briefly blanks some browsers' video elements.
+    if (!sameVideo && video.srcObject !== stream) {
+      video.srcObject = stream;
+      if (stream) void video.play().catch(() => undefined);
+    }
     video.muted = true;
-    if (stream) void video.play().catch(() => undefined);
   }, []);
 
   const setLocalVideoElement = React.useCallback(
@@ -1018,7 +1083,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // old stream.
   React.useEffect(() => {
     bindLocalVideo(localVideoRef.current, localMediaStreamRef.current);
-  }, [bindLocalVideo, localMediaStreamRef, previewStream]);
+    const input = recordingInputRef.current;
+    if (localMediaStreamRef.current && input) {
+      void input.update(localMediaStreamRef.current).catch(error => {
+        if (recordingInputRef.current !== input) return;
+        reportRecorderFailure({ debateId, stage: 'runtime', mimeType: recorderRef.current?.mimeType ?? '', error });
+        const recorder = recorderRef.current;
+        if (recorder && recorder.state !== 'inactive') recorder.stop();
+        setCapturing(false);
+        releaseRecordingInput(input);
+      });
+    }
+  }, [bindLocalVideo, debateId, localMediaStreamRef, previewStream, releaseRecordingInput, reportRecorderFailure]);
 
   const attachRemoteTrack = React.useCallback((track: RemoteTrackLike) => {
     const element = track.attach();
@@ -1028,7 +1104,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (element instanceof HTMLVideoElement) {
       element.className = 'h-full w-full object-contain';
       element.playsInline = true;
-      setRemoteVideoReady(true);
     } else if (element instanceof HTMLAudioElement) {
       element.className = 'hidden';
     }
@@ -1041,6 +1116,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
     remoteMediaRef.current.appendChild(element);
+    if (element instanceof HTMLVideoElement) setRemoteVideoReady(true);
   }, []);
 
   /**
@@ -1157,108 +1233,141 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, []);
 
-  const startLocalRecorder = React.useCallback((stream: MediaStream) => {
-    if (recordingStartedAtRef.current !== null) return;
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') return;
-    const debateId = debateIdRef.current;
-    // GEO-2843. Any failure is reported and leaves no recorder behind — the state an unsupported
-    // browser has always left: the pill never lights and there is nothing to persist. The calling
-    // effect re-runs on every debate refresh, so each stage is reported once per debate.
-    const started = startDebateRecorder({
-      stream,
-      debateId,
-      timesliceMs: 1_000,
-      report: failure => {
-        const key = `${failure.debateId}:${failure.stage}`;
-        if (reportedRecorderFailuresRef.current.has(key)) return;
-        reportedRecorderFailuresRef.current.add(key);
-        reportDebateRecorderFailure(failure);
-      },
-      wire: (recorder, mimeType) => {
-        recordingChunksRef.current = [];
-        recordingEndedAtRef.current = null;
-        recorder.addEventListener(
-          'start',
-          () => {
-            recordingStartedAtRef.current = serverNowRef.current();
-            const userId = currentUserIdRef.current;
-            if (userId) {
-              liveRecordingStreamRef.current = startRoomRecordingStream({
-                debateId: debateIdRef.current,
-                userId,
-                auth: geoChatAuthRef.current,
-                recorder,
-                stream,
-                mimeType: recorder.mimeType || mimeType || 'video/webm',
-                startedAtMs: recordingStartedAtRef.current,
-                // Why, not just whether: a stream that stands down says which of these held it.
-                shouldPause: () => {
-                  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
-                  if (roomStateRef.current !== 'connected') return 'room_not_connected';
-                  if (callConnectionPoorRef.current) return 'connection_poor';
-                  return null;
-                },
-              });
-            }
-            // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
-            // clock waits on it. `/ready` fires after a camera *preview* exists and `/joined` fires on
-            // room connection, both before LiveKit has published the tracks this recorder consumes —
-            // so the window used to open while one participant was still acquiring a device, costing
-            // 20-50s off the head of their recording, permanently.
-            //
-            // Fire-and-forget: the mutation retries itself, and a failure must not stop a recorder
-            // that is already running. The worst case is the server waiting out its grace, which is
-            // the old behaviour rather than a new one.
-            markCapturingRef.current();
-            // GEO-2819. The recording pill is driven from here rather than from the debate status, so
-            // what it claims and what is on disk cannot drift apart.
-            setCapturing(true);
-          },
-          { once: true }
-        );
-        // A recorder can end without `stopLocalRecorder`: `disconnectRoom` stops the local tracks,
-        // the stream goes inactive and the recorder stops itself. `capturing` outlives the modal, so
-        // clear it from the recorder's own events or the pill keeps claiming to record.
-        recorder.addEventListener('stop', () => setCapturing(false), { once: true });
-        // `startDebateRecorder` reports the `error` itself; this only clears the pill.
-        recorder.addEventListener('error', () => setCapturing(false), { once: true });
-        recorder.ondataavailable = event => {
-          if (event.data.size === 0) return;
-          // One home per recording, decided when it started: the stream if there is one, which lets
-          // go of each timeslice once it is uploaded, or this tab's own list, as before streaming.
-          const live = liveRecordingStreamRef.current;
-          if (live) live.append(event.data, serverNowRef.current());
-          else recordingChunksRef.current.push(event.data);
-        };
-      },
-    });
-    if (started) recorderRef.current = started.recorder;
-  }, []);
+  const startLocalRecorder = React.useCallback(
+    async (source: MediaStream) => {
+      if (recordingStartedAtRef.current !== null || recordingStartingRef.current) return;
+      if (recorderRef.current && recorderRef.current.state !== 'inactive') return;
+      const attempt = ++recordingStartAttemptRef.current;
+      const connection = connectionGenerationRef.current;
+      const isCurrent = () =>
+        mountedRef.current &&
+        recordingStartAttemptRef.current === attempt &&
+        connectionGenerationRef.current === connection;
+      recordingStartingRef.current = true;
+      let input: RecordingInput | null = null;
+      const started = await startDebateRecorder({
+        stream: source,
+        debateId: debateIdRef.current,
+        timesliceMs: 1_000,
+        prepareStream: async source => {
+          // Keep normal recordings on the published tracks until the experimental adapter has
+          // passed iPhone autoplay and background-tab acceptance checks.
+          if (!deviceSwitchRecordingEnabled) return source;
+          input = createRecordingInput(source);
+          recordingInputRef.current = input;
+          await input.ready;
+          return input.stream;
+        },
+        isCurrent,
+        report: reportRecorderFailure,
+        wire: (recorder, mimeType) => {
+          const stream = input?.stream ?? source;
+          recordingChunksRef.current = [];
+          recordingEndedAtRef.current = null;
+          recorder.addEventListener(
+            'start',
+            () => {
+              recordingStartedAtRef.current = serverNowRef.current();
+              const userId = currentUserIdRef.current;
+              if (userId) {
+                liveRecordingStreamRef.current = startRoomRecordingStream({
+                  debateId: debateIdRef.current,
+                  userId,
+                  auth: geoChatAuthRef.current,
+                  recorder,
+                  stream,
+                  mimeType: recorder.mimeType || mimeType || 'video/webm',
+                  startedAtMs: recordingStartedAtRef.current,
+                  // Why, not just whether: a stream that stands down says which of these held it.
+                  shouldPause: () => {
+                    if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
+                    if (roomStateRef.current !== 'connected') return 'room_not_connected';
+                    if (callConnectionPoorRef.current) return 'connection_poor';
+                    return null;
+                  },
+                });
+              }
+              // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
+              // clock waits on it. `/ready` fires after a camera *preview* exists and `/joined` fires on
+              // room connection, both before LiveKit has published the tracks this recorder consumes —
+              // so the window used to open while one participant was still acquiring a device, costing
+              // 20-50s off the head of their recording, permanently.
+              //
+              // Fire-and-forget: the mutation retries itself, and a failure must not stop a recorder
+              // that is already running. The worst case is the server waiting out its grace, which is
+              // the old behaviour rather than a new one.
+              markCapturingRef.current();
+              // GEO-2819. The recording pill is driven from here rather than from the debate status, so
+              // what it claims and what is on disk cannot drift apart.
+              setCapturing(true);
+            },
+            { once: true }
+          );
+          // End recording resources and the indicator together, including browser-initiated stops.
+          recorder.addEventListener(
+            'stop',
+            () => {
+              setCapturing(false);
+              recordingEndedAtRef.current ??= serverNowRef.current();
+              releaseRecordingInput(input);
+            },
+            { once: true }
+          );
+          // `startDebateRecorder` reports the `error` itself; this only clears the pill.
+          recorder.addEventListener(
+            'error',
+            () => {
+              setCapturing(false);
+              releaseRecordingInput(input);
+            },
+            { once: true }
+          );
+          recorder.ondataavailable = event => {
+            if (event.data.size === 0) return;
+            // One home per recording, decided when it started: the stream if there is one, which lets
+            // go of each timeslice once it is uploaded, or this tab's own list, as before streaming.
+            const live = liveRecordingStreamRef.current;
+            if (live) live.append(event.data, serverNowRef.current());
+            else recordingChunksRef.current.push(event.data);
+          };
+        },
+      });
+      if (recordingStartAttemptRef.current === attempt) recordingStartingRef.current = false;
+      if (started && isCurrent()) recorderRef.current = started.recorder;
+      else releaseRecordingInput(input);
+    },
+    [deviceSwitchRecordingEnabled, releaseRecordingInput, reportRecorderFailure]
+  );
 
   const stopLocalRecorder = React.useCallback(async () => {
+    recordingStartAttemptRef.current += 1;
+    recordingStartingRef.current = false;
+    // A second exit can arrive after stop() has made the recorder inactive but before its final
+    // dataavailable/stop events. Both exits must await the same final chunks before saving.
+    if (recordingStopPromiseRef.current) return recordingStopPromiseRef.current;
     const recorder = recorderRef.current;
-    if (!recorder) return;
-    if (recordingEndedAtRef.current !== null) return;
-
-    setCapturing(false);
-    const stopped = new Promise<void>(resolve => {
-      recorder.addEventListener(
-        'stop',
-        () => {
-          recordingEndedAtRef.current = serverNowRef.current();
-          resolve();
-        },
-        { once: true }
-      );
-    });
-    if (recorder.state !== 'inactive') {
-      recorder.requestData();
-      recorder.stop();
-      await stopped;
+    if (!recorder) {
+      releaseRecordingInput();
       return;
     }
-    recordingEndedAtRef.current = serverNowRef.current();
-  }, []);
+    if (recordingEndedAtRef.current !== null) return;
+    setCapturing(false);
+    // An input failure or the browser may already have called stop(). Inactive does not mean
+    // its final dataavailable/stop events have arrived; the stop listener records that boundary.
+    const stopped = new Promise<void>(resolve => {
+      recorder.addEventListener('stop', () => resolve(), { once: true });
+    });
+    recordingStopPromiseRef.current = stopped;
+    try {
+      if (recorder.state !== 'inactive') {
+        recorder.requestData();
+        recorder.stop();
+      }
+      await stopped;
+    } finally {
+      if (recordingStopPromiseRef.current === stopped) recordingStopPromiseRef.current = null;
+    }
+  }, [releaseRecordingInput]);
 
   const performStoppedLocalRecordingPersistence = React.useCallback(async () => {
     if (persistedRecordingDebateIdRef.current === debate?.id) return true;
@@ -1403,12 +1512,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * streamed during it and the chunks saved locally go too.
    */
   const discardLocalRecorder = React.useCallback(async () => {
+    recordingStartAttemptRef.current += 1;
+    recordingStartingRef.current = false;
     clearRecordingTimers();
     setCapturing(false);
     void liveRecordingStreamRef.current?.abort();
     liveRecordingStreamRef.current = null;
     const recorder = recorderRef.current;
     if (!recorder) {
+      releaseRecordingInput();
       recordingChunksRef.current = [];
       recordingStartedAtRef.current = null;
       recordingEndedAtRef.current = null;
@@ -1419,13 +1531,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
 
-    const stopped = new Promise<void>(resolve => {
-      recorder.addEventListener('stop', () => resolve(), { once: true });
-    });
-    if (recorder.state !== 'inactive') {
-      recorder.stop();
-      await stopped;
-    }
+    await stopLocalRecorder();
     recorderRef.current = null;
     recordingChunksRef.current = [];
     recordingStartedAtRef.current = null;
@@ -1434,7 +1540,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingPersistenceStartedRef.current = null;
     recordingPersistencePromiseRef.current = null;
     persistedRecordingDebateIdRef.current = null;
-  }, [clearRecordingTimers]);
+  }, [clearRecordingTimers, releaseRecordingInput, stopLocalRecorder]);
 
   /**
    * This tab is letting go of a recording it could not finish, after a dropped connection or an
@@ -1552,7 +1658,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         return;
       }
 
-      // An intro device change reconnects from a live room, and leaving the old session up evicts
+      // A retry replaces a live room, and leaving the old session up evicts
       // the new one on duplicate identity. Null the ref first so the Disconnected handler does not
       // read our own teardown as a dropped call.
       // `disconnect(false)` because the default stops every published track while `localTracksRef`
@@ -1561,7 +1667,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const previousRoom = roomRef.current;
       if (previousRoom) {
         roomRef.current = null;
-        previousRoom.disconnect(false);
+        disconnectLiveKitRoom(previousRoom, false);
       }
 
       setConnectionConflictSource(null);
@@ -1600,7 +1706,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setJoinResponse(token);
 
         connectionStage = 'sdk_import';
-        const livekit = await import('livekit-client');
+        const [livekit, startTelemetry] = await Promise.all([import('livekit-client'), loadDebateRoomTelemetry()]);
         if (!isCurrent()) return;
         connectionStage = 'audio_output';
         await audioOutputSelectionPromiseRef.current;
@@ -1618,6 +1724,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           // reject only a different room here rather than a not-yet-set one.
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
           const track = payload as RemoteTrackLike;
+          if (subscribedRemoteTracksRef.current.has(track)) {
+            for (const element of track.detach()) element.remove();
+          }
           subscribedRemoteTracksRef.current.add(track);
           setRemotePresence('present');
           attachRemoteTrack(track);
@@ -1631,7 +1740,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           const track = payload as RemoteTrackLike;
           subscribedRemoteTracksRef.current.delete(track);
           for (const element of track.detach()) element.remove();
-          if (track.kind === 'video') setRemoteVideoReady(false);
+          setRemoteVideoReady(Boolean(remoteMediaRef.current?.querySelector('video')));
         });
         room.on(livekit.RoomEvent.ParticipantConnected, () => {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
@@ -1647,8 +1756,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // last frame. Tracks are dropped by TrackUnsubscribed above; this is about the person.
         room.on(livekit.RoomEvent.ParticipantDisconnected, () => {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
+          // Late departure events from an old session must not hide the new session's video.
+          if (room.remoteParticipants?.size || subscribedRemoteTracksRef.current.size > 0) return;
           setRemotePresence('left');
-          setRemoteVideoReady(false);
+          setRemoteVideoReady(Boolean(remoteMediaRef.current?.querySelector('video')));
           void refetchDebate();
         });
         // LiveKit runs its own ICE-restart reconnection; surface it so a debater whose connection
@@ -1729,6 +1840,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
           // call room.disconnect() a second time and could re-enter this handler.
           roomRef.current = null;
+          void stopLocalRecorder();
           disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
           noiseFilterProcessorRef.current = null;
           ownershipRef.current?.release();
@@ -1762,7 +1874,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               debateId,
               debateStatus: debateStatusRef.current,
               roomState: roomStateRef.current,
-              disconnectReason: disconnectReasonName(livekit.DisconnectReason, payload),
+              disconnectReason: disconnectReasonName(
+                typeof payload === 'number' ? (payload as DisconnectReason) : undefined
+              ),
               elapsedMs: reconnectElapsedMs,
             });
           }
@@ -1778,12 +1892,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           peerConnectionTimeout: 25_000,
         });
         if (!isCurrent()) {
-          room.disconnect();
+          disconnectLiveKitRoom(room);
           if (connectingRoomRef.current === room) connectingRoomRef.current = null;
           return;
         }
         connectingRoomRef.current = null;
         roomRef.current = room;
+        roomTelemetryStops.set(room, startTelemetry(room as unknown as Room, debateId, token.participant_slot));
         // Whoever joins second finds the other already there, and no arrival event will fire.
         if ((room.remoteParticipants?.size ?? 0) > 0) setRemotePresence('present');
 
@@ -1801,7 +1916,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           await markJoined.mutateAsync();
           markedJoinedRef.current = true;
           if (!isCurrent()) {
-            room.disconnect();
+            disconnectLiveKitRoom(room);
             stopLocalTracks(localTracksRef);
             localMediaStreamRef.current = null;
             if (roomRef.current === room) roomRef.current = null;
@@ -1821,7 +1936,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             })) as LocalTrackLike[]);
         if (!hasPreviewTracks) newlyCreatedTracks = tracks;
         if (!isCurrent()) {
-          room.disconnect();
+          disconnectLiveKitRoom(room);
           stopTracks(newlyCreatedTracks);
           if (roomRef.current === room) roomRef.current = null;
           return;
@@ -1837,7 +1952,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         for (const track of tracks) {
           await publishTrackWithRetry(room, track, isCurrent);
           if (!isCurrent()) {
-            room.disconnect();
+            disconnectLiveKitRoom(room);
             stopLocalTracks(localTracksRef);
             localMediaStreamRef.current = null;
             if (roomRef.current === room) roomRef.current = null;
@@ -1851,22 +1966,24 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         connectionStage = 'noise_filter';
         await initializeNoiseFilter(tracks, isCurrent);
         if (!isCurrent()) {
-          room.disconnect();
+          disconnectLiveKitRoom(room);
           stopLocalTracks(localTracksRef);
           localMediaStreamRef.current = null;
           if (roomRef.current === room) roomRef.current = null;
           return;
         }
         connectionStage = 'local_preview';
-        const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
+        // A hand-off can finish opening another kind while publication/Krisp is pending.
+        const previewTracks = localTracksRef.current;
+        const stream = new MediaStream(previewTracks.map(track => track.mediaStreamTrack));
         // `bindLocalVideo` runs off this and off the element callback ref, so whichever tile is
         // mounted picks it up. A receive-only intro leaves the preview empty, so a device opened
         // later reads as a new stream and republishes.
-        if (tracks.length > 0) setPreviewStream(stream);
-        publishedStreamRef.current = stream;
+        if (previewTracks.length > 0) setPreviewStream(stream);
+        publishedTracksRef.current = new Set(tracks);
 
         if (!isCurrent()) {
-          room.disconnect();
+          disconnectLiveKitRoom(room);
           stopLocalTracks(localTracksRef);
           localMediaStreamRef.current = null;
           if (roomRef.current === room) roomRef.current = null;
@@ -1884,7 +2001,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       } catch (error) {
         if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
         if (connectingRoom && roomRef.current !== connectingRoom) {
-          connectingRoom.disconnect();
+          disconnectLiveKitRoom(connectingRoom);
           stopTracks(newlyCreatedTracks);
         }
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
@@ -1954,6 +2071,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       selectedAudioOutputIdRef,
       selectedVideoInputIdRef,
       setPreviewStream,
+      stopLocalRecorder,
     ]
   );
 
@@ -2033,8 +2151,67 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     };
   }, [connectionConflictSource, roomState]);
 
+  // Input restarts keep their LocalTrack/publication. A previously disabled kind opened in the
+  // intro is new, though, and must be published on the existing connection, never by rejoining.
+  const syncLocalPublications = React.useCallback(() => {
+    if (roomStateRef.current !== 'connected') return Promise.resolve();
+    const room = roomRef.current;
+    if (!room) return Promise.resolve();
+    const generation = connectionGenerationRef.current;
+    const isCurrent = () => roomRef.current === room && connectionGenerationRef.current === generation;
+    if (localTracksRef.current.some(track => !publishedTracksRef.current.has(track))) setPublishingMedia(true);
+    publishingTracksRef.current = publishingTracksRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (!isCurrent()) return;
+        const tracks = localTracksRef.current;
+        for (const track of publishedTracksRef.current) {
+          if (!tracks.includes(track)) {
+            await room.localParticipant.unpublishTrack?.(track, false);
+            if (!isCurrent()) return;
+            publishedTracksRef.current.delete(track);
+          }
+        }
+        const added = tracks.filter(track => !publishedTracksRef.current.has(track));
+        setLocalTrackPreferences(
+          tracks,
+          localTrackPreferencesRef.current(localSlot),
+          sourceMediaStreamTracksRef.current
+        );
+        for (const track of added) {
+          await publishTrackWithRetry(room, track, isCurrent);
+          if (!isCurrent()) return;
+          publishedTracksRef.current.add(track);
+        }
+        if (added.some(track => track.mediaStreamTrack.kind === 'audio')) {
+          await initializeNoiseFilter(tracks, isCurrent);
+          // Publication/processing may have yielded while another input was enabled.
+          if (isCurrent())
+            setPreviewStream(new MediaStream(localTracksRef.current.map(track => track.mediaStreamTrack)));
+        }
+      })
+      .catch(error => {
+        if (isCurrent())
+          setRoomError(error instanceof Error ? error.message : 'Could not publish the selected device.');
+        throw error;
+      })
+      .finally(() => {
+        if (isCurrent()) setPublishingMedia(false);
+      });
+    return publishingTracksRef.current;
+  }, [initializeNoiseFilter, localSlot, localTracksRef, setPreviewStream]);
+
+  React.useEffect(() => {
+    if (roomState !== 'connected') {
+      setPublishingMedia(false);
+      return;
+    }
+    if (previewBusy) return;
+    void syncLocalPublications().catch(() => undefined);
+  }, [previewBusy, previewStream, roomState, syncLocalPublications]);
+
   const liveKindsNow = React.useCallback(
-    () => mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind),
+    () => mediaSession.localTracksRef.current.filter(isLocalTrackLive).map(track => track.mediaStreamTrack.kind),
     [mediaSession.localTracksRef]
   );
 
@@ -2167,6 +2344,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       endedAtMs: serverClock.now(),
     };
     setRoomError(null);
+    // Close both the source and published tracks at the press, before the request or React's
+    // next effect. The recorder holds these same tracks, and a deliberate yield has no overrun.
+    setLocalTrackPreferences(
+      localTracksRef.current,
+      { audioEnabled: false, videoEnabled },
+      sourceMediaStreamTracksRef.current
+    );
     setPendingTurnYield(pendingYield);
     try {
       await endDebateTurn.mutateAsync({
@@ -2189,9 +2373,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     countdown.turnIndex,
     endDebateTurn,
     localSlot,
+    localTracksRef,
     pendingTurnYield,
     refetchDebate,
     serverClock,
+    videoEnabled,
   ]);
 
   const toggleNoiseFilter = React.useCallback(async () => {
@@ -2525,11 +2711,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // the preview's error and a Try again that asks for both.
     if (!(await openForJoinState({ audioMuted: false, videoEnabled: true }, { retry: true }))) return;
     try {
+      await syncLocalPublications();
       await markReady.mutateAsync();
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not mark you ready.');
     }
-  }, [markReady, openForJoinState]);
+  }, [markReady, openForJoinState, syncLocalPublications]);
 
   const publishRematchLeave = React.useCallback(async () => {
     if (rematchLeavePublishedRef.current) return;
@@ -2793,20 +2980,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     void connect();
   }, [connect, connectionConflictSource, debate, previewBusy, previewState, roomState]);
 
-  /**
-   * Picking a different camera or microphone restarts the preview, which stops the tracks the room
-   * is publishing, and nothing republishes them. Nothing is recorded or timed during the intro, so
-   * the connection is rebuilt around the new devices.
-   */
-  React.useEffect(() => {
-    if (debate?.status !== 'ready' || roomState !== 'connected') return;
-    // `previewBusy` and not just `previewState`: a forced restart holds the state at `ready`, so
-    // it is the only signal that `ensurePreview` still has the camera.
-    if (previewState !== 'ready' || previewBusy || !previewStream) return;
-    if (publishedStreamRef.current === null || publishedStreamRef.current === previewStream) return;
-    void connect();
-  }, [connect, debate?.status, previewBusy, previewState, previewStream, roomState]);
-
   // Deferred `/joined` for a room joined during the intro — see `reportJoinedForConnecting`.
   React.useEffect(() => {
     if (debate?.status !== 'connecting' || roomState !== 'connected') return;
@@ -2859,7 +3032,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // large misses on record are unaffected. Those need the clock to stop being armed by `/joined`,
     // which is the rest of GEO-2644; this is the prerequisite that makes that possible without
     // deadlocking capture against the clock it would then be waiting on.
-    startLocalRecorder(stream);
+    void startLocalRecorder(stream);
     // GEO-3175. An Open rounds debate has no end until a round resolves End or the cap round is
     // appended, so there is no stop timer yet. This effect re-runs on every row update, which is
     // when the end becomes known, and arms the timer then.
@@ -3065,7 +3238,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             previewState={previewState}
             previewBusy={previewBusy}
             switchingDevice={replacingPreview}
-            error={roomError ?? deviceError?.message ?? null}
+            error={roomError ?? deviceError?.message ?? (previewState === 'ready' ? previewError : null)}
             mediaError={previewError}
             audioInputDevices={audioInputDevices}
             audioOutputDevices={audioOutputDevices}
@@ -3076,19 +3249,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             audioOutputSupported={audioOutputSupported}
             audioOutputError={audioOutputError}
             onAudioInputChange={changeAudioInput}
-            onAudioOutputChange={changeAudioOutput}
+            onAudioOutputChange={selectAudioOutput}
             onVideoInputChange={changeVideoInput}
             onRetryMedia={retryMedia}
             devicesLocked={
               Boolean(preScreenLocalParticipant?.ready_at) || roomState === 'connecting' || roomState === 'reconnecting'
             }
-            connectionSettling={roomState === 'connecting' || roomState === 'reconnecting'}
+            connectionSettling={roomState === 'connecting' || roomState === 'reconnecting' || publishingMedia}
             canRetryConnection={roomState === 'idle' && roomError !== null && !connectionConflict}
             onRetryConnection={retryConnection}
             canTakeOverConnection={connectionConflict && canTakeOverConnection}
             onTakeOverConnection={takeOverConnection}
             readyBusy={markReady.isPending}
             onReady={markLocalReady}
+            returnsToLobby={returnsToLobby}
             onLeave={leave}
             leaveDisabled={abortDebate.isPending}
           />
@@ -3172,6 +3346,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
+                returnsToLobby={returnsToLobby}
                 onLeave={leave}
                 leaveDisabled={abortDebate.isPending || recordingModalRoomState === 'saving'}
               />
@@ -3214,6 +3389,7 @@ function DebateRecordingModal({
   canRetryConnection,
   onRetryConnection,
   onLeave,
+  returnsToLobby,
   leaveDisabled,
 }: {
   debate: Debate;
@@ -3249,6 +3425,7 @@ function DebateRecordingModal({
   canRetryConnection: boolean;
   onRetryConnection: () => void;
   onLeave: () => void;
+  returnsToLobby: boolean;
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
@@ -3268,65 +3445,51 @@ function DebateRecordingModal({
     localSlot,
     remote: { slot: remoteParticipant?.participant_slot ?? null, name: remoteName },
   });
-  // Open rounds draws the room's moments in the published player's stamps design (GEO-3315); every
-  // fixed format keeps today's.
-  const stamps = isOpenRoundsDebate(debate);
-  const localTileFirst = localParticipant?.position !== false;
-  const pickReveal = (pick: OpenRoundRevealedPick | null, first: boolean) =>
-    pick ? <OpenRoundPickStamp pick={pick.pick} order={first ? 'first' : 'second'} /> : null;
+  // Open rounds uses classic outlined type and glass pills (GEO-3366).
+  const openRoundsStyle = isOpenRoundsDebate(debate);
+  const pickReveal = (pick: OpenRoundRevealedPick | null) =>
+    pick ? <OpenRoundPickPill pick={pick.pick} subdued={reveal.result?.kind === 'round'} /> : null;
   // The pick, the reveal and what it means span both tiles, so both dim under them.
   const tilesDimmed =
-    stamps && (countdown.openRounds?.phase === 'deciding' || reveal.step === 'flip' || reveal.result !== null);
-  const lastWord =
-    countdown.effectiveStatus === 'in_progress' &&
-    countdown.openRounds?.phase === 'speaking' &&
-    countdown.activeSlot !== null &&
-    countdown.yieldingSlot === null
-      ? openRoundLastWord(debate, countdown.turnIndex)
-      : null;
-  const lastWordChip = !lastWord ? null : stamps ? (
-    <RoomTag data-open-round-last-word={lastWord} className="text-[2.6cqw]">
-      Last word
-    </RoomTag>
-  ) : (
-    <DebateTileChip data-open-round-last-word={lastWord} className={cx('text-text', tileChipSurface)}>
-      {/* Your own tile also carries Recording, and on a phone the full line squeezes the position. */}
-      <span className="mobile:hidden">
-        {lastWord === 'debate' ? 'Last word of the debate' : 'Last word this round'}
-      </span>
-      <span className="hidden mobile:inline">{lastWord === 'debate' ? 'Final word' : 'Last word'}</span>
-    </DebateTileChip>
-  );
+    openRoundsStyle && (countdown.openRounds?.phase === 'deciding' || reveal.step === 'flip' || reveal.result !== null);
   const localUpcomingSeconds = reveal.holdsCountIn ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
   // Open rounds names the turn after an early end too, so an opening is still "You're up in".
   const localUpcomingLabel =
-    !stamps && countdown.yieldingSlot && !countdown.preservesExistingCountIn
+    !openRoundsStyle && countdown.yieldingSlot && !countdown.preservesExistingCountIn
       ? 'Your turn in'
       : (upcomingTurnLabel(debate, countdown) ?? "You're up in");
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
-  const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot, stamps);
+  const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
   const thankingSlot = reveal.holdsEndCard ? null : thankingParticipantSlot(debate, countdown);
-  // Match the audio gate: both microphones are open during the pick, reveal and count-in.
+  // Voting is an open call; the reveal, round title, count-in and final board mute both participants.
   const betweenRounds = isBetweenOpenRounds(countdown.openRounds);
+  const roundTransition = countdown.openRounds?.phase === 'result' || reveal.holdsEndCard;
   const localInactive =
-    !betweenRounds && participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
+    roundTransition ||
+    (!betweenRounds && participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot));
   const remoteInactive =
-    !betweenRounds &&
-    participantIsInactive(countdown.effectiveStatus, remoteParticipant?.participant_slot ?? null, countdown.activeSlot);
+    roundTransition ||
+    (!betweenRounds &&
+      participantIsInactive(
+        countdown.effectiveStatus,
+        remoteParticipant?.participant_slot ?? null,
+        countdown.activeSlot
+      ));
   const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
   const speakingTurn = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot !== null;
   // The speaker's last five seconds, when the timer warns, and in Open rounds the tile's outline
   // turns red with it (GEO-3315).
   const speakerFinalSeconds = speakingTurn && countdown.remainingSeconds > 0 && countdown.remainingSeconds <= 5;
-  const finalSeconds = stamps && speakerFinalSeconds;
+  const finalSeconds = openRoundsStyle && speakerFinalSeconds;
   const countdownRing =
     countdown.remainingSeconds > 0 ? (
       <RecordingCountdownRing
         remainingSeconds={countdown.remainingSeconds}
         progress={countdown.progress}
         variant={speakerFinalSeconds ? 'warning' : 'default'}
-        buildUp={stamps && speakingTurn ? { remainingMs: countdown.remainingMs } : null}
+        openRounds={openRoundsStyle}
+        buildUp={openRoundsStyle && speakingTurn ? { remainingMs: countdown.remainingMs } : null}
       />
     ) : null;
   const yieldedCountdownRing =
@@ -3353,10 +3516,10 @@ function DebateRecordingModal({
     : countdown.activeSlot === localSlot
       ? countdownRing
       : sharedPhaseCountdown;
-  // In Open rounds the "Turn ended" stamp says it, as in the mockup, without the spent timer.
+  // In Open rounds the "Turn ended" pill says it, as in the mockup, without the spent timer.
   const remoteCountdown =
     countdown.yieldingSlot === remoteParticipant?.participant_slot
-      ? stamps
+      ? openRoundsStyle
         ? null
         : yieldedCountdownRing
       : countdown.activeSlot === remoteParticipant?.participant_slot
@@ -3367,6 +3530,30 @@ function DebateRecordingModal({
   );
   const remoteConsented = Boolean(remoteRematchParticipant?.consented_at);
   const controlsDisabled = roomState === 'saving' || roomState === 'transitioning';
+  const canRetrySave = ['thanking', 'complete'].includes(debate.status);
+  const recoveryActions =
+    canRetrySave || canRetryConnection ? (
+      <>
+        {canRetrySave && (
+          <DebateRoomNoticeAction
+            appearance={openRoundsStyle ? 'glass' : 'default'}
+            onClick={onRetryFinalization}
+            disabled={controlsDisabled}
+          >
+            Retry save
+          </DebateRoomNoticeAction>
+        )}
+        {canRetryConnection && (
+          <DebateRoomNoticeAction
+            appearance={openRoundsStyle ? 'glass' : 'default'}
+            onClick={onRetryConnection}
+            disabled={controlsDisabled}
+          >
+            Retry connection
+          </DebateRoomNoticeAction>
+        )}
+      </>
+    ) : null;
   const handingOff =
     countdown.effectiveStatus === 'thanking' &&
     countdown.remainingSeconds > 0 &&
@@ -3376,17 +3563,16 @@ function DebateRecordingModal({
   const connecting = countdown.effectiveStatus === 'connecting';
   const remoteEndingTurn =
     countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
-  // Only a yield that hands over to the other speaker gets a handoff window to stamp "Turn ended" and
+  // Only a yield that hands over to the other speaker gets a handoff window to show "Turn ended" and
   // name their turn in. Any other closes as soon as geo-chat accepts it (GEO-3347).
   const localYieldHandsOver = localEndingTurn && turnYieldHandsOver(debate, countdown.turnIndex);
   // You ended your turn and theirs follows straight on, which they are counted into on their own
   // screen. Otherwise the pick, a lead-in or the end comes next.
   const remoteTurnIsNext =
-    stamps &&
+    openRoundsStyle &&
     localYieldHandsOver &&
     countdown.incomingSlot !== null &&
     countdown.incomingSlot === remoteParticipant?.participant_slot;
-  const remoteSpeaking = remoteParticipant !== null && countdown.activeSlot === remoteParticipant.participant_slot;
   const canEndLocalTurn =
     countdown.effectiveStatus === 'in_progress' &&
     countdown.activeSlot === localSlot &&
@@ -3398,6 +3584,7 @@ function DebateRecordingModal({
       participantPosition={localParticipant?.position ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' &&
+        (!openRoundsStyle || !localEndingTurn) &&
         (countdown.activeSlot === localSlot || countdown.yieldingSlot === localSlot)
       }
       overlayText={
@@ -3419,7 +3606,11 @@ function DebateRecordingModal({
             type="button"
             onClick={onEndTurn}
             disabled={endTurnPending || localEndingTurn}
-            className="min-h-9 rounded-full bg-black px-5 text-sm font-medium text-white shadow-light transition hover:bg-black/85 disabled:cursor-default disabled:opacity-70 md:min-h-14 md:px-8 md:text-xl"
+            className={
+              openRoundsStyle
+                ? ROOM_END_TURN_CLASS
+                : 'min-h-9 rounded-full bg-black px-5 text-sm font-medium text-white shadow-light transition hover:bg-black/85 disabled:cursor-default disabled:opacity-70 md:min-h-14 md:px-8 md:text-xl'
+            }
           >
             End turn
           </button>
@@ -3431,7 +3622,7 @@ function DebateRecordingModal({
       inactive={localInactive}
       revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon || localEndingTurn}
       inactiveIndicatorId="local"
-      showMutedIndicator={localEndingTurn}
+      showMutedIndicator={localEndingTurn || roundTransition}
       countdown={localCountdown}
       closingMessage={
         countdown.effectiveStatus === 'thanking' &&
@@ -3439,21 +3630,10 @@ function DebateRecordingModal({
         localSlot !== null &&
         thankingSlot === localSlot
       }
-      status={
-        // Open rounds tags the speaker's corner, as in the mockup, beside the recording indicator.
-        stamps && countdown.activeSlot === localSlot && lastWordChip ? (
-          <span className="flex items-center gap-1.5">
-            {lastWordChip}
-            <DebateRecordingStatusPill recording={capturing} />
-          </span>
-        ) : (
-          <DebateRecordingStatusPill recording={capturing} />
-        )
-      }
-      tileControls={!stamps && countdown.activeSlot === localSlot ? lastWordChip : null}
-      reveal={pickReveal(reveal.localPick, localTileFirst)}
+      status={<DebateRecordingStatusPill recording={capturing} openRounds={openRoundsStyle} />}
+      reveal={pickReveal(reveal.localPick)}
       chipsHidden={reveal.chipsHidden}
-      stamps={stamps}
+      openRounds={openRoundsStyle}
       dimmed={tilesDimmed}
       finalSeconds={finalSeconds && countdown.activeSlot === localSlot}
     >
@@ -3466,6 +3646,7 @@ function DebateRecordingModal({
       participantPosition={remoteParticipant?.position ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' &&
+        (!openRoundsStyle || !remoteEndingTurn) &&
         (countdown.activeSlot === remoteParticipant?.participant_slot ||
           countdown.yieldingSlot === remoteParticipant?.participant_slot)
       }
@@ -3479,22 +3660,14 @@ function DebateRecordingModal({
             : 'Waiting for video'
       }
       inactive={remoteInactive}
-      // Open rounds shows the speaker's "Wrap it up" on both screens, with their red timer (GEO-3315).
-      // On the debate's last turn the listener's own tile says "Debate ends soon" instead.
-      showWrapItUp={
-        stamps &&
-        !showLocalDebateEndsSoon &&
-        wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null, true)
-      }
       endingTurn={remoteEndingTurn}
       revealInactive={remoteEndingTurn}
       inactiveIndicatorId="remote"
+      showMutedIndicator={roundTransition}
       countdown={remoteCountdown}
-      tileControls={!stamps && remoteSpeaking ? lastWordChip : null}
-      status={stamps && remoteSpeaking ? lastWordChip : undefined}
-      reveal={pickReveal(reveal.remotePick, !localTileFirst)}
+      reveal={pickReveal(reveal.remotePick)}
       chipsHidden={reveal.chipsHidden}
-      stamps={stamps}
+      openRounds={openRoundsStyle}
       dimmed={tilesDimmed}
       finalSeconds={finalSeconds && countdown.activeSlot === remoteParticipant?.participant_slot}
       nextTurnName={remoteTurnIsNext ? remoteName : null}
@@ -3555,85 +3728,100 @@ function DebateRecordingModal({
           {debate.claim.claim}
         </h1>
 
-        {/* Where the debate is and the way out, between the claim and the tiles (GEO-3174). A fixed
+        <div
+          className="@container w-full max-w-[430px]"
+          style={openRoundsStyle ? { ...ROOM_UI_FONT, fontSize: 16, lineHeight: 1.45 } : undefined}
+        >
+          {/* Where the debate is and the way out, between the claim and the tiles (GEO-3174). A fixed
             format has no rounds to count, so its row holds Leave alone. */}
-        <div className="mb-3 flex w-full max-w-[430px] items-center justify-between gap-2">
-          {countdown.openRounds && debate.open_rounds && (
-            <DebateRoundIndicator
-              // Once the new round is announced, the counter moves to it.
-              phase={reveal.announcedRoundPhase ?? countdown.openRounds}
-              maxRounds={debate.open_rounds.max_rebuttal_rounds}
-              requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
-            />
-          )}
-          <RecordingCircleButton
-            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            onClick={onLeave}
-            disabled={leaveDisabled}
-            className="ml-auto shrink-0"
+          <div
+            className={cx(
+              'flex w-full items-center justify-between',
+              openRoundsStyle ? 'mb-[1.6cqw] gap-[2cqw]' : 'mb-3 gap-2'
+            )}
           >
-            <LeaveIcon />
-          </RecordingCircleButton>
-        </div>
-
-        {/* A size container, so the Open rounds panel and banners over the tiles size with them. */}
-        <div className="@container relative grid w-full max-w-[430px] gap-2">
-          {orderedVideoTiles}
-
-          {/* The pick panel fades and the round's banner rolls out, as the next moment comes in. */}
-          <RoomExit className="z-40">
-            {openRoundDeciding && debate.open_rounds && localSlot !== null && (
-              <OpenRoundPickCard
-                // A fresh card per round, so nothing picked or failed in one round carries into the next.
-                key={openRoundDeciding.roundIndex}
-                roundIndex={openRoundDeciding.roundIndex}
-                savedPick={
-                  debate.open_rounds.round_index === openRoundDeciding.roundIndex ? debate.open_rounds.my_pick : null
-                }
-                rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
-                remainingSeconds={countdown.remainingSeconds}
-                onPick={(pick, context) =>
-                  onPickOpenRound(openRoundDeciding.roundIndex, pick, {
-                    ...context,
-                    decisionDeadlineAtMs: openRoundDeciding.decisionDeadlineAtMs,
-                  })
-                }
-                localReconnecting={roomState === 'reconnecting'}
-                reconnectingOpponentName={remoteDisconnected ? remoteName : null}
+            {countdown.openRounds && debate.open_rounds && (
+              <DebateRoundIndicator
+                // Once the new round is announced, the counter moves to it.
+                phase={reveal.announcedRoundPhase ?? countdown.openRounds}
+                maxRounds={debate.open_rounds.max_rebuttal_rounds}
+                requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
               />
             )}
-          </RoomExit>
+            <DebateLeaveButton
+              appearance={openRoundsStyle ? 'text' : 'default'}
+              returnsToLobby={returnsToLobby}
+              saving={roomState === 'saving'}
+              onClick={onLeave}
+              disabled={leaveDisabled}
+              className="ml-auto shrink-0"
+            />
+          </div>
 
-          <RoomExit exit="roll" className="z-[45]">
-            {reveal.result && <OpenRoundResultOverlay result={reveal.result} />}
-          </RoomExit>
-          {debate.open_rounds && (
-            <p role="status" aria-live="polite" data-open-round-announcement className="sr-only">
-              {reveal.announcement}
-            </p>
-          )}
+          {/* A size container, so the Open rounds panel and announcements over the tiles size with them. */}
+          <div
+            className={cx('@container relative grid w-full max-w-[430px]', openRoundsStyle ? 'gap-[1.6cqw]' : 'gap-2')}
+          >
+            {orderedVideoTiles}
+
+            {/* The pick panel and round announcement fade out, as the next moment comes in. */}
+            <RoomExit className="z-40">
+              {openRoundDeciding && debate.open_rounds && localSlot !== null && (
+                <OpenRoundPickCard
+                  // A fresh card per round, so nothing picked or failed in one round carries into the next.
+                  key={openRoundDeciding.roundIndex}
+                  roundIndex={openRoundDeciding.roundIndex}
+                  savedPick={
+                    debate.open_rounds.round_index === openRoundDeciding.roundIndex ? debate.open_rounds.my_pick : null
+                  }
+                  rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
+                  remainingSeconds={countdown.remainingSeconds}
+                  progress={countdown.progress}
+                  onPick={(pick, context) =>
+                    onPickOpenRound(openRoundDeciding.roundIndex, pick, {
+                      ...context,
+                      decisionDeadlineAtMs: openRoundDeciding.decisionDeadlineAtMs,
+                    })
+                  }
+                  localReconnecting={roomState === 'reconnecting'}
+                  reconnectingOpponentName={remoteDisconnected ? remoteName : null}
+                />
+              )}
+            </RoomExit>
+
+            <RoomExit className="z-[45]">{reveal.result && <OpenRoundResultOverlay result={reveal.result} />}</RoomExit>
+            {debate.open_rounds && (
+              <p role="status" aria-live="polite" data-open-round-announcement className="sr-only">
+                {reveal.announcement}
+              </p>
+            )}
+          </div>
         </div>
 
-        {roomState === 'reconnecting' && (
+        {openRoundsStyle && (
+          <RoomExit layout="inline" className="w-full max-w-[430px]">
+            {roomState === 'reconnecting' && <DebateRoomNotice>Reconnecting to the debate room…</DebateRoomNotice>}
+          </RoomExit>
+        )}
+        {!openRoundsStyle && roomState === 'reconnecting' && (
           <div className="mt-3 w-full max-w-[430px] rounded-lg border border-grey-02 bg-white px-4 py-3">
             <Text>Reconnecting to the debate room…</Text>
           </div>
         )}
 
-        {roomError && (
+        {openRoundsStyle && (
+          <RoomExit layout="inline" className="w-full max-w-[430px]">
+            {roomError && (
+              <DebateRoomNotice error actions={recoveryActions}>
+                {roomError}
+              </DebateRoomNotice>
+            )}
+          </RoomExit>
+        )}
+        {!openRoundsStyle && roomError && (
           <div className="mt-3 flex w-full max-w-[430px] flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
             <Text color="red-01">{roomError}</Text>
-            {['thanking', 'complete'].includes(debate.status) && (
-              <Button type="button" variant="tertiary" onClick={onRetryFinalization} disabled={controlsDisabled}>
-                Retry save
-              </Button>
-            )}
-            {canRetryConnection && (
-              <Button type="button" variant="tertiary" onClick={onRetryConnection} disabled={controlsDisabled}>
-                Retry connection
-              </Button>
-            )}
+            {recoveryActions}
           </div>
         )}
       </main>
@@ -3643,6 +3831,7 @@ function DebateRecordingModal({
           waitingForOpponent={rematchSession !== null && !remoteConsented}
           // The only way out while the room is hidden; a lobby it returns to joins on arrival.
           onLeave={onLeave}
+          returnsToLobby={returnsToLobby}
           leaveDisabled={leaveDisabled}
         />
       )}
@@ -3826,15 +4015,14 @@ function localTurnGoIsVisible(countdown: DebateCountdown, localSlot: Participant
 }
 
 /**
- * "Wrap it up" over the speaker's last five seconds. In Open rounds it lands as the timer turns red
- * and clears after about two seconds (GEO-3315), leaving the timer to count the rest.
+ * "Wrap it up" stays over the local speaker's final five seconds, as on the classic + glass board.
  */
-function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | null, stamps = false) {
+function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | null) {
   return (
     countdown.effectiveStatus === 'in_progress' &&
     slot !== null &&
     countdown.activeSlot === slot &&
-    countdown.remainingSeconds > (stamps ? 3 : 0) &&
+    countdown.remainingSeconds > 0 &&
     countdown.remainingSeconds <= 5
   );
 }
@@ -3939,11 +4127,13 @@ function DebateHandoffNotice({
   opponentName,
   waitingForOpponent,
   onLeave,
+  returnsToLobby,
   leaveDisabled,
 }: {
   opponentName: string;
   waitingForOpponent: boolean;
   onLeave: () => void;
+  returnsToLobby: boolean;
   leaveDisabled: boolean;
 }) {
   return (
@@ -3958,7 +4148,7 @@ function DebateHandoffNotice({
               onClick={onLeave}
               disabled={leaveDisabled}
             >
-              Leave
+              {returnsToLobby ? 'Back to lobby' : 'Leave'}
             </SmallButton>
           }
         >
@@ -3981,19 +4171,16 @@ function setLocalTrackPreferences(
 ) {
   for (const track of tracks) {
     if (track.mediaStreamTrack.kind === 'audio') {
-      const sourceMediaStreamTrack = sourceMediaStreamTracks?.get(track);
-      if (sourceMediaStreamTrack && sourceMediaStreamTrack !== track.mediaStreamTrack) {
-        sourceMediaStreamTrack.enabled = preferences.audioEnabled;
-      }
-      track.mediaStreamTrack.enabled = preferences.audioEnabled;
+      setLocalTrackEnabled(
+        track,
+        preferences.audioEnabled,
+        track.mediaStream?.getAudioTracks()[0] ?? sourceMediaStreamTracks?.get(track)
+      );
     }
     if (track.mediaStreamTrack.kind === 'video') {
-      // `enabled`, never LiveKit's `mute()`. For a camera track LiveKit stops the underlying
-      // MediaStreamTrack on mute and acquires a replacement on unmute, but the preview and the
-      // `MediaRecorder` hold a MediaStream captured at publish time — they would keep the stopped
-      // track and the debate would record without video. Disabling sends black frames instead,
-      // which keeps one live track for the whole recording.
-      track.mediaStreamTrack.enabled = preferences.videoEnabled;
+      // Disabling sends black frames while keeping capture warm; muting through the SDK would
+      // release and reacquire the camera on every toggle.
+      setLocalTrackEnabled(track, preferences.videoEnabled);
     }
   }
 }
@@ -4195,17 +4382,6 @@ function captureDebateRoomResilienceEvent(
   }
 }
 
-// LiveKit's DisconnectReason is a numeric protobuf enum; resolve the payload back to its name so
-// analytics reads "SERVER_SHUTDOWN" instead of "3". Numeric-enum objects carry reverse mappings
-// (numeric keys), which are skipped. Unknown values fall back to their stringified form.
-function disconnectReasonName(disconnectReasons: Record<string, unknown>, payload: unknown) {
-  if (payload === undefined || payload === null) return 'unknown';
-  for (const [name, value] of Object.entries(disconnectReasons)) {
-    if (value === payload && Number.isNaN(Number(name))) return name;
-  }
-  return String(payload);
-}
-
 function captureDebateRoomConnectionFailure({
   debateId,
   stage,
@@ -4255,6 +4431,16 @@ async function publishTrackWithRetry(room: RoomLike, track: LocalTrackLike, isCu
   }
 }
 
+/** Cleanup belongs to each Room, including ones superseded before joining finishes. */
+const roomTelemetryStops = new WeakMap<RoomLike, () => void>();
+
+function disconnectLiveKitRoom(room: RoomLike | null, stopTracks?: boolean) {
+  if (!room) return;
+  roomTelemetryStops.get(room)?.();
+  roomTelemetryStops.delete(room);
+  room.disconnect(stopTracks);
+}
+
 function disconnectRoom(
   roomRef: React.MutableRefObject<RoomLike | null>,
   localTracksRef: React.MutableRefObject<LocalTrackLike[]>,
@@ -4262,7 +4448,7 @@ function disconnectRoom(
   remoteMediaRef: React.RefObject<HTMLDivElement | null>
 ) {
   stopLocalTracks(localTracksRef);
-  roomRef.current?.disconnect();
+  disconnectLiveKitRoom(roomRef.current);
   roomRef.current = null;
   if (localVideoRef.current) {
     localVideoRef.current.srcObject = null;
@@ -4273,22 +4459,24 @@ function disconnectRoom(
 }
 
 function disconnectConnectingRoom(connectingRoomRef: React.MutableRefObject<RoomLike | null>) {
-  connectingRoomRef.current?.disconnect();
+  disconnectLiveKitRoom(connectingRoomRef.current);
   connectingRoomRef.current = null;
 }
 
 function useDebateCountdown(debate: Debate | null, serverNow: () => number): DebateCountdown {
-  const [now, setNow] = React.useState(serverNow);
+  const [, refresh] = React.useReducer(tick => tick + 1, 0);
+  // Ticks schedule renders; they must not cache the clock. A yield can be confirmed between
+  // ticks, and evaluating its timestamp against the previous tick would hand the turn back.
+  const now = serverNow();
   const countdownWindow = debate ? countdownWindowForDebate(debate, now) : null;
   const boundaryAtMs = countdownWindow?.targetMs ?? null;
 
   React.useEffect(() => {
     const currentNow = serverNow();
-    setNow(currentNow);
-    const timer = window.setInterval(() => setNow(serverNow()), 500);
+    const timer = window.setInterval(refresh, 500);
     const boundaryTimer =
       boundaryAtMs !== null && boundaryAtMs > currentNow
-        ? window.setTimeout(() => setNow(serverNow()), boundaryAtMs - currentNow + 1)
+        ? window.setTimeout(refresh, boundaryAtMs - currentNow + 1)
         : null;
     return () => {
       window.clearInterval(timer);

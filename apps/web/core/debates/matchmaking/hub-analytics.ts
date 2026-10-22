@@ -10,7 +10,14 @@ export type DebateActionAnalyticsSurface =
   | 'schedule-editor'
   | 'peer-availability'
   | 'availability-link'
-  | 'room-join-prompt';
+  | 'room-join-prompt'
+  /** The room page's own notices, and the prompts that can open over a room (GEO-3433). */
+  | 'room'
+  | 'debate-ready-prompt'
+  | 'rejoin-bar'
+  | 'challenge-accepted-prompt'
+  | 'challenge-dialog'
+  | 'open-elsewhere';
 
 const ACTION_SURFACE_ANALYTICS = {
   hub: {
@@ -57,6 +64,30 @@ const ACTION_SURFACE_ANALYTICS = {
     labelPrefix: 'Debate lobby',
     actionIntent: 'debate_lobby_action',
   },
+  room: {
+    labelPrefix: 'Debate room',
+    actionIntent: 'debate_room_action',
+  },
+  'debate-ready-prompt': {
+    labelPrefix: 'Debate ready prompt',
+    actionIntent: 'debate_ready_prompt_action',
+  },
+  'rejoin-bar': {
+    labelPrefix: 'Debate rejoin bar',
+    actionIntent: 'debate_rejoin_bar_action',
+  },
+  'challenge-accepted-prompt': {
+    labelPrefix: 'Challenge accepted prompt',
+    actionIntent: 'challenge_accepted_prompt_action',
+  },
+  'challenge-dialog': {
+    labelPrefix: 'Debate challenge dialog',
+    actionIntent: 'debate_challenge_dialog_action',
+  },
+  'open-elsewhere': {
+    labelPrefix: 'Debate open elsewhere',
+    actionIntent: 'debate_open_elsewhere_action',
+  },
 } as const satisfies Record<DebateActionAnalyticsSurface, { labelPrefix: string; actionIntent: string }>;
 
 const FILTER_INTENTS = {
@@ -87,6 +118,12 @@ export function debateActionAnalyticsAttributes(
     'data-geo-analytics-intent': intent ?? ACTION_SURFACE_ANALYTICS[surface].actionIntent,
   } as const;
 }
+
+/**
+ * A control's label and intent together, for a shared component to spread onto the element it
+ * renders. Passing the object rather than a bare label keeps the two from drifting apart.
+ */
+export type DebateAnalyticsAttributes = ReturnType<typeof debateActionAnalyticsAttributes>;
 
 /** Analytics metadata for controls shared by the debate hub, rematch page, and profile debate list. */
 export function debateSurfaceAnalyticsAttributes(

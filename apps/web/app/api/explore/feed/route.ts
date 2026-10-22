@@ -192,6 +192,7 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
     spaceFilterIds: spaceFilter,
     cursor: windowCursor,
     walletAddress,
+    viewerMemberSpaceId: personalMemberSpaceId,
     memberOrEditorSpaceIds,
     typeIds,
     ...EXPLORE_FEED_POLICY,

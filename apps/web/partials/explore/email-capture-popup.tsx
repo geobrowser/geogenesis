@@ -1,7 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -9,6 +7,7 @@ import { useAtomValue } from 'jotai';
 
 import { signupCompleted } from '~/core/analytics';
 import { currentAuthAttempt, finishAuthAttempt } from '~/core/auth-attempt';
+import { useGoogleOAuthSignIn } from '~/core/auth/google-oauth';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useAnyModalOpen } from '~/core/hooks/use-any-modal-open';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
@@ -18,9 +17,11 @@ import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 import { useLocalVoteCount } from '~/core/state/local-votes';
 import { timeoutSignal } from '~/core/timeout-signal';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { GoogleMark } from '~/design-system/icons/google-mark';
 
 import { ACCOUNT_ANALYTICS, AccountStep } from './email-capture-account-step';
 import { useMarkEmailCaptureShowing } from './email-capture-presence';
@@ -29,6 +30,7 @@ import {
   CLOSE_BUTTON_CLASS,
   ERROR_CLASS,
   FORM_STACK_CLASS,
+  GOOGLE_BUTTON_CLASS,
   HEADING_CLASS,
   PRIMARY_BUTTON_CLASS,
   SECONDARY_BUTTON_CLASS,
@@ -179,6 +181,20 @@ function EmailCapturePopup() {
     writePendingSignup(subscribedEmail);
     setWantsAccount(true);
   }, [prepareOnboarding, subscribedEmail]);
+
+  // Undefined with the `googleSignIn` flag off, which hides the button.
+  const googleSignIn = useGoogleOAuthSignIn();
+  const [googleStatus, setGoogleStatus] = React.useState<'idle' | 'starting' | 'failed'>('idle');
+  const startGoogle = React.useCallback(async () => {
+    if (!googleSignIn) return;
+    setGoogleStatus('starting');
+    try {
+      // Redirects away on success, so nothing after this runs.
+      await googleSignIn({ ...ACCOUNT_ANALYTICS, auth_control: 'continue_with_google' });
+    } catch {
+      setGoogleStatus('failed');
+    }
+  }, [googleSignIn]);
 
   const close = React.useCallback(() => {
     if (currentAuthAttempt()?.properties.component === 'explore_email_capture') finishAuthAttempt('closed');
@@ -379,10 +395,26 @@ function EmailCapturePopup() {
                   <button type="button" onClick={startAccount} className={PRIMARY_BUTTON_CLASS}>
                     Create account
                   </button>
+                  {googleSignIn ? (
+                    <button
+                      type="button"
+                      onClick={() => void startGoogle()}
+                      disabled={googleStatus === 'starting'}
+                      className={GOOGLE_BUTTON_CLASS}
+                    >
+                      <GoogleMark />
+                      Continue with Google
+                    </button>
+                  ) : null}
                   <button type="button" onClick={close} className={SECONDARY_BUTTON_CLASS}>
                     Skip
                   </button>
                 </div>
+                {googleStatus === 'failed' ? (
+                  <p role="alert" className={ERROR_CLASS}>
+                    Google sign-in did not start. Try again, or create an account with your email.
+                  </p>
+                ) : null}
               </>
             )}
           </div>

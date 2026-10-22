@@ -1,8 +1,8 @@
 'use client';
 
-import { useIdentityToken, usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
+
+import { useIdentityToken, usePrivy } from '~/core/wallet/auth-hooks';
 
 import { useSmartAccount } from './use-smart-account';
 

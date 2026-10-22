@@ -16,7 +16,8 @@ import { devLog } from '../dev-log';
 import { getImagePath } from '../utils';
 import { EMPTY_SPACE_ID } from './dao-space-factory';
 import { generateOpsForSpaceType } from './generate-ops-for-space-type';
-import { SpaceRegistryAbi } from './space-registry';
+import { padBytes16ToBytes32 } from './governance';
+import { GOVERNANCE_ACTIONS, SpaceRegistryAbi } from './space-registry';
 import { buildPersonalTopicDeclaredCalldata } from './space-topic';
 
 /**
@@ -59,6 +60,33 @@ export async function readRegisteredSpaceId(walletAddress: string): Promise<stri
   })) as Hex;
 
   return parseRegisteredSpaceId(hex);
+}
+
+/**
+ * Whether the chain shows this personal space's profile publish: its own topic declaration,
+ * which ships in the same userOp as the profile edit, so it exists only if that publish landed.
+ * Unlike the index it has no lag, which is what keeps a second browser from publishing a second
+ * profile (under a fresh topic id) while the index still trails the first.
+ *
+ * Proves presence only. Spaces whose profile predates topic declarations have none, so callers
+ * use this to confirm a profile the index has not shown yet, never to rule one out.
+ */
+export async function hasDeclaredPersonalTopic(spaceId: string): Promise<boolean> {
+  const space = padBytes16ToBytes32(`0x${spaceId}`);
+  // `enter` logs [from space, to space, action, topic] as raw topics with no event signature,
+  // so viem's typed `getLogs` cannot filter it.
+  const logs = await publicClient().request({
+    method: 'eth_getLogs',
+    params: [
+      {
+        address: SPACE_REGISTRY_ADDRESS_HEX,
+        fromBlock: 'earliest',
+        toBlock: 'latest',
+        topics: [space, space, GOVERNANCE_ACTIONS.TOPIC_DECLARED],
+      },
+    ],
+  });
+  return logs.length > 0;
 }
 
 /**

@@ -222,6 +222,14 @@ async function fetchFeedPage(
   return res.json() as Promise<ExploreFeedResult>;
 }
 
+/** `items` with the card `leadId` names moved to the front, when it is there. */
+export function leadFirst<T extends { entityId: string }>(items: T[], leadId: string | null): T[] {
+  if (leadId === null) return items;
+  const index = items.findIndex(item => normId(item.entityId) === normId(leadId));
+  if (index <= 0) return items;
+  return [items[index]!, ...items.slice(0, index), ...items.slice(index + 1)];
+}
+
 function sameFeedOtherThanAccount(a: readonly unknown[], b: readonly unknown[]) {
   return a.length === b.length && a.slice(0, -1).every((part, i) => part === b[i]);
 }
@@ -503,39 +511,64 @@ export function EntityFeed({
   ];
 
   const wantsIdentityToken = usesIdentityToken && viewerAddress !== null;
+  const feedParams = {
+    sort,
+    time: requestedTime,
+    spaceIds: requestedSpaceIds,
+    typeIds,
+    topicIds: selectedTopicIds,
+    followedTopicIds: requestedFollowedTopicIds,
+    pendingTopicFollows: isForYou && pendingTopicFollows,
+    fixedParams,
+  };
 
-  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
-    queryKey,
-    queryFn: async ({ pageParam }) =>
-      fetchFeedPage(apiEndpoint, {
-        identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
-        anonymous: cdnFirstPage && viewerAddress === null && !wantsIdentityToken,
-        sort,
-        time: requestedTime,
-        spaceIds: requestedSpaceIds,
-        typeIds,
-        topicIds: selectedTopicIds,
-        followedTopicIds: requestedFollowedTopicIds,
-        pendingTopicFollows: isForYou && pendingTopicFollows,
-        fixedParams,
-        cursor: pageParam as string | undefined,
-      }),
-    enabled: !awaitingIdentityToken && (!isForYou || followedTopicIds !== null),
-    // When only the account changed (signing in on the page, or an account that arrived after the
-    // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
-    placeholderData: (previous, previousQuery) =>
-      previousQuery && sameFeedOtherThanAccount(previousQuery.queryKey, queryKey) ? previous : undefined,
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: last => last.nextCursor ?? undefined,
-    retry: 2,
-    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
+  // A signed-in reader's plain first Best page is built for them, which takes most of a second
+  // after Privy hands over a token. The CDN-cached public page is the same feed bar a few
+  // member-space cards and flags, and the route preloads it for everyone, so it paints first and the
+  // reader's own page replaces it when it lands.
+  const paintsFromPublicPage =
+    cdnFirstPage &&
+    viewerAddress !== null &&
+    buildFeedQuery({ ...feedParams, cursor: undefined, anonymous: true }).includes(`${PUBLIC_FEED_PARAM}=1`);
+  const publicFirstPage = useQuery({
+    queryKey: [apiEndpoint, PUBLIC_FEED_PARAM],
+    queryFn: () => fetchFeedPage(apiEndpoint, { ...feedParams, cursor: undefined, anonymous: true }),
+    enabled: paintsFromPublicPage,
+    retry: false,
   });
+  const publicPlaceholder = paintsFromPublicPage ? publicFirstPage.data : undefined;
+
+  const { data, isLoading, isFetchingNextPage, isPlaceholderData, fetchNextPage, hasNextPage, error } =
+    useInfiniteQuery({
+      queryKey,
+      queryFn: async ({ pageParam }) =>
+        fetchFeedPage(apiEndpoint, {
+          ...feedParams,
+          identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
+          anonymous: cdnFirstPage && viewerAddress === null && !wantsIdentityToken,
+          cursor: pageParam as string | undefined,
+        }),
+      enabled: !awaitingIdentityToken && (!isForYou || followedTopicIds !== null),
+      // When only the account changed (signing in on the page, or an account that arrived after the
+      // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
+      // Otherwise a signed-in reader sees the public page meanwhile.
+      placeholderData: (previous, previousQuery) => {
+        if (previousQuery && sameFeedOtherThanAccount(previousQuery.queryKey, queryKey)) return previous;
+        return publicPlaceholder ? { pages: [publicPlaceholder], pageParams: [undefined] } : undefined;
+      },
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: last => last.nextCursor ?? undefined,
+      retry: 2,
+      retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
+    });
 
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     const el = sentinelRef.current;
-    if (!el || !hasNextPage) return;
+    // A placeholder's cursor belongs to another feed: its next page would be fetched against this
+    // one's key. Wait for the real first page.
+    if (!el || !hasNextPage || isPlaceholderData) return;
     const io = new IntersectionObserver(
       entries => {
         if (entries[0]?.isIntersecting && !isFetchingNextPage) {
@@ -546,7 +579,7 @@ export function EntityFeed({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData]);
 
   // GEO-3234. Load what this browser has already shown, once, while the first page is in flight.
   const isBest = sort === 'best';
@@ -554,6 +587,11 @@ export function EntityFeed({
     if (isBest) seenStore().prime();
   }, [isBest]);
   const [mountedAtSec] = React.useState(() => Math.floor(Date.now() / 1000));
+  // Keyed on the feed so a pin never follows the reader onto another sort or filter.
+  const feedKey = JSON.stringify(queryKey.slice(0, -1));
+  const [pin, setPin] = React.useState<{ feedKey: string; entityId: string } | null>(null);
+  const pinnedLeadId = pin?.feedKey === feedKey ? pin.entityId : null;
+  const setPinnedLeadId = React.useCallback((entityId: string) => setPin({ feedKey, entityId }), [feedKey]);
 
   const items = React.useMemo(() => {
     // GEO-3234. Best's pages composed together for this visitor: seen cards hidden, gaps filled from
@@ -566,7 +604,7 @@ export function EntityFeed({
       })),
       { snapshot: seenStore().snapshot(), nowSec: mountedAtSec }
     );
-    if (!isForYou) return flat;
+    if (!isForYou) return leadFirst(flat, pinnedLeadId);
     // For you pages two streams that overlap, so an item served from one can come back later from
     // the other. The first appearance stays.
     const seen = new Set<string>();
@@ -576,7 +614,14 @@ export function EntityFeed({
       seen.add(id);
       return true;
     });
-  }, [data?.pages, isForYou, mountedAtSec]);
+  }, [data?.pages, isForYou, mountedAtSec, pinnedLeadId]);
+
+  // The public page's lead is already playing when the reader's own page replaces it, so it stays on
+  // top if that page has it too, rather than the card sliding away under them.
+  const placeholderLeadId = isPlaceholderData && publicPlaceholder ? (items[0]?.entityId ?? null) : null;
+  React.useEffect(() => {
+    if (placeholderLeadId !== null) setPinnedLeadId(placeholderLeadId);
+  }, [placeholderLeadId, setPinnedLeadId]);
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_LABELS[sort];

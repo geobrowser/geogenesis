@@ -1,6 +1,5 @@
 'use client';
 
-import { useLogout } from '@geogenesis/auth';
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import { useQueryClient } from '@tanstack/react-query';
@@ -33,6 +32,7 @@ import type { TopicOption } from '~/core/topics/use-topic-suggestions';
 import type { SearchResult } from '~/core/types';
 import { devLog } from '~/core/utils/dev-log';
 import { NavUtils, validateEntityId } from '~/core/utils/utils';
+import { useLogout } from '~/core/wallet/auth-hooks';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import {

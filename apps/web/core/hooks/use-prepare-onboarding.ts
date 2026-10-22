@@ -1,11 +1,11 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
+
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
   avatarAtom,

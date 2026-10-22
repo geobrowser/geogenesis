@@ -18,7 +18,7 @@ import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 const mocks = vi.hoisted(() => ({ authenticated: false }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ authenticated: mocks.authenticated }),
 }));
 

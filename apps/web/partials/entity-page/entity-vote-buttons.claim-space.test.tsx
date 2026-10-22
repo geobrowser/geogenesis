@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   responseSpaceIds: [] as string[],
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
   usePrivy: () => ({ authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
@@ -61,7 +61,7 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));
 
 vi.mock('~/core/io/queries', () => ({
-  getClaimResponseSummaryPage: () => Effect.succeed([]),
+  getClaimResponseSummaryPage: () => Effect.succeed({ items: [], endCursor: null, hasNextPage: false }),
   // Two up, one down: a curation score reads "1", a claim percentage reads "67%".
   getEntityResponseCounts: (_entityId: string, spaceId: string) => {
     mocks.countsSpaceIds.push(spaceId);

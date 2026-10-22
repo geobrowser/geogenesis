@@ -15,6 +15,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'debateDeviceSwitchRecording',
+    label: 'Debate recording: device switching experiment',
+    description:
+      'Record through canvas and Web Audio to follow device changes. Pending iPhone and background-tab validation (GEO-3404).',
+    enabledByDefault: false,
+  },
+  {
     id: 'debateFormatSelector',
     label: 'Debate format selector',
     description: 'Allow the first matched debater to choose a format before accepting.',
@@ -56,9 +63,17 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'debateVideo',
-    label: 'Video in the claim picker and lobbies',
-    description: 'Camera and video tiles in the claim picker and in live debate lobbies (GEO-3165, GEO-3307).',
+    id: 'googleSignIn',
+    label: 'Google sign-in',
+    description:
+      'Offer Google in every sign-in prompt (GEO-3139). Google redirects, so an action queued before signing in is dropped. Google must also be enabled in the Privy dashboard.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'googleCalendar',
+    label: 'Google Calendar',
+    description:
+      'Connect Google Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Google Calendar configured.',
     enabledByDefault: false,
   },
   {
@@ -73,11 +88,11 @@ export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
 export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // Claims and debates shipped to everyone, so `questionsTab` (and `debatesTab`, the id it was
 // renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too, nor
-// `lobbyJoining`, since finding and joining lobbies did (GEO-3306). All of them are still sitting in
-// browsers' stored flag objects; normalizing drops them on the next write rather than reading them
-// back.
+// `lobbyJoining`, since finding and joining lobbies did (GEO-3306), nor `debateVideo`, since video in
+// the claim picker and lobbies did (GEO-3414). All of them are still sitting in browsers' stored flag
+// objects; normalizing drops them on the next write rather than reading them back.
 type StoredFeatureFlags = Partial<
-  Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability' | 'lobbyJoining', boolean>
+  Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability' | 'lobbyJoining' | 'debateVideo', boolean>
 >;
 
 /**

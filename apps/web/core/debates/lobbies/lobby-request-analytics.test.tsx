@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   requested: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: true, authenticated: true, user: { id: 'user-a' } }),
 }));
 vi.mock('~/core/auth/identity-token', () => ({

@@ -111,7 +111,7 @@ export function reportLobbyMic(on: boolean | null) {
   lobbyMic = on;
 }
 
-/** Reported by the lobby's voice connection; null without the camera (debateVideo off, a mic-only token). */
+/** Reported by the lobby's voice connection; null without the camera (a mic-only token). */
 export function reportLobbyCamera(on: boolean | null) {
   lobbyCamera = on;
 }

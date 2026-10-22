@@ -8,10 +8,13 @@ import {
   blockDebateUser,
   clearClaimNotInterested,
   completeLocalRecordingUpload,
+  connectGoogleCalendar,
   createDebateRequest,
   createScheduledDebate,
+  disconnectGoogleCalendar,
   dismissDebateRequest,
   endDebateTurn,
+  getCalendarBusy,
   getDebateActivity,
   getGeoChatSession,
   getRematchLiveKitToken,
@@ -27,6 +30,7 @@ import {
   listUpcomingDebateRooms,
   markClaimNotInterested,
   notifyClaimResponseIndexed,
+  refreshGoogleCalendar,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
   saveOpenRoundPick,
@@ -223,6 +227,66 @@ describe('upcoming debate rooms', () => {
 });
 
 // GEO-3300. The calendar's week reads geo-chat's date range (GEO-3271).
+describe('google calendar', () => {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+
+  it('connects with the return URL and the browser-binding cookie', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(json({ authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth?x=1' }));
+    vi.stubGlobal('fetch', fetch);
+
+    const result = await connectGoogleCalendar('https://www.geobrowser.io/space/abc?tab=x', vi.fn(), 'user-a');
+
+    expect(result.authorization_url).toBe('https://accounts.google.com/o/oauth2/v2/auth?x=1');
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe('http://localhost:8080/me/calendar/google/connect');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual({ return_to: 'https://www.geobrowser.io/space/abc?tab=x' });
+  });
+
+  it('surfaces a refresh refusal with its code and Retry-After', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'rate_limited', message: 'Slow down' } }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json', 'Retry-After': '30' },
+        })
+      )
+    );
+
+    const error = await refreshGoogleCalendar(vi.fn(), 'user-a').catch(caught => caught);
+
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect(error).toMatchObject({ status: 429, code: 'rate_limited', retryAfterMs: 30_000 });
+  });
+
+  it('disconnects with a DELETE that answers no body', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(disconnectGoogleCalendar(vi.fn(), 'user-a')).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/me/calendar/google',
+      expect.objectContaining({ method: 'DELETE' })
+    );
+  });
+
+  it('asks for busy time with encoded bounds', async () => {
+    const fetch = vi.fn().mockResolvedValue(json({ intervals: [] }));
+    vi.stubGlobal('fetch', fetch);
+
+    await getCalendarBusy({ from: '2026-10-19T04:00:00.000Z', to: '2026-12-19T04:00:00.000Z' }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/me/calendar-busy?from=2026-10-19T04%3A00%3A00.000Z&to=2026-12-19T04%3A00%3A00.000Z',
+      expect.anything()
+    );
+  });
+});
+
 describe('debate lobby calendar', () => {
   it('asks for the week as RFC 3339 bounds, encoded', async () => {
     const fetch = vi

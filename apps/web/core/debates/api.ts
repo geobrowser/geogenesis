@@ -121,6 +121,8 @@ export type DebateMediaArtifactKind =
   | 'final_video_hevc'
   | 'preview_image'
   | 'social_video'
+  /** The share video without spoken-word captions (GEO-3442); absent on debates rendered before it. */
+  | 'social_video_uncaptioned'
   | 'social_preview_image'
   | 'speaker_still_slot_1'
   | 'speaker_still_slot_2'
@@ -182,6 +184,9 @@ export type DebateMediaTurnSegment = {
   output_end_ms: number;
   duration_ms: number;
   countdown_start_ms?: number;
+  /** Original clock deadline and allowance, independent of trimmed turn edges (GEO-3408). */
+  countdown_end_ms?: number;
+  countdown_duration_ms?: number;
   /** The same turn on the raw recordings' clock (GEO-3293). Absent where the two clocks agree: a
    * fixed format, or a render with no edits. See `recording-clock.ts`. */
   source_start_ms?: number;
@@ -210,8 +215,10 @@ export type DebateMediaCondensedBreak = {
   speed: number;
 };
 
-/** An early end inside a round, cut down to a short quiet at `output_ms` (GEO-3276). */
+/** A served turn-edge silence cut (GEO-3408), or a legacy End turn handoff (GEO-3276). */
 export type DebateMediaEarlyEndGap = {
+  /** Absent on legacy End turn handoffs. Turn-edge edits have no on-screen cue. */
+  kind?: 'turn_start' | 'turn_end';
   turn_index: number;
   next_turn_index: number;
   output_ms: number;
@@ -1121,6 +1128,8 @@ type RequestOptions = {
   signal?: AbortSignal;
   /** Let the request outlive the document. For anything sent from `pagehide`. */
   keepalive?: boolean;
+  /** Send and accept cookies cross-origin, for a route that binds a cookie to the browser. */
+  credentials?: RequestCredentials;
 };
 
 const geoChatSessionStorageKey = 'geo:chat-session';
@@ -1200,6 +1209,92 @@ export async function replaceDebateSchedule(
     auth: true,
     getPrivyIdentityToken,
     accountKey,
+  });
+}
+
+/** Why a connected calendar last failed to sync. */
+export type CalendarConnectionError =
+  'invalid_grant' | 'scope_missing' | 'provider_unavailable' | 'rate_limited' | 'unknown';
+
+export type GoogleCalendarConnection = {
+  account_email: string | null;
+  /** `needs_reconnect` stops syncing until the user connects again. */
+  status: 'ok' | 'needs_reconnect' | 'error';
+  /** No successful sync in 48h (or ever), so its busy time is not being applied. */
+  stale: boolean;
+  last_success_at: string | null;
+  last_error: CalendarConnectionError | null;
+};
+
+export type CalendarConnections = { google: GoogleCalendarConnection | null };
+
+/** An absolute busy window from the viewer's own connected calendar. */
+export type CalendarBusyInterval = {
+  start: string;
+  end: string;
+};
+
+/** Every calendar route answers 404 `calendar_disabled` while geo-chat runs without Google Calendar configured. */
+export async function getCalendarConnections(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
+  return geoChatRequest<CalendarConnections>('/me/calendar', { auth: true, getPrivyIdentityToken, accountKey });
+}
+
+/**
+ * Returns Google's consent URL; geo-chat redirects back to `returnTo` with `?calendar=…`.
+ * Credentials included for geo-chat's browser-binding cookie.
+ */
+export async function connectGoogleCalendar(
+  returnTo: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<{ authorization_url: string }>('/me/calendar/google/connect', {
+    method: 'POST',
+    body: { return_to: returnTo },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    credentials: 'include',
+  });
+}
+
+/** Syncs now. 429 `rate_limited` within a minute of the last refresh. */
+export async function refreshGoogleCalendar(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
+  return geoChatRequest<CalendarConnections>('/me/calendar/google/refresh', {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Idempotent: 204 whether or not anything was connected. */
+export async function disconnectGoogleCalendar(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<void>('/me/calendar/google', {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** The viewer's own merged busy time, clipped to `[from, to)`. geo-chat caps the window at 92 days. */
+export async function getCalendarBusy(
+  { from, to }: { from: string; to: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ from, to });
+
+  return geoChatRequest<{ intervals: CalendarBusyInterval[] }>(`/me/calendar-busy?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
   });
 }
 
@@ -3624,6 +3719,7 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     signal: options.signal,
     keepalive: options.keepalive,
+    credentials: options.credentials,
   });
 
   if (!response.ok) {

@@ -5,7 +5,6 @@ import {
   DisconnectButton,
   GridLayout,
   LiveKitRoom,
-  MediaDeviceMenu,
   ParticipantTile,
   RoomAudioRenderer,
   TrackToggle,
@@ -40,6 +39,8 @@ import { ChatEntry, usePersistentChat } from '~/core/community-calls/use-persist
 import { useReconnectionState } from '~/core/community-calls/use-reconnection-state';
 import { useRecordingMetadataSync } from '~/core/community-calls/use-recording-metadata-sync';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { withMediaDeviceOptions } from '~/core/media/device-options';
+import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 import { setTelemetryUser } from '~/core/telemetry/logger';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 
@@ -48,6 +49,7 @@ import { Button } from '~/design-system/button';
 import { Dialog } from '~/design-system/dialog';
 import { Member } from '~/design-system/icons/member';
 
+import { CallDeviceMenu } from './call-device-menu';
 import { CallEndTimer } from './call-end-timer';
 import { ChatPanel } from './chat-panel';
 import { FocusStage } from './focus-stage';
@@ -72,6 +74,8 @@ type Props = {
   occurrenceEnd?: number;
   audio: boolean;
   video: boolean;
+  audioDeviceId?: string;
+  videoDeviceId?: string;
   backHref: string;
 };
 
@@ -89,12 +93,20 @@ export function LiveRoom({
   occurrenceEnd,
   audio,
   video,
+  audioDeviceId,
+  videoDeviceId,
   backHref,
 }: Props) {
   // The default LiveKit reconnect policy gives up after ~37s; ours retries for up to
   // 3 minutes to ride out transient server issues (e.g. deploys) or brief network drops.
   // Memoized so `<LiveKitRoom>` doesn't tear down/recreate its Room on every re-render.
-  const roomOptions = React.useMemo(() => ({ reconnectPolicy: new ExtendedReconnectPolicy() }), []);
+  const devices = useInitialMediaDevices({ audioInputId: audioDeviceId, videoInputId: videoDeviceId });
+  const roomOptions = React.useMemo(
+    () => withMediaDeviceOptions(devices, { reconnectPolicy: new ExtendedReconnectPolicy() }),
+    [devices]
+  );
+
+  if (!devices.ready) return null;
 
   return (
     <LiveKitRoom
@@ -506,15 +518,16 @@ function RoomBody({
             <div className="lk-button-group">
               <TrackToggle source={Track.Source.Microphone} />
               <div className="lk-button-group-menu">
-                <MediaDeviceMenu kind="audioinput" />
+                <CallDeviceMenu kind="audioinput" />
               </div>
             </div>
             <div className="lk-button-group">
               <TrackToggle source={Track.Source.Camera} />
               <div className="lk-button-group-menu">
-                <MediaDeviceMenu kind="videoinput" />
+                <CallDeviceMenu kind="videoinput" />
               </div>
             </div>
+            <CallDeviceMenu kind="audiooutput" />
             <TrackToggle source={Track.Source.ScreenShare} />
             <ReactionsButton onSend={sendReaction} />
             <button

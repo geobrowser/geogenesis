@@ -14,11 +14,11 @@ vi.mock('~/core/explore/fetch-explore-feed', () => ({
 }));
 vi.mock('~/core/explore/resolve-explore-feed-request-context', () => ({
   resolveExploreFeedRequestContext: async (...args: unknown[]) => ({
-    ...mocks.context(...args),
     browse: { featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null },
     memberOrEditorSpaceIds: [],
     walletAddress: null,
     personalMemberSpaceId: null,
+    ...mocks.context(...args),
   }),
 }));
 vi.mock('~/core/explore/fresh-slot/fresh-slot-store', () => ({
@@ -65,6 +65,17 @@ describe('GET /api/explore/feed', () => {
     await GET(new Request('https://example.com/api/explore/feed?sort=best'));
 
     expect(sentArgs().freshSlot).toEqual({ config: FRESH_ON, revision: 4 });
+  });
+
+  it('hands the feed the member space it resolved, so the feed does not look it up again', async () => {
+    mocks.context.mockReturnValue({ walletAddress: '0xabc', personalMemberSpaceId: 'member-space' });
+
+    await GET(new Request('https://example.com/api/explore/feed?sort=new'));
+
+    expect(mocks.fetchFeed.mock.calls[0]?.[0]).toMatchObject({
+      walletAddress: '0xabc',
+      viewerMemberSpaceId: 'member-space',
+    });
   });
 
   it.each(['new', 'top', 'for-you'])('does not read the fresh slot for %s', async sort => {

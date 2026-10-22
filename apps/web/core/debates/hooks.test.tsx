@@ -36,6 +36,7 @@ import {
   useDebateProfile,
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
+  useDebateSchedule,
   useEndDebateTurn,
   useForgetEndedRematch,
   useGeoChatAuth,
@@ -61,6 +62,7 @@ const mocks = vi.hoisted(() => ({
   getDebateProfile: vi.fn(),
   getDebateExtractedClaims: vi.fn(),
   getDebateMedia: vi.fn(),
+  getDebateSchedule: vi.fn(),
   listDebateRematchClaims: vi.fn(),
   listDebateSharePrompts: vi.fn(),
   markDebateReady: vi.fn(),
@@ -83,7 +85,7 @@ vi.mock('~/core/state/feature-flags', async importOriginal => ({
   useFeatureFlag: () => false,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   getIdentityToken: mocks.getIdentityToken,
   useIdentityToken: () => ({ identityToken: mocks.identityToken() }),
   usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: { id: 'user-a' } }),
@@ -123,6 +125,7 @@ vi.mock('./api', async importOriginal => {
     getDebateProfile: mocks.getDebateProfile,
     getDebateExtractedClaims: mocks.getDebateExtractedClaims,
     getDebateMedia: mocks.getDebateMedia,
+    getDebateSchedule: mocks.getDebateSchedule,
     listDebateRematchClaims: mocks.listDebateRematchClaims,
     listDebateSharePrompts: mocks.listDebateSharePrompts,
     markDebateReady: mocks.markDebateReady,
@@ -1813,5 +1816,42 @@ describe('useDebateProfile signed out', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mocks.getDebateProfile).toHaveBeenCalledOnce();
     expect(mocks.getDebateProfile.mock.calls[0][0]).toBe('space-1');
+  });
+});
+
+describe('useDebateSchedule', () => {
+  beforeEach(() => {
+    mocks.authenticated = true;
+    mocks.identityToken.mockReturnValue('token');
+    mocks.getIdentityToken.mockResolvedValue('token');
+    setCachedIdentityToken('token');
+    mocks.getDebateSchedule.mockReset();
+  });
+
+  // The schedule editor tells an edit from the saved week by reference.
+  it('keeps the same blocks across re-renders and unchanged refetches', async () => {
+    const schedule = {
+      timezone: 'UTC',
+      slot_minutes: 30,
+      recurring: [{ weekday: 1, start: '09:00', end: '10:00' }],
+      dated: [],
+      exceptions: [],
+    };
+    mocks.getDebateSchedule.mockImplementation(async () => ({ is_set: true, schedule: structuredClone(schedule) }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const { result, rerender } = renderHook(() => useDebateSchedule(), { wrapper });
+    await waitFor(() => expect(result.current.blocks).toHaveLength(1));
+    const first = result.current.blocks;
+
+    rerender();
+    expect(result.current.blocks).toBe(first);
+
+    await act(() => result.current.refetch());
+    expect(mocks.getDebateSchedule).toHaveBeenCalledTimes(2);
+    expect(result.current.blocks).toBe(first);
   });
 });
