@@ -32,7 +32,9 @@ export function validatePayoutAmount(raw: string, balance: number | null): strin
   if (!raw.trim()) return 'Enter an amount.';
   const amount = parseWholePoints(raw);
   if (amount == null) return 'Amount must be a positive whole number of points.';
-  if (balance != null && amount > balance) return `This space only has ${formatPoints(balance)} points.`;
+  // An unknown balance is not "no limit": the ledger would refuse an unfunded payout after it is published.
+  if (balance == null) return "The space's balance couldn't be read, so you can't pay yet.";
+  if (amount > balance) return `This space only has ${formatPoints(balance)} points.`;
   return null;
 }
 
@@ -66,6 +68,8 @@ export function BountyPayDialog({
   const handleOutcome = (outcome: DirectPayoutOutcome) => {
     if (outcome.status === 'paid') {
       onOpenChange(false);
+    } else if (outcome.status === 'not-paid') {
+      setError(outcome.message);
     } else if (outcome.status === 'publish-failed') {
       setError('The payout could not be published. Nothing was paid.');
     } else {
@@ -160,7 +164,11 @@ export function BountyPayDialog({
                   Cancel
                 </Button>
               </Dialog.Close>
-              <Button variant="primary" disabled={busy || (!pendingCredit && !recipient)} onClick={() => void submit()}>
+              <Button
+                variant="primary"
+                disabled={busy || (!pendingCredit && (!recipient || balance == null))}
+                onClick={() => void submit()}
+              >
                 {busy ? 'Paying…' : pendingCredit ? 'Retry credit' : 'Pay'}
               </Button>
             </div>

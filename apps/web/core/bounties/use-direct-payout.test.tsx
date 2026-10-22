@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   invalidateQueries: vi.fn(() => Promise.resolve()),
   recordPayoutCredit: vi.fn(),
   token: 'jwt' as string | null,
+  balance: 1000 as number | null,
 }));
 
 vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: mocks.makeProposal }) }));
@@ -28,7 +29,7 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('~/core/auth/identity-token', () => ({ getCachedIdentityToken: async () => mocks.token }));
 vi.mock('./payout-credit', () => ({
   recordPayoutCredit: (...args: unknown[]) => mocks.recordPayoutCredit(...args),
-  fetchSpaceBalance: async () => 1000,
+  fetchSpaceBalance: async () => mocks.balance,
 }));
 
 const SPACE = '3be38bb922bc80c6a6503fbbba28d2b0';
@@ -48,6 +49,8 @@ function publishSucceeds() {
 }
 
 beforeEach(() => {
+  window.localStorage.clear();
+  mocks.balance = 1000;
   mocks.makeProposal.mockReset();
   mocks.recordPayoutCredit.mockReset();
   mocks.recordPayoutCredit.mockResolvedValue({ newBalance: 750 });
@@ -124,15 +127,49 @@ describe('useDirectPayout', () => {
     expect(result.current.pendingCredit).toBeNull();
   });
 
-  it('asks the editor to sign in again when there is no identity token', async () => {
+  // The publish can't be taken back, so anything the ledger would refuse for good is
+  // caught before it: each of these must leave the graph untouched.
+  it.each([
+    ['no identity token', () => (mocks.token = null), /sign-in expired/],
+    ['an unreadable balance', () => (mocks.balance = null), /Couldn't read the space's balance/],
+    ['a balance below the amount (fresh, not the cached one)', () => (mocks.balance = 249), /only has 249 points/],
+  ])('refuses before publishing on %s', async (_label, arrange, message) => {
     publishSucceeds();
-    mocks.token = null;
+    arrange();
     const { result } = renderHook(() => useDirectPayout(detail));
     await act(async () => {
       const outcome = await result.current.pay(ibrahim, 250);
-      expect(outcome).toMatchObject({ status: 'credit-failed' });
+      expect(outcome).toMatchObject({ status: 'not-paid', message: expect.stringMatching(message) });
     });
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
     expect(mocks.recordPayoutCredit).not.toHaveBeenCalled();
-    expect(result.current.pendingCredit).not.toBeNull();
+    expect(result.current.pendingCredit).toBeNull();
+  });
+
+  it('keeps an uncredited payout across a reload and clears it once credited', async () => {
+    publishSucceeds();
+    mocks.recordPayoutCredit.mockRejectedValueOnce(new Error('ledger down'));
+    const first = renderHook(() => useDirectPayout(detail));
+    await act(async () => {
+      await first.result.current.pay(ibrahim, 250);
+    });
+    const pending = first.result.current.pendingCredit!;
+    first.unmount();
+
+    // A fresh mount (reload, or another visit to the bounty) offers the same credit.
+    const second = renderHook(() => useDirectPayout(detail));
+    await act(async () => {});
+    expect(second.result.current.pendingCredit).toEqual(pending);
+
+    await act(async () => {
+      expect(await second.result.current.retryCredit()).toEqual({ status: 'paid' });
+    });
+    expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+    expect(mocks.recordPayoutCredit.mock.calls[1][0].payoutEntityId).toBe(pending.payoutRelationId);
+    second.unmount();
+
+    const third = renderHook(() => useDirectPayout(detail));
+    await act(async () => {});
+    expect(third.result.current.pendingCredit).toBeNull();
   });
 });

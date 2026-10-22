@@ -9,8 +9,10 @@ import { publishOnce } from '~/core/hooks/publish-once';
 import { usePublish } from '~/core/hooks/use-publish';
 
 import type { BountyDetail } from './fetch-bounty-detail';
+import { formatPoints } from './payout';
 import { fetchSpaceBalance, recordPayoutCredit } from './payout-credit';
 import { buildPayoutOps } from './payout-ops';
+import { loadPendingCredit, savePendingCredit } from './pending-credit-storage';
 import { bountyQueryKeys, useInvalidateSoon } from './use-bounties';
 
 export type PayoutRecipient = {
@@ -27,7 +29,11 @@ export type PendingCredit = {
 };
 
 export type DirectPayoutOutcome =
-  { status: 'paid' } | { status: 'publish-failed' } | { status: 'credit-failed'; message: string };
+  | { status: 'paid' }
+  /** Refused before anything was published — nothing to undo. */
+  | { status: 'not-paid'; message: string }
+  | { status: 'publish-failed' }
+  | { status: 'credit-failed'; message: string };
 
 export function spaceBalanceQueryKey(spaceId: string) {
   return [...bountyQueryKeys.all, 'space-balance', spaceId] as const;
@@ -48,14 +54,27 @@ export function useSpaceBalance(spaceId: string | null | undefined, enabled = tr
  * work done outside the bounty space (e.g. in the curator's personal space).
  * Two steps, as in curator-app: publish the Payout relation into the bounty's
  * DAO space (editor FAST path), then credit the points ledger. If the credit
- * fails after the publish, the payout is kept as `pendingCredit` and
- * `retryCredit` finishes it without publishing a second Payout.
+ * fails after the publish, the payout is kept as `pendingCredit` (also in
+ * localStorage, so it survives a reload) and `retryCredit` finishes it without
+ * publishing a second Payout.
  */
 export function useDirectPayout(detail: BountyDetail | null | undefined) {
   const { makeProposal } = usePublish();
   const queryClient = useQueryClient();
   const [busy, setBusy] = React.useState(false);
-  const [pendingCredit, setPendingCredit] = React.useState<PendingCredit | null>(null);
+  const bountyId = detail?.bounty.id ?? null;
+  const [pendingCredit, setPendingCreditState] = React.useState<PendingCredit | null>(null);
+  // Pick up a credit a previous visit left unfinished, so the dialog can offer to retry it.
+  React.useEffect(() => {
+    setPendingCreditState(bountyId ? loadPendingCredit(bountyId) : null);
+  }, [bountyId]);
+  const setPendingCredit = React.useCallback(
+    (pending: PendingCredit | null) => {
+      setPendingCreditState(pending);
+      if (bountyId) savePendingCredit(bountyId, pending);
+    },
+    [bountyId]
+  );
 
   const invalidate = React.useCallback(
     () => queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all }),
@@ -92,7 +111,7 @@ export function useDirectPayout(detail: BountyDetail | null | undefined) {
         };
       }
     },
-    [detail]
+    [detail, setPendingCredit]
   );
 
   const pay = React.useCallback(
@@ -101,6 +120,20 @@ export function useDirectPayout(detail: BountyDetail | null | undefined) {
       if (!detail || pendingCredit) return { status: 'publish-failed' };
       setBusy(true);
       try {
+        // The publish can't be taken back, and the ledger refuses (for good, a 4xx)
+        // a payout it can't fund or an editor it can't authenticate. Check both
+        // first, against a fresh balance rather than the dialog's cached one.
+        if (!(await getCachedIdentityToken())) {
+          return { status: 'not-paid', message: 'Your sign-in expired. Sign in again, then pay.' };
+        }
+        const balance = await fetchSpaceBalance(detail.bounty.spaceId);
+        if (balance == null) {
+          return { status: 'not-paid', message: "Couldn't read the space's balance, so nothing was paid. Try again." };
+        }
+        if (balance < amount) {
+          return { status: 'not-paid', message: `This space only has ${formatPoints(balance)} points.` };
+        }
+
         const payout = buildPayoutOps({
           spaceId: detail.bounty.spaceId,
           bounty: { id: detail.bounty.id, name: detail.bounty.name },
@@ -124,7 +157,7 @@ export function useDirectPayout(detail: BountyDetail | null | undefined) {
         setBusy(false);
       }
     },
-    [credit, detail, makeProposal, pendingCredit, refresh]
+    [credit, detail, makeProposal, pendingCredit, refresh, setPendingCredit]
   );
 
   const retryCredit = React.useCallback(async (): Promise<DirectPayoutOutcome> => {

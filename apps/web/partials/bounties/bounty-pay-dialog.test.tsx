@@ -37,7 +37,7 @@ describe('validatePayoutAmount', () => {
     expect(validatePayoutAmount('0', 100)).toMatch(/whole number/);
     expect(validatePayoutAmount('101', 100)).toBe('This space only has 100 points.');
     expect(validatePayoutAmount('100', 100)).toBeNull();
-    expect(validatePayoutAmount('500', null)).toBeNull();
+    expect(validatePayoutAmount('500', null)).toMatch(/balance couldn't be read/);
   });
 });
 
@@ -88,5 +88,21 @@ describe('BountyPayDialog', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('data-testid', 'bounty-pay-dialog');
     expect(dialog.parentElement?.className).toMatch(/fixed inset-0/);
+  });
+
+  it('will not pay while the space balance is unknown', () => {
+    renderDialog({ balance: null });
+    expect(screen.getByText('Space balance unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pay' })).toBeDisabled();
+  });
+
+  it('shows why a payout was refused before anything was published', async () => {
+    const props = renderDialog({
+      onPay: vi.fn(async () => ({ status: 'not-paid' as const, message: 'This space only has 10 points.' })),
+    });
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Pay' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('This space only has 10 points.');
+    expect(props.onOpenChange).not.toHaveBeenCalled();
   });
 });

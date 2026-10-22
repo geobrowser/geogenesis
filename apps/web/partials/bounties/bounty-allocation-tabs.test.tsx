@@ -32,11 +32,16 @@ const mocks = vi.hoisted(() => ({
   // Person entity → personal space, as the graph resolves pages to spaces.
   spaceByPerson: new Map<string, string>(),
   lookupFails: false,
+  pendingCredit: null as null | {
+    payoutRelationId: string;
+    recipient: { spaceId: string; name: string | null };
+    amount: number;
+  },
   searchPick: null as { spaceId: string; personId: string; name: string | null } | null,
 }));
 
 vi.mock('~/core/bounties/use-direct-payout', () => ({
-  useDirectPayout: () => ({ pay: mocks.pay, retryCredit: vi.fn(), pendingCredit: null, busy: false }),
+  useDirectPayout: () => ({ pay: mocks.pay, retryCredit: vi.fn(), pendingCredit: mocks.pendingCredit, busy: false }),
   useSpaceBalance: () => ({ data: 6880, isLoading: false }),
 }));
 vi.mock('~/core/io/subgraph/fetch-personal-spaces-by-page-ids', () => ({
@@ -132,6 +137,7 @@ beforeEach(() => {
   mocks.pay.mockClear();
   mocks.spaceByPerson = new Map();
   mocks.lookupFails = false;
+  mocks.pendingCredit = null;
   mocks.searchPick = null;
 });
 afterEach(cleanup);
@@ -152,15 +158,17 @@ describe('BountyAllocationTabs', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('gives editors Remove on allocated and Allocate on interested-but-unallocated', () => {
+  it('gives editors Remove on allocated and Allocate on interested-but-unallocated', async () => {
     render(<BountyAllocationTabs detail={detail} roles={{ ...viewer, isEditor: true }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
-    expect(mocks.remove).toHaveBeenCalledWith(ALICE);
+    expect(mocks.remove).toHaveBeenCalledWith({ id: ALICE, targetIds: [ALICE] });
     expect(screen.getByRole('button', { name: 'Pay' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: /Interested/ }));
     const allocateButtons = screen.getAllByRole('button', { name: 'Allocate' });
     expect(allocateButtons).toHaveLength(1);
+    // Allocate waits for the person → space lookup, so it can't duplicate an allocation.
+    await waitFor(() => expect(allocateButtons[0]).toBeEnabled());
     fireEvent.click(allocateButtons[0]);
     expect(mocks.allocate).toHaveBeenCalledWith({ spaceId: BOB, name: 'Bob' });
   });
@@ -221,5 +229,56 @@ describe('BountyAllocationTabs', () => {
     // Let the failed lookup settle; Pay must never enable.
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(screen.getByRole('button', { name: 'Pay' })).toBeDisabled();
+  });
+
+  // Live shape on "The ranked 25": curator-app allocated the person entity, Geo recorded
+  // interest from the personal space. Both must read as one curator.
+  it('treats a person-allocated curator with space-shaped interest as one allocated curator', async () => {
+    const PERSON = 'eeee00000000000000000000000000e5';
+    const PERSON_SPACE = 'ffff00000000000000000000000000f6';
+    mocks.spaceByPerson = new Map([[PERSON, PERSON_SPACE]]);
+    mocks.names.set(PERSON, 'Ali');
+    const mixed: BountyDetail = {
+      ...detail,
+      bounty: { ...detail.bounty, allocatedIds: [PERSON] },
+      interest: [{ id: 'i-ali', fromEntityId: PERSON, spaceId: PERSON_SPACE }],
+    };
+    render(<BountyAllocationTabs detail={mixed} roles={{ ...viewer, isEditor: true }} />);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Pay' })).toBeEnabled());
+    expect(screen.getAllByTestId('curator-row')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Pay' })).toHaveLength(1);
+    expect(screen.getByText('Ali')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Interested/ }));
+    const rows = screen.getAllByTestId('curator-row');
+    expect(rows).toHaveLength(1);
+    expect(within(rows[0]).getByText('Allocated')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Allocate' })).not.toBeInTheDocument();
+
+    // Remove still tombstones the person-shaped row it was actually allocated under.
+    fireEvent.click(screen.getByRole('tab', { name: /Allocated/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(mocks.remove).toHaveBeenCalledWith({ id: PERSON_SPACE, targetIds: [PERSON] });
+  });
+
+  it('pays the personal space once for a curator allocated under both identities', async () => {
+    const PERSON = 'eeee00000000000000000000000000e5';
+    const PERSON_SPACE = 'ffff00000000000000000000000000f6';
+    mocks.spaceByPerson = new Map([[PERSON, PERSON_SPACE]]);
+    const both = { ...detail, bounty: { ...detail.bounty, allocatedIds: [PERSON, PERSON_SPACE] } };
+    render(<BountyAllocationTabs detail={both} roles={{ ...viewer, isEditor: true }} />);
+    await waitFor(() => expect(screen.getAllByTestId('curator-row')).toHaveLength(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(mocks.remove).toHaveBeenCalledWith({ id: PERSON_SPACE, targetIds: [PERSON, PERSON_SPACE] });
+  });
+
+  it('offers to finish a payout a previous visit published but never credited', async () => {
+    mocks.pendingCredit = { payoutRelationId: 'p1', recipient: { spaceId: BOB, name: 'Bob' }, amount: 250 };
+    render(<BountyAllocationTabs detail={detail} roles={{ ...viewer, isEditor: true }} />);
+    expect(screen.getByTestId('pending-credit-notice')).toHaveTextContent(
+      "A payout of 250 points to Bob was published but its points haven't moved yet."
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Finish payout' }));
+    expect(await screen.findByRole('button', { name: 'Retry credit' })).toBeInTheDocument();
   });
 });

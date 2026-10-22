@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { type BountyDetail, distinctInterestedIds } from '~/core/bounties/fetch-bounty-detail';
+import { formatPoints } from '~/core/bounties/payout';
 import { useBountyAllocationActions } from '~/core/bounties/use-bounty-actions';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
 import { type PayoutRecipient, useDirectPayout, useSpaceBalance } from '~/core/bounties/use-direct-payout';
@@ -39,25 +40,40 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
   const [paying, setPaying] = React.useState<{ recipient: PayoutRecipient; label: string } | null>(null);
   const balance = useSpaceBalance(detail.bounty.spaceId, roles.isEditor);
 
-  const allocatedIds = React.useMemo(() => [...new Set(detail.bounty.allocatedIds.map(uuidToHex))], [detail]);
-  const interestedIds = React.useMemo(
+  const rawAllocatedIds = React.useMemo(() => [...new Set(detail.bounty.allocatedIds.map(uuidToHex))], [detail]);
+  const rawInterestedIds = React.useMemo(
     () => distinctInterestedIds(detail.interest, detail.bounty.spaceId),
     [detail.interest, detail.bounty.spaceId]
   );
-  const allocatedSet = React.useMemo(() => new Set(allocatedIds), [allocatedIds]);
-  const names = useEntityNames([...allocatedIds, ...interestedIds]);
 
-  // Payouts go to the curator's personal space. Allocations written by curator-app
-  // point at the person entity instead, so map those people to their spaces; an id
-  // missing from the map is already a space.
-  const spaceByPerson = usePersonalSpacesByPageIds(allocatedIds, roles.isEditor);
-  const recipientSpaceId = (id: string) => spaceByPerson.data?.get(id) ?? id;
+  // One curator can be allocated under their person entity (curator-app's shape) and
+  // show interest from their personal space (Geo's), so every id is folded onto the
+  // personal space it belongs to; an id missing from the map is already a space.
+  // Without this the same curator shows as unallocated with an Allocate button, and a
+  // second allocation gives them two rows and two Pay buttons.
+  const spaceByPerson = usePersonalSpacesByPageIds(
+    React.useMemo(() => [...rawAllocatedIds, ...rawInterestedIds], [rawAllocatedIds, rawInterestedIds])
+  );
+  const { allocatedIds, targetsBySpace, interestedIds } = React.useMemo(() => {
+    const toSpace = (id: string) => spaceByPerson.data?.get(id) ?? id;
+    const targets = new Map<string, string[]>();
+    for (const id of rawAllocatedIds) targets.set(toSpace(id), [...(targets.get(toSpace(id)) ?? []), id]);
+    return {
+      allocatedIds: [...targets.keys()],
+      targetsBySpace: targets,
+      interestedIds: [...new Set(rawInterestedIds.map(toSpace))],
+    };
+  }, [rawAllocatedIds, rawInterestedIds, spaceByPerson.data]);
+  const allocatedSet = React.useMemo(() => new Set(allocatedIds), [allocatedIds]);
+  const names = useEntityNames([...allocatedIds, ...interestedIds, ...rawAllocatedIds]);
 
   const spotsLeft =
     detail.bounty.maxContributors != null ? Math.max(0, detail.bounty.maxContributors - allocatedIds.length) : null;
 
   const rows = tab === 'allocated' ? allocatedIds : interestedIds;
-  const label = (id: string): string => names.data?.get(id)?.trim() || `${id.slice(0, 6)}…${id.slice(-4)}`;
+  const nameOf = (id: string): string | null =>
+    [id, ...(targetsBySpace.get(id) ?? [])].map(key => names.data?.get(key)?.trim()).find(Boolean) ?? null;
+  const label = (id: string): string => nameOf(id) ?? `${id.slice(0, 6)}…${id.slice(-4)}`;
 
   return (
     <section aria-label="Curators" data-testid="bounty-allocation-tabs" className="flex flex-col gap-3">
@@ -74,6 +90,28 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
           </Text>
         ) : null}
       </div>
+
+      {roles.isEditor && payout.pendingCredit ? (
+        <div
+          role="status"
+          className="flex items-center justify-between gap-3 rounded-md border border-grey-02 px-3 py-2"
+          data-testid="pending-credit-notice"
+        >
+          <Text variant="metadata">
+            A payout of {formatPoints(payout.pendingCredit.amount)} points to{' '}
+            {payout.pendingCredit.recipient.name ?? 'a curator'} was published but its points haven&apos;t moved yet.
+          </Text>
+          <SmallButton
+            disabled={payout.busy}
+            onClick={() => {
+              const { recipient } = payout.pendingCredit!;
+              setPaying({ recipient, label: recipient.name ?? label(recipient.spaceId) });
+            }}
+          >
+            Finish payout
+          </SmallButton>
+        </div>
+      ) : null}
 
       {roles.isEditor && tab === 'allocated' && spotsLeft !== 0 ? (
         <div data-testid="allocate-search">
@@ -92,14 +130,9 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
       ) : (
         <ul className="flex flex-col divide-y divide-grey-02">
           {rows.map(id => {
-            // Known limitation: a curator allocated under the LEGACY shape (person
-            // entity target) but interested under the current shape (personal-space
-            // entity) won't match here, so Allocate stays clickable and could create
-            // a second allocation under a second identity. Resolving the two shapes
-            // needs a person↔space profile lookup; deliberately not built for a case
-            // this rare — deduped counts keep it from affecting spots math.
             const isAllocated = allocatedSet.has(id);
             const pending = actions.pendingTargetId != null && uuidToHex(actions.pendingTargetId) === id;
+            const targetIds = targetsBySpace.get(id) ?? [id];
             return (
               <li key={id} className="flex items-center justify-between gap-3 py-2" data-testid="curator-row">
                 <Link
@@ -115,14 +148,14 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
                         disabled={payout.busy || !spaceByPerson.isSuccess}
                         onClick={() =>
                           setPaying({
-                            recipient: { spaceId: recipientSpaceId(id), name: names.data?.get(id) ?? null },
+                            recipient: { spaceId: id, name: nameOf(id) },
                             label: label(id),
                           })
                         }
                       >
                         Pay
                       </SmallButton>
-                      <SmallButton disabled={pending} onClick={() => void actions.remove(id)}>
+                      <SmallButton disabled={pending} onClick={() => void actions.remove({ id, targetIds })}>
                         {pending ? 'Removing…' : 'Remove'}
                       </SmallButton>
                     </div>
@@ -132,8 +165,8 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
                     </Text>
                   ) : (
                     <SmallButton
-                      disabled={pending || spotsLeft === 0}
-                      onClick={() => void actions.allocate({ spaceId: id, name: names.data?.get(id) ?? null })}
+                      disabled={pending || spotsLeft === 0 || !spaceByPerson.isSuccess}
+                      onClick={() => void actions.allocate({ spaceId: id, name: nameOf(id) })}
                     >
                       {pending ? 'Allocating…' : 'Allocate'}
                     </SmallButton>

@@ -169,17 +169,17 @@ export function useBountyAllocationActions(detail: BountyDetail | null | undefin
   );
 
   const remove = React.useCallback(
-    async (targetId: string): Promise<boolean> => {
+    async (curator: { id: string; targetIds: readonly string[] }): Promise<boolean> => {
       if (!detail) return false;
       const { bounty } = detail;
       const { relations } = buildRemoveAllocationOps({
         daoSpaceId: bounty.spaceId,
         bounty: { id: bounty.id, name: bounty.name },
-        targetId,
+        targetIds: curator.targetIds,
         existingRelations: detail.allocationRelations,
       });
       if (relations.length === 0) return false;
-      setPendingTargetId(targetId);
+      setPendingTargetId(curator.id);
       try {
         const ok = await publishOnce(makeProposal, {
           values: [],
