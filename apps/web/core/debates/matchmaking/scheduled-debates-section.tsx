@@ -42,6 +42,7 @@ import { RequestSection } from './request-section';
 import { formatDebateSlot, formatDebateTime, formatTime } from './scheduled-debate-format';
 import { type UpcomingLobbyRow, upcomingLobbyRows } from './upcoming-lobby-rows';
 import { useAnswerOnce } from './use-answer-once';
+import { useDebatesHub } from './use-debates-hub';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useRequestCountdown } from './use-request-countdown';
 import { type ScheduledDebateAnswer, useScheduledDebateAnswer } from './use-scheduled-debate-answer';
@@ -394,10 +395,14 @@ export function ScheduledRow({
   const viewerAccepted =
     viewerId !== null && request.participants.some(entry => entry.accepted === true && sameId(entry.user_id, viewerId));
   const withdrawable = !request.viewer_must_answer && (proposedByViewer || viewerAccepted);
+  // GEO-3431: an email's link to this request ("Withdraw the invite") brings it into view.
+  const { focusedRequestId } = useDebatesHub();
+  const focused = focusedRequestId !== null && sameId(focusedRequestId, request.request_id);
 
   return (
     <ScheduleCard
       ref={ref}
+      focused={focused}
       parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
       status={`${
@@ -659,8 +664,11 @@ function ScheduleCard({
   actions,
   ref,
   testId,
+  focused = false,
 }: {
   ref?: React.Ref<HTMLElement>;
+  /** A link asked for this card (GEO-3431): outlined, and scrolled into view once. */
+  focused?: boolean;
   /** Who it is with: the "You vs Them" strip for a debate, the lobby's name and host for a lobby. */
   parties: React.ReactNode;
   testId?: string;
@@ -671,12 +679,27 @@ function ScheduleCard({
   urgent?: boolean;
   actions?: React.ReactNode;
 }) {
+  // Our own handle on the card, beside the caller's (`HubCardList` measures it on its way out).
+  const articleRef = React.useRef<HTMLElement | null>(null);
+  const setRef = React.useCallback(
+    (node: HTMLElement | null) => {
+      articleRef.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref]
+  );
+  React.useEffect(() => {
+    if (focused) articleRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }, [focused]);
+
   return (
     <motion.article
-      ref={ref}
+      ref={setRef}
       {...hubCardMotion}
-      className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
+      className={`flex w-full flex-col gap-3 rounded-lg border bg-white p-3 ${focused ? 'border-text' : 'border-grey-02'}`}
       data-testid={testId}
+      data-focused={focused || undefined}
     >
       {/* The time on its own line, with where things stand under it: side by side, a slot and a
           sentence crowd each other out at this width, and it was the status that lost. */}

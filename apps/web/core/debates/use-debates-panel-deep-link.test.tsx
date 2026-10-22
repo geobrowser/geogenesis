@@ -93,6 +93,29 @@ describe('a link to a tab that needs sign-in', () => {
   });
 });
 
+// GEO-3431: "Withdraw the invite" in the requester heads-up email.
+describe('a link to one scheduled request', () => {
+  const REQUEST = '5f0c2a9e-1b7d-4c3e-9a8f-2d6b1e4c7a90';
+
+  it('opens Requests on it for someone signed in', () => {
+    mocks.authenticated = true;
+    mocks.search = `modal=debates&modalTarget=requests:${REQUEST}`;
+    renderHook(() => useDebatesPanelDeepLink());
+
+    expect(mocks.open).toHaveBeenCalledWith('requests', REQUEST);
+  });
+
+  it('keeps the request through sign-in, and in the link a new account comes back to', () => {
+    mocks.search = `modal=debates&modalTarget=requests:${REQUEST}&via=email`;
+    renderHook(() => useDebatesPanelDeepLink());
+
+    expect(mocks.signIn).toHaveBeenCalledTimes(1);
+    expect(mocks.signInOptions?.redirectTo).toBe(`/explore?modal=debates&modalTarget=requests%3A${REQUEST}&via=email`);
+    mocks.signInComplete?.();
+    expect(mocks.open).toHaveBeenCalledWith('requests', REQUEST);
+  });
+});
+
 describe('a link to a tab that reads fine signed out', () => {
   it('opens it with no sign-in, as before', () => {
     mocks.search = 'modal=debates&modalTarget=people';

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
+import { getDefaultStore } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbySummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
@@ -11,6 +12,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import type { UpcomingRoomRow } from './scheduled-debates-section';
 import type { UpcomingLobbyRow } from './upcoming-lobby-rows';
+import { debatesHubAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   respond: vi.fn().mockResolvedValue({ outcome: 'recorded' }),
@@ -499,6 +501,47 @@ describe('moving a scheduled debate', () => {
 
 // The scheduling email's third answer to an invite (GEO-3232), in its words: the same move, on the
 // same week, so the other side is asked to accept the new time.
+// GEO-3431: the requester heads-up email's "Withdraw the invite" opens the Requests tab on that
+// invite (`modalTarget=requests:<id>`), so of several, the one the email was about is the one shown.
+describe('a link to one request', () => {
+  afterEach(() => getDefaultStore().set(debatesHubAtom, null));
+
+  it('outlines that request and scrolls it into view, and no other', () => {
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    Element.prototype.scrollIntoView = scrollIntoView;
+    getDefaultStore().set(debatesHubAtom, { tab: 'requests', requestId: 'request-2' });
+    setup({
+      answerable: [
+        request({ viewer_must_answer: false, proposed_by_user_id: 'user-me' }),
+        request({
+          request_id: 'request-2',
+          viewer_must_answer: false,
+          proposed_by_user_id: 'user-me',
+          scheduled_start_at: '2099-09-25T13:00:00Z',
+          scheduled_end_at: '2099-09-25T13:30:00Z',
+        }),
+      ],
+    });
+
+    const cards = screen.getAllByRole('article');
+    const focused = cards.filter(card => card.hasAttribute('data-focused'));
+    expect(focused).toHaveLength(1);
+    expect(focused[0]).toHaveClass('border-text');
+    expect(focused[0]).toHaveTextContent('Cancel request');
+    expect(scrolled).toEqual(focused);
+  });
+
+  it('outlines nothing when the hub was opened without one', () => {
+    getDefaultStore().set(debatesHubAtom, { tab: 'requests' });
+    setup({ answerable: [request({ viewer_must_answer: false, proposed_by_user_id: 'user-me' })] });
+
+    expect(screen.getByRole('article')).not.toHaveAttribute('data-focused');
+  });
+});
+
 describe('choosing a different time for an invite', () => {
   it("opens the other debater's week to move the invite, beside Decline and Accept", async () => {
     mocks.people = [ADA];

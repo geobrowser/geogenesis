@@ -4,7 +4,12 @@ import * as React from 'react';
 
 import { usePathname } from 'next/navigation';
 
-import { DEBATES_MODAL, debatesPanelTab, toDebatesPanel } from '~/core/debates/debates-panel-deep-link';
+import {
+  DEBATES_MODAL,
+  debatesPanelRequestId,
+  debatesPanelTab,
+  toDebatesPanel,
+} from '~/core/debates/debates-panel-deep-link';
 import { tabNeedsSignIn } from '~/core/debates/matchmaking/signed-out-tabs';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep-link';
@@ -24,6 +29,9 @@ import type { DebatesHubTab } from '~/atoms';
  * about was nowhere to be seen. So a signed-out visitor is asked to sign in first, and the hub opens
  * on the tab the link named once they have. Dismissing the sign-in still opens the hub, on what it
  * can show them.
+ *
+ * A link naming one scheduled request (`requests:<id>`, GEO-3431) opens Requests with that request
+ * brought into view, through sign-in the same way.
  */
 export function useDebatesPanelDeepLink() {
   const { ready, authenticated } = usePrivy();
@@ -31,21 +39,30 @@ export function useDebatesPanelDeepLink() {
   const link = useDeepLinkParams(DEBATES_MODAL);
   const pathname = usePathname();
   const tab = debatesPanelTab(link.target);
+  const requestId = debatesPanelRequestId(link.target);
   const needsSignIn = tab !== null && tabNeedsSignIn(tab);
 
-  // The tab to open once the sign-in this hook started settles, either way.
-  const pendingTabRef = React.useRef<DebatesHubTab | null>(null);
+  // The tab (and request) to open once the sign-in this hook started settles, either way.
+  const pendingTabRef = React.useRef<{ tab: DebatesHubTab; requestId: string | null } | null>(null);
   const openPending = () => {
     const pending = pendingTabRef.current;
     pendingTabRef.current = null;
-    if (pending) open(pending);
+    if (pending?.requestId) open(pending.tab, pending.requestId);
+    else if (pending) open(pending.tab);
   };
 
   const signIn = usePrivySignIn(openPending, {
     // A new account goes through onboarding and is sent back here afterwards. The cleared URL would
     // land them on the page with the hub shut, so hand back the link itself: signed in by then, it
     // opens the tab it named.
-    redirectTo: tab ? toDebatesPanel({ tab, pathname: pathname ?? undefined, via: link.via ?? undefined }) : undefined,
+    redirectTo: tab
+      ? toDebatesPanel({
+          tab,
+          requestId: requestId ?? undefined,
+          pathname: pathname ?? undefined,
+          via: link.via ?? undefined,
+        })
+      : undefined,
     analytics: {
       link_source: link.via ?? undefined,
       component: 'debate_matchmaking',
@@ -63,8 +80,12 @@ export function useDebatesPanelDeepLink() {
     enabled: ready || !needsSignIn,
     run: () => {
       if (needsSignIn && !authenticated) {
-        pendingTabRef.current = tab;
+        pendingTabRef.current = tab ? { tab, requestId } : null;
         signIn();
+        return;
+      }
+      if (tab && requestId) {
+        open(tab, requestId);
         return;
       }
       // `undefined` rather than null: `open()` falls back to the hub's own landing tab, so this
