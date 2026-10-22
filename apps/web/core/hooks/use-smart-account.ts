@@ -5,6 +5,7 @@ import { RevertedUserOperationError } from '@geogenesis/auth/account';
 import { useQuery } from '@tanstack/react-query';
 
 import { toViemAccount, useWalletClient, useWallets } from '~/core/wallet/auth-hooks';
+import { findEmbeddedWallet } from '~/core/wallet/embedded-wallet';
 
 import { forgetSyncedWalletCookie, syncWalletCookie } from '../cookie/sync-wallet-cookie';
 import { ReceiptConfirmationTimeoutError } from '../errors';
@@ -33,7 +34,7 @@ export function useSmartAccount() {
   // separately from the wagmi WalletClient because viem's signAuthorization rejects
   // JSON-RPC accounts; only a viem LocalAccount built via Privy's toViemAccount has a
   // usable signAuthorization method.
-  const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
+  const embeddedWallet = findEmbeddedWallet(wallets);
 
   const {
     data: smartAccount,
