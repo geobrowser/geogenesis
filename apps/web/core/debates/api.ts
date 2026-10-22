@@ -2740,7 +2740,11 @@ export async function getDebateLobby(
 }
 
 /** A lobby member on one side of an "In this room" claim. */
-export type DebateLobbyClaimParticipant = DebateParticipantSummary & { requestable: boolean };
+export type DebateLobbyClaimParticipant = DebateParticipantSummary & {
+  requestable: boolean;
+  /** This person and the viewer already debated this claim together. Absent on older geo-chat. */
+  previously_debated?: boolean;
+};
 
 /** One side of an "In this room" claim. The viewer is never counted in it. */
 export type DebateLobbyClaimSide = {
