@@ -339,7 +339,7 @@ describe('a refused move', () => {
     [
       'debate_already_started',
       'someone has already joined this debate',
-      'Someone has already joined this debate, so its time can no longer be changed.',
+      'This debate has already started, so its time can no longer be changed.',
     ],
     ['schedule_conflict', '{"conflicting_request_id":"x"}', 'You already have a debate at that time. Pick another.'],
     [

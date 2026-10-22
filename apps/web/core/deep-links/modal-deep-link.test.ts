@@ -22,6 +22,8 @@ describe('DEEP_LINK_MODALS', () => {
       roomAccess: 'room-access',
       availability: 'availability',
       schedule: 'schedule',
+      runningLate: 'running-late',
+      cantMakeIt: 'cant-make-it',
     });
   });
 

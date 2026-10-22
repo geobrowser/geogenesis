@@ -17,12 +17,14 @@ import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import {
   ADMIN_SCHEDULED_DEBATES_LIMIT,
   GeoChatRequestError,
+  type RunningLateMinutes,
   type ScheduledDebateRequest,
   type ScheduledDebateResponseResult,
   cancelScheduledDebate,
   createScheduledDebate,
   listAdminScheduledDebates,
   listScheduledDebates,
+  reportRunningLate,
   rescheduleScheduledDebate,
   respondToScheduledDebate,
 } from '../api';
@@ -162,11 +164,23 @@ export function useRescheduleScheduledDebate() {
   return useMutation<
     ScheduledDebateRequest,
     Error,
-    { requestId: string; startsAt: Date; minutes: number; analytics?: ScheduledRequestAnalytics },
+    {
+      requestId: string;
+      startsAt: Date;
+      minutes: number;
+      /** Goes to the other debater with the new time: Can't make it's note (GEO-3427). */
+      note?: string;
+      analytics?: ScheduledRequestAnalytics;
+    },
     AnalyticsRevision
   >({
-    mutationFn: ({ requestId, startsAt, minutes }) =>
-      rescheduleScheduledDebate(requestId, slotPayload(startsAt, minutes), getPrivyIdentityToken, accountKey),
+    mutationFn: ({ requestId, startsAt, minutes, note }) =>
+      rescheduleScheduledDebate(
+        requestId,
+        { ...slotPayload(startsAt, minutes), ...(note ? { note } : {}) },
+        getPrivyIdentityToken,
+        accountKey
+      ),
     onMutate: snapshotAnalyticsRevision,
     onSuccess: (request, { startsAt, analytics }, isCurrent) => {
       if (isCurrent()) {
@@ -240,8 +254,9 @@ export function useCancelScheduledDebate() {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation<ScheduledDebateRequest, Error, { requestId: string }>({
-    mutationFn: ({ requestId }) => cancelScheduledDebate(requestId, getPrivyIdentityToken, accountKey),
+  return useMutation<ScheduledDebateRequest, Error, { requestId: string; note?: string }>({
+    mutationFn: ({ requestId, note }) =>
+      cancelScheduledDebate(requestId, getPrivyIdentityToken, accountKey, note ? { note } : undefined),
     onSettled: () => {
       // Settled rather than succeeded: a refusal (someone joined, or it was already resolved) means
       // the list the viewer pressed on is stale, and the refetch is what corrects it.
@@ -251,4 +266,37 @@ export function useCancelScheduledDebate() {
       void queryClient.invalidateQueries({ queryKey: ['debates', 'account', accountKey, 'peer-schedule'] });
     },
   });
+}
+
+/**
+ * Can't make it (GEO-3427): the same cancel, observed as its own action so the outcome measurement
+ * (GEO-3432) can tell a debater withdrawing from the Requests tab's quiet Cancel.
+ */
+export function useCantMakeIt() {
+  const getContext = useActionContext('scheduled_debate_notice', 'entity', '');
+  return useObservedMutation(useCancelScheduledDebate(), 'cant_make_it', ({ requestId }) =>
+    getContext({ target_type: 'scheduled_debate_request', target_id: requestId })
+  );
+}
+
+/**
+ * Running late (GEO-3427). The notice lives on the room view, which the other debater's page polls;
+ * the requests list does not change. Only the viewer's own room reads are refreshed, for a second tab
+ * of theirs with the room open.
+ */
+export function useReportRunningLate() {
+  const getContext = useActionContext('scheduled_debate_notice', 'entity', '');
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  const mutation = useMutation({
+    mutationFn: ({ requestId, minutes, note }: { requestId: string; minutes: RunningLateMinutes; note?: string }) =>
+      reportRunningLate(requestId, { minutes, ...(note ? { note } : {}) }, getPrivyIdentityToken, accountKey),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.roomRoot(accountKey) });
+    },
+  });
+  return useObservedMutation(mutation, 'running_late', ({ requestId }) =>
+    getContext({ target_type: 'scheduled_debate_request', target_id: requestId })
+  );
 }

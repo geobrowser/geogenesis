@@ -238,6 +238,7 @@ type PairContext = {
   opponentName: string;
   onOpenOpponentSpace: (event: React.MouseEvent) => void;
   leaveAction?: React.ReactNode;
+  opponentWaiting?: React.ReactNode;
 };
 
 function toHeaderParticipant(participant: DebateRematchParticipant | null): PairHeaderParticipant | null {
@@ -275,6 +276,8 @@ type RematchVoiceHeaderProps = {
    * re-laying-out on the way to somewhere else.
    */
   exiting?: boolean;
+  /** What to show in the other person's video slot until they join (GEO-3427: running late). */
+  opponentWaiting?: React.ReactNode;
 };
 
 export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
@@ -284,7 +287,13 @@ export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
   return <SessionRematchVoiceHeader key={props.session.id} {...props} />;
 }
 
-function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exiting = false }: RematchVoiceHeaderProps) {
+function SessionRematchVoiceHeader({
+  session,
+  currentUserId,
+  leaveAction,
+  exiting = false,
+  opponentWaiting,
+}: RematchVoiceHeaderProps) {
   const voiceCapableNow = voiceCapable(session.status);
 
   /**
@@ -572,6 +581,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
     opponentName,
     onOpenOpponentSpace: openOpponentProfile,
     leaveAction,
+    opponentWaiting,
   };
 
   const headerWith = (voice: PairHeaderVoice) => <RematchPairHeader {...pair} voice={voice} />;
