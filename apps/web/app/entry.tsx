@@ -58,6 +58,7 @@ import {
   rankingFullscreenActiveAtom,
   rankingFullscreenFocusTargetAtom,
 } from '~/atoms';
+import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 // Opened on demand, so none of these is needed to paint or hydrate a page. Each renders nothing
@@ -106,6 +107,14 @@ const PendingPersonalSpaceRunner = dynamic(
   () =>
     import('~/partials/onboarding/pending-personal-space-runner').then(m => ({
       default: m.PendingPersonalSpaceRunner,
+    })),
+  { ssr: false }
+);
+
+const PendingTopicFollowsRunner = dynamic(
+  () =>
+    import('~/partials/onboarding/pending-topic-follows-runner').then(m => ({
+      default: m.PendingTopicFollowsRunner,
     })),
   { ssr: false }
 );
@@ -234,6 +243,11 @@ function PendingPersonalSpaceGate() {
   return useSticky(pending !== null) ? <PendingPersonalSpaceRunner /> : null;
 }
 
+function PendingTopicFollowsGate() {
+  const held = useAtomValue(feedTopicsAtom);
+  return useSticky((held?.topics?.length ?? 0) > 0) ? <PendingTopicFollowsRunner /> : null;
+}
+
 function PendingCreatedSpaceGate() {
   const pending = useAtomValue(pendingCreatedSpaceAtom);
   const mounted = useSticky(pending !== null);
@@ -343,6 +357,7 @@ export function App({ children }: { children: React.ReactNode }) {
             <SaveVotesGate />
           </React.Suspense>
           <PendingPersonalSpaceGate />
+          <PendingTopicFollowsGate />
           <PendingActionsRunner />
           <LocalVotesSaver />
           <CreateSpaceDialogGate />

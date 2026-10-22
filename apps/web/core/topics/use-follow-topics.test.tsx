@@ -173,6 +173,29 @@ describe('useFollowTopics (GEO-3158)', () => {
     expect(mocks.sendUserOperation).not.toHaveBeenCalled();
     expect(result.current.canFollow).toBe(false);
   });
+
+  it('reports an incomplete batch when another control is already following one of its topics', async () => {
+    let rejectFirst!: (reason: Error) => void;
+    mocks.sendUserOperation.mockImplementationOnce(() => new Promise((_, reject) => (rejectFirst = reject)));
+    const { result, cachedInterested } = setup();
+
+    let first!: Promise<boolean>;
+    await act(async () => {
+      first = result.current.follow([{ id: TOPIC_A }]);
+    });
+    let complete = true;
+    await act(async () => {
+      complete = await result.current.follow([{ id: TOPIC_A }, { id: TOPIC_B }]);
+    });
+    await act(async () => {
+      rejectFirst(new Error('the other control failed'));
+      await first;
+    });
+
+    expect(complete).toBe(false);
+    expect(await first).toBe(false);
+    expect(cachedInterested()?.map(row => row.objectId)).toEqual([TOPIC_B]);
+  });
 });
 
 describe('useFollowEntities on a person (GEO-3236)', () => {

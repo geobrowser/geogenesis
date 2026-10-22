@@ -785,6 +785,41 @@ describe('EntityFeed for a reader with a wallet cookie', () => {
   });
 });
 
+describe('EntityFeed pending onboarding follows', () => {
+  it('sends the pending-follow signal only for For you', async () => {
+    render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="for-you"
+        sortOptions={['for-you', 'best']}
+        showSortFilter
+        followedTopicIds={['topic-a']}
+        pendingTopicFollows
+      />
+    );
+    expect(new URL(await requestedUrl(), 'http://localhost').searchParams.get('pendingTopicFollows')).toBe('1');
+
+    pickOption('Best');
+    const best = new URL(await requestedUrl(), 'http://localhost');
+    expect(best.searchParams.get('pendingTopicFollows')).toBeNull();
+    expect(best.searchParams.get('followedTopicIds')).toBeNull();
+  });
+
+  it('refetches when pending follows clear without changing the topic ids', () => {
+    const props = {
+      apiEndpoint: '/api/explore/feed',
+      initialSort: 'for-you' as const,
+      followedTopicIds: ['topic-a'],
+    };
+    const { rerender } = render(<EntityFeed {...props} pendingTopicFollows />);
+    const pendingKey = mocks.queryOptions?.queryKey;
+
+    rerender(<EntityFeed {...props} pendingTopicFollows={false} />);
+
+    expect(mocks.queryOptions?.queryKey).not.toEqual(pendingKey);
+  });
+});
+
 // The CDN ignores cookies, so only the plain signed-out first Best page may use the cacheable URL.
 describe('EntityFeed cacheable first page', () => {
   function renderFeed(props: Partial<React.ComponentProps<typeof EntityFeed>> = {}) {
