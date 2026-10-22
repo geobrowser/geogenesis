@@ -252,6 +252,7 @@ async function fetchTopicFacets(
   params: {
     selectedTopicIds: readonly string[];
     typeIds: readonly string[] | undefined;
+    spaceIds: readonly string[];
     fixedParams: Record<string, string>;
     signal?: AbortSignal;
   }
@@ -263,6 +264,7 @@ async function fetchTopicFacets(
     body: JSON.stringify({
       selectedTopicIds: params.selectedTopicIds,
       typeIds: params.typeIds,
+      spaceIds: params.spaceIds,
       fixedParams: params.fixedParams,
     }),
     signal: params.signal,
@@ -316,7 +318,9 @@ export function EntityFeed({
   const moreFiltersRevealed = showMoreFilters && moreFiltersOpen;
   const typeFilterVisible = showTypeFilter || moreFiltersRevealed;
   const spaceFilterVisible = moreFiltersRevealed && lockedSpaceId == null;
-  const topicFilterVisible = showTopicFilter && (!showMoreFilters || moreFiltersRevealed);
+  const topicFilterVisible = showMoreFilters
+    ? showTopicFilter && moreFiltersRevealed
+    : showTopicFilter || topicOptions.length > 0 || Boolean(topicFacetEndpoint);
   const typeSelectionTouchedRef = React.useRef(false);
   const contextualTypeDefaultAppliedRef = React.useRef(false);
   // A locked space is the whole filter; otherwise whatever the revealed space menu has ticked, and
@@ -400,13 +404,21 @@ export function EntityFeed({
   });
 
   const topicFacets = useQuery({
-    queryKey: ['entity-feed-topic-facets', topicFacetEndpoint ?? null, topicIdsKey, typeIdsKey, fixedParamsKey],
-    enabled: Boolean(topicFacetEndpoint),
+    queryKey: [
+      'entity-feed-topic-facets',
+      topicFacetEndpoint ?? null,
+      topicIdsKey,
+      typeIdsKey,
+      facetSpaceIds.join(','),
+      fixedParamsKey,
+    ],
+    enabled: Boolean(topicFacetEndpoint) && topicFilterVisible,
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       fetchTopicFacets(topicFacetEndpoint!, {
         selectedTopicIds,
         typeIds,
+        spaceIds: facetSpaceIds,
         fixedParams,
         signal,
       }),

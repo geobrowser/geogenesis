@@ -197,6 +197,7 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
     ...EXPLORE_FEED_POLICY,
     forYouTopicIds,
     topicIds: topicIds.length > 0 ? topicIds : undefined,
+    rankedTopicIds: topicIds.length > 0 ? topicIds : undefined,
     reorderWindow:
       viewerId !== null
         ? createPersonalizedWindowReorder({

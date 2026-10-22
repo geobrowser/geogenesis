@@ -933,53 +933,53 @@ export async function fetchExploreFeed(args: {
           requireDebateTagOnClaims: args.requireDebateTagOnClaims,
         })
       : bestFiltersServerSide
-          ? fetchBestEntitiesByTypePage({
+        ? fetchBestEntitiesByTypePage({
+            spaceIds: baseIds,
+            time: args.time,
+            limit: windowSize,
+            // This path paginates by offset, and the window cursor's `after` slot carries it as
+            // a decimal string. Anything unparseable restarts at 0, matching the tolerance
+            // `decodeExploreWindowCursor` already documents.
+            offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
+            typeIds: args.typeIds ?? [],
+            topicIds: args.topicIds,
+            requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+            entityFilter: args.entityFilter,
+          })
+        : args.sort === 'best'
+          ? fetchBestEntitiesPage({
               spaceIds: baseIds,
               time: args.time,
               limit: windowSize,
-              // This path paginates by offset, and the window cursor's `after` slot carries it as
-              // a decimal string. Anything unparseable restarts at 0, matching the tolerance
-              // `decodeExploreWindowCursor` already documents.
-              offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
-              typeIds: args.typeIds ?? [],
+              after: windowAfter,
               topicIds: args.topicIds,
               requireDebateTagOnClaims: args.requireDebateTagOnClaims,
               entityFilter: args.entityFilter,
             })
-          : args.sort === 'best'
-            ? fetchBestEntitiesPage({
+          : args.sort === 'top'
+            ? fetchTopEntitiesPage({
                 spaceIds: baseIds,
                 time: args.time,
                 limit: windowSize,
                 after: windowAfter,
+                typeIds: args.typeIds,
                 topicIds: args.topicIds,
+                requireName: args.requireName,
                 requireDebateTagOnClaims: args.requireDebateTagOnClaims,
                 entityFilter: args.entityFilter,
               })
-            : args.sort === 'top'
-              ? fetchTopEntitiesPage({
-                  spaceIds: baseIds,
-                  time: args.time,
-                  limit: windowSize,
-                  after: windowAfter,
-                  typeIds: args.typeIds,
-                  topicIds: args.topicIds,
-                  requireName: args.requireName,
-                  requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-                  entityFilter: args.entityFilter,
-                })
-              : fetchExploreEntitiesPage({
-                  spaceIds: baseIds,
-                  time: args.time,
-                  limit: windowSize,
-                  after: windowAfter,
-                  orderBy: [EntitiesOrderBy.CreatedAtDesc],
-                  typeIds: args.typeIds,
-                  topicIds: args.topicIds,
-                  requireName: args.requireName,
-                  requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-                  entityFilter: args.entityFilter,
-                });
+            : fetchExploreEntitiesPage({
+                spaceIds: baseIds,
+                time: args.time,
+                limit: windowSize,
+                after: windowAfter,
+                orderBy: [EntitiesOrderBy.CreatedAtDesc],
+                typeIds: args.typeIds,
+                topicIds: args.topicIds,
+                requireName: args.requireName,
+                requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+                entityFilter: args.entityFilter,
+              });
 
   const excludeTypeIds = args.excludeTypeIds ?? [];
 

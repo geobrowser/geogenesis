@@ -26,6 +26,8 @@ const EXPLORE_FEED_PROPS = {
   showSortFilter: true,
   showMoreFilters: true,
   showTopicFilter: true,
+  // Exact topic counts from gaia's ranking table, so the dropdown number agrees with the feed.
+  topicFacetEndpoint: '/api/explore/topic-facets',
   typeOptions: EXPLORE_ENTITY_TYPES,
   initialTypeIds: DEFAULT_EXPLORE_TYPE_IDS,
   compactHeader: true,
