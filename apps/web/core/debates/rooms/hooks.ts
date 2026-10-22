@@ -99,6 +99,10 @@ async function withRetry<T>(task: () => Promise<T>, shouldStop: () => boolean = 
 
 /** Past the start before announcing again, so the join lands after it on the server. */
 const START_MARGIN_MS = 1_000;
+/** Between joins after the start while geo-chat has not counted one as an arrival. */
+const ARRIVAL_RETRY_MS = 30_000;
+/** Enough to outlast a long drop at the start; a room that never counts one stops asking. */
+const MAX_ARRIVAL_TRIES = 20;
 /** `setTimeout` overflows past this; a room booked further ahead re-arms on waking. */
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
@@ -142,31 +146,48 @@ export function useRoomPresence(roomId: string, admitted: boolean, startsAt: str
 
     // An arrival nobody recorded is invisible to the opponent and counts towards a no-show, so a
     // dropped join is retried rather than swallowed. A refusal is reported by the room query's own
-    // `access`, which is the surface that explains it.
-    const announce = () =>
+    // `access`, which is the surface that explains it. Resolves the room as the join left it, or
+    // `null` once the retries are spent.
+    const announceRoom = (): Promise<DebateRoomView | null> =>
       withRetry(
         () => send(true),
         () => cancelled
       )
         .then(room => {
-          if (cancelled) return false;
+          if (cancelled) return null;
           queryClient.setQueryData(debateQueryKeys.room(accountKey, roomId), room);
-          return true;
+          return room;
         })
-        .catch(() => false);
-
-    void announce();
-    announceRef.current = announce;
+        .catch(() => null);
+    const announce = () => announceRoom().then(room => room !== null);
 
     // GEO-3427: geo-chat counts someone as having arrived by a join at or after the start, so that a
     // tab left open from a look in before it (or a crashed one) does not count. A tab someone is
     // actually waiting in says so again once the start passes; a dead one never does.
+    //
+    // Settled by geo-chat's own answer, `viewer_arrived`, not by a flag here or by this device's
+    // clock: a laptop a few seconds fast, or a network drop right at the start, would otherwise
+    // leave someone waiting in the room counted as absent for good. Until it says so the join is
+    // sent again: at the start, every so often after it, and on coming back to the tab.
     const startMs = startsAt ? Date.parse(startsAt) : Number.NaN;
     const now = () => clockRef.current?.now() ?? Date.now();
     let startTimer: ReturnType<typeof setTimeout> | undefined;
-    let arrived = false;
-    const arriveAtStart = () => {
+    let arrived = !Number.isFinite(startMs);
+    let tries = 0;
+    let inFlight = false;
+    const answered = (room: DebateRoomView | null) => {
       if (cancelled || arrived) return;
+      // A geo-chat older than `viewer_arrived` has nothing to say: a join past the start has to do.
+      if (room?.viewer_arrived === true || (room && room.viewer_arrived === undefined && now() >= startMs)) {
+        arrived = true;
+        return;
+      }
+      clearTimeout(startTimer);
+      if (tries >= MAX_ARRIVAL_TRIES) return;
+      startTimer = setTimeout(arriveAtStart, startMs - now() > 0 ? 0 : ARRIVAL_RETRY_MS);
+    };
+    const arriveAtStart = () => {
+      if (cancelled || arrived || inFlight) return;
       clearTimeout(startTimer);
       const wait = startMs - now();
       if (wait > 0) {
@@ -174,17 +195,21 @@ export function useRoomPresence(roomId: string, admitted: boolean, startsAt: str
         startTimer = setTimeout(arriveAtStart, Math.min(wait + START_MARGIN_MS, MAX_TIMEOUT_MS));
         return;
       }
-      arrived = true;
-      void announce();
+      inFlight = true;
+      tries += 1;
+      void announceRoom().then(room => {
+        inFlight = false;
+        answered(room);
+      });
     };
     // A phone can suspend the tab past the start, and its timer with it: coming back says so too.
     const arriveOnReturn = () => {
       if (document.visibilityState === 'visible') arriveAtStart();
     };
-    if (Number.isFinite(startMs) && now() < startMs) {
-      arriveAtStart();
-      document.addEventListener('visibilitychange', arriveOnReturn);
-    }
+
+    void announceRoom().then(answered);
+    announceRef.current = announce;
+    if (!arrived) document.addEventListener('visibilitychange', arriveOnReturn);
 
     // `pagehide` has no later, so the request is made rather than queued: a leave waiting behind
     // an in-flight join is never sent at all once the document freezes, and the server has no

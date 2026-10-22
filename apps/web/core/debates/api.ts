@@ -2478,7 +2478,7 @@ export async function createScheduledDebate(
  */
 export async function rescheduleScheduledDebate(
   requestId: string,
-  /** `note` goes to the other debater with the new time (GEO-3427). */
+  /** `note` is kept on the room for the other debater; the email does not carry it (GEO-3427). */
   body: { scheduled_start_at: string; scheduled_end_at: string; note?: string },
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
@@ -2512,7 +2512,8 @@ export async function respondToScheduledDebate(
  * Calls a scheduled debate off (GEO-3093). While pending only whoever proposed the current time may
  * withdraw it; once accepted either debater may. geo-chat closes the room as `cancelled`, frees the
  * slot for both people and withdraws the calendar invite. A debater who cancels an agreed debate is
- * telling the other one they can't make it (GEO-3427): that is the email they get, with `note`.
+ * telling the other one they can't make it (GEO-3427): that is the email they get. `note` is kept on
+ * the room, not put in the email.
  *
  * It refuses with `409 debate_already_started` once both debaters are in the room or their debate
  * has begun (the other one waiting inside does not stop it: they are who it releases), `409

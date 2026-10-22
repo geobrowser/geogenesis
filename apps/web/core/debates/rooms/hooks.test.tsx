@@ -281,6 +281,75 @@ describe('useRoomPresence at the start', () => {
     }
   });
 
+  // The device's clock a few seconds ahead of geo-chat's: the join meant for the start lands just
+  // before it there, and geo-chat says so.
+  it('joins again until geo-chat counts the arrival', async () => {
+    vi.useFakeTimers();
+    try {
+      const { renderHook: render } = await import('@testing-library/react');
+      const { useRoomPresence } = await import('./hooks');
+      const api = await import('../api');
+      vi.spyOn(api, 'getServerTime').mockRejectedValue(new Error('offline'));
+      const answers = [false, false, true];
+      const spy = vi
+        .spyOn(api, 'setDebateRoomPresence')
+        .mockImplementation(async (_room, body) =>
+          body.joined ? ({ viewer_arrived: answers.shift() ?? true } as never) : ({} as never)
+        );
+      const startsAt = new Date(Date.now() + 60_000).toISOString();
+      const joins = () => spy.mock.calls.filter(call => call[1].joined === true);
+
+      render(() => useRoomPresence('room-1', true, startsAt), { wrapper: withQueryClient });
+      await vi.advanceTimersByTimeAsync(62_000);
+      expect(joins()).toHaveLength(2);
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(joins()).toHaveLength(3);
+
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(joins()).toHaveLength(3);
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps joining after a join at the start that fails every retry', async () => {
+    vi.useFakeTimers();
+    try {
+      const { renderHook: render } = await import('@testing-library/react');
+      const { useRoomPresence } = await import('./hooks');
+      const api = await import('../api');
+      vi.spyOn(api, 'getServerTime').mockRejectedValue(new Error('offline'));
+      let online = true;
+      const spy = vi.spyOn(api, 'setDebateRoomPresence').mockImplementation(async (_room, body) => {
+        if (!online) throw new Error('offline');
+        return (body.joined ? { viewer_arrived: Date.now() >= start } : {}) as never;
+      });
+      const start = Date.now() + 60_000;
+      const joins = () => spy.mock.calls.filter(call => call[1].joined === true);
+
+      render(() => useRoomPresence('room-1', true, new Date(start).toISOString()), { wrapper: withQueryClient });
+      await vi.advanceTimersByTimeAsync(0);
+      online = false;
+      await vi.advanceTimersByTimeAsync(2 * 60_000);
+      const failed = joins().length;
+      expect(failed).toBeGreaterThan(1);
+
+      online = true;
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(60_000);
+      const settled = joins().length;
+      expect(settled).toBeGreaterThan(failed);
+
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(joins()).toHaveLength(settled);
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('sends nothing extra when it opens after the start', async () => {
     vi.useFakeTimers();
     try {

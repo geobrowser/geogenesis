@@ -20,7 +20,10 @@ type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'>
    * and its "Choose different time" on an invite the viewer has yet to answer.
    */
   rescheduleRequestId?: string | null;
-  /** Goes to the other debater with the new time: what someone wrote under Can't make it (GEO-3427). */
+  /**
+   * What someone wrote under Can't make it (GEO-3427). Kept on the room, where the other debater sees
+   * it; the email about the new time carries the approved copy only.
+   */
   rescheduleNote?: string;
   /**
    * A new request the server accepted, before the requests list has been read again. The calendar
