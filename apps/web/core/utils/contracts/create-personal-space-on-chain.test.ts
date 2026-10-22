@@ -50,7 +50,7 @@ describe('hasDeclaredPersonalTopic', () => {
       params: [
         {
           address: SPACE_REGISTRY_ADDRESS_HEX,
-          fromBlock: toHex(88_482n),
+          fromBlock: toHex(88_483n),
           toBlock: toHex(98_482n),
           topics: [PADDED_SPACE, PADDED_SPACE, TOPIC_DECLARED],
         },

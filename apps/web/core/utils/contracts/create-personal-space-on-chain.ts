@@ -65,8 +65,9 @@ export async function readRegisteredSpaceId(walletAddress: string): Promise<stri
 /**
  * How far back `hasDeclaredPersonalTopic` looks. It only has to cover the index's lag (seconds to
  * minutes): a declaration older than that is already served by the index, which answers first.
- * Bounded so the query stays inside RPC block-range caps as the chain grows. On testnet (~1,700
- * blocks a day, Oct 2026) this is about six days.
+ * Bounded so the query stays inside RPC block-range caps as the chain grows; the range includes both
+ * ends, so it spans exactly this many blocks. Counted in blocks, not time: on testnet (~1,700 blocks
+ * a day, Oct 2026) this is about six days, and less on a chain with faster blocks.
  */
 const DECLARATION_LOOKBACK_BLOCKS = 10_000n;
 
@@ -83,7 +84,7 @@ export async function hasDeclaredPersonalTopic(spaceId: string): Promise<boolean
   const client = publicClient();
   const space = padBytes16ToBytes32(`0x${spaceId}`);
   const head = await client.getBlockNumber();
-  const fromBlock = head > DECLARATION_LOOKBACK_BLOCKS ? head - DECLARATION_LOOKBACK_BLOCKS : 0n;
+  const fromBlock = head >= DECLARATION_LOOKBACK_BLOCKS ? head - DECLARATION_LOOKBACK_BLOCKS + 1n : 0n;
   // `enter` logs [from space, to space, action, topic] as raw topics with no event signature,
   // so viem's typed `getLogs` cannot filter it.
   const logs = await client.request({
