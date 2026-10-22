@@ -83,6 +83,10 @@ export function BountyPayDialog({
       setError(
         `The points ledger didn't confirm the payout (${outcome.message}). Finish it to retry — it won't pay twice.`
       );
+    } else if (outcome.status === 'publish-unconfirmed') {
+      setError(
+        "The points were paid and the payout record was submitted, but it hasn't appeared yet. It may be waiting for a vote in Governance. Finish it later to check; it won't publish twice."
+      );
     } else {
       setError('The points were paid, but the payout record could not be published. Finish it to retry.');
     }

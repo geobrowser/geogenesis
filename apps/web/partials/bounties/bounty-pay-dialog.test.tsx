@@ -72,6 +72,7 @@ describe('BountyPayDialog', () => {
   it.each([
     [{ status: 'credit-unconfirmed' as const, message: 'ledger down' }, /didn't confirm the payout \(ledger down\)/],
     [{ status: 'publish-failed' as const }, /points were paid, but the payout record could not be published/],
+    [{ status: 'publish-unconfirmed' as const }, /hasn't appeared yet\. It may be waiting for a vote in Governance/],
   ])('explains an unfinished payout and stays open (%o)', async (outcome, text) => {
     const props = renderDialog({ onPay: vi.fn(async () => outcome) });
     fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '5' } });

@@ -20,7 +20,18 @@ const mocks = vi.hoisted(() => ({
   recordPayoutCredit: vi.fn(),
   token: 'jwt' as string | null,
   calls: [] as string[],
+  /** Payout relation ids the graph currently shows for the bounty. */
+  landed: new Set<string>(),
+  /** Whether a successful publish shows up in the graph (an executed FAST proposal). */
+  publishLands: true,
 }));
+
+vi.mock('./fetch-submissions', async () => {
+  const { Effect } = await import('effect');
+  return {
+    fetchPayoutItems: () => Effect.succeed([...mocks.landed].map(id => ({ id }))),
+  };
+});
 
 vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: mocks.makeProposal }) }));
 vi.mock('@tanstack/react-query', () => ({
@@ -52,11 +63,17 @@ const detail = {
   allocationRelations: [],
 } as unknown as BountyDetail;
 
+function outerRelationId(relations: Relation[]) {
+  return relations.find(r => r.type.id === PAYOUT_RECIPIENT_PROPERTY_ID)!.id;
+}
 function publishSucceeds() {
-  mocks.makeProposal.mockImplementation(async ({ onSuccess }: { onSuccess: () => void }) => {
-    mocks.calls.push('publish');
-    onSuccess();
-  });
+  mocks.makeProposal.mockImplementation(
+    async ({ onSuccess, relations }: { onSuccess: () => void; relations: Relation[] }) => {
+      mocks.calls.push('publish');
+      if (mocks.publishLands) mocks.landed.add(outerRelationId(relations));
+      onSuccess();
+    }
+  );
 }
 function publishFailsOnce() {
   mocks.makeProposal.mockImplementationOnce(async ({ onError }: { onError: () => void }) => {
@@ -65,9 +82,14 @@ function publishFailsOnce() {
   });
 }
 
+const noWait = async () => {};
+const usePayout = () => useDirectPayout(detail, { wait: noWait });
+
 beforeEach(() => {
   window.localStorage.clear();
   mocks.calls = [];
+  mocks.landed = new Set();
+  mocks.publishLands = true;
   mocks.token = 'jwt';
   mocks.makeProposal.mockReset();
   mocks.recordPayoutCredit.mockReset();
@@ -85,7 +107,7 @@ async function payIbrahim(result: { current: ReturnType<typeof useDirectPayout> 
 
 describe('useDirectPayout', () => {
   it('asks the ledger first, then publishes a submission-free Payout carrying the id the ledger recorded', async () => {
-    const { result } = renderHook(() => useDirectPayout(detail));
+    const { result } = renderHook(usePayout);
     expect(await payIbrahim(result)).toEqual({ status: 'paid' });
     // The ledger's atomic balance check decides the payout before the graph hears of it.
     expect(mocks.calls).toEqual(['ledger', 'publish']);
@@ -116,9 +138,9 @@ describe('useDirectPayout', () => {
 
   it('publishes nothing when the ledger refuses (e.g. the balance ran out to a concurrent payout)', async () => {
     mocks.recordPayoutCredit.mockRejectedValueOnce(
-      new PayoutCreditError('Insufficient balance or space not found', 400, true)
+      new PayoutCreditError('Insufficient balance or space not found', 400, 'always')
     );
-    const { result } = renderHook(() => useDirectPayout(detail));
+    const { result } = renderHook(usePayout);
     expect(await payIbrahim(result)).toEqual({
       status: 'not-paid',
       message: 'Insufficient balance or space not found',
@@ -129,7 +151,7 @@ describe('useDirectPayout', () => {
 
   it('publishes nothing and keeps nothing pending without a sign-in token', async () => {
     mocks.token = null;
-    const { result } = renderHook(() => useDirectPayout(detail));
+    const { result } = renderHook(usePayout);
     expect(await payIbrahim(result)).toMatchObject({ status: 'not-paid' });
     expect(mocks.calls).toEqual([]);
     expect(result.current.pendingPayout).toBeNull();
@@ -137,7 +159,7 @@ describe('useDirectPayout', () => {
 
   it('keeps an unconfirmed credit pending, refuses a second payout, and finishes with the same id', async () => {
     mocks.recordPayoutCredit.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-    const { result } = renderHook(() => useDirectPayout(detail));
+    const { result } = renderHook(usePayout);
     expect(await payIbrahim(result)).toEqual({ status: 'credit-unconfirmed', message: 'Failed to fetch' });
     expect(mocks.makeProposal).not.toHaveBeenCalled();
     const pending = result.current.pendingPayout!;
@@ -157,8 +179,9 @@ describe('useDirectPayout', () => {
   it('does not drop a pending payout when a retry is refused, since an earlier attempt may have gone through', async () => {
     mocks.recordPayoutCredit
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
-      .mockRejectedValueOnce(new PayoutCreditError('Only space editors can create payouts', 403, true));
-    const { result } = renderHook(() => useDirectPayout(detail));
+      // A fresh call on Finish sees a clean 403, but the earlier call was ambiguous.
+      .mockRejectedValueOnce(new PayoutCreditError('Only space editors can create payouts', 403, 'this-call'));
+    const { result } = renderHook(usePayout);
     await payIbrahim(result);
     await act(async () => {
       expect(await result.current.finish()).toMatchObject({ status: 'credit-unconfirmed' });
@@ -169,7 +192,7 @@ describe('useDirectPayout', () => {
 
   it('after the points moved, retries only the publish, with the same Payout ids', async () => {
     publishFailsOnce();
-    const { result } = renderHook(() => useDirectPayout(detail));
+    const { result } = renderHook(usePayout);
     expect(await payIbrahim(result)).toEqual({ status: 'publish-failed' });
     expect(result.current.pendingPayout?.stage).toBe('publish');
 
@@ -183,13 +206,13 @@ describe('useDirectPayout', () => {
 
   it('keeps an unfinished payout across a reload and clears it once finished', async () => {
     publishFailsOnce();
-    const first = renderHook(() => useDirectPayout(detail));
+    const first = renderHook(usePayout);
     await payIbrahim(first.result);
     const pending = first.result.current.pendingPayout!;
     first.unmount();
 
     // A fresh mount (reload, or another visit to the bounty) offers the same payout.
-    const second = renderHook(() => useDirectPayout(detail));
+    const second = renderHook(usePayout);
     await act(async () => {});
     expect(second.result.current.pendingPayout).toEqual(pending);
     await act(async () => {
@@ -198,8 +221,42 @@ describe('useDirectPayout', () => {
     expect(mocks.recordPayoutCredit).toHaveBeenCalledTimes(1);
     second.unmount();
 
-    const third = renderHook(() => useDirectPayout(detail));
+    const third = renderHook(usePayout);
     await act(async () => {});
     expect(third.result.current.pendingPayout).toBeNull();
+  });
+
+  it('clears a stuck payout when the ledger definitely refuses on Finish, so later payouts are not blocked', async () => {
+    mocks.recordPayoutCredit
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(new PayoutCreditError('Insufficient balance or space not found', 400, 'always'));
+    const { result } = renderHook(usePayout);
+    await payIbrahim(result);
+    await act(async () => {
+      expect(await result.current.finish()).toMatchObject({ status: 'not-paid' });
+    });
+    expect(result.current.pendingPayout).toBeNull();
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+
+  it('is not paid while the published record has not appeared (a DAO proposal awaiting execution)', async () => {
+    mocks.publishLands = false;
+    const { result } = renderHook(usePayout);
+    expect(await payIbrahim(result)).toEqual({ status: 'publish-unconfirmed' });
+    expect(result.current.pendingPayout).toMatchObject({ stage: 'publish' });
+  });
+
+  it('on Finish, recognises a record that landed late instead of proposing it again', async () => {
+    mocks.publishLands = false;
+    const { result } = renderHook(usePayout);
+    await payIbrahim(result);
+    // Someone votes the proposal through from Governance.
+    mocks.landed.add(outerRelationId(mocks.makeProposal.mock.calls[0][0].relations));
+
+    await act(async () => {
+      expect(await result.current.finish()).toEqual({ status: 'paid' });
+    });
+    expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+    expect(result.current.pendingPayout).toBeNull();
   });
 });

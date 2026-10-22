@@ -18,25 +18,39 @@ import { CURATOR_API_URL } from './config';
 
 const CREDIT_RETRY_DELAYS_MS = [0, 750, 1500, 3000] as const;
 
+/**
+ * 400s the ledger returns only when it moved no points for this payout id, ever.
+ * Its statement is `WHERE alreadyProcessed OR balance >= amount`, so a payout
+ * that had already gone through would have come back as a success instead; and
+ * the amount check runs on the same amount every attempt. Any other 400 may be
+ * a database error (curator-backend maps those to 400 too), so it proves nothing.
+ */
+const DEFINITE_REFUSALS = [/^Insufficient balance/i, /^Payout amount must be/i];
+
 export class PayoutCreditError extends Error {
   constructor(
     message: string,
     readonly status: number | null,
     /**
-     * True when the ledger turned the payout down and no earlier attempt could
-     * have gone through — so certainly no points moved. False after any attempt
-     * whose outcome is unknown (network error, 5xx).
+     * How sure we are that no points moved: `always` — a definite refusal, true
+     * whatever happened on earlier attempts; `this-call` — a 4xx before the
+     * ledger (auth, editor check) on a call with no ambiguous attempt, which only
+     * proves it if no earlier call was ambiguous either; `unknown` otherwise.
      */
-    readonly refused = false
+    readonly noPointsMoved: 'always' | 'this-call' | 'unknown' = 'unknown'
   ) {
     super(message);
     this.name = 'PayoutCreditError';
   }
 }
 
-/** The ledger certainly did not move any points for this payout. */
-export function isLedgerRefusal(error: unknown): boolean {
-  return error instanceof PayoutCreditError && error.refused;
+/**
+ * Whether the ledger certainly moved no points for this payout. `firstAttempt`:
+ * no earlier call for this payout id could have gone through.
+ */
+export function ledgerMovedNoPoints(error: unknown, firstAttempt: boolean): boolean {
+  if (!(error instanceof PayoutCreditError)) return false;
+  return error.noPointsMoved === 'always' || (firstAttempt && error.noPointsMoved === 'this-call');
 }
 
 /** Network failures and 5xx are worth retrying; a 4xx (not an editor, bad amount, low balance) is not. */
@@ -91,8 +105,14 @@ export async function recordPayoutCredit(
         }),
       });
       if (!response.ok) {
-        const refused = response.status < 500 && !outcomeUnknown;
-        throw new PayoutCreditError(await messageFrom(response), response.status, refused);
+        const message = await messageFrom(response);
+        const definite = response.status === 400 && DEFINITE_REFUSALS.some(pattern => pattern.test(message));
+        const beforeLedger = response.status < 500 && response.status !== 400 && !outcomeUnknown;
+        throw new PayoutCreditError(
+          message,
+          response.status,
+          definite ? 'always' : beforeLedger ? 'this-call' : 'unknown'
+        );
       }
       const body = (await response.json()) as { newBalance?: unknown };
       return { newBalance: Number(body.newBalance ?? 0) };

@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   PayoutCreditError,
   fetchSpaceBalance,
-  isLedgerRefusal,
   isRetryableCreditError,
+  ledgerMovedNoPoints,
   recordPayoutCredit,
 } from './payout-credit';
 
@@ -55,21 +55,42 @@ describe('recordPayoutCredit', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
-  it('marks a first-attempt 4xx as a refusal: certainly no points moved', async () => {
-    const fetchImpl = vi.fn(async () => json(400, { message: 'Insufficient balance or space not found' }));
-    const error = await recordPayoutCredit(input, { fetchImpl, wait: noWait }).catch(e => e);
-    expect(isLedgerRefusal(error)).toBe(true);
-  });
-
-  it('does not call a 4xx a refusal after an attempt whose outcome is unknown', async () => {
-    // The 503 may have been applied before the response failed; the 4xx then proves nothing.
+  // The ledger's statement is `alreadyProcessed OR balance >= amount`: an insufficient-balance
+  // refusal proves no points moved for this id even after ambiguous attempts.
+  it('treats an insufficient-balance refusal as proof no points moved, whatever came before', async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValueOnce(json(503, {}))
-      .mockResolvedValueOnce(json(401, { message: 'expired' }));
+      .mockResolvedValueOnce(json(400, { message: 'Insufficient balance or space not found' }));
     const error = await recordPayoutCredit(input, { fetchImpl, wait: noWait }).catch(e => e);
-    expect(error).toBeInstanceOf(PayoutCreditError);
-    expect(isLedgerRefusal(error)).toBe(false);
+    expect(ledgerMovedNoPoints(error, false)).toBe(true);
+  });
+
+  it('treats a clean auth refusal as proof only on the first attempt for the payout', async () => {
+    const fetchImpl = vi.fn(async () => json(403, { message: 'Only space editors can create payouts' }));
+    const error = await recordPayoutCredit(input, { fetchImpl, wait: noWait }).catch(e => e);
+    expect(ledgerMovedNoPoints(error, true)).toBe(true);
+    // On a retry an earlier call may have gone through; the 403 proves nothing about it.
+    expect(ledgerMovedNoPoints(error, false)).toBe(false);
+  });
+
+  it('proves nothing after an attempt whose outcome is unknown, or from a database-error 400', async () => {
+    const afterUnknown = await recordPayoutCredit(input, {
+      fetchImpl: vi
+        .fn()
+        .mockResolvedValueOnce(json(503, {}))
+        .mockResolvedValueOnce(json(401, { message: 'expired' })),
+      wait: noWait,
+    }).catch(e => e);
+    expect(afterUnknown).toBeInstanceOf(PayoutCreditError);
+    expect(ledgerMovedNoPoints(afterUnknown, true)).toBe(false);
+
+    // curator-backend maps any neo4j failure to a 400 too.
+    const dbError = await recordPayoutCredit(input, {
+      fetchImpl: vi.fn(async () => json(400, { message: 'Failed to record payout' })),
+      wait: noWait,
+    }).catch(e => e);
+    expect(ledgerMovedNoPoints(dbError, true)).toBe(false);
   });
 
   it('gives up after four attempts on a network failure', async () => {
