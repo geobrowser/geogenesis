@@ -356,9 +356,8 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
       className={cx(
-        'pointer-events-auto relative z-100 my-auto flex max-h-[calc(100dvh-3rem)] min-h-[485px] w-full shrink-0 flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown',
-        effectiveStep === 'customize-feed' ? 'h-[560px] max-w-[528px] p-8 md:p-6' : 'h-[485px] max-w-[360px]',
-        effectiveStep === 'completed' ? 'justify-center px-6 py-10' : effectiveStep !== 'customize-feed' && 'p-6 pt-8'
+        'pointer-events-auto relative z-100 my-auto flex h-[520px] max-h-[calc(100dvh-3rem)] min-h-[485px] w-full max-w-[440px] shrink-0 flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown',
+        effectiveStep === 'completed' ? 'justify-center px-6 py-10' : 'p-6 pt-8'
       )}
     >
       {children}
