@@ -3109,6 +3109,40 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledWith({ automatic: true }));
   });
 
+  it("stops listening to the opponent's audio once the room is torn down (GEO-3407)", async () => {
+    const contexts = installSpeechAnalysisMocks();
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    const remoteAudio = { kind: 'audio', id: 'remote-audio' } as unknown as MediaStreamTrack;
+    const element = document.createElement('audio');
+    act(() =>
+      emitRoomEvent('trackSubscribed', {
+        kind: 'audio',
+        mediaStreamTrack: remoteAudio,
+        attach: () => element,
+        detach: vi.fn(() => [element]),
+      })
+    );
+    const listening = () => contexts.filter(context => context.tracks.includes(remoteAudio));
+    await waitFor(() => expect(listening()).toHaveLength(1));
+    expect(listening()[0]?.close).not.toHaveBeenCalled();
+
+    // Torn down without a reconnect, and without the old room ever unsubscribing the track: the
+    // same as handing the room to another tab.
+    act(() => emitRoomEvent('disconnected', 2));
+    expect(await screen.findByText('This debate is active in another tab or device.')).toBeInTheDocument();
+    expect(mocks.roomConnect).toHaveBeenCalledOnce();
+    await waitFor(() => expect(listening()[0]?.close).toHaveBeenCalled());
+  });
+
   it('refuses an automatic takeover from a tab no nearer the viewer, and honours an explicit one', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
@@ -3304,6 +3338,23 @@ describe('DebateRoomPageClient', () => {
 
     expect(mocks.replace).toHaveBeenCalledWith('/space/root-space?tab=activity');
     expect(mocks.back).not.toHaveBeenCalled();
+  });
+
+  it('keeps trying to sync the debate clock after a failed sync rather than staying on the local clock (GEO-3407)', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('offline'));
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'preflight',
+      preflight_ends_at: new Date(Date.now() + 60_000).toISOString(),
+      started_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.getServerTime).toHaveBeenCalledTimes(3));
+
+    mocks.getServerTime.mockImplementation(() => Promise.resolve({ server_time_ms: Date.now() }));
+    // The first retry, one sample per request as before.
+    await waitFor(() => expect(mocks.getServerTime).toHaveBeenCalledTimes(6), { timeout: 4_000 });
   });
 
   it('does not hand off a stale preflight after the first turn has started locally', async () => {
@@ -4075,6 +4126,27 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('Failed')).toBeInTheDocument();
     expect(noiseFilterSwitch).toBeDisabled();
     expect(warning).toHaveBeenCalledWith('[DebateNoiseFilter] Krisp could not change state.', expect.any(Error));
+  });
+
+  it('measures a recording on the clock it started on when a clock retry lands mid-capture (GEO-3407)', async () => {
+    installRecordingMocks();
+    // The first sync fails, so capture starts on this computer's clock (frozen at 00:00:20)...
+    mocks.getServerTime.mockRejectedValue(new Error('offline'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce());
+    // ...then a retry succeeds against a server ten seconds ahead of it.
+    mocks.getServerTime.mockImplementation(() => Promise.resolve({ server_time_ms: Date.now() + 10_000 }));
+    await waitFor(() => expect(mocks.getServerTime).toHaveBeenCalledTimes(6), { timeout: 4_000 });
+    await act(async () => undefined);
+
+    mocks.debate = completedDebateOutsideThankYou();
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+    const recording = mocks.enqueueRecording.mock.calls[0]?.[0];
+    // No time passed on the frozen clock, so not the ten seconds the correction would add.
+    expect(recording.endedAtMs - recording.startedAtMs).toBe(0);
+    expect(recording.durationSeconds).toBe(1);
   });
 
   it('hides debate controls while the terminal recording is being saved', async () => {
@@ -7866,6 +7938,55 @@ function installRecordingMocks() {
   );
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
   return recorders;
+}
+
+/** A Web Audio stand-in for the speech detectors: each context remembers which tracks it reads. */
+function installSpeechAnalysisMocks() {
+  const contexts: Array<{ tracks: MediaStreamTrack[]; close: ReturnType<typeof vi.fn> }> = [];
+  vi.stubGlobal(
+    'MediaStream',
+    class {
+      constructor(readonly tracks: MediaStreamTrack[] = []) {}
+
+      getTracks() {
+        return this.tracks;
+      }
+
+      getAudioTracks() {
+        return this.tracks.filter(track => track.kind === 'audio');
+      }
+
+      getVideoTracks() {
+        return this.tracks.filter(track => track.kind === 'video');
+      }
+    }
+  );
+  vi.stubGlobal(
+    'AudioContext',
+    class {
+      readonly record = { tracks: [] as MediaStreamTrack[], close: vi.fn(() => Promise.resolve()) };
+      close = this.record.close;
+
+      constructor() {
+        contexts.push(this.record);
+      }
+
+      createMediaStreamSource(stream: { tracks: MediaStreamTrack[] }) {
+        this.record.tracks.push(...stream.tracks);
+        return { connect: () => undefined, disconnect: () => undefined };
+      }
+
+      createAnalyser() {
+        return {
+          fftSize: 256,
+          getFloatTimeDomainData: (samples: Float32Array) => samples.fill(0),
+          connect: () => undefined,
+          disconnect: () => undefined,
+        };
+      }
+    }
+  );
+  return contexts;
 }
 
 function createLocalAudioTrack() {

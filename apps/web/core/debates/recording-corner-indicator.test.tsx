@@ -64,4 +64,16 @@ describe('RecordingCornerIndicator', () => {
     expect(number).toBeInTheDocument();
     expect(badge.querySelector('[data-muted-indicator]')).toBeNull();
   });
+
+  it('shows a speaker who is still finishing past the buzzer as finishing, not muted (GEO-3407)', () => {
+    const view = render(
+      <RecordingCornerIndicator participant="remote" muted={false} countdown={null} finishingSince={Date.now()} />
+    );
+    expect(screen.getByRole('img', { name: 'Microphone still open' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Microphone muted')).not.toBeInTheDocument();
+
+    view.rerender(<RecordingCornerIndicator participant="remote" muted countdown={null} finishingSince={null} />);
+    expect(screen.getByLabelText('Microphone muted')).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Microphone still open' })).not.toBeInTheDocument();
+  });
 });

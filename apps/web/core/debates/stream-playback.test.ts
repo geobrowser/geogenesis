@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from './api';
 import {
+  HLS_MAX_BUFFER_SECONDS,
   attachStreamSource,
   debateStreamsFully,
-  HLS_MAX_BUFFER_SECONDS,
   isStreamUnavailableError,
   previewPairOffsetSeconds,
   recordingHasPreview,

@@ -75,7 +75,9 @@ export type ScheduleEditorSurface =
   /** The calendar's own prompt and its Edit my times (GEO-3152). */
   | 'calendar'
   /** Reopened on the way back from connecting Google Calendar. */
-  | 'google_calendar';
+  | 'google_calendar'
+  /** Reopened on the way back from connecting Outlook Calendar. */
+  | 'microsoft_calendar';
 
 /** Every event that knows how the week was opened says so the same way, `unknown` included. */
 function entryProperty(entry: ScheduleEntry | null | undefined) {

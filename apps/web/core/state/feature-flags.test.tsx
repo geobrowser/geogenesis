@@ -30,6 +30,7 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.debateDeviceSwitchRecording).toBe(false);
     expect(defaultFeatureFlags.googleSignIn).toBe(false);
     expect(defaultFeatureFlags.googleCalendar).toBe(false);
+    expect(defaultFeatureFlags.microsoftCalendar).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
@@ -42,6 +43,7 @@ describe('feature flags', () => {
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
       googleCalendar: false,
+      microsoftCalendar: false,
       bountiesTab: true,
     });
   });
@@ -71,6 +73,7 @@ describe('feature flags', () => {
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
       googleCalendar: false,
+      microsoftCalendar: false,
       bountiesTab: true,
     });
   });
@@ -101,6 +104,7 @@ describe('feature flags', () => {
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
       googleCalendar: false,
+      microsoftCalendar: false,
       bountiesTab: true,
     });
   });
