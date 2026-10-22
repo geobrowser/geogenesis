@@ -33,7 +33,7 @@ const mocks = vi.hoisted(() => ({
   heldReads: new Map<string, Promise<string | null>>(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, user: { id: mocks.accountId } }),
 }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({}) }));
@@ -177,6 +177,34 @@ describe('LocalVotesSaver', () => {
     await waitFor(() => expect(readLocalVotes().votes).toEqual([]));
     expect(mocks.submit.mock.calls).toEqual([['opposite', 'positive']]);
     expect(mocks.capture).toHaveBeenCalledWith('already_held', expect.objectContaining({ entityId: 'held' }), 2);
+  });
+
+  it('never switches a side the account holds for a vote an email link cast (GEO-3374)', async () => {
+    toggleLocalVote({
+      entityId: 'emailed',
+      spaceId: 'space-1',
+      responseKind: 'stance',
+      direction: 'positive',
+      title: 'emailed',
+      refEmail: 'digest',
+    });
+    toggleLocalVote({
+      entityId: 'emailed-new',
+      spaceId: 'space-1',
+      responseKind: 'stance',
+      direction: 'positive',
+      title: 'emailed-new',
+      refEmail: 'digest',
+    });
+    mocks.held.set('emailed', 'negative');
+    saveSignedIn();
+    signInWithSpace();
+    render(<LocalVotesSaver />);
+
+    await waitFor(() => expect(readLocalVotes().votes).toEqual([]));
+    // The claim the account had no side on is saved; the one it held the other way is left alone.
+    expect(mocks.submit.mock.calls).toEqual([['emailed-new', 'positive']]);
+    expect(mocks.capture).toHaveBeenCalledWith('already_held', expect.objectContaining({ entityId: 'emailed' }), 2);
   });
 
   it('keeps the votes and offers a retry when a write fails', async () => {

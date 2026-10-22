@@ -1,7 +1,8 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
-import type { ActionContext } from '~/core/action-context';
+import type { ActionContext, ActionScope } from '~/core/action-context';
+import type { Debate } from '~/core/debates/api';
 import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
@@ -106,12 +107,71 @@ export const spaceSidebarHasContentAtom = atom<boolean | null>(null);
  * page they should open the comments beside what you're reading rather than
  * navigate away from it.
  */
-export const entityCommentsPanelAtom = atom<{
+export type EntityCommentsPanelTarget = {
   entityId: string;
   spaceId: string;
   /** Logical graph type retained so comments created from the global panel are attributed correctly. */
   targetEntityType?: string;
-} | null>(null);
+};
+
+export const entityCommentsPanelAtom = atom<EntityCommentsPanelTarget | null>(null);
+
+/**
+ * The debate whose claims panel an explore card has open, or `null`. Drawn by an app-level host, not
+ * the card: a card inside the entity side panel unmounts when opening this closes that panel.
+ */
+export type ExploreDebateClaimsPanelTarget = {
+  debateId: string;
+  debate: Debate;
+  /** The opening card's analytics scope, so the panel keeps attributing to it. */
+  scope: ActionScope;
+};
+
+export const exploreDebateClaimsPanelAtom = atom<ExploreDebateClaimsPanelTarget | null>(null);
+
+/** Which panel the full-screen debate feed has open, or `null`. */
+export const debateFeedPanelAtom = atom<'claims' | 'comments' | null>(null);
+
+/**
+ * Every panel sharing the one right-hand slot. Opening any of these clears the others.
+ *
+ * A slot panel whose opener can sit inside another slot panel must render from an app-level host,
+ * or clearing that panel unmounts the new one. Hosts close their own panel on route change.
+ *
+ * Not in this slot (left alone on purpose): ranking-compose entity sheets, proposal review
+ * panels (exclusive among themselves), the debates hub, and slide-ups (those stack).
+ */
+type EntityPanelKind = 'entity' | 'comments' | 'exploreDebateClaims' | 'debateFeed';
+
+const clearEntityPanelsExceptAtom = atom(null, (_get, set, keep: EntityPanelKind) => {
+  if (keep !== 'entity') set(entitySidePanelAtom, null);
+  if (keep !== 'comments') set(entityCommentsPanelAtom, null);
+  if (keep !== 'exploreDebateClaims') set(exploreDebateClaimsPanelAtom, null);
+  if (keep !== 'debateFeed') set(debateFeedPanelAtom, null);
+});
+
+export const openEntitySidePanelAtom = atom(null, (_get, set, target: EntitySidePanelTarget | null) => {
+  set(entitySidePanelAtom, target);
+  if (target) set(clearEntityPanelsExceptAtom, 'entity');
+});
+
+export const openEntityCommentsPanelAtom = atom(null, (_get, set, target: EntityCommentsPanelTarget | null) => {
+  set(entityCommentsPanelAtom, target);
+  if (target) set(clearEntityPanelsExceptAtom, 'comments');
+});
+
+export const openExploreDebateClaimsPanelAtom = atom(
+  null,
+  (_get, set, target: ExploreDebateClaimsPanelTarget | null) => {
+    set(exploreDebateClaimsPanelAtom, target);
+    if (target) set(clearEntityPanelsExceptAtom, 'exploreDebateClaims');
+  }
+);
+
+export const openDebateFeedPanelAtom = atom(null, (_get, set, panel: 'claims' | 'comments' | null) => {
+  set(debateFeedPanelAtom, panel);
+  if (panel) set(clearEntityPanelsExceptAtom, 'debateFeed');
+});
 
 export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'people';
 

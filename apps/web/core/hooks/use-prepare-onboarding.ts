@@ -1,11 +1,11 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
+
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
   avatarAtom,
@@ -14,7 +14,7 @@ import {
   spaceIdAtom,
   stepAtom,
   topicIdAtom,
-} from '~/partials/onboarding/dialog';
+} from '~/partials/onboarding/onboarding-atoms';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 

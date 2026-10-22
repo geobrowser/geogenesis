@@ -231,6 +231,7 @@ export function useSpaceOffer(
     shown: (
       <ExploreJoinSpaceButton
         spaceId={item.spaceId}
+        spaceName={item.spaceName}
         hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
         variant={joinVariant}
         label="Join"

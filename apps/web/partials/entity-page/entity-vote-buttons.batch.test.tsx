@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/debates/rematch-panel-context', () => ({ useRematchPanelContext: () => ({}) }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
   usePrivy: () => ({ authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
@@ -112,7 +112,7 @@ beforeEach(() => {
   mocks.getResponders.mockReset();
   mocks.getResponders.mockReturnValue([]);
   mocks.getSummaryPage.mockReset();
-  mocks.getSummaryPage.mockReturnValue([]);
+  mocks.getSummaryPage.mockReturnValue({ items: [], endCursor: null, hasNextPage: false });
   mocks.getViewerResponse.mockReset();
   mocks.getViewerResponse.mockReturnValue('positive');
   mocks.optimisticResponse = undefined;

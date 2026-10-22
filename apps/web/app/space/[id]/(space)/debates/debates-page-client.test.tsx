@@ -201,6 +201,11 @@ describe('DebatesPageClient browse feed', () => {
     expect(screen.getAllByText('Sam').length).toBeGreaterThan(0);
     expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
 
+    // The feed holds full recordings until the viewer presses Play (feed-full-playback.ts).
+    const play = await screen.findByRole('button', { name: 'Play debate' });
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+
+    fireEvent.click(play);
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
   });
 

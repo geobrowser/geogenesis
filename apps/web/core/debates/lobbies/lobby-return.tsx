@@ -2,15 +2,18 @@
 
 import * as React from 'react';
 
+import { useHydrated } from '~/core/hooks/use-hydrated';
+
 import {
   consumeDebateReturnDestination,
   peekDebateReturnDestination,
   rememberLobbyReturnDestination,
 } from '../debate-return-navigation';
+import type { DebateJoinChoice } from '../request-join-state';
 import { sameId } from '../rooms/room-presence';
 import { debateRoomIdFromPath } from '../rooms/room-routes';
 import { useMyDebateLobby } from './hooks';
-import { clearCarriedLobbyMic, readCarriedLobbyMic } from './step-out';
+import { clearCarriedLobbyChoice, readCarriedLobbyChoice } from './step-out';
 
 /** The lobby in this tab's record of where the flow returns to, or null when it is a page. */
 function storedLobbyId(): string | null {
@@ -42,25 +45,29 @@ function useServerLobbyReturn(): { lobbyId: string | null } | undefined {
 }
 
 /**
- * The leave paths' `consumeDebateReturnDestination`, preferring geo-chat's lobby over this tab's. A
+ * The leave destination and its button state, preferring geo-chat's lobby over this tab's. A
  * lobby joins on arrival by itself (GEO-3337), so nothing here asks it to.
  */
-export function useConsumeDebateReturnDestination() {
+export function useDebateReturnNavigation() {
+  const hydrated = useHydrated();
   const lobby = useServerLobbyReturn();
   const lobbyId = lobby?.lobbyId;
   const known = lobby !== undefined;
-  return React.useCallback(
+  const consume = React.useCallback(
     () => consumeDebateReturnDestination(known ? { lobbyId: lobbyId ?? null } : undefined),
     [known, lobbyId]
   );
+  // Session storage is only visible in the browser; keep the server and first client label equal.
+  return { consume, returnsToLobby: hydrated && Boolean(known ? lobbyId : storedLobbyId()) };
 }
 
 /**
- * The mic the viewer had in the lobby they stepped out of to get here, so the picker or ready room
- * starts the same way: null when they did not come straight from one. Read once per mount and spent.
+ * The mic and camera the viewer had in the lobby they stepped out of to get here, so the picker or
+ * ready room starts the same way: null when they did not come straight from one. Read once per
+ * mount and spent.
  */
-export function useCarriedLobbyMic(): boolean | null {
-  const [carried] = React.useState(readCarriedLobbyMic);
-  React.useEffect(() => clearCarriedLobbyMic(), []);
+export function useCarriedLobbyChoice(): DebateJoinChoice | null {
+  const [carried] = React.useState(readCarriedLobbyChoice);
+  React.useEffect(() => clearCarriedLobbyChoice(), []);
   return carried;
 }

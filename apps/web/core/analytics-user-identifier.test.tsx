@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => mocks.privyState,
 }));
 

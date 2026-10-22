@@ -4,6 +4,7 @@ import { ACTION_CONTEXT_FIELDS, pageContext } from './action-context';
 import { type AnalyticsEventName, type AnalyticsProperties, capture } from './analytics';
 import { isAnalyticsEnabled, readAnalyticsContext } from './analytics-context';
 import { equals } from './id/normalize';
+import { pushMarketingEvent } from './marketing-events';
 
 const PREFIX = 'geo:auth-attempt:v1:';
 const POINTER = 'geo:auth-attempt:active';
@@ -52,6 +53,9 @@ const fields = new Set<string>([
   'marketing_handoff_id',
   // How many device votes a save sign-in was started for (GEO-3214).
   'local_vote_count',
+  // Why the save sheet was open when that sign-in started: the navbar's centred sheet and the corner
+  // card share one email field, so this is what tells their sign-ins apart (GEO-3400).
+  'prompt_reason',
 ]);
 
 const sourceIdentifierFields = new Set(['link_source', 'marketing_page', 'marketing_cta', 'marketing_handoff_id']);
@@ -205,6 +209,7 @@ export function beginAuthAttempt(properties: AnalyticsProperties = {}) {
   ownedAttemptId = attempt.id;
   save(attempt);
   captureAuthEvent('auth_attempt_started', attemptProperties(attempt));
+  pushMarketingEvent('geo_sign_up_start');
   return attempt;
 }
 export function openAuthAttempt(properties: AnalyticsProperties = { auth_trigger: 'redirect' }) {

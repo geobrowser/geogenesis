@@ -1,6 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -50,6 +49,7 @@ import { Profile } from '~/core/types';
 import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { Avatar } from '~/design-system/avatar';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
@@ -101,6 +101,8 @@ type EntityVoteButtonsProps = {
    * announcement is the better failure than none.
    */
   compact?: boolean;
+  /** Whether to load counts yet. Until true, with nothing cached, the skeleton shows instead of a zero. */
+  nearViewport?: boolean;
 };
 
 /**
@@ -130,6 +132,7 @@ function EntityResponseButtons({
   claimResponderAvatarsPosition = 'leading',
   presentation = 'inline',
   compact = false,
+  nearViewport = true,
 }: EntityVoteButtonsProps) {
   const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);
   const responseBatch = useClaimResponseBatchState();
@@ -205,7 +208,7 @@ function EntityResponseButtons({
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, queryResponseKind),
     queryFn: () =>
       Effect.runPromise(getEntityResponseCounts(entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)),
-    enabled: !responseBatch.managed && !isResponseKindLoading && responseKind !== null,
+    enabled: nearViewport && !responseBatch.managed && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
@@ -223,7 +226,8 @@ function EntityResponseButtons({
         getUserEntityResponse(personalSpaceId, entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)
       );
     },
-    enabled: !responseBatch.managed && !!personalSpaceId && !isResponseKindLoading && responseKind !== null,
+    enabled:
+      nearViewport && !responseBatch.managed && !!personalSpaceId && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
@@ -461,7 +465,8 @@ function EntityResponseButtons({
     );
   };
 
-  if ((responseBatch.managed && !responseBatch.ready) || isResponseKindLoading) {
+  const countsDeferred = !nearViewport && !responseBatch.managed && responseCounts === undefined;
+  if ((responseBatch.managed && !responseBatch.ready) || isResponseKindLoading || countsDeferred) {
     return <Skeleton className="h-5 w-16 shrink-0 rounded" />;
   }
 

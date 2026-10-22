@@ -7,6 +7,10 @@ import { Entity as EntitySchema, EntityType as EntityTypeSchema } from '../schem
 
 export class EntityDecoder {
   static decode(data: unknown): EntityType | null {
+    return EntityDecoder.decodeInSpace(data);
+  }
+
+  static decodeInSpace(data: unknown, spaceId?: string): EntityType | null {
     const decoded = Schema.decodeUnknownEither(EntitySchema)(data);
 
     if (Either.isLeft(decoded)) {
@@ -14,7 +18,7 @@ export class EntityDecoder {
       return null;
     }
 
-    const result = EntityDtoLive(decoded.right);
+    const result = EntityDtoLive(decoded.right, spaceId);
     return result;
   }
 }

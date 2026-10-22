@@ -13,6 +13,7 @@ import { debatePath } from './debate-routes';
 import { useAbortDebate, useClearDebateActivity } from './hooks';
 import { routeIntoDebate } from './lobbies/step-out';
 import { SpaceChip } from './matchmaking/matchmaking-claim-card';
+import { debateMediaSessionKey } from './media-session';
 
 /**
  * GEO-2514. Accepting a request creates the debate outright — there is no match prompt in between
@@ -70,6 +71,7 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
   return (
     <DebateRequestDialog
       claim={debate.claim.claim}
+      media={{ kind: 'choose', sessionKey: debateMediaSessionKey(debate.id) }}
       participants={debate.participants}
       currentUserId={currentUserId}
       formatId={debate.turn_format_id}

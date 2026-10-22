@@ -11,6 +11,9 @@ import type { Debate } from '~/core/debates/api';
 import { useDebateMedia } from '~/core/debates/hooks';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
+import { pushMarketingEvent } from '~/core/marketing-events';
+import { copyShareLink, observeShareLinkHandoff } from '~/core/sharing/share-handoff';
+import { type ShareMethod as LinkShareMethod, type ShareLink, createShareLink } from '~/core/sharing/share-link';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
@@ -24,6 +27,7 @@ import { Spinner } from '~/design-system/spinner';
 
 import { hasSocialVideo } from '../playback-utils';
 import { downloadPreparedVideo, usePreparedSocialVideo } from '../social-video-share';
+import { xShareMessage } from './x-share-message';
 
 type Props = {
   open: boolean;
@@ -33,12 +37,11 @@ type Props = {
   openerRef: React.RefObject<HTMLElement | null>;
 };
 
-type ShareMethod = 'reddit' | 'x' | 'linkedin' | 'copy_link' | 'download';
+type ShareMethod = LinkShareMethod | 'download';
 
 const SHARE_TAGLINE = 'Watch the debate on Geo!';
 
 const REDDIT_TITLE_MAX = 300;
-const X_TWEET_MAX = 280;
 const LINKEDIN_TEXT_MAX = 700;
 
 /**
@@ -58,10 +61,23 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   const download = useDebateVideoDownload(debate.id, open && socialVideoReady);
   const [, setToast] = useToast();
 
-  const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))}`;
+  React.useEffect(() => {
+    if (open) pushMarketingEvent('geo_share_open', { debate_id: debate.id, space_id: spaceId });
+  }, [open, debate.id, spaceId]);
+
+  const shareLink = (method: LinkShareMethod) =>
+    createShareLink(
+      `${window.location.origin}${NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))}`,
+      'debate',
+      debate.id,
+      method
+    );
+  const participants = debate.participants?.map(participant => participant.profile_space_id);
 
   const shareMessage = (maxLength: number) => {
+    if (maxLength <= 0) return '';
     const suffix = `. ${SHARE_TAGLINE}`;
+    if (maxLength < suffix.length) return SHARE_TAGLINE.slice(0, maxLength);
     const claim = debate.claim.claim.trim();
     const claimRoom = maxLength - suffix.length;
     const trimmedClaim = claim.length > claimRoom ? `${claim.slice(0, Math.max(0, claimRoom - 1)).trimEnd()}…` : claim;
@@ -73,10 +89,15 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   };
 
   // Preserve synchronous user activation and the handler's original errors.
-  const handoffShare = (method: ShareMethod, handoff: () => void) => {
-    const operation = observeOperation('share', 'debate', debate.id, undefined, getContext());
+  const handoffShare = (method: ShareMethod, handoff: () => void, link?: ShareLink) => {
+    const context = getContext();
+    const recordHandoff = link
+      ? observeShareLinkHandoff(link, { ...context, space_id: spaceId }, participants)
+      : undefined;
+    const operation = observeOperation('share', 'debate', debate.id, undefined, context);
     try {
       handoff();
+      recordHandoff?.('composer_requested');
       if (method === 'download') operation.succeeded({ method });
       else operation.failed('unknown');
     } catch (error) {
@@ -86,41 +107,58 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     try {
       capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method });
     } catch {}
+    pushMarketingEvent('geo_share', { debate_id: debate.id, space_id: spaceId, share_method: method });
   };
 
   const onReddit = () => {
-    handoffShare('reddit', () =>
-      openComposer(
-        `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl())}&title=${encodeURIComponent(shareMessage(REDDIT_TITLE_MAX))}`
-      )
+    const link = shareLink('reddit');
+    handoffShare(
+      'reddit',
+      () =>
+        openComposer(
+          `https://www.reddit.com/submit?url=${encodeURIComponent(link.url)}&title=${encodeURIComponent(shareMessage(REDDIT_TITLE_MAX))}`
+        ),
+      link
     );
   };
 
   const onX = () => {
-    const url = shareUrl();
-    const text = shareMessage(X_TWEET_MAX - url.length - 1);
-    handoffShare('x', () =>
-      openComposer(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`)
+    const link = shareLink('x');
+    const url = link.url;
+    const text = xShareMessage(debate.claim.claim, SHARE_TAGLINE);
+    handoffShare(
+      'x',
+      () =>
+        openComposer(
+          `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`
+        ),
+      link
     );
   };
 
   const onLinkedIn = () => {
+    const link = shareLink('linkedin');
     // `share-offsite` ignores any text param — it scrapes the page's OG tags. The feed composer is
     // the only hand-off that pre-fills text; putting the URL in the text still yields a link preview.
-    handoffShare('linkedin', () =>
-      openComposer(
-        `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareMessage(LINKEDIN_TEXT_MAX)}\n${shareUrl()}`)}`
-      )
+    handoffShare(
+      'linkedin',
+      () =>
+        openComposer(
+          `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareMessage(LINKEDIN_TEXT_MAX)}\n${link.url}`)}`
+        ),
+      link
     );
   };
 
   const onCopy = async () => {
-    const operation = observeOperation('share', 'debate', debate.id, undefined, getContext());
+    const context = getContext();
+    const operation = observeOperation('share', 'debate', debate.id, undefined, context);
     try {
-      await navigator.clipboard.writeText(shareUrl());
+      await copyShareLink(shareLink('copy_link'), { ...context, space_id: spaceId }, participants);
       setToast(<span>Link copied!</span>);
       operation.succeeded({ method: 'copy_link' });
       capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method: 'copy_link' });
+      pushMarketingEvent('geo_share', { debate_id: debate.id, space_id: spaceId, share_method: 'copy_link' });
     } catch {
       operation.failed('unavailable');
       setToast(<span>Could not copy link.</span>);

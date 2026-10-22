@@ -6,16 +6,19 @@ import cx from 'classnames';
 
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
+import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
+import styles from './rematch-video-header.module.css';
+
 /**
  * The "You VS them" header for the rematch claim picker (GEO-2992).
  *
  * The voice controls used to live in a 200px dock pinned to the bottom-right corner, outside the
- * 720px column the viewer is actually reading. People were not finding it, so they never learned
+ * content column the viewer is actually reading. People were not finding it, so they never learned
  * they could unmute and talk while picking a claim. This puts the same controls in the page header,
  * inside the column, and gives the room a face: two participant cards either side of a VS badge —
  * them on the left, you on the right.
@@ -56,6 +59,8 @@ export type PairHeaderVoice =
       onRetryMic: () => void;
       /** The mute/unmute pill and its attached settings chevron. Owned by `rematch-voice.tsx`. */
       controls: React.ReactNode;
+      localVideo?: React.ReactNode;
+      cameraMessage?: string | null;
       opponentState: PairMicState;
       /**
        * The viewer is making sound the room cannot hear. Wired to nothing today — see the note on
@@ -97,6 +102,8 @@ type RematchPairHeaderProps = {
    * "View profile" on the other card, so each card's corner is that person's secondary action, and
    * the row it used to occupy at the end of the tab strip is now the tabs' alone.
    */
+  /** The other person's camera, where they have one running. */
+  opponentVideo?: React.ReactNode;
   leaveAction?: React.ReactNode;
 };
 
@@ -109,6 +116,7 @@ export function RematchPairHeader({
   toast,
   onOpenOpponentSpace,
   leaveAction,
+  opponentVideo,
 }: RematchPairHeaderProps) {
   /**
    * Everything about the opponent that their card cannot say for itself.
@@ -128,12 +136,10 @@ export function RematchPairHeader({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Them, then the badge, then you — the home side of a scoreboard, and the side a reader's
-          eye lands on last. Three tracks on desktop, stacked on a phone: two 150px cards side by
-          side at 375px leave no room for a labelled pill, and a labelled pill is the entire point
-          of this change. */}
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2 mobile:grid-cols-1">
+      {/* The videos side by side, with the phone's controls in their own row. */}
+      <div className={cx('grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2', styles.pair)}>
         <OpponentCard
+          video={opponentVideo}
           opponent={opponent}
           name={opponentName}
           state={voice.kind === 'live' ? voice.opponentState : 'waiting'}
@@ -172,7 +178,7 @@ function toastAnnouncement(toast: PairHeaderToast, opponentName: string) {
 
 function VsBadge() {
   return (
-    <div className="flex items-center justify-center">
+    <div className={cx('flex items-center justify-center', styles.vs)}>
       <span
         aria-hidden
         className="grid size-7 place-items-center rounded-full bg-text text-tag tracking-[0.04em] text-white"
@@ -209,8 +215,8 @@ export const PAIR_PILL = 'flex h-6 shrink-0 items-center gap-1 px-2 text-chatMed
 /**
  * The layout both cards wear.
  *
- * Avatar, then a column holding the name with that person's state directly under it, then that
- * person's secondary action in the corner. One component rather than two similar ones, because
+ * Their video (or avatar) across the top, then one row with the name, that person's state and
+ * their secondary action at the end. One component rather than two similar ones, because
  * these sit side by side: the mute pill drifting out to the card's left edge while the opponent's
  * chip stayed indented under their name was invisible in either card alone and impossible to miss
  * across the pair.
@@ -231,18 +237,14 @@ function PairCardBody({
   action?: React.ReactNode;
 }) {
   return (
-    <>
-      <div className="flex w-full items-center gap-2.5">
-        {avatar}
-        <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-          <span title={nameTitle} className="w-full truncate text-left text-quoteMedium text-text">
-            {name}
-          </span>
-          {state}
-        </div>
-        {action ? <div className="flex shrink-0 items-center">{action}</div> : null}
-      </div>
-    </>
+    <div className={styles.cardBody}>
+      {avatar}
+      <span title={nameTitle} className={styles.cardName}>
+        {name}
+      </span>
+      <div className={styles.cardState}>{state}</div>
+      {action ? <div className={styles.cardAction}>{action}</div> : null}
+    </div>
   );
 }
 
@@ -279,10 +281,13 @@ function YouCard({
     if (voice.kind === 'message') return voice.message;
     if (voice.micFailureMessage) return voice.micFailureMessage;
     if (talkingWhileMuted) return `Muted · ${firstName(opponentName)} can’t hear you`;
+    if (voice.cameraMessage) return voice.cameraMessage;
     return null;
   })();
 
-  const captionTone = voice.kind === 'live' ? 'text-red-01' : 'text-grey-04';
+  const captionIsCameraNote =
+    voice.kind === 'live' && !voice.micFailureMessage && !talkingWhileMuted && Boolean(voice.cameraMessage);
+  const captionTone = voice.kind === 'live' && !captionIsCameraNote ? 'text-red-01' : 'text-grey-04';
 
   /**
    * The same two states, for a screen reader.
@@ -323,14 +328,21 @@ function YouCard({
     ) : null;
 
   return (
-    <div data-testid="rematch-you-card" className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5')}>
+    <div
+      data-testid="rematch-you-card"
+      role="group"
+      aria-label="You"
+      className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5', styles.card, styles.youCard)}
+    >
       <PairCardBody
         avatar={
           <ParticipantAvatar
             avatarUrl={local?.avatarCid ?? null}
             value={local?.profileSpaceId}
             name="You"
+            border={border}
             speaking={speaking}
+            video={live ? voice.localVideo : null}
           />
         }
         name="You"
@@ -369,6 +381,7 @@ function OpponentCard({
   showMicState,
   onOpen,
   describedBy,
+  video,
 }: {
   opponent: PairHeaderParticipant;
   name: string;
@@ -377,8 +390,12 @@ function OpponentCard({
   onOpen: (event: React.MouseEvent) => void;
   /** The header's live region, which also serves as this button's description. */
   describedBy: string;
+  video?: React.ReactNode;
 }) {
   const talking = showMicState && state === 'talking';
+  const videoAnchorRef = React.useRef<HTMLSpanElement>(null);
+  const { outside, dismissed, dismiss } = useFloatingOpponentVideo(videoAnchorRef);
+  const floating = showMicState && Boolean(video) && outside && !dismissed;
 
   // Base and hover in one expression, because a hover variant outranks a plain utility on
   // specificity whichever order they are written in. An unconditional `hover:border-grey-03`
@@ -390,10 +407,14 @@ function OpponentCard({
     <PairCardBody
       avatar={
         <ParticipantAvatar
+          anchorRef={videoAnchorRef}
+          floating={floating}
           avatarUrl={opponent.avatarCid}
           value={opponent.profileSpaceId}
           name={name}
+          border={border}
           speaking={talking}
+          video={video}
         />
       }
       name={name}
@@ -411,17 +432,74 @@ function OpponentCard({
   );
 
   return (
-    <button
-      type="button"
-      data-testid="rematch-opponent-card"
-      onClick={onOpen}
-      aria-label={`Open ${name}’s personal space`}
-      aria-describedby={describedBy}
-      className={cx(CARD_SURFACE, border, 'flex flex-col gap-2.5 text-left transition-colors')}
-    >
-      {body}
-    </button>
+    <>
+      <button
+        type="button"
+        data-testid="rematch-opponent-card"
+        onClick={onOpen}
+        aria-label={`Open ${name}’s personal space`}
+        aria-describedby={describedBy}
+        className={cx(
+          CARD_SURFACE,
+          border,
+          'flex flex-col gap-2.5 text-left transition-colors',
+          styles.card,
+          styles.opponentCard,
+          floating && styles.floatingActive
+        )}
+      >
+        {body}
+      </button>
+      {floating ? (
+        <button
+          type="button"
+          aria-label="Hide floating video"
+          title="Hide floating video"
+          onClick={event => {
+            // Keyboard dismissal must leave focus in the visible picker. Pointer dismissal
+            // should not focus the search box and open the phone's keyboard.
+            if (event.detail === 0) {
+              event.currentTarget
+                .closest('[data-rematch-scroll]')
+                ?.querySelector<HTMLInputElement>('[data-rematch-search]')
+                ?.focus({ preventScroll: true });
+            }
+            dismiss();
+          }}
+          className={styles.floatingClose}
+        >
+          <CloseSmall />
+        </button>
+      ) : null}
+    </>
   );
+}
+
+/** Observe the unchanged video slot, so docking the video cannot change the visibility signal. */
+function useFloatingOpponentVideo(anchorRef: React.RefObject<HTMLSpanElement | null>) {
+  const [outside, setOutside] = React.useState(false);
+  const [dismissed, setDismissed] = React.useState(false);
+
+  React.useEffect(() => {
+    const anchor = anchorRef.current;
+    if (!anchor || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      entries => {
+        // Batched transitions are chronological; use the latest visibility state.
+        const entry = entries.at(-1);
+        if (!entry) return;
+        // Do not dock a video that starts below the viewport on a short screen.
+        setOutside(!entry.isIntersecting && entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0));
+        // Any visit to the full-size slot resets dismissal, even within a batch.
+        if (entries.some(change => change.isIntersecting)) setDismissed(false);
+      },
+      { root: anchor.closest('[data-rematch-scroll]'), threshold: 0 }
+    );
+    observer.observe(anchor);
+    return () => observer.disconnect();
+  }, [anchorRef]);
+
+  return { outside, dismissed, dismiss: () => setDismissed(true) };
 }
 
 function ParticipantAvatar({
@@ -429,22 +507,56 @@ function ParticipantAvatar({
   value,
   name,
   speaking,
+  video,
+  border,
+  anchorRef,
+  floating = false,
 }: {
   avatarUrl: string | null;
   value?: string;
   name: string;
   speaking: boolean;
+  video?: React.ReactNode;
+  border?: string;
+  anchorRef?: React.Ref<HTMLSpanElement>;
+  floating?: boolean;
 }) {
   return (
     // The size lives on the wrapper, not on `<Avatar>`: its `size` prop only reaches the generated
     // fallback, while a real avatar renders `h-full w-full` and takes whatever box it is given.
     <span
+      ref={anchorRef}
+      data-testid="pair-avatar"
       className={cx(
-        'inline-flex size-8 shrink-0 overflow-hidden rounded-full',
-        speaking && 'ring-2 ring-successTertiary'
+        'inline-flex shrink-0 overflow-hidden',
+        styles.video,
+        border,
+        speaking && 'ring-2 ring-successTertiary',
+        floating && styles.floatingActive
       )}
     >
-      <Avatar avatarUrl={avatarUrl} value={value ?? name} size={32} alt="" />
+      <span
+        className={floating ? cx(styles.floatingVideo, border) : 'contents'}
+        data-testid={floating ? 'rematch-floating-opponent-video' : undefined}
+      >
+        {video ?? (
+          <span className={styles.fallback}>
+            <Avatar avatarUrl={avatarUrl} value={value ?? name} size={56} alt="" />
+          </span>
+        )}
+        <DebateTileChip
+          aria-hidden
+          className={cx(
+            tileChipSurface,
+            'absolute bottom-1.5 left-1.5 max-w-[calc(100%-12px)] text-text',
+            styles.videoName,
+            floating && styles.floatingName
+          )}
+        >
+          {speaking ? <TalkingBars /> : null}
+          <span className="truncate">{name}</span>
+        </DebateTileChip>
+      </span>
     </span>
   );
 }
@@ -531,8 +643,7 @@ function UnmuteNotice({ opponentName, onUnmute, onDismiss }: PairHeaderNotice & 
 /**
  * The nudges, in the header rather than over the corner dock that no longer exists.
  *
- * Both live inside the sticky block, so a viewer who has scrolled a page of claims still sees them
- * next to the button they are about.
+ * Both live under the participant cards, next to the button they are about.
  */
 function VoiceToast({ toast, opponentName }: { toast: PairHeaderToast; opponentName: string }) {
   const name = firstName(opponentName);

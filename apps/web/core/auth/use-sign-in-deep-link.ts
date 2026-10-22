@@ -1,7 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import { marketingAuthProperties } from '~/core/auth-attempt';
 import { SIGN_IN_MODAL } from '~/core/auth/sign-in-deep-link';
 import { dashlessId } from '~/core/debates/api';
@@ -9,6 +7,7 @@ import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
 import { claimLobbySignInPrompt } from '~/core/debates/lobbies/lobby-guest-sign-in';
 import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep-link';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 /**
  * GEO-2727. Opens the Privy sign-in dialog for a viewer who arrived on `?modal=signin`.

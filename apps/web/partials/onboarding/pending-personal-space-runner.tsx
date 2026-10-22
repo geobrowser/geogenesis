@@ -27,7 +27,7 @@ import { readRegisteredSpaceId } from '~/core/utils/contracts/create-personal-sp
 import { devLog } from '~/core/utils/dev-log';
 import { describeError } from '~/core/utils/error-diagnostics';
 
-import { avatarAtom, nameAtom, selectedTopicIdsAtom, spaceIdAtom } from './dialog';
+import { avatarAtom, nameAtom, selectedTopicIdsAtom, spaceIdAtom } from './onboarding-atoms';
 
 /**
  * Runs the background `createPersonalSpace` chain for an optimistically

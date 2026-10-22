@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { NEWS_STORY_TYPE_ID } from '~/core/explore/explore-constants';
+import { resetLastGoodPublicFeedForTests } from '~/core/explore/last-good-public-feed';
 
-import { GET } from './route';
+import { FEED_TIME_BUDGET_MS, GET } from './route';
 
 const mocks = vi.hoisted(() => ({ fetchFeed: vi.fn(), viewer: vi.fn(), freshState: vi.fn(), context: vi.fn() }));
 
@@ -13,11 +14,11 @@ vi.mock('~/core/explore/fetch-explore-feed', () => ({
 }));
 vi.mock('~/core/explore/resolve-explore-feed-request-context', () => ({
   resolveExploreFeedRequestContext: async (...args: unknown[]) => ({
-    ...mocks.context(...args),
     browse: { featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null },
     memberOrEditorSpaceIds: [],
     walletAddress: null,
     personalMemberSpaceId: null,
+    ...mocks.context(...args),
   }),
 }));
 vi.mock('~/core/explore/fresh-slot/fresh-slot-store', () => ({
@@ -37,6 +38,11 @@ beforeEach(() => {
   mocks.freshState.mockReset();
   mocks.freshState.mockResolvedValue({ config: FRESH_ON, revision: 4, updatedAt: null, updatedBy: null });
   vi.unstubAllEnvs();
+  resetLastGoodPublicFeedForTests(null);
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 const FRESH_ON = { enabled: true, cadence: 4, firstPosition: 3, maxPerPage: 3, freshnessHours: 48, perTypeCaps: {} };
@@ -59,6 +65,17 @@ describe('GET /api/explore/feed', () => {
     await GET(new Request('https://example.com/api/explore/feed?sort=best'));
 
     expect(sentArgs().freshSlot).toEqual({ config: FRESH_ON, revision: 4 });
+  });
+
+  it('hands the feed the member space it resolved, so the feed does not look it up again', async () => {
+    mocks.context.mockReturnValue({ walletAddress: '0xabc', personalMemberSpaceId: 'member-space' });
+
+    await GET(new Request('https://example.com/api/explore/feed?sort=new'));
+
+    expect(mocks.fetchFeed.mock.calls[0]?.[0]).toMatchObject({
+      walletAddress: '0xabc',
+      viewerMemberSpaceId: 'member-space',
+    });
   });
 
   it.each(['new', 'top', 'for-you'])('does not read the fresh slot for %s', async sort => {
@@ -253,7 +270,9 @@ describe('GET /api/explore/feed', () => {
 
       const response = await GET(new Request(url));
 
-      expect(response.headers.get('cache-control')).toBe('public, s-maxage=30, stale-while-revalidate=60');
+      expect(response.headers.get('cache-control')).toBe(
+        'public, s-maxage=60, stale-while-revalidate=600, stale-if-error=86400'
+      );
     });
 
     it.each([
@@ -294,6 +313,87 @@ describe('GET /api/explore/feed', () => {
       const response = await GET(new Request('https://example.com/api/explore/feed?sort=for-you'));
 
       expect(response.headers.get('cache-control')).toBe('private, no-store');
+    });
+  });
+
+  // 2026-10-16: gaia shed the feed's queries, and readers waited 60–106s to be told nothing.
+  describe('when the feed cannot be built', () => {
+    const publicUrl = 'https://example.com/api/explore/feed?sort=best&public=1';
+    const page = { items: [{ entityId: 'e1' }], nextCursor: 'c1', feed: { name: 'best', version: 'best-1' } };
+
+    async function rememberPublicPage() {
+      mocks.fetchFeed.mockResolvedValueOnce(page);
+      expect((await GET(new Request(publicUrl))).status).toBe(200);
+    }
+
+    beforeEach(() => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    it.each([
+      ['the public first page', publicUrl],
+      ['the signed-in first page of Best', 'https://example.com/api/explore/feed?sort=best'],
+    ])('serves the last good public page for %s, kept by no cache', async (_name, url) => {
+      await rememberPublicPage();
+      mocks.fetchFeed.mockRejectedValue(new Error('gaia 503'));
+
+      const response = await GET(new Request(url));
+
+      expect(response.status).toBe(200);
+      expect((await response.json()).items).toEqual([{ entityId: 'e1', ranking: { version: 'best-1' } }]);
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+      expect(response.headers.get('x-feed-stale-age')).toBe('0');
+    });
+
+    it.each([
+      ['a filtered page', `sort=best&typeIds=${DEBATE_TYPE_ID}`],
+      ['a later page', 'sort=best&cursor=abc'],
+      ['another sort', 'sort=new'],
+      ['For you', 'sort=for-you'],
+    ])('answers 503 for %s rather than a page that ignores it', async (_name, query) => {
+      await rememberPublicPage();
+      mocks.fetchFeed.mockRejectedValue(new Error('gaia 503'));
+
+      const response = await GET(new Request(`https://example.com/api/explore/feed?${query}`));
+
+      expect(response.status).toBe(503);
+    });
+
+    it('answers 503 when there is no last good page', async () => {
+      mocks.fetchFeed.mockRejectedValue(new Error('gaia 503'));
+
+      expect((await GET(new Request(publicUrl))).status).toBe(503);
+    });
+
+    it('answers 503 rather than 500 when the request context cannot be read', async () => {
+      mocks.context.mockImplementation(() => {
+        throw new Error('featured spaces timed out');
+      });
+
+      expect((await GET(new Request('https://example.com/api/explore/feed?sort=new'))).status).toBe(503);
+    });
+
+    it('stops waiting at the time budget', async () => {
+      await rememberPublicPage();
+      vi.useFakeTimers();
+      mocks.fetchFeed.mockReturnValue(new Promise(() => {}));
+
+      const answered = GET(new Request(publicUrl));
+      await vi.advanceTimersByTimeAsync(FEED_TIME_BUDGET_MS);
+      const response = await answered;
+
+      expect(response.status).toBe(200);
+      expect((await response.json()).items).toHaveLength(1);
+    });
+
+    it('answers 503 at the time budget for a request the last good page cannot stand in for', async () => {
+      vi.useFakeTimers();
+      mocks.fetchFeed.mockReturnValue(new Promise(() => {}));
+
+      const answered = GET(new Request('https://example.com/api/explore/feed?sort=new'));
+      await vi.advanceTimersByTimeAsync(FEED_TIME_BUDGET_MS);
+
+      expect((await answered).status).toBe(503);
     });
   });
 });

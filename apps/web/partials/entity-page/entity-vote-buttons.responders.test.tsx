@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => ({
   entity: null as unknown,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
 }));
@@ -66,7 +66,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: {} }) }));
 
 vi.mock('~/core/io/queries', () => ({
-  getClaimResponseSummaryPage: () => Effect.succeed([]),
+  getClaimResponseSummaryPage: () => Effect.succeed({ items: [], endCursor: null, hasNextPage: false }),
   getEntityResponseCounts: () => Effect.succeed({ positive: mocks.positive, negative: mocks.negative }),
   getEntityResponders: () => Effect.succeed([]),
   getSpaces: () => Effect.succeed([]),
