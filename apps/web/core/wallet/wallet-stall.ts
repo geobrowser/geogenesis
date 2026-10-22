@@ -11,14 +11,28 @@
  * - `wallet_never_arrived`: the same, but it never gets there. The account already has an embedded
  *   wallet, so `useEnsureEmbeddedWallet` does not create one, and there is nothing in `useWallets()`
  *   for it to activate. Until GEO-3245 nothing retried short of a page load.
+ *   GEO-3449 found the usual reason: Privy lists an embedded wallet only once its hidden iframe has
+ *   answered a handshake, and it abandons that handshake silently after about 40 seconds. The way
+ *   back is a fresh Privy (`restartAuthHost` in `auth-store.ts`), which Reconnect asks for and the
+ *   stall asks for once on its own.
  * - `smart_account_error`: building the smart account failed (Privy signing, ZeroDev RPC).
  */
 
 /** How long a signed-in navbar waits for the account before offering Reconnect. */
 export const WALLET_STALL_GRACE_MS = 5_000;
 
-/** How long a Reconnect is given before it counts as failed. */
-export const RECONNECT_WINDOW_MS = 10_000;
+/**
+ * How long a Reconnect is given before it counts as failed. Long enough for a restarted Privy to
+ * start and its wallet iframe to load, which takes several seconds on a phone.
+ */
+export const RECONNECT_WINDOW_MS = 20_000;
+
+/**
+ * How long a stall with no wallet waits before restarting Privy without being asked. Privy's iframe
+ * handshake runs for about 40 seconds (270 tries, 150ms apart) before it gives up; restarting sooner
+ * would cut off one that is slow but still going. Most people never press Reconnect.
+ */
+export const AUTO_RESTART_MS = 45_000;
 
 /**
  * Set before the one reload a failed Reconnect earns, and never cleared in the tab: a session that

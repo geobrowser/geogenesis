@@ -12,6 +12,7 @@ import { motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
+import { capture } from '~/core/analytics';
 import { trackAuthOnboarding } from '~/core/auth-attempt';
 import type { BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
@@ -27,6 +28,7 @@ import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
 import { E } from '~/core/sync/orm';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import type { TopicOption } from '~/core/topics/use-topic-suggestions';
 import type { SearchResult } from '~/core/types';
 import { devLog } from '~/core/utils/dev-log';
 import { NavUtils, validateEntityId } from '~/core/utils/utils';
@@ -39,7 +41,6 @@ import {
   SquareButton,
 } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
-import { FallbackImage } from '~/design-system/fallback-image';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { Camera } from '~/design-system/icons/camera';
 import { CheckedCircleCheckedSmall } from '~/design-system/icons/check-circle-checked-small';
@@ -53,8 +54,12 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
+import { FeedTopicPicker, RECOMMENDED_FEED_TOPIC_COUNT } from './customize-feed';
+import { InterestGrid, preloadInterestImages } from './interest-grid';
 import { avatarAtom, nameAtom, selectedTopicIdsAtom, stepAtom, topicIdAtom } from './onboarding-atoms';
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
+import { useContentBelow } from './use-content-below';
+import { feedTopicsAtom, heldTopicsFor } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 type Step = OnboardingStep;
@@ -62,6 +67,7 @@ type Step = OnboardingStep;
 const stepOrder: Partial<Record<Step, number>> = {
   start: 1,
   'interested-in': 2,
+  'customize-feed': 3,
 };
 
 const stepByOrder = Object.fromEntries(Object.entries(stepOrder).map(([step, order]) => [order, step])) as Record<
@@ -90,7 +96,7 @@ export const OnboardingDialog = () => {
   const router = useRouter();
 
   const { smartAccount } = useSmartAccount();
-  const setTopicId = useSetAtom(topicIdAtom);
+  const [topicId, setTopicId] = useAtom(topicIdAtom);
   const setName = useSetAtom(nameAtom);
   const setPending = useSetAtom(pendingPersonalSpaceAtom);
   const setChatOpen = useSetAtom(isChatOpenAtom);
@@ -101,6 +107,7 @@ export const OnboardingDialog = () => {
   const [selectedTopicIds, setSelectedTopicIds] = useAtom(selectedTopicIdsAtom);
   const [featuredSpaces, setFeaturedSpaces] = useState<BrowseSpaceRow[]>([]);
   const [featuredStatus, setFeaturedStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [heldFeedTopics, setHeldFeedTopics] = useAtom(feedTopicsAtom);
 
   const [step, setStep] = useAtom(stepAtom);
   const [entityMatchCandidates, setEntityMatchCandidates] = useState<SearchResult[]>([]);
@@ -162,6 +169,7 @@ export const OnboardingDialog = () => {
     setFeaturedStatus('loading');
     fetchBrowseSidebarData(undefined)
       .then(data => {
+        preloadInterestImages(data.featured);
         setFeaturedSpaces(data.featured);
         setFeaturedStatus(data.featuredError ? 'error' : 'loaded');
       })
@@ -172,10 +180,12 @@ export const OnboardingDialog = () => {
       });
   }, []);
 
+  // Start during profile setup so the choices and their thumbnails are ready for the next step.
+  // 'customize-feed' also needs them: with no space picks, suggestions come from every featured space.
   useEffect(() => {
-    if (step !== 'interested-in') return;
+    if (!isOnboardingVisible) return;
     loadFeaturedSpaces();
-  }, [step, loadFeaturedSpaces]);
+  }, [isOnboardingVisible, loadFeaturedSpaces]);
 
   const lastTrackedStep = useRef<string | null>(null);
   useEffect(() => {
@@ -190,6 +200,7 @@ export const OnboardingDialog = () => {
   }, [isOnboardingVisible, step]);
 
   const address = smartAccount?.account.address;
+  const feedTopics = heldTopicsFor(heldFeedTopics, address);
 
   if (!address) return null;
 
@@ -232,13 +243,24 @@ export const OnboardingDialog = () => {
     }
   }
 
+  // `topicId` is empty unless the user claimed an existing entity on the match step.
   function onCompleteOnboard() {
     if (!address || !smartAccount) return;
-    beginOptimisticOnboarding('');
+    capture('form_submission', {
+      form_type: 'onboarding_customize_feed',
+      outcome: feedTopics.length > 0 ? 'completed' : 'skipped',
+      topic_count: feedTopics.length,
+      space_pick_count: selectedTopicIds.length,
+    });
+    beginOptimisticOnboarding(topicId);
   }
 
   const handleSelectTopics = (id: string) => {
-    setSelectedTopicIds(prev => (prev.includes(id) ? prev.filter(topicId => topicId !== id) : [...prev, id]));
+    setSelectedTopicIds(prev => (prev.includes(id) ? prev.filter(spaceId => spaceId !== id) : [...prev, id]));
+  };
+
+  const handleSelectFeedTopics = (topics: TopicOption[]) => {
+    setHeldFeedTopics({ address, topics });
   };
 
   // `stepAtom` is persisted via atomWithStorage, but entityMatchCandidates
@@ -284,7 +306,9 @@ export const OnboardingDialog = () => {
                 }}
                 onSelect={(entityId, entityName) => {
                   if (entityName) setName(entityName);
-                  beginOptimisticOnboarding(entityId);
+                  // Claiming an existing entity skips the space step but still picks topics.
+                  setTopicId(entityId);
+                  setStep('customize-feed');
                 }}
               />
             )}
@@ -292,10 +316,21 @@ export const OnboardingDialog = () => {
               <StepInterestedIn
                 selectedTopicIds={selectedTopicIds}
                 handleSelectTopics={handleSelectTopics}
-                onCompleteOnboard={onCompleteOnboard}
+                onContinue={() => setStep('customize-feed')}
                 featuredSpaces={featuredSpaces}
                 status={featuredStatus}
                 onRetry={loadFeaturedSpaces}
+              />
+            )}
+            {effectiveStep === 'customize-feed' && (
+              <StepCustomizeFeed
+                spaceIds={selectedTopicIds.length > 0 ? selectedTopicIds : featuredSpaces.map(space => space.id)}
+                isPreparing={selectedTopicIds.length === 0 && featuredStatus === 'loading'}
+                failedToPrepare={selectedTopicIds.length === 0 && featuredStatus === 'error'}
+                onRetryPrepare={loadFeaturedSpaces}
+                selected={feedTopics}
+                onChange={handleSelectFeedTopics}
+                onCompleteOnboard={onCompleteOnboard}
               />
             )}
             {effectiveStep === 'completed' && <StepComplete />}
@@ -320,45 +355,42 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className={`pointer-events-auto relative z-100 my-auto flex shrink-0 ${effectiveStep === 'completed' ? 'h-[245px] px-6 py-10' : 'h-[485px] p-6 pt-8'} w-full max-w-[360px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown`}
+      className={cx(
+        'pointer-events-auto relative z-100 my-auto flex h-[520px] max-h-[calc(100dvh-3rem)] min-h-[485px] w-full max-w-[440px] shrink-0 flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown',
+        effectiveStep === 'completed' ? 'justify-center px-6 py-10' : 'p-6 pt-8'
+      )}
     >
       {children}
     </motion.div>
   );
 };
 
-const STEPS_WITH_HEADER = ['start', 'interested-in', 'existing-entity-match'] as const;
+const STEPS_WITH_HEADER = ['start', 'interested-in', 'customize-feed', 'existing-entity-match'] as const;
 type StepWithHeader = (typeof STEPS_WITH_HEADER)[number];
 
-type DotConfig = { width: 'w-4' | 'w-8'; active: boolean };
-
-const DOT_CONFIGS: Record<StepWithHeader, DotConfig[]> = {
-  start: [
-    { width: 'w-8', active: true },
-    { width: 'w-4', active: false },
-  ],
-  'interested-in': [
-    { width: 'w-4', active: true },
-    { width: 'w-8', active: true },
-  ],
-  'existing-entity-match': [
-    { width: 'w-8', active: true },
-    { width: 'w-4', active: false },
-  ],
+const StepDots = ({ step }: { step: StepWithHeader }) => {
+  const currentOrder = stepOrder[step] ?? 1;
+  return (
+    <div className="flex w-full items-center justify-center gap-[7px]">
+      {Object.values(stepOrder).map(order => (
+        <span
+          key={order}
+          className={cx(
+            'h-[5px] rounded-[50px]',
+            order === currentOrder ? 'w-8' : 'w-4',
+            order <= currentOrder ? 'bg-text' : 'bg-grey-02'
+          )}
+        />
+      ))}
+    </div>
+  );
 };
-
-const StepDots = ({ step }: { step: StepWithHeader }) => (
-  <div className="flex w-full items-center justify-center gap-[7px]">
-    {DOT_CONFIGS[step].map((dot, i) => (
-      <span key={i} className={`h-[5px] rounded-[50px] ${dot?.width} ${dot?.active ? 'bg-[#2A2B2E]' : 'bg-grey-02'}`} />
-    ))}
-  </div>
-);
 
 // `step` is the normalized effectiveStep, so a legacy value persisted by an
 // older version of the flow still renders the header for the step it maps to.
 const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityMatches: () => void }) => {
   const setStep = useSetAtom(stepAtom);
+  const topicId = useAtomValue(topicIdAtom);
   // Cleanup runs via the app-root useGeoLogoutCleanup; this only triggers it.
   const { logout } = useLogout();
 
@@ -372,14 +404,24 @@ const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityM
       setStep('start');
       return;
     }
+    // A claimed entity came from the match step, not the space step.
+    if (step === 'customize-feed' && topicId) {
+      setStep('existing-entity-match');
+      return;
+    }
     setStep(stepByOrder[(stepOrder[step] ?? 0) - 1] ?? 'start');
   };
 
   return (
-    <div className="relative z-20 mb-6 flex h-4 w-full items-center justify-center">
+    <div className="relative z-20 mb-6 flex h-4 w-full shrink-0 items-center justify-center">
       {showBack && (
         <div className="absolute left-0 rotate-180">
-          <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="border-none! bg-transparent!" />
+          <SquareButton
+            aria-label="Previous step"
+            icon={<RightArrowLongSmall />}
+            onClick={handleBack}
+            className="border-none! bg-transparent!"
+          />
         </div>
       )}
       <StepDots step={step as StepWithHeader} />
@@ -415,6 +457,25 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
     >
       {children}
     </motion.div>
+  );
+};
+
+type StepIntroProps = {
+  childKey: string;
+  title: string;
+  description: string;
+};
+
+const StepIntro = ({ childKey, title, description }: StepIntroProps) => {
+  return (
+    <StepContents childKey={childKey}>
+      <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
+        {title}
+      </Text>
+      <Text as="p" variant="body" className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04">
+        {description}
+      </Text>
+    </StepContents>
   );
 };
 
@@ -485,22 +546,9 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
   };
 
   return (
-    <div className="flex h-full flex-col justify-between">
-      <StepContents childKey="welcome">
-        <div className="w-full">
-          <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
-            Welcome to Geo 👋
-          </Text>
-          <Text
-            as="p"
-            variant="body"
-            className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
-          >
-            What should we call you?
-          </Text>
-        </div>
-      </StepContents>
-      <div className="mt-[58px] flex grow flex-col items-center justify-start">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <StepIntro childKey="welcome" title="Welcome to Geo 👋" description="What should we call you?" />
+      <div className="my-6 flex flex-col items-center md:my-3">
         <div className="group relative h-20 w-20">
           {avatar ? (
             <OnboardingAvatarPreview avatar={avatar} />
@@ -533,7 +581,7 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
           type="file"
           className="hidden"
         />
-        <div className="mt-6 flex w-full flex-col items-center justify-center gap-3">
+        <div className="mt-6 flex w-full flex-col items-center justify-center gap-3 md:mt-4">
           <input
             value={name}
             onChange={event => {
@@ -546,8 +594,8 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
           />
         </div>
       </div>
-      <div className="relative">
-        <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
+      <div className="mt-auto shrink-0 space-y-4">
+        <div className="flex justify-center">
           <Text as="p" variant="footnote" className="text-center text-grey-04">
             All content is public and shared onchain.
             <br />
@@ -749,98 +797,119 @@ function MatchCard({ result, isSelected, hasDivider, onSelect }: MatchCardProps)
 function StepInterestedIn({
   handleSelectTopics,
   selectedTopicIds,
-  onCompleteOnboard,
+  onContinue,
   featuredSpaces,
   status,
   onRetry,
 }: {
   handleSelectTopics: (id: string) => void;
   selectedTopicIds: string[];
-  onCompleteOnboard: () => void;
+  onContinue: () => void;
   featuredSpaces: BrowseSpaceRow[];
   status: 'loading' | 'loaded' | 'error';
   onRetry: () => void;
 }) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
-  const isCreateProfile = selectedTopicIds.length > 0;
-  const primaryLabel = isCreateProfile ? 'Create profile' : 'Skip for now';
+  const hasPicks = selectedTopicIds.length > 0;
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const hasContentBelow = useContentBelow(scrollRef, contentRef, status === 'loaded');
 
   return (
-    <div className="flex h-full flex-col justify-between">
-      <StepContents childKey="interested-in">
-        <div className="w-full">
-          <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
-            What are you interested in?
-          </Text>
-          <Text
-            as="p"
-            variant="body"
-            className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
-          >
-            Select the first spaces you want to join
-          </Text>
-        </div>
-      </StepContents>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <StepIntro
+        childKey="interested-in"
+        title="Choose your interests"
+        description="Choose spaces to join and discover topics you care about"
+      />
       {isLoading ? (
-        <div className="flex h-full items-center justify-center pt-[32px]">
+        <div className="flex min-h-0 flex-1 items-center justify-center py-6">
           <Dots />
         </div>
       ) : isError ? (
-        <div className="flex h-full flex-col items-center justify-center gap-2 pt-[32px] text-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 py-6 text-center">
           <Text as="p" variant="body" className="text-[16px] leading-5 font-normal text-grey-04">
             We couldn&apos;t load spaces to join. Check your connection and try again.
           </Text>
         </div>
       ) : (
-        <div className="flex h-full flex-wrap content-start items-start justify-center gap-1 pt-[32px]">
-          {featuredSpaces.map(featuredSpace => {
-            return (
-              <div
-                key={`interested-topic-${featuredSpace.id}`}
-                role="button"
-                // It already said `role="button"`, which promises a control that can be focused and
-                // activated from a keyboard. Without a tabIndex it could not be reached, and without
-                // a key handler Enter and Space did nothing. `aria-pressed` because it is a toggle.
-                tabIndex={0}
-                aria-pressed={selectedTopicIds.includes(featuredSpace.id)}
-                onKeyDown={event => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    handleSelectTopics(featuredSpace.id);
-                  }
-                }}
-                onClick={() => handleSelectTopics(featuredSpace.id)}
-                className={`flex cursor-pointer items-center justify-start rounded-[40px] border px-4 py-3 ${selectedTopicIds.includes(featuredSpace.id) ? 'border-[#2A2B2E]' : 'border-grey-02'}`}
-              >
-                <div className="relative mr-[10px] h-4 w-4">
-                  <FallbackImage
-                    value={featuredSpace.image ?? ''}
-                    sizes="16px"
-                    className="max-h-4 max-w-4 rounded-full bg-red-01"
-                  />
-                </div>
-
-                <span className="text-[16px] leading-[10px] font-normal text-[#2A2B2E]">{featuredSpace.name}</span>
-              </div>
-            );
-          })}
+        <div ref={scrollRef} className="my-4 min-h-0 flex-1 overflow-y-auto">
+          <div ref={contentRef}>
+            <InterestGrid spaces={featuredSpaces} selectedIds={selectedTopicIds} onToggle={handleSelectTopics} />
+          </div>
         </div>
       )}
-      {isError ? (
-        <button type="button" onClick={onRetry} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
-          Try again
-        </button>
-      ) : (
+      <div className={cx('shrink-0 border-t pt-4', hasContentBelow ? 'border-grey-02' : 'border-transparent')}>
+        {isError ? (
+          <button type="button" onClick={onRetry} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+            Try again
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onContinue}
+            disabled={isLoading}
+            className={hasPicks ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
+          >
+            {hasPicks ? 'Continue' : 'Skip for now'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StepCustomizeFeed({
+  spaceIds,
+  isPreparing,
+  failedToPrepare,
+  onRetryPrepare,
+  selected,
+  onChange,
+  onCompleteOnboard,
+}: {
+  spaceIds: string[];
+  isPreparing: boolean;
+  failedToPrepare: boolean;
+  onRetryPrepare: () => void;
+  selected: TopicOption[];
+  onChange: (topics: TopicOption[]) => void;
+  onCompleteOnboard: () => void;
+}) {
+  const hasPicks = selected.length > 0;
+  const needsMore = selected.length < RECOMMENDED_FEED_TOPIC_COUNT;
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <StepIntro
+        childKey="customize-feed"
+        title="Customize your feed"
+        description="Every topic you follow helps personalize your feed"
+      />
+      <FeedTopicPicker
+        spaceIds={spaceIds}
+        isPreparing={isPreparing}
+        failedToPrepare={failedToPrepare}
+        onRetryPrepare={onRetryPrepare}
+        selected={selected}
+        onChange={onChange}
+        className="mt-6 flex-1"
+      />
+      <div className="mt-4 shrink-0 border-t border-grey-02 pt-4">
+        <Text as="p" variant="footnote" className="pb-2 text-center text-grey-04">
+          {needsMore
+            ? `Pick ${RECOMMENDED_FEED_TOPIC_COUNT} or more for a better feed`
+            : `${selected.length} topics selected`}
+        </Text>
         <button
           type="button"
           onClick={onCompleteOnboard}
-          disabled={isLoading}
-          className={isCreateProfile ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
+          className={hasPicks ? DIALOG_ACTION_BUTTON_CLASS_NAME : DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
         >
-          {primaryLabel}
+          {hasPicks ? 'Create profile' : 'Skip for now'}
         </button>
-      )}
+      </div>
     </div>
   );
 }

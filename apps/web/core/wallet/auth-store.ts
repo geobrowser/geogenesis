@@ -39,6 +39,10 @@ type State = {
   hostFailed: boolean;
   /** Bumped by a retry so the host loader runs again. */
   hostAttempt: number;
+  /** Bumped to remount the Privy host in place (`restartAuthHost`). */
+  hostKey: number;
+  /** A remounted host has not reported ready yet; what the last one published stands until it does. */
+  restarting: boolean;
   privy: PrivyValue | null;
   wallets: WalletsValue | null;
   identityToken: IdentityTokenValue | null;
@@ -50,6 +54,8 @@ const initialState: State = {
   requested: false,
   hostFailed: false,
   hostAttempt: 0,
+  hostKey: 0,
+  restarting: false,
   privy: null,
   wallets: null,
   identityToken: null,
@@ -57,7 +63,10 @@ const initialState: State = {
   instanceIds: [],
 };
 
+const READY_TIMEOUT_MS = 20_000;
+
 let state: State = initialState;
+let restartTimer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<() => void>();
 const instances = new Map<string, InstanceEntry>();
 
@@ -83,6 +92,8 @@ export function getState() {
 
 /** Test seam. */
 export function resetAuthStore() {
+  if (restartTimer) clearTimeout(restartTimer);
+  restartTimer = null;
   state = initialState;
   instances.clear();
   detected = undefined;
@@ -124,8 +135,42 @@ function shallowEqual(a: unknown, b: unknown) {
   return keys.every(key => Object.is(left[key], right[key]));
 }
 
+/**
+ * GEO-3449. Unmounts the Privy host and mounts a fresh one, without touching the app beside it.
+ *
+ * The one way back for an embedded wallet that never reaches `useWallets()`. Privy lists it only
+ * once its hidden wallet iframe answers a handshake, which it retries for about 40 seconds and then
+ * abandons without telling anyone (`onLoadFailed: () => null` in 3.32). Nothing in Privy's API asks
+ * again; a new `PrivyProvider` builds a new iframe and does.
+ *
+ * A fresh Privy starts out not ready and signed out. Published as it is, that would read as a
+ * sign-out to everything downstream, so the new host's slices are held back until it is ready and
+ * the last host's values stand in the meantime, for up to `READY_TIMEOUT_MS`.
+ */
+export function restartAuthHost() {
+  const hostKey = state.hostKey + 1;
+  const restarting = state.privy !== null;
+  setState({ hostKey, restarting });
+  if (restartTimer) clearTimeout(restartTimer);
+  restartTimer = null;
+  if (!restarting) return;
+  // A host that never reports ready would otherwise leave the page on the last one's values for good.
+  restartTimer = setTimeout(() => {
+    restartTimer = null;
+    if (state.restarting && state.hostKey === hostKey) setState({ restarting: false });
+  }, READY_TIMEOUT_MS);
+}
+
 /** Called by the host after its hooks render. Quiet when nothing changed. */
 export function publish<K extends Slice>(slice: K, value: State[K]) {
+  if (state.restarting) {
+    // The host publishes `privy` first, so the slices after it in the same pass go through.
+    if (slice !== 'privy' || !(value as PrivyValue | null)?.ready) return;
+    if (restartTimer) clearTimeout(restartTimer);
+    restartTimer = null;
+    setState({ restarting: false, privy: value as PrivyValue });
+    return;
+  }
   if (shallowEqual(state[slice], value)) return;
   setState({ [slice]: value } as Partial<State>);
 }
@@ -154,8 +199,6 @@ export function publishInstanceResult(id: string, result: unknown) {
   entry.result = result;
   emit();
 }
-
-const READY_TIMEOUT_MS = 20_000;
 
 /** Resolves with `select()` once it is non-null; rejects after `timeoutMs`. */
 export function whenReady<T>(select: () => T | null, timeoutMs = READY_TIMEOUT_MS): Promise<T> {

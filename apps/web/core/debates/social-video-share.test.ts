@@ -45,6 +45,7 @@ describe('handoffPreparedSocialVideo', () => {
     expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
       debate_id: 'debate-1',
       method: 'native_share',
+      captions: true,
     });
   });
 
@@ -76,6 +77,7 @@ describe('handoffPreparedSocialVideo', () => {
       method: 'download',
       fell_back_from: 'native_share',
       error_name: 'NotAllowedError',
+      captions: true,
     });
   });
 
@@ -135,6 +137,7 @@ describe('handoffPreparedSocialVideo', () => {
     expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
       debate_id: 'debate-1',
       method: 'download',
+      captions: true,
     });
   });
 
@@ -180,6 +183,7 @@ describe('handoffPreparedSocialVideo', () => {
       debate_id: 'debate-1',
       method: 'native_share',
       error_name: 'Error',
+      captions: true,
     });
   });
 
@@ -210,6 +214,7 @@ describe('handoffPreparedSocialVideo', () => {
       debate_id: 'debate-1',
       method: 'download',
       error_name: 'Error',
+      captions: true,
     });
   });
 });

@@ -181,6 +181,46 @@ describe('GET /api/explore/feed', () => {
   describe('personalized For you (GEO-3140)', () => {
     const item = (entityId: string, ranking?: object) => ({ entityId, ...(ranking ? { ranking } : {}) });
 
+    it('uses the topic stream for verified viewers while onboarding follows are pending, then personalizes again', async () => {
+      mocks.viewer.mockResolvedValue('aaaaaaaa000040008000000000000001');
+      mocks.fetchFeed.mockResolvedValue({ items: [], nextCursor: 'w1:22:' });
+      const topic = '8cb0a2b4adbf4627aa080cec5112099a';
+      const url = `https://example.com/api/explore/feed?sort=for-you&followedTopicIds=${topic}`;
+      const response = await GET(new Request(`${url}&pendingTopicFollows=1`));
+
+      expect(sentArgs().reorderWindow).toBeUndefined();
+      expect(sentArgs().forYouTopicIds).toEqual([topic]);
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+      expect((await response.json()).nextCursor).toBe('w1:22:');
+
+      mocks.fetchFeed.mockClear();
+      await GET(new Request(url));
+      expect(sentArgs().reorderWindow).toBeTypeOf('function');
+      expect(sentArgs().forYouTopicIds).toEqual([]);
+    });
+
+    it.each(['best', 'new', 'top'])('does not change %s for a pending onboarding signal', async sort => {
+      vi.stubEnv('NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED', 'true');
+      mocks.viewer.mockResolvedValue('aaaaaaaa000040008000000000000001');
+      await GET(
+        new Request(
+          `https://example.com/api/explore/feed?sort=${sort}&pendingTopicFollows=1&followedTopicIds=8cb0a2b4adbf4627aa080cec5112099a`
+        )
+      );
+
+      expect(sentArgs().forYouTopicIds).toEqual([]);
+      if (sort === 'best') expect(sentArgs().reorderWindow).toBeTypeOf('function');
+    });
+
+    it('does not disable personalization for a pending flag with no valid topic ids', async () => {
+      mocks.viewer.mockResolvedValue('aaaaaaaa000040008000000000000001');
+      await GET(
+        new Request('https://example.com/api/explore/feed?sort=for-you&pendingTopicFollows=1&followedTopicIds=invalid')
+      );
+
+      expect(sentArgs().reorderWindow).toBeTypeOf('function');
+    });
+
     it('personalizes only for a verified viewer, ignoring followed topics', async () => {
       mocks.viewer.mockResolvedValue('aaaaaaaa000040008000000000000001');
       mocks.fetchFeed.mockResolvedValue({
