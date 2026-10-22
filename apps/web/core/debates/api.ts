@@ -2156,6 +2156,11 @@ export type DebateRoomView = {
   rematch_session_id: string | null;
   /** Absent from a geo-chat that predates GEO-3427. Returned on a closed room too, to a participant. */
   notices?: DebateRoomNotice[];
+  /**
+   * Whether the viewer has arrived: joined at or after the start (GEO-3427). A look in before the
+   * start does not count. Absent from an older geo-chat.
+   */
+  viewer_arrived?: boolean;
 };
 
 /** A row in "your upcoming debates". Feeds the join prompt and the Requests tab (GEO-2940). */

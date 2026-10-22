@@ -293,6 +293,20 @@ describe('DebateRoomPageClient', () => {
       },
       'Debate room Notice find a debate',
     ],
+    // GEO-3427's notices for a room that closed under someone.
+    [
+      'told the debate moved',
+      () => (mocks.access = { status: 'closed', reason: 'rescheduled' } as typeof mocks.access),
+      'Debate room Notice see the new time',
+    ],
+    [
+      'told the other can’t make it',
+      () => {
+        mocks.access = { status: 'closed', reason: 'cancelled' } as typeof mocks.access;
+        mocks.notices = [{ user_id: 'maya', kind: 'cant_make_it', at: '', expected_at: null, note: null }];
+      },
+      'Debate room Notice find someone else',
+    ],
   ])('labels the notice action for a room visitor who is %s', (_state, arrange, label) => {
     arrange();
     mocks.guestView = { data: undefined, isPending: false, fetchStatus: 'idle' };

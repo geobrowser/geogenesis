@@ -81,7 +81,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   }, [denial, router]);
 
   const admitted = room?.access.status === 'admitted';
-  const { rejoin } = useRoomPresence(roomId, admitted);
+  const { rejoin } = useRoomPresence(roomId, admitted, room?.starts_at ?? null);
   const presence = useDebateRoomPresence(room);
   const { ready, authenticated } = useGeoChatAuth();
   // Signed out, the room's kind is unknown; the guest view answers for a lobby (GEO-3129), and is

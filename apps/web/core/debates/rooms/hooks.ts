@@ -15,6 +15,7 @@ import {
 } from '../api';
 import { useDebateVisibility } from '../debate-attention';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import { useServerClock } from '../matchmaking/use-request-countdown';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { debateRoomOpponent, debateRoomPresence } from './room-presence';
 
@@ -96,16 +97,26 @@ async function withRetry<T>(task: () => Promise<T>, shouldStop: () => boolean = 
   }
 }
 
+/** Past the start before announcing again, so the join lands after it on the server. */
+const START_MARGIN_MS = 1_000;
+/** `setTimeout` overflows past this; a room booked further ahead re-arms on waking. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
 /**
  * Announces arrival once admitted, and departure on both exits: unmount is navigating within the
  * app, `pagehide` is closing the tab. A duplicate leave changes nothing. Everything the leave
  * needs is captured inside the effect: a ref written during render already holds the next room by
  * cleanup time.
  */
-export function useRoomPresence(roomId: string, admitted: boolean) {
+export function useRoomPresence(roomId: string, admitted: boolean, startsAt: string | null = null) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const connectionId = useConnectionId();
+  // The server's time where it has synced: the start below is the server's, and a laptop clock a
+  // few seconds behind would announce just before it and not count as arriving.
+  const clock = useServerClock(admitted && startsAt !== null);
+  const clockRef = React.useRef(clock);
+  clockRef.current = clock;
 
   // `getPrivyIdentityToken` only reads the current session, so holding it in a ref keeps a token
   // refresh from re-running the join/leave pair.
@@ -147,6 +158,34 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
     void announce();
     announceRef.current = announce;
 
+    // GEO-3427: geo-chat counts someone as having arrived by a join at or after the start, so that a
+    // tab left open from a look in before it (or a crashed one) does not count. A tab someone is
+    // actually waiting in says so again once the start passes; a dead one never does.
+    const startMs = startsAt ? Date.parse(startsAt) : Number.NaN;
+    const now = () => clockRef.current?.now() ?? Date.now();
+    let startTimer: ReturnType<typeof setTimeout> | undefined;
+    let arrived = false;
+    const arriveAtStart = () => {
+      if (cancelled || arrived) return;
+      clearTimeout(startTimer);
+      const wait = startMs - now();
+      if (wait > 0) {
+        // Re-checked on waking, against the server's clock if it has synced since.
+        startTimer = setTimeout(arriveAtStart, Math.min(wait + START_MARGIN_MS, MAX_TIMEOUT_MS));
+        return;
+      }
+      arrived = true;
+      void announce();
+    };
+    // A phone can suspend the tab past the start, and its timer with it: coming back says so too.
+    const arriveOnReturn = () => {
+      if (document.visibilityState === 'visible') arriveAtStart();
+    };
+    if (Number.isFinite(startMs) && now() < startMs) {
+      arriveAtStart();
+      document.addEventListener('visibilitychange', arriveOnReturn);
+    }
+
     // `pagehide` has no later, so the request is made rather than queued: a leave waiting behind
     // an in-flight join is never sent at all once the document freezes, and the server has no
     // staleness window to clean up after it. Ordering is worth less here than the request
@@ -169,12 +208,14 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
     window.addEventListener('pageshow', restore);
     return () => {
       cancelled = true;
+      clearTimeout(startTimer);
+      document.removeEventListener('visibilitychange', arriveOnReturn);
       announceRef.current = null;
       window.removeEventListener('pagehide', departOnce);
       window.removeEventListener('pageshow', restore);
       void withRetry(() => send(false, true)).catch(() => undefined);
     };
-  }, [accountKey, admitted, connectionId, queryClient, roomId]);
+  }, [accountKey, admitted, connectionId, queryClient, roomId, startsAt]);
 
   // A join is also how a room gets a fresh session: geo-chat replaces an expired or ended one on the
   // next join, which an occupant who never left would otherwise not send.

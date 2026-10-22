@@ -62,7 +62,7 @@ let scheduledQuery: StubQuery<{ requests: unknown[] }> = { data: { requests: [] 
 let roomsQuery: StubQuery<{ rooms: unknown[] }> = { data: { rooms: [] }, isPending: false, isError: false };
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({ useScheduledDebates: () => scheduledQuery }));
 // The room view: who is inside, and who said they are late. Empty by default.
-let roomView: { data?: { occupants: string[]; notices?: unknown[] }; isError: boolean } = {
+let roomView: { data?: { occupants: string[]; notices?: unknown[]; viewer_arrived?: boolean }; isError: boolean } = {
   data: { occupants: [], notices: [] },
   isError: false,
 };
@@ -461,6 +461,20 @@ describe('AvailabilityDeepLink', () => {
 
       auth.authenticated = true;
       rerender(<AvailabilityDeepLink />);
+      expect(screen.getByTestId('scheduled-notice')).toHaveAttribute('data-step', 'decide');
+    });
+
+    // Their Can't make it would be a plain cancel, and the note they typed would go nowhere.
+    it('opens the week for someone who already came', () => {
+      roomView = { data: { occupants: [], notices: [], viewer_arrived: true }, isError: false };
+      render(<AvailabilityDeepLink />);
+      expect(screen.getByTestId('booking-modal')).toBeInTheDocument();
+    });
+
+    it('still offers the choices to someone late themselves, whatever the other said', () => {
+      const late = (user_id: string) => ({ user_id, kind: 'running_late', at: '', expected_at: '', note: null });
+      roomView = { data: { occupants: [], notices: [late('maya'), late('viewer-1')] }, isError: false };
+      render(<AvailabilityDeepLink />);
       expect(screen.getByTestId('scheduled-notice')).toHaveAttribute('data-step', 'decide');
     });
 

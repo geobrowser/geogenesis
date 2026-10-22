@@ -286,9 +286,15 @@ function useRoomOpenFor(requestId: string | null, auth: { ready: boolean; authen
     // Who is waiting can't be told without it, and board 2 is the wrong question for them.
     if (roomView.isError) return false;
     if (!roomView.data || !viewerId) return null;
+    // The person waiting, who board 2 is the wrong question for: inside now, already came (whose
+    // Can't make it would be a plain cancel, dropping a note), or told the other is late while not
+    // late themselves.
     const inside = roomView.data.occupants.some(userId => sameId(userId, viewerId));
-    const otherIsLate = noticeFrom(roomView.data.notices, opponentOf(request, viewerId), 'running_late') !== null;
-    return !inside && !otherIsLate;
+    const notices = roomView.data.notices;
+    const toldOtherIsLate =
+      noticeFrom(notices, opponentOf(request, viewerId), 'running_late') !== null &&
+      noticeFrom(notices, viewerId, 'running_late') === null;
+    return !inside && !roomView.data.viewer_arrived && !toldOtherIsLate;
   })();
 
   // Signed out is not latched: someone who signs in from the week's own prompt is decided afresh.

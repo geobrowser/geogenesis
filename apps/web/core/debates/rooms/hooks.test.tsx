@@ -224,6 +224,83 @@ describe('useRoomPresence', () => {
   });
 });
 
+// GEO-3427: geo-chat counts an arrival by a join at or after the start, so a tab someone is waiting
+// in says so again once the start passes. A crashed tab, which never does, is the one left out.
+describe('useRoomPresence at the start', () => {
+  it('joins again on the same connection once the start passes, and only once', async () => {
+    vi.useFakeTimers();
+    try {
+      const { renderHook: render } = await import('@testing-library/react');
+      const { useRoomPresence } = await import('./hooks');
+      const api = await import('../api');
+      vi.spyOn(api, 'getServerTime').mockRejectedValue(new Error('offline'));
+      const spy = vi.spyOn(api, 'setDebateRoomPresence').mockResolvedValue({} as never);
+      const startsAt = new Date(Date.now() + 60_000).toISOString();
+
+      render(() => useRoomPresence('room-1', true, startsAt), { wrapper: withQueryClient });
+      await vi.advanceTimersByTimeAsync(0);
+      const joins = () => spy.mock.calls.filter(call => call[1].joined === true);
+      expect(joins()).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(59_000);
+      expect(joins()).toHaveLength(1);
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(joins()).toHaveLength(2);
+      expect(joins()[1][1].connection_id).toBe(joins()[0][1].connection_id);
+
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(joins()).toHaveLength(2);
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A phone can suspend the tab, and its timer, past the start.
+  it('joins again on coming back to the tab after the start', async () => {
+    vi.useFakeTimers();
+    try {
+      const { renderHook: render } = await import('@testing-library/react');
+      const { useRoomPresence } = await import('./hooks');
+      const api = await import('../api');
+      vi.spyOn(api, 'getServerTime').mockRejectedValue(new Error('offline'));
+      const spy = vi.spyOn(api, 'setDebateRoomPresence').mockResolvedValue({} as never);
+      const startsAt = new Date(Date.now() + 60_000).toISOString();
+
+      render(() => useRoomPresence('room-1', true, startsAt), { wrapper: withQueryClient });
+      await vi.advanceTimersByTimeAsync(0);
+      // The clock moves past the start without the timer having run.
+      vi.setSystemTime(Date.now() + 120_000);
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(spy.mock.calls.filter(call => call[1].joined === true)).toHaveLength(2);
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends nothing extra when it opens after the start', async () => {
+    vi.useFakeTimers();
+    try {
+      const { renderHook: render } = await import('@testing-library/react');
+      const { useRoomPresence } = await import('./hooks');
+      const api = await import('../api');
+      vi.spyOn(api, 'getServerTime').mockRejectedValue(new Error('offline'));
+      const spy = vi.spyOn(api, 'setDebateRoomPresence').mockResolvedValue({} as never);
+      const startsAt = new Date(Date.now() - 60_000).toISOString();
+
+      render(() => useRoomPresence('room-1', true, startsAt), { wrapper: withQueryClient });
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(spy.mock.calls.filter(call => call[1].joined === true)).toHaveLength(1);
+      spy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('useFinishedRoomIds', () => {
   const upcoming = (roomId: string, sessionId: string | null) => ({
     room_id: roomId,
