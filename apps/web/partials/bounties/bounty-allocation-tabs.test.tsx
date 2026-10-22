@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
   pay: vi.fn(async () => ({ status: 'paid' as const })),
   // Person entity → personal space, as the graph resolves pages to spaces.
   spaceByPerson: new Map<string, string>(),
-  searchPick: null as { id: string; name: string | null } | null,
+  searchPick: null as { spaceId: string; personId: string; name: string | null } | null,
 }));
 
 vi.mock('~/core/bounties/use-direct-payout', () => ({
@@ -42,15 +42,15 @@ vi.mock('~/core/io/subgraph/fetch-personal-spaces-by-page-ids', () => ({
   fetchPersonalSpacesByPageIds: async (ids: string[]) =>
     new Map(ids.flatMap(id => (mocks.spaceByPerson.has(id) ? [[id, mocks.spaceByPerson.get(id)!]] : []))),
 }));
-vi.mock('~/design-system/select-entity-compact', () => ({
-  SelectEntityCompact: ({
-    onDone,
+vi.mock('./curator-search', () => ({
+  CuratorSearch: ({
+    onSelect,
     placeholder,
   }: {
-    onDone: (r: { id: string; name: string | null }) => void;
-    placeholder?: string;
+    onSelect: (c: { spaceId: string; personId: string; name: string | null }) => void;
+    placeholder: string;
   }) => (
-    <button type="button" onClick={() => mocks.searchPick && onDone(mocks.searchPick)}>
+    <button type="button" onClick={() => mocks.searchPick && onSelect(mocks.searchPick)}>
       {placeholder}
     </button>
   ),
@@ -193,33 +193,12 @@ describe('BountyAllocationTabs', () => {
     await waitFor(() => expect(mocks.pay).toHaveBeenCalledWith({ spaceId: PERSON_SPACE, name: 'Erin' }, 10));
   });
 
-  it('allocates a person found by name to their personal space, without an Interested click', async () => {
-    const DANA = 'dddd00000000000000000000000000d4';
+  it('allocates a curator picked by name to their personal space, without an Interested click', async () => {
     const DANA_SPACE = 'dddd0000000000000000000000000044';
-    mocks.spaceByPerson = new Map([[DANA, DANA_SPACE]]);
-    mocks.searchPick = { id: DANA, name: 'Dana' };
+    mocks.searchPick = { spaceId: DANA_SPACE, personId: 'dddd00000000000000000000000000d4', name: 'Dana' };
     render(<BountyAllocationTabs detail={detail} roles={{ ...viewer, isEditor: true }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Allocate a curator by name…' }));
     await waitFor(() => expect(mocks.allocate).toHaveBeenCalledWith({ spaceId: DANA_SPACE, name: 'Dana' }));
-  });
-
-  it('explains instead of allocating a person with no personal space', async () => {
-    mocks.searchPick = { id: 'cccc00000000000000000000000000c3', name: 'Famous Person' };
-    render(<BountyAllocationTabs detail={detail} roles={{ ...viewer, isEditor: true }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Allocate a curator by name…' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      "Famous Person has no personal space, so they can't be allocated."
-    );
-    expect(mocks.allocate).not.toHaveBeenCalled();
-  });
-
-  it('does not re-allocate someone already allocated', async () => {
-    mocks.spaceByPerson = new Map([['dddd00000000000000000000000000d4', ALICE]]);
-    mocks.searchPick = { id: 'dddd00000000000000000000000000d4', name: 'Alice' };
-    render(<BountyAllocationTabs detail={detail} roles={{ ...viewer, isEditor: true }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Allocate a curator by name…' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Alice is already allocated.');
-    expect(mocks.allocate).not.toHaveBeenCalled();
   });
 
   it('hides Pay and the name search from non-editors, and the search when spots are full', () => {

@@ -1,6 +1,5 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -18,10 +17,10 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { SelectEntityCompact } from '~/design-system/select-entity-compact';
 import { Text } from '~/design-system/text';
 
 import { BountyPayDialog } from './bounty-pay-dialog';
+import { CuratorSearch } from './curator-search';
 
 type Props = {
   detail: BountyDetail;
@@ -29,8 +28,6 @@ type Props = {
 };
 
 type Tab = 'allocated' | 'interested';
-
-const PERSON_TYPES = [{ id: SystemIds.PERSON_TYPE }];
 
 /**
  * Allocated / Interested curators. Editors allocate (from interest, or anyone
@@ -43,7 +40,6 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
   const payout = useDirectPayout(detail);
   const [paying, setPaying] = React.useState<{ recipient: PayoutRecipient; label: string } | null>(null);
   const balance = useSpaceBalance(detail.bounty.spaceId, roles.isEditor);
-  const [searchError, setSearchError] = React.useState<string | null>(null);
 
   const allocatedIds = React.useMemo(() => [...new Set(detail.bounty.allocatedIds.map(uuidToHex))], [detail]);
   const interestedIds = React.useMemo(
@@ -63,22 +59,6 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
     queryFn: () => fetchPersonalSpacesByPageIds(allocatedIds),
   });
   const recipientSpaceId = (id: string) => spaceByPerson.data?.get(id) ?? id;
-
-  const allocateByName = async (result: { id: string; name: string | null }) => {
-    setSearchError(null);
-    const personId = uuidToHex(result.id);
-    const spaces = await fetchPersonalSpacesByPageIds([personId]).catch(() => new Map<string, string>());
-    const spaceId = spaces.get(personId);
-    if (!spaceId) {
-      setSearchError(`${result.name ?? 'That person'} has no personal space, so they can't be allocated.`);
-      return;
-    }
-    if (allocatedSet.has(uuidToHex(spaceId)) || allocatedSet.has(personId)) {
-      setSearchError(`${result.name ?? 'That person'} is already allocated.`);
-      return;
-    }
-    await actions.allocate({ spaceId, name: result.name });
-  };
 
   const spotsLeft =
     detail.bounty.maxContributors != null ? Math.max(0, detail.bounty.maxContributors - allocatedIds.length) : null;
@@ -103,18 +83,12 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
       </div>
 
       {roles.isEditor && tab === 'allocated' && spotsLeft !== 0 ? (
-        <div className="flex flex-col gap-1" data-testid="allocate-search">
-          <SelectEntityCompact
-            spaceId={detail.bounty.spaceId}
+        <div data-testid="allocate-search">
+          <CuratorSearch
             placeholder="Allocate a curator by name…"
-            relationValueTypes={PERSON_TYPES}
-            onDone={result => void allocateByName(result)}
+            allocatedIds={allocatedSet}
+            onSelect={curator => void actions.allocate({ spaceId: curator.spaceId, name: curator.name })}
           />
-          {searchError ? (
-            <p role="alert" className="text-footnote text-red-01">
-              {searchError}
-            </p>
-          ) : null}
         </div>
       ) : null}
 
