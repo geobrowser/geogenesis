@@ -5,6 +5,7 @@ import * as React from 'react';
 import type { CalendarConnectSource } from '~/core/availability/calendar-analytics';
 import type { CalendarConnection, CalendarProvider } from '~/core/debates/api';
 import {
+  isCalendarSyncing,
   useCalendarConnections,
   useConnectCalendar,
   useDisconnectCalendar,
@@ -173,6 +174,7 @@ function ConnectedCalendar({
   const needsReconnect = connection.status === 'needs_reconnect';
   // Reconnecting the same account would fail the same way.
   const needsOtherAccount = connection.last_error === 'mailbox_unavailable';
+  const syncing = isCalendarSyncing(connection);
   const requestError = connect.error ?? (refresh.isError ? refresh.error : null);
 
   return (
@@ -233,10 +235,10 @@ function ConnectedCalendar({
         </Text>
       )}
       <Text as="p" variant="footnote" color="grey-04">
-        {syncedAgo(connection.last_success_at)}
+        {syncing ? 'Syncing…' : syncedAgo(connection.last_success_at)}
       </Text>
 
-      {connection.stale && !needsReconnect ? (
+      {connection.stale && !needsReconnect && !syncing ? (
         <Text as="p" variant="footnote" className="text-red-01">
           Calendar hasn’t synced recently, so busy times aren’t being taken out of your availability.
         </Text>

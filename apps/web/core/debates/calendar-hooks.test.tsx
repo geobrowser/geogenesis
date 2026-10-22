@@ -9,6 +9,8 @@ import { setCachedIdentityToken } from '~/core/auth/identity-token';
 
 import { GeoChatRequestError } from './api';
 import {
+  CALENDAR_SYNCING_POLL_MS,
+  isCalendarSyncing,
   useCalendarBusy,
   useCalendarConnections,
   useConnectCalendar,
@@ -112,6 +114,52 @@ describe('useCalendarConnections', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.disabled).toBe(false);
+  });
+});
+
+describe('first sync', () => {
+  const syncing = {
+    account_email: 'ada@contoso.com',
+    status: 'ok' as const,
+    stale: true,
+    last_success_at: null,
+    last_error: null,
+  };
+
+  it('is a healthy connection that has never synced', () => {
+    expect(isCalendarSyncing(syncing)).toBe(true);
+    expect(isCalendarSyncing({ ...syncing, status: 'error' })).toBe(false);
+    expect(isCalendarSyncing({ ...syncing, last_success_at: '2026-10-22T14:03:11Z' })).toBe(false);
+    expect(isCalendarSyncing(null)).toBe(false);
+  });
+
+  it('reads the connection again until the sync lands, then rereads busy time', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      mocks.getCalendarConnections
+        .mockResolvedValueOnce({ providers: ['microsoft'], google: null, microsoft: syncing })
+        .mockResolvedValue({
+          providers: ['microsoft'],
+          google: null,
+          microsoft: { ...syncing, stale: false, last_success_at: '2026-10-22T14:03:11Z' },
+        });
+      const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+      const { result } = renderHook(() => useCalendarConnections(true), { wrapper });
+      await waitFor(() => expect(isCalendarSyncing(result.current.microsoft)).toBe(true));
+      expect(invalidate).not.toHaveBeenCalled();
+
+      await act(() => vi.advanceTimersByTimeAsync(CALENDAR_SYNCING_POLL_MS));
+      await waitFor(() => expect(result.current.microsoft?.stale).toBe(false));
+
+      expect(invalidatedKeys(invalidate)).toEqual(expect.arrayContaining([debateQueryKeys.calendarBusyRoot('user-a')]));
+      const reads = mocks.getCalendarConnections.mock.calls.length;
+      await act(() => vi.advanceTimersByTimeAsync(CALENDAR_SYNCING_POLL_MS * 2));
+      // One reread from the invalidation, then no more polling.
+      expect(mocks.getCalendarConnections.mock.calls.length).toBeLessThanOrEqual(reads + 1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

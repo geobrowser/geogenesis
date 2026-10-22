@@ -1218,6 +1218,8 @@ export type CalendarConnectionError =
   | 'scope_missing'
   /** Microsoft only: the account has no mailbox Graph can read, so another account is needed. */
   | 'mailbox_unavailable'
+  /** geo-chat's own provider client was refused; ours to fix, never the user's. */
+  | 'provider_misconfigured'
   | 'provider_unavailable'
   | 'rate_limited'
   | 'unknown';

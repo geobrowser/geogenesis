@@ -33,7 +33,8 @@ const mocks = vi.hoisted(() => ({
   disconnect: {} as Record<string, Mutation>,
 }));
 
-vi.mock('~/core/debates/calendar-hooks', () => ({
+vi.mock('~/core/debates/calendar-hooks', async importOriginal => ({
+  isCalendarSyncing: (await importOriginal<typeof import('~/core/debates/calendar-hooks')>()).isCalendarSyncing,
   useCalendarConnections: () => mocks.connections,
   useConnectCalendar: () => mocks.connect,
   useRefreshCalendar: (provider: string) => mocks.refresh[provider],
@@ -117,11 +118,45 @@ describe('CalendarSection with Google alone', () => {
   });
 
   it('warns when busy time has stopped applying', () => {
+    mocks.connections.google = connection({
+      stale: true,
+      last_success_at: new Date(Date.now() - 3 * 24 * 60 * 60_000).toISOString(),
+    });
+    render(<CalendarSection providers={['google']} />);
+
+    expect(screen.getByText('Synced 3 days ago')).toBeInTheDocument();
+    expect(screen.getByText(/hasn’t synced recently/)).toBeInTheDocument();
+  });
+
+  it('reads a connection whose first sync has not landed as syncing, not stale', () => {
     mocks.connections.google = connection({ stale: true, last_success_at: null });
     render(<CalendarSection providers={['google']} />);
 
+    expect(screen.getByText('Syncing…')).toBeInTheDocument();
+    expect(screen.queryByText(/hasn’t synced recently/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Not synced yet')).not.toBeInTheDocument();
+  });
+
+  it('says a failed first sync was never synced', () => {
+    mocks.connections.google = connection({
+      status: 'error',
+      last_error: 'unknown',
+      stale: true,
+      last_success_at: null,
+    });
+    render(<CalendarSection providers={['google']} />);
+
     expect(screen.getByText('Not synced yet')).toBeInTheDocument();
-    expect(screen.getByText(/hasn’t synced recently/)).toBeInTheDocument();
+    expect(screen.queryByText('Syncing…')).not.toBeInTheDocument();
+  });
+
+  it('keeps Refresh, not Reconnect, when geo-chat’s own client was refused', () => {
+    mocks.connections.google = connection({ status: 'error', last_error: 'provider_misconfigured' });
+    render(<CalendarSection providers={['google']} />);
+
+    expect(screen.getByText('Calendar connections aren’t available right now. Try again later.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument();
   });
 
   it('says why a refresh was refused', () => {
@@ -270,6 +305,19 @@ describe('CalendarSection with Outlook', () => {
     expect(screen.getByRole('link', { name: 'My Apps' })).toHaveAttribute('href', 'https://myapps.microsoft.com');
     await userEvent.click(screen.getByRole('button', { name: 'Disconnect calendar' }));
     expect(mocks.disconnect.microsoft.mutate).toHaveBeenCalled();
+  });
+
+  it('says connections are unavailable when the provider refused geo-chat’s client', () => {
+    render(
+      <CalendarSection
+        providers={['microsoft']}
+        returned={{ provider: 'microsoft', outcome: 'error', reason: 'provider_misconfigured' }}
+      />
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Calendar connections aren’t available right now. Try again later.'
+    );
   });
 
   it('explains the admin approval a work account needs', () => {

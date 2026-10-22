@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import * as React from 'react';
+
 import {
   type CalendarConnectSource,
   calendarConnectRequestFailed,
@@ -11,6 +13,7 @@ import {
 } from '~/core/availability/calendar-analytics';
 
 import {
+  type CalendarConnection,
   type CalendarConnections,
   type CalendarProvider,
   GeoChatRequestError,
@@ -36,16 +39,38 @@ function configuredProviders({ providers }: CalendarConnections): CalendarProvid
   );
 }
 
+/** How often the connection is read while its first sync is still running. */
+export const CALENDAR_SYNCING_POLL_MS = 15_000;
+
+/** Connected, but the first sync has not landed yet; geo-chat's sweeper picks it up within a minute. */
+export function isCalendarSyncing(connection: CalendarConnection | null | undefined) {
+  return connection?.status === 'ok' && connection.stale && connection.last_success_at === null;
+}
+
+function anySyncing(data: CalendarConnections | undefined) {
+  return isCalendarSyncing(data?.google) || isCalendarSyncing(data?.microsoft);
+}
+
 /** The viewer's connected calendars. `enabled` is a calendar flag and the editor being open. */
 export function useCalendarConnections(enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const invalidate = useInvalidateCalendarReads();
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.calendarConnections(accountKey),
     queryFn: () => getCalendarConnections(getPrivyIdentityToken, accountKey),
     enabled: enabled && accountKey !== null,
+    refetchInterval: ({ state }) => (anySyncing(state.data) ? CALENDAR_SYNCING_POLL_MS : false),
   });
+
+  // Busy time read during the first sync is empty, so read it again once the sync lands.
+  const syncing = anySyncing(query.data);
+  const wasSyncing = React.useRef(syncing);
+  React.useEffect(() => {
+    if (wasSyncing.current && !syncing) invalidate();
+    wasSyncing.current = syncing;
+  }, [syncing, invalidate]);
 
   return {
     ...query,

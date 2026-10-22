@@ -10,6 +10,9 @@ export function signInName(provider: CalendarProvider) {
   return provider === 'microsoft' ? 'Microsoft' : 'Google';
 }
 
+/** geo-chat's own client was refused, so nothing the user does will help. */
+const UNAVAILABLE = 'Calendar connections aren’t available right now. Try again later.';
+
 /** Why the last sync failed, from `GET /me/calendar`'s `last_error`. */
 export function connectionErrorCopy(provider: CalendarProvider, code: CalendarConnectionError | null) {
   const name = calendarName(provider);
@@ -20,6 +23,8 @@ export function connectionErrorCopy(provider: CalendarProvider, code: CalendarCo
       return 'Geo can’t see when you’re busy. Reconnect and allow access to your free/busy times.';
     case 'mailbox_unavailable':
       return 'This account has no Outlook calendar Geo can read. Connect a different Microsoft account.';
+    case 'provider_misconfigured':
+      return UNAVAILABLE;
     case 'provider_unavailable':
       return `${name} didn’t respond. We’ll keep trying.`;
     case 'rate_limited':
@@ -49,6 +54,8 @@ export function calendarReturnCopy(provider: CalendarProvider, outcome: 'connect
       return `That ${signInName(provider)} sign-in expired. Try connecting again.`;
     case 'admin_consent_required':
       return 'Your organization’s IT admin must approve Geo before you can connect this calendar. Personal Microsoft accounts work without approval.';
+    case 'provider_misconfigured':
+      return UNAVAILABLE;
     default:
       return `We couldn’t connect ${name}. Try again.`;
   }
