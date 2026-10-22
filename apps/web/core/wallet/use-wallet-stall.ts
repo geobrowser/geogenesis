@@ -5,9 +5,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { capture } from '~/core/analytics';
-import { retryEmbeddedWalletSetup, useWallets } from '~/core/wallet/auth-hooks';
+import { restartAuthHost, retryEmbeddedWalletSetup, usePrivy, useWallets } from '~/core/wallet/auth-hooks';
+import { accountHasEmbeddedWallet, findEmbeddedWallet } from '~/core/wallet/embedded-wallet';
 
 import {
+  AUTO_RESTART_MS,
   RECONNECT_WINDOW_MS,
   WALLET_STALL_GRACE_MS,
   WALLET_STALL_RELOAD_KEY,
@@ -45,8 +47,10 @@ function send(properties: Record<string, unknown>) {
 /**
  * Watches for a signed-in user with no smart account (see `wallet-stall.ts`), and owns the way out:
  * after `WALLET_STALL_GRACE_MS` it reports `stalled`, and `reconnect` refetches the smart account
- * and restarts the embedded wallet setup. A Reconnect that has not worked within
- * `RECONNECT_WINDOW_MS` reloads the page once per tab; after that, Reconnect is offered again.
+ * and restarts the embedded wallet setup, restarting Privy too when no wallet has reached the page.
+ * A stall still without one at `AUTO_RESTART_MS`, for an account that has one, restarts Privy once by itself. A Reconnect that has
+ * not worked within `RECONNECT_WINDOW_MS` reloads the page once per tab; after that, Reconnect is
+ * offered again.
  */
 export function useWalletStall({
   authenticated,
@@ -59,7 +63,10 @@ export function useWalletStall({
 }) {
   const queryClient = useQueryClient();
   const { wallets } = useWallets();
-  const hasEmbeddedWallet = wallets.some(wallet => wallet.walletClientType === 'privy');
+  const { user } = usePrivy();
+  const hasEmbeddedWallet = Boolean(findEmbeddedWallet(wallets));
+  // Tells a wallet that never reached the page from one that was never created.
+  const accountHasWallet = accountHasEmbeddedWallet(user);
 
   const waiting = authenticated && !address;
   const [stalled, setStalled] = React.useState(false);
@@ -71,11 +78,12 @@ export function useWalletStall({
     hadError: boolean;
     shownCause: WalletStallCause | null;
     reconnectAttempts: number;
+    privyRestarts: number;
   } | null>(null);
 
   // Read from timers, which would otherwise see the values of the render that set them.
-  const latest = React.useRef({ hasEmbeddedWallet, error });
-  latest.current = { hasEmbeddedWallet, error };
+  const latest = React.useRef({ hasEmbeddedWallet, accountHasWallet, error });
+  latest.current = { hasEmbeddedWallet, accountHasWallet, error };
 
   const properties = (phase: 'shown' | 'reloading' | 'ended', cause: WalletStallCause) => {
     const current = episode.current;
@@ -84,6 +92,8 @@ export function useWalletStall({
       stall_cause: cause,
       stall_ms: current ? Date.now() - current.startedAt : 0,
       reconnect_attempts: current?.reconnectAttempts ?? 0,
+      privy_restarts: current?.privyRestarts ?? 0,
+      account_has_wallet: latest.current.accountHasWallet,
       after_reload: hasReloaded(),
     };
   };
@@ -98,6 +108,7 @@ export function useWalletStall({
       hadError: Boolean(latest.current.error),
       shownCause: null,
       reconnectAttempts: 0,
+      privyRestarts: 0,
     };
     const timer = setTimeout(() => {
       const current = episode.current;
@@ -112,8 +123,20 @@ export function useWalletStall({
       setStalled(true);
     }, WALLET_STALL_GRACE_MS);
 
+    // Once per stall, and only if nothing has restarted Privy already: by now its own handshake has
+    // given up for good. Only for an account that already has a wallet: without one, Privy may still
+    // be creating it, and a remount nobody asked for could leave a second one.
+    const restartTimer = setTimeout(() => {
+      const current = episode.current;
+      if (!current || current.privyRestarts > 0 || latest.current.hasEmbeddedWallet || !latest.current.accountHasWallet)
+        return;
+      current.privyRestarts += 1;
+      restartAuthHost();
+    }, AUTO_RESTART_MS);
+
     return () => {
       clearTimeout(timer);
+      clearTimeout(restartTimer);
       setStalled(false);
       setReconnecting(false);
     };
@@ -131,11 +154,13 @@ export function useWalletStall({
     const current = episode.current;
     if (!address || !current) return;
     if (current.shownCause) {
-      const recoveredByReconnect = current.reconnectAttempts > 0;
-      const cause = recoveredByReconnect
-        ? current.shownCause
-        : walletStallCause({ hadError: current.hadError, hasEmbeddedWallet, resolvedOnItsOwn: true });
-      send({ ...propertiesRef.current('ended', cause), recovered_by: recoveredByReconnect ? 'reconnect' : 'self' });
+      const recoveredBy = current.reconnectAttempts > 0 ? 'reconnect' : current.privyRestarts > 0 ? 'restart' : 'self';
+      // Only a stall that ended without help says anything new about its cause.
+      const cause =
+        recoveredBy === 'self'
+          ? walletStallCause({ hadError: current.hadError, hasEmbeddedWallet, resolvedOnItsOwn: true })
+          : current.shownCause;
+      send({ ...propertiesRef.current('ended', cause), recovered_by: recoveredBy });
     }
     episode.current = null;
   }, [address, hasEmbeddedWallet]);
@@ -162,7 +187,14 @@ export function useWalletStall({
     if (!current || reconnectTimer.current) return;
     current.reconnectAttempts += 1;
     setReconnecting(true);
-    retryEmbeddedWalletSetup();
+    // Refetching cannot help a wallet Privy never listed; only a fresh Privy can, and its wallet setup
+    // starts over by itself.
+    if (latest.current.hasEmbeddedWallet) {
+      retryEmbeddedWalletSetup();
+    } else {
+      current.privyRestarts += 1;
+      restartAuthHost();
+    }
     void queryClient.invalidateQueries({ queryKey: ['smart-account'] });
 
     reconnectTimer.current = setTimeout(() => {
