@@ -35,7 +35,8 @@ export function markPersonalProfilePublished(address: string) {
   }
 }
 
-function recentlyPublishedProfile(address: string) {
+/** Whether this browser sent the personal profile publish for `address` within the grace window. */
+export function recentlyPublishedProfile(address: string) {
   try {
     const at = Number(window.localStorage.getItem(profilePublishStorageKey(address)));
     return Number.isFinite(at) && Date.now() - at < PROFILE_PUBLISH_GRACE_MS;
