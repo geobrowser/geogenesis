@@ -422,38 +422,48 @@ function OpponentCard({
   const border = talking ? 'border-green hover:border-green' : 'border-grey-02 hover:border-grey-03';
 
   // GEO-3427: while the slot holds their running-late notice, it has a button of its own
-  // (Reschedule), and a button can't sit inside the card's. So the card is a plain surface, and
-  // View profile is the way to their profile. No mic chip: the notice already says they're not here.
+  // (Reschedule), and a button can't sit inside the card's. So the card's button is laid under the
+  // card instead of around it: the whole card still opens their profile, on a phone too (where View
+  // profile is hidden), and the notice's own buttons sit above it. No mic chip: the notice already
+  // says they're not here.
   if (waiting) {
     return (
       <div
         data-testid="rematch-opponent-card"
-        className={cx(CARD_SURFACE, 'flex flex-col gap-2.5 border-grey-02', styles.card, styles.opponentCard)}
+        className={cx(CARD_SURFACE, border, 'relative flex flex-col gap-2.5', styles.card, styles.opponentCard)}
       >
-        <PairCardBody
-          avatar={
-            <span
-              data-testid="rematch-opponent-waiting"
-              className={cx('inline-flex shrink-0 overflow-hidden', styles.video, styles.waiting)}
-            >
-              {waiting}
-            </span>
-          }
-          name={name}
-          nameTitle={name}
-          action={
-            <button
-              type="button"
-              onClick={onOpen}
-              aria-label={`Open ${name}’s personal space`}
-              {...debateActionAnalyticsAttributes('rematch', 'Opponent card')}
-              className="flex items-center gap-0.5 text-chat whitespace-nowrap text-grey-04 transition-colors hover:text-text mobile:sr-only"
-            >
-              View profile
-              <ChevronRight />
-            </button>
-          }
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`Open ${name}’s personal space`}
+          {...debateActionAnalyticsAttributes('rematch', 'Opponent card')}
+          aria-describedby={describedBy}
+          className="absolute inset-0 rounded-[inherit]"
         />
+        <div className="pointer-events-none relative h-full">
+          <PairCardBody
+            avatar={
+              <span
+                data-testid="rematch-opponent-waiting"
+                className={cx(
+                  'inline-flex shrink-0 overflow-hidden [&_button]:pointer-events-auto',
+                  styles.video,
+                  styles.waiting
+                )}
+              >
+                {waiting}
+              </span>
+            }
+            name={name}
+            nameTitle={name}
+            action={
+              <span className="flex items-center gap-0.5 text-chat whitespace-nowrap text-grey-04 mobile:sr-only">
+                View profile
+                <ChevronRight />
+              </span>
+            }
+          />
+        </div>
       </div>
     );
   }

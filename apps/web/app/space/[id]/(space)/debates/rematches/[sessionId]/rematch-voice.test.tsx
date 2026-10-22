@@ -1821,11 +1821,12 @@ describe('RematchVoiceHeader', () => {
     const slot = within(them).getByTestId('rematch-opponent-waiting');
     expect(within(slot).getByTestId('late')).toBeInTheDocument();
     expect(within(them).queryByTestId('pair-avatar')).toBeNull();
-    // The card holds a button of its own now, so it can't be one.
-    expect(them.tagName).not.toBe('BUTTON');
-    expect(within(them).getByRole('button', { name: 'Open Salina’s personal space' })).toHaveTextContent(
-      'View profile'
-    );
+    // The card's own button is laid under the notice rather than around it: a button can't hold
+    // Reschedule, and the whole card still opens their profile, on a phone too.
+    const open = within(them).getByRole('button', { name: 'Open Salina’s personal space' });
+    expect(open).not.toContainElement(within(slot).getByTestId('late'));
+    expect(open).toHaveAttribute('aria-describedby', screen.getByTestId('rematch-opponent-status').id);
+    expect(within(them).getByText('View profile')).toBeInTheDocument();
   });
 
   // Your control and their chip sit at the same height in mirrored cards, so anything they do not
