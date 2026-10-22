@@ -30,9 +30,8 @@ const SECONDARY_BUTTON =
 const TEXT_BUTTON = 'rounded-full px-3 py-1 text-metadata text-grey-04 transition-colors hover:text-text';
 
 /**
- * Connected calendars in the viewer's own schedule editor, one row per provider in `providers`
- * (each behind its own flag). geo-chat reads only busy times and takes them out of their debate
- * availability; it never adds time.
+ * Connected calendars in the viewer's schedule editor, one row per flagged provider. geo-chat reads
+ * only busy times and takes them out of their availability; it never adds time.
  */
 export function CalendarSection({
   providers,
