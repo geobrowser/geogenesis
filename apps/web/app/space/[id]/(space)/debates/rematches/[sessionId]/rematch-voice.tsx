@@ -1265,12 +1265,19 @@ function LocalAudioControls({
               open={cameraPanelOpen}
               onOpenChange={setCameraPanelOpen}
               returnFocusRef={cameraTriggerRef}
+              closeAnalytics={debateActionAnalyticsAttributes('rematch', 'Camera settings close')}
             >
               {cameraPanel}
             </MobileSettingsSheet>
           )}
           {settingsTrigger}
-          <MobileSettingsSheet title="Audio settings" open={open} onOpenChange={setOpen} returnFocusRef={triggerRef}>
+          <MobileSettingsSheet
+            title="Audio settings"
+            open={open}
+            onOpenChange={setOpen}
+            returnFocusRef={triggerRef}
+            closeAnalytics={debateActionAnalyticsAttributes('rematch', 'Audio settings close')}
+          >
             <AudioSettings {...settings} framed analyticsSurface="rematch" />
           </MobileSettingsSheet>
         </>

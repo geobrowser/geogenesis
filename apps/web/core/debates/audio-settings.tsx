@@ -4,7 +4,11 @@ import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
-import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+import {
+  type DebateAnalyticsAttributes,
+  type DebateAnalyticsSurface,
+  debateActionAnalyticsAttributes,
+} from '~/core/debates/matchmaking/hub-analytics';
 import { type MediaDeviceOption, systemDefaultAudioOutput } from '~/core/debates/media-session';
 
 import { Text } from '~/design-system/text';
@@ -87,12 +91,15 @@ export function MobileSettingsSheet({
   open,
   onOpenChange,
   returnFocusRef,
+  closeAnalytics,
   children,
 }: {
   title: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   returnFocusRef: React.RefObject<HTMLButtonElement | null>;
+  /** The close button's click-analytics label and intent. */
+  closeAnalytics?: DebateAnalyticsAttributes;
   children: React.ReactNode;
 }) {
   return (
@@ -114,6 +121,7 @@ export function MobileSettingsSheet({
               <button
                 type="button"
                 aria-label={`Close ${title}`}
+                {...closeAnalytics}
                 className="grid size-8 place-items-center rounded-full text-grey-04 hover:bg-grey-01 hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-text"
               >
                 <CloseIcon />

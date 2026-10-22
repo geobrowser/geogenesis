@@ -3209,4 +3209,18 @@ describe('click analytics labels in the room header', () => {
     expect(await screen.findByText('USB Webcam')).toBeInTheDocument();
     expect(unlabeledControls()).toEqual([]);
   });
+
+  // Phones open both panels as a bottom sheet with its own close button, which the popovers above lack.
+  it.each([['Audio settings'], ['Camera settings']] as const)('labels the %s sheet on a phone', async title => {
+    setMobileLayout(true);
+    await renderInRoom();
+
+    fireEvent.click(screen.getByRole('button', { name: title }));
+    await screen.findByRole('dialog', { name: title });
+    expect(screen.getByRole('button', { name: `Close ${title}` })).toHaveAttribute(
+      'data-geo-analytics-label',
+      `Debate rematch ${title} close`
+    );
+    expect(unlabeledControls()).toEqual([]);
+  });
 });
