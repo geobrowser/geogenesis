@@ -63,7 +63,9 @@ export type ScheduleEditorSurface =
   | 'requests_tab'
   | 'availability_link'
   /** The calendar's own prompt and its Edit my times (GEO-3152). */
-  | 'calendar';
+  | 'calendar'
+  /** Reopened on the way back from connecting Google Calendar. */
+  | 'google_calendar';
 
 /** Every event that knows how the week was opened says so the same way, `unknown` included. */
 function entryProperty(entry: ScheduleEntry | null | undefined) {

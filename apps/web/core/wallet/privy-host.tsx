@@ -5,6 +5,7 @@ import {
   useGeoLogin,
   useIdentityToken,
   useLoginWithEmail,
+  useLoginWithOAuth,
   useLogout,
   usePrivy,
   usePrivyLogin,
@@ -98,6 +99,8 @@ function Instance({ id }: { id: string }) {
       return <LogoutInstance id={id} entry={entry} />;
     case 'emailLogin':
       return <EmailLoginInstance id={id} entry={entry} />;
+    case 'oauthLogin':
+      return <OAuthLoginInstance id={id} />;
     case 'accountEffect':
       return <AccountEffectInstance entry={entry} />;
   }
@@ -132,6 +135,13 @@ function EmailLoginInstance({ id, entry }: Props) {
   const onComplete = useDelegate(entry, 'onComplete');
   const onError = useDelegate(entry, 'onError');
   const value = useLoginWithEmail({ onComplete, onError } as Parameters<typeof useLoginWithEmail>[0]);
+  usePublishResult(id, value);
+  return null;
+}
+
+/** Also completes a headless OAuth return on mount, so the app registers at most one (`google-oauth.tsx`). */
+function OAuthLoginInstance({ id }: { id: string }) {
+  const value = useLoginWithOAuth();
   usePublishResult(id, value);
   return null;
 }
