@@ -152,7 +152,11 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
     !anonymous && sort === 'best' && (pageSort === 'for-you' || interleaving)
       ? await resolveForYouViewer(request, { walletAddress, personalMemberSpaceId })
       : null;
-  const personalized = viewerId !== null;
+  const requestedTopicIds = pageSort === 'for-you' ? parseFollowedTopicIds(searchParams.get('followedTopicIds')) : [];
+  // Gaia reads indexed preferences, so pending onboarding picks cannot influence its reorder yet.
+  // Use the existing topic mix temporarily; the client changes its query key when submissions end.
+  const pendingTopicFollows = requestedTopicIds.length > 0 && searchParams.get('pendingTopicFollows') === '1';
+  const personalized = viewerId !== null && !pendingTopicFollows;
   // Decoded whether or not this request is personalized, so a scroll that loses its token midway
   // still pages on rather than restarting.
   const { asOf, inner: windowCursor } = decodePersonalizedCursor(cursor);
@@ -161,8 +165,7 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
   // stream, so with no followed topics it is exactly Best and a signed-out reader never gets an
   // empty feed. The client sends the ids because its follow cache updates the moment a follow is
   // written, where a server read would trail the indexer.
-  const forYouTopicIds =
-    pageSort === 'for-you' && !personalized ? parseFollowedTopicIds(searchParams.get('followedTopicIds')) : [];
+  const forYouTopicIds = personalized ? [] : requestedTopicIds;
 
   // Only spaces this reader may see, whatever they asked for. `all` and an empty parameter both
   // mean no narrowing; so does a list that matches nothing they can see, because a filter naming
@@ -198,15 +201,14 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
     forYouTopicIds,
     topicIds: topicIds.length > 0 ? topicIds : undefined,
     rankedTopicIds: topicIds.length > 0 ? topicIds : undefined,
-    reorderWindow:
-      viewerId !== null
-        ? createPersonalizedWindowReorder({
-            userId: viewerId,
-            requested: pageSort === 'for-you' ? 'for-you' : 'best',
-            asOf,
-            interleavingEnabled: interleaving,
-          })
-        : undefined,
+    reorderWindow: personalized
+      ? createPersonalizedWindowReorder({
+          userId: viewerId,
+          requested: pageSort === 'for-you' ? 'for-you' : 'best',
+          asOf,
+          interleavingEnabled: interleaving,
+        })
+      : undefined,
     freshSlot: freshState ? { config: freshState.config, revision: freshState.revision } : undefined,
     markPlayableLeads: seenDemotion !== null,
   });
@@ -224,8 +226,9 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
     items,
     nextCursor: personalized ? encodePersonalizedCursor(asOf, result.nextCursor) : result.nextCursor,
   };
-  // A personalized page belongs to one person: never let any cache between here and them keep it.
-  if (personalized) return NextResponse.json(body, { headers: { 'cache-control': 'private, no-store' } });
+  // A verified or pending-topic page belongs to one person, even when it temporarily uses the mix.
+  if (viewerId !== null || pendingTopicFollows)
+    return NextResponse.json(body, { headers: { 'cache-control': 'private, no-store' } });
   // An empty page is never kept: it is as likely a dependency hiccup as a truth.
   if (anonymous && isCacheablePublicFirstPage(searchParams) && items.length > 0) {
     runAfterResponse(() => rememberPublicFeedPage(body));

@@ -102,6 +102,8 @@ type EntityFeedProps = {
    * you waits for them rather than serving Best first and then swapping the feed underneath.
    */
   followedTopicIds?: readonly string[] | null;
+  /** Use the topic stream until onboarding's account-owned follow submissions finish. For you only. */
+  pendingTopicFollows?: boolean;
   /** Whether to render the time-range dropdown. Defaults to true. */
   showTimeFilter?: boolean;
   /** Whether to render the sort dropdown (Best / New / Top). Defaults to false. */
@@ -170,17 +172,20 @@ type EntityFeedProps = {
  * The query string of a feed request. `anonymous` adds the cacheable-URL marker, and only to the
  * plain first Best page: any cursor, filter or other sort stays on the uncached URL.
  */
-export function buildFeedQuery(params: {
+type FeedQueryParams = {
   sort: ExplorePageSort;
   time: ExploreTime | undefined;
   spaceIds: readonly string[];
   typeIds: readonly string[] | undefined;
   topicIds: readonly string[];
   followedTopicIds: readonly string[];
+  pendingTopicFollows?: boolean;
   fixedParams: Record<string, string>;
   cursor: string | undefined;
   anonymous?: boolean;
-}): string {
+};
+
+export function buildFeedQuery(params: FeedQueryParams): string {
   const sp = new URLSearchParams();
   sp.set('sort', params.sort);
   // Absent means "no time filter" — see the route's parseTime. Sending nothing is what keeps a
@@ -192,6 +197,7 @@ export function buildFeedQuery(params: {
   if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
   if (params.topicIds.length > 0) sp.set('topicIds', params.topicIds.join(','));
   if (params.followedTopicIds.length > 0) sp.set('followedTopicIds', params.followedTopicIds.join(','));
+  if (params.sort === 'for-you' && params.pendingTopicFollows) sp.set('pendingTopicFollows', '1');
   for (const [key, value] of Object.entries(params.fixedParams)) sp.set(key, value);
   if (params.cursor) sp.set('cursor', params.cursor);
   if (params.anonymous && sp.toString() === 'sort=best') sp.set(PUBLIC_FEED_PARAM, '1');
@@ -200,19 +206,8 @@ export function buildFeedQuery(params: {
 
 async function fetchFeedPage(
   apiEndpoint: string,
-  params: {
-    sort: ExplorePageSort;
-    /** Omitted when the feed's sort has no time range. */
-    time: ExploreTime | undefined;
-    /** Empty means no space narrowing at all. */
-    spaceIds: readonly string[];
-    typeIds: readonly string[] | undefined;
-    topicIds: readonly string[];
-    followedTopicIds: readonly string[];
-    fixedParams: Record<string, string>;
-    cursor: string | undefined;
+  params: FeedQueryParams & {
     identityToken?: string | null;
-    anonymous?: boolean;
   }
 ): Promise<ExploreFeedResult> {
   const res = await fetch(`${apiEndpoint}?${buildFeedQuery(params)}`, {
@@ -276,6 +271,7 @@ export function EntityFeed({
   initialSort = 'new',
   sortOptions = DEFAULT_SORT_OPTIONS,
   followedTopicIds = [],
+  pendingTopicFollows = false,
   showTimeFilter = true,
   showSortFilter = false,
   compactHeader = false,
@@ -539,7 +535,7 @@ export function EntityFeed({
     topicIdsKey,
     fixedParamsKey,
     // Only on For you, so every other sort's key, and so its cache, is unchanged.
-    ...(isForYou ? [requestedFollowedTopicIds.join(',')] : []),
+    ...(isForYou ? [requestedFollowedTopicIds.join(','), pendingTopicFollows] : []),
     // Last, so `placeholderData` below can tell a change of account from a change of filter.
     viewerAddress,
   ];
@@ -552,6 +548,7 @@ export function EntityFeed({
     typeIds,
     topicIds: selectedTopicIds,
     followedTopicIds: requestedFollowedTopicIds,
+    pendingTopicFollows: isForYou && pendingTopicFollows,
     fixedParams,
   };
 

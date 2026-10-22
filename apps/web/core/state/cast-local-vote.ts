@@ -2,7 +2,7 @@
 
 import type { ActionContext } from '~/core/action-context';
 import { recordAction } from '~/core/analytics-operations';
-import { pushMarketingEvent } from '~/core/marketing-events';
+import { marketingVoteDirection, pushMarketingEvent } from '~/core/marketing-events';
 import { type ResponseKind, voteOutcomeProperties } from '~/core/responses/entity-response';
 
 import { type LocalVoteChange, type LocalVoteDirection, readLocalVotes, toggleLocalVote } from './local-votes';
@@ -65,7 +65,12 @@ export function castLocalVote({
     /* Never fail a vote over analytics. */
   }
   if (change.action !== 'remove') {
-    pushMarketingEvent('geo_vote_anonymous', { target_id: entityId, space_id: spaceId, vote_kind: responseKind });
+    pushMarketingEvent('geo_vote_anonymous', {
+      target_id: entityId,
+      space_id: spaceId,
+      vote_kind: responseKind,
+      vote_direction: marketingVoteDirection(responseKind, direction),
+    });
   }
   // Only casts count toward an ask: removing or switching a vote doesn't make anyone more invested.
   if (change.action === 'cast') {

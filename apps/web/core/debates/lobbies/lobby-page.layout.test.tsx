@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
 }));
 
+vi.mock('./lobby-scheduled-requests', () => ({ LobbyScheduledRequests: () => null }));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace }),
   usePathname: () => '/debate/lobby-1',

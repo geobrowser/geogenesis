@@ -5,10 +5,10 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useGeoLogin, usePrivy } from './auth-hooks';
+import { useGeoLogin, useLoginWithOAuth, usePrivy } from './auth-hooks';
 import { getIdentityToken } from './auth-hooks';
 import { AuthRoot, IDLE_LOAD_DELAY_MS, scheduleIdleLoad } from './auth-root';
-import { getState, resetAuthStore } from './auth-store';
+import { getState, resetAuthStore, restartAuthHost } from './auth-store';
 import { PRIVY_REFRESH_TOKEN_KEY } from './privy-session';
 
 const mocks = vi.hoisted(() => ({
@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   privyLogin: vi.fn(),
   privyLogout: vi.fn(),
   geoLoginParams: [] as unknown[],
+  initOAuth: vi.fn(async () => undefined),
+  oauthHookMounts: 0,
+  oauthState: { status: 'initial' } as { status: string; error?: Error },
 }));
 
 // The real Privy, wagmi and connectors are what these tests keep out of the page; stand-ins record
@@ -49,6 +52,12 @@ vi.mock('@geogenesis/auth', async () => {
     usePrivyLogin: () => ({ login: mocks.privyLogin }),
     useLogout: () => ({ logout: mocks.privyLogout }),
     useLoginWithEmail: () => ({ state: { status: 'initial' }, sendCode: vi.fn(), loginWithCode: vi.fn() }),
+    useLoginWithOAuth: () => {
+      React.useEffect(() => {
+        mocks.oauthHookMounts += 1;
+      }, []);
+      return { initOAuth: mocks.initOAuth, state: mocks.oauthState, loading: false };
+    },
     useAccountEffect: vi.fn(),
     useEnsureEmbeddedWallet: vi.fn(),
     getIdentityToken: vi.fn(async () => 'token'),
@@ -90,11 +99,15 @@ beforeEach(() => {
   mocks.providerMounts = 0;
   mocks.privyLogin.mockReset();
   mocks.geoLoginParams.length = 0;
+  mocks.initOAuth.mockClear();
+  mocks.oauthHookMounts = 0;
+  mocks.oauthState = { status: 'initial' };
   localStorage.clear();
   resetAuthStore();
 });
 afterEach(() => {
   cleanup();
+  window.history.replaceState({}, '', '/');
   vi.useRealTimers();
   localStorage.clear();
   resetAuthStore();
@@ -159,6 +172,32 @@ describe('visitor with a Privy session', () => {
   });
 });
 
+describe('restarting Privy (GEO-3449)', () => {
+  it('mounts a fresh Privy in place, without remounting the app beside it', async () => {
+    let pageMounts = 0;
+    function CountedPage() {
+      React.useEffect(() => {
+        pageMounts += 1;
+      }, []);
+      return <Page />;
+    }
+    render(
+      <>
+        <AuthRoot />
+        <CountedPage />
+      </>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+    await waitFor(() => expect(mocks.providerMounts).toBe(1));
+
+    act(() => restartAuthHost());
+
+    await waitFor(() => expect(mocks.providerMounts).toBe(2));
+    expect(pageMounts).toBe(1);
+    expect(getState().restarting).toBe(false);
+  });
+});
+
 describe('idle load', () => {
   it('loads Privy once the page has been idle, so a session the check missed still comes back', async () => {
     vi.useFakeTimers();
@@ -204,5 +243,80 @@ describe('idle load', () => {
 
     vi.advanceTimersByTime(5_000);
     expect(onIdle).not.toHaveBeenCalled();
+  });
+});
+
+// GEO-3139. Google sign-in redirects away and back, so the return has to load Privy by itself.
+describe('Google sign-in', () => {
+  function OAuthPage() {
+    const { initOAuth } = useLoginWithOAuth();
+    return <button onClick={() => void initOAuth({ provider: 'google' })}>Continue with Google</button>;
+  }
+
+  it('passes per-call login options through to Privy', async () => {
+    function OptionsPage() {
+      const { login } = useGeoLogin({});
+      return <button onClick={() => login({ loginMethods: ['email', 'google'] })}>Log in</button>;
+    }
+    render(
+      <>
+        <AuthRoot />
+        <OptionsPage />
+      </>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+
+    await waitFor(() => expect(mocks.privyLogin).toHaveBeenCalledWith({ loginMethods: ['email', 'google'] }));
+  });
+
+  it('loads Privy before starting a headless OAuth sign-in', async () => {
+    render(
+      <>
+        <AuthRoot />
+        <OAuthPage />
+      </>
+    );
+    expect(mocks.providerMounts).toBe(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+
+    await waitFor(() => expect(mocks.initOAuth).toHaveBeenCalledWith({ provider: 'google' }));
+    expect(mocks.providerMounts).toBe(1);
+  });
+
+  it('mounts Privy and its OAuth hook straight away on the return from Google, with no sign-in asked', async () => {
+    window.history.replaceState({}, '', '/explore?privy_oauth_code=c&privy_oauth_state=s&privy_oauth_provider=google');
+    resetAuthStore();
+
+    render(
+      <>
+        <AuthRoot />
+        <OAuthPage />
+      </>
+    );
+
+    await waitFor(() => expect(mocks.oauthHookMounts).toBe(1));
+    expect(mocks.providerMounts).toBe(1);
+    expect(getState().requested).toBe(false);
+  });
+
+  it("passes Privy's OAuth flow state through, so a failed return can be seen", async () => {
+    mocks.oauthState = { status: 'error', error: new Error('invalid code') };
+    window.history.replaceState({}, '', '/explore?privy_oauth_code=c&privy_oauth_state=s&privy_oauth_provider=google');
+    resetAuthStore();
+    function StatePage() {
+      return <span data-testid="oauth">{useLoginWithOAuth().state.status}</span>;
+    }
+
+    render(
+      <>
+        <AuthRoot />
+        <StatePage />
+      </>
+    );
+
+    expect(screen.getByTestId('oauth')).toHaveTextContent('initial');
+    await waitFor(() => expect(screen.getByTestId('oauth')).toHaveTextContent('error'));
   });
 });

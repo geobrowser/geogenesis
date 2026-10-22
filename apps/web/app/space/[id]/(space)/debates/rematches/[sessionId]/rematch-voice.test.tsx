@@ -1802,6 +1802,33 @@ describe('RematchVoiceHeader', () => {
     expect(leave).toHaveBeenCalledOnce();
   });
 
+  // GEO-3427: their running-late notice fills their empty video slot, in place of the avatar.
+  it("shows what fills the other person's slot while they are away, with View profile as its own button", async () => {
+    render(
+      <RematchVoiceHeader
+        session={makeSession('browsing')}
+        currentUserId="me"
+        opponentWaiting={
+          <button type="button" data-testid="late">
+            Reschedule
+          </button>
+        }
+      />
+    );
+    await flushOwnership();
+
+    const them = screen.getByTestId('rematch-opponent-card');
+    const slot = within(them).getByTestId('rematch-opponent-waiting');
+    expect(within(slot).getByTestId('late')).toBeInTheDocument();
+    expect(within(them).queryByTestId('pair-avatar')).toBeNull();
+    // The card's own button is laid under the notice rather than around it: a button can't hold
+    // Reschedule, and the whole card still opens their profile, on a phone too.
+    const open = within(them).getByRole('button', { name: 'Open Salina’s personal space' });
+    expect(open).not.toContainElement(within(slot).getByTestId('late'));
+    expect(open).toHaveAttribute('aria-describedby', screen.getByTestId('rematch-opponent-status').id);
+    expect(within(them).getByText('View profile')).toBeInTheDocument();
+  });
+
   // Your control and their chip sit at the same height in mirrored cards, so anything they do not
   // share reads as an accident rather than a decision. They were two hand-written sets of paddings
   // and type sizes that were close but not equal; this is what keeps them from drifting apart
@@ -3161,5 +3188,66 @@ describe('a remembered camera', () => {
 
     await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenCalledWith(true));
     expect(readRematchJoinIntent('session-1')).toEqual({ micOn: true, cameraOn: true, source: 'card' });
+  });
+});
+
+/** GEO-3433. The header's controls in a room, each named for click analytics rather than by its text. */
+describe('click analytics labels in the room header', () => {
+  const CONTROLS = 'button, a[href], [role="button"], [role="menuitem"], [role="radio"]';
+  const unlabeledControls = () =>
+    [...document.body.querySelectorAll(CONTROLS)]
+      .filter(
+        control =>
+          !control.getAttribute('data-geo-analytics-label')?.trim() ||
+          !control.getAttribute('data-geo-analytics-intent')?.trim()
+      )
+      .map(control => control.getAttribute('aria-label') ?? control.textContent?.trim());
+
+  async function renderInRoom() {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    render(
+      <DebateRoomProvider
+        roomId="room-1"
+        presence={{ state: 'present', opponentUserId: 'them', opponentPresent: true }}
+      >
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+    await flushOwnership();
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate rematch Turn camera on'
+    );
+  }
+
+  it('labels the media controls and the audio settings', async () => {
+    await renderInRoom();
+    expect(unlabeledControls()).toEqual([]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    expect(await screen.findAllByRole('radio')).not.toHaveLength(0);
+    expect(unlabeledControls()).toEqual([]);
+  });
+
+  it('labels the camera settings', async () => {
+    await renderInRoom();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Camera settings' }));
+    expect(await screen.findByText('USB Webcam')).toBeInTheDocument();
+    expect(unlabeledControls()).toEqual([]);
+  });
+
+  // Phones open both panels as a bottom sheet with its own close button, which the popovers above lack.
+  it.each([['Audio settings'], ['Camera settings']] as const)('labels the %s sheet on a phone', async title => {
+    setMobileLayout(true);
+    await renderInRoom();
+
+    fireEvent.click(screen.getByRole('button', { name: title }));
+    await screen.findByRole('dialog', { name: title });
+    expect(screen.getByRole('button', { name: `Close ${title}` })).toHaveAttribute(
+      'data-geo-analytics-label',
+      `Debate rematch ${title} close`
+    );
+    expect(unlabeledControls()).toEqual([]);
   });
 });
