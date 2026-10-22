@@ -159,10 +159,16 @@ describe('calendar mutations', () => {
     // The refetch that follows never lands, so only the refresh's own answer can update the cache.
     mocks.getCalendarConnections.mockReturnValue(new Promise(() => {}));
 
-    const { result } = renderHook(() => useRefreshGoogleCalendar(), { wrapper });
-    await act(() => result.current.mutateAsync());
+    // Mounted with the connection read, as in the editor: unwatched, `gcTime: 0` would drop the entry.
+    const { result } = renderHook(
+      () => ({ refresh: useRefreshGoogleCalendar(), connections: useCalendarConnections(true) }),
+      {
+        wrapper,
+      }
+    );
+    await act(() => result.current.refresh.mutateAsync());
 
-    expect(client.getQueryData(debateQueryKeys.calendarConnections('user-a'))).toEqual(failed);
+    await waitFor(() => expect(result.current.connections.google).toEqual(failed.google));
     expect(capture).toHaveBeenCalledWith('calendar_refreshed', { provider: 'google', outcome: 'needs_reconnect' });
   });
 
