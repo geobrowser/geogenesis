@@ -2,10 +2,10 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { EntityFilter, RelationFilter } from '~/core/gql/graphql';
+import { topicsRelationFilter } from '~/core/topics/browse/topic-feed-filter';
 
-import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
 import { EXPLORE_ENTITY_NAME_PROPERTY_ID } from './explore-constants';
-import { topicFilterClauses } from './explore-topic-filter';
+import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
 
 export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
 
@@ -66,7 +66,7 @@ export function buildExploreFeedFilter(args: {
   const base: EntityFilter = {
     ...FEED_EXCLUDED_RELATIONS_FILTER,
     ...(args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : {}),
-    ...topicFilterClauses(args.topicIds),
+    ...topicsRelationFilter(args.topicIds ?? []),
     ...(args.includeEntityScopeInFilter
       ? {
           spaceIds: { overlaps: [...args.spaceIds] },
@@ -99,7 +99,7 @@ export function buildExploreTopicFacetFilter(args: {
   const t = timeThresholdSec(args.time);
   const fromEntity: EntityFilter = {
     ...(args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : {}),
-    ...topicFilterClauses(args.topicIds),
+    ...topicsRelationFilter(args.topicIds ?? []),
     ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
     ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
   };

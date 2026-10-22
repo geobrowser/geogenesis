@@ -1052,7 +1052,7 @@ describe('the topics clauses reaching the query', () => {
     await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY, ETHICS] });
 
     // Two clauses, not one: the threading must not collapse the selection on its way down, or the
-    // intersection the dropdown promises quietly becomes a union. See `explore-topic-filter.test`.
+    // intersection the dropdown promises quietly becomes a union. See `topic-feed-filter.test`.
     expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY), topicClause(ETHICS)]);
   });
 

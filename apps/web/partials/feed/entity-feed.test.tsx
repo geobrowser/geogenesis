@@ -90,15 +90,6 @@ vi.mock('@tanstack/react-query', () => ({
   },
 }));
 
-vi.mock('~/core/explore/use-explore-topic-facet', () => ({
-  useExploreTopicFacet: () => ({
-    topics: [],
-    namesPending: false,
-    countsPending: false,
-    settled: false,
-  }),
-}));
-
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({
     smartAccount: mocks.accountAddress ? { account: { address: mocks.accountAddress } } : null,

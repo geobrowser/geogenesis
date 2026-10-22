@@ -12,18 +12,12 @@ import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-d
 import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cache';
 import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
-import {
-  keepSelectableTopics,
-  keepSelectedVisible,
-  orderFacetOptions,
-  toggleId,
-} from '~/core/debates/matchmaking/topic-facets';
+import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
 import { type ExplorePageSort, PUBLIC_FEED_PARAM } from '~/core/explore/explore-feed-params';
 import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
 import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 import { seenStore } from '~/core/explore/seen-demotion/seen-store';
-import { useExploreTopicFacet } from '~/core/explore/use-explore-topic-facet';
 import { useFeedViewer } from '~/core/hooks/use-awaited-smart-account';
 import { exploreMoreFiltersOpenAtom } from '~/core/state/explore-more-filters';
 import { normId } from '~/core/utils/norm-id';
@@ -384,10 +378,9 @@ export function EntityFeed({
     [browseSidebar]
   );
 
-  // Two sources for the topic facet. A contextual feed names a `topicFacetEndpoint` and gets its
-  // counts over REST. Explore has none; it reads co-occurrence counts straight from the graph over
-  // the same population the feed filters to, so each topic's count equals what picking it would
-  // leave. The hook is disabled when an endpoint is given, so only one of the two ever runs.
+  // The topic facet's counts come from the feed's `topicFacetEndpoint` over REST. A feed that wants
+  // a topic filter but has not named its endpoint yet (a topic page before its space scope loads)
+  // shows the picker pending rather than a facet over the wrong population.
   const facetSpaceIds = React.useMemo(
     () => (requestedSpaceIds.length > 0 ? requestedSpaceIds : spaceOptions.map(option => option.value)).map(normId),
     [requestedSpaceIds, spaceOptions]
@@ -395,13 +388,6 @@ export function EntityFeed({
 
   const browseSidebarSettled = browseSidebar !== null && !browseSidebar.featuredError;
   const facetScopeReady = requestedSpaceIds.length > 0 || (browseSidebarSettled && facetSpaceIds.length > 0);
-  const exploreTopicFacet = useExploreTopicFacet({
-    spaceIds: facetSpaceIds,
-    typeIds: typeIds ?? initialTypeIds,
-    time: requestedTime ?? 'all',
-    topicIds: selectedTopicIds,
-    enabled: topicFilterVisible && !topicFacetEndpoint && facetScopeReady,
-  });
 
   const topicFacets = useQuery({
     queryKey: [
@@ -424,52 +410,28 @@ export function EntityFeed({
       }),
     staleTime: 60_000,
   });
+  // A picker whose endpoint has not arrived yet is pending, not empty: a topic page keeps the
+  // control showing a loading state until its space scope resolves rather than offering no topics.
   const topicCountsPending = topicFacetEndpoint
     ? !facetScopeReady || topicFacets.isLoading || topicFacets.isPlaceholderData
-    : showTopicFilter
-      ? exploreTopicFacet.countsPending
-      : false;
+    : showTopicFilter;
   const topicFacetFailed = Boolean(topicFacetEndpoint) && topicFacets.isError && !topicFacets.data;
   const availableTopicOptions = React.useMemo<HubFilterOption<string>[]>(() => {
-    if (topicFacetEndpoint) {
-      return orderFacetOptions(topicFacets.data?.topics ?? [], selectedTopicIds).map(topic => ({
-        value: topic.id,
-        label: topic.name?.trim() || 'Topic',
-        count: topic.count,
-      }));
-    }
-    if (showTopicFilter) {
-      return orderFacetOptions(keepSelectedVisible(exploreTopicFacet.topics, selectedTopicIds), selectedTopicIds).map(
-        option => ({
-          value: option.id,
-          label: option.name ?? 'Topic',
-          // The count is in before the name resolves; draw a skeleton rather than "Topic".
-          pending: option.name === null && exploreTopicFacet.namesPending,
-          count: option.count,
-        })
-      );
-    }
-    return [];
-  }, [
-    topicFacetEndpoint,
-    topicFacets.data?.topics,
-    showTopicFilter,
-    exploreTopicFacet.topics,
-    exploreTopicFacet.namesPending,
-    selectedTopicIds,
-  ]);
+    if (!topicFacetEndpoint) return [];
+    return orderFacetOptions(topicFacets.data?.topics ?? [], selectedTopicIds).map(topic => ({
+      value: topic.id,
+      label: topic.name?.trim() || 'Topic',
+      count: topic.count,
+    }));
+  }, [topicFacetEndpoint, topicFacets.data?.topics, selectedTopicIds]);
 
-  // A contextual feed prunes its selection against the settled REST payload; Explore prunes against
-  // the settled graph facet. Either way a topic that drops to zero and is not selected leaves the
-  // menu, and a still-loading facet keeps the selection rather than discarding it mid-flight.
+  // A topic that drops to zero and is not selected leaves the menu; a still-loading or failed
+  // payload keeps the selection rather than discarding one mid-flight. Only the settled REST
+  // payload prunes — a feed with no endpoint yet has nothing to reconcile against.
   React.useEffect(() => {
     if (!topicFacetEndpoint || topicFacets.isPlaceholderData || topicFacets.error || !topicFacets.data) return;
     setSelectedTopicIds(current => keepSelectableTopics(current, topicFacets.data.topics, true));
   }, [topicFacetEndpoint, topicFacets.data, topicFacets.error, topicFacets.isPlaceholderData]);
-  React.useEffect(() => {
-    if (!topicFilterVisible || topicFacetEndpoint) return;
-    setSelectedTopicIds(current => keepSelectableTopics(current, exploreTopicFacet.topics, exploreTopicFacet.settled));
-  }, [topicFilterVisible, topicFacetEndpoint, exploreTopicFacet.topics, exploreTopicFacet.settled]);
 
   const showFilterRow = showSortFilter || timeRangeApplies || typeFilterVisible || topicFilterVisible;
 
