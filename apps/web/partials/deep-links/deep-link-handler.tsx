@@ -6,6 +6,7 @@ import { useDebatesPanelDeepLink } from '~/core/debates/use-debates-panel-deep-l
 
 import { GoogleCalendarReturn } from '~/partials/availability/google-calendar-return';
 import { AvailabilityDeepLink } from '~/partials/availability/shared-availability';
+import { EmailSettingsDeepLink } from '~/partials/notifications/email-settings-deep-link';
 
 /**
  * Every deep link, at one mount point. Adding a link is a hook and a value in `DEEP_LINK_MODALS`,
@@ -26,6 +27,7 @@ export function DeepLinkHandler() {
     <>
       <AvailabilityDeepLink />
       <GoogleCalendarReturn />
+      <EmailSettingsDeepLink />
     </>
   );
 }

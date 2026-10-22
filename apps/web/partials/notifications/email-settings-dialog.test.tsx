@@ -1,0 +1,145 @@
+import '@testing-library/jest-dom/vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+import * as React from 'react';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { EmailGroupSettings } from '~/core/notifications/email-groups';
+
+type Callbacks = { onSuccess?: () => void; onError?: () => void };
+
+const mocks = vi.hoisted(() => ({
+  state: null as unknown as {
+    registration: { isError: boolean; isSuccess: boolean; data?: { email: string | null } };
+    preferences: {
+      isError: boolean;
+      data?: { email_enabled: boolean; email_groups?: EmailGroupSettings; email?: string | null };
+    };
+  },
+  mutate: vi.fn(),
+  capture: vi.fn(),
+}));
+
+vi.mock('~/core/notifications/hooks', () => ({
+  useNotificationPreferences: () => mocks.state,
+  useSaveEmailSwitch: () => ({ mutate: mocks.mutate }),
+}));
+vi.mock('~/core/analytics', () => ({ capture: (...args: unknown[]) => mocks.capture(...args) }));
+
+const { EmailSettingsDialog } = await import('./email-settings-dialog');
+
+const allOn: EmailGroupSettings = {
+  invites: true,
+  your_debates: true,
+  replies: true,
+  digest: true,
+  getting_started: true,
+};
+
+function ready(emailEnabled = true, groups: EmailGroupSettings | null = allOn) {
+  mocks.state = {
+    registration: { isError: false, isSuccess: true, data: { email: 'jordan@gmail.com' } },
+    preferences: {
+      isError: false,
+      data: { email_enabled: emailEnabled, email_groups: groups ?? undefined, email: 'jo•••@gmail.com' },
+    },
+  };
+}
+
+beforeEach(() => {
+  ready();
+  mocks.mutate = vi.fn();
+  mocks.capture = vi.fn();
+});
+afterEach(() => cleanup());
+
+const toggle = (name: string) => screen.getByRole('switch', { name });
+
+describe('EmailSettingsDialog', () => {
+  it('shows where email goes, the all-email switch and the five groups, and records the open', () => {
+    render(<EmailSettingsDialog entry="account_menu" onClose={() => {}} />);
+
+    expect(screen.getByRole('dialog', { name: 'Email settings' })).toBeInTheDocument();
+    expect(screen.getByText(/Sending to jo•••@gmail\.com\./)).toBeInTheDocument();
+    expect(toggle('All Geo emails')).toHaveAttribute('aria-checked', 'true');
+    for (const name of [
+      'Debate invites and reminders',
+      'Your debates',
+      'Replies',
+      'Weekly digest',
+      'Getting started',
+    ]) {
+      expect(toggle(name)).toHaveAttribute('aria-checked', 'true');
+    }
+    expect(screen.getByText(/Space proposals are set in each space's settings\./)).toBeInTheDocument();
+    expect(mocks.capture).toHaveBeenCalledWith('email_settings_opened', { entry: 'account_menu' });
+  });
+
+  it('saves a group as it changes and says so, or says a save failed', async () => {
+    const user = userEvent.setup();
+    let callbacks: Callbacks = {};
+    mocks.mutate = vi.fn((_change, options: Callbacks) => (callbacks = options));
+    render(<EmailSettingsDialog entry="link" via="email" onClose={() => {}} />);
+    expect(mocks.capture).toHaveBeenCalledWith('email_settings_opened', { entry: 'link', via: 'email' });
+
+    await user.click(toggle('Weekly digest'));
+    expect(mocks.mutate).toHaveBeenCalledWith({ group: 'digest', enabled: false }, expect.anything());
+    expect(screen.getByText(/Changes save as you go\./)).toBeInTheDocument();
+
+    React.act(() => callbacks.onSuccess?.());
+    expect(screen.getByText(/^Saved\./)).toBeInTheDocument();
+
+    await user.click(toggle('Replies'));
+    React.act(() => callbacks.onError?.());
+    expect(screen.getByText(/Couldn't save\. Try again\./)).toBeInTheDocument();
+  });
+
+  it('dims the groups and holds them while all email is off, keeping their values underneath', async () => {
+    ready(false, { ...allOn, digest: false });
+    render(<EmailSettingsDialog entry="account_menu" onClose={() => {}} />);
+
+    expect(toggle('All Geo emails')).toHaveAttribute('aria-checked', 'false');
+    expect(toggle('Replies')).toBeDisabled();
+    expect(toggle('Replies')).toHaveAttribute('aria-checked', 'false');
+
+    await userEvent.setup().click(toggle('All Geo emails'));
+    expect(mocks.mutate).toHaveBeenCalledWith({ group: 'all', enabled: true }, expect.anything());
+  });
+
+  it('warns while debate invites are off', () => {
+    ready(true, { ...allOn, invites: false });
+    render(<EmailSettingsDialog entry="account_menu" onClose={() => {}} />);
+
+    expect(screen.getByText(/People who book a time with you won't reach you by email\./)).toBeInTheDocument();
+  });
+
+  it('shows only the all-email switch while the service reports no groups', () => {
+    ready(true, null);
+    render(<EmailSettingsDialog entry="account_menu" onClose={() => {}} />);
+
+    expect(screen.getAllByRole('switch')).toHaveLength(1);
+  });
+
+  it('explains why nothing can be set for an account with no address', () => {
+    mocks.state = {
+      registration: { isError: false, isSuccess: true, data: { email: null } },
+      preferences: { isError: false, data: { email_enabled: true, email_groups: allOn, email: null } },
+    };
+    render(<EmailSettingsDialog entry="account_menu" onClose={() => {}} />);
+
+    expect(screen.getByText('No email on your account.')).toBeInTheDocument();
+    expect(toggle('All Geo emails')).toBeDisabled();
+  });
+
+  it('closes on Done and on Escape', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<EmailSettingsDialog entry="account_menu" onClose={onClose} />);
+
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+});

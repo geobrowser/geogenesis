@@ -5,6 +5,7 @@
  *     /explore?modal=debates&modalTarget=people        GEO-2746
  *     /space/<id>?modal=availability                   a person's bookable week
  *     <any page>?modal=schedule                        the viewer's own schedule editor
+ *     <any page>?modal=email-settings                  the viewer's email settings (every email's footer)
  *
  * The rule the repo already follows, written down: **a fragment addresses a position in the
  * document, a query param triggers an action.** `buildBlockLink` puts a block id in the fragment
@@ -51,6 +52,7 @@ export const DEEP_LINK_MODALS = {
   roomAccess: 'room-access',
   availability: 'availability',
   schedule: 'schedule',
+  emailSettings: 'email-settings',
 } as const;
 
 export type ModalDeepLink = (typeof DEEP_LINK_MODALS)[keyof typeof DEEP_LINK_MODALS];
