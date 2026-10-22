@@ -197,6 +197,36 @@ describe('analytics', () => {
     expect(properties).not.toHaveProperty('wallet');
   });
 
+  // GEO-3139: a Google-only user has no `user.email`; the address is on the google_oauth account.
+  it('records the email and method of a Google sign-up', async () => {
+    const signedUp = vi.fn();
+    window.lytics = {
+      capture: vi.fn(),
+      signedUp,
+    };
+
+    const { trackPrivyAuth } = await import('./analytics');
+
+    trackPrivyAuth({
+      user: {
+        id: 'did:privy:user-3',
+        linkedAccounts: [{ type: 'google_oauth', email: 'person@gmail.com', subject: '123' }],
+      },
+      isNewUser: true,
+      wasAlreadyAuthenticated: false,
+      loginMethod: 'google',
+      loginAccount: { type: 'google_oauth' },
+    });
+
+    const [identity, properties] = signedUp.mock.calls[0];
+    expect(identity).toMatchObject({ has_privy_email: true });
+    expect(properties).toMatchObject({
+      email: 'person@gmail.com',
+      login_method: 'google',
+      login_account_type: 'google_oauth',
+    });
+  });
+
   it('tracks existing Privy users as logins', async () => {
     const loggedIn = vi.fn();
     window.lytics = {

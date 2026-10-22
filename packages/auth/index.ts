@@ -15,6 +15,8 @@ export {
   // wallet. Deleting it does not fall back to something; it reinstates the bug this was opened for.
   useLoginWithEmail,
   type UseLoginWithEmail,
+  // Headless Google sign-in for the app's own UI; run only in apps/web `core/wallet/privy-host.tsx`.
+  useLoginWithOAuth,
   useIdentityToken,
   getIdentityToken,
   PrivyProvider,
