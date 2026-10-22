@@ -1,11 +1,18 @@
 import { NextResponse } from 'next/server';
 
+import { DEFAULT_EXPLORE_TYPE_IDS } from '~/core/explore/explore-constants';
 import { fetchExploreTopicFacets } from '~/core/explore/explore-topic-facets';
+import { sanitizeExploreTypeIds } from '~/core/explore/explore-type-filter';
 import { normId } from '~/core/utils/norm-id';
 
 function parseIds(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((id): id is string => typeof id === 'string' && id.length > 0).map(normId);
+}
+
+function parseTypeIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_EXPLORE_TYPE_IDS];
+  return sanitizeExploreTypeIds(raw);
 }
 
 /**
@@ -21,7 +28,7 @@ export async function POST(request: Request) {
   } | null;
 
   const selectedTopicIds = parseIds(body?.selectedTopicIds);
-  const typeIds = parseIds(body?.typeIds);
+  const typeIds = parseTypeIds(body?.typeIds);
   const spaceIds = parseIds(body?.spaceIds);
 
   const requireDebateTagOnClaims = body?.fixedParams?.requireDebateTagOnClaims !== 'false';
