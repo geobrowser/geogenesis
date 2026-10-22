@@ -183,28 +183,27 @@ export function disagreementCount(disagreements: DebateLobbyClaims['disagreement
   return entry && entry.claims > 0 ? entry.claims : null;
 }
 
+/** A pair person's row on the roster, if they have one: never for someone outside the lobby. */
+function rosterRow(members: DebateLobbyMember[], person: Pick<DebateLobbyPerson, 'user_id'>) {
+  return members.find(member => sameUser(member, person));
+}
+
 /**
  * The pairs as the roster stands (GEO-3445). A partner still in the claim picker keeps naming the
- * person who went back to the room, so anyone whose own row is no longer in a debate leaves the
- * pair, and with it the "In a debate" card, for their tile. A pair left empty goes.
+ * person who went back to the room, so anyone whose own row is out of the debate leaves the pair
+ * for their tile. A pair left empty goes.
  */
 export function debatingPairs(pairs: DebateLobbyPair[], members: DebateLobbyMember[]) {
-  return pairs.flatMap(pair => {
-    const people = pair.people.filter(person => {
-      if (!person.in_lobby) return true;
-      const member = members.find(m => sameUser(m, person));
-      return !member || member.in_debate;
-    });
-    if (people.length === pair.people.length) return [pair];
-    return people.length > 0 ? [{ ...pair, people }] : [];
-  });
+  return pairs
+    .map(pair => ({ ...pair, people: pair.people.filter(person => rosterRow(members, person)?.in_debate !== false) }))
+    .filter(pair => pair.people.length > 0);
 }
 
 /** What the pair is debating, from its first lobby member's roster row. */
 export function pairSubject(pair: DebateLobbyPair, members: DebateLobbyMember[]) {
   for (const person of pair.people) {
     if (!person.in_lobby) continue;
-    const member = members.find(m => sameUser(m, person));
+    const member = rosterRow(members, person);
     if (member?.in_debate_subject) return member.in_debate_subject;
   }
   return null;

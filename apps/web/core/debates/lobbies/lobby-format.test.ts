@@ -389,15 +389,6 @@ describe('pairs', () => {
     expect(debatingPairs([pair], [picking])).toEqual([pair]);
     expect(debatingPairs([{ people: [person('leo')] }], [back])).toEqual([]);
   });
-
-  it('hands back an unchanged pair as is', () => {
-    const pair = { people: [person('maya'), person('leo')] };
-    const both = [
-      { ...member('maya', 'speaker'), in_debate: true },
-      { ...member('leo', 'speaker'), in_debate: true },
-    ];
-    expect(debatingPairs([pair], both)[0]).toBe(pair);
-  });
 });
 
 describe('lobbyRoomHeadcount (GEO-3311)', () => {

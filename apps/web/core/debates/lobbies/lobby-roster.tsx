@@ -57,7 +57,7 @@ export function publishes(member: Pick<DebateLobbyMember, 'role' | 'acting_host'
 
 /**
  * The People side (GEO-3131): debates in progress, speaker tiles, then who is listening. Anyone in
- * a pair card is left out of the tiles and chips below it; someone back from a debate is not in one.
+ * a pair card is left out of the tiles and chips below it, but a pair only keeps people still debating.
  */
 export function LobbyPeople({
   lobby,
