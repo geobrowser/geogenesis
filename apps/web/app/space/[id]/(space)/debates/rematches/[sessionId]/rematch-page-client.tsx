@@ -99,7 +99,7 @@ import { useDebateRoomContext, useInDebateRoom, useRoomOpponentPresent } from '~
 import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { RoomLeaveDialog } from '~/core/debates/rooms/room-leave-dialog';
 import { roomLeaveNeedsConfirm } from '~/core/debates/rooms/room-presence';
-import { DebateRoomPresenceIndicator } from '~/core/debates/rooms/room-presence-indicator';
+import { DebateRoomPresenceIndicator, RoomLateNotice } from '~/core/debates/rooms/room-presence-indicator';
 import {
   type TaggedClaimFilters,
   tagDisplaySpaceId,
@@ -2920,6 +2920,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 // was the other person who left, which reaches this page as a status change with no
                 // mutation of ours behind it.
                 exiting={leaveSession.isPending || leaveSession.isSuccess || sessionEnded}
+                // GEO-3427: in their empty video slot, where the viewer is waiting for them.
+                opponentWaiting={
+                  roomPresence?.opponentLate && roomPresence.opponentUserId ? (
+                    <RoomLateNotice
+                      late={roomPresence.opponentLate}
+                      opponentName={remoteParticipant?.display_name || UNNAMED_OPPONENT}
+                      opponentUserId={roomPresence.opponentUserId}
+                    />
+                  ) : null
+                }
               />
             ) : (
               <div className="flex justify-end">{leaveButton}</div>

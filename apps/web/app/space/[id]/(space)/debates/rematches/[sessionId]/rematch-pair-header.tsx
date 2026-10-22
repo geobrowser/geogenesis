@@ -106,6 +106,12 @@ type RematchPairHeaderProps = {
   /** The other person's camera, where they have one running. */
   opponentVideo?: React.ReactNode;
   leaveAction?: React.ReactNode;
+  /**
+   * What fills the other person's video slot until they join, in place of their avatar (GEO-3427:
+   * their running-late notice). The slot is otherwise empty space while you wait, and this is the
+   * one thing worth reading there. Ignored once their camera is up.
+   */
+  opponentWaiting?: React.ReactNode;
 };
 
 export function RematchPairHeader({
@@ -118,6 +124,7 @@ export function RematchPairHeader({
   onOpenOpponentSpace,
   leaveAction,
   opponentVideo,
+  opponentWaiting,
 }: RematchPairHeaderProps) {
   /**
    * Everything about the opponent that their card cannot say for itself.
@@ -141,6 +148,7 @@ export function RematchPairHeader({
       <div className={cx('grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2', styles.pair)}>
         <OpponentCard
           video={opponentVideo}
+          waiting={opponentVideo ? null : opponentWaiting}
           opponent={opponent}
           name={opponentName}
           state={voice.kind === 'live' ? voice.opponentState : 'waiting'}
@@ -390,6 +398,7 @@ function OpponentCard({
   onOpen,
   describedBy,
   video,
+  waiting,
 }: {
   opponent: PairHeaderParticipant;
   name: string;
@@ -399,6 +408,7 @@ function OpponentCard({
   /** The header's live region, which also serves as this button's description. */
   describedBy: string;
   video?: React.ReactNode;
+  waiting?: React.ReactNode;
 }) {
   const talking = showMicState && state === 'talking';
   const videoAnchorRef = React.useRef<HTMLSpanElement>(null);
@@ -410,6 +420,43 @@ function OpponentCard({
   // therefore erased the talking outline exactly while the viewer was pointing at the card — the
   // one moment they are most likely to be looking at it.
   const border = talking ? 'border-green hover:border-green' : 'border-grey-02 hover:border-grey-03';
+
+  // GEO-3427: while the slot holds their running-late notice, it has a button of its own
+  // (Reschedule), and a button can't sit inside the card's. So the card is a plain surface, and
+  // View profile is the way to their profile. No mic chip: the notice already says they're not here.
+  if (waiting) {
+    return (
+      <div
+        data-testid="rematch-opponent-card"
+        className={cx(CARD_SURFACE, 'flex flex-col gap-2.5 border-grey-02', styles.card, styles.opponentCard)}
+      >
+        <PairCardBody
+          avatar={
+            <span
+              data-testid="rematch-opponent-waiting"
+              className={cx('inline-flex shrink-0 overflow-hidden', styles.video, styles.waiting)}
+            >
+              {waiting}
+            </span>
+          }
+          name={name}
+          nameTitle={name}
+          action={
+            <button
+              type="button"
+              onClick={onOpen}
+              aria-label={`Open ${name}’s personal space`}
+              {...debateActionAnalyticsAttributes('rematch', 'Opponent card')}
+              className="flex items-center gap-0.5 text-chat whitespace-nowrap text-grey-04 transition-colors hover:text-text mobile:sr-only"
+            >
+              View profile
+              <ChevronRight />
+            </button>
+          }
+        />
+      </div>
+    );
+  }
 
   const body = (
     <PairCardBody

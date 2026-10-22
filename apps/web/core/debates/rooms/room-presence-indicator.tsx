@@ -51,10 +51,6 @@ export function DebateRoomPresenceIndicator({
         </Text>
       </div>
 
-      {late && presence.opponentUserId && (
-        <LateCard late={late} opponentName={opponentName} opponentUserId={presence.opponentUserId} />
-      )}
-
       {note && (
         <div className="max-w-full rounded-lg border border-grey-02 bg-white px-3 py-2 text-center">
           <Text as="p" variant="footnote" color="grey-04">
@@ -67,7 +63,7 @@ export function DebateRoomPresenceIndicator({
 }
 
 /**
- * The week the late card's Reschedule opens, loaded on the press: every debate room renders the
+ * The week the late notice's Reschedule opens, loaded on the press: every debate room renders the
  * indicator, and few of them ever reschedule from it.
  */
 const PeerAvailabilityBookingModal = dynamic(
@@ -91,11 +87,21 @@ function PresenceDot({ state }: { state: DebateRoomPresenceState }) {
 
 /**
  * What the waiting debater reads once the other said they are running late (GEO-3427, board 6b):
- * how late, what they wrote, and a footer row with when to expect them and Reschedule, which moves
- * this debate to a time in the late debater's week without leaving the room. The timeline and
- * Leave on the board are GEO-3428's.
+ * how late, what they wrote, when to expect them, and Reschedule, which moves this debate to a time
+ * in the late debater's week without leaving the room. The timeline and Leave on the board are
+ * GEO-3428's.
+ *
+ * It fills the late debater's empty video slot rather than sitting above the pair: the slot is
+ * unused until they join, and it is where the waiting debater is already looking for them. The
+ * type matches the room cards around it: medium for the line that matters, `text-chat` grey for the
+ * rest, as on the card's own View profile.
+ *
+ * A phone's slot is about 110px tall inside, so there the note goes and the title is capped at
+ * three lines: how late, when, and Reschedule are what the waiting debater acts on. Below 375px
+ * wide "Expected by about…" takes two lines and no longer fits, so it goes too; the title still
+ * says how many minutes.
  */
-function LateCard({
+export function RoomLateNotice({
   late,
   opponentName,
   opponentUserId,
@@ -110,22 +116,20 @@ function LateCard({
   const [rescheduling, setRescheduling] = React.useState(false);
 
   return (
-    <div className="flex w-full max-w-[560px] flex-col gap-3 rounded-xl border border-grey-02 bg-white px-5 py-4">
-      <div className="flex flex-col gap-1">
-        <Text as="p" variant="bodySemibold">
-          {ROOM_LATE_NOTICE.title(opponentName, late.minutes)}
-        </Text>
-        {late.note && (
-          <Text as="p" variant="metadata" color="grey-04">
-            “{late.note}”
-          </Text>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-2 border-t border-grey-02 pt-3">
-        <Text as="p" variant="metadata" color="grey-04" className="min-w-[180px] flex-1">
-          {ROOM_LATE_NOTICE.expected(formatClockTime(late.expectedAt))}
-        </Text>
-        {request?.status === 'accepted' && (
+    <div
+      role="status"
+      data-testid="room-late-notice"
+      className="flex w-full max-w-[320px] flex-col items-center gap-1.5 text-center max-[767px]:gap-1"
+    >
+      <p className="text-metadataMedium text-text max-[767px]:line-clamp-3 max-[767px]:text-chatMedium">
+        {ROOM_LATE_NOTICE.title(opponentName, late.minutes)}
+      </p>
+      {late.note && <p className="line-clamp-2 text-chat break-words text-grey-04 max-[767px]:hidden">“{late.note}”</p>}
+      <p className="text-chat text-grey-04 max-[374px]:hidden">
+        {ROOM_LATE_NOTICE.expected(formatClockTime(late.expectedAt))}
+      </p>
+      {request?.status === 'accepted' && (
+        <div className="pt-1 max-[767px]:pt-0">
           <HubPillButton
             analyticsLabel={debateAnalyticsLabel('room', 'Late notice reschedule')}
             analyticsIntent="reschedule_scheduled_debate"
@@ -133,8 +137,8 @@ function LateCard({
           >
             {ROOM_LATE_NOTICE.reschedule}
           </HubPillButton>
-        )}
-      </div>
+        </div>
+      )}
       {request && rescheduling && (
         <PeerAvailabilityBookingModal
           open={rescheduling}

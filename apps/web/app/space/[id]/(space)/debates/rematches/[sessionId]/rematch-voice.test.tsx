@@ -1802,6 +1802,32 @@ describe('RematchVoiceHeader', () => {
     expect(leave).toHaveBeenCalledOnce();
   });
 
+  // GEO-3427: their running-late notice fills their empty video slot, in place of the avatar.
+  it("shows what fills the other person's slot while they are away, with View profile as its own button", async () => {
+    render(
+      <RematchVoiceHeader
+        session={makeSession('browsing')}
+        currentUserId="me"
+        opponentWaiting={
+          <button type="button" data-testid="late">
+            Reschedule
+          </button>
+        }
+      />
+    );
+    await flushOwnership();
+
+    const them = screen.getByTestId('rematch-opponent-card');
+    const slot = within(them).getByTestId('rematch-opponent-waiting');
+    expect(within(slot).getByTestId('late')).toBeInTheDocument();
+    expect(within(them).queryByTestId('pair-avatar')).toBeNull();
+    // The card holds a button of its own now, so it can't be one.
+    expect(them.tagName).not.toBe('BUTTON');
+    expect(within(them).getByRole('button', { name: 'Open Salina’s personal space' })).toHaveTextContent(
+      'View profile'
+    );
+  });
+
   // Your control and their chip sit at the same height in mirrored cards, so anything they do not
   // share reads as an accident rather than a decision. They were two hand-written sets of paddings
   // and type sizes that were close but not equal; this is what keeps them from drifting apart

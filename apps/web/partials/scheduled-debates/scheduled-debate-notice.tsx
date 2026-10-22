@@ -556,7 +556,7 @@ function Heading({ children, focus = false }: { children: React.ReactNode; focus
     if (focus) ref.current?.focus();
   }, [focus]);
   return (
-    <h2 ref={ref} tabIndex={-1} className="text-mediumTitle focus:outline-hidden">
+    <h2 ref={ref} tabIndex={-1} className="text-smallTitle focus:outline-hidden">
       {children}
     </h2>
   );
@@ -643,7 +643,7 @@ function NoteField({
         maxLength={NOTICE_NOTE_MAX}
         value={value}
         onChange={event => onChange(event.target.value)}
-        className="w-full resize-none rounded-lg border border-grey-02 p-3 text-body focus:border-text focus:outline-hidden"
+        className="w-full resize-none rounded-lg border border-grey-02 p-3 text-input focus:border-text focus:outline-hidden"
       />
     </div>
   );
