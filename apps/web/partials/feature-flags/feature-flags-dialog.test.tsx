@@ -66,6 +66,7 @@ describe('FeatureFlagsDialog', () => {
         forYouFeed: false,
         lobbyHosting: false,
         googleSignIn: false,
+        googleCalendar: false,
         bountiesTab: true,
       });
     });
