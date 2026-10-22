@@ -5,12 +5,31 @@ import cx from 'classnames';
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbyDebateSubject, type DebateLobbyMember, type DebateLobbyPair, dashlessId } from '../api';
+import {
+  type DebateLobbyDebateSubject,
+  type DebateLobbyMember,
+  type DebateLobbyPair,
+  type DebateLobbyPairPerson,
+  dashlessId,
+} from '../api';
+import { sameId } from '../rooms/room-presence';
 import { LobbyDebateSubject } from './lobby-debate-subject';
-import { pairLabel, pairRoundLabel, pairSubject, personName } from './lobby-format';
+import { pairRoundLabel, pairSubject, personName } from './lobby-format';
+import { LobbyPersonMenu, personMenuAnalyticsAttributes } from './lobby-person-menu';
+import type { LobbyPageView } from './lobby-view';
 
 /** A card per debate a lobby member is in (GEO-3131). Nothing when nobody is debating. */
-export function LobbyDebatePairs({ pairs, members }: { pairs: DebateLobbyPair[]; members: DebateLobbyMember[] }) {
+export function LobbyDebatePairs({
+  pairs,
+  members,
+  lobby,
+  viewerId = null,
+}: {
+  pairs: DebateLobbyPair[];
+  members: DebateLobbyMember[];
+  lobby?: LobbyPageView;
+  viewerId?: string | null;
+}) {
   if (pairs.length === 0) return null;
   return (
     <section className="flex flex-col gap-2.5 md:gap-2" aria-label="In a debate">
@@ -39,7 +58,16 @@ export function LobbyDebatePairs({ pairs, members }: { pairs: DebateLobbyPair[];
             </span>
             <div className="min-w-0 flex-1">
               <Text as="p" variant="metadataMedium" ellipsize>
-                {pairLabel(pair)}
+                {pair.people.map((person, index) => (
+                  <span key={person.user_id}>
+                    {index > 0 ? ' vs. ' : ''}
+                    {lobby ? (
+                      <PairPerson person={person} members={members} lobby={lobby} viewerId={viewerId} />
+                    ) : (
+                      personName(person)
+                    )}
+                  </span>
+                ))}
               </Text>
               <Text as="p" variant="footnote" color="grey-04" ellipsize>
                 <PairLine subject={pairSubject(pair, members)} round={pairRoundLabel(pair.progress)} />
@@ -72,5 +100,49 @@ function PairLine({ subject, round }: { subject: DebateLobbyDebateSubject | null
       {named && round ? ' · ' : null}
       {round}
     </>
+  );
+}
+
+/** Partners outside the roster can be scheduled too, but never get lobby moderation controls. */
+function PairPerson({
+  person,
+  members,
+  lobby,
+  viewerId,
+}: {
+  person: DebateLobbyPairPerson;
+  members: DebateLobbyMember[];
+  lobby: LobbyPageView;
+  viewerId: string | null;
+}) {
+  const rosterMember = members.find(member => sameId(member.user_id, person.user_id));
+  const member: DebateLobbyMember = {
+    role: 'listener',
+    creator: false,
+    acting_host: false,
+    on_roster_since: '',
+    stepped_out: true,
+    ...rosterMember,
+    ...person,
+    in_debate: true,
+  };
+  const isSelf = viewerId !== null && sameId(viewerId, person.user_id);
+  return (
+    <LobbyPersonMenu
+      lobby={lobby}
+      member={member}
+      isSelf={isSelf}
+      viewerId={viewerId}
+      disagreements={null}
+      outsideLobby={!rosterMember}
+    >
+      <button
+        type="button"
+        {...personMenuAnalyticsAttributes(lobby, member, isSelf)}
+        className="min-h-7 rounded px-0.5 text-left hover:underline md:min-h-11"
+      >
+        {personName(person)}
+      </button>
+    </LobbyPersonMenu>
   );
 }

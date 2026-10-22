@@ -38,7 +38,7 @@ import { Text } from '~/design-system/text';
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
 import { useDebatePeople } from './hooks';
-import { hubAnalyticsAttributes } from './hub-analytics';
+import { type DebateAnalyticsSurface, debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
@@ -377,7 +377,7 @@ function UpcomingRow({
   );
 }
 
-function ScheduledRow({
+export function ScheduledRow({
   request,
   opponent,
   viewer,
@@ -386,9 +386,11 @@ function ScheduledRow({
   onAnswer,
   onReschedule,
   ref,
+  analyticsSurface = 'hub',
 }: {
   /** From `HubCardList`, whose `popLayout` measures the card on its way out. */
   ref?: React.Ref<HTMLElement>;
+  analyticsSurface?: DebateAnalyticsSurface;
   request: ScheduledDebateRequest;
   opponent: DebateParticipantSummary | null;
   viewer: DebateParticipantSummary | null;
@@ -430,7 +432,8 @@ function ScheduledRow({
             {/* Labelled apart from the instant request cards' Accept and Decline, which would
                 otherwise share their labels and could not be told from these in the data. */}
             <HubPillButton
-              analyticsLabel="Debate hub Decline scheduled debate"
+              analyticsSurface={analyticsSurface}
+              analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Decline scheduled debate')}
               analyticsIntent="decline_scheduled_debate"
               onClick={() => onAnswer(request.request_id, false)}
               disabled={busy}
@@ -439,7 +442,8 @@ function ScheduledRow({
             </HubPillButton>
             <HubPillButton
               variant="primary"
-              analyticsLabel="Debate hub Accept scheduled debate"
+              analyticsSurface={analyticsSurface}
+              analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Accept scheduled debate')}
               analyticsIntent="accept_scheduled_debate"
               onClick={() => onAnswer(request.request_id, true)}
               disabled={busy}
@@ -449,7 +453,8 @@ function ScheduledRow({
             {onReschedule && (
               <HubPillButton
                 className="col-span-2"
-                analyticsLabel="Debate hub Choose different time for scheduled request"
+                analyticsSurface={analyticsSurface}
+                analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Choose different time for scheduled request')}
                 analyticsIntent="choose_different_time_scheduled_request"
                 onClick={event => onReschedule(event.currentTarget)}
                 disabled={busy}
@@ -464,7 +469,8 @@ function ScheduledRow({
               {viewerAccepted && onReschedule && (
                 <HubPillButton
                   className="w-full"
-                  analyticsLabel="Debate hub Reschedule scheduled request"
+                  analyticsSurface={analyticsSurface}
+                  analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Reschedule scheduled request')}
                   analyticsIntent="reschedule_scheduled_request"
                   onClick={event => onReschedule(event.currentTarget)}
                 >
