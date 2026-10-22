@@ -94,6 +94,27 @@ describe('LobbyDebatePairs', () => {
     expect(screen.queryByRole('button', { name: /Request a debate/ })).toBeNull();
   });
 
+  it('never offers host controls or counts their opening for a partner outside the lobby', () => {
+    const view = {
+      lobby_id: 'lobby',
+      members: [member('Ana')],
+      viewer: { kind: 'member', role: 'host', hosting: true, creator: true },
+    } as LobbyPageView;
+    render(
+      <LobbyDebatePairs
+        pairs={[{ people: [person('Ana'), person('Ben', false)] }]}
+        members={view.members}
+        lobby={view}
+        viewerId="me"
+      />
+    );
+    const ben = screen.getByRole('button', { name: 'Ben' });
+    expect(ben).not.toHaveAttribute('data-geo-analytics-intent', 'open_lobby_host_controls');
+    fireEvent.click(ben);
+    expect(screen.queryByText('Host controls')).toBeNull();
+    expect(screen.getByText('Schedule Ben')).toBeInTheDocument();
+  });
+
   it('draws nothing when nobody is debating', () => {
     const { container } = render(<LobbyDebatePairs pairs={[]} members={[]} />);
     expect(container.innerHTML).toBe('');

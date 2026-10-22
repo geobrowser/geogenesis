@@ -138,7 +138,7 @@ function PairPerson({
     >
       <button
         type="button"
-        {...personMenuAnalyticsAttributes(lobby, member, isSelf)}
+        {...personMenuAnalyticsAttributes(lobby, member, isSelf, !rosterMember)}
         className="min-h-7 rounded px-0.5 text-left hover:underline md:min-h-11"
       >
         {personName(person)}

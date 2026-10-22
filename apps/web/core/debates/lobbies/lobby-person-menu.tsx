@@ -23,9 +23,10 @@ import type { LobbyPageView } from './lobby-view';
 export function personMenuAnalyticsAttributes(
   lobby: Pick<LobbyPageView, 'viewer'>,
   member: Pick<DebateLobbyMember, 'role' | 'creator'>,
-  isSelf: boolean
+  isSelf: boolean,
+  outsideLobby = false
 ) {
-  return hasMemberActions(lobby, member, isSelf)
+  return !outsideLobby && hasMemberActions(lobby, member, isSelf)
     ? debateActionAnalyticsAttributes('hub', 'Lobby host controls', 'open_lobby_host_controls')
     : debateActionAnalyticsAttributes('hub', 'Lobby person menu');
 }

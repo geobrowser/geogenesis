@@ -85,12 +85,15 @@ describe('scheduled invitations in the lobby', () => {
     mocks.requests = [request()];
     render(<LobbyScheduledRequests lobby={lobby} />);
     fireEvent.click(screen.getByRole('button', { name: 'Choose different time' }));
-    expect(mocks.schedule).toHaveBeenCalledWith({
-      userId: 'peer',
-      name: 'Maya',
-      requestId: 'invite',
-      entry: 'lobby_new_time',
-    });
+    expect(mocks.schedule).toHaveBeenCalledWith(
+      {
+        userId: 'peer',
+        name: 'Maya',
+        requestId: 'invite',
+        entry: 'lobby_new_time',
+      },
+      screen.getByRole('button', { name: 'Choose different time' })
+    );
     expect(mocks.respond).not.toHaveBeenCalled();
   });
   it('keeps a conflicting acceptance visible with a useful error', () => {
@@ -102,6 +105,41 @@ describe('scheduled invitations in the lobby', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
     expect(screen.getByRole('alert')).toHaveTextContent('That clashes with a debate');
     expect(screen.getByRole('button', { name: 'Choose different time' })).toBeInTheDocument();
+  });
+
+  it('uses the Geo team label for an admin-arranged invitation', () => {
+    mocks.requests = [request({ created_by_admin: true, invited_by_user_id: null, proposed_by_user_id: null })];
+    render(<LobbyScheduledRequests lobby={lobby} />);
+    expect(screen.getByText('The Geo team arranged a debate for you')).toBeInTheDocument();
+    expect(screen.queryByText('Maya asked you to debate later')).toBeNull();
+  });
+
+  it('ignores repeated answers before the pending render, and allows a new proposal on the same request', () => {
+    mocks.requests = [request()];
+    const view = render(<LobbyScheduledRequests lobby={lobby} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    expect(mocks.respond).toHaveBeenCalledOnce();
+    mocks.requests = [request({ reschedule_count: 1 })];
+    view.rerender(<LobbyScheduledRequests lobby={lobby} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    expect(mocks.respond).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows retrying after an answer fails or conflicts', () => {
+    mocks.respond
+      .mockImplementationOnce((_vars, options) => options.onError(new Error('Try again.')))
+      .mockImplementationOnce((_vars, options) =>
+        options.onSuccess({ outcome: 'conflict', conflicting_start_at: '2026-10-24T18:00:00Z' })
+      );
+    mocks.requests = [request()];
+    render(<LobbyScheduledRequests lobby={lobby} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Try again.');
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('That clashes with a debate');
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+    expect(mocks.respond).toHaveBeenCalledTimes(3);
   });
 
   it('omits expired, outgoing and answered requests', () => {

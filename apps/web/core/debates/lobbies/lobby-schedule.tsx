@@ -13,18 +13,20 @@ import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-avail
 import type { DebateLobbyMember } from '../api';
 import { usePeerSchedule } from '../hooks';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
-import { formatDebateTime } from '../matchmaking/scheduled-debates-section';
-import { SharedTimes } from '../matchmaking/shared-times';
+import { formatDebateTime } from '../matchmaking/scheduled-debate-format';
+import { CancelScheduled } from '../matchmaking/scheduled-debates-section';
+import { INLINE_SLOTS, SharedTimes } from '../matchmaking/shared-times';
 import { opponentOf } from '../rooms/room-opponent';
 import { sameId } from '../rooms/room-presence';
 import { useOpenScheduledRequests } from '../rooms/scheduled-awaiting';
-import { useCancelScheduledDebate, useScheduledDebates } from '../rooms/scheduling-hooks';
+import { useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { lobbyAuthPage, useLobbyGuestSignIn } from './lobby-guest-sign-in';
 import { useLobbyHandoff } from './lobby-popup';
 import type { LobbyPageView } from './lobby-view';
+import { useMinuteNow } from './use-minute-now';
 
 export type LobbyBooking = {
   userId: string;
@@ -35,14 +37,23 @@ export type LobbyBooking = {
   requestId?: string;
 };
 
-const LobbyScheduleContext = React.createContext<(booking: LobbyBooking) => void>(() => undefined);
+const LobbyScheduleContext = React.createContext<(booking: LobbyBooking, opener?: HTMLElement) => void>(
+  () => undefined
+);
 export const useLobbySchedule = () => React.useContext(LobbyScheduleContext);
 
 /** Keeps the booking outside the menu's focus trap and alive after that menu closes. */
 export function LobbyScheduleProvider({ lobby, children }: { lobby: LobbyPageView; children: React.ReactNode }) {
   const guest = useIsLobbyGuest();
   const viewerId = useCurrentGeoChatUserId();
-  const [booking, setBooking] = React.useState<LobbyBooking | null>(null);
+  const [selection, setSelection] = React.useState<{ viewerId: string | null; booking: LobbyBooking | null }>({
+    viewerId,
+    booking: null,
+  });
+  // A booking belongs to the account that opened it. Signing out or switching accounts drops it.
+  if (selection.viewerId !== viewerId) setSelection({ viewerId, booking: null });
+  const booking = selection.viewerId === viewerId ? selection.booking : null;
+  const setBooking = (next: LobbyBooking | null) => setSelection({ viewerId, booking: next });
   const openerRef = React.useRef<HTMLElement | null>(null);
   const signIn = useLobbyGuestSignIn(lobby.lobby_id);
   const queued = useQueuedAction({
@@ -57,8 +68,8 @@ export function LobbyScheduleProvider({ lobby, children }: { lobby: LobbyPageVie
       if (viewerId && !sameId(next.userId, viewerId)) setBooking(next);
     },
   });
-  const open = (next: LobbyBooking) => {
-    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const open = (next: LobbyBooking, opener?: HTMLElement) => {
+    openerRef.current = opener ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     if (!guest) {
       if (!viewerId || sameId(next.userId, viewerId)) return;
       setBooking(next);
@@ -151,7 +162,7 @@ function MemberSchedule({
   const requests = useScheduledDebates();
   const openRequests = useOpenScheduledRequests(requests.data?.requests);
   const viewerId = useCurrentGeoChatUserId();
-  const cancel = useCancelScheduledDebate();
+  const now = useMinuteNow();
   const pending = openRequests.filter(request => {
     const opponent = opponentOf(request, viewerId);
     return (
@@ -165,48 +176,32 @@ function MemberSchedule({
   });
   // One chip per day first, so a free afternoon does not fill the whole menu.
   const slots = peer.schedule
-    ? peerScheduleDays(peer.schedule)
+    ? peerScheduleDays(peer.schedule, new Date(now))
         .flatMap(day =>
           day.slots
-            .filter(slot => Date.parse(slot.start) > Date.now())
+            .filter(slot => Date.parse(slot.start) > now)
             .slice(0, 1)
             .map(slot => ({
               start: slot.start,
-              end: new Date(Date.parse(slot.start) + 30 * 60_000).toISOString(),
               viewerIsFree: peer.schedule?.viewerHasSchedule ? (slot.viewerIsFree ?? undefined) : undefined,
             }))
         )
-        .slice(0, 3)
+        .slice(0, INLINE_SLOTS)
     : [];
 
   return (
     <>
       {pending.map(request => (
-        <div key={request.request_id} className="flex flex-col gap-1 rounded-lg bg-grey-01 p-2">
+        <div key={request.request_id} className="flex flex-col gap-1 rounded-lg bg-grey-01 p-2 [&_button]:md:min-h-11">
           <Text as="p" variant="footnoteMedium">
             Requested {formatDebateTime(request.scheduled_start_at)}
           </Text>
           <Text as="p" variant="footnote" color="grey-04">
             Awaiting response
           </Text>
-          <HubPillButton
-            analyticsSurface="lobby"
-            analyticsLabel="Lobby cancel scheduled request"
-            analyticsIntent="cancel_scheduled_request"
-            className="md:min-h-11"
-            pending={cancel.isPending}
-            pendingLabel="Cancelling…"
-            onClick={() => cancel.mutate({ requestId: request.request_id })}
-          >
-            Cancel request
-          </HubPillButton>
+          <CancelScheduled requestId={request.request_id} kind="request" opponent={member} analyticsSurface="lobby" />
         </div>
       ))}
-      {cancel.error ? (
-        <p role="alert" className="text-footnote text-red-01">
-          {cancel.error.message}
-        </p>
-      ) : null}
       {peer.isPending ? (
         <Text as="p" variant="footnote" color="grey-04">
           Loading availability…
@@ -235,6 +230,7 @@ function MemberSchedule({
           touchSized
           analyticsSurface="lobby"
           personName={personName(member)}
+          timezone={peer.schedule?.viewerTimezone}
           schedule={{ slots, truncated: true }}
           onPick={start => onPick(start, start ? 'lobby_time' : 'lobby_more_times')}
         />

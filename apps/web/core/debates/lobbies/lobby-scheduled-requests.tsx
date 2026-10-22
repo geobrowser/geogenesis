@@ -2,14 +2,17 @@
 
 import * as React from 'react';
 
+import { Close } from '~/design-system/icons/close';
+
 import type { DebateParticipantSummary, ScheduledDebateRequest } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
-import { ScheduledRow, formatDebateTime } from '../matchmaking/scheduled-debates-section';
+import { ScheduledRow } from '../matchmaking/scheduled-debates-section';
 import { useGeoChatUserSummaries } from '../matchmaking/use-geo-chat-user-summaries';
+import { useScheduledDebateAnswer } from '../matchmaking/use-scheduled-debate-answer';
 import { opponentOf } from '../rooms/room-opponent';
 import { sameId } from '../rooms/room-presence';
 import { useOpenScheduledRequests } from '../rooms/scheduled-awaiting';
-import { useRespondToScheduledDebate, useScheduledDebates } from '../rooms/scheduling-hooks';
+import { useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { useLobbySchedule } from './lobby-schedule';
 import type { LobbyPageView } from './lobby-view';
@@ -19,7 +22,7 @@ export function LobbyScheduledRequests({ lobby }: { lobby: LobbyPageView }) {
   const viewerId = useCurrentGeoChatUserId();
   const query = useScheduledDebates();
   const open = useOpenScheduledRequests(query.data?.requests);
-  const incoming = open.filter(request => request.viewer_must_answer);
+  const incoming = React.useMemo(() => open.filter(request => request.viewer_must_answer), [open]);
   const ids = React.useMemo(
     () => incoming.flatMap(request => request.participants.map(person => person.user_id)),
     [incoming]
@@ -75,28 +78,18 @@ export function LobbyScheduledRequest({
   viewer: DebateParticipantSummary | null;
   onDismiss: () => void;
 }) {
-  const respond = useRespondToScheduledDebate();
+  const { answer, busy, error } = useScheduledDebateAnswer('lobby');
   const schedule = useLobbySchedule();
-  const [error, setError] = React.useState<string | null>(null);
   const name = opponent?.display_name || 'Someone';
   const opponentId = opponentOf(request, viewerId);
-  const answer = (requestId: string, accepted: boolean) => {
-    setError(null);
-    respond.mutate(
-      { requestId, accepted, surface: 'lobby' },
-      {
-        onSuccess: result => {
-          if (result.outcome === 'conflict')
-            setError(`That clashes with a debate ${formatDebateTime(result.conflicting_start_at)}.`);
-        },
-        onError: failure => setError(failure.message),
-      }
-    );
-  };
   return (
     <div className="flex flex-col gap-2 [&_button]:md:min-h-11">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-metadataMedium">{name} asked you to debate later</p>
+        <p className="text-metadataMedium">
+          {request.created_by_admin && request.reschedule_count === 0
+            ? 'The Geo team arranged a debate for you'
+            : `${name} asked you to debate later`}
+        </p>
         <button
           type="button"
           aria-label={`Dismiss scheduled request from ${name}`}
@@ -104,7 +97,7 @@ export function LobbyScheduledRequest({
           className="grid size-8 shrink-0 place-items-center rounded-full hover:bg-grey-01 md:size-11"
           onClick={onDismiss}
         >
-          ×
+          <Close />
         </button>
       </div>
       <ScheduledRow
@@ -112,11 +105,12 @@ export function LobbyScheduledRequest({
         opponent={opponent}
         viewer={viewer}
         viewerId={viewerId}
-        busy={respond.isPending}
+        busy={busy}
         onAnswer={answer}
         onReschedule={
           opponentId
-            ? () => schedule({ userId: opponentId, name, requestId: request.request_id, entry: 'lobby_new_time' })
+            ? opener =>
+                schedule({ userId: opponentId, name, requestId: request.request_id, entry: 'lobby_new_time' }, opener)
             : null
         }
         analyticsSurface="lobby"

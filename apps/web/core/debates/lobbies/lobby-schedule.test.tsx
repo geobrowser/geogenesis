@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PeerSchedule } from '~/core/availability/peer-schedule';
 
-import type { DebateLobbyMember, ScheduledDebateRequest } from '../api';
+import { type DebateLobbyMember, GeoChatRequestError, type ScheduledDebateRequest } from '../api';
 import type { LobbyBooking } from './lobby-schedule';
 import type { LobbyPageView } from './lobby-view';
 
@@ -120,6 +120,7 @@ beforeEach(() => {
     ],
   };
   vi.clearAllMocks();
+  mocks.cancel.mockReset();
 });
 afterEach(() => {
   cleanup();
@@ -193,7 +194,64 @@ describe('scheduling from a lobby person menu', () => {
     fireEvent.click(screen.getByText('Open Priya'));
     expect(screen.getByText(/Requested/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
-    expect(mocks.cancel).toHaveBeenCalledWith({ requestId: 'request' });
+    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(screen.getByText('Cancel your request to Priya?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
+    expect(mocks.cancel).toHaveBeenCalledWith({ requestId: 'request' }, expect.anything());
+  });
+
+  it('clears the open booking when the account changes, including switching back', async () => {
+    const view = render(menu());
+    fireEvent.click(screen.getByText('Open Priya'));
+    fireEvent.click(screen.getByRole('button', { name: 'More times for Priya' }));
+    await screen.findByRole('dialog', { name: 'Booking confirmation' });
+    mocks.viewerId = 'someone-else';
+    view.rerender(menu());
+    expect(screen.queryByRole('dialog', { name: 'Booking confirmation' })).toBeNull();
+    mocks.viewerId = 'me';
+    view.rerender(menu());
+    expect(screen.queryByRole('dialog', { name: 'Booking confirmation' })).toBeNull();
+  });
+
+  it('updates time chips as the minute passes while a menu remains open', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-22T12:00:00Z'));
+    mocks.phone = true;
+    mocks.schedule = {
+      ...mocks.schedule!,
+      slots: [{ start: '2026-10-22T12:01:00Z', end: '2026-10-22T13:00:00Z', viewerIsFree: true }],
+    };
+    render(menu());
+    fireEvent.click(screen.getByText('Open Priya'));
+    const first = screen.getByRole('button', { name: /Schedule a debate with Priya/ }).textContent;
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByRole('button', { name: /Schedule a debate with Priya/ }).textContent).not.toBe(first);
+  });
+
+  it('uses the shared cancellation refusal message', () => {
+    mocks.cancel.mockImplementation((_vars, options) =>
+      options.onError(new GeoChatRequestError('already started', 'debate_already_started', 409))
+    );
+    mocks.requests = [
+      {
+        request_id: 'request',
+        status: 'pending',
+        room_id: null,
+        proposed_by_user_id: 'me',
+        viewer_must_answer: false,
+        scheduled_start_at: '2026-10-24T15:00:00Z',
+        participants: [{ user_id: 'me' }, { user_id: 'peer' }],
+      } as ScheduledDebateRequest,
+    ];
+    render(menu());
+    fireEvent.click(screen.getByText('Open Priya'));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
+    expect(
+      screen.getByText('Someone has already joined this debate, so it can no longer be cancelled.')
+    ).toBeInTheDocument();
   });
 
   it('queues the booking across signup, then opens confirmation instead of sending', async () => {

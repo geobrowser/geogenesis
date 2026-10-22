@@ -68,21 +68,18 @@ import { PersonMatches } from './person-disagreements';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { PersonSpaceIcons } from './person-space-icons';
-import { SharedTimes } from './shared-times';
+import { INLINE_SLOTS, SharedTimes } from './shared-times';
 import { useLiveRequestBlock } from './use-live-request-block';
 import { usePersonFacts } from './use-person-facts';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { type DebatesHubTab, debatesHubPeopleOnlineOnlyAtom, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
-export { formatSlot } from './shared-times';
+export { INLINE_SLOTS, formatSlot } from './shared-times';
 
 const EMPTY_SPACE_IDS: string[] = [];
 const EMPTY_MATCHES: ClaimMatch[] = [];
 const EMPTY_MATCH_COUNTS = new Map<string, number>();
 const EMPTY_USER_IDS: ReadonlySet<string> = new Set();
-
-/** Times drawn on an offline row; the rest are behind "More times" (GEO-2937). */
-export const INLINE_SLOTS = 3;
 
 /** `viewerIsFree` as on the booking week's chips; unset when the viewer has no hours to compare. */
 type ChipSlot = ScheduleOverlapSlot & { viewerIsFree?: boolean };
