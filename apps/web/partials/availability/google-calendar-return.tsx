@@ -12,16 +12,19 @@ import { useSetToast } from '~/core/hooks/use-toast';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
-import { calendarReturnCopy } from './google-calendar-copy';
-import { type CalendarReturn, calendarReturn, urlWithoutCalendarReturn } from './google-calendar-return-url';
+import { calendarReturnCopy } from './calendar-copy';
+import { type CalendarReturn, calendarReturn, urlWithoutCalendarReturn } from './calendar-return-url';
 import { OwnScheduleModal } from './own-schedule-modal';
 
 /**
- * Handles `?calendar=…` and `?modal=schedule` from Google's redirect, cleared in one write. Signed in,
- * it reopens the editor with the outcome inside (a toast would sit under its backdrop); else a toast.
+ * Handles `?calendar=…` and `?modal=schedule` from a calendar provider's redirect (Google or
+ * Outlook), cleared in one write. Signed in, it reopens the editor with the outcome inside (a toast
+ * would sit under its backdrop); else a toast.
  */
 export function GoogleCalendarReturn() {
-  const enabled = useFeatureFlag('googleCalendar');
+  const googleEnabled = useFeatureFlag('googleCalendar');
+  const microsoftEnabled = useFeatureFlag('microsoftCalendar');
+  const enabled = googleEnabled || microsoftEnabled;
   const { ready, authenticated } = usePrivy();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -37,10 +40,10 @@ export function GoogleCalendarReturn() {
     // Held until Privy settles whether there is an editor to open.
     enabled: enabled && ready,
     run: () => {
-      if (result?.outcome === 'connected') calendarConnected('google');
-      else if (result) calendarConnectCallbackFailed('google', result.reason);
+      if (result?.outcome === 'connected') calendarConnected(result.provider);
+      else if (result) calendarConnectCallbackFailed(result.provider, result.reason);
       if (scheduleRequested && authenticated) setOpened({ returned: result });
-      else if (result) setToast(<span>{calendarReturnCopy(result.outcome, result.reason)}</span>);
+      else if (result) setToast(<span>{calendarReturnCopy(result.provider, result.outcome, result.reason)}</span>);
     },
   });
 
@@ -50,7 +53,7 @@ export function GoogleCalendarReturn() {
     <OwnScheduleModal
       open
       onOpenChange={next => !next && setOpened(null)}
-      surface="google_calendar"
+      surface={opened.returned?.provider === 'microsoft' ? 'microsoft_calendar' : 'google_calendar'}
       calendarReturn={opened.returned}
     />
   );

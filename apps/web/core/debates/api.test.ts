@@ -8,10 +8,10 @@ import {
   blockDebateUser,
   clearClaimNotInterested,
   completeLocalRecordingUpload,
-  connectGoogleCalendar,
+  connectCalendar,
   createDebateRequest,
   createScheduledDebate,
-  disconnectGoogleCalendar,
+  disconnectCalendar,
   dismissDebateRequest,
   endDebateTurn,
   getCalendarBusy,
@@ -30,7 +30,7 @@ import {
   listUpcomingDebateRooms,
   markClaimNotInterested,
   notifyClaimResponseIndexed,
-  refreshGoogleCalendar,
+  refreshCalendar,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
   saveOpenRoundPick,
@@ -227,7 +227,7 @@ describe('upcoming debate rooms', () => {
 });
 
 // GEO-3300. The calendar's week reads geo-chat's date range (GEO-3271).
-describe('google calendar', () => {
+describe('calendar', () => {
   const json = (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
@@ -237,7 +237,7 @@ describe('google calendar', () => {
       .mockResolvedValue(json({ authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth?x=1' }));
     vi.stubGlobal('fetch', fetch);
 
-    const result = await connectGoogleCalendar('https://www.geobrowser.io/space/abc?tab=x', vi.fn(), 'user-a');
+    const result = await connectCalendar('google', 'https://www.geobrowser.io/space/abc?tab=x', vi.fn(), 'user-a');
 
     expect(result.authorization_url).toBe('https://accounts.google.com/o/oauth2/v2/auth?x=1');
     const [url, init] = fetch.mock.calls[0];
@@ -257,7 +257,7 @@ describe('google calendar', () => {
       )
     );
 
-    const error = await refreshGoogleCalendar(vi.fn(), 'user-a').catch(caught => caught);
+    const error = await refreshCalendar('google', vi.fn(), 'user-a').catch(caught => caught);
 
     expect(error).toBeInstanceOf(GeoChatRequestError);
     expect(error).toMatchObject({ status: 429, code: 'rate_limited', retryAfterMs: 30_000 });
@@ -267,11 +267,32 @@ describe('google calendar', () => {
     const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetch);
 
-    await expect(disconnectGoogleCalendar(vi.fn(), 'user-a')).resolves.toBeUndefined();
+    await expect(disconnectCalendar('google', vi.fn(), 'user-a')).resolves.toBeUndefined();
     expect(fetch).toHaveBeenCalledWith(
       'http://localhost:8080/me/calendar/google',
       expect.objectContaining({ method: 'DELETE' })
     );
+  });
+
+  it('puts the provider in each Outlook route', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json({ authorization_url: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize' })
+      )
+      .mockResolvedValueOnce(json({ google: null, microsoft: null }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetch);
+
+    await connectCalendar('microsoft', 'https://www.geobrowser.io/', vi.fn(), 'user-a');
+    await refreshCalendar('microsoft', vi.fn(), 'user-a');
+    await disconnectCalendar('microsoft', vi.fn(), 'user-a');
+
+    expect(fetch.mock.calls.map(([url, init]) => [url, init.method])).toEqual([
+      ['http://localhost:8080/me/calendar/microsoft/connect', 'POST'],
+      ['http://localhost:8080/me/calendar/microsoft/refresh', 'POST'],
+      ['http://localhost:8080/me/calendar/microsoft', 'DELETE'],
+    ]);
   });
 
   it('asks for busy time with encoded bounds', async () => {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { GeoChatRequestError, type GoogleCalendarConnection } from '~/core/debates/api';
+import { type CalendarConnection, GeoChatRequestError } from '~/core/debates/api';
 
 import {
   calendarConnectCallbackFailed,
@@ -54,6 +54,16 @@ describe('calendar analytics', () => {
     });
   });
 
+  it('names Outlook as microsoft, with its admin consent reason', () => {
+    calendarConnectCallbackFailed('microsoft', 'admin_consent_required');
+    calendarConnected('microsoft');
+
+    expect(capture.mock.calls).toEqual([
+      ['calendar_connect_failed', { provider: 'microsoft', reason: 'admin_consent_required', stage: 'callback' }],
+      ['calendar_connected', { provider: 'microsoft' }],
+    ]);
+  });
+
   it('reports the remaining outcomes with the provider only', () => {
     calendarConnected('google');
     calendarDisconnected('google');
@@ -65,7 +75,7 @@ describe('calendar analytics', () => {
   });
 
   it('reports a refresh by how its sync went, a missing connection as an error', () => {
-    const connection = (status: GoogleCalendarConnection['status']): GoogleCalendarConnection => ({
+    const connection = (status: CalendarConnection['status']): CalendarConnection => ({
       account_email: 'ada@example.com',
       status,
       stale: false,

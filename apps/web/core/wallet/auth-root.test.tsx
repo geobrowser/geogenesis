@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGeoLogin, useLoginWithOAuth, usePrivy } from './auth-hooks';
 import { getIdentityToken } from './auth-hooks';
 import { AuthRoot, IDLE_LOAD_DELAY_MS, scheduleIdleLoad } from './auth-root';
-import { getState, resetAuthStore } from './auth-store';
+import { getState, resetAuthStore, restartAuthHost } from './auth-store';
 import { PRIVY_REFRESH_TOKEN_KEY } from './privy-session';
 
 const mocks = vi.hoisted(() => ({
@@ -169,6 +169,32 @@ describe('visitor with a Privy session', () => {
     await waitFor(() => expect(mocks.providerMounts).toBe(1));
     await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('ready/out'));
     expect(getState().requested).toBe(false);
+  });
+});
+
+describe('restarting Privy (GEO-3449)', () => {
+  it('mounts a fresh Privy in place, without remounting the app beside it', async () => {
+    let pageMounts = 0;
+    function CountedPage() {
+      React.useEffect(() => {
+        pageMounts += 1;
+      }, []);
+      return <Page />;
+    }
+    render(
+      <>
+        <AuthRoot />
+        <CountedPage />
+      </>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+    await waitFor(() => expect(mocks.providerMounts).toBe(1));
+
+    act(() => restartAuthHost());
+
+    await waitFor(() => expect(mocks.providerMounts).toBe(2));
+    expect(pageMounts).toBe(1);
+    expect(getState().restarting).toBe(false);
   });
 });
 

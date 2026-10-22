@@ -54,6 +54,12 @@ export function AuthRoot() {
     () => getState().hostAttempt,
     () => 0
   );
+  // Keyed so `restartAuthHost` can swap in a fresh Privy (GEO-3449).
+  const hostKey = React.useSyncExternalStore(
+    subscribe,
+    () => getState().hostKey,
+    () => 0
+  );
   const [Host, setHost] = React.useState<HostModule['default'] | null>(null);
 
   React.useEffect(() => {
@@ -79,5 +85,5 @@ export function AuthRoot() {
     return scheduleIdleLoad(requestRealAuth);
   }, [wanted]);
 
-  return Host ? <Host /> : null;
+  return Host ? <Host key={hostKey} /> : null;
 }
