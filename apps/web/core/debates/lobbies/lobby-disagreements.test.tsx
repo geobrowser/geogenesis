@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyClaim, DebateLobbyClaims, DebateLobbyMember } from '../api';
+import type { DebateLobbyClaim, DebateLobbyClaimParticipant, DebateLobbyClaims, DebateLobbyMember } from '../api';
 import type { LobbyPageView } from './lobby-view';
 
 const mocks = vi.hoisted(() => ({
@@ -98,7 +98,7 @@ const daniel = {
 
 const lobby = { lobby_id: '0192-abc' } as LobbyPageView;
 
-function participant(id: string, requestable = true) {
+function participant(id: string, requestable = true): DebateLobbyClaimParticipant {
   return { user_id: id, profile_space_id: `space-${id}`, display_name: id, avatar_cid: null, requestable };
 }
 
@@ -139,13 +139,94 @@ describe('lobbyDisagreements', () => {
     ];
 
     expect(lobbyDisagreements(claims, 'Daniel-1')).toEqual([
-      { row: claims[0], viewerPosition: true, viewerLabel: 'Agree', theirLabel: 'Disagree', requestable: true },
-      { row: claims[3], viewerPosition: false, viewerLabel: 'Disagree', theirLabel: 'Agree', requestable: false },
+      {
+        row: claims[0],
+        viewerPosition: true,
+        viewerLabel: 'Agree',
+        theirLabel: 'Disagree',
+        requestable: true,
+        previouslyDebated: false,
+      },
+      {
+        row: claims[3],
+        viewerPosition: false,
+        viewerLabel: 'Disagree',
+        theirLabel: 'Agree',
+        requestable: false,
+        previouslyDebated: false,
+      },
     ]);
   });
 });
 
 describe('LobbyDisagreementsTrigger', () => {
+  it.each([false, true])('keeps this pair’s debated claims behind See more (phone: %s)', phone => {
+    mocks.phone = phone;
+    mocks.data = {
+      lobby_id: '0192abc',
+      source: 'room',
+      claims: [
+        row('old', true, [{ ...participant('daniel1'), previously_debated: true }]),
+        // Someone else debated it with the viewer; Daniel has not. It is still fresh for them.
+        row('fresh', false, [
+          { ...participant('elena'), previously_debated: true },
+          { ...participant('daniel1'), previously_debated: false },
+        ]),
+      ],
+    };
+    render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={2} variant="pill" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 2 claims with Daniel' }));
+
+    expect(screen.getByText('Claim fresh')).toBeInTheDocument();
+    expect(screen.queryByText('Claim old')).not.toBeInTheDocument();
+    expect(screen.queryByText(/isn’t listed/)).not.toBeInTheDocument();
+    const more = screen.getByRole('button', { name: 'See more · Already debated (1)' });
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(more);
+    expect(screen.getByText('Claim old')).toBeInTheDocument();
+    expect(screen.getByText('Already debated together')).toBeInTheDocument();
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    // Deliberate rematches remain possible and target the selected person.
+    fireEvent.click(
+      within(screen.getAllByTestId('lobby-disagreement')[1]!).getByRole('button', { name: 'Request debate' })
+    );
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ recipient_user_id: 'daniel1', claim_entity_id: 'entity-old' }),
+      expect.any(Object)
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'See less · Already debated (1)' }));
+    expect(screen.queryByText('Claim old')).not.toBeInTheDocument();
+  });
+
+  it('explains when all listed claims have been debated and keeps the unlisted count separate', () => {
+    mocks.data = {
+      lobby_id: '0192abc',
+      source: 'room',
+      claims: [row('old', true, [{ ...participant('daniel1'), previously_debated: true }])],
+    };
+    render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={2} variant="pill" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 2 claims with Daniel' }));
+    expect(screen.getByText('You and Daniel have already debated all the claims listed here.')).toBeInTheDocument();
+    expect(screen.getByText('1 more claim isn’t listed here.')).toBeInTheDocument();
+    expect(screen.queryByText('Claim old')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'See more · Already debated (1)' }));
+    expect(screen.getByText('Claim old')).toBeInTheDocument();
+  });
+
+  it('moves a claim into the collapsed section when a refresh marks the pair as debated', () => {
+    mocks.data = { lobby_id: '0192abc', source: 'room', claims: [row('a', true, [participant('daniel1')])] };
+    const { rerender } = render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claim with Daniel' }));
+    expect(screen.getByText('Claim a')).toBeInTheDocument();
+    mocks.data = {
+      ...mocks.data,
+      claims: [row('a', true, [{ ...participant('daniel1'), previously_debated: true }])],
+    };
+    rerender(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
+    expect(screen.queryByText('Claim a')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'See more · Already debated (1)' })).toBeInTheDocument();
+  });
+
   it('opens the claims behind the count and requests that one person on a claim', () => {
     mocks.data = {
       lobby_id: '0192abc',
