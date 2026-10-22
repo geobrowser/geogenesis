@@ -11,11 +11,11 @@ import { publishOnce } from '~/core/hooks/publish-once';
 import { usePublish } from '~/core/hooks/use-publish';
 import { createEntityId } from '~/core/id/create-id';
 import { uuidToHex } from '~/core/id/normalize';
-import { fetchProposal } from '~/core/io/subgraph/fetch-proposal';
 import type { Relation, Value } from '~/core/types';
+import { sleep } from '~/core/utils/utils';
 
 import type { BountyDetail } from './fetch-bounty-detail';
-import { fetchPayoutItems } from './fetch-submissions';
+import { fetchPayoutItems, fetchProposalStatuses } from './fetch-submissions';
 import { fetchSpaceBalance, ledgerMovedNoPoints, recordPayoutCredit } from './payout-credit';
 import { buildPayoutOps } from './payout-ops';
 import { clearPendingPayout, loadPendingPayouts, savePendingPayout } from './pending-payout-storage';
@@ -72,8 +72,6 @@ export type DirectPayoutOutcome =
  */
 const PUBLISH_CONFIRM_DELAYS_MS = [2_000, 5_000, 10_000];
 
-const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-
 /**
  * Whether the bounty's Payouts (read from its own space) include this payout
  * relation — or `unknown` when the read itself failed, which is not the same as
@@ -92,13 +90,16 @@ async function isPayoutInGraph(
 
 /**
  * Where the payout's proposal stands: `open` (awaiting a vote, or passed and
- * awaiting execution), `rejected` (rejected or expired — safe to propose again),
- * or `unknown` (not indexed yet, or the read failed — don't guess).
+ * awaiting execution), `rejected` (rejected or canceled — safe to propose again),
+ * or `unknown` (not indexed yet, unreadable, or executed but not yet indexed as a
+ * Payout — wait, don't guess).
  */
 async function proposalState(proposalId: string): Promise<'open' | 'rejected' | 'unknown'> {
-  const proposal = await fetchProposal({ id: proposalId }).catch(() => null);
-  if (!proposal) return 'unknown';
-  return proposal.status === 'REJECTED' ? 'rejected' : 'open';
+  const statuses = await Effect.runPromise(fetchProposalStatuses([proposalId]));
+  const status = statuses.get(uuidToHex(proposalId));
+  if (status === 'PROPOSED' || status === 'ACCEPTED') return 'open';
+  if (status === 'REJECTED' || status === 'CANCELED') return 'rejected';
+  return 'unknown';
 }
 
 /** Merges payout lists by id; the first list wins on a clash. */
@@ -136,7 +137,7 @@ export function useSpaceBalance(spaceId: string | null | undefined, enabled = tr
  */
 export function useDirectPayout(
   detail: BountyDetail | null | undefined,
-  options: { wait?: (ms: number) => Promise<void> } = {}
+  options: { wait?: (ms: number) => Promise<unknown> } = {}
 ) {
   const wait = options.wait ?? sleep;
   const { makeProposal } = usePublish();

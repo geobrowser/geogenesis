@@ -28,12 +28,15 @@ const mocks = vi.hoisted(() => ({
   /** The graph read fails (subgraph/API error). */
   graphDown: false,
   /** Governance status by proposal id; absent = not found / unreadable. */
-  proposals: new Map<string, 'PROPOSED' | 'ACCEPTED' | 'REJECTED'>(),
+  proposals: new Map<string, 'PROPOSED' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'EXECUTED'>(),
 }));
 
 vi.mock('./fetch-submissions', async () => {
   const { Effect } = await import('effect');
   return {
+    // Same contract as the real reader: unreadable or missing proposals are simply absent.
+    fetchProposalStatuses: (ids: string[]) =>
+      Effect.succeed(new Map(ids.flatMap(id => (mocks.proposals.has(id) ? [[id, mocks.proposals.get(id)!]] : [])))),
     fetchPayoutItems: () =>
       mocks.graphDown ? Effect.fail(new Error('graph down')) : Effect.succeed([...mocks.landed].map(id => ({ id }))),
   };
@@ -43,12 +46,6 @@ vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: 
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
   useQuery: () => ({ data: undefined, isLoading: false }),
-}));
-vi.mock('~/core/io/subgraph/fetch-proposal', () => ({
-  fetchProposal: async ({ id }: { id: string }) => {
-    const status = mocks.proposals.get(id);
-    return status ? { id, status } : null;
-  },
 }));
 vi.mock('~/core/auth/identity-token', () => ({ getCachedIdentityToken: async () => mocks.token }));
 vi.mock('./payout-credit', async importOriginal => {
@@ -370,27 +367,32 @@ describe('useDirectPayout', () => {
       expect(result.current.pendingPayout?.stage).toBe('publish');
     });
 
-    it('does not guess when the proposal cannot be found or read', async () => {
+    // Absent = not indexed yet or unreadable; EXECUTED = landed, Payout not indexed yet.
+    it.each([undefined, 'EXECUTED'] as const)('does not guess while the proposal reads as %s', async status => {
       const { result } = renderHook(usePayout);
-      await payWithUnexecutedProposal(result);
+      const proposalId = await payWithUnexecutedProposal(result);
+      if (status) mocks.proposals.set(proposalId, status);
       await act(async () => {
         expect(await result.current.finish()).toEqual({ status: 'publish-unconfirmed' });
       });
       expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
     });
 
-    it('proposes again, under a new proposal id, once the proposal was rejected', async () => {
-      const { result } = renderHook(usePayout);
-      const proposalId = await payWithUnexecutedProposal(result);
-      mocks.proposals.set(proposalId, 'REJECTED');
-      mocks.publishLands = true;
-      await act(async () => {
-        expect(await result.current.finish()).toEqual({ status: 'paid' });
-      });
-      expect(mocks.makeProposal).toHaveBeenCalledTimes(2);
-      const second = mocks.makeProposal.mock.calls[1][0];
-      expect(second.proposalId).not.toBe(proposalId);
-      expect(second.relations).toEqual(mocks.makeProposal.mock.calls[0][0].relations);
-    });
+    it.each(['REJECTED', 'CANCELED'] as const)(
+      'proposes again, under a new proposal id, once it was %s',
+      async status => {
+        const { result } = renderHook(usePayout);
+        const proposalId = await payWithUnexecutedProposal(result);
+        mocks.proposals.set(proposalId, status);
+        mocks.publishLands = true;
+        await act(async () => {
+          expect(await result.current.finish()).toEqual({ status: 'paid' });
+        });
+        expect(mocks.makeProposal).toHaveBeenCalledTimes(2);
+        const second = mocks.makeProposal.mock.calls[1][0];
+        expect(second.proposalId).not.toBe(proposalId);
+        expect(second.relations).toEqual(mocks.makeProposal.mock.calls[0][0].relations);
+      }
+    );
   });
 });
