@@ -41,8 +41,8 @@ export function validatePayoutAmount(raw: string, balance: number | null): strin
   if (!raw.trim()) return 'Enter an amount.';
   const amount = parseWholePoints(raw);
   if (amount == null) return 'Amount must be a positive whole number of points.';
-  // A courtesy check against the last balance read; the ledger re-checks atomically and
-  // refuses an unfunded payout before anything is published, so an unknown balance is fine.
+  // A courtesy check against the last balance read; the ledger checks again and refuses
+  // an unfunded payout before anything is published, so an unknown balance is fine.
   if (balance != null && amount > balance) return `This space only has ${formatPoints(balance)} points.`;
   return null;
 }
@@ -82,6 +82,10 @@ export function BountyPayDialog({
     } else if (outcome.status === 'credit-unconfirmed') {
       setError(
         `The points ledger didn't confirm the payout (${outcome.message}). Finish it to retry — it won't pay twice.`
+      );
+    } else if (outcome.status === 'awaiting-governance') {
+      setError(
+        "The points were paid. The payout record's proposal is open in Governance and will appear once it passes and is executed, so there's no need to finish it again until then."
       );
     } else if (outcome.status === 'publish-unconfirmed') {
       setError(

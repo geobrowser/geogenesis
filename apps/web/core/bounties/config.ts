@@ -32,10 +32,11 @@ export function useBountiesEnabled(): boolean {
  * submission's creator entity, which can be a person rather than the curator's
  * space. Direct payouts to an allocated curator (`useDirectPayout`) are on, and
  * run LEDGER FIRST: credit the curator points ledger (neo4j) through
- * curator-backend, whose atomic balance check decides whether the payout
- * happens, and only then publish the Payout relation. That is the reverse of
- * curator-app's route, and deliberate: publishing first lets two payouts race
- * for one balance and leaves a Payout in the graph that the ledger refused.
+ * curator-backend, whose balance check decides whether the payout happens, and
+ * only then publish the Payout relation. That is the reverse of curator-app's
+ * route, and deliberate: publishing first can leave a Payout in the graph that
+ * the ledger then refused. (The ledger's check is not concurrency-safe across
+ * different payouts; see `payout-credit.ts`.)
  */
 export const PAYOUT_AUTHORING_ENABLED = false;
 

@@ -2,11 +2,19 @@
  * The ledger half of a payout. curator-backend keeps the curator points ledger
  * (a space's balance, a curator's rewards) outside the graph; publishing a
  * Payout relation alone moves no points. An editor's call to
- * `POST /space/:spaceId/payout` debits the space and credits the recipient in
- * one statement that also checks the balance, and is idempotent on
- * `payoutEntityId` (a uniquely-constrained ProcessedPayout row): two payouts
- * can't both spend the same points, and retrying one never pays twice. It
- * never reads the Payout from the graph, so it can run before the publish.
+ * `POST /space/:spaceId/payout` checks the balance, debits the space and
+ * credits the recipient in one statement, and is idempotent on
+ * `payoutEntityId` (a uniquely-constrained ProcessedPayout row), so retrying a
+ * payout never pays it twice. It never reads the Payout from the graph, so it
+ * can run before the publish.
+ *
+ * KNOWN LIMITATION (curator-backend): the balance check is not safe against
+ * two DIFFERENT payouts from one space at the same moment. The statement reads
+ * `s.balance` before it holds a write lock and writes `currentBalance - amount`
+ * back, so both can pass the check and one debit overwrites the other (a lost
+ * update; the space keeps points it paid out). Fixing it means taking the lock
+ * first (write to `s` before reading the balance) in `recordPayout`. Nothing
+ * here can prevent it, so don't rely on the ledger to serialise payouts.
  *
  * Same endpoint and payload as curator-app's `recordPayoutCredit`
  * (utils/manual-payout.ts), including the outer Payout Recipient relation id

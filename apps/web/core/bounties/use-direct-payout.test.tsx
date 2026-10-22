@@ -27,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   publishLands: true,
   /** The graph read fails (subgraph/API error). */
   graphDown: false,
+  /** Governance status by proposal id; absent = not found / unreadable. */
+  proposals: new Map<string, 'PROPOSED' | 'ACCEPTED' | 'REJECTED'>(),
 }));
 
 vi.mock('./fetch-submissions', async () => {
@@ -41,6 +43,12 @@ vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: 
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
   useQuery: () => ({ data: undefined, isLoading: false }),
+}));
+vi.mock('~/core/io/subgraph/fetch-proposal', () => ({
+  fetchProposal: async ({ id }: { id: string }) => {
+    const status = mocks.proposals.get(id);
+    return status ? { id, status } : null;
+  },
 }));
 vi.mock('~/core/auth/identity-token', () => ({ getCachedIdentityToken: async () => mocks.token }));
 vi.mock('./payout-credit', async importOriginal => {
@@ -95,6 +103,7 @@ beforeEach(() => {
   mocks.landed = new Set();
   mocks.publishLands = true;
   mocks.graphDown = false;
+  mocks.proposals = new Map();
   mocks.token = 'jwt';
   mocks.makeProposal.mockReset();
   mocks.recordPayoutCredit.mockReset();
@@ -114,7 +123,7 @@ describe('useDirectPayout', () => {
   it('asks the ledger first, then publishes a submission-free Payout carrying the id the ledger recorded', async () => {
     const { result } = renderHook(usePayout);
     expect(await payIbrahim(result)).toEqual({ status: 'paid' });
-    // The ledger's atomic balance check decides the payout before the graph hears of it.
+    // The ledger's balance check decides the payout before the graph hears of it.
     expect(mocks.calls).toEqual(['ledger', 'publish']);
 
     const published = mocks.makeProposal.mock.calls[0][0];
@@ -141,7 +150,7 @@ describe('useDirectPayout', () => {
     expect(result.current.pendingPayout).toBeNull();
   });
 
-  it('publishes nothing when the ledger refuses (e.g. the balance ran out to a concurrent payout)', async () => {
+  it('publishes nothing when the ledger refuses (e.g. the balance ran out)', async () => {
     mocks.recordPayoutCredit.mockRejectedValueOnce(
       new PayoutCreditError('Insufficient balance or space not found', 400, 'always')
     );
@@ -337,5 +346,51 @@ describe('useDirectPayout', () => {
       window.dispatchEvent(new StorageEvent('storage', { key: pendingPayoutStorageKey(BOUNTY) }));
     });
     expect(result.current.pendingPayout).toEqual(otherTab);
+  });
+
+  // Patrick's review: Finish must not pile identical proposals into Governance.
+  describe('while the record waits on Governance', () => {
+    async function payWithUnexecutedProposal(result: { current: ReturnType<typeof useDirectPayout> }) {
+      mocks.publishLands = false;
+      expect(await payIbrahim(result)).toEqual({ status: 'publish-unconfirmed' });
+      const proposalId = mocks.makeProposal.mock.calls[0][0].proposalId as string;
+      expect(proposalId).toMatch(/^[0-9a-f]{32}$/);
+      expect(result.current.pendingPayout?.proposalId).toBe(proposalId);
+      return proposalId;
+    }
+
+    it.each(['PROPOSED', 'ACCEPTED'] as const)('does not propose again while its proposal is %s', async status => {
+      const { result } = renderHook(usePayout);
+      const proposalId = await payWithUnexecutedProposal(result);
+      mocks.proposals.set(proposalId, status);
+      await act(async () => {
+        expect(await result.current.finish()).toEqual({ status: 'awaiting-governance' });
+      });
+      expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+      expect(result.current.pendingPayout?.stage).toBe('publish');
+    });
+
+    it('does not guess when the proposal cannot be found or read', async () => {
+      const { result } = renderHook(usePayout);
+      await payWithUnexecutedProposal(result);
+      await act(async () => {
+        expect(await result.current.finish()).toEqual({ status: 'publish-unconfirmed' });
+      });
+      expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+    });
+
+    it('proposes again, under a new proposal id, once the proposal was rejected', async () => {
+      const { result } = renderHook(usePayout);
+      const proposalId = await payWithUnexecutedProposal(result);
+      mocks.proposals.set(proposalId, 'REJECTED');
+      mocks.publishLands = true;
+      await act(async () => {
+        expect(await result.current.finish()).toEqual({ status: 'paid' });
+      });
+      expect(mocks.makeProposal).toHaveBeenCalledTimes(2);
+      const second = mocks.makeProposal.mock.calls[1][0];
+      expect(second.proposalId).not.toBe(proposalId);
+      expect(second.relations).toEqual(mocks.makeProposal.mock.calls[0][0].relations);
+    });
   });
 });

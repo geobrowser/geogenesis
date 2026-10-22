@@ -9,7 +9,9 @@ import { Effect } from 'effect';
 import { getCachedIdentityToken } from '~/core/auth/identity-token';
 import { publishOnce } from '~/core/hooks/publish-once';
 import { usePublish } from '~/core/hooks/use-publish';
+import { createEntityId } from '~/core/id/create-id';
 import { uuidToHex } from '~/core/id/normalize';
+import { fetchProposal } from '~/core/io/subgraph/fetch-proposal';
 import type { Relation, Value } from '~/core/types';
 
 import type { BountyDetail } from './fetch-bounty-detail';
@@ -38,6 +40,12 @@ export type PendingPayout = {
   /** The exact Payout ops, so finishing publishes the ids the ledger recorded. */
   values: Value[];
   relations: Relation[];
+  /**
+   * The DAO proposal that carries the record, once one was created. Finishing
+   * asks Governance about it before proposing again, so a payout waiting on a
+   * vote doesn't pile up identical proposals.
+   */
+  proposalId?: string | null;
 };
 
 export type DirectPayoutOutcome =
@@ -50,10 +58,12 @@ export type DirectPayoutOutcome =
   | { status: 'publish-failed' }
   /**
    * The points moved and the record was proposed, but it hasn't appeared in the
-   * graph — e.g. its proposal is still waiting for a vote in Governance. Finishing
-   * later checks again before proposing anything.
+   * graph yet (or the graph couldn't be read). Finishing later checks again
+   * before proposing anything.
    */
-  | { status: 'publish-unconfirmed' };
+  | { status: 'publish-unconfirmed' }
+  /** The points moved; the record's proposal is open in Governance (awaiting a vote or execution). */
+  | { status: 'awaiting-governance' };
 
 /**
  * When to look for a just-published Payout. In a DAO space a successful publish
@@ -78,6 +88,17 @@ async function isPayoutInGraph(
   if (items === null) return 'unknown';
   const target = uuidToHex(payoutRelationId);
   return items.some(item => uuidToHex(item.id) === target);
+}
+
+/**
+ * Where the payout's proposal stands: `open` (awaiting a vote, or passed and
+ * awaiting execution), `rejected` (rejected or expired — safe to propose again),
+ * or `unknown` (not indexed yet, or the read failed — don't guess).
+ */
+async function proposalState(proposalId: string): Promise<'open' | 'rejected' | 'unknown'> {
+  const proposal = await fetchProposal({ id: proposalId }).catch(() => null);
+  if (!proposal) return 'unknown';
+  return proposal.status === 'REJECTED' ? 'rejected' : 'open';
 }
 
 /** Merges payout lists by id; the first list wins on a clash. */
@@ -105,9 +126,10 @@ export function useSpaceBalance(spaceId: string | null | undefined, enabled = tr
  * work done outside the bounty space (e.g. in the curator's personal space).
  *
  * Ledger first, then graph. The ledger checks the balance and records the
- * payout id atomically, so it decides — race-free — whether the payout happens
- * at all; only then is the Payout relation published into the bounty's DAO
- * space (editor FAST path). Each step is safe to repeat (idempotent payout id,
+ * payout id, so it decides whether the payout happens at all (though not
+ * safely against a concurrent different payout; see `payout-credit.ts`); only
+ * then is the Payout relation published into the bounty's DAO space (editor
+ * FAST path). Each step is safe to repeat (idempotent payout id,
  * same publish ids), so a payout interrupted at either step is kept as
  * `pendingPayout` — in localStorage too, to survive a reload — and `finish`
  * completes it. It counts as paid only once the Payout is seen in the graph.
@@ -230,15 +252,27 @@ export function useDirectPayout(
         const before = await landed();
         if (before === true) return done();
         if (before === 'unknown') return { status: 'publish-unconfirmed' };
+        // Not in the graph yet. If its proposal is still open, proposing again would only
+        // add an identical one to Governance; propose again only once it was rejected.
+        if (current.proposalId) {
+          const state = await proposalState(current.proposalId);
+          if (state === 'open') return { status: 'awaiting-governance' };
+          if (state === 'unknown') return { status: 'publish-unconfirmed' };
+        }
       }
 
+      // A fresh proposal id each time: a rejected proposal's id can't be reused.
+      const proposalId = createEntityId();
       const published = await publishOnce(makeProposal, {
         values: current.values,
         relations: current.relations,
         spaceId,
         name: `Payout: ${detail.bounty.name}`,
+        proposalId,
       });
       if (!published) return { status: 'publish-failed' };
+      current = { ...current, proposalId };
+      keepPending(current);
 
       // Paid only once the record is actually in the graph, not merely proposed.
       for (const delay of PUBLISH_CONFIRM_DELAYS_MS) {

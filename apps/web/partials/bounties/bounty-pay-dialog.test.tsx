@@ -45,7 +45,7 @@ describe('validatePayoutAmount', () => {
     expect(validatePayoutAmount('0', 100)).toMatch(/whole number/);
     expect(validatePayoutAmount('101', 100)).toBe('This space only has 100 points.');
     expect(validatePayoutAmount('100', 100)).toBeNull();
-    // An unknown balance is left to the ledger, which checks atomically before anything is published.
+    // An unknown balance is left to the ledger, which checks before anything is published.
     expect(validatePayoutAmount('500', null)).toBeNull();
   });
 });
@@ -72,6 +72,7 @@ describe('BountyPayDialog', () => {
   it.each([
     [{ status: 'credit-unconfirmed' as const, message: 'ledger down' }, /didn't confirm the payout \(ledger down\)/],
     [{ status: 'publish-failed' as const }, /points were paid, but the payout record could not be published/],
+    [{ status: 'awaiting-governance' as const }, /proposal is open in Governance/],
     [{ status: 'publish-unconfirmed' as const }, /hasn't appeared yet\. It may be waiting for a vote in Governance/],
   ])('explains an unfinished payout and stays open (%o)', async (outcome, text) => {
     const props = renderDialog({ onPay: vi.fn(async () => outcome) });
