@@ -103,9 +103,10 @@ export function ScheduledDebateNoticeDialog({
     setMoved(true);
     setStep(next);
   };
-  const [outcome, setSentOutcome] = React.useState<Outcome | null>(null);
-  const setOutcome = (next: Outcome) => {
-    setSentOutcome(next);
+  const [outcome, setOutcome] = React.useState<Outcome | null>(null);
+  // Every outcome is something sent; `onSent` hears of it as the confirmation replaces the step.
+  const sent = (next: Outcome) => {
+    setOutcome(next);
     onSent?.();
   };
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
@@ -251,7 +252,7 @@ export function ScheduledDebateNoticeDialog({
           focusHeading={moved}
           onCant={() => go('cant')}
           onSent={expectedAt =>
-            setOutcome({
+            sent({
               message: COPY.late.sent(name, formatTime(expectedAt)),
               // Only into a room that is open. A late notice can be sent the day before, from the
               // calendar invite, and Join would land on "the room opens at…".
@@ -270,7 +271,7 @@ export function ScheduledDebateNoticeDialog({
           focusHeading={moved}
           onLate={() => go('late')}
           onSuggest={note => setSuggesting({ note })}
-          onSent={() => setOutcome({ message: COPY.cant.sent(name), joinRoomId: null })}
+          onSent={() => sent({ message: COPY.cant.sent(name), joinRoomId: null })}
         />,
         { ownHeading: true, back }
       );

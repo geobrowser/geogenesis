@@ -23,6 +23,21 @@ import type { ScheduledNoticeStep } from './scheduled-notice';
 /** Minute-grained copy, so a quarter-minute tick is never more than 15s stale. */
 const TICK_MS = 15_000;
 
+/** The banner's Running late or Can't make it: which screen, on the request that booked the room. */
+export type RoomJoinPromptNotice = { requestId: string; step: ScheduledNoticeStep };
+
+/** A booked debate's way to tell the other debater something instead of joining (GEO-3427). */
+const NOTICE_ACTIONS = [
+  { step: 'late', label: ROOM_JOIN_PROMPT.late, analytics: 'Running late', intent: 'open_running_late' },
+  { step: 'cant', label: ROOM_JOIN_PROMPT.cant, analytics: 'Cant make it', intent: 'open_cant_make_it' },
+] as const;
+
+/**
+ * The banner's own pill, shared by all its buttons. Taller than the hub's `h-7` pill, which would
+ * resize the lobby banner's Join and Not now.
+ */
+const PILL_CLASS = 'shrink-0 rounded-full px-3 py-1.5 text-metadata';
+
 /**
  * The offer to join a scheduled debate (GEO-2941), never a redirect. Shown at the top of whatever
  * page the viewer is on once the room opens. Whether the opponent is in comes from the server's
@@ -43,7 +58,7 @@ export function DebateRoomJoinPrompt({
   room: UpcomingDebateRoom;
   /** A reminded lobby's Not now. */
   onDismiss: () => void;
-  onNotice: (notice: { requestId: string; step: ScheduledNoticeStep }) => void;
+  onNotice: (notice: RoomJoinPromptNotice) => void;
 }) {
   const router = useRouter();
   const [joining, setJoining] = React.useState(false);
@@ -55,28 +70,6 @@ export function DebateRoomJoinPrompt({
   const name = opponentName(opponent);
   const schedule = scheduleLabel(new Date(room.starts_at).getTime() - now);
   const isLobby = room.kind === 'lobby';
-
-  const join = () => {
-    setJoining(true);
-    const go = () => startJoining(() => router.push(debateRoomPath(room.room_id)));
-    // Moving to another lobby is a normal leave, not a step-out.
-    if (isLobby) go();
-    else routeIntoDebate(go);
-  };
-  const joinButton = (className?: string) => (
-    <button
-      type="button"
-      disabled={joining}
-      {...debateActionAnalyticsAttributes('room-join-prompt', 'Join', 'join_scheduled_debate')}
-      onClick={join}
-      className={cx(
-        'shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white transition-opacity hover:opacity-90 disabled:opacity-70',
-        className
-      )}
-    >
-      {joining ? 'Joining…' : isLobby ? LOBBY_JOIN_PROMPT.join : ROOM_JOIN_PROMPT.join}
-    </button>
-  );
 
   return (
     <div className="pointer-events-none fixed top-[calc(2.75rem+0.75rem)] left-1/2 z-1100 flex w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 justify-center">
@@ -136,51 +129,67 @@ export function DebateRoomJoinPrompt({
               )}
             </div>
           </div>
-          {isLobby ? (
-            <div className="flex shrink-0 items-center gap-2 md:w-full md:justify-end">
+          <div
+            className={cx(
+              'flex gap-2',
+              isLobby
+                ? 'shrink-0 items-center md:w-full md:justify-end'
+                : // Board 5: Join leads on a phone, full width over the other two.
+                  'flex-wrap justify-end md:grid md:grid-cols-2'
+            )}
+          >
+            {isLobby ? (
               <button
                 type="button"
                 {...debateActionAnalyticsAttributes('room-join-prompt', 'Not now', 'dismiss_scheduled_debate_prompt')}
                 onClick={onDismiss}
-                className="shrink-0 rounded-full px-3 py-1.5 text-metadata text-grey-04 hover:bg-grey-01"
+                className={cx(PILL_CLASS, 'text-grey-04 hover:bg-grey-01')}
               >
                 {LOBBY_JOIN_PROMPT.notNow}
               </button>
-              {joinButton()}
-            </div>
-          ) : (
-            // Board 5: Join leads on a phone, full width over the other two, each a thumb's height.
-            <div className="flex flex-wrap justify-end gap-2 md:grid md:grid-cols-2">
-              {/* Until the request that booked the room is read there is no debate to name. */}
-              <button
-                type="button"
-                disabled={!request}
-                {...debateActionAnalyticsAttributes('room-join-prompt', 'Running late', 'open_running_late')}
-                onClick={() => request && onNotice({ requestId: request.request_id, step: 'late' })}
-                className={NOTICE_BUTTON_CLASS}
-              >
-                {ROOM_JOIN_PROMPT.late}
-              </button>
-              <button
-                type="button"
-                disabled={!request}
-                {...debateActionAnalyticsAttributes('room-join-prompt', 'Cant make it', 'open_cant_make_it')}
-                onClick={() => request && onNotice({ requestId: request.request_id, step: 'cant' })}
-                className={NOTICE_BUTTON_CLASS}
-              >
-                {ROOM_JOIN_PROMPT.cant}
-              </button>
-              {joinButton('md:col-span-2 md:-order-1 md:h-11')}
-            </div>
-          )}
+            ) : (
+              NOTICE_ACTIONS.map(action => (
+                <button
+                  key={action.step}
+                  type="button"
+                  // Until the request that booked the room is read there is no debate to name.
+                  disabled={!request}
+                  {...debateActionAnalyticsAttributes('room-join-prompt', action.analytics, action.intent)}
+                  onClick={() => request && onNotice({ requestId: request.request_id, step: action.step })}
+                  className={cx(
+                    PILL_CLASS,
+                    'border border-grey-02 bg-white text-text transition-colors hover:bg-grey-01 disabled:opacity-50 md:h-11'
+                  )}
+                >
+                  {action.label}
+                </button>
+              ))
+            )}
+            <button
+              type="button"
+              disabled={joining}
+              {...debateActionAnalyticsAttributes('room-join-prompt', 'Join', 'join_scheduled_debate')}
+              onClick={() => {
+                setJoining(true);
+                const go = () => startJoining(() => router.push(debateRoomPath(room.room_id)));
+                // Moving to another lobby is a normal leave, not a step-out.
+                if (isLobby) go();
+                else routeIntoDebate(go);
+              }}
+              className={cx(
+                PILL_CLASS,
+                'bg-text text-white transition-opacity hover:opacity-90 disabled:opacity-70',
+                !isLobby && 'md:-order-1 md:col-span-2 md:h-11'
+              )}
+            >
+              {joining ? 'Joining…' : isLobby ? LOBBY_JOIN_PROMPT.join : ROOM_JOIN_PROMPT.join}
+            </button>
+          </div>
         </motion.div>
       </MotionConfig>
     </div>
   );
 }
-
-const NOTICE_BUTTON_CLASS =
-  'shrink-0 rounded-full border border-grey-02 bg-white px-3 py-1.5 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50 md:h-11';
 
 /** Minutes to the start, or since it, as the prompt says them. See `startOffset` for the rounding. */
 export function scheduleLabel(untilStartMs: number): string | null {

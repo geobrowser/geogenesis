@@ -45,10 +45,9 @@ import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
-import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
+import { DebateRoomJoinPrompt, type RoomJoinPromptNotice } from './rooms/room-join-prompt';
 import { sameId } from './rooms/room-presence';
 import { debateRoomIdFromPath } from './rooms/room-routes';
-import type { ScheduledNoticeStep } from './rooms/scheduled-notice';
 import { SocialVideoCaptionChoiceRows, useSocialVideoCaptionChoice } from './social-video-caption-choice';
 import {
   type PreparedSocialVideo,
@@ -287,12 +286,9 @@ export function DebateCoordinator() {
   // cannot offer a room that would refuse the join.
   const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
+  const snoozeRoom = (roomId: string) => setSnoozedRoomIds(current => [...current, roomId]);
   // The join banner's Running late or Can't make it, open over the page (GEO-3430).
-  const [roomNotice, setRoomNotice] = React.useState<{
-    roomId: string;
-    requestId: string;
-    step: ScheduledNoticeStep;
-  } | null>(null);
+  const [roomNotice, setRoomNotice] = React.useState<(RoomJoinPromptNotice & { roomId: string }) | null>(null);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
   const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
   // A room whose debate already happened is never offered again. Reminded lobbies ride the same
@@ -527,7 +523,7 @@ export function DebateCoordinator() {
         <DebateRoomJoinPrompt
           key={promptedRoom.room_id}
           room={promptedRoom}
-          onDismiss={() => setSnoozedRoomIds(current => [...current, promptedRoom.room_id])}
+          onDismiss={() => snoozeRoom(promptedRoom.room_id)}
           onNotice={notice => setRoomNotice({ ...notice, roomId: promptedRoom.room_id })}
         />
       )}
@@ -540,7 +536,7 @@ export function DebateCoordinator() {
           requestId={roomNotice.requestId}
           initialStep={roomNotice.step}
           // Told, the other debater knows something; until then the banner stays (GEO-3430).
-          onSent={() => setSnoozedRoomIds(current => [...current, roomNotice.roomId])}
+          onSent={() => snoozeRoom(roomNotice.roomId)}
           onClose={() => setRoomNotice(null)}
         />
       )}
