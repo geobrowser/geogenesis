@@ -82,7 +82,12 @@ import {
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
 import { useCarriedLobbyChoice, useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
-import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
+import {
+  type LocalAudioGateInput,
+  MIC_OVERRUN_MAX_MS,
+  shouldEnableLocalAudio,
+  turnOverrunPossible,
+} from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
   DebateMediaSessionBoundary,
@@ -135,10 +140,10 @@ import {
 } from '~/core/debates/recording-upload-queue';
 import { readRematchJoinIntent, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { joinStateNeedsOpening, kindsForJoinState, resolveJoinChoice } from '~/core/debates/request-join-state';
-import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
+import { createLocalServerClock, keepServerClockSynchronized } from '~/core/debates/server-clock';
 import { isDebateInThankYouPeriod } from '~/core/debates/thank-you-period';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
-import { useLocalSpeechActivity } from '~/core/debates/use-local-speech-activity';
+import { REMOTE_OVERRUN_WINDOW_MS, opponentTurnState, useTurnOverrun } from '~/core/debates/turn-overrun';
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
@@ -213,6 +218,7 @@ const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
 
 type RemoteTrackLike = {
   kind: string;
+  mediaStreamTrack?: MediaStreamTrack;
   attach: () => HTMLElement;
   detach: () => HTMLMediaElement[];
 };
@@ -508,6 +514,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * a narrow surface over the parts of LiveKit this room uses.
    */
   const subscribedRemoteTracksRef = React.useRef<Set<RemoteTrackLike>>(new Set());
+  // The opponent's audio as it reaches us, listened to so their tile can say whether they can still
+  // be heard past the buzzer (GEO-3407).
+  const [remoteAudioTrack, setRemoteAudioTrack] = React.useState<MediaStreamTrack | null>(null);
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
   const roomRef = React.useRef<RoomLike | null>(null);
   const appliedAudioOutputRef = React.useRef<{ room: RoomLike; id: string } | null>(null);
@@ -541,6 +550,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // struggles. Set from LiveKit's own quality reports for the local participant.
   const callConnectionPoorRef = React.useRef(false);
   const recordingStartedAtRef = React.useRef<number | null>(null);
+  // GEO-3407. The clock a recording was started on, for its whole capture. A clock sync retry can
+  // replace the room's clock mid-debate; a recording that read the new one at its end would measure
+  // its length across two clocks and be off by the whole correction, as would its streamed chunks.
+  const recordingClockRef = React.useRef<(() => number) | null>(null);
   const recordingEndedAtRef = React.useRef<number | null>(null);
   const recordingStopTimerRef = React.useRef<number | null>(null);
   const autoConnectAttemptedRef = React.useRef<string | null>(null);
@@ -741,35 +754,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     thankingRecordingCancelled,
   ]);
   React.useLayoutEffect(() => () => setThankingDebate(null), [setThankingDebate]);
-  // GEO-2915. The mic has to outlive the turn, or the speaker's last words are never recorded --
-  // the `MediaRecorder` holds the very track the gate disables. Held as a timestamp rather than a
-  // flag so the threshold lives in one place, in `local-audio-gate`, where it is tested.
-  const [localTurnEndedAt, setLocalTurnEndedAt] = React.useState<number | null>(null);
-  const localSlotWasActiveRef = React.useRef(false);
-  // Read through a ref: a deliberate yield must suppress the overrun, but it must not be a
-  // dependency of the effect below, which fires on the turn changing and nothing else.
-  const pendingTurnYieldRef = React.useRef(pendingTurnYield);
-  pendingTurnYieldRef.current = pendingTurnYield;
-  React.useEffect(() => {
-    const active = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot;
-    const wasActive = localSlotWasActiveRef.current;
-    localSlotWasActiveRef.current = active;
-    if (active) {
-      setLocalTurnEndedAt(null);
-      return;
-    }
-    if (!wasActive) return;
-    // Their turn just ended. A deliberate yield means they chose to stop, so there is nothing to
-    // rescue and the mic closes at once as before.
-    if (pendingTurnYieldRef.current) return;
-    setLocalTurnEndedAt(Date.now());
-    const timer = window.setTimeout(() => setLocalTurnEndedAt(null), MIC_OVERRUN_MAX_MS);
-    return () => window.clearTimeout(timer);
-  }, [countdown.activeSlot, countdown.effectiveStatus, localSlot]);
-
-  // Reads the microphone's own signal, so it still answers after the published track is gated --
-  // which is the entire question the overrun has to settle.
-  const localSpeakingRef = useLocalSpeechActivity(previewStream, roomState === 'connected');
   const localTurnStartsIn = debate ? localTurnStartsInSeconds(debate, countdown, localSlot) : null;
   const revealHold = debate
     ? openRoundThankingHold({
@@ -782,18 +766,51 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     : null;
   // The final board holds both microphones and the exit on the same room clock.
   const revealHoldsExit = Boolean(revealHold?.maxReached || revealHold?.wrapHeld);
+  // GEO-2915. The mic has to outlive the turn, or the speaker's last words are never recorded --
+  // the `MediaRecorder` holds the very track the gate disables. GEO-3407: the listener's room asks
+  // the same question of the opponent's incoming audio, so both tiles say "finishing" rather than
+  // "muted" for exactly as long as the speaker can be heard past the buzzer.
+  const overrunPossible = turnOverrunPossible({ effectiveStatus: countdown.effectiveStatus });
+  const localTurnEndedAt = useTurnOverrun({
+    // Reads the microphone's own signal, so it still answers after the published track is gated --
+    // which is the entire question the overrun has to settle.
+    track: previewStream?.getAudioTracks()[0] ?? null,
+    listening: roomState === 'connected',
+    turnActive: countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot,
+    overrunPossible,
+    yielded: pendingTurnYield !== null,
+    windowMs: MIC_OVERRUN_MAX_MS,
+  });
+  const remoteFinishingSince = useTurnOverrun({
+    track: remoteAudioTrack,
+    // As for our own microphone: only while connected. A teardown that hands the room elsewhere
+    // ignores the old room's unsubscribe events, so the track alone would keep this listening.
+    listening: roomState === 'connected' && remoteAudioTrack !== null,
+    ...opponentTurnState({
+      effectiveStatus: countdown.effectiveStatus,
+      activeSlot: countdown.activeSlot,
+      yieldingSlot: countdown.yieldingSlot,
+      localSlot,
+    }),
+    overrunPossible,
+    startsLate: true,
+    windowMs: REMOTE_OVERRUN_WINDOW_MS,
+  });
   const localAudioGate: LocalAudioGateInput = {
     effectiveStatus: debate ? countdown.effectiveStatus : null,
     activeSlot: countdown.activeSlot,
     localSlot,
     audioMuted: audioMuted || pendingTurnYield !== null,
     msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
-    stillSpeaking: localSpeakingRef.current,
+    // `useTurnOverrun` ends the overrun the moment they stop, so one that is running means they are
+    // still talking.
+    stillSpeaking: localTurnEndedAt !== null,
     msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
     openRoundsPhase: countdown.openRounds?.phase ?? null,
     openRoundResultHeld: revealHoldsExit,
   };
   const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
+  const localFinishingSince = localAudioEnabled ? localTurnEndedAt : null;
   // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
   // turn. Reading preferences through a ref keeps that write consistent with the reconciliation
   // effect below, which can otherwise run first against a still-empty `localTracksRef` and be
@@ -1233,6 +1250,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, []);
 
+  const recordingNow = React.useCallback(() => (recordingClockRef.current ?? serverNowRef.current)(), []);
+
   const startLocalRecorder = React.useCallback(
     async (source: MediaStream) => {
       if (recordingStartedAtRef.current !== null || recordingStartingRef.current) return;
@@ -1267,7 +1286,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           recorder.addEventListener(
             'start',
             () => {
-              recordingStartedAtRef.current = serverNowRef.current();
+              recordingClockRef.current = serverNowRef.current;
+              recordingStartedAtRef.current = recordingClockRef.current();
               const userId = currentUserIdRef.current;
               if (userId) {
                 liveRecordingStreamRef.current = startRoomRecordingStream({
@@ -1308,7 +1328,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             'stop',
             () => {
               setCapturing(false);
-              recordingEndedAtRef.current ??= serverNowRef.current();
+              recordingEndedAtRef.current ??= recordingNow();
               releaseRecordingInput(input);
             },
             { once: true }
@@ -1327,7 +1347,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             // One home per recording, decided when it started: the stream if there is one, which lets
             // go of each timeslice once it is uploaded, or this tab's own list, as before streaming.
             const live = liveRecordingStreamRef.current;
-            if (live) live.append(event.data, serverNowRef.current());
+            if (live) live.append(event.data, recordingNow());
             else recordingChunksRef.current.push(event.data);
           };
         },
@@ -1336,7 +1356,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (started && isCurrent()) recorderRef.current = started.recorder;
       else releaseRecordingInput(input);
     },
-    [deviceSwitchRecordingEnabled, releaseRecordingInput, reportRecorderFailure]
+    [deviceSwitchRecordingEnabled, recordingNow, releaseRecordingInput, reportRecorderFailure]
   );
 
   const stopLocalRecorder = React.useCallback(async () => {
@@ -1472,6 +1492,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingChunksRef.current = [];
     stoppedRecordingRef.current = null;
     recordingStartedAtRef.current = null;
+    recordingClockRef.current = null;
     recordingEndedAtRef.current = null;
     return true;
   }, [currentUserId, debate, joinResponse?.participant_slot, localMediaStreamRef, stopLocalRecorder]);
@@ -1523,6 +1544,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       releaseRecordingInput();
       recordingChunksRef.current = [];
       recordingStartedAtRef.current = null;
+      recordingClockRef.current = null;
       recordingEndedAtRef.current = null;
       stoppedRecordingRef.current = null;
       recordingPersistenceStartedRef.current = null;
@@ -1535,6 +1557,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recorderRef.current = null;
     recordingChunksRef.current = [];
     recordingStartedAtRef.current = null;
+    recordingClockRef.current = null;
     recordingEndedAtRef.current = null;
     stoppedRecordingRef.current = null;
     recordingPersistenceStartedRef.current = null;
@@ -1691,14 +1714,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       remoteMediaRef.current?.replaceChildren();
       subscribedRemoteTracksRef.current.clear();
-      void synchronizeServerClock(getServerTime)
-        .then(clock => {
-          if (isCurrent()) setServerClock(clock);
-        })
-        .catch(() => null)
-        .finally(() => {
-          if (isCurrent()) setServerClockSettled(true);
-        });
+      setRemoteAudioTrack(null);
+      keepServerClockSynchronized(getServerTime, {
+        isCurrent,
+        onSynchronized: setServerClock,
+        onFirstAttemptSettled: () => setServerClockSettled(true),
+      });
 
       try {
         const token = await liveKitJoin.mutateAsync();
@@ -1728,6 +1749,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             for (const element of track.detach()) element.remove();
           }
           subscribedRemoteTracksRef.current.add(track);
+          if (track.kind === 'audio' && track.mediaStreamTrack) setRemoteAudioTrack(track.mediaStreamTrack);
           setRemotePresence('present');
           attachRemoteTrack(track);
           void refetchDebate();
@@ -1739,6 +1761,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
           const track = payload as RemoteTrackLike;
           subscribedRemoteTracksRef.current.delete(track);
+          if (track.kind === 'audio') {
+            setRemoteAudioTrack(current => (current === track.mediaStreamTrack ? null : current));
+          }
           for (const element of track.detach()) element.remove();
           setRemoteVideoReady(Boolean(remoteMediaRef.current?.querySelector('video')));
         });
@@ -3341,6 +3366,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 currentUserId={currentUserId}
                 endTurnPending={pendingTurnYield !== null}
                 onEndTurn={endLocalTurn}
+                localFinishingSince={localFinishingSince}
+                remoteFinishingSince={remoteFinishingSince}
                 onPickOpenRound={pickOpenRound}
                 remoteDisconnected={remotePresence === 'left'}
                 onRetryFinalization={retryLiveDebateFinalization}
@@ -3383,6 +3410,8 @@ function DebateRecordingModal({
   currentUserId,
   endTurnPending,
   onEndTurn,
+  localFinishingSince,
+  remoteFinishingSince,
   onPickOpenRound,
   remoteDisconnected,
   onRetryFinalization,
@@ -3414,6 +3443,9 @@ function DebateRecordingModal({
   currentUserId: string | null;
   endTurnPending: boolean;
   onEndTurn: () => void;
+  /** GEO-3407: see `DebateVideoTile`'s `finishingSince`. */
+  localFinishingSince: number | null;
+  remoteFinishingSince: number | null;
   onPickOpenRound: (
     roundIndex: number,
     pick: OpenRoundPick,
@@ -3636,6 +3668,7 @@ function DebateRecordingModal({
       openRounds={openRoundsStyle}
       dimmed={tilesDimmed}
       finalSeconds={finalSeconds && countdown.activeSlot === localSlot}
+      finishingSince={localFinishingSince}
     >
       <video ref={setLocalVideoElement} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
     </DebateVideoTile>
@@ -3671,6 +3704,7 @@ function DebateRecordingModal({
       dimmed={tilesDimmed}
       finalSeconds={finalSeconds && countdown.activeSlot === remoteParticipant?.participant_slot}
       nextTurnName={remoteTurnIsNext ? remoteName : null}
+      finishingSince={remoteFinishingSince}
     >
       <div
         ref={setRemoteMediaElement}
