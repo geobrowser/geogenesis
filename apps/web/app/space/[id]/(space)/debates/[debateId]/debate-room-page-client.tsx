@@ -3660,13 +3660,6 @@ function DebateRecordingModal({
             : 'Waiting for video'
       }
       inactive={remoteInactive}
-      // Open rounds shows the speaker's "Wrap it up" on both screens, with their red timer (GEO-3315).
-      // On the debate's last turn the listener's own tile says "Debate ends soon" instead.
-      showWrapItUp={
-        openRoundsStyle &&
-        !showLocalDebateEndsSoon &&
-        wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null)
-      }
       endingTurn={remoteEndingTurn}
       revealInactive={remoteEndingTurn}
       inactiveIndicatorId="remote"
@@ -4022,7 +4015,7 @@ function localTurnGoIsVisible(countdown: DebateCountdown, localSlot: Participant
 }
 
 /**
- * "Wrap it up" stays over the speaker's final five seconds, as on the classic + glass board.
+ * "Wrap it up" stays over the local speaker's final five seconds, as on the classic + glass board.
  */
 function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | null) {
   return (
