@@ -1,12 +1,12 @@
 import { capture } from '~/core/analytics';
-import { GeoChatRequestError, type GoogleCalendarConnection } from '~/core/debates/api';
+import { type CalendarConnection, type CalendarProvider, GeoChatRequestError } from '~/core/debates/api';
 
 /**
- * Analytics for calendar connections (the `googleCalendar` flag). Outcome events, registered in
- * `geobrowser/analytics`; no account email or provider message leaves here.
+ * Analytics for calendar connections (the `googleCalendar` and `microsoftCalendar` flags). Outcome
+ * events, registered in `geobrowser/analytics`; no account email or provider message leaves here.
  */
 
-export type CalendarProvider = 'google';
+export type { CalendarProvider };
 
 /** Which button sent the viewer to the provider. */
 export type CalendarConnectSource = 'connect' | 'reconnect';
@@ -31,7 +31,7 @@ export function calendarConnectCallbackFailed(provider: CalendarProvider, reason
 }
 
 /** A refresh geo-chat answered. Its sync can still have failed, so the outcome is the connection's status. */
-export function calendarRefreshed(provider: CalendarProvider, connection: GoogleCalendarConnection | null) {
+export function calendarRefreshed(provider: CalendarProvider, connection: CalendarConnection | null) {
   capture('calendar_refreshed', { provider, outcome: connection?.status ?? 'error' });
 }
 

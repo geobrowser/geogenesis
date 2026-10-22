@@ -12,23 +12,31 @@ import {
 
 import {
   type CalendarConnections,
+  type CalendarProvider,
   GeoChatRequestError,
-  connectGoogleCalendar,
-  disconnectGoogleCalendar,
+  connectCalendar,
+  disconnectCalendar,
   getCalendarBusy,
   getCalendarConnections,
-  refreshGoogleCalendar,
+  refreshCalendar,
 } from './api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from './hooks';
 
-/** geo-chat answers this on every calendar route while Google Calendar is not configured. */
+/** geo-chat answers this on every calendar route while no calendar provider is configured. */
 export const CALENDAR_DISABLED_CODE = 'calendar_disabled';
 
 export function isCalendarDisabled(error: unknown) {
   return error instanceof GeoChatRequestError && error.status === 404 && error.code === CALENDAR_DISABLED_CODE;
 }
 
-/** The viewer's connected calendars. `enabled` is the `googleCalendar` flag and the editor being open. */
+function configuredProviders({ providers }: CalendarConnections): CalendarProvider[] {
+  if (!providers) return ['google'];
+  return providers.filter(
+    (provider): provider is CalendarProvider => provider === 'google' || provider === 'microsoft'
+  );
+}
+
+/** The viewer's connected calendars. `enabled` is a calendar flag and the editor being open. */
 export function useCalendarConnections(enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -42,6 +50,9 @@ export function useCalendarConnections(enabled: boolean) {
   return {
     ...query,
     google: query.data?.google,
+    microsoft: query.data ? (query.data.microsoft ?? null) : undefined,
+    /** The providers geo-chat can connect; a geo-chat that predates the list only knows Google. */
+    providers: query.data ? configuredProviders(query.data) : undefined,
     /** geo-chat has the feature switched off, so there is nothing to offer. */
     disabled: isCalendarDisabled(query.error),
   };
@@ -78,14 +89,18 @@ export function useInvalidateCalendarReads() {
   };
 }
 
-/** Resolves with Google's consent URL; the caller sends the browser there. */
-export function useConnectGoogleCalendar() {
+/** Resolves with the provider's consent URL; the caller sends the browser there. */
+export function useConnectCalendar() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation<{ authorization_url: string }, Error, { returnTo: string; source: CalendarConnectSource }>({
-    mutationFn: ({ returnTo }) => connectGoogleCalendar(returnTo, getPrivyIdentityToken, accountKey),
-    onMutate: ({ source }) => calendarConnectStarted('google', source),
-    onError: error => calendarConnectRequestFailed('google', error),
+  return useMutation<
+    { authorization_url: string },
+    Error,
+    { provider: CalendarProvider; returnTo: string; source: CalendarConnectSource }
+  >({
+    mutationFn: ({ provider, returnTo }) => connectCalendar(provider, returnTo, getPrivyIdentityToken, accountKey),
+    onMutate: ({ provider, source }) => calendarConnectStarted(provider, source),
+    onError: (error, { provider }) => calendarConnectRequestFailed(provider, error),
   });
 }
 
@@ -93,28 +108,28 @@ export function useConnectGoogleCalendar() {
  * The answer is the connection after the sync, failed or not, so it shows at once. Settled rather
  * than success: a refusal (404, 429) also means the state on screen may be stale.
  */
-export function useRefreshGoogleCalendar() {
+export function useRefreshCalendar(provider: CalendarProvider) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const invalidate = useInvalidateCalendarReads();
 
   return useMutation<CalendarConnections, Error, void>({
-    mutationFn: () => refreshGoogleCalendar(getPrivyIdentityToken, accountKey),
+    mutationFn: () => refreshCalendar(provider, getPrivyIdentityToken, accountKey),
     onSuccess: connections => {
       queryClient.setQueryData(debateQueryKeys.calendarConnections(accountKey), connections);
-      calendarRefreshed('google', connections.google);
+      calendarRefreshed(provider, connections[provider] ?? null);
     },
     onSettled: invalidate,
   });
 }
 
-export function useDisconnectGoogleCalendar() {
+export function useDisconnectCalendar(provider: CalendarProvider) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const invalidate = useInvalidateCalendarReads();
 
   return useMutation<void, Error, void>({
-    mutationFn: () => disconnectGoogleCalendar(getPrivyIdentityToken, accountKey),
-    onSuccess: () => calendarDisconnected('google'),
+    mutationFn: () => disconnectCalendar(provider, getPrivyIdentityToken, accountKey),
+    onSuccess: () => calendarDisconnected(provider),
     onSettled: invalidate,
   });
 }
