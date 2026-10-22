@@ -15,11 +15,15 @@ The measurement lives outside this repo:
 ## What Genesis sends
 
 `debate_availability_viewed` carries `request_id` when the week was opened to move an existing
-debate. So does `debate_availability_link_opened` for an email's link, because it fires even when
-the week never loads (signed out, an error). That covers a scheduling email's "Choose different time", Reschedule on an accepted debate
-in the Requests tab, and "Choose different time" on an invite there. The weekly report joins it to
-geo-chat's record and counts reschedules that were started and then abandoned: no move or
-cancellation of that debate within 30 minutes.
+debate. That covers a scheduling email's "Choose different time", Reschedule on an accepted debate
+in the Requests tab, and "Choose different time" on an invite there. So does
+`debate_availability_link_opened` for an email's link, because it fires even when the week never
+loads (signed out, an error). The weekly report joins them to geo-chat's record and counts
+reschedules that were started and then abandoned: no move or cancellation of that debate within
+30 minutes.
+
+Don't count the raw events. The owner opening their own link and anyone opening a forwarded one
+send them too, with the id. The report counts only the two debaters, once per request and session.
 
 It is `null` on every other week view. A link's id is already checked by
 `rescheduleRequestIdFromTarget` before it reaches the week. The property is optional, so the
