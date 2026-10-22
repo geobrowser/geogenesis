@@ -29,7 +29,7 @@ export type WalletClientValue = {
 export type Slice = 'privy' | 'wallets' | 'identityToken' | 'walletClient';
 
 /** One mounted call of a Privy hook that takes callbacks, each of which keeps its own. */
-export type InstanceKind = 'login' | 'geoLogin' | 'logout' | 'emailLogin' | 'accountEffect';
+export type InstanceKind = 'login' | 'geoLogin' | 'logout' | 'emailLogin' | 'oauthLogin' | 'accountEffect';
 export type InstanceEntry = { kind: InstanceKind; params: { current: unknown }; result: unknown };
 
 type State = {

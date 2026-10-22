@@ -6,10 +6,7 @@ import { parse } from 'graphql';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID, SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
-import {
-  type ExploreCardEntity,
-  decodeExploreCardEntity,
-} from '~/core/explore/explore-card-item';
+import { type ExploreCardEntity, decodeExploreCardEntity } from '~/core/explore/explore-card-item';
 import { exploreCardNodeFields, exploreCardPropertyFragment } from '~/core/explore/explore-card-selection';
 import { EntitiesOrderBy, type EntityFilter, type RelationFilter } from '~/core/gql/graphql';
 import { BEST_ORDER_BY, NEWEST_ORDER_BY } from '~/core/io/entity-order-by';
@@ -393,8 +390,7 @@ export function claimRecordFilters({
     debates: debateBranches.length === 1 ? debateBranches[0] : { or: debateBranches },
     claimRelations: { or: claimRelationBranches },
     claimTopicRelations: { or: claimTopicRelationBranches },
-    debateRelations:
-      debateRelationBranches.length === 1 ? debateRelationBranches[0] : { or: debateRelationBranches },
+    debateRelations: debateRelationBranches.length === 1 ? debateRelationBranches[0] : { or: debateRelationBranches },
   };
 }
 
@@ -438,10 +434,7 @@ export function claimRecordDirectDebatesKey(directDebates: ClaimRecordDirectDeba
 }
 
 /** Candidate ids, or null when either path exceeds the limit and the facet must stay unrestricted. */
-export function decodeClaimRecordCandidates(data: {
-  topic?: IdConnection;
-  extracted?: IdConnection;
-}): string[] | null {
+export function decodeClaimRecordCandidates(data: { topic?: IdConnection; extracted?: IdConnection }): string[] | null {
   if (data.topic?.pageInfo?.hasNextPage || data.extracted?.pageInfo?.hasNextPage) return null;
   const ids = new Set<string>();
   for (const node of [...(data.topic?.nodes ?? []), ...(data.extracted?.nodes ?? [])]) {
@@ -544,10 +537,10 @@ function decodeCount(connection: CountConnection): number {
   return count;
 }
 
-export function decodeClaimRecordCounts(data: {
-  claims?: CountConnection;
-  debates?: CountConnection;
-}): { claims: number; debates: number } {
+export function decodeClaimRecordCounts(data: { claims?: CountConnection; debates?: CountConnection }): {
+  claims: number;
+  debates: number;
+} {
   return { claims: decodeCount(data.claims ?? null), debates: decodeCount(data.debates ?? null) };
 }
 
@@ -567,10 +560,7 @@ export function mergeSortedRecordEntities<
     createdAt?: string | null;
     updatedAt: string | null;
   },
->(
-  sort: ClaimRecordSort,
-  ...groups: readonly T[][]
-): T[] {
+>(sort: ClaimRecordSort, ...groups: readonly T[][]): T[] {
   const byId = new Map<string, T>();
   for (const entity of groups.flat()) {
     const key = normId(entity.id);
@@ -617,9 +607,7 @@ export function firstClaimRecordClaimsPageParam(hasTopics: boolean): ClaimRecord
   };
 }
 
-export function nextClaimRecordClaimsPageParam(
-  page: ClaimRecordClaimsPage
-): ClaimRecordClaimsPageParam | undefined {
+export function nextClaimRecordClaimsPageParam(page: ClaimRecordClaimsPage): ClaimRecordClaimsPageParam | undefined {
   const topicHasNext = page.topicClaims.hasNextPage && page.topicClaims.endCursor !== null;
   const extractedHasNext = page.extractedClaims.hasNextPage && page.extractedClaims.endCursor !== null;
   if (!topicHasNext && !extractedHasNext) return undefined;
@@ -777,7 +765,11 @@ export async function fetchClaimRecordCandidates({
       decoder: decodeClaimRecordCandidates,
       variables: {
         topicFilter: { typeId: { is: TOPICS_PROPERTY_ID }, spaceId: { in: scopes }, toEntityId: { in: topicIds } },
-        extractedFilter: { typeId: { is: SOURCES_PROPERTY_ID }, spaceId: { in: scopes }, toEntityId: { in: debateIds } },
+        extractedFilter: {
+          typeId: { is: SOURCES_PROPERTY_ID },
+          spaceId: { in: scopes },
+          toEntityId: { in: debateIds },
+        },
         first: CLAIM_RECORD_CANDIDATE_LIMIT,
         skipExtracted: debateIds.length === 0,
       },

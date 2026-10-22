@@ -52,7 +52,7 @@ function hasSessionCookie(): boolean {
 }
 
 /** A return from an OAuth redirect has to be completed by Privy on this very load. */
-function isReturningFromPrivyRedirect(): boolean {
+export function isReturningFromPrivyRedirect(): boolean {
   try {
     const params = new URLSearchParams(window.location.search);
     return ['privy_oauth_code', 'privy_oauth_state', 'privy_oauth_provider'].some(key => params.has(key));

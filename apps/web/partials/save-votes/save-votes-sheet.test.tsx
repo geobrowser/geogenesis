@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import {
   saveVotesHeading,
   saveVotesNavLabel,
@@ -23,6 +24,7 @@ import {
 import { useMarkEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
 
 import { SaveVotesSheet } from './save-votes-sheet';
+import { codeStepClasses } from './save-votes-styles';
 
 /** Stands in for the Explore email capture card, which shares the sheet's corner. */
 function EmailCaptureCard() {
@@ -39,6 +41,7 @@ const mocks = vi.hoisted(() => ({
   anyModalOpen: false,
   isModalOpen: false,
   accountStepMounts: 0,
+  accountStepClasses: undefined as unknown,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
@@ -62,12 +65,30 @@ vi.mock('~/core/save-votes-analytics', () => ({
   }),
 }));
 vi.mock('~/partials/explore/email-capture-account-step', () => ({
-  AccountStep: ({ email }: { email: string }) => {
+  AccountStep: ({
+    email,
+    classes,
+    onChangeEmail,
+  }: {
+    email: string;
+    classes?: unknown;
+    onChangeEmail?: () => void;
+  }) => {
     // Mounting the real step is what mails a code, so a remount is a second email.
     React.useEffect(() => {
       mocks.accountStepMounts += 1;
     }, []);
-    return <p>Enter the code we sent to {email}</p>;
+    mocks.accountStepClasses = classes;
+    return (
+      <>
+        <p>Enter the code we sent to {email}</p>
+        {onChangeEmail ? (
+          <button type="button" onClick={onChangeEmail}>
+            Change
+          </button>
+        ) : null}
+      </>
+    );
   },
 }));
 
@@ -88,6 +109,7 @@ beforeEach(() => {
   mocks.anyModalOpen = false;
   mocks.isModalOpen = false;
   mocks.accountStepMounts = 0;
+  mocks.accountStepClasses = undefined;
 });
 
 describe('copy', () => {
@@ -96,12 +118,10 @@ describe('copy', () => {
     expect(saveVotesHeading(2, false)).toBe('Save your 2 votes');
     expect(saveVotesHeading(1, true)).toBe('You have 1 unsaved vote');
     expect(saveVotesHeading(3, true)).toBe('You have 3 unsaved votes');
-    expect(saveVotesSubtext(1, false)).toBe(
-      'It’s only on this device for now. Add your email and it counts toward the result.'
-    );
-    expect(saveVotesSubtext(2, true)).toBe(
-      'They’re still on this device. Add your email and they count toward the result.'
-    );
+    expect(saveVotesSubtext(1)).toBe('Add your email to make it count.');
+    expect(saveVotesSubtext(2)).toBe('Add your email to make them count.');
+    expect(saveVotesSubtext(1, true)).toBe('Log in to make it count.');
+    expect(saveVotesSubtext(3, true)).toBe('Log in to make them count.');
     expect(saveVotesNavLabel(1)).toBe('Save 1 vote');
     expect(saveVotesNavLabel(4)).toBe('Save 4 votes');
     expect([savingVotesCopy(1), savingVotesCopy(3)]).toEqual(['Saving your vote…', 'Saving 3 votes…']);
@@ -110,6 +130,48 @@ describe('copy', () => {
 });
 
 describe('SaveVotesSheet', () => {
+  it('asks a visitor who came from one of our emails to log in, not sign up (GEO-3374)', () => {
+    noteEmailArrival('?ref_email=welcome');
+    vote('a', 'Couples should keep separate finances');
+    markPromptedThisSession();
+    // Pages after the landing: the URL no longer carries `ref_email`, the session still knows. An ask
+    // that isn't the vote link's own keeps the corner card, with the login wording.
+    window.history.replaceState(null, '', '/explore');
+    render(<SaveVotesSheet />);
+
+    act(() => openSaveVotesPrompt('single_claim'));
+    const region = screen.getByRole('region', { name: 'Save your votes' });
+    expect(region).toHaveTextContent('Log in to save your vote');
+    expect(region).toHaveTextContent('Log in to make it count.');
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
+  });
+
+  it('opens centred for the vote an email link cast, with that vote as its chip (GEO-3374)', () => {
+    noteEmailArrival('?ref_email=welcome');
+    vote('a', 'Couples should keep separate finances');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+
+    act(() => openSaveVotesPrompt('email_link'));
+    const dialog = screen.getByRole('dialog', { name: 'Save your votes' });
+    expect(dialog).toHaveTextContent('Log in to save your vote');
+    expect(screen.getByRole('list', { name: 'Your votes' })).toHaveTextContent('Couples should keep separate finances');
+    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(mocks.impression).toHaveBeenCalledWith('email_link', 1);
+    // An automatic ask: it counts toward when the sheet asks again, as the pill's own first ask would.
+    expect(readLocalVotes().prompt.shownCount).toBe(1);
+  });
+
+  it('keeps the sign-up wording for a visit that did not come from an email', () => {
+    vote('a');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+
+    act(() => openSaveVotesPrompt('single_claim'));
+    expect(screen.getByText('Save your vote')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Log in' })).not.toBeInTheDocument();
+  });
+
   it('stays closed until something asks for it', () => {
     vote('a');
     markPromptedThisSession();
@@ -153,17 +215,24 @@ describe('SaveVotesSheet', () => {
     expect(readLocalVotes().prompt.shownCount).toBe(1);
   });
 
-  it('rejects an address that is not an email', () => {
+  it('keeps Save off until the address looks like an email', () => {
     vote('a');
     markPromptedThisSession();
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('single_claim'));
+    const field = screen.getByRole('textbox', { name: 'Email address' });
+    const save = screen.getByRole('button', { name: 'Save vote' });
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save vote' }));
-
-    expect(screen.getByRole('alert')).toHaveTextContent('That does not look like an email address.');
+    expect(save).toBeDisabled();
+    fireEvent.change(field, { target: { value: 'sam@hey' } });
+    expect(save).toBeDisabled();
+    // Enter in the field submits the form even with the button off; that must not send either.
+    fireEvent.submit(field.closest('form')!);
     expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    fireEvent.change(field, { target: { value: 'sam@hey.com' } });
+    expect(save).toBeEnabled();
   });
 
   it('starts a save sign-in with the email and moves to the code step', () => {
@@ -196,6 +265,90 @@ describe('SaveVotesSheet', () => {
     expect(mocks.cancelPrivyAuth).toHaveBeenCalled();
     expect(readLocalVotes().prompt.dismissCount).toBe(1);
     expect(readLocalVotes().votes).toHaveLength(2);
+  });
+
+  it('says what happens next under the button', () => {
+    vote('a');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+    act(() => openSaveVotesPrompt('single_claim'));
+
+    expect(screen.getByRole('region', { name: 'Save your votes' })).toHaveTextContent(
+      'We’ll email you a 6-digit code. No password.'
+    );
+  });
+
+  describe('going back to change the address (GEO-3439)', () => {
+    function sendCodeTo(address: string) {
+      vote('a');
+      vote('b');
+      markPromptedThisSession();
+      render(<SaveVotesSheet />);
+      act(() => openSaveVotesPrompt('threshold'));
+      fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: address } });
+      fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
+    }
+
+    it.each([
+      ['the back arrow', 'Back to email'],
+      ['Change beside the address', 'Change'],
+    ])('%s returns to the email step with the address kept and focused', (_, control) => {
+      sendCodeTo('sam@hey.con');
+      fireEvent.click(screen.getByRole('button', { name: control }));
+
+      const field = screen.getByRole('textbox', { name: 'Email address' });
+      expect(field).toHaveValue('sam@hey.con');
+      expect(field).toHaveFocus();
+      expect(screen.getByRole('button', { name: 'Send code' })).toBeInTheDocument();
+      expect(screen.queryByText('Check your email')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back to email' })).not.toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Save your votes' })).toHaveTextContent(
+        'We’ll email you a 6-digit code. No password.'
+      );
+      // Still the visitor's sign-in, and still their votes.
+      expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
+      expect(readLocalVotes().votes).toHaveLength(2);
+      expect(readLocalVotes().prompt.dismissCount).toBe(0);
+    });
+
+    it('sends a code to the corrected address', () => {
+      sendCodeTo('sam@hey.con');
+      fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
+      fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send code' }));
+
+      expect(screen.getByText('Enter the code we sent to sam@hey.com')).toBeInTheDocument();
+      expect(mocks.accountStepMounts).toBe(2);
+      expect(mocks.beginPrivyAuth).toHaveBeenCalledTimes(2);
+      expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(expect.objectContaining({ prompt_reason: 'threshold' }));
+      expect(readLocalVotes().votes).toHaveLength(2);
+    });
+
+    it('draws the code step at the corner card’s size', () => {
+      sendCodeTo('sam@hey.com');
+
+      expect(mocks.accountStepClasses).toEqual(codeStepClasses(true));
+    });
+
+    it('a fresh ask after leaving mid-edit is the plain email step again', () => {
+      sendCodeTo('sam@hey.con');
+      fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      act(() => openSaveVotesPrompt('repeat'));
+
+      expect(screen.getByRole('button', { name: 'Save votes' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Send code' })).not.toBeInTheDocument();
+    });
+
+    it('closing after going back still withdraws the sign-in', () => {
+      sendCodeTo('sam@hey.con');
+      fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+
+      expect(mocks.cancelPrivyAuth).toHaveBeenCalled();
+      expect(readSaveVotesPrompt()).toBeNull();
+      expect(readLocalVotes().votes).toHaveLength(2);
+    });
   });
 
   // GEO-3400: email is the sheet's one way in; Privy's other methods are left to the app's other sign-ins.
@@ -295,6 +448,8 @@ describe('SaveVotesSheet', () => {
     act(() => openSaveVotesPrompt('threshold'));
 
     const chips = screen.getByRole('list', { name: 'Your votes' });
+    // One row in the corner card, the "+1" on it.
+    expect(Array.from(chips.children).map(row => row.textContent)).toEqual(['Agree:Third claimAgree:Second claim+1']);
     expect(chips).toHaveTextContent('Third claim');
     expect(chips).toHaveTextContent('Second claim');
     expect(chips).not.toHaveTextContent('First claim');
@@ -312,6 +467,26 @@ describe('SaveVotesSheet from the navbar', () => {
     act(() => openSaveVotesPrompt('navbar'));
     return view;
   };
+
+  it('draws the code step at the centred dialog’s size (GEO-3439)', () => {
+    openFromNavbar();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
+
+    expect(mocks.accountStepClasses).toEqual(codeStepClasses(false));
+  });
+
+  it('stays centred on the way back from the code step (GEO-3439)', () => {
+    openFromNavbar();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.con' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
+    // A new ask meanwhile must not move the sheet out from under the visitor on the way back.
+    act(() => openSaveVotesPrompt('repeat'));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
+
+    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toHaveTextContent('Send code');
+    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+  });
 
   it('is a centred modal dialog with the corner card’s content', () => {
     openFromNavbar();
@@ -364,13 +539,18 @@ describe('SaveVotesSheet from the navbar', () => {
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('navbar'));
 
-    const chips = screen.getByRole('list', { name: 'Your votes' });
-    expect(Array.from(chips.children).map(chip => chip.textContent)).toEqual([
+    const chips = within(screen.getByRole('list', { name: 'Your votes' }));
+    expect(chips.getAllByRole('listitem').map(chip => chip.textContent)).toEqual([
       'Agree:Claim f',
       'Agree:Claim e',
       'Agree:Claim d',
       'Agree:Claim c',
       '+2',
+    ]);
+    // Two rows of two, the "+2" closing the second rather than starting a third.
+    expect(Array.from(screen.getByRole('list', { name: 'Your votes' }).children).map(row => row.textContent)).toEqual([
+      'Agree:Claim fAgree:Claim e',
+      'Agree:Claim dAgree:Claim c+2',
     ]);
   });
 
@@ -454,7 +634,7 @@ describe('SaveVotesSheet from the navbar', () => {
     openFromNavbar();
     const dialog = screen.getByRole('dialog', { name: 'Save your votes' });
 
-    expect(dialog).toHaveClass('w-[340px]');
+    expect(dialog).toHaveClass('w-[360px]');
     expect(dialog).not.toHaveClass('inset-0');
     expect(dialog.parentElement).toHaveClass('fixed', 'inset-0');
   });
