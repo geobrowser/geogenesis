@@ -30,6 +30,7 @@ import {
   type ScheduledNoticeStep,
   noticeNote,
   noticeRequestState,
+  otherDebaterWaiting,
 } from '~/core/debates/rooms/scheduled-notice';
 import { useCantMakeIt, useReportRunningLate } from '~/core/debates/rooms/scheduling-hooks';
 import { noticeFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
@@ -263,15 +264,6 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
   }
 }
 
-/**
- * "{Name} is in the room, waiting for you" needs them there now, so it reads the live count: by
- * `others_present` alone, a tab that crashed or lost its connection keeps the pill up until the room
- * closes (GEO-3450). Falls back to `others_present` on a geo-chat that predates `others_live`.
- */
-function othersWaiting(room: UpcomingDebateRoom) {
-  return room.others_live ?? room.others_present;
-}
-
 function DecideStep({
   name,
   opponent,
@@ -303,7 +295,7 @@ function DecideStep({
         <Heading focus={focusHeading}>
           {COPY.decide.heading(name, startOffset(new Date(startsAt).getTime() - now))}
         </Heading>
-        {room && othersWaiting(room) && (
+        {otherDebaterWaiting(room) && (
           <span className="inline-flex items-center gap-2 rounded-full border border-grey-02 px-3 py-1.5 text-metadata">
             <span aria-hidden className="size-2 rounded-full bg-green" />
             {COPY.decide.waiting(name)}
