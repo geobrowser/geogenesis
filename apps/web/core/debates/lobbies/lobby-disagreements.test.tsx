@@ -160,6 +160,37 @@ describe('lobbyDisagreements', () => {
 });
 
 describe('LobbyDisagreementsTrigger', () => {
+  it('keeps claims visible without a disclosure when an older API omits pair history', () => {
+    mocks.data = { lobby_id: '0192abc', source: 'room', claims: [row('a', true, [participant('daniel1')])] };
+    render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claim with Daniel' }));
+
+    expect(screen.getByText('Claim a')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /See more/ })).not.toBeInTheDocument();
+  });
+
+  it('starts collapsed again when the person’s dropdown is reopened', () => {
+    mocks.data = {
+      lobby_id: '0192abc',
+      source: 'room',
+      claims: [row('old', true, [{ ...participant('daniel1'), previously_debated: true }])],
+    };
+    render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
+    const trigger = screen.getByRole('button', { name: 'Disagrees on 1 claim with Daniel' });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('button', { name: 'See more · Already debated (1)' }));
+    expect(screen.getByText('Claim old')).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    expect(screen.queryByText('Claim old')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'See more · Already debated (1)' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
+  });
+
   it.each([false, true])('keeps this pair’s debated claims behind See more (phone: %s)', phone => {
     mocks.phone = phone;
     mocks.data = {
