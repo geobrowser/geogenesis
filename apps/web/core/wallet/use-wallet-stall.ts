@@ -48,7 +48,7 @@ function send(properties: Record<string, unknown>) {
  * Watches for a signed-in user with no smart account (see `wallet-stall.ts`), and owns the way out:
  * after `WALLET_STALL_GRACE_MS` it reports `stalled`, and `reconnect` refetches the smart account
  * and restarts the embedded wallet setup, restarting Privy too when no wallet has reached the page.
- * A stall still without one at `AUTO_RESTART_MS` restarts Privy once by itself. A Reconnect that has
+ * A stall still without one at `AUTO_RESTART_MS`, for an account that has one, restarts Privy once by itself. A Reconnect that has
  * not worked within `RECONNECT_WINDOW_MS` reloads the page once per tab; after that, Reconnect is
  * offered again.
  */
@@ -124,10 +124,12 @@ export function useWalletStall({
     }, WALLET_STALL_GRACE_MS);
 
     // Once per stall, and only if nothing has restarted Privy already: by now its own handshake has
-    // given up for good.
+    // given up for good. Only for an account that already has a wallet: without one, Privy may still
+    // be creating it, and a remount nobody asked for could leave a second one.
     const restartTimer = setTimeout(() => {
       const current = episode.current;
-      if (!current || current.privyRestarts > 0 || latest.current.hasEmbeddedWallet) return;
+      if (!current || current.privyRestarts > 0 || latest.current.hasEmbeddedWallet || !latest.current.accountHasWallet)
+        return;
       current.privyRestarts += 1;
       restartAuthHost();
     }, AUTO_RESTART_MS);

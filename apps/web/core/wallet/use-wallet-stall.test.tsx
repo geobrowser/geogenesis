@@ -232,6 +232,15 @@ describe('useWalletStall', () => {
     expect(mocks.restartAuthHost).not.toHaveBeenCalled();
   });
 
+  it('does not restart on its own while the account has no wallet yet, which Privy may still be creating', () => {
+    mocks.linkedAccounts = [];
+    setup(signedInNoAccount);
+
+    act(() => vi.advanceTimersByTime(AUTO_RESTART_MS));
+
+    expect(mocks.restartAuthHost).not.toHaveBeenCalled();
+  });
+
   it('reports whether the account has a wallet at all', () => {
     mocks.linkedAccounts = [];
     setup(signedInNoAccount);

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { type PrivyValue, type WalletsValue, getState, publish, resetAuthStore, restartAuthHost } from './auth-store';
 
@@ -6,7 +6,10 @@ const privy = (ready: boolean, authenticated: boolean) => ({ ready, authenticate
 const wallets = (count: number) =>
   ({ wallets: Array.from({ length: count }, () => ({})), ready: true }) as unknown as WalletsValue;
 
-afterEach(() => resetAuthStore());
+afterEach(() => {
+  resetAuthStore();
+  vi.useRealTimers();
+});
 
 describe('restartAuthHost', () => {
   it("holds the last host's values until the new one is ready, so the app never reads a sign-out", () => {
@@ -42,6 +45,33 @@ describe('restartAuthHost', () => {
     publish('privy', signedOut);
 
     expect(getState().privy).toBe(signedOut);
+  });
+
+  it('stops holding after a while if the new host never reports ready', () => {
+    vi.useFakeTimers();
+    publish('privy', privy(true, true));
+    restartAuthHost();
+
+    const stuck = privy(false, false);
+    publish('privy', stuck);
+    vi.advanceTimersByTime(19_999);
+    expect(getState().restarting).toBe(true);
+
+    vi.advanceTimersByTime(1);
+    expect(getState().restarting).toBe(false);
+    publish('privy', stuck);
+    expect(getState().privy).toBe(stuck);
+  });
+
+  it('lets a later restart keep its own hold when an earlier one times out', () => {
+    vi.useFakeTimers();
+    publish('privy', privy(true, true));
+    restartAuthHost();
+    vi.advanceTimersByTime(10_000);
+    restartAuthHost();
+
+    vi.advanceTimersByTime(10_000);
+    expect(getState().restarting).toBe(true);
   });
 
   it('holds nothing back when no host had published yet', () => {
