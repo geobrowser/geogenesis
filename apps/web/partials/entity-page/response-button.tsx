@@ -113,7 +113,7 @@ export function ResponseButton({
     </button>
   );
 
-  if (!tooltip || !actionTitle) return button;
+  if (!tooltip || !behaviour.title) return button;
 
-  return <Tooltip trigger={button} label={actionTitle} />;
+  return <Tooltip trigger={button} label={behaviour.title} />;
 }
