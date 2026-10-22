@@ -6170,7 +6170,7 @@ describe('inside a debate room', () => {
 
         const dialog = await screen.findByRole('dialog', { name: 'Leave the room?' });
         expect(mocks.push).not.toHaveBeenCalled();
-        expect(dialog).toHaveTextContent(state === 'present' ? /is here/ : /hasn’t arrived yet/);
+        expect(dialog).toHaveTextContent(state === 'present' ? /is here/ : /isn’t here yet/);
 
         fireEvent.click(within(dialog).getByRole('button', { name: 'Stay' }));
 
@@ -6241,7 +6241,7 @@ describe('inside a debate room', () => {
       rerender(withPresence('left', page));
 
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-      expect(screen.queryByText(/hasn’t arrived yet/)).toBeNull();
+      expect(screen.queryByText(/isn’t here yet/)).toBeNull();
       expect(mocks.push).not.toHaveBeenCalled();
     });
 

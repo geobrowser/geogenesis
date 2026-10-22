@@ -3169,7 +3169,11 @@ describe('click analytics labels in the room header', () => {
   const CONTROLS = 'button, a[href], [role="button"], [role="menuitem"], [role="radio"]';
   const unlabeledControls = () =>
     [...document.body.querySelectorAll(CONTROLS)]
-      .filter(control => !control.getAttribute('data-geo-analytics-label')?.trim())
+      .filter(
+        control =>
+          !control.getAttribute('data-geo-analytics-label')?.trim() ||
+          !control.getAttribute('data-geo-analytics-intent')?.trim()
+      )
       .map(control => control.getAttribute('aria-label') ?? control.textContent?.trim());
 
   async function renderInRoom() {

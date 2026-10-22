@@ -96,7 +96,8 @@ export const ROOM_LEAVE_CONFIRM = {
   body: (state: DebateRoomPresenceState, opponentName: string) =>
     state === 'present'
       ? `${opponentName} is here. If you leave, they’ll be left waiting.`
-      : `${opponentName} hasn’t arrived yet. If you leave, they’ll find the room empty.`,
+      : // Not "hasn't arrived": after a reload a visit that came and went reads as waiting again.
+        `${opponentName} isn’t here yet. If you leave, they’ll find the room empty.`,
   stay: 'Stay',
   leave: 'Leave room',
 } as const;
