@@ -13,9 +13,8 @@ import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-avail
 import type { DebateLobbyMember } from '../api';
 import { usePeerSchedule } from '../hooks';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
-import { formatDebateTime } from '../matchmaking/scheduled-debate-format';
 import { CancelScheduled } from '../matchmaking/scheduled-debates-section';
-import { INLINE_SLOTS, SharedTimes } from '../matchmaking/shared-times';
+import { INLINE_SLOTS, SharedTimes, formatSlot } from '../matchmaking/shared-times';
 import { opponentOf } from '../rooms/room-opponent';
 import { sameId } from '../rooms/room-presence';
 import { useOpenScheduledRequests } from '../rooms/scheduled-awaiting';
@@ -194,7 +193,7 @@ function MemberSchedule({
       {pending.map(request => (
         <div key={request.request_id} className="flex flex-col gap-1 rounded-lg bg-grey-01 p-2 [&_button]:md:min-h-11">
           <Text as="p" variant="footnoteMedium">
-            Requested {formatDebateTime(request.scheduled_start_at)}
+            Requested {formatSlot(request.scheduled_start_at, new Date(now), peer.schedule?.viewerTimezone)}
           </Text>
           <Text as="p" variant="footnote" color="grey-04">
             Awaiting response

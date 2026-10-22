@@ -13,19 +13,18 @@ export function useScheduledDebateAnswer(surface?: 'lobby') {
   const [error, setError] = React.useState<string | null>(null);
   const answer: ScheduledDebateAnswer = (requestId, accepted, onFailure) => {
     setError(null);
-    respond.mutate(
-      { requestId, accepted, ...(surface ? { surface } : {}) },
-      {
-        onSuccess: result => {
-          if (result.outcome === 'conflict') {
-            onFailure?.();
-            setError(`That clashes with a debate ${formatDebateTime(result.conflicting_start_at)}.`);
-          }
-        },
-        onError: failure => {
+    // Per-call mutate callbacks belong to the latest mutation observer. Each attempt's promise
+    // still settles independently, so overlapping answers must release their own retry guards here.
+    void respond.mutateAsync({ requestId, accepted, ...(surface ? { surface } : {}) }).then(
+      result => {
+        if (result.outcome === 'conflict') {
           onFailure?.();
-          setError(failure.message);
-        },
+          setError(`That clashes with a debate ${formatDebateTime(result.conflicting_start_at)}.`);
+        }
+      },
+      (failure: unknown) => {
+        onFailure?.();
+        setError(failure instanceof Error ? failure.message : 'Could not answer the request. Try again.');
       }
     );
   };

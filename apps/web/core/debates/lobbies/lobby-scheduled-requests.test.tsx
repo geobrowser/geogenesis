@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,7 +9,7 @@ import type { LobbyPageView } from './lobby-view';
 const mocks = vi.hoisted(() => ({ requests: [] as ScheduledDebateRequest[], respond: vi.fn(), schedule: vi.fn() }));
 vi.mock('../rooms/scheduling-hooks', () => ({
   useScheduledDebates: () => ({ data: { requests: mocks.requests } }),
-  useRespondToScheduledDebate: () => ({ mutate: mocks.respond, isPending: false }),
+  useRespondToScheduledDebate: () => ({ mutateAsync: mocks.respond, isPending: false }),
 }));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'me' }));
 vi.mock('../matchmaking/use-geo-chat-user-summaries', () => ({ useGeoChatUserSummaries: () => [] }));
@@ -42,7 +42,7 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-10-22T12:00:00Z'));
   mocks.requests = [];
   vi.clearAllMocks();
-  mocks.respond.mockReset();
+  mocks.respond.mockReset().mockResolvedValue({ outcome: 'recorded' });
 });
 afterEach(() => {
   cleanup();
@@ -68,7 +68,7 @@ describe('scheduled invitations in the lobby', () => {
     mocks.requests = [request()];
     render(<LobbyScheduledRequests lobby={lobby} />);
     fireEvent.click(screen.getByRole('button', { name: label }));
-    expect(mocks.respond).toHaveBeenCalledWith({ requestId: 'invite', accepted, surface: 'lobby' }, expect.anything());
+    expect(mocks.respond).toHaveBeenCalledWith({ requestId: 'invite', accepted, surface: 'lobby' });
   });
   it('dismisses without answering and shows the request again when its time changes', () => {
     mocks.requests = [request()];
@@ -96,14 +96,12 @@ describe('scheduled invitations in the lobby', () => {
     );
     expect(mocks.respond).not.toHaveBeenCalled();
   });
-  it('keeps a conflicting acceptance visible with a useful error', () => {
-    mocks.respond.mockImplementation((_variables, options) =>
-      options.onSuccess({ outcome: 'conflict', conflicting_start_at: '2026-10-24T18:00:00Z' })
-    );
+  it('keeps a conflicting acceptance visible with a useful error', async () => {
+    mocks.respond.mockResolvedValue({ outcome: 'conflict', conflicting_start_at: '2026-10-24T18:00:00Z' });
     mocks.requests = [request()];
     render(<LobbyScheduledRequests lobby={lobby} />);
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('That clashes with a debate');
+    expect(await screen.findByRole('alert')).toHaveTextContent('That clashes with a debate');
     expect(screen.getByRole('button', { name: 'Choose different time' })).toBeInTheDocument();
   });
 
@@ -126,18 +124,16 @@ describe('scheduled invitations in the lobby', () => {
     expect(mocks.respond).toHaveBeenCalledTimes(2);
   });
 
-  it('allows retrying after an answer fails or conflicts', () => {
+  it('allows retrying after an answer fails or conflicts', async () => {
     mocks.respond
-      .mockImplementationOnce((_vars, options) => options.onError(new Error('Try again.')))
-      .mockImplementationOnce((_vars, options) =>
-        options.onSuccess({ outcome: 'conflict', conflicting_start_at: '2026-10-24T18:00:00Z' })
-      );
+      .mockRejectedValueOnce(new Error('Try again.'))
+      .mockResolvedValueOnce({ outcome: 'conflict', conflicting_start_at: '2026-10-24T18:00:00Z' });
     mocks.requests = [request()];
     render(<LobbyScheduledRequests lobby={lobby} />);
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('Try again.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Try again.');
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('That clashes with a debate');
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('That clashes with a debate'));
     fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
     expect(mocks.respond).toHaveBeenCalledTimes(3);
   });

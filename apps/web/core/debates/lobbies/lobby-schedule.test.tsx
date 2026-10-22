@@ -200,6 +200,29 @@ describe('scheduling from a lobby person menu', () => {
     expect(mocks.cancel).toHaveBeenCalledWith({ requestId: 'request' }, expect.anything());
   });
 
+  it.each(['Asia/Tokyo', 'Pacific/Honolulu'])(
+    'keeps pending request and chip labels in the same %s timezone',
+    timezone => {
+      mocks.schedule = { ...mocks.schedule!, viewerTimezone: timezone };
+      const start = mocks.schedule.slots[0].start;
+      mocks.requests = [
+        {
+          request_id: 'request',
+          status: 'pending',
+          room_id: null,
+          proposed_by_user_id: 'me',
+          viewer_must_answer: false,
+          scheduled_start_at: start,
+          participants: [{ user_id: 'me' }, { user_id: 'peer' }],
+        } as ScheduledDebateRequest,
+      ];
+      render(menu());
+      fireEvent.click(screen.getByText('Open Priya'));
+      const chip = screen.getAllByRole('button', { name: /Schedule a debate with Priya/ })[0];
+      expect(screen.getByText(/^Requested /)).toHaveTextContent(`Requested ${chip.textContent}`);
+    }
+  );
+
   it('clears the open booking when the account changes, including switching back', async () => {
     const view = render(menu());
     fireEvent.click(screen.getByText('Open Priya'));
