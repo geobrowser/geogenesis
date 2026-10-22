@@ -2,7 +2,7 @@ import { isRevertedUserOperationError } from '@geogenesis/auth/account';
 import { getCreatePersonalSpaceCalldata } from '@geoprotocol/geo-sdk';
 
 import { Duration, Effect, Schedule } from 'effect';
-import { type Hex, createPublicClient, http } from 'viem';
+import { type Hex, createPublicClient, http, toHex } from 'viem';
 
 import type { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
@@ -63,6 +63,14 @@ export async function readRegisteredSpaceId(walletAddress: string): Promise<stri
 }
 
 /**
+ * How far back `hasDeclaredPersonalTopic` looks. It only has to cover the index's lag (seconds to
+ * minutes): a declaration older than that is already served by the index, which answers first.
+ * Bounded so the query stays inside RPC block-range caps as the chain grows. On testnet (~1,700
+ * blocks a day, Oct 2026) this is about six days.
+ */
+const DECLARATION_LOOKBACK_BLOCKS = 10_000n;
+
+/**
  * Whether the chain shows this personal space's profile publish: its own topic declaration,
  * which ships in the same userOp as the profile edit, so it exists only if that publish landed.
  * Unlike the index it has no lag, which is what keeps a second browser from publishing a second
@@ -72,16 +80,19 @@ export async function readRegisteredSpaceId(walletAddress: string): Promise<stri
  * use this to confirm a profile the index has not shown yet, never to rule one out.
  */
 export async function hasDeclaredPersonalTopic(spaceId: string): Promise<boolean> {
+  const client = publicClient();
   const space = padBytes16ToBytes32(`0x${spaceId}`);
+  const head = await client.getBlockNumber();
+  const fromBlock = head > DECLARATION_LOOKBACK_BLOCKS ? head - DECLARATION_LOOKBACK_BLOCKS : 0n;
   // `enter` logs [from space, to space, action, topic] as raw topics with no event signature,
   // so viem's typed `getLogs` cannot filter it.
-  const logs = await publicClient().request({
+  const logs = await client.request({
     method: 'eth_getLogs',
     params: [
       {
         address: SPACE_REGISTRY_ADDRESS_HEX,
-        fromBlock: 'earliest',
-        toBlock: 'latest',
+        fromBlock: toHex(fromBlock),
+        toBlock: toHex(head),
         topics: [space, space, GOVERNANCE_ACTIONS.TOPIC_DECLARED],
       },
     ],
