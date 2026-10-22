@@ -6,6 +6,7 @@ import { type ActionContext, withActionContext } from '~/core/action-context';
 import { useActionContext, useActionScope } from '~/core/action-context-provider';
 import { type AnalyticsProperties } from '~/core/analytics';
 import { currentAuthAttempt } from '~/core/auth-attempt';
+import { useGoogleSignInOptions } from '~/core/auth/google-sign-in';
 import { beginPrivyAuth } from '~/core/privy-auth-events';
 import { useGeoLogin, usePrivy } from '~/core/wallet/auth-hooks';
 
@@ -24,6 +25,8 @@ export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
   const { authenticated } = usePrivy();
   const authenticatedRef = useRef(authenticated);
   authenticatedRef.current = authenticated;
+  // The only place Privy's login() is called, so the flag alone decides whether Google is offered.
+  const googleSignInOptions = useGoogleSignInOptions();
   const { login } = useGeoLogin({
     ...params,
     onComplete: args => {
@@ -52,10 +55,12 @@ export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
         context.component === 'sign_in_prompt' ? (properties?.component ?? context.component) : context.component;
       const attempt = beginPrivyAuth({ ...context, auth_trigger: 'control', ...properties, component }, options);
       requested.current = { ...context, auth_attempt_id: attempt?.id };
-      login();
+      // No argument with the flag off, so Privy's modal keeps the config's methods.
+      if (googleSignInOptions) login(googleSignInOptions);
+      else login();
       return attempt;
     },
-    [login, getContext]
+    [login, getContext, googleSignInOptions]
   );
   return { login: trackedLogin };
 }

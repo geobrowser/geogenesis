@@ -1013,7 +1013,7 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
 
-    await waitFor(() => expect(videoTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'camera-2' }));
+    await waitFor(() => expect(videoTrack.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'camera-2' } }));
     expect(mocks.roomConnect).toHaveBeenCalledTimes(1);
     expect(mocks.roomDisconnect).not.toHaveBeenCalled();
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
@@ -1305,7 +1305,7 @@ describe('DebateRoomPageClient', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
 
-    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'mic-2' } }));
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
 
     await openDeviceSettings('Video settings');
@@ -1313,7 +1313,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('dialog', { name: 'Video settings' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
 
-    await waitFor(() => expect(videoTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'camera-2' }));
+    await waitFor(() => expect(videoTrack.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'camera-2' } }));
     expect(mocks.roomConnect).toHaveBeenCalledTimes(1);
     expect(mocks.roomDisconnect).not.toHaveBeenCalled();
   });
@@ -1451,7 +1451,7 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
-    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'mic-2' } }));
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('radio', { name: 'System default' })).not.toBeDisabled();
     expect(screen.getByRole('radio', { name: 'Studio Speakers' })).toBeInTheDocument();
@@ -1590,7 +1590,7 @@ describe('DebateRoomPageClient', () => {
     const selectedCamera = screen.getByRole('radio', { name: 'HD Pro Webcam' });
     selectedCamera.focus();
     fireEvent.keyDown(selectedCamera, { key: 'ArrowDown' });
-    await waitFor(() => expect(videoTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'camera-2' }));
+    await waitFor(() => expect(videoTrack.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'camera-2' } }));
     expect(screen.getByRole('dialog', { name: 'Video settings' })).toBeInTheDocument();
   });
 
@@ -1673,7 +1673,7 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await openDeviceSettings('Audio settings');
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
-    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'mic-2' } }));
     audioTrack.restartTrack.mockClear();
     await act(async () => mocks.deviceChangeHandler?.());
     expect(audioTrack.restartTrack).not.toHaveBeenCalled();
@@ -1683,7 +1683,7 @@ describe('DebateRoomPageClient', () => {
       { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
     ]);
     await act(async () => mocks.deviceChangeHandler?.());
-    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-1' }));
+    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'mic-1' } }));
     expect(mocks.roomConnect).toHaveBeenCalledTimes(1);
     expect(mocks.roomDisconnect).not.toHaveBeenCalled();
     expect(cameraStop).not.toHaveBeenCalled();
@@ -1710,7 +1710,7 @@ describe('DebateRoomPageClient', () => {
     act(() => mocks.deviceChangeHandler?.());
     act(() => mocks.deviceChangeHandler?.());
 
-    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    await waitFor(() => expect(audioTrack.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'mic-2' } }));
 
     act(() =>
       olderEnumeration.resolve([
@@ -7429,13 +7429,24 @@ describe('DebateRoomPageClient', () => {
       expect(debateVideoTile('local').querySelector('[aria-label^="Phase timer:"]')).not.toBeInTheDocument();
     });
 
-    it('shows the listener "Wrap it up" on the speaker\'s tile with their red timer', async () => {
-      joinAsBob();
-      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:47.500'));
-      await renderLiveDebate(openRoundsRoundOneSpeaking());
+    it.each(['Alice', 'Bob'])("hides the opponent's wrap-up prompt from %s (GEO-2415)", async listener => {
+      if (listener === 'Bob') joinAsBob();
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt(listener === 'Bob' ? '20:02:47.500' : '20:01:56.500'));
+      await renderLiveDebate(listener === 'Bob' ? openRoundsRoundOneSpeaking() : openRoundsListening());
 
-      await waitFor(() => expect(pill('remote', 'wrap-it-up')).toHaveTextContent('Wrap it up'));
+      await waitFor(() => expect(timer('remote')).toHaveAttribute('data-turn-timer', 'final'));
+      expect(pill('remote', 'wrap-it-up')).toBeNull();
       expect(pill('local', 'wrap-it-up')).toBeNull();
+      expect(screen.queryByText(/^Wrap it up!?$/)).not.toBeInTheDocument();
+    });
+
+    it.each(['Alice', 'Bob'])('shows %s their own wrap-up prompt (GEO-2415)', async speaker => {
+      if (speaker === 'Bob') joinAsBob();
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt(speaker === 'Bob' ? '20:01:56.500' : '20:02:47.500'));
+      await renderLiveDebate(speaker === 'Bob' ? openRoundsListening() : openRoundsRoundOneSpeaking());
+
+      await waitFor(() => expect(pill('local', 'wrap-it-up')).toHaveTextContent('Wrap it up'));
+      expect(pill('remote', 'wrap-it-up')).toBeNull();
     });
 
     it('counts nobody in over the last word, which leads to the pick, even with the next round appended', async () => {

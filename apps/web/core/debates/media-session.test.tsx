@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
 
-import { DebateMediaSessionProvider, useDebateMediaSession } from './media-session';
+import { DebateMediaSessionProvider, localTrackSource, useDebateMediaSession } from './media-session';
 
 const mocks = vi.hoisted(() => ({
   createLocalTracks: vi.fn(),
@@ -40,6 +40,14 @@ beforeEach(() => {
       getTracks() {
         return this.tracks;
       }
+
+      getAudioTracks() {
+        return this.tracks.filter(track => track.kind === 'audio');
+      }
+
+      getVideoTracks() {
+        return this.tracks.filter(track => track.kind === 'video');
+      }
     }
   );
   Object.defineProperty(navigator, 'mediaDevices', {
@@ -67,6 +75,131 @@ async function fireDeviceChange() {
     await Promise.resolve();
   });
 }
+
+// Exercise LiveKit's real constraint conversion instead of mocking restartTrack. A browser may
+// choose its default for an ideal device ID; an exact ID must open that hardware or reject.
+class DeviceCapture extends EventTarget {
+  enabled = true;
+  muted = false;
+  readyState = 'live';
+  id = crypto.randomUUID();
+  constructor(
+    readonly kind: 'audio' | 'video',
+    private readonly deviceId: string
+  ) {
+    super();
+  }
+  getSettings() {
+    return { deviceId: this.deviceId };
+  }
+  getConstraints() {
+    return { deviceId: this.deviceId };
+  }
+  applyConstraints = vi.fn().mockResolvedValue(undefined);
+  stop() {
+    this.readyState = 'ended';
+  }
+}
+
+describe('device selection through LiveKit', () => {
+  it.each([
+    { kind: 'audio' as const, processed: false, unavailable: false },
+    { kind: 'audio' as const, processed: true, unavailable: false },
+    { kind: 'video' as const, processed: false, unavailable: false },
+    { kind: 'audio' as const, processed: true, unavailable: true },
+    { kind: 'video' as const, processed: false, unavailable: true },
+  ])(
+    'confirms $kind capture or recovers the previous device (processed: $processed, unavailable: $unavailable)',
+    async ({ kind, processed, unavailable }) => {
+      rememberMediaDevice('audioinput', 'mic-1');
+      rememberMediaDevice('videoinput', 'camera-1');
+      const sdk = await vi.importActual<typeof import('livekit-client')>('livekit-client');
+      const getUserMedia = vi.fn(async (constraints: MediaStreamConstraints) => {
+        const tracks = (['audio', 'video'] as const).flatMap(mediaKind => {
+          const constraint = constraints[mediaKind];
+          if (!constraint) return [];
+          const requested = typeof constraint === 'object' ? constraint.deviceId : undefined;
+          const exact = typeof requested === 'object' && !Array.isArray(requested) ? requested.exact : undefined;
+          if (unavailable && (exact === 'mic-2' || exact === 'camera-2')) {
+            throw new DOMException('Device is no longer available', 'OverconstrainedError');
+          }
+          if (
+            exact &&
+            !(mediaKind === 'audio' ? ['mic-1', 'mic-2'] : ['camera-1', 'camera-2']).includes(String(exact))
+          ) {
+            throw new DOMException('Device is not of the requested kind', 'OverconstrainedError');
+          }
+          const deviceId = typeof exact === 'string' ? exact : mediaKind === 'audio' ? 'mic-1' : 'camera-1';
+          return [new DeviceCapture(mediaKind, deviceId) as unknown as MediaStreamTrack];
+        });
+        return new MediaStream(tracks);
+      });
+      Object.assign(navigator.mediaDevices, { getUserMedia });
+      mocks.createLocalTracks.mockImplementation(sdk.createLocalTracks);
+      mocks.enumerateDevices.mockResolvedValue([
+        { kind: 'audioinput', deviceId: 'mic-1', label: 'Old mic' },
+        { kind: 'audioinput', deviceId: 'mic-2', label: 'New mic' },
+        { kind: 'videoinput', deviceId: 'camera-1', label: 'Old camera' },
+        { kind: 'videoinput', deviceId: 'camera-2', label: 'New camera' },
+      ]);
+      render(
+        <DebateMediaSessionProvider>
+          <MediaSessionHarness />
+        </DebateMediaSessionProvider>
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Ensure both' }));
+      await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+      const tracks = (await mocks.createLocalTracks.mock.results[0].value) as import('livekit-client').LocalTrack[];
+      const selectedTrack = tracks.find(track => track.kind === kind)!;
+      if (processed) {
+        (selectedTrack as import('livekit-client').LocalAudioTrack).setAudioContext({} as AudioContext);
+        const processor = {
+          name: 'test-noise-filter',
+          processedTrack: new DeviceCapture('audio', 'processed') as unknown as MediaStreamTrack,
+          init: async () => {},
+          restart: async () => {
+            processor.processedTrack = new DeviceCapture('audio', 'processed') as unknown as MediaStreamTrack;
+          },
+          destroy: async () => {},
+        };
+        await selectedTrack.setProcessor(processor);
+      }
+      const replaceTrack = vi.fn().mockResolvedValue(undefined);
+      selectedTrack.sender = { replaceTrack } as unknown as RTCRtpSender;
+      fireEvent.click(screen.getByRole('button', { name: kind === 'audio' ? 'Select microphone' : 'Select camera' }));
+      const expectedCaptures = unavailable ? 3 : 2;
+      await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(expectedCaptures));
+      await waitFor(() => expect(screen.getByTestId('preview-busy')).toHaveTextContent('false'));
+      expect(screen.getByTestId('selected-devices')).toHaveTextContent(
+        unavailable ? 'mic-1/camera-1' : kind === 'audio' ? 'mic-2/camera-1' : 'mic-1/camera-2'
+      );
+      const deviceId = `${kind === 'audio' ? 'mic' : 'camera'}-${unavailable ? 1 : 2}`;
+      expect(selectedTrack.getSourceTrackSettings().deviceId).toBe(deviceId);
+      expect(screen.getByTestId('preview-devices')).toHaveTextContent(`${kind}:${processed ? 'processed' : deviceId}`);
+      expect(replaceTrack).toHaveBeenCalledWith(selectedTrack.mediaStreamTrack);
+      expect(readMediaDevicePreference(kind === 'audio' ? 'audioinput' : 'videoinput')).toBe(deviceId);
+      if (unavailable) expect(screen.getByTestId('preview-error')).not.toBeEmptyDOMElement();
+      expect(mocks.createLocalTracks).toHaveBeenCalledOnce();
+      expect(getUserMedia).toHaveBeenCalledTimes(expectedCaptures);
+    }
+  );
+
+  it.each(['audio', 'video'] as const)(
+    'reads the %s capture from a combined stream regardless of track order',
+    kind => {
+      const source = new DeviceCapture(kind, 'capture') as unknown as MediaStreamTrack;
+      const unrelated = new DeviceCapture(
+        kind === 'audio' ? 'video' : 'audio',
+        'other-device'
+      ) as unknown as MediaStreamTrack;
+      const processed = new DeviceCapture(kind, 'processed') as unknown as MediaStreamTrack;
+      expect(localTrackSource({ mediaStreamTrack: processed, mediaStream: new MediaStream([unrelated, source]) })).toBe(
+        source
+      );
+    }
+  );
+});
 
 describe('remembered devices across debate sessions', () => {
   it('restores saved input and output devices after the provider remounts', async () => {
@@ -130,7 +263,7 @@ describe('remembered devices across debate sessions', () => {
       { kind: 'audioinput', deviceId: 'mic-2' },
     ]);
     await fireDeviceChange();
-    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'mic-2' } }));
     expect(mocks.createLocalTracks).toHaveBeenCalledOnce();
   });
 
@@ -611,8 +744,14 @@ function restartableTrack(kind: 'audio' | 'video', deviceId: string) {
     get mediaStream() {
       return { getTracks: () => [source] };
     },
-    restartTrack: vi.fn(async (options?: { deviceId?: string }) => {
-      const nextId = options?.deviceId ?? deviceId;
+    restartTrack: vi.fn(async (options?: { deviceId?: ConstrainDOMString }) => {
+      const requested = options?.deviceId;
+      const nextId =
+        typeof requested === 'object'
+          ? Array.isArray(requested)
+            ? requested[0]
+            : (requested.exact as string)
+          : (requested ?? deviceId);
       source = { ...source, enabled: true, readyState: 'live', getSettings: () => ({ deviceId: nextId }) };
       listeners.get('restarted')?.();
     }),
@@ -651,12 +790,12 @@ describe('input changes on existing LocalTracks', () => {
     const { audio, video } = await startInputs();
     audio.mediaStreamTrack.enabled = false;
     fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
-    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'mic-2' } }));
     await waitFor(() => expect(screen.getByTestId('preview-busy')).toHaveTextContent('false'));
     expect(audio.mediaStreamTrack.enabled).toBe(false);
     expect(video.restartTrack).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Select camera' }));
-    await waitFor(() => expect(video.restartTrack).toHaveBeenCalledWith({ deviceId: 'camera-2' }));
+    await waitFor(() => expect(video.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'camera-2' } }));
     expect(audio.restartTrack).toHaveBeenCalledTimes(1);
     expect(audio.stop).not.toHaveBeenCalled();
     expect(video.stop).not.toHaveBeenCalled();
@@ -775,7 +914,10 @@ describe('input changes on existing LocalTracks', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select third camera' }));
     await act(async () => finish());
     await waitFor(() => expect(video.restartTrack).toHaveBeenCalledTimes(2));
-    expect(video.restartTrack.mock.calls.map(call => call[0]?.deviceId)).toEqual(['camera-2', 'camera-3']);
+    expect(video.restartTrack.mock.calls.map(call => call[0]?.deviceId)).toEqual([
+      { exact: 'camera-2' },
+      { exact: 'camera-3' },
+    ]);
     expect(video.mediaStreamTrack.getSettings().deviceId).toBe('camera-3');
     expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-2/camera-3');
   });
@@ -794,7 +936,7 @@ describe('input changes on existing LocalTracks', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select third mic' }));
     expect(audio.restartTrack).toHaveBeenCalledTimes(1);
     await act(async () => finish());
-    await waitFor(() => expect(audio.restartTrack).toHaveBeenLastCalledWith({ deviceId: 'mic-3' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenLastCalledWith({ deviceId: { exact: 'mic-3' } }));
     expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-3/');
   });
 
@@ -846,7 +988,7 @@ describe('input changes on existing LocalTracks', () => {
     const { audio, video } = await startInputs();
     audio.restartTrack.mockRejectedValueOnce(new Error('Capture failed'));
     fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
-    await waitFor(() => expect(audio.restartTrack).toHaveBeenLastCalledWith({ deviceId: 'mic-1' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenLastCalledWith({ deviceId: { exact: 'mic-1' } }));
     await waitFor(() => expect(screen.getByTestId('preview-error')).toHaveTextContent('microphone'));
     expect(screen.getByTestId('selected-devices')).toHaveTextContent('mic-1/camera-1');
     expect(video.restartTrack).not.toHaveBeenCalled();
@@ -949,7 +1091,7 @@ describe('input changes on existing LocalTracks', () => {
     const { audio, video } = await startInputs();
     audio.mediaStreamTrack.readyState = 'ended';
     await fireDeviceChange();
-    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-1' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'mic-1' } }));
     expect(video.restartTrack).not.toHaveBeenCalled();
   });
 
@@ -978,7 +1120,7 @@ describe('input changes on existing LocalTracks', () => {
       { kind: 'videoinput', deviceId: 'camera-1', groupId: 'video', label: 'Camera 1' },
     ]);
     await fireDeviceChange();
-    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: 'mic-2' }));
+    await waitFor(() => expect(audio.restartTrack).toHaveBeenCalledWith({ deviceId: { exact: 'mic-2' } }));
     expect(video.restartTrack).not.toHaveBeenCalled();
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
   });

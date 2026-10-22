@@ -265,4 +265,28 @@ describe('DebateRoomPageClient', () => {
 
     expect(screen.getByText('picker for session-1')).toBeInTheDocument();
   });
+
+  // GEO-3433. A link's text never reaches click analytics; each notice's way out is named instead.
+  it.each([
+    ['signed out', () => (mocks.authenticated = false), 'Debate room Notice sign in'],
+    [
+      'early',
+      () => (mocks.access = { status: 'not_yet_open', opens_at: '2026-09-24T12:50:00.000Z' }),
+      'Debate room Notice not yet open explore',
+    ],
+    [
+      'over',
+      () => {
+        mocks.session = converted;
+        mocks.debateStatus = { data: 'complete', isLoading: false };
+      },
+      'Debate room Notice find a debate',
+    ],
+  ])('labels the notice action for a room visitor who is %s', (_state, arrange, label) => {
+    arrange();
+    mocks.guestView = { data: undefined, isPending: false, fetchStatus: 'idle' };
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByRole('link')).toHaveAttribute('data-geo-analytics-label', label);
+  });
 });

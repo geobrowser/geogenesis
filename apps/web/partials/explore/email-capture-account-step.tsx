@@ -17,6 +17,42 @@ const CODE_LENGTH = 6;
 /** The muted line under the boxes: the resend link, or the verification under way. */
 const NOTE_CLASS = 'mt-2 text-[14px] tracking-[-0.35px] text-[rgba(21,21,21,0.7)]';
 
+/** The step's parts, styled by the card it sits in. */
+export type AccountStepClasses = {
+  subtext: string;
+  /** The save-votes look only: the address on a line of its own, and the "Change" beside it. */
+  address?: string;
+  change?: string;
+  stack: string;
+  box: string;
+  note: string;
+  error: string;
+  resend: string;
+};
+
+/** The Explore email capture's frame. */
+const CAPTURE_CLASSES: AccountStepClasses = {
+  subtext: SUBTEXT_CLASS,
+  stack: FORM_STACK_CLASS,
+  box: 'h-11 max-w-[44px] rounded-lg text-[20px]',
+  note: NOTE_CLASS,
+  error: ERROR_CLASS,
+  resend: 'underline underline-offset-2 disabled:opacity-60',
+};
+
+/**
+ * `save-votes` is the save-votes sheet's restyle (GEO-3439): it says how long the code is, names the
+ * address on a line of its own beside a way to change it, and takes its classes from the sheet.
+ */
+type AppearanceProps =
+  | { appearance?: 'capture'; classes?: never; onChangeEmail?: never }
+  | {
+      appearance: 'save-votes';
+      classes: AccountStepClasses;
+      /** Offers a "Change" beside the address, for a visitor who typed it wrong. */
+      onChangeEmail?: () => void;
+    };
+
 /**
  * Typing always lands in the next empty box, so a caret is kept at the end of the hidden field rather
  * than wherever a tap on a box put it. A selection is left alone: select-all then paste must replace
@@ -56,13 +92,18 @@ export function AccountStep({
   onGiveUp,
   analytics = ACCOUNT_ANALYTICS,
   analyticsLabel = 'Explore account verification',
+  appearance,
+  classes,
+  onChangeEmail,
 }: {
   email: string;
   onGiveUp: () => void;
   /** Whose sign-in this is. Defaults to Explore's email capture, the step's first host. */
   analytics?: AccountStepAnalytics;
   analyticsLabel?: string;
-}) {
+} & AppearanceProps) {
+  const styles = classes ?? CAPTURE_CLASSES;
+  const savesVotes = appearance === 'save-votes';
   // Headless email completion runs directly after verification, even if authentication has
   // already unmounted this card. Modal completions go through the app-wide PrivyAuthTracker.
   // EmbeddedWalletSync separately creates and activates the wallet for a headless login.
@@ -185,12 +226,7 @@ export function AccountStep({
   }, [failed]);
 
   const resendButton = (label: string) => (
-    <button
-      type="button"
-      onClick={() => void requestCode()}
-      disabled={busy}
-      className="underline underline-offset-2 disabled:opacity-60"
-    >
+    <button type="button" onClick={() => void requestCode()} disabled={busy} className={styles.resend}>
       {label}
     </button>
   );
@@ -208,14 +244,37 @@ export function AccountStep({
     >
       {/* The card's own subtext style, shared from the popup so the two states are one design
           rather than two that drifted. */}
-      <p className={SUBTEXT_CLASS}>
-        {busy && !verifying ? 'Sending a code to ' : 'Enter the code we sent to '}
-        <span className="text-[#151515]">{email}</span>
-      </p>
+      {savesVotes ? (
+        <>
+          <p className={styles.subtext}>
+            {busy && !verifying ? 'Sending a 6-digit code to' : 'Enter the 6-digit code we sent to'}
+          </p>
+          <p className={styles.address}>
+            <span>{email}</span>
+            {onChangeEmail ? (
+              <button
+                type="button"
+                onClick={onChangeEmail}
+                aria-label="Change email address"
+                data-geo-analytics-label="save_votes_change_email"
+                data-geo-analytics-intent="navigate"
+                className={styles.change}
+              >
+                Change
+              </button>
+            ) : null}
+          </p>
+        </>
+      ) : (
+        <p className={styles.subtext}>
+          {busy && !verifying ? 'Sending a code to ' : 'Enter the code we sent to '}
+          <span className="text-[#151515]">{email}</span>
+        </p>
+      )}
 
       {/* The subscribe row's layout after the restyle: a column, same spacing and width, so the
           card does not change shape when it swaps to this step. */}
-      <div className={FORM_STACK_CLASS}>
+      <div className={styles.stack}>
         <div className="relative">
           {/* What the reader sees: a box per digit, the next one to fill outlined while they type. */}
           <div aria-hidden className="flex justify-center gap-2">
@@ -224,7 +283,8 @@ export function AccountStep({
                 key={index}
                 data-testid="code-box"
                 className={cx(
-                  'flex h-11 max-w-[44px] min-w-0 flex-1 basis-0 items-center justify-center rounded-lg border bg-white text-[20px] leading-none font-medium text-[#151515] transition-colors',
+                  'flex min-w-0 flex-1 basis-0 items-center justify-center border bg-white leading-none font-medium text-[#151515] transition-colors',
+                  styles.box,
                   failed && code.length === 0
                     ? 'border-red-01'
                     : focused && !busy && index === Math.min(code.length, CODE_LENGTH - 1)
@@ -282,15 +342,18 @@ export function AccountStep({
       {verifying ? (
         // In the resend line's place, so the card keeps its height while the code is checked.
         // No role of its own: both hosts wrap this step in a `status` region, which announces it.
-        <p className={NOTE_CLASS}>Verifying…</p>
+        <p className={styles.note}>Verifying…</p>
       ) : failed ? (
-        <p role="alert" className={ERROR_CLASS}>
-          That code did not work. {resendButton('Send a new one')}
+        <p role="alert" className={styles.error}>
+          {savesVotes ? 'That code didn’t work. ' : 'That code did not work. '}
+          {resendButton(savesVotes ? 'Send a new code' : 'Send a new one')}
         </p>
+      ) : savesVotes ? (
+        <p className={styles.note}>Didn’t get it? {resendButton('Send a new code')}</p>
       ) : (
         // Always reachable, not only after a failure: a code can simply not arrive, and Privy
         // retires one after five wrong attempts, at which point the only way forward is a new code.
-        <p className={NOTE_CLASS}>{resendButton('Send a new code')}</p>
+        <p className={styles.note}>{resendButton('Send a new code')}</p>
       )}
     </form>
   );

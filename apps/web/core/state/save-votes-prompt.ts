@@ -9,7 +9,14 @@ import { useSyncExternalStore } from 'react';
  * and its tests mock `jotai` wholesale.
  */
 export type SaveVotesPromptReason =
-  'threshold' | 'single_claim' | 'repeat' | 'return_visit' | 'inline_save' | SaveVotesPressReason;
+  | 'threshold'
+  | 'single_claim'
+  | 'repeat'
+  | 'return_visit'
+  | 'inline_save'
+  /** An email's vote link put a side on this device (GEO-3374). */
+  | 'email_link'
+  | SaveVotesPressReason;
 
 /**
  * A "Save N votes" sign-in button: the navbar's, or the debate feed's phone bar (GEO-3415). Pressed,
@@ -17,8 +24,14 @@ export type SaveVotesPromptReason =
  */
 export type SaveVotesPressReason = 'navbar' | 'debate_feed_bar';
 
-export function isSaveVotesPressReason(reason: SaveVotesPromptReason | null): reason is SaveVotesPressReason {
-  return reason === 'navbar' || reason === 'debate_feed_bar';
+/**
+ * Whether the sheet opens as a centred dialog rather than the corner card. A press on a "Save N
+ * votes" button asked for it, so it comes forward (GEO-3400). So does an email's vote link (GEO-3374):
+ * the reader came to vote, and logging in is the only step left, so the ask shouldn't wait in a corner
+ * a screen away from the pills.
+ */
+export function opensSaveVotesCentered(reason: SaveVotesPromptReason | null): boolean {
+  return reason === 'navbar' || reason === 'debate_feed_bar' || reason === 'email_link';
 }
 
 /**

@@ -4,6 +4,7 @@ import { useSignInDeepLink } from '~/core/auth/use-sign-in-deep-link';
 import { useRoomAccessDeepLink } from '~/core/debates/rooms/use-room-access-deep-link';
 import { useDebatesPanelDeepLink } from '~/core/debates/use-debates-panel-deep-link';
 
+import { GoogleCalendarReturn } from '~/partials/availability/google-calendar-return';
 import { AvailabilityDeepLink } from '~/partials/availability/shared-availability';
 
 /**
@@ -21,5 +22,10 @@ export function DeepLinkHandler() {
   useDebatesPanelDeepLink();
   useRoomAccessDeepLink();
 
-  return <AvailabilityDeepLink />;
+  return (
+    <>
+      <AvailabilityDeepLink />
+      <GoogleCalendarReturn />
+    </>
+  );
 }
