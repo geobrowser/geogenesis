@@ -28,7 +28,7 @@ import {
 } from '~/core/hooks/use-user-voted-entity-ids';
 import { withRetryAfterJitter } from '~/core/io/errors/retry-utils';
 import { getUserEntityResponse } from '~/core/io/queries';
-import { pushMarketingEvent } from '~/core/marketing-events';
+import { marketingVoteDirection, pushMarketingEvent } from '~/core/marketing-events';
 import {
   claimResponseSummariesQueryKeyPrefix,
   loadClaimResponseSummaryCaches,
@@ -613,6 +613,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
           target_id: submission.pending.entityId,
           space_id: submission.pending.spaceId,
           vote_kind: submission.pending.responseKind,
+          vote_direction: marketingVoteDirection(submission.pending.responseKind, direction),
         });
       }
       submission.pending.onIndexed = () => context?.operation.outcome('vote_cast', 'indexed', outcomeProperties);
