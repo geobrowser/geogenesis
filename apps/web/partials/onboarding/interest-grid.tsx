@@ -68,11 +68,18 @@ export function InterestGrid({
               <span
                 className={cx(
                   'pointer-events-none absolute inset-0 rounded-full transition-colors',
-                  selected ? 'bg-ctaPrimary/15 ring-2 ring-ctaPrimary ring-inset' : 'group-hover:bg-text/5'
+                  selected ? 'bg-ctaPrimary/25 ring-4 ring-ctaPrimary ring-inset' : 'group-hover:bg-text/5'
                 )}
               />
             </span>
-            <span className="min-h-8 w-full text-[13px] leading-4 font-medium break-words">{space.name}</span>
+            <span
+              className={cx(
+                'flex min-h-8 w-full items-center justify-center rounded-md px-0.5 text-[13px] leading-4 font-medium break-words transition-colors',
+                selected ? 'bg-ctaPrimary text-white' : 'text-text'
+              )}
+            >
+              {space.name}
+            </span>
           </button>
         );
       })}
