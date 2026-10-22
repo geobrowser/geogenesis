@@ -9,15 +9,17 @@ export type BusyInterval = { start: string; end: string };
 /** One shaded stretch inside a day, in minutes from local midnight. */
 export type BusySegment = { start: number; end: number };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 /** Inside geo-chat's 92-day cap on `/me/calendar-busy`, which is also how far ahead it syncs. */
 export const CALENDAR_BUSY_WINDOW_DAYS = 90;
 
-/** The window to ask for: from this week's Monday (the earliest week the grid opens on) forward 90 days. */
+/**
+ * The window to ask for: from this week's Monday (the earliest week the grid opens on) forward 90
+ * local days, midnight to midnight. A clock change makes that up to an hour off 90 × 24h, still
+ * inside the cap.
+ */
 export function calendarBusyWindow(now: Date) {
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
-  const to = new Date(monday.getTime() + CALENDAR_BUSY_WINDOW_DAYS * DAY_MS);
+  const to = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + CALENDAR_BUSY_WINDOW_DAYS);
   return { from: monday.toISOString(), to: to.toISOString() };
 }
 

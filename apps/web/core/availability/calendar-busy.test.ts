@@ -41,7 +41,7 @@ describe('calendarBusyWindow', () => {
   it('starts at this week’s Monday and spans the busy window', () => {
     const { from, to } = calendarBusyWindow(new Date(2026, 9, 8, 15, 0));
     expect(from).toBe(new Date(2026, 9, 5).toISOString());
-    expect(Date.parse(to) - Date.parse(from)).toBe(CALENDAR_BUSY_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    expect(to).toBe(new Date(2026, 9, 5 + CALENDAR_BUSY_WINDOW_DAYS).toISOString());
   });
 
   it('treats Sunday as the end of the week, not the start', () => {
