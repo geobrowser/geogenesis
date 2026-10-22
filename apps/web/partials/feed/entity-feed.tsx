@@ -392,12 +392,15 @@ export function EntityFeed({
     () => (requestedSpaceIds.length > 0 ? requestedSpaceIds : spaceOptions.map(option => option.value)).map(normId),
     [requestedSpaceIds, spaceOptions]
   );
+
+  const browseSidebarSettled = browseSidebar !== null && !browseSidebar.featuredError;
+  const facetScopeReady = requestedSpaceIds.length > 0 || (browseSidebarSettled && facetSpaceIds.length > 0);
   const exploreTopicFacet = useExploreTopicFacet({
     spaceIds: facetSpaceIds,
     typeIds: typeIds ?? initialTypeIds,
     time: requestedTime ?? 'all',
     topicIds: selectedTopicIds,
-    enabled: topicFilterVisible && !topicFacetEndpoint && facetSpaceIds.length > 0,
+    enabled: topicFilterVisible && !topicFacetEndpoint && facetScopeReady,
   });
 
   const topicFacets = useQuery({
@@ -409,7 +412,7 @@ export function EntityFeed({
       facetSpaceIds.join(','),
       fixedParamsKey,
     ],
-    enabled: Boolean(topicFacetEndpoint) && topicFilterVisible,
+    enabled: Boolean(topicFacetEndpoint) && topicFilterVisible && facetScopeReady,
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       fetchTopicFacets(topicFacetEndpoint!, {
@@ -422,7 +425,7 @@ export function EntityFeed({
     staleTime: 60_000,
   });
   const topicCountsPending = topicFacetEndpoint
-    ? topicFacets.isLoading || topicFacets.isPlaceholderData
+    ? !facetScopeReady || topicFacets.isLoading || topicFacets.isPlaceholderData
     : showTopicFilter
       ? exploreTopicFacet.countsPending
       : false;
@@ -494,7 +497,7 @@ export function EntityFeed({
   // A payload whose Featured traversal failed is not settled either. It still arrives — with the
   // featured rows empty and `featuredError` set — so reading it as an answer would untick every
   // featured space on one transient failure, when the route's own lookup may well have succeeded.
-  const spaceOptionsSettled = browseSidebar !== null && !browseSidebar.featuredError;
+  const spaceOptionsSettled = browseSidebarSettled;
   React.useEffect(() => {
     setSelectedSpaceIds(current =>
       keepSelectableSpaces(
