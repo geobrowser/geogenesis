@@ -416,14 +416,15 @@ export function EntityFeed({
     ? !facetScopeReady || topicFacets.isLoading || topicFacets.isPlaceholderData
     : showTopicFilter;
   const topicFacetFailed = Boolean(topicFacetEndpoint) && topicFacets.isError && !topicFacets.data;
+  const topicCountsExact = sort !== 'top';
   const availableTopicOptions = React.useMemo<HubFilterOption<string>[]>(() => {
     if (!topicFacetEndpoint) return [];
     return orderFacetOptions(topicFacets.data?.topics ?? [], selectedTopicIds).map(topic => ({
       value: topic.id,
       label: topic.name?.trim() || 'Topic',
-      count: topic.count,
+      ...(topicCountsExact ? { count: topic.count } : {}),
     }));
-  }, [topicFacetEndpoint, topicFacets.data?.topics, selectedTopicIds]);
+  }, [topicFacetEndpoint, topicFacets.data?.topics, selectedTopicIds, topicCountsExact]);
 
   // A topic that drops to zero and is not selected leaves the menu; a still-loading or failed
   // payload keeps the selection rather than discarding one mid-flight. Only the settled REST
