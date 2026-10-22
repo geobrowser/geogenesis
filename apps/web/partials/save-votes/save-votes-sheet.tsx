@@ -46,24 +46,23 @@ import { ResponsePositionIcon } from '~/design-system/icons/response-position-ic
 
 import { AccountStep } from '~/partials/explore/email-capture-account-step';
 import { useIsEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
+import { HEADING_CLASS, SUBTEXT_CLASS } from '~/partials/explore/email-capture-styles';
 
 import {
   CENTERED_CARD_CLASS,
   CHIP_CLASS,
+  CHIP_LIST_CLASS,
   CHIP_ROW_CLASS,
   CORNER_CARD_CLASS,
-  HEADING_CLASS,
   ICON_BUTTON_CLASS,
   INPUT_CLASS,
   TOP_BAR_CLASS,
   badgeClass,
   bodyClass,
-  chipListClass,
   codeStepClasses,
   fieldClass,
   fineClass,
   primaryButtonClass,
-  subtextClass,
 } from './save-votes-styles';
 
 /**
@@ -286,7 +285,7 @@ export function SaveVotesSheet() {
           {lobbyName ? (
             <>
               <p className={HEADING_CLASS}>Join the discussion</p>
-              <p className={subtextClass(compact)}>
+              <p className={SUBTEXT_CLASS}>
                 Create an account to vote on claims, speak and debate. You’ll stay in{' '}
                 <span className="font-medium text-text">{lobbyName}</span>, and your audio keeps playing.
               </p>
@@ -295,7 +294,7 @@ export function SaveVotesSheet() {
           ) : (
             <>
               <p className={HEADING_CLASS}>{saveVotesHeading(count, returnVisit, logIn)}</p>
-              <p className={subtextClass(compact)}>{saveVotesSubtext(count, logIn)}</p>
+              <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, logIn)}</p>
             </>
           )}
           <VoteChips votes={votes} rows={centered ? 2 : 1} />
@@ -402,14 +401,15 @@ function VoteChips({ votes, rows }: { votes: LocalVote[]; rows: 1 | 2 }) {
   if (shown.length === 0) return null;
   const lines = Array.from({ length: Math.ceil(shown.length / 2) }, (_, line) => shown.slice(line * 2, line * 2 + 2));
   return (
-    <div role="list" aria-label="Your votes" className={chipListClass(rows === 1)}>
+    <div role="list" aria-label="Your votes" className={CHIP_LIST_CLASS}>
       {lines.map((line, index) => (
         <div key={index} className={CHIP_ROW_CLASS}>
           {line.map(vote => (
             <div
               key={`${vote.entityId}:${vote.spaceId}:${vote.responseKind}`}
               role="listitem"
-              className={cx(CHIP_CLASS, 'max-w-[132px] min-w-0 gap-1')}
+              // A touch narrower over two rows, as the sheet first drew them.
+              className={cx(CHIP_CLASS, rows === 2 ? 'max-w-[128px]' : 'max-w-[132px]', 'min-w-0 gap-1')}
             >
               <span aria-hidden className="shrink-0">
                 <ResponsePositionIcon

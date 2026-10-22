@@ -24,7 +24,7 @@ import {
 import { useMarkEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
 
 import { SaveVotesSheet } from './save-votes-sheet';
-import { subtextClass } from './save-votes-styles';
+import { codeStepClasses } from './save-votes-styles';
 
 /** Stands in for the Explore email capture card, which shares the sheet's corner. */
 function EmailCaptureCard() {
@@ -41,7 +41,7 @@ const mocks = vi.hoisted(() => ({
   anyModalOpen: false,
   isModalOpen: false,
   accountStepMounts: 0,
-  accountStepSubtext: undefined as string | undefined,
+  accountStepClasses: undefined as unknown,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
@@ -71,14 +71,14 @@ vi.mock('~/partials/explore/email-capture-account-step', () => ({
     onChangeEmail,
   }: {
     email: string;
-    classes?: { subtext: string };
+    classes?: unknown;
     onChangeEmail?: () => void;
   }) => {
     // Mounting the real step is what mails a code, so a remount is a second email.
     React.useEffect(() => {
       mocks.accountStepMounts += 1;
     }, []);
-    mocks.accountStepSubtext = classes?.subtext;
+    mocks.accountStepClasses = classes;
     return (
       <>
         <p>Enter the code we sent to {email}</p>
@@ -109,7 +109,7 @@ beforeEach(() => {
   mocks.anyModalOpen = false;
   mocks.isModalOpen = false;
   mocks.accountStepMounts = 0;
-  mocks.accountStepSubtext = undefined;
+  mocks.accountStepClasses = undefined;
 });
 
 describe('copy', () => {
@@ -327,7 +327,7 @@ describe('SaveVotesSheet', () => {
     it('draws the code step at the corner card’s size', () => {
       sendCodeTo('sam@hey.com');
 
-      expect(mocks.accountStepSubtext).toBe(subtextClass(true));
+      expect(mocks.accountStepClasses).toEqual(codeStepClasses(true));
     });
 
     it('a fresh ask after leaving mid-edit is the plain email step again', () => {
@@ -473,7 +473,7 @@ describe('SaveVotesSheet from the navbar', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
 
-    expect(mocks.accountStepSubtext).toBe(subtextClass(false));
+    expect(mocks.accountStepClasses).toEqual(codeStepClasses(false));
   });
 
   it('stays centred on the way back from the code step (GEO-3439)', () => {
