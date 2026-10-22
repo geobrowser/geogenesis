@@ -14,10 +14,12 @@ const SPACE_ID = '17b847abe1d146079294071b11ab81fc';
 
 const readRegisteredSpaceId = vi.fn();
 const createPersonalSpaceOnChain = vi.fn();
+const hasDeclaredPersonalTopic = vi.fn();
 const getSpace = vi.fn();
 
 vi.mock('~/core/utils/contracts/create-personal-space-on-chain', () => ({
   readRegisteredSpaceId: (address: string) => readRegisteredSpaceId(address),
+  hasDeclaredPersonalTopic: (spaceId: string) => hasDeclaredPersonalTopic(spaceId),
   createPersonalSpaceOnChain: (args: unknown) => createPersonalSpaceOnChain(args),
 }));
 
@@ -42,9 +44,11 @@ function create(onRegistered = vi.fn()) {
 beforeEach(() => {
   readRegisteredSpaceId.mockReset();
   createPersonalSpaceOnChain.mockReset();
+  hasDeclaredPersonalTopic.mockReset();
   getSpace.mockReset();
   window.localStorage.clear();
   createPersonalSpaceOnChain.mockResolvedValue(SPACE_ID);
+  hasDeclaredPersonalTopic.mockResolvedValue(false);
 });
 
 describe('useCreatePersonalSpace', () => {
@@ -87,6 +91,34 @@ describe('useCreatePersonalSpace', () => {
 
     expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
     expect(onRegistered).toHaveBeenCalledWith(SPACE_ID);
+    // The index already answered; the chain is only asked when the index says "missing".
+    expect(hasDeclaredPersonalTopic).not.toHaveBeenCalled();
+  });
+
+  it('does not publish a second profile that another browser landed while the index lags', async () => {
+    // Browser A sent the profile; browser B finishes onboarding before the index serves it. B's
+    // dialog minted a fresh topic id, so publishing here would write a second profile under it.
+    readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
+    getSpace.mockReturnValue(Effect.succeed(null));
+    hasDeclaredPersonalTopic.mockResolvedValue(true);
+    const onRegistered = vi.fn();
+
+    await expect(create(onRegistered)).resolves.toBe(SPACE_ID);
+
+    expect(hasDeclaredPersonalTopic).toHaveBeenCalledWith(SPACE_ID);
+    expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
+    expect(onRegistered).toHaveBeenCalledWith(SPACE_ID);
+  });
+
+  it('still publishes the missing profile when the chain check cannot be read', async () => {
+    readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
+    getSpace.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: false }));
+    hasDeclaredPersonalTopic.mockRejectedValue(new Error('rpc unavailable'));
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await create();
+
+    expect(createPersonalSpaceOnChain).toHaveBeenCalledTimes(1);
   });
 
   it('trusts a profile this browser just sent over an index that has not caught up', async () => {
