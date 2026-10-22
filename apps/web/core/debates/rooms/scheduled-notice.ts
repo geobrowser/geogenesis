@@ -34,8 +34,13 @@ export function toCantMakeIt(requestId: string, pathname = NavUtils.toExplore())
   return toModal({ modal: CANT_MAKE_IT_MODAL, pathname, target: requestId });
 }
 
-/** As long as geo-chat takes a note. The field stops typing there rather than refusing on send. */
-export const NOTICE_NOTE_MAX = 280;
+/**
+ * As long as a note can be and still show in full in the waiting room (GEO-3427): two lines of the
+ * late notice in the other debater's video slot, measured at the narrowest desktop slot (768px),
+ * where ordinary text fits about 110 characters. geo-chat takes the same. The field stops typing
+ * there and counts down to it, rather than refusing on send.
+ */
+export const NOTICE_NOTE_MAX = 100;
 
 /** What is sent: trimmed, and nothing at all for a note that is only whitespace. */
 export function noticeNote(note: string): string | undefined {

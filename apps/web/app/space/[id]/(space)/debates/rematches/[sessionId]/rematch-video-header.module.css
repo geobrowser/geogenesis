@@ -40,6 +40,8 @@
   align-items: center;
   justify-content: center;
   padding: 12px 16px;
+  /* The room's waiting orange, lightly: enough to tell this slot apart from an empty one. */
+  background: color-mix(in srgb, var(--color-orange) 12%, white);
 }
 
 .fallback > * {

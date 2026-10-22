@@ -643,8 +643,15 @@ function NoteField({
         maxLength={NOTICE_NOTE_MAX}
         value={value}
         onChange={event => onChange(event.target.value)}
+        aria-describedby={`${id}-count`}
         className="w-full resize-none rounded-lg border border-grey-02 p-3 text-input focus:border-text focus:outline-hidden"
       />
+      {/* Short enough to show in full in the room, so say how much is left. */}
+      <Text as="p" variant="footnote" color="grey-04" className="self-end">
+        <span id={`${id}-count`}>
+          {value.length}/{NOTICE_NOTE_MAX}
+        </span>
+      </Text>
     </div>
   );
 }

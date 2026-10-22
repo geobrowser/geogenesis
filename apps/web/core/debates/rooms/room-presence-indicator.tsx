@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import dynamic from 'next/dynamic';
 
+import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
 import { debateAnalyticsLabel } from '../matchmaking/hub-analytics';
@@ -93,13 +94,16 @@ function PresenceDot({ state }: { state: DebateRoomPresenceState }) {
  *
  * It fills the late debater's empty video slot rather than sitting above the pair: the slot is
  * unused until they join, and it is where the waiting debater is already looking for them. The
- * type matches the room cards around it: medium for the line that matters, `text-chat` grey for the
- * rest, as on the card's own View profile.
+ * slot is tinted with the room's waiting orange and the title leads with an orange clock, so it
+ * reads as news rather than as an empty tile. Titles use the design system's `smallTitle`; the rest
+ * is `text-chat` grey, as on the card's own View profile, with the time itself set in the text
+ * colour. `text-balance` keeps a two-line title or note from leaving one word on its own.
  *
  * A phone's slot is about 110px tall inside, so there the note goes and the title is capped at
- * three lines: how late, when, and Reschedule are what the waiting debater acts on. Below 375px
- * wide "Expected by about…" takes two lines and no longer fits, so it goes too; the title still
- * says how many minutes.
+ * three lines: how late, when, and Reschedule are what the waiting debater acts on. The time says
+ * "By about 2:40 PM" there, on one line at every phone width from 375px (the full words need more
+ * than the tile has up to about 400px, and left "PM" alone on a line). Below 375px even that does
+ * not fit, so it goes; the title still says how many minutes.
  */
 export function RoomLateNotice({
   late,
@@ -121,12 +125,22 @@ export function RoomLateNotice({
       data-testid="room-late-notice"
       className="flex w-full max-w-[320px] flex-col items-center gap-1.5 text-center max-[767px]:gap-1"
     >
-      <p className="text-metadataMedium text-text max-[767px]:line-clamp-3 max-[767px]:text-chatMedium">
+      <p className="text-smallTitle text-balance text-text max-[767px]:line-clamp-3 max-[767px]:text-chatMedium">
+        <span
+          aria-hidden
+          className="mr-1.5 inline-flex align-[-1px] text-orange [&>svg]:size-4 max-[767px]:[&>svg]:size-3"
+        >
+          <Time />
+        </span>
         {ROOM_LATE_NOTICE.title(opponentName, late.minutes)}
       </p>
-      {late.note && <p className="line-clamp-2 text-chat break-words text-grey-04 max-[767px]:hidden">“{late.note}”</p>}
+      {late.note && (
+        <p className="line-clamp-2 text-chat text-balance break-words text-grey-04 max-[767px]:hidden">“{late.note}”</p>
+      )}
       <p className="text-chat text-grey-04 max-[374px]:hidden">
-        {ROOM_LATE_NOTICE.expected(formatTime(late.expectedAt))}
+        <span className="max-[767px]:hidden">{ROOM_LATE_NOTICE.expectedLead}</span>
+        <span className="hidden max-[767px]:inline">{ROOM_LATE_NOTICE.expectedLeadShort}</span>{' '}
+        <span className="text-chatMedium whitespace-nowrap text-text">{formatTime(late.expectedAt)}</span>
       </p>
       {request?.status === 'accepted' && (
         <div className="pt-1 max-[767px]:pt-0">
@@ -134,6 +148,7 @@ export function RoomLateNotice({
             analyticsLabel={debateAnalyticsLabel('room', 'Late notice reschedule')}
             analyticsIntent="reschedule_scheduled_debate"
             onClick={() => setRescheduling(true)}
+            className="bg-white"
           >
             {ROOM_LATE_NOTICE.reschedule}
           </HubPillButton>

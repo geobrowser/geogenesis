@@ -49,6 +49,10 @@ export const ROOM_LATE_NOTICE = {
   title: (opponentName: string, minutes: number | null) =>
     minutes ? `${opponentName} is running about ${minutes} minutes late` : `${opponentName} is running late`,
   expected: (time: string) => `Expected by about ${time}`,
+  /** `expected`'s words ahead of the time, for a notice that sets the time apart. */
+  expectedLead: 'Expected by about',
+  /** A phone's: "Expected by about 12:40 PM" is wider than its tile and leaves "PM" on a line alone. */
+  expectedLeadShort: 'By about',
   reschedule: 'Reschedule',
 } as const;
 

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
@@ -179,6 +179,16 @@ describe('ScheduledDebateNoticeDialog', () => {
   });
 
   describe('running late from an email (board 1b)', () => {
+    // A note shows in full in the other debater's room only up to 100 characters.
+    it('stops the note at 100 characters and counts up to it', async () => {
+      open('late');
+      const field = screen.getByLabelText('Note for Maya (optional)');
+      expect(field).toHaveAttribute('maxLength', '100');
+      expect(field).toHaveAccessibleDescription('0/100');
+      fireEvent.change(field, { target: { value: 'Train is delayed' } });
+      expect(field).toHaveAccessibleDescription('16/100');
+    });
+
     it('says which debate, then sends the picked minutes and the note on the confirm press', async () => {
       const user = userEvent.setup();
       open('late');

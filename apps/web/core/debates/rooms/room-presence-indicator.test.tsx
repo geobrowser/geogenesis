@@ -46,7 +46,10 @@ describe('RoomLateNotice (GEO-3427, board 6b)', () => {
 
     expect(screen.getByText('Jordan is running about 10 minutes late')).toBeInTheDocument();
     expect(screen.getByText('“Train is delayed, so sorry!”')).toBeInTheDocument();
-    expect(screen.getByText(/^Expected by about /)).toBeInTheDocument();
+    // The time is set apart and kept on one line; a phone gets the shorter lead-in.
+    expect(screen.getByText('Expected by about')).toHaveClass('max-[767px]:hidden');
+    expect(screen.getByText('By about')).toHaveClass('hidden', 'max-[767px]:inline');
+    expect(screen.getByText(/^\d{1,2}:13/)).toHaveClass('whitespace-nowrap');
   });
 
   it('says only that they are late when they gave no minutes', () => {
