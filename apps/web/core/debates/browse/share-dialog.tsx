@@ -24,9 +24,14 @@ import { LinkedIn } from '~/design-system/icons/linkedin';
 import { Reddit } from '~/design-system/icons/reddit';
 import { XIcon } from '~/design-system/icons/x';
 
-import { hasSocialVideo, hasUncaptionedSocialVideo } from '../playback-utils';
+import { hasSocialVideo } from '../playback-utils';
 import { SocialVideoCaptionChoiceRows, useSocialVideoCaptionChoice } from '../social-video-caption-choice';
-import { type PreparedSocialVideo, type SocialVideoCaptions, downloadPreparedVideo } from '../social-video-share';
+import {
+  type PreparedSocialVideo,
+  SOCIAL_VIDEO_VARIANTS,
+  type SocialVideoCaptions,
+  downloadPreparedVideo,
+} from '../social-video-share';
 import { xShareMessage } from './x-share-message';
 
 type Props = {
@@ -176,7 +181,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     const { downloadUrl, file } = video;
     if (!downloadUrl || !file) return;
     handoffShare('download', () => downloadPreparedVideo(downloadUrl, file.name), undefined, {
-      captions: captions === 'captioned',
+      captions: SOCIAL_VIDEO_VARIANTS[captions].captions,
     });
     setStep('share');
   };
@@ -184,9 +189,9 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   // Prepare only while the sheet is open: closing aborts the in-flight fetch and revokes the blob.
   const captionChoice = useSocialVideoCaptionChoice({
     debateId: debate.id,
+    media: media.data,
     enabled: open && socialVideoReady,
     includePreview: false,
-    uncaptionedAvailable: hasUncaptionedSocialVideo(media.data),
     handoff: (video, captions) => {
       try {
         downloadVideo(video, captions);
@@ -280,13 +285,11 @@ function ShareAction({
   ariaLabel,
   onClick,
   tile,
-  disabled,
 }: {
   label: string;
   ariaLabel: string;
   onClick: () => void;
   tile: React.ReactNode;
-  disabled?: boolean;
 }) {
   return (
     // Tile stays 40×40; the column is only as wide as the tile so gap-4 is icon-to-icon spacing.
@@ -296,8 +299,7 @@ function ShareAction({
         type="button"
         aria-label={ariaLabel}
         onClick={onClick}
-        disabled={disabled}
-        className="grid size-10 shrink-0 place-items-center rounded-full transition-transform hover:scale-[1.06] disabled:cursor-not-allowed disabled:opacity-60"
+        className="grid size-10 shrink-0 place-items-center rounded-full transition-transform hover:scale-[1.06]"
       >
         {tile}
       </button>

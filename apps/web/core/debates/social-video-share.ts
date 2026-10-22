@@ -5,6 +5,7 @@ import * as React from 'react';
 import { type AnalyticsEventName, capture } from '~/core/analytics';
 import { errorName } from '~/core/utils/error-name';
 
+import type { DebateMediaArtifactKind } from './api';
 import { useDebateMediaArtifactUrl } from './hooks';
 
 type PreparationStatus = 'preparing' | 'ready' | 'error';
@@ -14,14 +15,14 @@ export type SocialVideoHandoffMethod = 'native_share' | 'download';
 /** Whether the share video has its spoken-word captions burned in (GEO-3442). */
 export type SocialVideoCaptions = 'captioned' | 'uncaptioned';
 
-const SOCIAL_VIDEO_ARTIFACT_KIND = {
-  captioned: 'social_video',
-  uncaptioned: 'social_video_uncaptioned',
-} as const;
-
-export function socialVideoFilename(debateId: string, captions: SocialVideoCaptions) {
-  return captions === 'captioned' ? `debate-${debateId}-social.mp4` : `debate-${debateId}-social-no-captions.mp4`;
-}
+/** Everything that differs between the two share videos: the artifact, the file and the analytics flag. */
+export const SOCIAL_VIDEO_VARIANTS = {
+  captioned: { kind: 'social_video', fileSuffix: 'social', captions: true },
+  uncaptioned: { kind: 'social_video_uncaptioned', fileSuffix: 'social-no-captions', captions: false },
+} as const satisfies Record<
+  SocialVideoCaptions,
+  { kind: DebateMediaArtifactKind; fileSuffix: string; captions: boolean }
+>;
 
 export type PreparedSocialVideo = {
   status: PreparationStatus;
@@ -84,6 +85,7 @@ export function usePreparedSocialVideo(
       return;
     }
 
+    const variant = SOCIAL_VIDEO_VARIANTS[captions];
     let active = true;
     let downloadUrl: string | null = null;
     const controller = new AbortController();
@@ -112,7 +114,7 @@ export function usePreparedSocialVideo(
             captureSocialVideoEvent('debate_social_video_preparation_failed', {
               debate_id: debateId,
               stage: 'preview_url',
-              captions: captions === 'captioned',
+              captions: variant.captions,
             });
             setState(current => ({ ...current, previewFailed: true }));
           },
@@ -121,7 +123,7 @@ export function usePreparedSocialVideo(
     }
 
     videoMutateRef.current(
-      { debateId, request: { kind: SOCIAL_VIDEO_ARTIFACT_KIND[captions] } },
+      { debateId, request: { kind: variant.kind } },
       {
         onSuccess: response => {
           if (!active) return;
@@ -137,7 +139,7 @@ export function usePreparedSocialVideo(
           })
             .then(blob => {
               if (!active) return;
-              const file = new File([blob], socialVideoFilename(debateId, captions), {
+              const file = new File([blob], `debate-${debateId}-${variant.fileSuffix}.mp4`, {
                 type: 'video/mp4',
                 lastModified: Date.now(),
               });
@@ -157,7 +159,7 @@ export function usePreparedSocialVideo(
                 debate_id: debateId,
                 stage: 'video_download',
                 error_name: errorName(error),
-                captions: captions === 'captioned',
+                captions: variant.captions,
               });
               setState(current => ({
                 ...current,
@@ -172,7 +174,7 @@ export function usePreparedSocialVideo(
             debate_id: debateId,
             stage: 'video_url',
             error_name: errorName(error),
-            captions: captions === 'captioned',
+            captions: variant.captions,
           });
           setState(current => ({
             ...current,
@@ -209,7 +211,7 @@ export async function handoffPreparedSocialVideo({
   downloadUrl: string;
   captions?: SocialVideoCaptions;
 }): Promise<SocialVideoHandoffMethod> {
-  const captioned = captions === 'captioned';
+  const { captions: captioned } = SOCIAL_VIDEO_VARIANTS[captions];
   const method = getPreparedSocialVideoHandoffMethod(file);
 
   try {

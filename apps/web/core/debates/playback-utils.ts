@@ -1,6 +1,13 @@
 import { errorName } from '~/core/utils/error-name';
 
-import type { Debate, DebateMediaResponse, DebateMediaTurnSegment, DebateParticipant, ParticipantSlot } from './api';
+import type {
+  Debate,
+  DebateMediaArtifactKind,
+  DebateMediaResponse,
+  DebateMediaTurnSegment,
+  DebateParticipant,
+  ParticipantSlot,
+} from './api';
 
 export type TurnState = {
   slot: ParticipantSlot;
@@ -38,16 +45,16 @@ export function isWatchableDebate(debate: Debate) {
 
 /** The media worker composed the two per-slot recordings into a single `final_video`. */
 export function hasProcessedVideo(media: DebateMediaResponse | undefined): boolean {
-  return media?.artifacts.some(artifact => artifact.kind === 'final_video') ?? false;
+  return hasMediaArtifact(media, 'final_video');
 }
 
 export function hasSocialVideo(media: DebateMediaResponse | undefined): boolean {
-  return media?.artifacts.some(artifact => artifact.kind === 'social_video') ?? false;
+  return hasMediaArtifact(media, 'social_video');
 }
 
-/** Only debates rendered since GEO-3442 have a share video without captions. */
-export function hasUncaptionedSocialVideo(media: DebateMediaResponse | undefined): boolean {
-  return media?.artifacts.some(artifact => artifact.kind === 'social_video_uncaptioned') ?? false;
+/** Whether the media worker published `kind` for this debate. Older debates lack newer kinds. */
+export function hasMediaArtifact(media: DebateMediaResponse | undefined, kind: DebateMediaArtifactKind): boolean {
+  return media?.artifacts.some(artifact => artifact.kind === kind) ?? false;
 }
 
 /**

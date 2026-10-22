@@ -2,9 +2,19 @@
 
 import * as React from 'react';
 
-import { Spinner } from '~/design-system/spinner';
+import cx from 'classnames';
 
-import { type PreparedSocialVideo, type SocialVideoCaptions, usePreparedSocialVideo } from './social-video-share';
+import { Spinner } from '~/design-system/spinner';
+import { Text } from '~/design-system/text';
+
+import type { DebateMediaResponse } from './api';
+import { hasMediaArtifact } from './playback-utils';
+import {
+  type PreparedSocialVideo,
+  SOCIAL_VIDEO_VARIANTS,
+  type SocialVideoCaptions,
+  usePreparedSocialVideo,
+} from './social-video-share';
 
 const CAPTION_LABELS: Record<SocialVideoCaptions, string> = {
   captioned: 'With captions',
@@ -16,7 +26,8 @@ const CAPTION_LABELS: Record<SocialVideoCaptions, string> = {
  *
  * The captioned file is prepared as soon as the surface opens, as it always was, so choosing it
  * hands off at once. The clean file is fetched only after it is chosen: preparing both up front
- * would double the data for everyone who opens the sheet and only copies a link.
+ * would double the data for everyone who opens the sheet and only copies a link. Debates rendered
+ * before the clean file existed have no such artifact in `media`, and offer it as unavailable.
  *
  * `handoff` runs straight from the choice's click when the file is ready, inside the person's
  * gesture. When it is not, the choice waits, and `canHandoffWithoutGesture` decides what happens
@@ -25,19 +36,20 @@ const CAPTION_LABELS: Record<SocialVideoCaptions, string> = {
  */
 export function useSocialVideoCaptionChoice({
   debateId,
+  media,
   enabled,
   includePreview,
-  uncaptionedAvailable,
   handoff,
   canHandoffWithoutGesture,
 }: {
   debateId: string;
+  media: DebateMediaResponse | undefined;
   enabled: boolean;
   includePreview: boolean;
-  uncaptionedAvailable: boolean;
   handoff: (video: PreparedSocialVideo, captions: SocialVideoCaptions) => void;
   canHandoffWithoutGesture: (video: PreparedSocialVideo) => boolean;
 }) {
+  const uncaptionedAvailable = hasMediaArtifact(media, SOCIAL_VIDEO_VARIANTS.uncaptioned.kind);
   const [uncaptionedRequested, setUncaptionedRequested] = React.useState(false);
   const [pending, setPending] = React.useState<SocialVideoCaptions | null>(null);
   const captioned = usePreparedSocialVideo(debateId, { enabled, includePreview });
@@ -59,20 +71,19 @@ export function useSocialVideoCaptionChoice({
     setPending(null);
   }, [debateId]);
 
-  const handoffRef = React.useRef(handoff);
-  const canHandoffWithoutGestureRef = React.useRef(canHandoffWithoutGesture);
-  React.useEffect(() => {
-    handoffRef.current = handoff;
-    canHandoffWithoutGestureRef.current = canHandoffWithoutGesture;
-  }, [handoff, canHandoffWithoutGesture]);
-
-  const pendingVideo = pending ? videos[pending] : null;
-  React.useEffect(() => {
-    if (!pending || !pendingVideo || pendingVideo.status !== 'ready') return;
-    if (!canHandoffWithoutGestureRef.current(pendingVideo)) return;
+  // Reads the latest file and callbacks without re-running on every render: the prepared videos
+  // are new objects each render, and only a status change can make a waiting choice ready.
+  const handOffWhenReady = React.useEffectEvent(() => {
+    const video = pending ? videos[pending] : null;
+    if (!pending || !video || video.status !== 'ready') return;
+    if (!canHandoffWithoutGesture(video)) return;
     setPending(null);
-    handoffRef.current(pendingVideo, pending);
-  }, [pending, pendingVideo]);
+    handoff(video, pending);
+  });
+  const pendingStatus = pending ? videos[pending].status : null;
+  React.useEffect(() => {
+    handOffWhenReady();
+  }, [pending, pendingStatus]);
 
   const choose = (captions: SocialVideoCaptions) => {
     if (captions === 'uncaptioned' && !uncaptionedAvailable) return;
@@ -108,8 +119,6 @@ export function useSocialVideoCaptionChoice({
 
   return {
     captioned,
-    uncaptioned,
-    pending,
     options,
     choose,
     cancel: () => setPending(null),
@@ -122,7 +131,7 @@ export type SocialVideoCaptionOption = {
    * `idle` until chosen. `awaiting_tap` is a chosen file that is ready but needs another tap,
    * because only a tap may open the system share sheet.
    */
-  status: 'idle' | 'preparing' | 'ready' | 'error' | 'unavailable' | 'awaiting_tap';
+  status: 'idle' | 'preparing' | 'error' | 'unavailable' | 'awaiting_tap';
   progressPercent: number | null;
   error: string | null;
 };
@@ -159,22 +168,20 @@ export function SocialVideoCaptionChoiceRows({
             onClick={() => onChoose(option.captions)}
             disabled={disabled || option.status === 'unavailable' || option.status === 'preparing'}
             aria-busy={option.status === 'preparing' || undefined}
-            className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-grey-02 px-4 py-2 text-left transition-colors hover:bg-bg disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            className={cx(
+              'flex min-h-11 w-full items-center justify-between gap-3 rounded-lg border border-grey-02 px-4 py-2 text-left',
+              'transition-colors hover:bg-bg disabled:cursor-not-allowed disabled:hover:bg-transparent'
+            )}
           >
             <span className="flex min-w-0 flex-col">
-              <span
-                className={`text-[15px] leading-5 font-medium ${
-                  option.status === 'unavailable' ? 'text-grey-04' : 'text-text'
-                }`}
-              >
+              <Text as="span" variant="metadataMedium" color={option.status === 'unavailable' ? 'grey-04' : 'text'}>
                 {CAPTION_LABELS[option.captions]}
-              </span>
+              </Text>
               {hint && (
-                <span
-                  aria-live="polite"
-                  className={`text-[12px] leading-4 ${option.status === 'error' ? 'text-red-01' : 'text-grey-04'}`}
-                >
-                  {hint}
+                <span aria-live="polite">
+                  <Text as="span" variant="footnote" color={option.status === 'error' ? 'red-01' : 'grey-04'}>
+                    {hint}
+                  </Text>
                 </span>
               )}
             </span>

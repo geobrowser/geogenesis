@@ -23,7 +23,8 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateMedia: () => ({ data: { artifacts: mocks.artifacts } }),
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, vi.fn()] }));
-vi.mock('../social-video-share', () => ({
+vi.mock('../social-video-share', async importOriginal => ({
+  ...(await importOriginal<typeof import('../social-video-share')>()),
   downloadPreparedVideo: mocks.download,
   usePreparedSocialVideo: (_debateId: string, options: { enabled: boolean; captions?: string }) => {
     mocks.prepared(options);

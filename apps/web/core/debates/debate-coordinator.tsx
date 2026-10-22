@@ -41,7 +41,6 @@ import { routeIntoDebate } from './lobbies/step-out';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
-import { hasUncaptionedSocialVideo } from './playback-utils';
 import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
@@ -682,9 +681,9 @@ function DebateSharePromptDialog({
   };
   const captionChoice = useSocialVideoCaptionChoice({
     debateId: prompt.debate_id,
+    media: media.data,
     enabled: true,
     includePreview: true,
-    uncaptionedAvailable: hasUncaptionedSocialVideo(media.data),
     handoff: (video, captions) => void shareVideo(video, captions),
     // A file that finishes after the tap may still download, but must not open the share sheet:
     // browsers refuse that outside a gesture. The ready row then asks for one more tap.
@@ -692,8 +691,13 @@ function DebateSharePromptDialog({
       video.file !== null && getPreparedSocialVideoHandoffMethod(video.file) === 'download',
   });
   const preparedVideo = captionChoice.captioned;
+  // Probed with an empty MP4 until the real file arrives: the share capability depends on the
+  // file's type, not its bytes, so the button can name the right action before the download ends.
   const handoffMethod = React.useMemo(
-    () => (preparedVideo.file ? getPreparedSocialVideoHandoffMethod(preparedVideo.file) : null),
+    () =>
+      getPreparedSocialVideoHandoffMethod(
+        preparedVideo.file ?? new File([], 'debate-social.mp4', { type: 'video/mp4' })
+      ),
     [preparedVideo.file]
   );
   const share = () => {
@@ -713,11 +717,9 @@ function DebateSharePromptDialog({
         ? promptHandled
           ? 'Done'
           : 'Finish sharing'
-        : preparedVideo.status !== 'ready'
-          ? 'Preparing video…'
-          : handoffMethod === 'native_share'
-            ? 'Share video'
-            : 'Download video';
+        : handoffMethod === 'native_share'
+          ? 'Share video'
+          : 'Download video';
 
   return (
     <div className="fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-text/55 p-4 backdrop-blur-sm">
@@ -839,7 +841,7 @@ function DebateSharePromptDialog({
             <Button
               type="button"
               onClick={share}
-              disabled={isSharing || isUpdatingPrompt || handlePrompt.isPending || preparedVideo.status !== 'ready'}
+              disabled={isSharing || isUpdatingPrompt || handlePrompt.isPending}
               icon={<Upload />}
               className="gap-2 rounded-full"
             >

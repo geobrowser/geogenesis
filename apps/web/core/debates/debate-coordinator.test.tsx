@@ -1386,7 +1386,8 @@ describe('DebateCoordinator', () => {
       expect.any(Object)
     );
     expect(mocks.fetch).toHaveBeenCalledWith('https://video.test/social.mp4', { signal: expect.any(AbortSignal) });
-    expect(screen.getAllByText('Preparing video…')).toHaveLength(2);
+    // Only the progress row says so: the button can already open the caption choice.
+    expect(screen.getAllByText('Preparing video…')).toHaveLength(1);
     expect(screen.getByRole('progressbar', { name: 'Preparing social video' })).not.toHaveAttribute('aria-valuenow');
 
     resolveDownload?.(videoResponse());
@@ -1404,7 +1405,7 @@ describe('DebateCoordinator', () => {
     expect(player).toBeInstanceOf(HTMLVideoElement);
     expect(player).toHaveAttribute('src', 'https://video.test/social.mp4');
     expect(player).toHaveAttribute('controls');
-    expect(screen.getByRole('button', { name: 'Preparing video…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Download video' })).toBeEnabled();
   });
 
   it('shares only the prepared MP4 and claim through the native share sheet', async () => {
@@ -1606,6 +1607,48 @@ describe('DebateCoordinator', () => {
       method: 'download',
       captions: false,
     });
+  });
+
+  it('lets people choose the video without captions before the captioned one has downloaded', async () => {
+    showSharePrompt();
+    mocks.media = { artifacts: [{ kind: 'social_video' }, { kind: 'social_video_uncaptioned' }] };
+    mockArtifactUrls();
+    mocks.fetch.mockImplementation((url: string) =>
+      url.includes('no-captions') ? Promise.resolve(videoResponse()) : new Promise<Response>(() => undefined)
+    );
+    mocks.canShare.mockReturnValue(false);
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Without captions' }));
+
+    await waitFor(() => expect(mocks.downloadClick).toHaveBeenCalledTimes(1));
+    const downloadLink = mocks.downloadClick.mock.instances[0] as HTMLAnchorElement;
+    expect(downloadLink.download).toBe('debate-debate-1-social-no-captions.mp4');
+  });
+
+  it('saves nothing when someone goes Back while the video without captions is preparing', async () => {
+    showSharePrompt();
+    mocks.media = { artifacts: [{ kind: 'social_video' }, { kind: 'social_video_uncaptioned' }] };
+    mockArtifactUrls();
+    let resolveClean: ((response: Response) => void) | undefined;
+    mocks.fetch.mockImplementation((url: string) =>
+      url.includes('no-captions')
+        ? new Promise<Response>(resolve => (resolveClean = resolve))
+        : Promise.resolve(videoResponse())
+    );
+    mocks.canShare.mockReturnValue(false);
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Without captions' }));
+    await waitFor(() => expect(resolveClean).toBeDefined());
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    resolveClean?.(videoResponse());
+    await waitFor(() => expect(mocks.createObjectURL).toHaveBeenCalledTimes(2));
+    expect(mocks.downloadClick).not.toHaveBeenCalled();
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_social_video_handoff_resolved', expect.anything());
   });
 
   it('marks the video without captions unavailable for a debate rendered before it existed', async () => {
