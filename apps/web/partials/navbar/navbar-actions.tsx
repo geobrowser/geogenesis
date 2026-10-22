@@ -9,6 +9,7 @@ import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
+import { privyUserEmail } from '~/core/auth/privy-email';
 import { useDebateSchedule } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
@@ -202,7 +203,7 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
         ? `/space/pending/${topicId}`
         : null;
     const displayName = profile?.name?.trim() || shortAddress(address);
-    const email = userEmail(user);
+    const email = privyUserEmail(user);
     const identityDetail = email ?? address;
 
     return (
@@ -423,42 +424,6 @@ function IdentityHeader({
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
-}
-
-function userEmail(user: unknown) {
-  if (!isRecord(user)) return undefined;
-  const primary = emailFromUnknown(user.email);
-  if (primary) return primary;
-  if (!Array.isArray(user.linkedAccounts)) return undefined;
-
-  for (const account of user.linkedAccounts) {
-    const email = emailFromUnknown(account);
-    if (email) return email;
-  }
-
-  return undefined;
-}
-
-function emailFromUnknown(value: unknown) {
-  if (typeof value === 'string') return normalizeEmail(value);
-  if (!isRecord(value)) return undefined;
-
-  for (const key of ['address', 'email', 'emailAddress']) {
-    const email = normalizeEmail(value[key]);
-    if (email) return email;
-  }
-
-  return undefined;
-}
-
-function normalizeEmail(value: unknown) {
-  if (typeof value !== 'string') return undefined;
-  const email = value.trim().toLowerCase();
-  return email.includes('@') ? email : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];

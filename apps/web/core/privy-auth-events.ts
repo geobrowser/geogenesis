@@ -6,6 +6,7 @@ import {
   attemptProperties,
   beginAuthAttempt,
   captureAuthEvent,
+  claimRedirectedAuthAttempt,
   currentAuthAttempt,
   finishAuthAttempt,
   recoverAuthAttempt,
@@ -54,6 +55,11 @@ export function cancelPrivyAuth(account: ExitedFlowAccount = null) {
   finishAuthAttempt(exitOutcome(account));
   clearSignupVisitor();
   runSignInAbandoned();
+}
+
+/** A redirect sign-in came back failed: close attempt `id`, unless a newer sign-in has replaced it. */
+export function failRedirectedPrivyAuth(id: string) {
+  if (claimRedirectedAuthAttempt(id)) cancelPrivyAuth();
 }
 
 /**

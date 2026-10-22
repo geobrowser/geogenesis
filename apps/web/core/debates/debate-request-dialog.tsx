@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { type DebateAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Avatar } from '~/design-system/avatar';
@@ -75,6 +76,15 @@ type DebateRequestDialogProps = {
   /** GEO-2430: overflow ("…") menu anchored to the participants card, e.g. to block a user. */
   overflowMenu?: React.ReactNode;
   formatSummaryOnly?: boolean;
+  /**
+   * The buttons' click-analytics labels and intents. Per caller, since the same two buttons are Accept/Reject on
+   * one surface and Join/Decline on another, and their visible text never reaches the warehouse.
+   */
+  analytics?: {
+    accept: DebateAnalyticsAttributes;
+    reject: DebateAnalyticsAttributes;
+    formatAction?: DebateAnalyticsAttributes;
+  };
 };
 
 export function DebateRequestDialog({
@@ -96,6 +106,7 @@ export function DebateRequestDialog({
   formatAction,
   overflowMenu,
   formatSummaryOnly = false,
+  analytics,
 }: DebateRequestDialogProps) {
   const titleId = React.useId();
   const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
@@ -196,6 +207,7 @@ export function DebateRequestDialog({
                   type="button"
                   onClick={formatAction.onClick}
                   disabled={busy}
+                  {...analytics?.formatAction}
                   className="text-metadata text-grey-04 underline transition-colors hover:text-text disabled:opacity-50"
                 >
                   {formatAction.label}
@@ -255,23 +267,37 @@ export function DebateRequestDialog({
                 type="button"
                 onClick={onReject}
                 disabled={busy}
+                {...analytics?.reject}
                 className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
               >
                 {rejectLabel}
               </button>
-              <button type="button" onClick={accept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+              <button
+                type="button"
+                onClick={accept}
+                disabled={busy}
+                {...analytics?.accept}
+                className={DIALOG_ACTION_BUTTON_CLASS_NAME}
+              >
                 {acceptLabel}
               </button>
             </div>
           ) : (
             <>
-              <button type="button" onClick={accept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+              <button
+                type="button"
+                onClick={accept}
+                disabled={busy}
+                {...analytics?.accept}
+                className={DIALOG_ACTION_BUTTON_CLASS_NAME}
+              >
                 {acceptLabel}
               </button>
               <button
                 type="button"
                 onClick={onReject}
                 disabled={busy}
+                {...analytics?.reject}
                 className="mx-auto px-4 py-1 text-metadata text-grey-04 hover:text-text disabled:opacity-50"
               >
                 {rejectLabel}

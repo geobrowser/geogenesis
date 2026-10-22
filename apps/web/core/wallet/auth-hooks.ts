@@ -215,6 +215,24 @@ export function useLoginWithEmail(
   );
 }
 
+/**
+ * Headless OAuth. Privy's hook completes a redirect's return when it mounts in the host, which loads
+ * on that return (`privy-session.ts`). `initOAuth` loads Privy first and rejects if it can't start;
+ * `state` is Privy's flow state, `initial` until it loads.
+ */
+type OAuthLogin = ReturnType<typeof Auth.useLoginWithOAuth>;
+const INITIAL_OAUTH_STATE: OAuthLogin['state'] = { status: 'initial' };
+export function useLoginWithOAuth(): Pick<OAuthLogin, 'initOAuth' | 'state'> {
+  const { id, result } = useInstance('oauthLogin', undefined);
+  const state = (result as Partial<OAuthLogin> | null)?.state ?? INITIAL_OAUTH_STATE;
+  const initOAuth = React.useCallback(
+    (...args: Parameters<OAuthLogin['initOAuth']>) =>
+      Promise.resolve(invokeInstance<OAuthLogin, Promise<void>>(id, r => r.initOAuth(...args))).then(() => undefined),
+    [id]
+  );
+  return React.useMemo(() => ({ initOAuth, state }), [initOAuth, state]);
+}
+
 /** Wagmi's connect/disconnect events. Nothing connects until Privy is loaded, so nothing to do before. */
 export function useAccountEffect(params: Parameters<typeof Auth.useAccountEffect>[0]) {
   useInstance('accountEffect', params);

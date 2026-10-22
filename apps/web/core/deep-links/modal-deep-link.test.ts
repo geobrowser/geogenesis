@@ -21,6 +21,7 @@ describe('DEEP_LINK_MODALS', () => {
       debates: 'debates',
       roomAccess: 'room-access',
       availability: 'availability',
+      schedule: 'schedule',
     });
   });
 

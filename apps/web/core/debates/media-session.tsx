@@ -27,7 +27,7 @@ export type PreJoinMediaState = 'idle' | 'requesting' | 'ready' | 'denied' | 'un
 export type LocalTrackLike = {
   mediaStreamTrack: MediaStreamTrack;
   /** Restarts capture and replaces the published sender without changing the LocalTrack. */
-  restartTrack?: (options?: { deviceId?: string }) => Promise<void>;
+  restartTrack?: (options?: { deviceId?: ConstrainDOMString }) => Promise<void>;
   mediaStream?: MediaStream;
   on?: (event: string, callback: () => void) => unknown;
   off?: (event: string, callback: () => void) => unknown;
@@ -41,7 +41,9 @@ type LocalCapture = Pick<LocalTrackLike, 'mediaStreamTrack' | 'mediaStream'>;
 
 /** The capture source can differ from mediaStreamTrack when Krisp supplies processed audio. */
 export function localTrackSource(track: LocalCapture) {
-  return track.mediaStream?.getTracks()[0] ?? track.mediaStreamTrack;
+  return (
+    track.mediaStream?.getTracks().find(source => source.kind === track.mediaStreamTrack.kind) ?? track.mediaStreamTrack
+  );
 }
 
 export function isLocalTrackLive(track: LocalCapture) {
@@ -474,6 +476,13 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           const track = localTracksRef.current.find(track => track.mediaStreamTrack.kind === kind);
           // Choosing a device for a disabled kind must not turn it on.
           if (!track?.restartTrack) return;
+          const restartTrack = track.restartTrack.bind(track);
+          const restartCapture = (id?: string) =>
+            restartTrack({
+              // Unlike createLocalTracks, restartTrack leaves string IDs as ideal constraints.
+              // An explicit hardware choice must not silently reopen the browser's default.
+              deviceId: id && id !== 'default' && id !== 'communications' ? { exact: id } : id || 'default',
+            });
           const ownsTrack = () => isCurrent() && localTracksRef.current.includes(track);
           const previousId = localTrackSource(track).getSettings?.().deviceId;
           const previousCapture = track.mediaStreamTrack;
@@ -498,7 +507,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           setPreviewBusy(true);
           setPreviewError(null);
           try {
-            await track.restartTrack({ deviceId: deviceId || 'default' });
+            await restartCapture(deviceId);
             if (!ownsTrack()) {
               track.stop();
               return;
@@ -515,9 +524,9 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
             // The SDK stops the old capture before opening the new one. Recover the previous device,
             // or the system default if it disappeared, without discarding the publication.
             try {
-              await track.restartTrack({ deviceId: previousId || 'default' });
+              await restartCapture(previousId);
             } catch {
-              if (ownsTrack()) await track.restartTrack({ deviceId: 'default' }).catch(() => undefined);
+              if (ownsTrack()) await restartCapture('default').catch(() => undefined);
             }
             if (!ownsTrack()) {
               track.stop();

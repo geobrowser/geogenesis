@@ -13,7 +13,13 @@ import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
 import { captureSaveVotesImpression, saveVotesSignInProperties } from '~/core/save-votes-analytics';
-import { saveVotesHeading, saveVotesSubmitLabel, saveVotesSubtext } from '~/core/save-votes-copy';
+import {
+  SAVE_VOTES_FINE_PRINT,
+  SAVE_VOTES_RESEND_LABEL,
+  saveVotesHeading,
+  saveVotesSubmitLabel,
+  saveVotesSubtext,
+} from '~/core/save-votes-copy';
 import { isChatOpenAtom } from '~/core/state/chat-store';
 import {
   type LocalVote,
@@ -33,22 +39,31 @@ import {
 import { usePrivy } from '~/core/wallet/auth-hooks';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
+import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { Mail } from '~/design-system/icons/mail';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 
 import { AccountStep } from '~/partials/explore/email-capture-account-step';
 import { useIsEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
+import { HEADING_CLASS, SUBTEXT_CLASS } from '~/partials/explore/email-capture-styles';
+
 import {
-  CARD_CLASS,
   CENTERED_CARD_CLASS,
-  CLOSE_BUTTON_CLASS,
-  ERROR_CLASS,
-  FORM_STACK_CLASS,
-  HEADING_CLASS,
-  PRIMARY_BUTTON_CLASS,
-  SUBTEXT_CLASS,
+  CHIP_CLASS,
+  CHIP_LIST_CLASS,
+  CHIP_ROW_CLASS,
+  CORNER_CARD_CLASS,
+  ICON_BUTTON_CLASS,
+  INPUT_CLASS,
+  TOP_BAR_CLASS,
+  badgeClass,
+  bodyClass,
+  codeStepClasses,
   fieldClass,
-} from '~/partials/explore/email-capture-styles';
+  fineClass,
+  primaryButtonClass,
+} from './save-votes-styles';
 
 /**
  * Asks that open on their own count toward when the sheet asks again; a press on "Save" does not. The
@@ -66,8 +81,8 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
  * "Save your N votes": asks a signed-out visitor who has voted to keep their votes by making an
  * account (GEO-3214).
  *
- * The Explore email capture's card and code step, given new content: a corner card on desktop, a
- * bottom sheet on phones. Mounted app-wide, because the controls that open it are on the claim page,
+ * A corner card on desktop and a bottom sheet on phones, in its own restyle of the Explore email
+ * capture's card (GEO-3439), with the same code step. Mounted app-wide, because the controls that open it are on the claim page,
  * entity pages, the debates hub and the debate player as well as Explore.
  *
  * Opened from the navbar's "Save N votes", it is the same card as a centred modal dialog instead
@@ -84,19 +99,24 @@ export function SaveVotesSheet() {
   const prepareOnboarding = usePrepareOnboarding();
 
   const [email, setEmail] = React.useState('');
-  const [invalid, setInvalid] = React.useState(false);
   /**
    * Once the visitor has asked for a code: the address it went to, and the sheet as it was then.
-   * The code step keeps that presentation and attribution to the end. Moving between the corner card
+   * The sign-in keeps that presentation and attribution to the end. Moving between the corner card
    * and the centred dialog is a different tree, which would remount the step, clear what was typed
    * and mail a second code.
+   *
+   * `editing` is the way back from the code step to fix the address (GEO-3439). The sign-in they
+   * started is still theirs, so it is not withdrawn on the way back; the next send starts it again.
    */
-  const [codeStep, setCodeStep] = React.useState<{
+  const [attempt, setAttempt] = React.useState<{
     email: string;
     centered: boolean;
     reason: SaveVotesPromptReason | null;
+    phase: 'code' | 'editing';
   } | null>(null);
-  const codeEmail = codeStep?.email ?? null;
+  const codeEmail = attempt?.phase === 'code' ? attempt.email : null;
+  const editing = attempt?.phase === 'editing';
+  const emailInputRef = React.useRef<HTMLInputElement>(null);
 
   // Landed from one of our emails: everyone they go to has an account, so this visit's asks are to
   // log in (GEO-3374). Read at the first render, so the sign-up wording never paints first; the
@@ -112,26 +132,27 @@ export function SaveVotesSheet() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  const open = reason !== null && ready && !authenticated && (count > 0 || codeEmail !== null);
+  const midSignIn = attempt !== null;
+  const open = reason !== null && ready && !authenticated && (count > 0 || midSignIn);
 
   // Every vote taken back: the ask was about votes that are gone, and must not reopen for the next
-  // single vote, which on a feed isn't an ask yet. Not mid-code: that step outlives the votes.
+  // single vote, which on a feed isn't an ask yet. Not mid-sign-in: that outlives the votes.
   React.useEffect(() => {
-    if (count === 0 && codeEmail === null) closeSaveVotesPrompt();
-  }, [count, codeEmail]);
+    if (count === 0 && !midSignIn) closeSaveVotesPrompt();
+  }, [count, midSignIn]);
 
   // Signed in: the sheet's job is done whichever way they got there, and the saver takes over.
   React.useEffect(() => {
     if (!authenticated) return;
-    setCodeStep(null);
+    setAttempt(null);
     closeSaveVotesPrompt();
   }, [authenticated]);
 
-  const centered = codeStep ? codeStep.centered : opensSaveVotesCentered(reason);
+  const centered = attempt ? attempt.centered : opensSaveVotesCentered(reason);
   // Centred, the sheet is a modal of its own, which this would find and hide itself behind. Nothing
   // else is modal at the press that opens it, and anything opened later is opened from inside it.
   const isAnyModalOpen = useAnyModalOpen(open && !centered);
-  const signInProperties = saveVotesSignInProperties('email', count, codeStep ? codeStep.reason : reason);
+  const signInProperties = saveVotesSignInProperties('email', count, attempt ? attempt.reason : reason);
   // The email capture card shares this corner, and is mid-signup if it is still up once votes exist.
   const isEmailCaptureShowing = useIsEmailCaptureShowing();
   // Privy's dialog still comes first, centred or not: it is the visitor's sign-in in progress.
@@ -143,7 +164,7 @@ export function SaveVotesSheet() {
   // saved if it completes, and stay on the device if not.
   React.useEffect(() => {
     if (!centered || !isModalOpen) return;
-    setCodeStep(null);
+    setAttempt(null);
     closeSaveVotesPrompt();
   }, [centered, isModalOpen]);
   // Read when the dialog closes, which is after the render that closed it.
@@ -159,7 +180,7 @@ export function SaveVotesSheet() {
   const recordedFor = React.useRef<SaveVotesPromptReason | null>(null);
   React.useEffect(() => {
     if (!open) recordedFor.current = null;
-    if (!visible || !reason || codeStep || recordedFor.current === reason) return;
+    if (!visible || !reason || attempt || recordedFor.current === reason) return;
     recordedFor.current = reason;
     if (AUTOMATIC_REASONS.has(reason)) recordSavePromptShown();
     captureSaveVotesImpression(reason, count);
@@ -169,23 +190,35 @@ export function SaveVotesSheet() {
 
   const close = React.useCallback(() => {
     // Ends this sheet's own sign-in as closed, once a code is out, so it no longer counts as a save.
-    if (codeEmail !== null) cancelPrivyAuth();
+    if (midSignIn) cancelPrivyAuth();
     // Not now, not never: the votes stay on the device and the pills still offer "Save".
     recordSavePromptDismissed();
-    setCodeStep(null);
+    setAttempt(null);
     closeSaveVotesPrompt();
-  }, [codeEmail]);
+  }, [midSignIn]);
+
+  /** Back to the email step, the address as it was sent, to fix a typo. Unmounting the code step ends it. */
+  const changeEmail = React.useCallback(() => {
+    if (attempt?.phase !== 'code') return;
+    setEmail(attempt.email);
+    setAttempt({ ...attempt, phase: 'editing' });
+  }, [attempt]);
+
+  // The field takes focus on the way back, so the address can be fixed without reaching for it.
+  React.useEffect(() => {
+    if (editing) emailInputRef.current?.focus();
+  }, [editing]);
+
+  const trimmedEmail = email.trim();
+  // The button waits for an address that looks like one, so there is no rejection to show.
+  const canSend = isLikelyEmail(trimmedEmail);
 
   const submitEmail = (event: React.FormEvent) => {
     event.preventDefault();
-    const trimmed = email.trim();
-    if (!isLikelyEmail(trimmed)) {
-      setInvalid(true);
-      return;
-    }
+    if (!canSend) return;
     beginPrivyAuth(signInProperties);
     prepareOnboarding();
-    setCodeStep({ email: trimmed, centered, reason });
+    setAttempt({ email: trimmedEmail, centered, reason: attempt ? attempt.reason : reason, phase: 'code' });
   };
 
   if (!open) return null;
@@ -196,84 +229,102 @@ export function SaveVotesSheet() {
   const returnVisit = reason === 'return_visit';
 
   const label = lobbyName ? 'Join the discussion' : 'Save your votes';
+  const compact = !centered;
   const content = (
-    <>
-      <button
-        type="button"
-        onClick={close}
-        aria-label="Not now"
-        data-geo-analytics-label="save_votes_dismiss"
-        data-geo-analytics-intent="dismiss"
-        className={CLOSE_BUTTON_CLASS}
-      >
-        <CloseSmall />
-      </button>
-
-      {/* The email capture's body, with the artwork's height given back as top padding. */}
-      <div className="px-5 pt-[27px] pb-[27px] text-center mobile:pb-[max(34px,env(safe-area-inset-bottom))]">
+    <div className={bodyClass(compact)}>
+      <div className={TOP_BAR_CLASS}>
         {codeEmail !== null ? (
-          <div role="status">
-            <p className={HEADING_CLASS}>Check your email</p>
-            <AccountStep
-              email={codeEmail}
-              analytics={signInProperties}
-              analyticsLabel="Save votes verification"
-              onGiveUp={close}
-            />
-          </div>
-        ) : (
-          <form
-            data-geo-analytics-label="Save votes"
-            data-geo-analytics-intent={logIn ? 'login' : 'signup'}
-            onSubmit={submitEmail}
-            noValidate
+          <button
+            type="button"
+            onClick={changeEmail}
+            aria-label="Back to email"
+            data-geo-analytics-label="save_votes_back"
+            data-geo-analytics-intent="navigate"
+            className={ICON_BUTTON_CLASS}
           >
-            {lobbyName ? (
-              <>
-                <p className={HEADING_CLASS}>Join the discussion</p>
-                <p className={SUBTEXT_CLASS}>
-                  Create an account to vote on claims, speak and debate. You’ll stay in{' '}
-                  <span className="font-medium text-text">{lobbyName}</span>, and your audio keeps playing.
-                </p>
-                <p className="mt-[14px] text-[11px] leading-[13px] font-medium text-grey-04">Saved for after sign-up</p>
-              </>
-            ) : (
-              <>
-                <p className={HEADING_CLASS}>{saveVotesHeading(count, returnVisit, logIn)}</p>
-                <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, returnVisit, logIn)}</p>
-              </>
-            )}
-            <VoteChips votes={votes} rows={centered ? 2 : 1} className={lobbyName ? 'mt-1.5' : undefined} />
-
-            <div className={FORM_STACK_CLASS}>
-              <input
-                type="text"
-                inputMode="email"
-                autoComplete="email"
-                value={email}
-                onChange={event => {
-                  setEmail(event.currentTarget.value);
-                  setInvalid(false);
-                }}
-                placeholder="Email..."
-                aria-label="Email address"
-                aria-invalid={invalid}
-                className={cx(fieldClass(invalid), 'text-left placeholder:text-grey-03 mobile:text-center')}
-              />
-              <button type="submit" className={PRIMARY_BUTTON_CLASS}>
-                {saveVotesSubmitLabel(count, logIn)}
-              </button>
-            </div>
-
-            {invalid ? (
-              <p role="alert" className={ERROR_CLASS}>
-                That does not look like an email address.
-              </p>
-            ) : null}
-          </form>
+            <ArrowLeft />
+          </button>
+        ) : (
+          <span aria-hidden className="size-7 mobile:size-11" />
         )}
+        <button
+          type="button"
+          onClick={close}
+          aria-label="Not now"
+          data-geo-analytics-label="save_votes_dismiss"
+          data-geo-analytics-intent="dismiss"
+          className={ICON_BUTTON_CLASS}
+        >
+          <CloseSmall />
+        </button>
       </div>
-    </>
+
+      {codeEmail !== null ? (
+        <div role="status">
+          <div aria-hidden className={badgeClass(compact)}>
+            <Mail size={compact ? 20 : 22} />
+          </div>
+          <p className={HEADING_CLASS}>Check your email</p>
+          <AccountStep
+            email={codeEmail}
+            analytics={signInProperties}
+            analyticsLabel="Save votes verification"
+            onGiveUp={close}
+            appearance="save-votes"
+            classes={codeStepClasses(compact)}
+            onChangeEmail={changeEmail}
+          />
+        </div>
+      ) : (
+        <form
+          data-geo-analytics-label="Save votes"
+          data-geo-analytics-intent={logIn ? 'login' : 'signup'}
+          onSubmit={submitEmail}
+          noValidate
+        >
+          {lobbyName ? (
+            <>
+              <p className={HEADING_CLASS}>Join the discussion</p>
+              <p className={SUBTEXT_CLASS}>
+                Create an account to vote on claims, speak and debate. You’ll stay in{' '}
+                <span className="font-medium text-text">{lobbyName}</span>, and your audio keeps playing.
+              </p>
+              <p className="mt-3 text-[12px] leading-[16px] font-medium text-grey-04">Saved for after sign-up</p>
+            </>
+          ) : (
+            <>
+              <p className={HEADING_CLASS}>{saveVotesHeading(count, returnVisit, logIn)}</p>
+              <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, logIn)}</p>
+            </>
+          )}
+          <VoteChips votes={votes} rows={centered ? 2 : 1} />
+
+          <label className={fieldClass(compact)}>
+            <span aria-hidden className="shrink-0">
+              <Mail size={compact ? 16 : 18} />
+            </span>
+            <input
+              ref={emailInputRef}
+              type="text"
+              inputMode="email"
+              autoComplete="email"
+              value={email}
+              onChange={event => {
+                setEmail(event.currentTarget.value);
+              }}
+              placeholder="your@email.com"
+              aria-label="Email address"
+              className={INPUT_CLASS}
+            />
+          </label>
+          <button type="submit" disabled={!canSend} className={primaryButtonClass(compact)}>
+            {editing ? SAVE_VOTES_RESEND_LABEL : saveVotesSubmitLabel(count, logIn)}
+          </button>
+
+          <p className={fineClass(compact)}>{SAVE_VOTES_FINE_PRINT}</p>
+        </form>
+      )}
+    </div>
   );
 
   if (centered) {
@@ -324,7 +375,7 @@ export function SaveVotesSheet() {
       onKeyDown={event => {
         if (event.key === 'Escape') close();
       }}
-      className={CARD_CLASS}
+      className={CORNER_CARD_CLASS}
     >
       {content}
     </div>
@@ -336,36 +387,48 @@ function chipLabel(vote: LocalVote) {
   return vote.direction === 'positive' ? 'Agree:' : 'Disagree:';
 }
 
-const CHIP_CLASS =
-  'flex items-center rounded-full border border-grey-02 bg-grey-01 px-2 py-[3px] text-[12px] leading-[14px] text-text';
-
 /**
  * The visitor's latest votes, two to a row, then how many more: a reminder of what closing this
- * leaves behind. One row in the corner card; the centred dialog has room for a second.
+ * leaves behind. One row in the corner card; the centred dialog has room for a second. The "+N" closes
+ * the last row rather than wrapping onto a line of its own, so the chips in a row shrink to fit.
  */
-function VoteChips({ votes, rows, className }: { votes: LocalVote[]; rows: 1 | 2; className?: string }) {
+function VoteChips({ votes, rows }: { votes: LocalVote[]; rows: 1 | 2 }) {
   const shown = [...votes]
     .reverse()
     .filter(vote => vote.title)
     .slice(0, rows * 2);
   const more = votes.length - shown.length;
   if (shown.length === 0) return null;
+  const lines = Array.from({ length: Math.ceil(shown.length / 2) }, (_, line) => shown.slice(line * 2, line * 2 + 2));
   return (
-    <ul className={cx('mt-[14px] flex flex-wrap justify-center gap-1', className)} aria-label="Your votes">
-      {shown.map(vote => (
-        <li
-          key={`${vote.entityId}:${vote.spaceId}:${vote.responseKind}`}
-          // A touch narrower over two rows, so the "+N" closes the second instead of wrapping to a third.
-          className={cx(CHIP_CLASS, rows === 2 ? 'max-w-[128px]' : 'max-w-[132px]', 'gap-1')}
-        >
-          <span aria-hidden className="shrink-0">
-            <ResponsePositionIcon responseKind={vote.responseKind} position={vote.direction === 'positive'} selected />
-          </span>
-          <span className="sr-only">{chipLabel(vote)}</span>
-          <span className="truncate">{vote.title}</span>
-        </li>
+    <div role="list" aria-label="Your votes" className={CHIP_LIST_CLASS}>
+      {lines.map((line, index) => (
+        <div key={index} className={CHIP_ROW_CLASS}>
+          {line.map(vote => (
+            <div
+              key={`${vote.entityId}:${vote.spaceId}:${vote.responseKind}`}
+              role="listitem"
+              // A touch narrower over two rows, as the sheet first drew them.
+              className={cx(CHIP_CLASS, rows === 2 ? 'max-w-[128px]' : 'max-w-[132px]', 'min-w-0 gap-1')}
+            >
+              <span aria-hidden className="shrink-0">
+                <ResponsePositionIcon
+                  responseKind={vote.responseKind}
+                  position={vote.direction === 'positive'}
+                  selected
+                />
+              </span>
+              <span className="sr-only">{chipLabel(vote)}</span>
+              <span className="truncate">{vote.title}</span>
+            </div>
+          ))}
+          {more > 0 && index === lines.length - 1 ? (
+            <div role="listitem" className={cx(CHIP_CLASS, 'shrink-0')}>
+              +{more}
+            </div>
+          ) : null}
+        </div>
       ))}
-      {more > 0 ? <li className={CHIP_CLASS}>+{more}</li> : null}
-    </ul>
+    </div>
   );
 }
