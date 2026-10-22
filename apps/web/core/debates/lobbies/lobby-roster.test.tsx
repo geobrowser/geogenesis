@@ -8,6 +8,8 @@ import type { LobbyPageView } from './lobby-view';
 
 const mocks = vi.hoisted(() => ({ phone: false, guest: false }));
 
+vi.mock('./lobby-schedule', () => ({ LobbyScheduleSection: () => null }));
+
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
 vi.mock('./lobby-guest-hooks', () => ({ useIsLobbyGuest: () => mocks.guest }));
 vi.mock('./lobby-people', () => ({

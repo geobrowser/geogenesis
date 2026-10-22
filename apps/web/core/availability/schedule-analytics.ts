@@ -49,7 +49,13 @@ export type ScheduleEntry =
   /** A time beside someone who disagrees with the viewer, in the calendar's Claims panel (GEO-3220). */
   | 'calendar_claim_match'
   /** A row's chips or Schedule in the calendar's People panel (GEO-3220). */
-  | 'calendar_people_panel';
+  | 'calendar_people_panel'
+  /** A time chip, More times, or type-a-time from a lobby person menu. */
+  | 'lobby_time'
+  | 'lobby_more_times'
+  | 'lobby_schedule'
+  /** Choose different time on an incoming scheduled request in the lobby. */
+  | 'lobby_new_time';
 
 /** Which control opened the viewer's own schedule editor. */
 export type ScheduleEditorSurface =
@@ -182,15 +188,18 @@ export function debateScheduledRequestAnswered({
   requestId,
   accepted,
   outcome,
+  surface,
 }: {
   requestId: string;
   accepted: boolean;
+  surface?: 'lobby';
   outcome: 'recorded' | 'conflict';
 }) {
   capture('debate_scheduled_request_answered', {
     request_id: requestId,
     accepted,
     outcome,
+    ...(surface ? { surface } : {}),
   });
 }
 

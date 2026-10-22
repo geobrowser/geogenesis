@@ -240,6 +240,22 @@ describe('scheduling analytics', () => {
     });
   });
 
+  it.each([true, false])(
+    'attributes a lobby answer (accepted=%s) without adding telemetry to the API payload',
+    async accepted => {
+      const respond = vi.spyOn(api, 'respondToScheduledDebate').mockResolvedValue({ ...sent, outcome: 'recorded' });
+      const { result } = renderHook(() => useRespondToScheduledDebate(), { wrapper: mutationWrapper() });
+      await act(() => result.current.mutateAsync({ requestId: 'req-1', accepted, surface: 'lobby' }));
+      expect(capture).toHaveBeenCalledWith('debate_scheduled_request_answered', {
+        request_id: 'req-1',
+        accepted,
+        outcome: 'recorded',
+        surface: 'lobby',
+      });
+      expect(respond).toHaveBeenCalledWith('req-1', accepted, expect.any(Function), 'acct');
+    }
+  );
+
   // GEO-3073's canonical record, alongside the scheduling events: the same `start_debate` and
   // `join_debate` the instant challenge and request cards report, told apart by target type.
   it('reports a booking as a canonical start_debate against the other debater', async () => {
