@@ -5,7 +5,7 @@ up. It is the baseline for the GEO-3426 no-show fixes.
 
 The measurement lives outside this repo:
 
-- **geo-chat** records each step of a scheduled debate as it happens (migration 0111,
+- **geo-chat** records each step of a scheduled debate as it happens (migration 0112,
   `scheduled_debate_events`). Its hourly `geo-chat-lobby-export` job sends the steps to the
   warehouse.
 - **geobrowser/analytics** holds the warehouse tables and outcome views (migration 113) and the
