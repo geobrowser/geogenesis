@@ -50,7 +50,6 @@ import {
 import { exploreForYouBestConnectionDocument, exploreForYouConnectionDocument } from './explore-for-you-document';
 import { FOR_YOU_FEED, composeForYouPage } from './explore-for-you-mix';
 import { exploreTopicFeedConnectionDocument } from './explore-topic-feed-document';
-import { topicFilterClauses } from './explore-topic-filter';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import {
   type ExploreForYouCursor,
@@ -237,7 +236,6 @@ function rankedWindowVariables(args: RankedWindowArgs) {
  */
 async function fetchBestEntitiesByTypePage(
   args: RankedWindowArgs & {
-    topicIds?: readonly string[];
     requireDebateTagOnClaims?: boolean;
     entityFilter?: EntityFilter;
   }
@@ -255,10 +253,7 @@ async function fetchBestEntitiesByTypePage(
       variables: {
         ...rankedWindowVariables(args),
         maxPerType: args.offset + args.limit,
-        filter: combineEntityFilters(
-          mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims, args.topicIds),
-          args.entityFilter
-        ),
+        filter: combineEntityFilters(mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims), args.entityFilter),
       },
     })
   );
@@ -368,19 +363,12 @@ async function fetchForYouStreamPage(
 }
 
 /**
- * The `filter` the two Best paths send: the debate-tag gate and the topic AND clauses,
- * or `undefined` when neither applies so the ranked walk keeps its no-filter fast path.
+ * The debate-tag gate the two Best paths send, or `undefined` so the ranked walk keeps its
+ * no-filter fast path. Topics no longer ride this: Best/New serve a topic selection from gaia's
+ * ranking table via `rankedTopicIds`, and Top filters topics through `buildExploreFeedFilter`.
  */
-function mergeBestFilter(
-  spaceIds: string[],
-  requireDebateTagOnClaims: boolean | undefined,
-  topicIds: readonly string[] | undefined
-): EntityFilter | undefined {
-  const filter: EntityFilter = {
-    ...(requireDebateTagOnClaims ? claimsRequireDebateTagFilter(spaceIds) : {}),
-    ...topicFilterClauses(topicIds),
-  };
-  return Object.keys(filter).length > 0 ? filter : undefined;
+function mergeBestFilter(spaceIds: string[], requireDebateTagOnClaims: boolean | undefined): EntityFilter | undefined {
+  return requireDebateTagOnClaims ? claimsRequireDebateTagFilter(spaceIds) : undefined;
 }
 
 async function fetchExploreEntitiesPage(args: {
@@ -693,7 +681,6 @@ async function fetchBestEntitiesPage(args: {
   time: ExploreTime;
   limit: number;
   after: string | null;
-  topicIds?: readonly string[];
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
 }): Promise<ExploreEntitiesPageResponse> {
@@ -718,12 +705,9 @@ async function fetchBestEntitiesPage(args: {
         // are 1.7x and 2.3x slower with the argument rather than 135x, and they have no
         // equivalent cliff, so New and Top keep filtering server-side where it is exact.
         createdAfter: t != null ? String(t) : undefined,
-        // Left undefined when there is neither a tag gate nor a topic pick, so the sort keeps its
-        // no-filter fast path unless there is a clause the connection genuinely does not know.
-        filter: combineEntityFilters(
-          mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims, args.topicIds),
-          args.entityFilter
-        ),
+        // Left undefined when there is no tag gate, so the sort keeps its no-filter fast path unless
+        // there is a clause the connection genuinely does not know.
+        filter: combineEntityFilters(mergeBestFilter(args.spaceIds, args.requireDebateTagOnClaims), args.entityFilter),
         spaceIdsForLists: args.spaceIds,
       },
     })
@@ -942,7 +926,6 @@ export async function fetchExploreFeed(args: {
             // `decodeExploreWindowCursor` already documents.
             offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
             typeIds: args.typeIds ?? [],
-            topicIds: args.topicIds,
             requireDebateTagOnClaims: args.requireDebateTagOnClaims,
             entityFilter: args.entityFilter,
           })
@@ -952,7 +935,6 @@ export async function fetchExploreFeed(args: {
               time: args.time,
               limit: windowSize,
               after: windowAfter,
-              topicIds: args.topicIds,
               requireDebateTagOnClaims: args.requireDebateTagOnClaims,
               entityFilter: args.entityFilter,
             })
@@ -1041,8 +1023,10 @@ export async function fetchExploreFeed(args: {
   };
 
   const forYouTopicIds = args.forYouTopicIds ?? [];
-  // An explicit explore-dropdown topic falls through to the ranked Best path, where `mergeBestFilter`
-  // applies it; the For-you stream keys on followed topics (`forYouTopicIds`), not `args.topicIds`.
+  // An explicit explore-dropdown topic is served by the ranked topic path (`rankedTopicIds`), which
+  // makes `bestFiltersServerSide` false anyway; the For-you stream keys on followed topics
+  // (`forYouTopicIds`), not `args.topicIds`, and it skips personalization and the fresh slot — a
+  // known limit of serving a topic selection from gaia's ranking table.
   if (forYouTopicIds.length > 0 && bestFiltersServerSide && (args.topicIds?.length ?? 0) === 0) {
     const streamArgs = {
       topicIds: forYouTopicIds,

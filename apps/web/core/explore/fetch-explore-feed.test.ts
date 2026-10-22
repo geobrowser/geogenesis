@@ -1036,6 +1036,8 @@ describe('the topics clauses reaching the query', () => {
     { name: 'top', args: { sort: 'top' as const, typeIds: [CLAIM_TYPE_ID] } },
   ];
 
+  const filterPaths = paths.filter(path => path.args.sort !== 'best');
+
   function sentFilter() {
     return windows.variables[0]?.filter as { and?: unknown[]; or?: unknown; relations?: unknown } | undefined;
   }
@@ -1044,7 +1046,7 @@ describe('the topics clauses reaching the query', () => {
     return { relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: topicId } } } };
   }
 
-  it.each(paths)('sends one clause per picked topic on the $name path', async ({ args }) => {
+  it.each(filterPaths)('sends one clause per picked topic on the $name path', async ({ args }) => {
     windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
 
     await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY, ETHICS] });
@@ -1072,7 +1074,7 @@ describe('the topics clauses reaching the query', () => {
     expect(sentFilter()).toBeUndefined();
   });
 
-  it.each(paths)('combines the topic clauses with the debate-tag gate on the $name path', async ({ args }) => {
+  it.each(filterPaths)('combines the topic clauses with the debate-tag gate on the $name path', async ({ args }) => {
     windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
 
     await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY] });
@@ -1081,17 +1083,14 @@ describe('the topics clauses reaching the query', () => {
     expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY)]);
   });
 
-  it.each(paths.filter(path => path.args.sort !== 'best'))(
-    'keeps the feed exclusions alongside the topics on the $name path',
-    async ({ args }) => {
-      windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
+  it.each(filterPaths)('keeps the feed exclusions alongside the topics on the $name path', async ({ args }) => {
+    windows.queue = [windowOf([entity('c1', CLAIM_TYPE_ID)], { hasNextPage: false, endCursor: null })];
 
-      await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY] });
+    await fetchExploreFeed({ ...feedArgs, ...args, topicIds: [PHILOSOPHY] });
 
-      expect(sentFilter()?.relations).toBeDefined();
-      expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY)]);
-    }
-  );
+    expect(sentFilter()?.relations).toBeDefined();
+    expect(sentFilter()?.and).toEqual([topicClause(PHILOSOPHY)]);
+  });
 });
 
 describe("a signed-in reader's pending membership requests", () => {
