@@ -68,7 +68,9 @@ export function InterestGrid({
               <span
                 className={cx(
                   'pointer-events-none absolute inset-0 rounded-full transition-colors',
-                  selected ? 'ring-4 ring-text ring-inset' : 'group-hover:bg-text/5'
+                  selected
+                    ? 'bg-text/20 ring-1 ring-text ring-inset'
+                    : 'ring-1 ring-grey-02 ring-inset group-hover:bg-text/5'
                 )}
               />
             </span>
