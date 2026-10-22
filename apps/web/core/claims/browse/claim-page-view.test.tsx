@@ -204,7 +204,8 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateClaims: () => ({ data: { claims: [] } }),
 }));
 
-vi.mock('./use-claim-response-state', () => ({
+vi.mock('./use-claim-response-state', async importOriginal => ({
+  ...(await importOriginal<typeof import('./use-claim-response-state')>()),
   useClaimResponseState: (args: Record<string, unknown>) => {
     mocks.responseStateArgs = args;
     return {

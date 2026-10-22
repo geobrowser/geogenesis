@@ -58,7 +58,7 @@ import { ClaimTopicsTab } from './claim-topics-tab';
 import { EmailVoteNote } from './email-vote-note';
 import { useClaimActivityRows } from './use-claim-activity-rows';
 import { useClaimRecord } from './use-claim-record';
-import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
+import { type ClaimResponseState, claimTitleFrom, useClaimResponseState } from './use-claim-response-state';
 import { useEmailVoteLink } from './use-email-vote-link';
 
 type ClaimTab = 'overview' | 'debates' | 'claims' | 'topics' | 'sources' | 'custom';
@@ -153,7 +153,7 @@ export function ClaimPageView({
     entity: entity ?? null,
     // Not drawn from this (the page has its own heading), but a vote kept on this device is saved
     // under it: without it the save sheet had no reminder chip for a vote cast here (GEO-3374).
-    title: entity?.name ?? row?.claim,
+    title: claimTitleFrom({ entity: entity ?? null, row }),
   });
   const { responseKind, summary } = state;
   // Explore's rule for drawing the verdict column at all: counts that answered, and at least one.
