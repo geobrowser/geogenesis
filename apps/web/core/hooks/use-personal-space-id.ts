@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
+import type { Space } from '~/core/io/dto/spaces';
 import { getSpaceByAddress } from '~/core/io/queries';
 
 import { useSmartAccount } from './use-smart-account';
@@ -35,14 +36,26 @@ export function markPersonalProfilePublished(address: string) {
   }
 }
 
-/** Whether this browser sent the personal profile publish for `address` within the grace window. */
-export function recentlyPublishedProfile(address: string) {
+function recentlyPublishedProfile(address: string) {
   try {
     const at = Number(window.localStorage.getItem(profilePublishStorageKey(address)));
     return Number.isFinite(at) && Date.now() - at < PROFILE_PUBLISH_GRACE_MS;
   } catch {
     return false;
   }
+}
+
+/**
+ * Whether `address`'s registered personal space still needs its profile published.
+ *
+ * The one rule both readers share: onboarding (whether to reopen) and space creation (whether a
+ * re-run publishes or returns). `null` is a space the index has not served yet — the reload
+ * between registration and publish, where the profile really was never sent — so it counts as
+ * needing one unless this browser just sent it.
+ */
+export function needsPersonalProfile(space: Pick<Space, 'type' | 'hasProfile'> | null, address: string) {
+  if (recentlyPublishedProfile(address)) return false;
+  return space === null || (space.type === 'PERSONAL' && !space.hasProfile);
 }
 
 export type PersonalSpaceIdData = {
@@ -82,7 +95,7 @@ export function usePersonalSpaceId() {
         isRegistered: true,
         personalSpaceId: space.id,
         personalEntityId: space.topicId ?? null,
-        needsProfile: space.type === 'PERSONAL' && !space.hasProfile && !recentlyPublishedProfile(address),
+        needsProfile: needsPersonalProfile(space, address),
       };
     },
     enabled: !!address,

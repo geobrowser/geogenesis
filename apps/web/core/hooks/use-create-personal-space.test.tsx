@@ -97,7 +97,6 @@ describe('useCreatePersonalSpace', () => {
     await create();
 
     expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
-    expect(getSpace).not.toHaveBeenCalled();
   });
 
   it('fails rather than guessing when the profile check cannot be read', async () => {

@@ -4,28 +4,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
-import { recentlyPublishedProfile } from '~/core/hooks/use-personal-space-id';
+import { needsPersonalProfile } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
 import {
   createPersonalSpaceOnChain,
   readRegisteredSpaceId,
 } from '~/core/utils/contracts/create-personal-space-on-chain';
-
-/**
- * Whether a registered space already has its profile, or this browser just sent it.
- *
- * The local mark covers the indexer lag: a reload right after the publish was sent would
- * otherwise read "no profile" and publish it a second time. A space the index has not served
- * yet counts as having none — that is the reload-between-registration-and-publish case, where
- * the profile really was never sent. A failed read throws rather than guessing either way;
- * the runner then offers the retry.
- */
-async function hasPublishedProfile(spaceId: string, walletAddress: string) {
-  if (recentlyPublishedProfile(walletAddress)) return true;
-  const space = await Effect.runPromise(getSpace(spaceId));
-  return space?.hasProfile ?? false;
-}
 
 type CreatePersonalSpaceArgs = {
   spaceName: string;
@@ -49,15 +34,14 @@ export function useCreatePersonalSpace() {
 
       const walletAddress = smartAccount.account.address;
 
-      // Return an already-registered space without republishing — but only once its profile
-      // is published. Registered alone is not finished: an account whose profile publish
-      // never landed has a space with no name and no page, and geo-chat refuses it a session
-      // for good. Returning here for that account is how the onboarding retry (#2855) said
-      // "completed" while publishing nothing. Falling through instead is safe:
-      // `createPersonalSpaceOnChain` skips the registration it already has and publishes only
-      // the profile.
+      // Return an already-registered space without republishing, but only once its profile
+      // is published. An account whose profile never landed has no page, and geo-chat refuses
+      // it a session for good; returning here for it is how the onboarding retry (#2855) said
+      // "completed" while publishing nothing. Falling through is safe: the on-chain flow skips
+      // the registration it already has and publishes only the profile. A failed index read
+      // throws, and the runner offers the retry.
       const existingSpaceId = await readRegisteredSpaceId(walletAddress);
-      if (existingSpaceId && (await hasPublishedProfile(existingSpaceId, walletAddress))) {
+      if (existingSpaceId && !needsPersonalProfile(await Effect.runPromise(getSpace(existingSpaceId)), walletAddress)) {
         try {
           onRegistered?.(existingSpaceId);
         } catch (error) {
