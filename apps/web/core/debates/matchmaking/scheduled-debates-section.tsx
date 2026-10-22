@@ -22,13 +22,8 @@ import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
-import { formatClockTime } from '~/core/debates/rooms/room-time';
 import { useOpenScheduledRequests } from '~/core/debates/rooms/scheduled-awaiting';
-import {
-  useCancelScheduledDebate,
-  useRespondToScheduledDebate,
-  useScheduledDebates,
-} from '~/core/debates/rooms/scheduling-hooks';
+import { useCancelScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
 import { cancelFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { normId } from '~/core/utils/norm-id';
@@ -39,14 +34,19 @@ import { Text } from '~/design-system/text';
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
 import { useDebatePeople } from './hooks';
-import { hubAnalyticsAttributes } from './hub-analytics';
+import { type DebateAnalyticsSurface, debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
 import { RequestSection } from './request-section';
+import { formatDebateSlot, formatDebateTime, formatTime } from './scheduled-debate-format';
 import { type UpcomingLobbyRow, upcomingLobbyRows } from './upcoming-lobby-rows';
+import { useAnswerOnce } from './use-answer-once';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useRequestCountdown } from './use-request-countdown';
+import { type ScheduledDebateAnswer, useScheduledDebateAnswer } from './use-scheduled-debate-answer';
+
+export { formatDebateSlot, formatDebateTime } from './scheduled-debate-format';
 
 /**
  * Scheduled debates in the Requests tab (GEO-2939, GEO-2940). Answering and joining both happen
@@ -54,8 +54,7 @@ import { useRequestCountdown } from './use-request-countdown';
  */
 export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
   const { answerable, upcoming, lobbies, people, requestsError, roomsError, lobbiesError } = content;
-  const respond = useRespondToScheduledDebate();
-  const [conflict, setConflict] = React.useState<string | null>(null);
+  const { answer, busy, error: conflict } = useScheduledDebateAnswer();
   const viewerId = useCurrentGeoChatUserId();
   const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0, people);
   // The debate whose time is being moved, on the other debater's week. One at a time, so the modal
@@ -82,21 +81,6 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   const viewer = lookUp(viewerId);
 
   if (!hasScheduledContent(content)) return null;
-
-  const answer = (requestId: string, accepted: boolean) => {
-    setConflict(null);
-    respond.mutate(
-      { requestId, accepted },
-      {
-        onSuccess: result => {
-          if (result.outcome === 'conflict') {
-            setConflict(`That clashes with a debate ${formatDebateTime(result.conflicting_start_at)}.`);
-          }
-        },
-        onError: error => setConflict(error.message),
-      }
-    );
-  };
 
   return (
     <>
@@ -142,7 +126,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
                   opponent={lookUp(opponentUserId)}
                   viewer={viewer}
                   viewerId={viewerId}
-                  busy={respond.isPending}
+                  busy={busy}
                   onAnswer={answer}
                   onReschedule={reschedulerFor(
                     request.request_id,
@@ -333,7 +317,7 @@ function UpcomingRow({
       parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={
         room.due
-          ? `Starting now${scheduledEndAt ? ` · Ends at ${formatClockTime(scheduledEndAt)}` : ''}`
+          ? `Starting now${scheduledEndAt ? ` · Ends at ${formatTime(scheduledEndAt)}` : ''}`
           : scheduledEndAt
             ? formatDebateSlot(room.starts_at, scheduledEndAt)
             : formatDebateTime(room.starts_at)
@@ -343,7 +327,7 @@ function UpcomingRow({
           ? `${opponentName(opponent)} is waiting for you now`
           : room.joinable
             ? 'The room is open'
-            : `Opens at ${formatClockTime(room.opens_at)}`
+            : `Opens at ${formatTime(room.opens_at)}`
       }
       urgent={room.others_present}
       actions={
@@ -378,7 +362,7 @@ function UpcomingRow({
   );
 }
 
-function ScheduledRow({
+export function ScheduledRow({
   request,
   opponent,
   viewer,
@@ -387,15 +371,17 @@ function ScheduledRow({
   onAnswer,
   onReschedule,
   ref,
+  analyticsSurface = 'hub',
 }: {
   /** From `HubCardList`, whose `popLayout` measures the card on its way out. */
   ref?: React.Ref<HTMLElement>;
+  analyticsSurface?: DebateAnalyticsSurface;
   request: ScheduledDebateRequest;
   opponent: DebateParticipantSummary | null;
   viewer: DebateParticipantSummary | null;
   viewerId: string | null;
   busy: boolean;
-  onAnswer: (requestId: string, accepted: boolean) => void;
+  onAnswer: ScheduledDebateAnswer;
   /** Opens the other debater's week to propose a new time for this request. Null when they are not known. */
   onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
@@ -424,48 +410,22 @@ function ScheduledRow({
       note={adminArrangedNote(request, opponent, viewerId)}
       actions={
         request.viewer_must_answer ? (
-          // Decline first, Accept primary on the right: the order every other request card uses.
-          // Under them, the scheduling email's third answer in its words (GEO-3232): a time that
-          // does not suit is moved, and the other side asked again, rather than declined.
-          <div className="grid grid-cols-2 gap-2">
-            {/* Labelled apart from the instant request cards' Accept and Decline, which would
-                otherwise share their labels and could not be told from these in the data. */}
-            <HubPillButton
-              analyticsLabel="Debate hub Decline scheduled debate"
-              analyticsIntent="decline_scheduled_debate"
-              onClick={() => onAnswer(request.request_id, false)}
-              disabled={busy}
-            >
-              Decline
-            </HubPillButton>
-            <HubPillButton
-              variant="primary"
-              analyticsLabel="Debate hub Accept scheduled debate"
-              analyticsIntent="accept_scheduled_debate"
-              onClick={() => onAnswer(request.request_id, true)}
-              disabled={busy}
-            >
-              Accept
-            </HubPillButton>
-            {onReschedule && (
-              <HubPillButton
-                className="col-span-2"
-                analyticsLabel="Debate hub Choose different time for scheduled request"
-                analyticsIntent="choose_different_time_scheduled_request"
-                onClick={event => onReschedule(event.currentTarget)}
-                disabled={busy}
-              >
-                Choose different time
-              </HubPillButton>
-            )}
-          </div>
+          <ScheduledAnswerButtons
+            key={`${request.scheduled_start_at}:${request.reschedule_count}`}
+            requestId={request.request_id}
+            busy={busy}
+            onAnswer={onAnswer}
+            onReschedule={onReschedule}
+            analyticsSurface={analyticsSurface}
+          />
         ) : (
           withdrawable && (
             <div className="flex flex-col gap-2">
               {viewerAccepted && onReschedule && (
                 <HubPillButton
                   className="w-full"
-                  analyticsLabel="Debate hub Reschedule scheduled request"
+                  analyticsSurface={analyticsSurface}
+                  analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Reschedule scheduled request')}
                   analyticsIntent="reschedule_scheduled_request"
                   onClick={event => onReschedule(event.currentTarget)}
                 >
@@ -476,12 +436,70 @@ function ScheduledRow({
                 requestId={request.request_id}
                 kind={proposedByViewer ? 'request' : 'debate'}
                 opponent={opponent}
+                analyticsSurface={analyticsSurface}
               />
             </div>
           )
         )
       }
     />
+  );
+}
+
+/** One answer per request version, including taps before the mutation's pending render. */
+function ScheduledAnswerButtons({
+  requestId,
+  busy,
+  onAnswer,
+  onReschedule,
+  analyticsSurface,
+}: {
+  requestId: string;
+  busy: boolean;
+  onAnswer: ScheduledDebateAnswer;
+  onReschedule: ((opener: HTMLElement) => void) | null;
+  analyticsSurface: DebateAnalyticsSurface;
+}) {
+  const { answerOnce, releaseAnswer } = useAnswerOnce();
+  return (
+    // Decline first, Accept primary on the right: the order every other request card uses.
+    // Under them, the scheduling email's third answer in its words (GEO-3232): a time that
+    // does not suit is moved, and the other side asked again, rather than declined.
+    <div className="grid grid-cols-2 gap-2">
+      {/* Labelled apart from the instant request cards' Accept and Decline, which would
+          otherwise share their labels and could not be told from these in the data. */}
+      <HubPillButton
+        analyticsSurface={analyticsSurface}
+        analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Decline scheduled debate')}
+        analyticsIntent="decline_scheduled_debate"
+        onClick={() => answerOnce(() => onAnswer(requestId, false, releaseAnswer.onError))}
+        disabled={busy}
+      >
+        Decline
+      </HubPillButton>
+      <HubPillButton
+        variant="primary"
+        analyticsSurface={analyticsSurface}
+        analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Accept scheduled debate')}
+        analyticsIntent="accept_scheduled_debate"
+        onClick={() => answerOnce(() => onAnswer(requestId, true, releaseAnswer.onError))}
+        disabled={busy}
+      >
+        Accept
+      </HubPillButton>
+      {onReschedule && (
+        <HubPillButton
+          className="col-span-2"
+          analyticsSurface={analyticsSurface}
+          analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Choose different time for scheduled request')}
+          analyticsIntent="choose_different_time_scheduled_request"
+          onClick={event => onReschedule(event.currentTarget)}
+          disabled={busy}
+        >
+          Choose different time
+        </HubPillButton>
+      )}
+    </div>
   );
 }
 
@@ -520,11 +538,13 @@ const CANCEL_COPY = {
  * Calling a scheduled debate off (GEO-3093), behind a confirm step: an accepted debate is an
  * agreement with someone else, and one press should not be able to undo it.
  */
-function CancelScheduled({
+export function CancelScheduled({
   requestId,
   kind,
   opponent,
+  analyticsSurface = 'hub',
 }: {
+  analyticsSurface?: DebateAnalyticsSurface;
   requestId: string;
   kind: keyof typeof CANCEL_COPY;
   opponent: DebateParticipantSummary | null;
@@ -549,7 +569,8 @@ function CancelScheduled({
       <div className="flex flex-col gap-2">
         <HubPillButton
           className="w-full"
-          analyticsLabel={`Debate hub ${label}`}
+          analyticsSurface={analyticsSurface}
+          analyticsLabel={debateAnalyticsLabel(analyticsSurface, label)}
           analyticsIntent={intent}
           onClick={() => {
             setError(null);
@@ -574,7 +595,8 @@ function CancelScheduled({
       </Text>
       <div className="grid grid-cols-2 gap-2">
         <HubPillButton
-          analyticsLabel={`Debate hub Keep ${kind}`}
+          analyticsSurface={analyticsSurface}
+          analyticsLabel={debateAnalyticsLabel(analyticsSurface, `Keep ${kind}`)}
           analyticsIntent={`keep_scheduled_${kind}`}
           onClick={() => setConfirming(false)}
           disabled={cancel.isPending}
@@ -583,7 +605,8 @@ function CancelScheduled({
         </HubPillButton>
         <HubPillButton
           variant="primary"
-          analyticsLabel={`Debate hub Confirm ${label}`}
+          analyticsSurface={analyticsSurface}
+          analyticsLabel={debateAnalyticsLabel(analyticsSurface, `Confirm ${label}`)}
           analyticsIntent={`confirm_${intent}`}
           pending={cancel.isPending}
           pendingLabel="Cancelling…"
@@ -714,7 +737,7 @@ function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
     <ScheduleCard
       testId="upcoming-lobby-card"
       when={Date.parse(row.startsAt) <= now ? 'Starting now' : formatDebateTime(row.startsAt)}
-      status={row.open ? 'The lobby is open' : `Opens at ${formatClockTime(row.opensAt)}`}
+      status={row.open ? 'The lobby is open' : `Opens at ${formatTime(row.opensAt)}`}
       parties={
         <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-grey-01 px-3 py-2.5">
           <Text as="span" variant="footnoteMedium" color="grey-04">
@@ -767,41 +790,4 @@ function ReadFailed({ children }: { children: React.ReactNode }) {
       {children}
     </Text>
   );
-}
-
-/** `Today at 1:00 PM`, `Tomorrow at ...`, else `Thu, Sep 24 at ...`. */
-export function formatDebateTime(iso: string, now = new Date()) {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return iso;
-
-  return `${formatDay(at, now)} at ${formatClockTime(iso)}`;
-}
-
-function formatDay(at: Date, now: Date) {
-  const days = Math.round((startOfDay(at).getTime() - startOfDay(now).getTime()) / 86_400_000);
-  return days === 0
-    ? 'Today'
-    : days === 1
-      ? 'Tomorrow'
-      : at.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-/** `Tomorrow, 11:00 – 11:30 AM`: the day once, then the slot. Falls back to the start alone. */
-export function formatDebateSlot(startIso: string, endIso: string, now = new Date()) {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-    return formatDebateTime(startIso, now);
-  }
-  const from = formatClockTime(startIso);
-  const to = formatClockTime(endIso);
-  // `11:00 – 11:30 AM` rather than `11:00 AM – 11:30 AM`, when both ends share the period.
-  const period = /\s?([AP]M)$/i;
-  const fromPeriod = from.match(period)?.[1];
-  const shared = fromPeriod !== undefined && fromPeriod === to.match(period)?.[1];
-  return `${formatDay(start, now)}, ${shared ? from.replace(period, '') : from} – ${to}`;
-}
-
-function startOfDay(at: Date) {
-  return new Date(at.getFullYear(), at.getMonth(), at.getDate());
 }

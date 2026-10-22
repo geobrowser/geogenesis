@@ -210,14 +210,14 @@ export function useRespondToScheduledDebate() {
   const mutation = useMutation<
     ScheduledDebateResponseResult,
     Error,
-    { requestId: string; accepted: boolean },
+    { requestId: string; accepted: boolean; surface?: 'lobby' },
     AnalyticsRevision
   >({
     mutationFn: ({ requestId, accepted }) =>
       respondToScheduledDebate(requestId, accepted, getPrivyIdentityToken, accountKey),
     onMutate: snapshotAnalyticsRevision,
-    onSuccess: (result, { requestId, accepted }, isCurrent) => {
-      if (isCurrent()) debateScheduledRequestAnswered({ requestId, accepted, outcome: result.outcome });
+    onSuccess: (result, { requestId, accepted, surface }, isCurrent) => {
+      if (isCurrent()) debateScheduledRequestAnswered({ requestId, accepted, outcome: result.outcome, surface });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
       // An acceptance books the room, which the join prompt reads from a different key.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });

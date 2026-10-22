@@ -171,7 +171,7 @@ export function SharedAvailabilityModal({
     debateAvailabilityLinkOpened({
       viewer: isSelf ? 'self' : authenticated ? 'other' : 'signed_out',
       peer: isSelf ? null : settledPeer,
-      rescheduling: rescheduleRequestId !== null,
+      rescheduleRequestId,
       via,
     })
   );

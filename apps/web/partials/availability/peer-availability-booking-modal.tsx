@@ -83,6 +83,7 @@ export function PeerAvailabilityBookingModal({
       onClose={close}
       booking={{
         mode,
+        requestId: rescheduleRequestId,
         onRequest: (startsAt, pick) => {
           const slot = {
             startsAt: new Date(startsAt),

@@ -17,13 +17,13 @@ import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
 import { HubPillButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
-import { formatDebateTime } from '~/core/debates/matchmaking/scheduled-debates-section';
+import { formatDebateTime, formatTime } from '~/core/debates/matchmaking/scheduled-debate-format';
 import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
 import { useRequestRoom } from '~/core/debates/rooms/request-room';
 import { SCHEDULED_NOTICE_COPY as COPY } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, useRequestOpponent } from '~/core/debates/rooms/room-opponent';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
-import { formatClockTime, startOffset } from '~/core/debates/rooms/room-time';
+import { startOffset } from '~/core/debates/rooms/room-time';
 import {
   DEFAULT_LATE_MINUTES,
   NOTICE_NOTE_MAX,
@@ -238,7 +238,7 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
           onCant={() => go('cant')}
           onSent={expectedAt =>
             setOutcome({
-              message: COPY.late.sent(name, formatClockTime(expectedAt)),
+              message: COPY.late.sent(name, formatTime(expectedAt)),
               // Only into a room that is open. A late notice can be sent the day before, from the
               // calendar invite, and Join would land on "the room opens at…".
               joinRoomId: room?.joinable ? room.room_id : null,

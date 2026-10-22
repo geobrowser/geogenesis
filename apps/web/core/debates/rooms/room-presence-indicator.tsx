@@ -9,11 +9,11 @@ import { Text } from '~/design-system/text';
 
 import { debateAnalyticsLabel } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { formatTime } from '../matchmaking/scheduled-debate-format';
 import { useDebateRoomContext } from './room-context';
 import { ROOM_LATE_NOTICE, UNNAMED_OPPONENT, roomPresenceLabel, roomPresenceNote } from './room-copy';
 import { requestForRoom } from './room-opponent';
 import type { DebateRoomPresence, DebateRoomPresenceState } from './room-presence';
-import { formatClockTime } from './room-time';
 import { useScheduledDebates } from './scheduling-hooks';
 
 /**
@@ -126,7 +126,7 @@ export function RoomLateNotice({
       </p>
       {late.note && <p className="line-clamp-2 text-chat break-words text-grey-04 max-[767px]:hidden">“{late.note}”</p>}
       <p className="text-chat text-grey-04 max-[374px]:hidden">
-        {ROOM_LATE_NOTICE.expected(formatClockTime(late.expectedAt))}
+        {ROOM_LATE_NOTICE.expected(formatTime(late.expectedAt))}
       </p>
       {request?.status === 'accepted' && (
         <div className="pt-1 max-[767px]:pt-0">

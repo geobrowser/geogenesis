@@ -590,6 +590,7 @@ describe('AvailabilityDeepLink', () => {
       viewer: 'signed_out',
       peer: 'bookable',
       rescheduling: false,
+      request_id: null,
       link_source: 'share',
     });
 
@@ -597,6 +598,19 @@ describe('AvailabilityDeepLink', () => {
     auth.authenticated = true;
     rerender(<AvailabilityDeepLink />);
     expect(capture).toHaveBeenCalledTimes(1);
+  });
+
+  // GEO-3432: an email's reschedule link names the debate, even when the week is never loaded.
+  it('names the debate a reschedule link moves, signed out as well', () => {
+    search = 'modal=availability&modalTarget=6676b145-0970-4c1c-bfbc-7497d9721b39';
+    auth.authenticated = false;
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
+    render(<AvailabilityDeepLink />);
+
+    expect(capture).toHaveBeenCalledWith(
+      'debate_availability_link_opened',
+      expect.objectContaining({ rescheduling: true, request_id: '6676b145-0970-4c1c-bfbc-7497d9721b39' })
+    );
   });
 
   it('waits for the person to resolve before recording the arrival', () => {

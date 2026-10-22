@@ -9,6 +9,9 @@ import type { PeerSchedule } from '~/core/availability/peer-schedule';
 
 import { PeerAvailability } from './peer-availability';
 
+const capture = vi.hoisted(() => vi.fn());
+vi.mock('~/core/analytics', () => ({ capture }));
+
 const usePeerSchedule = vi.fn();
 vi.mock('~/core/debates/hooks', () => ({ usePeerSchedule: (...args: unknown[]) => usePeerSchedule(...args) }));
 
@@ -25,6 +28,7 @@ const schedule: PeerSchedule = {
 afterEach(() => {
   cleanup();
   usePeerSchedule.mockReset();
+  capture.mockClear();
 });
 
 /** Whatever the hook does not say is whatever react-query would say beside it. */
@@ -76,6 +80,24 @@ describe('PeerAvailability', () => {
     state({ isError: true });
     render(<PeerAvailability userId="user-peer" />);
     expect(screen.getByText(/Couldn’t load their availability/)).toBeInTheDocument();
+  });
+
+  // GEO-3432: the week a reschedule opens names the debate it moves, so one abandoned is seen.
+  it('names the debate a reschedule moves when the week is viewed', () => {
+    state({ schedule });
+    const requestId = '6676b145-0970-4c1c-bfbc-7497d9721b39';
+    render(
+      <PeerAvailability
+        userId="user-peer"
+        entry="requests_reschedule"
+        booking={{ mode: 'reschedule', requestId, onRequest: vi.fn(), pending: false, error: null }}
+      />
+    );
+
+    expect(capture).toHaveBeenCalledWith(
+      'debate_availability_viewed',
+      expect.objectContaining({ entry: 'requests_reschedule', request_id: requestId })
+    );
   });
 
   it('draws the week once it has one', () => {

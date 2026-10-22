@@ -46,12 +46,14 @@ vi.mock('./peer-availability', async importOriginal => ({
   }: {
     booking?: {
       mode?: string;
+      requestId?: string | null;
       onRequest: (startsAt: string, pick: { viewerIsFree: boolean | null; viewerTimezone: string }) => void;
       error: string | null;
     };
   }) => (
     <>
       <output aria-label="mode">{booking?.mode ?? ''}</output>
+      <output aria-label="moving">{booking?.requestId ?? ''}</output>
       <button
         type="button"
         onClick={() =>
@@ -302,6 +304,8 @@ describe('choosing a different time for an existing request', () => {
     expect(sent.startsAt.toISOString()).toBe('2026-09-24T13:00:00.000Z');
     expect(sent.minutes).toBe(30);
     expect(screen.getByLabelText('mode')).toHaveTextContent('reschedule');
+    // Named to the week too, so its analytics can say which debate was being moved (GEO-3432).
+    expect(screen.getByLabelText('moving')).toHaveTextContent(REQUEST_ID);
   });
 
   it('books a new request when no request is named', async () => {
@@ -312,6 +316,7 @@ describe('choosing a different time for an existing request', () => {
     expect(mocks.reschedule).not.toHaveBeenCalled();
     expect(mocks.mutate).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('mode')).toHaveTextContent('request');
+    expect(screen.getByLabelText('moving')).toBeEmptyDOMElement();
   });
 });
 

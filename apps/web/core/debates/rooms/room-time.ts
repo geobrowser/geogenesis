@@ -14,9 +14,3 @@ export function startOffset(untilStartMs: number): { in: number } | { ago: numbe
   const ago = Math.floor(-untilStartMs / MINUTE_MS);
   return ago < 1 ? 'now' : { ago };
 }
-
-/** `1:13 PM`, in the viewer's zone. An unparseable time comes back as written rather than blank. */
-export function formatClockTime(iso: string): string {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? iso : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
