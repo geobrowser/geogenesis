@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import {
   saveVotesHeading,
   saveVotesNavLabel,
@@ -110,6 +111,48 @@ describe('copy', () => {
 });
 
 describe('SaveVotesSheet', () => {
+  it('asks a visitor who came from one of our emails to log in, not sign up (GEO-3374)', () => {
+    noteEmailArrival('?ref_email=welcome');
+    vote('a', 'Couples should keep separate finances');
+    markPromptedThisSession();
+    // Pages after the landing: the URL no longer carries `ref_email`, the session still knows. An ask
+    // that isn't the vote link's own keeps the corner card, with the login wording.
+    window.history.replaceState(null, '', '/explore');
+    render(<SaveVotesSheet />);
+
+    act(() => openSaveVotesPrompt('single_claim'));
+    const region = screen.getByRole('region', { name: 'Save your votes' });
+    expect(region).toHaveTextContent('Log in to save your vote');
+    expect(region).toHaveTextContent('Log in with your email and it counts toward the result.');
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
+  });
+
+  it('opens centred for the vote an email link cast, with that vote as its chip (GEO-3374)', () => {
+    noteEmailArrival('?ref_email=welcome');
+    vote('a', 'Couples should keep separate finances');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+
+    act(() => openSaveVotesPrompt('email_link'));
+    const dialog = screen.getByRole('dialog', { name: 'Save your votes' });
+    expect(dialog).toHaveTextContent('Log in to save your vote');
+    expect(screen.getByRole('list', { name: 'Your votes' })).toHaveTextContent('Couples should keep separate finances');
+    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(mocks.impression).toHaveBeenCalledWith('email_link', 1);
+    // An automatic ask: it counts toward when the sheet asks again, as the pill's own first ask would.
+    expect(readLocalVotes().prompt.shownCount).toBe(1);
+  });
+
+  it('keeps the sign-up wording for a visit that did not come from an email', () => {
+    vote('a');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+
+    act(() => openSaveVotesPrompt('single_claim'));
+    expect(screen.getByText('Save your vote')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Log in' })).not.toBeInTheDocument();
+  });
+
   it('stays closed until something asks for it', () => {
     vote('a');
     markPromptedThisSession();

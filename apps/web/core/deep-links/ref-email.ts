@@ -1,0 +1,47 @@
+import type { ReadableParams } from './modal-deep-link';
+
+/**
+ * `ref_email`: which of our emails a link came from (GEO-3374). Every link in an email carries it, as
+ * attribution only — like `via`, it never triggers anything, and nothing clears it.
+ *
+ * Never named `source`, which the block link reads as a trigger (see `modal-deep-link`).
+ */
+export const REF_EMAIL_PARAM = 'ref_email';
+
+/**
+ * A slug, never free text. It ends up on analytics events, and the action context's allowlist exists
+ * so that text and email addresses can't get there by way of a URL somebody pasted.
+ */
+const REF_EMAIL_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
+
+export function readRefEmail(params: ReadableParams): string | null {
+  const value = params?.get(REF_EMAIL_PARAM)?.trim();
+  return value && REF_EMAIL_PATTERN.test(value) ? value : null;
+}
+
+/**
+ * Marks the browser session as one that started from one of our emails. Everyone they go to already
+ * has an account, so for the rest of the visit the save sheet asks them to log in rather than to sign
+ * up — wherever they go after landing, which is why it is kept for the session and not read off the
+ * URL at the moment of asking.
+ */
+const EMAIL_ARRIVAL_KEY = 'geo:arrived-from-email';
+
+/** Called on every page load, by something always mounted: the landing URL is the one that counts. */
+export function noteEmailArrival(search = window.location.search) {
+  if (!readRefEmail(new URLSearchParams(search))) return;
+  try {
+    window.sessionStorage.setItem(EMAIL_ARRIVAL_KEY, '1');
+  } catch {
+    // Storage blocked: `arrivedFromEmail` still answers from the URL while it carries the param.
+  }
+}
+
+export function arrivedFromEmail(search = window.location.search) {
+  if (readRefEmail(new URLSearchParams(search))) return true;
+  try {
+    return window.sessionStorage.getItem(EMAIL_ARRIVAL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
