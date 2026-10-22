@@ -87,10 +87,14 @@ async function fetchSuggestionPage(
           first,
           offset: cursor.offset,
           filter: {
+            // Ranking by space includes topics mentioned by its content, even when those topic
+            // entities only exist elsewhere. Constrain both tiers to actual space membership.
+            spaceIds: { overlaps: spaceIds },
             relations: {
               [cursor.tier === 'onboarding' ? 'some' : 'none']: {
                 typeId: { is: TAG_PROPERTY_ID },
                 toEntityId: { is: ONBOARDING_TOPIC_TAG_ID },
+                spaceId: { in: spaceIds },
               },
             },
           },
@@ -103,8 +107,8 @@ async function fetchSuggestionPage(
     if (batch.rawCount === first) {
       cursor = { ...cursor, offset: cursor.offset + batch.rawCount };
     } else if (cursor.tier === 'onboarding') {
-      // Onboarding tags are read across spaces, just as on topic pages. Once exhausted, fill the
-      // rest of this page with untagged topics, then continue that tier on the next Show more.
+      // Once local Onboarding tags are exhausted, fill the rest of this page with remaining
+      // topics from these spaces, then continue that tier on the next Show more.
       cursor = { tier: 'remaining', offset: 0 };
     } else {
       return { topics, next: null };
@@ -119,7 +123,7 @@ export function useTopicSuggestions(spaceIds: string[]) {
   const ids = React.useMemo(() => [...new Set(spaceIds.filter(Boolean).map(uuidToHex))].sort(), [spaceIds]);
 
   const query = useInfiniteQuery({
-    queryKey: ['topic-suggestions-for-spaces', ONBOARDING_TOPIC_TAG_ID, ids],
+    queryKey: ['topic-suggestions-for-spaces', 'space-scoped', ONBOARDING_TOPIC_TAG_ID, ids],
     queryFn: ({ pageParam, signal }) => fetchSuggestionPage(ids, pageParam, signal),
     initialPageParam: { tier: 'onboarding', offset: 0 } as SuggestionCursor,
     getNextPageParam: lastPage => lastPage.next ?? undefined,

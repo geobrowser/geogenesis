@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import { print } from 'graphql';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import { ONBOARDING_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 
 import { type TopicOption, useTopicSearch, useTopicSuggestions } from './use-topic-suggestions';
 
@@ -47,7 +47,11 @@ describe('useTopicSearch', () => {
 });
 
 const SPACE = '224406e0de3c48d78ef12774111b8b2f';
-const tagged = { typeId: { is: TAG_PROPERTY_ID }, toEntityId: { is: 'be0299ee92dd4e7ab11bfb810643b288' } };
+const tagged = {
+  typeId: { is: TAG_PROPERTY_ID },
+  toEntityId: { is: 'be0299ee92dd4e7ab11bfb810643b288' },
+  spaceId: { in: [SPACE] },
+};
 const topics = (prefix: string, count: number): TopicOption[] =>
   Array.from({ length: count }, (_, i) => ({ id: `${prefix}${i}`, name: `${prefix} ${i}` }));
 
@@ -82,13 +86,13 @@ describe('useTopicSuggestions onboarding-first pagination', () => {
       spaceIds: [SPACE],
       first: 20,
       offset: 0,
-      filter: { relations: { some: tagged } },
+      filter: { spaceIds: { overlaps: [SPACE] }, relations: { some: tagged } },
     });
     expect(mocks.graphql.mock.calls[1][0].variables).toEqual({
       spaceIds: [SPACE],
       first: 16,
       offset: 0,
-      filter: { relations: { none: tagged } },
+      filter: { spaceIds: { overlaps: [SPACE] }, relations: { none: tagged } },
     });
     expect(print(mocks.graphql.mock.calls[0][0].query)).toContain('filter: $filter');
 
@@ -101,7 +105,7 @@ describe('useTopicSuggestions onboarding-first pagination', () => {
     expect(mocks.graphql.mock.calls[2][0].variables).toMatchObject({
       first: 20,
       offset: 16,
-      filter: { relations: { none: tagged } },
+      filter: { spaceIds: { overlaps: [SPACE] }, relations: { none: tagged } },
     });
   });
 
@@ -122,12 +126,12 @@ describe('useTopicSuggestions onboarding-first pagination', () => {
     expect(mocks.graphql.mock.calls[1][0].variables).toMatchObject({
       offset: 20,
       first: 20,
-      filter: { relations: { some: tagged } },
+      filter: { spaceIds: { overlaps: [SPACE] }, relations: { some: tagged } },
     });
     expect(mocks.graphql.mock.calls[2][0].variables).toMatchObject({
       offset: 0,
       first: 15,
-      filter: { relations: { none: tagged } },
+      filter: { spaceIds: { overlaps: [SPACE] }, relations: { none: tagged } },
     });
     expect(result.current.hasMore).toBe(false);
   });
@@ -155,11 +159,11 @@ describe('useTopicSuggestions onboarding-first pagination', () => {
     await waitFor(() => expect(result.current.suggestions).toEqual([...onboarding, ...remaining]));
     expect(mocks.graphql.mock.calls[1][0].variables).toMatchObject({
       offset: 20,
-      filter: { relations: { some: tagged } },
+      filter: { spaceIds: { overlaps: [SPACE] }, relations: { some: tagged } },
     });
     expect(mocks.graphql.mock.calls[2][0].variables).toMatchObject({
       offset: 0,
-      filter: { relations: { none: tagged } },
+      filter: { spaceIds: { overlaps: [SPACE] }, relations: { none: tagged } },
     });
     expect(result.current.hasMore).toBe(false);
   });
@@ -170,6 +174,52 @@ describe('useTopicSuggestions onboarding-first pagination', () => {
     serveSuggestions(onboarding, [...onboarding, ...remaining]);
     const { result } = suggestions();
     await waitFor(() => expect(result.current.suggestions).toEqual([...onboarding, ...remaining]));
+  });
+
+  it('scopes membership and both tag tiers to the selected spaces on every page', async () => {
+    const crypto = 'c9f267dcb0d270718c2a3c45a64afd32';
+    const selected = [SPACE, crypto].sort();
+    serveSuggestions(topics('onboarding', 25), topics('remaining', 25));
+    const { result } = suggestions([crypto.toUpperCase(), SPACE, crypto]);
+    await waitFor(() => expect(result.current.suggestions).toHaveLength(20));
+    await act(async () => {
+      await result.current.fetchMore();
+    });
+    await act(async () => {
+      await result.current.fetchMore();
+    });
+    await waitFor(() => expect(result.current.suggestions).toHaveLength(50));
+
+    // Ranking by selected spaces alone can return topics that only exist elsewhere. Both the
+    // membership constraint and local tag relation must be applied before first/offset slicing.
+    for (const [request] of mocks.graphql.mock.calls) {
+      expect(request.variables.spaceIds).toEqual(selected);
+      expect(request.variables.filter.spaceIds).toEqual({ overlaps: selected });
+      const relation = request.variables.filter.relations;
+      expect(relation.some ?? relation.none).toEqual({
+        ...tagged,
+        spaceId: { in: selected },
+      });
+    }
+    expect(mocks.graphql.mock.calls.some(([r]) => r.variables.filter.relations.none)).toBe(true);
+  });
+
+  it('does not reuse cached suggestions from the old cross-space filter', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['topic-suggestions-for-spaces', ONBOARDING_TOPIC_TAG_ID, [SPACE]], {
+      pages: [{ topics: [{ id: 'trump', name: 'Trump administration' }], next: null }],
+      pageParams: [{ tier: 'onboarding', offset: 0 }],
+    });
+    const local = topics('local', 2);
+    serveSuggestions(local, []);
+    const { result } = renderHook(() => useTopicSuggestions([SPACE]), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await waitFor(() => expect(result.current.suggestions).toEqual(local));
+    expect(result.current.suggestions.some(topic => topic.id === 'trump')).toBe(false);
   });
 
   it('does not query until there are spaces to rank suggestions from', () => {
@@ -189,7 +239,10 @@ describe('useTopicSuggestions onboarding-first pagination', () => {
       await result.current.refetch();
     });
     await waitFor(() => expect(result.current.suggestions[0]).toEqual(onboarding[0]));
-    expect(mocks.graphql.mock.calls[1][0].variables.filter).toEqual({ relations: { some: tagged } });
+    expect(mocks.graphql.mock.calls[1][0].variables.filter).toEqual({
+      spaceIds: { overlaps: [SPACE] },
+      relations: { some: tagged },
+    });
   });
 
   it('advances by raw rows and fills a page when a decoded row is missing its name', async () => {
@@ -203,7 +256,7 @@ describe('useTopicSuggestions onboarding-first pagination', () => {
     expect(mocks.graphql.mock.calls[1][0].variables).toMatchObject({
       offset: 20,
       first: 1,
-      filter: { relations: { some: tagged } },
+      filter: { spaceIds: { overlaps: [SPACE] }, relations: { some: tagged } },
     });
     expect(mocks.graphql).toHaveBeenCalledTimes(2);
   });
