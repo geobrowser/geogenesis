@@ -65,6 +65,8 @@ type Props = {
   requestId: string;
   initialStep: ScheduledNoticeStep;
   onClose: () => void;
+  /** Told when a late notice or a cancel has gone through, before its confirmation shows. */
+  onSent?: () => void;
   /**
    * Board 2's "Reschedule instead". Only the reschedule link offers it, and it owns the week: there it
    * swaps this dialog for the calendar the link would otherwise have opened.
@@ -85,7 +87,15 @@ type Props = {
  * In the frame the other scheduling dialogs share. Nothing is sent until a confirm press: a link only
  * opens this, because mail scanners open links.
  */
-export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onClose, onReschedule, children }: Props) {
+export function ScheduledDebateNoticeDialog({
+  open,
+  requestId,
+  initialStep,
+  onClose,
+  onSent,
+  onReschedule,
+  children,
+}: Props) {
   const [step, setStep] = React.useState<ScheduledNoticeStep>(initialStep);
   // Once a press has swapped the screen, each new one's heading takes focus: the button is gone.
   const [moved, setMoved] = React.useState(false);
@@ -93,7 +103,11 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
     setMoved(true);
     setStep(next);
   };
-  const [outcome, setOutcome] = React.useState<Outcome | null>(null);
+  const [outcome, setSentOutcome] = React.useState<Outcome | null>(null);
+  const setOutcome = (next: Outcome) => {
+    setSentOutcome(next);
+    onSent?.();
+  };
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
   // Board 3 and its Back belong to arriving through board 2; an email's button lands on board 1b.
