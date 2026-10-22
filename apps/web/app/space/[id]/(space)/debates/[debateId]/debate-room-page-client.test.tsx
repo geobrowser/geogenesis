@@ -7429,13 +7429,24 @@ describe('DebateRoomPageClient', () => {
       expect(debateVideoTile('local').querySelector('[aria-label^="Phase timer:"]')).not.toBeInTheDocument();
     });
 
-    it('shows the listener "Wrap it up" on the speaker\'s tile with their red timer', async () => {
-      joinAsBob();
-      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:47.500'));
-      await renderLiveDebate(openRoundsRoundOneSpeaking());
+    it.each(['Alice', 'Bob'])("hides the opponent's wrap-up prompt from %s (GEO-2415)", async listener => {
+      if (listener === 'Bob') joinAsBob();
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt(listener === 'Bob' ? '20:02:47.500' : '20:01:56.500'));
+      await renderLiveDebate(listener === 'Bob' ? openRoundsRoundOneSpeaking() : openRoundsListening());
 
-      await waitFor(() => expect(pill('remote', 'wrap-it-up')).toHaveTextContent('Wrap it up'));
+      await waitFor(() => expect(timer('remote')).toHaveAttribute('data-turn-timer', 'final'));
+      expect(pill('remote', 'wrap-it-up')).toBeNull();
       expect(pill('local', 'wrap-it-up')).toBeNull();
+      expect(screen.queryByText(/^Wrap it up!?$/)).not.toBeInTheDocument();
+    });
+
+    it.each(['Alice', 'Bob'])('shows %s their own wrap-up prompt (GEO-2415)', async speaker => {
+      if (speaker === 'Bob') joinAsBob();
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt(speaker === 'Bob' ? '20:01:56.500' : '20:02:47.500'));
+      await renderLiveDebate(speaker === 'Bob' ? openRoundsListening() : openRoundsRoundOneSpeaking());
+
+      await waitFor(() => expect(pill('local', 'wrap-it-up')).toHaveTextContent('Wrap it up'));
+      expect(pill('remote', 'wrap-it-up')).toBeNull();
     });
 
     it('counts nobody in over the last word, which leads to the pick, even with the next round appended', async () => {
