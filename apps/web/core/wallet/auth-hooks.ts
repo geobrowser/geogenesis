@@ -266,3 +266,5 @@ export async function toViemAccount(...args: Parameters<typeof Auth.toViemAccoun
 export function retryEmbeddedWalletSetup() {
   void import('@geogenesis/auth').then(auth => auth.retryEmbeddedWalletSetup());
 }
+
+export { restartAuthHost } from './auth-store';

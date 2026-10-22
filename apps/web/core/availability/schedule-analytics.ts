@@ -99,10 +99,14 @@ export function debateScheduleSaved(
 /**
  * Someone's week, loaded and on screen. The step between "opened" and "requested": whether there
  * was anything to pick, and whether any of it suited both of them.
+ *
+ * `requestId` is the scheduled debate being moved, when this week is a reschedule. It joins the
+ * opening to geo-chat's record of that debate, so a reschedule started and then abandoned shows up
+ * (GEO-3432). A link's id is already checked by `rescheduleRequestIdFromTarget`.
  */
 export function debateAvailabilityViewed(
   schedule: PeerSchedule,
-  { entry, bookable }: { entry: ScheduleEntry | null; bookable: boolean }
+  { entry, bookable, requestId }: { entry: ScheduleEntry | null; bookable: boolean; requestId?: string | null }
 ) {
   // Minutes rather than slot counts: a wire slot is a range of any length, so counting them would
   // rank one free afternoon below two free half-hours.
@@ -117,6 +121,7 @@ export function debateAvailabilityViewed(
     viewer_has_schedule: schedule.viewerHasSchedule,
     free_minutes: minutes(schedule.slots) || 0,
     mutual_free_minutes: minutes(schedule.slots.filter(slot => slot.viewerIsFree)) || 0,
+    request_id: requestId ?? null,
   });
 }
 
@@ -197,19 +202,25 @@ export function debateScheduledRequestAnswered({
 export function debateAvailabilityLinkOpened({
   viewer,
   peer,
-  rescheduling,
+  rescheduleRequestId,
   via,
 }: {
   viewer: 'signed_out' | 'self' | 'other';
   /** `bookable` when the week can be shown; otherwise why not. */
   peer: 'bookable' | 'no_debate_profile' | 'error' | null;
-  rescheduling: boolean;
+  /**
+   * The request a scheduling email's link moves, or null for a booking link. Sent here as well as
+   * on `debate_availability_viewed`, because this fires even when the week never loads (signed out,
+   * an error), so a reschedule abandoned there is still seen (GEO-3432).
+   */
+  rescheduleRequestId: string | null;
   via: string | null;
 }) {
   capture('debate_availability_link_opened', {
     viewer,
     peer: peer ?? 'unknown',
-    rescheduling,
+    rescheduling: rescheduleRequestId !== null,
+    request_id: rescheduleRequestId,
     link_source: availabilityLinkSource(via),
   });
 }
