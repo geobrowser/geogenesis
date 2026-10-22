@@ -426,6 +426,7 @@ export function EntityFeed({
     : showTopicFilter
       ? exploreTopicFacet.countsPending
       : false;
+  const topicFacetFailed = Boolean(topicFacetEndpoint) && topicFacets.isError && !topicFacets.data;
   const availableTopicOptions = React.useMemo<HubFilterOption<string>[]>(() => {
     if (topicFacetEndpoint) {
       return orderFacetOptions(topicFacets.data?.topics ?? [], selectedTopicIds).map(topic => ({
@@ -824,6 +825,7 @@ export function EntityFeed({
                   showImages={false}
                   searchPlaceholder="Search topics"
                   searchEmptyLabel="No topics found"
+                  emptyLabel={topicFacetFailed ? 'Couldn’t load topics' : undefined}
                   countsPending={topicCountsPending}
                 />
               ) : null}
