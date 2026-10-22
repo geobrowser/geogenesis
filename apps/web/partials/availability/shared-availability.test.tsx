@@ -61,7 +61,16 @@ type StubQuery<T> = { data?: T; isPending: boolean; isError: boolean };
 let scheduledQuery: StubQuery<{ requests: unknown[] }> = { data: { requests: [] }, isPending: false, isError: false };
 let roomsQuery: StubQuery<{ rooms: unknown[] }> = { data: { rooms: [] }, isPending: false, isError: false };
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({ useScheduledDebates: () => scheduledQuery }));
-vi.mock('~/core/debates/rooms/hooks', () => ({ useUpcomingDebateRooms: () => roomsQuery }));
+// The room view: who is inside, and who said they are late. Empty by default.
+let roomView: { data?: { occupants: string[]; notices?: unknown[] }; isError: boolean } = {
+  data: { occupants: [], notices: [] },
+  isError: false,
+};
+vi.mock('~/core/debates/rooms/hooks', () => ({
+  useUpcomingDebateRooms: () => roomsQuery,
+  useDebateRoom: () => roomView,
+}));
+vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'viewer-1' }));
 vi.mock('~/partials/scheduled-debates/scheduled-debate-notice', () => ({
   ScheduledDebateNoticeDialog: ({ initialStep, onReschedule }: { initialStep: string; onReschedule?: () => void }) => (
     <div data-testid="scheduled-notice" data-step={initialStep}>
@@ -128,6 +137,7 @@ beforeEach(() => {
   setToast.mockClear();
   scheduledQuery = { data: { requests: [] }, isPending: false, isError: false };
   roomsQuery = { data: { rooms: [] }, isPending: false, isError: false };
+  roomView = { data: { occupants: [], notices: [] }, isError: false };
   personalSpaceId = null;
   signInOptions = undefined;
   profileCalls.length = 0;
@@ -368,6 +378,10 @@ describe('AvailabilityDeepLink', () => {
       request_id: requestId.replace(/-/g, ''),
       status: 'accepted',
       room_id: 'aaaabbbbccccddddeeeeffff00001111',
+      participants: [
+        { user_id: 'viewer-1', accepted: true },
+        { user_id: 'maya', accepted: true },
+      ],
     };
     const openRoom = { room_id: agreed.room_id, joinable: true, due: true, others_present: true };
 
@@ -376,6 +390,39 @@ describe('AvailabilityDeepLink', () => {
       profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
       scheduledQuery = { data: { requests: [agreed] }, isPending: false, isError: false };
       roomsQuery = { data: { rooms: [openRoom] }, isPending: false, isError: false };
+    });
+
+    // An email link opens a fresh tab, where Privy restores the session after the modal mounts.
+    it('waits for Privy before deciding, then offers the choices', () => {
+      auth.ready = false;
+      auth.authenticated = false;
+      const { rerender } = render(<AvailabilityDeepLink />);
+      expect(screen.queryByTestId('scheduled-notice')).not.toBeInTheDocument();
+
+      auth.ready = true;
+      auth.authenticated = true;
+      rerender(<AvailabilityDeepLink />);
+      expect(screen.getByTestId('scheduled-notice')).toHaveAttribute('data-step', 'decide');
+    });
+
+    // The running-late email gives the person waiting this same link as its Reschedule.
+    it('opens the week for someone already in the room', () => {
+      roomView = { data: { occupants: ['viewer-1'], notices: [] }, isError: false };
+      render(<AvailabilityDeepLink />);
+      expect(screen.getByTestId('booking-modal')).toHaveAttribute('data-reschedule', requestId);
+      expect(screen.queryByTestId('scheduled-notice')).not.toBeInTheDocument();
+    });
+
+    it('opens the week for the one the other debater told they are late', () => {
+      roomView = {
+        data: {
+          occupants: [],
+          notices: [{ user_id: 'maya', kind: 'running_late', at: '', expected_at: '', note: null }],
+        },
+        isError: false,
+      };
+      render(<AvailabilityDeepLink />);
+      expect(screen.getByTestId('booking-modal')).toBeInTheDocument();
     });
 
     it('offers Join, Running late and Can’t make it before any calendar', () => {

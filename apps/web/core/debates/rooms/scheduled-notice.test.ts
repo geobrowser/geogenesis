@@ -7,7 +7,7 @@ import { SCHEDULED_NOTICE_COPY } from './room-copy';
 import { requestById } from './room-opponent';
 import { startOffset } from './room-time';
 import { NOTICE_NOTE_MAX, noticeNote, noticeRequestState, toCantMakeIt, toRunningLate } from './scheduled-notice';
-import { noticeFailureMessage } from './scheduling-refusals';
+import { cancelFailureMessage, noticeFailureMessage } from './scheduling-refusals';
 
 const DASHED = '6676b145-0970-4c1c-bfbc-7497d9721b39';
 
@@ -89,6 +89,9 @@ describe('noticeFailureMessage', () => {
     expect(noticeFailureMessage(refusal('already_joined'), 'late')).toMatch(/already in the room/);
     expect(noticeFailureMessage(refusal('request_not_active'), 'late')).toBe('This debate is no longer on.');
     expect(noticeFailureMessage(refusal('running_late_limit'), 'late')).toMatch(/three times/);
+    expect(noticeFailureMessage(refusal('too_early'), 'late')).toMatch(/once the room opens/);
+    // A cancel on a room already closed, from the Requests tab too.
+    expect(cancelFailureMessage(refusal('request_not_active'))).toBe('This debate is no longer on.');
     // Can't make it is a cancel, so it says what the Requests tab's Cancel says.
     expect(noticeFailureMessage(refusal('request_not_cancellable'), 'cant')).toBe(
       'This has already been answered, cancelled or expired.'

@@ -6,7 +6,7 @@ const MINUTE_MS = 60_000;
  * `null` for an unparseable start, which has nothing honest to say.
  *
  * The join prompt's "Scheduled in 3 mins" and the Running late dialog's "started 3 minutes ago" both
- * read this, so the two cannot disagree about the same moment.
+ * round with this. Each brings its own clock: the prompt the server's, the dialog the browser's.
  */
 export function startOffset(untilStartMs: number): { in: number } | { ago: number } | 'now' | null {
   if (!Number.isFinite(untilStartMs)) return null;

@@ -129,6 +129,17 @@ export const SCHEDULED_NOTICE_COPY = {
       `Running late and Can’t make it tell ${name} in the room and by email. After Can’t make it you can suggest another time.`,
     reschedule: 'Reschedule instead',
   },
+  /** Board 1b: where an email's Running late button lands. */
+  lateFromEmail: {
+    debateWith: (name: string) => `Your debate with ${name}`,
+    title: (name: string) => `Tell ${name} you’re running late`,
+    noteLabel: (name: string) => `Note for ${name} (optional)`,
+    send: (name: string) => `Send to ${name}`,
+  },
+  back: 'Back',
+  /** Running late before the room opens, which geo-chat refuses: from the invite, say, a day out. */
+  lateNotYet: (name: string, opensAt: string) =>
+    `You can tell ${name} you’re running late once the room opens, at ${opensAt}.`,
   late: {
     title: 'How late will you be?',
     lead: (name: string) => `We’ll tell ${name} now, in the room and by email.`,

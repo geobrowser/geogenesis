@@ -2380,7 +2380,7 @@ export async function createScheduledDebate(
  * to pending: its room closes and its time is freed, and accepting the new time books a new room.
  *
  * Refusals, all `409` except the last: `reschedule_refused` (five moves already, or declined,
- * expired, cancelled or superseded), `debate_already_started` (the viewer has joined the room, or both have),
+ * expired, cancelled or superseded), `debate_already_started` (both debaters are in the room, or their debate has begun),
  * `schedule_conflict` (the viewer already has a debate then), and `403 not_a_participant`.
  */
 export async function rescheduleScheduledDebate(
@@ -2421,9 +2421,11 @@ export async function respondToScheduledDebate(
  * slot for both people and withdraws the calendar invite. A debater who cancels an agreed debate is
  * telling the other one they can't make it (GEO-3427): that is the email they get, with `note`.
  *
- * It refuses with `409 debate_already_started` once the viewer has joined the room, or both have
- * (the other one waiting inside does not stop it: they are who it releases), and `409
- * request_not_cancellable` once the request is already resolved.
+ * It refuses with `409 debate_already_started` once both debaters are in the room or their debate
+ * has begun (the other one waiting inside does not stop it: they are who it releases), `409
+ * request_not_cancellable` once the request is already resolved, and `409 request_not_active` once
+ * its room has already closed, as a no-show say. Someone cancelling from inside the room, the one
+ * waiting, sends a plain cancel: their note is not kept.
  */
 export async function cancelScheduledDebate(
   requestId: string,
@@ -2454,7 +2456,8 @@ export type RunningLateResponse = { expected_at: string; note: string | null };
  *
  * Refusals: `400 invalid_late_minutes` / `note_too_long`, `403 not_a_participant`, `404
  * request_not_found`, `409 request_not_active` (not an agreed debate, or its room has closed) and
- * `409 already_joined` (the viewer is already in the room).
+ * `409 already_joined` (the viewer is in the room now), `409 too_early` (the room has not opened yet)
+ * and `409 running_late_limit` (they have said it three times already for this debate).
  */
 export async function reportRunningLate(
   requestId: string,

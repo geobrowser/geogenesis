@@ -9,11 +9,12 @@ import { isDebateProfileMissing } from '~/core/debates/api';
 import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { useDisagreementCount } from '~/core/debates/matchmaking/use-disagreement-count';
-import { useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
-import { requestById } from '~/core/debates/rooms/room-opponent';
-import { sameId } from '~/core/debates/rooms/room-presence';
+import { useDebateRoom, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
+import { opponentOf, requestById } from '~/core/debates/rooms/room-opponent';
+import { noticeFrom, sameId } from '~/core/debates/rooms/room-presence';
 import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
 import { useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
+import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -173,7 +174,7 @@ export function SharedAvailabilityModal({
     })
   );
 
-  const roomOpen = useRoomOpenFor(open && authenticated && !isSelf ? rescheduleRequestId : null);
+  const roomOpen = useRoomOpenFor(open && !isSelf ? rescheduleRequestId : null, { ready, authenticated });
   const [calendarAnyway, setCalendarAnyway] = React.useState(false);
 
   if (isSelf) {
@@ -245,34 +246,52 @@ export function SharedAvailabilityModal({
 }
 
 /**
- * Whether the debate a reschedule link is about had its room open when the link was opened: `null`
- * while that is still being read, so the week is not drawn and then swapped. `false` straight away
- * for anything that is not a reschedule, or for a viewer who is signed out, who sees the week's own
- * sign-in first.
+ * Whether a reschedule link should open on the three choices (board 2) rather than the week: the
+ * debate's room is open, and the viewer is the one not there. `null` while that is still being read,
+ * so the week is not drawn and then swapped. `false` for anything that is not a reschedule, for a
+ * signed-out viewer (who sees the week's own sign-in first, and is decided again once signed in), and
+ * once any read fails, since that is
+ * no reason to withhold the week the link has always opened.
  *
- * Settled once per arrival. The reads keep polling, and following them would tear the week out
- * from under someone picking a slot as the room opens, or put the week back over a "cancelled"
- * confirmation once the cancel lands.
+ * Not the person waiting: the running-late email gives them this same link as its Reschedule, and
+ * "I'm running late" is the wrong question for someone already in the room. They are inside now, or
+ * the other debater has said they are late.
+ *
+ * Nothing is decided until Privy has restored the session, because an email link opens in a fresh
+ * tab where signed-out is only "not known yet". Then it is settled once per arrival: the reads keep
+ * polling, and following them would swap one dialog for the other under someone mid-choice.
  */
-function useRoomOpenFor(requestId: string | null): boolean | null {
-  const requests = useScheduledDebates(requestId !== null);
-  const rooms = useUpcomingDebateRooms(requestId !== null);
+function useRoomOpenFor(requestId: string | null, auth: { ready: boolean; authenticated: boolean }): boolean | null {
+  const reading = requestId !== null && auth.authenticated;
+  const requests = useScheduledDebates(reading);
+  const rooms = useUpcomingDebateRooms(reading);
+  const viewerId = useCurrentGeoChatUserId();
+  const request = reading ? requestById(requests.data?.requests, requestId) : undefined;
+  const roomId = request?.room_id ?? null;
+  const roomView = useDebateRoom(roomId ?? '', reading && roomId !== null);
   const [settled, setSettled] = React.useState<boolean | null>(null);
 
   const live = (() => {
     if (requestId === null) return false;
-    // A failed read is no reason to withhold the week the link has always opened.
+    if (!auth.ready) return null;
+    if (!auth.authenticated) return false;
     if (requests.isError || rooms.isError) return false;
     if (requests.isPending || rooms.isPending) return null;
-    const request = requestById(requests.data.requests, requestId);
-    if (noticeRequestState(request) !== 'active' || !request?.room_id) return false;
-    const roomId = request.room_id;
-    return rooms.data.rooms.some(room => sameId(room.room_id, roomId) && room.joinable);
+    if (noticeRequestState(request) !== 'active' || !roomId) return false;
+    if (!rooms.data.rooms.some(room => sameId(room.room_id, roomId) && room.joinable)) return false;
+    // The room view says who is inside and who said they are late.
+    if (roomView.isError) return true;
+    if (!roomView.data || !viewerId) return null;
+    const inside = roomView.data.occupants.some(userId => sameId(userId, viewerId));
+    const otherIsLate = noticeFrom(roomView.data.notices, opponentOf(request, viewerId), 'running_late') !== null;
+    return !inside && !otherIsLate;
   })();
 
+  // Signed out is not latched: someone who signs in from the week's own prompt is decided afresh.
+  const latch = live !== null && auth.authenticated;
   React.useEffect(() => {
-    if (live !== null) setSettled(current => current ?? live);
-  }, [live]);
+    if (latch) setSettled(current => current ?? live);
+  }, [latch, live]);
 
   return settled ?? live;
 }

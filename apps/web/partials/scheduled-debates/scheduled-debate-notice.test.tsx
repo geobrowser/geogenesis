@@ -34,6 +34,7 @@ const state = vi.hoisted(() => ({
   late: null as unknown as Mutation,
   cant: null as unknown as Mutation,
   viewerName: 'Jordan' as string | null,
+  noProfiles: false,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({ useGeoChatAuth: () => ({ authenticated: true, ready: true }) }));
@@ -46,10 +47,13 @@ vi.mock('~/core/debates/rooms/hooks', () => ({ useUpcomingDebateRooms: () => sta
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => VIEWER }));
 vi.mock('~/core/debates/matchmaking/use-geo-chat-user-summaries', () => ({
   useGeoChatUserSummaries: (ids: string[]) =>
-    [
-      { user_id: MAYA, profile_space_id: 'maya-space', display_name: 'Maya', avatar_cid: null },
-      { user_id: VIEWER, profile_space_id: 'jordan-space', display_name: state.viewerName, avatar_cid: null },
-    ].filter(person => ids.includes(person.user_id)),
+    (state.noProfiles
+      ? []
+      : [
+          { user_id: MAYA, profile_space_id: 'maya-space', display_name: 'Maya', avatar_cid: null },
+          { user_id: VIEWER, profile_space_id: 'jordan-space', display_name: state.viewerName, avatar_cid: null },
+        ]
+    ).filter(person => ids.includes(person.user_id)),
 }));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -96,9 +100,17 @@ beforeEach(() => {
   state.late = idle();
   state.cant = idle();
   state.viewerName = 'Jordan';
+  state.noProfiles = false;
 });
 
 afterEach(cleanup);
+
+/** The heading the screen draws; the dialog's own title is for assistive tech only. */
+function heading() {
+  const visible = screen.getAllByRole('heading').filter(element => !element.closest('.sr-only'));
+  expect(visible).toHaveLength(1);
+  return visible[0];
+}
 
 /** A mutation whose `mutate` succeeds at once with `data`, calling the per-call `onSuccess`. */
 function succeedWith(mutation: Mutation, data: unknown) {
@@ -157,21 +169,25 @@ describe('ScheduledDebateNoticeDialog', () => {
     it('moves on to the choice that was pressed', async () => {
       open('decide', vi.fn());
       await userEvent.setup().click(screen.getByRole('button', { name: 'I’m running late' }));
-      expect(screen.getByRole('heading')).toHaveTextContent('How late will you be?');
+      expect(heading()).toHaveTextContent('How late will you be?');
     });
   });
 
-  describe('running late', () => {
-    it('sends the picked minutes and the note, trimmed, on the confirm press', async () => {
+  describe('running late from an email (board 1b)', () => {
+    it('says which debate, then sends the picked minutes and the note on the confirm press', async () => {
       const user = userEvent.setup();
       open('late');
 
+      expect(screen.getByText('Your debate with Maya')).toBeInTheDocument();
+      expect(heading()).toHaveTextContent('Tell Maya you’re running late');
       expect(screen.getByRole('radio', { name: '10 min' })).toBeChecked();
       await user.click(screen.getByRole('radio', { name: '15 min' }));
-      await user.type(screen.getByLabelText('Add a note for Maya (optional)'), '  Train is delayed  ');
-      expect(screen.getByText('“Jordan is running about 15 minutes late. Train is delayed”')).toBeInTheDocument();
+      await user.type(screen.getByLabelText('Note for Maya (optional)'), '  Train is delayed  ');
+      // Board 1b has no preview and no way back: it is where the email lands.
+      expect(screen.queryByText('What Maya sees')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
 
-      await user.click(screen.getByRole('button', { name: 'Tell Maya' }));
+      await user.click(screen.getByRole('button', { name: 'Send to Maya' }));
       expect(state.late.mutate).toHaveBeenCalledWith(
         { requestId: REQUEST.replace(/-/g, ''), minutes: 15, note: 'Train is delayed' },
         expect.anything()
@@ -181,33 +197,83 @@ describe('ScheduledDebateNoticeDialog', () => {
     it('confirms with the time geo-chat will tell Maya, and offers the room', async () => {
       succeedWith(state.late, { expected_at: '2026-10-21T17:13:00.000Z', note: null });
       open('late');
-      await userEvent.setup().click(screen.getByRole('button', { name: 'Tell Maya' }));
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Send to Maya' }));
 
-      expect(screen.getByRole('heading')).toHaveTextContent(/^We’ve told Maya you’ll be there by about /);
+      expect(heading()).toHaveTextContent(/^We’ve told Maya you’ll be there by about /);
       expect(screen.getByRole('link', { name: 'Join the room' })).toHaveAttribute('href', '/debate/room-1');
     });
 
-    // The calendar invite carries the link, so it can be sent the day before.
-    it('offers no Join into a room that is not open yet', async () => {
-      state.rooms = { data: { rooms: [{ room_id: 'room-1', joinable: false, due: false, others_present: false }] } };
-      succeedWith(state.late, { expected_at: '2026-10-22T17:10:00.000Z', note: null });
+    // geo-chat refuses it before the room opens; the calendar invite carries the link a day out.
+    it('says when it can be sent while the room is not open yet, offering nothing to press', () => {
+      state.rooms = {
+        data: {
+          rooms: [
+            {
+              room_id: 'room-1',
+              joinable: false,
+              due: false,
+              others_present: false,
+              opens_at: '2026-10-22T16:50:00.000Z',
+            },
+          ],
+        },
+      };
       open('late');
-      await userEvent.setup().click(screen.getByRole('button', { name: 'Tell Maya' }));
 
-      expect(screen.getByRole('heading')).toHaveTextContent(/^We’ve told Maya/);
-      expect(screen.queryByRole('link', { name: 'Join the room' })).not.toBeInTheDocument();
+      expect(screen.getByText(/^You can tell Maya you’re running late once the room opens, at /)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Send to Maya' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'I can’t make it at all' })).toBeInTheDocument();
     });
 
-    it('speaks to the viewer in the preview when their own name has not loaded', () => {
-      state.viewerName = null;
+    it('offers no Join into a room it cannot see', async () => {
+      state.rooms = { data: { rooms: [] } };
+      succeedWith(state.late, { expected_at: '2026-10-22T17:10:00.000Z', note: null });
       open('late');
-      expect(screen.getByText('“You’re running about 10 minutes late.”')).toBeInTheDocument();
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Send to Maya' }));
+
+      expect(heading()).toHaveTextContent(/^We’ve told Maya/);
+      expect(screen.queryByRole('link', { name: 'Join the room' })).not.toBeInTheDocument();
     });
 
     it('says plainly when the viewer is already in the room', () => {
       state.late = { ...idle(), isError: true, error: new GeoChatRequestError('raw', 'already_joined', 409) };
       open('late');
       expect(screen.getByRole('alert')).toHaveTextContent('You’re already in the room, so there’s no need.');
+    });
+
+    // React Query keeps the list through a failed refetch; one dropped poll must not lose the step.
+    it('keeps the step through a failed refetch', async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderOpen('late');
+      await user.type(screen.getByLabelText('Note for Maya (optional)'), 'On my way');
+
+      state.requests = { ...state.requests, isError: true };
+      rerender(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="late" onClose={vi.fn()} />);
+      expect(screen.getByLabelText('Note for Maya (optional)')).toHaveValue('On my way');
+      expect(screen.queryByText(/Couldn’t load your debate/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('running late from the choices (board 3)', () => {
+    it('asks how late, previews what Maya sees, and goes back to the choices', async () => {
+      const user = userEvent.setup();
+      open('decide', vi.fn());
+      await user.click(screen.getByRole('button', { name: 'I’m running late' }));
+
+      expect(heading()).toHaveTextContent('How late will you be?');
+      await user.type(screen.getByLabelText('Add a note for Maya (optional)'), 'Train is delayed');
+      expect(screen.getByText('“Jordan is running about 10 minutes late. Train is delayed”')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Tell Maya' })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      expect(heading()).toHaveTextContent('Your debate with Maya started 3 minutes ago');
+    });
+
+    it('speaks to the viewer in the preview when their own name has not loaded', async () => {
+      state.viewerName = null;
+      open('decide', vi.fn());
+      await userEvent.setup().click(screen.getByRole('button', { name: 'I’m running late' }));
+      expect(screen.getByText('“You’re running about 10 minutes late.”')).toBeInTheDocument();
     });
   });
 
@@ -222,6 +288,14 @@ describe('ScheduledDebateNoticeDialog', () => {
         { requestId: REQUEST.replace(/-/g, ''), note: 'Something came up' },
         expect.anything()
       );
+    });
+
+    // The week needs only their id, which the request carries; the graph's name may never come.
+    it('opens the week to suggest a time even when their profile has not loaded', async () => {
+      state.noProfiles = true;
+      open('cant');
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+      expect(screen.getByTestId('week')).toHaveAttribute('data-user', MAYA);
     });
 
     it('hands the note to Maya’s week to suggest a time instead, cancelling nothing itself', async () => {
@@ -243,11 +317,11 @@ describe('ScheduledDebateNoticeDialog', () => {
       succeedWith(state.cant, {});
       const { rerender } = renderOpen('cant');
       await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel the debate' }));
-      expect(screen.getByRole('heading')).toHaveTextContent('Your debate is cancelled. We’ve let Maya know.');
+      expect(heading()).toHaveTextContent('Your debate is cancelled. We’ve let Maya know.');
 
       state.requests = { data: { requests: [agreed({ status: 'cancelled' })] }, isPending: false, isError: false };
       rerender(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={vi.fn()} />);
-      expect(screen.getByRole('heading')).toHaveTextContent('Your debate is cancelled. We’ve let Maya know.');
+      expect(heading()).toHaveTextContent('Your debate is cancelled. We’ve let Maya know.');
       expect(screen.queryByText('This debate is no longer on.')).not.toBeInTheDocument();
     });
   });

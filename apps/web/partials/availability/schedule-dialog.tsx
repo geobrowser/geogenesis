@@ -15,6 +15,11 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  /**
+   * The title for assistive tech only, for a dialog whose content draws its own heading where its
+   * design puts it (GEO-3427's Running late screens, under an avatar).
+   */
+  hideTitle?: boolean;
   /** A line under the title. */
   description?: string;
   /** Beside the close button. */
@@ -37,6 +42,7 @@ export function ScheduleDialog({
   open,
   onOpenChange,
   title,
+  hideTitle = false,
   description,
   headerAction,
   closeButtonProps,
@@ -82,8 +88,8 @@ export function ScheduleDialog({
               widthClassName
             )}
           >
-            <div className="flex shrink-0 items-start justify-between gap-4">
-              <div className="flex min-w-0 flex-col gap-1">
+            <div className={cx('flex shrink-0 items-start gap-4', hideTitle ? 'justify-end' : 'justify-between')}>
+              <div className={cx('flex min-w-0 flex-col gap-1', hideTitle && 'sr-only')}>
                 <Title asChild>
                   <Text as="h2" variant="smallTitle">
                     {title}

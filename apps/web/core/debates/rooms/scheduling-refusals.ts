@@ -8,6 +8,8 @@ export function cancelFailureMessage(error: unknown) {
       return 'This debate has already started, so it can no longer be cancelled.';
     }
     if (error.code === 'request_not_cancellable') return 'This has already been answered, cancelled or expired.';
+    // A room already closed, as a no-show say, while the request still reads as agreed.
+    if (error.code === 'request_not_active') return 'This debate is no longer on.';
   }
   return error instanceof Error ? error.message : 'Could not cancel. Try again.';
 }
@@ -23,6 +25,8 @@ export function noticeFailureMessage(error: unknown, action: 'late' | 'cant'): s
         return 'You’re already in the room, so there’s no need. Join it to carry on.';
       case 'request_not_active':
         return 'This debate is no longer on.';
+      case 'too_early':
+        return 'You can say you’re running late once the room opens, ten minutes before the start.';
       case 'running_late_limit':
         return 'You’ve already told them three times. Join when you can, or say you can’t make it.';
       case 'note_too_long':

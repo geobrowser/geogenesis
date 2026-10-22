@@ -5,17 +5,23 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import { RUNNING_LATE_MINUTES, type RunningLateMinutes, type UpcomingDebateRoom } from '~/core/debates/api';
+import {
+  type DebateParticipantSummary,
+  RUNNING_LATE_MINUTES,
+  type RunningLateMinutes,
+  type UpcomingDebateRoom,
+} from '~/core/debates/api';
 import { toDebatesPanel } from '~/core/debates/debates-panel-deep-link';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
 import { HubPillButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
+import { formatDebateTime } from '~/core/debates/matchmaking/scheduled-debates-section';
 import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
 import { useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { SCHEDULED_NOTICE_COPY as COPY } from '~/core/debates/rooms/room-copy';
-import { opponentName, requestById, useRequestOpponent } from '~/core/debates/rooms/room-opponent';
+import { opponentName, opponentOf, requestById, useRequestOpponent } from '~/core/debates/rooms/room-opponent';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { formatClockTime, startOffset } from '~/core/debates/rooms/room-time';
@@ -30,6 +36,8 @@ import { useCantMakeIt, useReportRunningLate, useScheduledDebates } from '~/core
 import { noticeFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 
+import { Avatar } from '~/design-system/avatar';
+import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Text } from '~/design-system/text';
 
 import { Notice } from '~/partials/availability/peer-availability';
@@ -68,33 +76,42 @@ type Props = {
 };
 
 /**
- * Running late and Can't make it (GEO-3427, boards 1b, 2 and 3): what a debater who won't be there
- * on time tells the other one. Reached from a scheduling email's buttons, the calendar invite, and
- * the reschedule link once the room is open. In the frame the other scheduling dialogs share.
+ * Running late and Can't make it (GEO-3427): what a debater who won't be there on time tells the
+ * other one. Two ways in, each its approved board:
  *
- * Nothing is sent until a confirm press. A link only opens this, because mail scanners open links.
+ * - **an email's or the calendar invite's button** lands straight on the choice (board 1b);
+ * - **the reschedule link once the room is open** offers the three choices first (board 2), and
+ *   Running late from there is board 3, with a way back.
+ *
+ * In the frame the other scheduling dialogs share. Nothing is sent until a confirm press: a link only
+ * opens this, because mail scanners open links.
  */
 export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onClose, onReschedule, children }: Props) {
   const [step, setStep] = React.useState<ScheduledNoticeStep>(initialStep);
   const [outcome, setOutcome] = React.useState<Outcome | null>(null);
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
+  // Board 3 and its Back belong to arriving through board 2; an email's button lands on board 1b.
+  const fromDecide = initialStep === 'decide';
 
   const { authenticated } = useGeoChatAuth();
   const requests = useScheduledDebates(open && authenticated);
   const rooms = useUpcomingDebateRooms(open && authenticated);
+  const viewerId = useCurrentGeoChatUserId();
   const request = requestById(requests.data?.requests, requestId);
+  // The week needs only their id, which the request has; the graph's name and face may never come.
+  const opponentUserId = opponentOf(request, viewerId);
   const opponent = useRequestOpponent(request);
   const name = opponentName(opponent);
   const roomId = request?.room_id ?? null;
   const room = roomId ? (rooms.data?.rooms.find(row => sameId(row.room_id, roomId)) ?? null) : null;
 
-  if (suggesting && request && opponent) {
+  if (suggesting && request && opponentUserId) {
     return (
       <PeerAvailabilityBookingModal
         open={open}
-        userId={opponent.user_id}
-        peerName={opponent.display_name}
+        userId={opponentUserId}
+        peerName={opponent?.display_name ?? null}
         rescheduleRequestId={request.request_id}
         rescheduleNote={suggesting.note}
         entry="cant_make_it"
@@ -103,11 +120,14 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
     );
   }
 
+  // Each screen draws its own heading where its board puts it, so the frame's title is for
+  // assistive tech only.
   const shell = (title: string, body: React.ReactNode) => (
     <ScheduleDialog
       open={open}
       onOpenChange={next => !next && onClose()}
       title={title}
+      hideTitle
       widthClassName="w-[26rem]"
       closeButtonProps={analytics('Close', 'close_scheduled_notice')}
     >
@@ -120,29 +140,35 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
   if (outcome) {
     return shell(
       outcome.message,
-      <Actions>
-        {outcome.joinRoomId && <JoinRoom roomId={outcome.joinRoomId} onJoin={onClose} label="Join the room" />}
-        <HubPillButton
-          size="large"
-          variant={outcome.joinRoomId ? 'secondary' : 'primary'}
-          className="w-full"
-          onClick={onClose}
-          {...pill('Done', 'close_scheduled_notice')}
-        >
-          {COPY.done}
-        </HubPillButton>
-      </Actions>
+      <>
+        <Heading>{outcome.message}</Heading>
+        <Actions>
+          {outcome.joinRoomId && <JoinRoom roomId={outcome.joinRoomId} onJoin={onClose} label="Join the room" />}
+          <HubPillButton
+            size="large"
+            variant={outcome.joinRoomId ? 'secondary' : 'primary'}
+            className="w-full"
+            onClick={onClose}
+            {...pill('Done', 'close_scheduled_notice')}
+          >
+            {COPY.done}
+          </HubPillButton>
+        </Actions>
+      </>
     );
   }
 
-  if (children) return shell(COPY.title[step], children);
-  if (requests.isPending) return shell(COPY.title[step], <Notice>{COPY.loading}</Notice>);
-  if (requests.isError) return shell(COPY.title[step], <Notice>{COPY.state.error}</Notice>);
+  const title = COPY.title[step];
+  if (children) return shell(title, children);
+  if (requests.isPending) return shell(title, <Notice>{COPY.loading}</Notice>);
+  // A failed refetch keeps the list it had, so only a first read that failed has nothing to show.
+  // Swapping the step out over one dropped poll would lose what was typed, and a cancel in flight.
+  if (requests.isError && !requests.data) return shell(title, <Notice>{COPY.state.error}</Notice>);
 
   const state = noticeRequestState(request);
   if (state !== 'active' || !request) {
     return shell(
-      COPY.title[step],
+      title,
       <Notice
         action={
           state === 'moved' && (
@@ -162,12 +188,16 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
     );
   }
 
+  // Back to the choices, from a step reached through them.
+  const back = fromDecide && step !== 'decide' ? () => setStep('decide') : undefined;
+
   switch (step) {
     case 'decide':
       return shell(
-        COPY.title.decide,
+        title,
         <DecideStep
           name={name}
+          opponent={opponent}
           startsAt={request.scheduled_start_at}
           room={room}
           onLate={() => setStep('late')}
@@ -178,10 +208,19 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
       );
     case 'late':
       return shell(
-        COPY.late.title,
+        title,
         <LateStep
           requestId={request.request_id}
           name={name}
+          variant={fromDecide ? 'decide' : 'email'}
+          // geo-chat takes it only once the room is open; before then, say when that is instead.
+          opensAt={room && !room.joinable ? room.opens_at : null}
+          header={
+            fromDecide ? undefined : (
+              <DebateHeader opponent={opponent} name={name} startsAt={request.scheduled_start_at} />
+            )
+          }
+          onBack={back}
           onCant={() => setStep('cant')}
           onSent={expectedAt =>
             setOutcome({
@@ -195,10 +234,11 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
       );
     case 'cant':
       return shell(
-        COPY.cant.title,
+        title,
         <CantStep
           requestId={request.request_id}
           name={name}
+          onBack={back}
           onLate={() => setStep('late')}
           onSuggest={note => setSuggesting({ note })}
           onSent={() => setOutcome({ message: COPY.cant.sent(name), joinRoomId: null })}
@@ -209,6 +249,7 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
 
 function DecideStep({
   name,
+  opponent,
   startsAt,
   room,
   onLate,
@@ -217,6 +258,7 @@ function DecideStep({
   onJoin,
 }: {
   name: string;
+  opponent: DebateParticipantSummary | null;
   startsAt: string;
   room: UpcomingDebateRoom | null;
   onLate: () => void;
@@ -229,10 +271,9 @@ function DecideStep({
 
   return (
     <>
-      <div className="flex flex-col items-center gap-3 text-center">
-        <Text as="p" variant="mediumTitle">
-          {COPY.decide.heading(name, startOffset(new Date(startsAt).getTime() - now))}
-        </Text>
+      <div className="flex flex-col items-center gap-3.5 text-center">
+        <OpponentAvatar opponent={opponent} name={name} size={64} />
+        <Heading>{COPY.decide.heading(name, startOffset(new Date(startsAt).getTime() - now))}</Heading>
         {room?.others_present && (
           <span className="inline-flex items-center gap-2 rounded-full border border-grey-02 px-3 py-1.5 text-metadata">
             <span aria-hidden className="size-2 rounded-full bg-green" />
@@ -240,7 +281,7 @@ function DecideStep({
           </span>
         )}
       </div>
-      <Actions>
+      <div className="flex flex-col gap-2.5">
         {room?.joinable && <JoinRoom roomId={room.room_id} onJoin={onJoin} label="Join now" />}
         <HubPillButton size="large" className="w-full" onClick={onLate} {...pill('Running late', 'open_running_late')}>
           {COPY.decide.late}
@@ -248,27 +289,42 @@ function DecideStep({
         <HubPillButton size="large" className="w-full" onClick={onCant} {...pill('Cant make it', 'open_cant_make_it')}>
           {COPY.decide.cant}
         </HubPillButton>
-        <Text as="p" variant="footnote" color="grey-04" className="text-center">
-          {COPY.decide.explainer(name)}
-        </Text>
-        {onReschedule && (
+      </div>
+      <Text as="p" variant="footnote" color="grey-04" className="text-center">
+        {COPY.decide.explainer(name)}
+      </Text>
+      {onReschedule && (
+        <Actions>
           <QuietButton onClick={onReschedule} {...analytics('Reschedule instead', 'reschedule_scheduled_debate')}>
             {COPY.decide.reschedule}
           </QuietButton>
-        )}
-      </Actions>
+        </Actions>
+      )}
     </>
   );
 }
 
+/**
+ * Running late. From an email's button it is board 1b: which debate, "Tell Maya you're running late",
+ * the minutes, a note and Send. From board 2 it is board 3: "How late will you be?", a preview of
+ * what they will see, Tell, and a way back.
+ */
 function LateStep({
   requestId,
   name,
+  variant,
+  opensAt,
+  header,
+  onBack,
   onCant,
   onSent,
 }: {
   requestId: string;
   name: string;
+  variant: 'email' | 'decide';
+  opensAt: string | null;
+  header?: React.ReactNode;
+  onBack?: () => void;
   onCant: () => void;
   onSent: (expectedAt: string) => void;
 }) {
@@ -280,56 +336,89 @@ function LateStep({
   const viewerIds = React.useMemo(() => (viewerId ? [viewerId] : []), [viewerId]);
   const viewerName = useGeoChatUserSummaries(viewerIds, viewerId !== null)[0]?.display_name || null;
   const sent = noticeNote(note);
+  const fromEmail = variant === 'email';
+
+  const cantInstead = fromEmail && (
+    <QuietButton onClick={onCant} {...analytics('Cant make it at all', 'open_cant_make_it')}>
+      {COPY.late.cantInstead}
+    </QuietButton>
+  );
 
   return (
     <>
-      <Text as="p" color="grey-04">
-        {COPY.late.lead(name)}
-      </Text>
-      <div role="radiogroup" aria-label={COPY.late.title} className="grid grid-cols-3 gap-2.5">
-        {RUNNING_LATE_MINUTES.map(choice => (
-          <HubPillButton
-            key={choice}
-            role="radio"
-            aria-checked={minutes === choice}
-            size="large"
-            variant={minutes === choice ? 'primary' : 'secondary'}
-            className="w-full rounded-xl"
-            onClick={() => setMinutes(choice)}
-            {...pill(`${choice} min`, 'pick_running_late_minutes')}
-          >
-            {COPY.late.minutes(choice)}
-          </HubPillButton>
-        ))}
-      </div>
-      <NoteField id={noteId} label={COPY.late.noteLabel(name)} value={note} onChange={setNote} />
-      <div className="flex flex-col gap-1 rounded-lg bg-grey-01 p-3.5">
-        <Text as="p" variant="metadataMedium">
-          {COPY.late.previewLabel(name)}
-        </Text>
-        <Text as="p" variant="metadata" color="grey-04">
-          {COPY.late.preview(viewerName, minutes, sent)}
-        </Text>
-      </div>
-      {report.isError && <ErrorLine>{noticeFailureMessage(report.error, 'late')}</ErrorLine>}
-      <Actions>
-        <HubPillButton
-          size="large"
-          variant="primary"
-          className="w-full"
-          pending={report.isPending}
-          pendingLabel={COPY.late.sending}
-          onClick={() =>
-            report.mutate({ requestId, minutes, note: sent }, { onSuccess: result => onSent(result.expected_at) })
-          }
-          {...pill('Tell', 'confirm_running_late')}
-        >
-          {COPY.late.send(name)}
-        </HubPillButton>
-        <QuietButton onClick={onCant} {...analytics('Cant make it at all', 'open_cant_make_it')}>
-          {COPY.late.cantInstead}
-        </QuietButton>
-      </Actions>
+      {onBack && <BackButton onClick={onBack} />}
+      {header}
+      {fromEmail ? (
+        <Heading>{COPY.lateFromEmail.title(name)}</Heading>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <Heading>{COPY.late.title}</Heading>
+          <Text as="p" color="grey-04">
+            {COPY.late.lead(name)}
+          </Text>
+        </div>
+      )}
+      {opensAt ? (
+        // Before the room opens geo-chat refuses it (`too_early`): an estimate a day out reads as
+        // nonsense beside an undated clock time. Said up front rather than after a press.
+        <>
+          <Notice>{COPY.lateNotYet(name, formatDebateTime(opensAt))}</Notice>
+          {cantInstead && <Actions>{cantInstead}</Actions>}
+        </>
+      ) : (
+        <>
+          <div role="radiogroup" aria-label={COPY.late.title} className="grid grid-cols-3 gap-2.5">
+            {RUNNING_LATE_MINUTES.map(choice => (
+              <HubPillButton
+                key={choice}
+                role="radio"
+                aria-checked={minutes === choice}
+                size="large"
+                variant={minutes === choice ? 'primary' : 'secondary'}
+                className="w-full rounded-xl"
+                onClick={() => setMinutes(choice)}
+                {...pill(`${choice} min`, 'pick_running_late_minutes')}
+              >
+                {COPY.late.minutes(choice)}
+              </HubPillButton>
+            ))}
+          </div>
+          <NoteField
+            id={noteId}
+            label={fromEmail ? COPY.lateFromEmail.noteLabel(name) : COPY.late.noteLabel(name)}
+            rows={fromEmail ? 2 : 3}
+            value={note}
+            onChange={setNote}
+          />
+          {!fromEmail && (
+            <div className="flex flex-col gap-1 rounded-lg bg-grey-01 p-3.5">
+              <Text as="p" variant="metadataMedium">
+                {COPY.late.previewLabel(name)}
+              </Text>
+              <Text as="p" variant="metadata" color="grey-04">
+                {COPY.late.preview(viewerName, minutes, sent)}
+              </Text>
+            </div>
+          )}
+          {report.isError && <ErrorLine>{noticeFailureMessage(report.error, 'late')}</ErrorLine>}
+          <Actions>
+            <HubPillButton
+              size="large"
+              variant="primary"
+              className="w-full"
+              pending={report.isPending}
+              pendingLabel={COPY.late.sending}
+              onClick={() =>
+                report.mutate({ requestId, minutes, note: sent }, { onSuccess: result => onSent(result.expected_at) })
+              }
+              {...pill('Tell', 'confirm_running_late')}
+            >
+              {fromEmail ? COPY.lateFromEmail.send(name) : COPY.late.send(name)}
+            </HubPillButton>
+            {cantInstead}
+          </Actions>
+        </>
+      )}
     </>
   );
 }
@@ -337,12 +426,14 @@ function LateStep({
 function CantStep({
   requestId,
   name,
+  onBack,
   onLate,
   onSuggest,
   onSent,
 }: {
   requestId: string;
   name: string;
+  onBack?: () => void;
   onLate: () => void;
   onSuggest: (note: string | undefined) => void;
   onSent: () => void;
@@ -353,10 +444,14 @@ function CantStep({
 
   return (
     <>
-      <Text as="p" color="grey-04">
-        {COPY.cant.lead(name)}
-      </Text>
-      <NoteField id={noteId} label={COPY.cant.noteLabel(name)} value={note} onChange={setNote} />
+      {onBack && <BackButton onClick={onBack} />}
+      <div className="flex flex-col gap-2">
+        <Heading>{COPY.cant.title}</Heading>
+        <Text as="p" color="grey-04">
+          {COPY.cant.lead(name)}
+        </Text>
+      </div>
+      <NoteField id={noteId} label={COPY.cant.noteLabel(name)} rows={3} value={note} onChange={setNote} />
       {cancel.isError && <ErrorLine>{noticeFailureMessage(cancel.error, 'cant')}</ErrorLine>}
       <Actions>
         <HubPillButton
@@ -390,9 +485,73 @@ function CantStep({
   );
 }
 
+/** Board 1b's first row: which debate this is, since an email link can land days after it was sent. */
+function DebateHeader({
+  opponent,
+  name,
+  startsAt,
+}: {
+  opponent: DebateParticipantSummary | null;
+  name: string;
+  startsAt: string;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <OpponentAvatar opponent={opponent} name={name} size={44} />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <Text as="p" variant="metadata" color="grey-04">
+          {COPY.lateFromEmail.debateWith(name)}
+        </Text>
+        <Text as="p" variant="metadataMedium">
+          {formatDebateTime(startsAt)}
+        </Text>
+      </div>
+    </div>
+  );
+}
+
+/** The other debater's face, or the generated one until the graph has it. */
+function OpponentAvatar({
+  opponent,
+  name,
+  size,
+}: {
+  opponent: DebateParticipantSummary | null;
+  name: string;
+  size: number;
+}) {
+  return (
+    <span className="shrink-0 overflow-hidden rounded-full" style={{ width: size, height: size }}>
+      <Avatar avatarUrl={opponent?.avatar_cid} value={opponent?.profile_space_id ?? name} size={size} alt={name} />
+    </span>
+  );
+}
+
+function Heading({ children }: { children: React.ReactNode }) {
+  return (
+    <Text as="h2" variant="mediumTitle">
+      {children}
+    </Text>
+  );
+}
+
 /** The step's buttons, at the bottom of the dialog, where a thumb reaches them on a phone. */
 function Actions({ children }: { children: React.ReactNode }) {
   return <div className="mt-auto flex flex-col gap-2.5">{children}</div>;
+}
+
+function BackButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={COPY.back}
+      onClick={onClick}
+      {...analytics('Back', 'back_to_scheduled_notice_choices')}
+      className="-mt-2 -ml-2 grid size-11 place-items-center text-text transition-opacity hover:opacity-70"
+    >
+      <ArrowLeft />
+    </button>
+  );
 }
 
 /** Into the room, stepping out of a lobby first as every way into a debate does. */
@@ -436,11 +595,13 @@ function QuietButton(props: React.ComponentProps<'button'>) {
 function NoteField({
   id,
   label,
+  rows,
   value,
   onChange,
 }: {
   id: string;
   label: string;
+  rows: number;
   value: string;
   onChange: (next: string) => void;
 }) {
@@ -451,7 +612,7 @@ function NoteField({
       </label>
       <textarea
         id={id}
-        rows={3}
+        rows={rows}
         maxLength={NOTICE_NOTE_MAX}
         value={value}
         onChange={event => onChange(event.target.value)}
