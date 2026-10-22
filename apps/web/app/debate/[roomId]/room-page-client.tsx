@@ -14,6 +14,10 @@ import { useGeoChatAuth } from '~/core/debates/hooks';
 import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
 import { useDebateLobbyGuestView } from '~/core/debates/lobbies/lobby-guest-hooks';
 import { DebateLobbyPage } from '~/core/debates/lobbies/lobby-page';
+import {
+  type DebateAnalyticsAttributes,
+  debateActionAnalyticsAttributes,
+} from '~/core/debates/matchmaking/hub-analytics';
 import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
 import {
   useDebateRoom,
@@ -123,6 +127,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
         action={{
           href: toSignIn({ pathname: debateRoomPath(roomId), via: lobbyLink ? LOBBY_LINK_VIA : 'room' }),
           label: 'Sign in',
+          analytics: debateActionAnalyticsAttributes('room', 'Notice sign in'),
         }}
       >
         {lobbyLink ? 'Sign in to join the lobby.' : 'Sign in to join your debate.'}
@@ -142,7 +147,14 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   // rather than bouncing someone who is merely early.
   if (room.access.status === 'not_yet_open') {
     return (
-      <RoomNotice action={{ href: NavUtils.toExplore(), label: ROOM_NOT_YET_OPEN.explore }} stacked>
+      <RoomNotice
+        action={{
+          href: NavUtils.toExplore(),
+          label: ROOM_NOT_YET_OPEN.explore,
+          analytics: debateActionAnalyticsAttributes('room', 'Notice not yet open explore'),
+        }}
+        stacked
+      >
         {ROOM_NOT_YET_OPEN.message(formatTime(room.access.opens_at), leadMinutes(room.starts_at, room.access.opens_at))}
       </RoomNotice>
     );
@@ -156,7 +168,15 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
 
   if (debateFinished) {
     return (
-      <RoomNotice action={{ href: NavUtils.toExplore(), label: 'Find a debate' }}>{ROOM_NO_ACCESS.ended}</RoomNotice>
+      <RoomNotice
+        action={{
+          href: NavUtils.toExplore(),
+          label: 'Find a debate',
+          analytics: debateActionAnalyticsAttributes('room', 'Notice find a debate'),
+        }}
+      >
+        {ROOM_NO_ACCESS.ended}
+      </RoomNotice>
     );
   }
 
@@ -202,9 +222,14 @@ function RoomWithdrawn({ reason, room }: { reason: 'cancelled' | 'rescheduled'; 
   }, [room.access, own, router]);
 
   if (viewerId === null) return <RoomNotice busy>Opening your debate room…</RoomNotice>;
+  const seeNewTime = {
+    href: toDebatesPanel({ tab: 'requests' }),
+    label: ROOM_CANT_MAKE_IT.seeNewTime,
+    analytics: debateActionAnalyticsAttributes('room', 'Notice see the new time'),
+  };
   if (!notice) {
     return own ? null : (
-      <RoomNotice stacked action={{ href: toDebatesPanel({ tab: 'requests' }), label: ROOM_CANT_MAKE_IT.seeNewTime }}>
+      <RoomNotice stacked action={seeNewTime}>
         {ROOM_CANT_MAKE_IT.moved}
       </RoomNotice>
     );
@@ -215,8 +240,12 @@ function RoomWithdrawn({ reason, room }: { reason: 'cancelled' | 'rescheduled'; 
       stacked
       action={
         rescheduled
-          ? { href: toDebatesPanel({ tab: 'requests' }), label: ROOM_CANT_MAKE_IT.seeNewTime }
-          : { href: toDebatesPanel({ tab: 'people' }), label: ROOM_CANT_MAKE_IT.findSomeone }
+          ? seeNewTime
+          : {
+              href: toDebatesPanel({ tab: 'people' }),
+              label: ROOM_CANT_MAKE_IT.findSomeone,
+              analytics: debateActionAnalyticsAttributes('room', 'Notice find someone else'),
+            }
       }
     >
       {rescheduled ? ROOM_CANT_MAKE_IT.rescheduled(name) : ROOM_CANT_MAKE_IT.cancelled(name)}
@@ -259,7 +288,8 @@ function RoomNotice({
 }: {
   children: React.ReactNode;
   busy?: boolean;
-  action?: { href: string; label: string };
+  /** `analytics` names the click, since a link's text never reaches the warehouse. */
+  action?: { href: string; label: string; analytics: DebateAnalyticsAttributes };
   /** Puts the action under the message rather than beside it, for a message long enough to wrap. */
   stacked?: boolean;
 }) {
@@ -274,7 +304,11 @@ function RoomNotice({
         {busy && <Spinner />}
         <Text color="grey-04">{children}</Text>
         {action && (
-          <Link href={action.href} className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white">
+          <Link
+            href={action.href}
+            {...action.analytics}
+            className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white"
+          >
             {action.label}
           </Link>
         )}

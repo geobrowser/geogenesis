@@ -127,7 +127,7 @@ function LateCard({
         </Text>
         {request?.status === 'accepted' && (
           <HubPillButton
-            analyticsLabel={debateAnalyticsLabel('scheduled-notice', 'Room Reschedule')}
+            analyticsLabel={debateAnalyticsLabel('room', 'Late notice reschedule')}
             analyticsIntent="reschedule_scheduled_debate"
             onClick={() => setRescheduling(true)}
           >

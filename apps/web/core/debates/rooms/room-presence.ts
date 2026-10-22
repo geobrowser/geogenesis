@@ -142,3 +142,8 @@ function presenceState(room: DebateRoomView, opponentPresent: boolean, sawOppone
       return 'waiting';
   }
 }
+
+/** Whether Leave asks first: only while someone is coming or here. After they left or never came, it doesn't. */
+export function roomLeaveNeedsConfirm(state: DebateRoomPresenceState | null | undefined): boolean {
+  return state === 'arrived_early' || state === 'waiting' || state === 'waiting_elsewhere' || state === 'present';
+}
