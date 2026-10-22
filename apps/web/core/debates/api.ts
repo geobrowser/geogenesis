@@ -2200,8 +2200,16 @@ export type UpcomingDebateRoom = {
   joinable: boolean;
   /** The scheduled start has passed — "starting now" rather than "at 9:00". */
   due: boolean;
-  /** Whether anyone else is already inside, so the prompt can say they are waiting. */
+  /**
+   * Whether anyone else is already inside, so the prompt can say they are waiting. By the bare
+   * join rule: a tab that crashed without leaving keeps it true until the room closes.
+   */
   others_present: boolean;
+  /**
+   * Whether anyone else is inside now and alive: a current join from someone seen in the last 90
+   * seconds (GEO-3450). Absent on a lobby row and from a geo-chat that predates it.
+   */
+  others_live?: boolean;
   /**
    * The session the room handed out, so the coordinator can tell it from a challenge's. `null`
    * before anyone joins, `undefined` on a geo-chat that predates the field.
