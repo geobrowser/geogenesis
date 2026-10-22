@@ -446,10 +446,12 @@ describe('AvailabilityDeepLink', () => {
       expect(roomViewEnabled.at(-1)).toBe(false);
     });
 
-    it('still offers the choices when the room view cannot be read', () => {
+    // Without the room view it can't tell who is waiting, and board 2 is the wrong question for them.
+    it('opens the week when the room view cannot be read', () => {
       roomView = { isError: true };
       render(<AvailabilityDeepLink />);
-      expect(screen.getByTestId('scheduled-notice')).toHaveAttribute('data-step', 'decide');
+      expect(screen.getByTestId('booking-modal')).toBeInTheDocument();
+      expect(screen.queryByTestId('scheduled-notice')).not.toBeInTheDocument();
     });
 
     it('decides afresh once someone signs in from the week’s own prompt', () => {

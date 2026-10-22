@@ -21,10 +21,14 @@ export function cancelFailureMessage(error: unknown) {
 export function noticeFailureMessage(error: unknown, action: 'late' | 'cant'): string {
   if (error instanceof GeoChatRequestError) {
     switch (error.code) {
+      // geo-chat's "arrived": joined at or after the start. A look in before it doesn't count.
       case 'already_joined':
-        return 'You’re already in the room, so there’s no need. Join it to carry on.';
+        return 'You’ve already joined this debate, so there’s no need.';
       case 'request_not_active':
         return 'This debate is no longer on.';
+      case 'debate_already_started':
+        if (action === 'late') return 'This debate has already started.';
+        break;
       case 'too_early':
         return 'You can say you’re running late once the room opens, ten minutes before the start.';
       case 'running_late_limit':

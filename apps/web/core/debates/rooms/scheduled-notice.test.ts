@@ -86,10 +86,11 @@ describe('noticeFailureMessage', () => {
   const refusal = (code: string) => new GeoChatRequestError('raw', code, 409);
 
   it('says geo-chat’s refusals plainly', () => {
-    expect(noticeFailureMessage(refusal('already_joined'), 'late')).toMatch(/already in the room/);
+    expect(noticeFailureMessage(refusal('already_joined'), 'late')).toMatch(/already joined this debate/);
     expect(noticeFailureMessage(refusal('request_not_active'), 'late')).toBe('This debate is no longer on.');
     expect(noticeFailureMessage(refusal('running_late_limit'), 'late')).toMatch(/three times/);
     expect(noticeFailureMessage(refusal('too_early'), 'late')).toMatch(/once the room opens/);
+    expect(noticeFailureMessage(refusal('debate_already_started'), 'late')).toBe('This debate has already started.');
     // A cancel on a room already closed, from the Requests tab too.
     expect(cancelFailureMessage(refusal('request_not_active'))).toBe('This debate is no longer on.');
     // Can't make it is a cancel, so it says what the Requests tab's Cancel says.

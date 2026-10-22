@@ -324,6 +324,20 @@ describe('DebateRoomPageClient: the other debater can’t make it', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
+  // Moved without a Can't make it (by the one waiting, from the late card say) is not "finished".
+  it('says the debate moved, to both of them, when it was moved without a Can’t make it', () => {
+    mocks.access = { status: 'closed', reason: 'rescheduled' } as typeof mocks.access;
+    mocks.notices = [];
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('This debate moved to a new time.');
+    expect(screen.getByRole('link', { name: 'See the new time' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('modalTarget=requests')
+    );
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
   it('sends whoever said it to the ordinary closed page', () => {
     mocks.access = { status: 'closed', reason: 'cancelled' } as typeof mocks.access;
     mocks.notices = [cantMakeIt('jordan')];

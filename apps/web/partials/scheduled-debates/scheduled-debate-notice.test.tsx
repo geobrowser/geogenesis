@@ -241,10 +241,10 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(screen.queryByRole('link', { name: 'Join the room' })).not.toBeInTheDocument();
     });
 
-    it('says plainly when the viewer is already in the room', () => {
+    it('says plainly when the viewer already joined', () => {
       state.late = { ...idle(), isError: true, error: new GeoChatRequestError('raw', 'already_joined', 409) };
       open('late');
-      expect(screen.getByRole('alert')).toHaveTextContent('You’re already in the room, so there’s no need.');
+      expect(screen.getByRole('alert')).toHaveTextContent('You’ve already joined this debate, so there’s no need.');
     });
 
     // React Query keeps the list through a failed refetch; one dropped poll must not lose the step.

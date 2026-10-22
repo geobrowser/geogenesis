@@ -9,11 +9,11 @@ import { isDebateProfileMissing } from '~/core/debates/api';
 import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { useDisagreementCount } from '~/core/debates/matchmaking/use-disagreement-count';
-import { useDebateRoom, useRoomFinished, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
-import { opponentOf, requestById } from '~/core/debates/rooms/room-opponent';
+import { useDebateRoom } from '~/core/debates/rooms/hooks';
+import { useRequestRoom } from '~/core/debates/rooms/request-room';
+import { opponentOf } from '~/core/debates/rooms/room-opponent';
 import { noticeFrom, sameId } from '~/core/debates/rooms/room-presence';
 import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
-import { useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -266,16 +266,10 @@ export function SharedAvailabilityModal({
  */
 function useRoomOpenFor(requestId: string | null, auth: { ready: boolean; authenticated: boolean }): boolean | null {
   const reading = requestId !== null && auth.authenticated;
-  const requests = useScheduledDebates(reading);
-  const rooms = useUpcomingDebateRooms(reading);
+  const { requests, rooms, request, room, finished } = useRequestRoom(requestId, reading);
   const viewerId = useCurrentGeoChatUserId();
   const [settled, setSettled] = React.useState<boolean | null>(null);
-  const request = reading ? requestById(requests.data?.requests, requestId) : undefined;
-  const roomId = noticeRequestState(request) === 'active' ? (request?.room_id ?? null) : null;
-  const room = roomId ? (rooms.data?.rooms.find(row => sameId(row.room_id, roomId)) ?? null) : null;
-  const open = room?.joinable ? room : null;
-  // A debate that already happened is listed as joinable until its room is swept.
-  const finished = useRoomFinished(open);
+  const open = noticeRequestState(request) === 'active' && room?.joinable ? room : null;
   // Who is inside and who said they are late. Read only while it can still change the answer: the
   // room view polls every few seconds, and the week can be open for as long as someone browses it.
   const roomView = useDebateRoom(open?.room_id ?? '', open !== null && finished === false && settled === null);
@@ -289,7 +283,8 @@ function useRoomOpenFor(requestId: string | null, auth: { ready: boolean; authen
     if (!open) return false;
     if (finished === null) return null;
     if (finished) return false;
-    if (roomView.isError) return true;
+    // Who is waiting can't be told without it, and board 2 is the wrong question for them.
+    if (roomView.isError) return false;
     if (!roomView.data || !viewerId) return null;
     const inside = roomView.data.occupants.some(userId => sameId(userId, viewerId));
     const otherIsLate = noticeFrom(roomView.data.notices, opponentOf(request, viewerId), 'running_late') !== null;

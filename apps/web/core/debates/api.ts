@@ -2544,8 +2544,9 @@ export type RunningLateResponse = { expected_at: string; note: string | null };
  *
  * Refusals: `400 invalid_late_minutes` / `note_too_long`, `403 not_a_participant`, `404
  * request_not_found`, `409 request_not_active` (not an agreed debate, or its room has closed) and
- * `409 already_joined` (the viewer is in the room now), `409 too_early` (the room has not opened yet)
- * and `409 running_late_limit` (they have said it three times already for this debate).
+ * `409 already_joined` (the viewer already arrived: joined at or after the start), `409 too_early`
+ * (the room has not opened yet), `409 debate_already_started` (their debate has begun) and `409
+ * running_late_limit` (they have said it three times already for this debate).
  */
 export async function reportRunningLate(
   requestId: string,

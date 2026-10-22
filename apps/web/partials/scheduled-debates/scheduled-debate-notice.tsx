@@ -19,10 +19,9 @@ import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/de
 import { HubPillButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { formatDebateTime } from '~/core/debates/matchmaking/scheduled-debates-section';
 import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
-import { useRoomFinished, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
+import { useRequestRoom } from '~/core/debates/rooms/request-room';
 import { SCHEDULED_NOTICE_COPY as COPY } from '~/core/debates/rooms/room-copy';
-import { opponentName, opponentOf, requestById, useRequestOpponent } from '~/core/debates/rooms/room-opponent';
-import { sameId } from '~/core/debates/rooms/room-presence';
+import { opponentName, opponentOf, useRequestOpponent } from '~/core/debates/rooms/room-opponent';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { formatClockTime, startOffset } from '~/core/debates/rooms/room-time';
 import {
@@ -32,7 +31,7 @@ import {
   noticeNote,
   noticeRequestState,
 } from '~/core/debates/rooms/scheduled-notice';
-import { useCantMakeIt, useReportRunningLate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
+import { useCantMakeIt, useReportRunningLate } from '~/core/debates/rooms/scheduling-hooks';
 import { noticeFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 
@@ -101,20 +100,15 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
   const fromDecide = initialStep === 'decide';
 
   const { authenticated } = useGeoChatAuth();
-  const requests = useScheduledDebates(open && authenticated);
-  const rooms = useUpcomingDebateRooms(open && authenticated);
+  // A debate that already happened stays listed as joinable until its room is swept: it is over,
+  // with no room to join and nobody left to be late for.
+  const { requests, request, room: listed, finished } = useRequestRoom(requestId, open && authenticated);
+  const room = finished ? null : listed;
   const viewerId = useCurrentGeoChatUserId();
-  const request = requestById(requests.data?.requests, requestId);
   // The week needs only their id, which the request has; the graph's name and face may never come.
   const opponentUserId = opponentOf(request, viewerId);
   const opponent = useRequestOpponent(request);
   const name = opponentName(opponent);
-  const roomId = request?.room_id ?? null;
-  const listed = roomId ? (rooms.data?.rooms.find(row => sameId(row.room_id, roomId)) ?? null) : null;
-  // A debate that already happened stays listed as joinable until its room is swept: it is over,
-  // with no room to join and nobody left to be late for.
-  const finished = useRoomFinished(listed);
-  const room = finished ? null : listed;
 
   if (suggesting && request && opponentUserId) {
     return (

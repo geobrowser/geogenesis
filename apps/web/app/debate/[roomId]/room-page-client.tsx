@@ -168,13 +168,15 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
 }
 
 /**
- * Why this room closed, when a debater said they can't make it (GEO-3427): the `cancelled` or
- * `rescheduled` close their Can't make it caused. `null` for every other room.
+ * Why this room closed, when that is news to say in it (GEO-3427): a debater's Can't make it, which
+ * closes it `cancelled` or `rescheduled`, or any move to a new time, which is not "finished" though
+ * the room is gone. `null` for every other room, which gets the ordinary closed page.
  */
 function withdrawalOf(room: DebateRoomView | null) {
   if (room?.access.status !== 'closed') return null;
   const { reason } = room.access;
-  if (reason !== 'cancelled' && reason !== 'rescheduled') return null;
+  if (reason === 'rescheduled') return { reason, room };
+  if (reason !== 'cancelled') return null;
   return (room.notices ?? []).some(notice => notice.kind === 'cant_make_it') ? { reason, room } : null;
 }
 
@@ -188,7 +190,10 @@ function RoomWithdrawn({ reason, room }: { reason: 'cancelled' | 'rescheduled'; 
   const notice = noticeFrom(room.notices, otherId, 'cant_make_it');
   const ids = React.useMemo(() => (notice ? [notice.user_id] : []), [notice]);
   const person = useGeoChatUserSummaries(ids, notice !== null)[0] ?? null;
-  const own = viewerId !== null && notice === null;
+  const rescheduled = reason === 'rescheduled';
+  // Called off by the viewer themselves, from a second tab say: the ordinary closed page. A move
+  // without a Can't make it is said to both of them below instead.
+  const own = viewerId !== null && notice === null && !rescheduled;
 
   React.useEffect(() => {
     if (!own) return;
@@ -196,9 +201,15 @@ function RoomWithdrawn({ reason, room }: { reason: 'cancelled' | 'rescheduled'; 
     if (denial) router.replace(toRoomAccess(denial));
   }, [room.access, own, router]);
 
-  if (!notice) return own ? null : <RoomNotice busy>Opening your debate room…</RoomNotice>;
+  if (viewerId === null) return <RoomNotice busy>Opening your debate room…</RoomNotice>;
+  if (!notice) {
+    return own ? null : (
+      <RoomNotice stacked action={{ href: toDebatesPanel({ tab: 'requests' }), label: ROOM_CANT_MAKE_IT.seeNewTime }}>
+        {ROOM_CANT_MAKE_IT.moved}
+      </RoomNotice>
+    );
+  }
   const name = opponentName(person);
-  const rescheduled = reason === 'rescheduled';
   return (
     <RoomNotice
       stacked

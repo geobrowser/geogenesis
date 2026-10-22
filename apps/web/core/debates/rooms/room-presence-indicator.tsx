@@ -3,11 +3,11 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import dynamic from 'next/dynamic';
 
 import { Text } from '~/design-system/text';
 
-import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
-
+import { debateAnalyticsLabel } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { useDebateRoomContext } from './room-context';
 import { ROOM_LATE_NOTICE, UNNAMED_OPPONENT, roomPresenceLabel, roomPresenceNote } from './room-copy';
@@ -66,6 +66,15 @@ export function DebateRoomPresenceIndicator({
   );
 }
 
+/**
+ * The week the late card's Reschedule opens, loaded on the press: every debate room renders the
+ * indicator, and few of them ever reschedule from it.
+ */
+const PeerAvailabilityBookingModal = dynamic(
+  () => import('~/partials/availability/peer-availability-booking-modal').then(m => m.PeerAvailabilityBookingModal),
+  { ssr: false }
+);
+
 /** Colour is never the only thing carrying the state; the label says it too. */
 function PresenceDot({ state }: { state: DebateRoomPresenceState }) {
   const tone: Record<DebateRoomPresenceState, string> = {
@@ -118,7 +127,7 @@ function LateCard({
         </Text>
         {request?.status === 'accepted' && (
           <HubPillButton
-            analyticsLabel="Room late notice Reschedule"
+            analyticsLabel={debateAnalyticsLabel('scheduled-notice', 'Room Reschedule')}
             analyticsIntent="reschedule_scheduled_debate"
             onClick={() => setRescheduling(true)}
           >
@@ -126,7 +135,7 @@ function LateCard({
           </HubPillButton>
         )}
       </div>
-      {request && (
+      {request && rescheduling && (
         <PeerAvailabilityBookingModal
           open={rescheduling}
           userId={opponentUserId}
