@@ -183,6 +183,23 @@ export function disagreementCount(disagreements: DebateLobbyClaims['disagreement
   return entry && entry.claims > 0 ? entry.claims : null;
 }
 
+/**
+ * The pairs as the roster stands (GEO-3445). A partner still in the claim picker keeps naming the
+ * person who went back to the room, so anyone whose own row is no longer in a debate leaves the
+ * pair, and with it the "In a debate" card, for their tile. A pair left empty goes.
+ */
+export function debatingPairs(pairs: DebateLobbyPair[], members: DebateLobbyMember[]) {
+  return pairs.flatMap(pair => {
+    const people = pair.people.filter(person => {
+      if (!person.in_lobby) return true;
+      const member = members.find(m => sameUser(m, person));
+      return !member || member.in_debate;
+    });
+    if (people.length === pair.people.length) return [pair];
+    return people.length > 0 ? [{ ...pair, people }] : [];
+  });
+}
+
 /** What the pair is debating, from its first lobby member's roster row. */
 export function pairSubject(pair: DebateLobbyPair, members: DebateLobbyMember[]) {
   for (const person of pair.people) {

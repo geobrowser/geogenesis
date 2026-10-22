@@ -20,6 +20,7 @@ import {
   type LobbyMemberStatus,
   SHORT_STATUS_LABEL,
   STATUS_LABEL,
+  debatingPairs,
   disagreementCount,
   inDebateLabel,
   isHosting,
@@ -56,7 +57,7 @@ export function publishes(member: Pick<DebateLobbyMember, 'role' | 'acting_host'
 
 /**
  * The People side (GEO-3131): debates in progress, speaker tiles, then who is listening. Anyone in
- * a pair card is left out of the tiles and chips below it.
+ * a pair card is left out of the tiles and chips below it; someone back from a debate is not in one.
  */
 export function LobbyPeople({
   lobby,
@@ -70,7 +71,7 @@ export function LobbyPeople({
   ownAvailable: boolean | undefined;
   disagreements: DebateLobbyClaims['disagreements'];
 }) {
-  const pairs = lobby.debate_pairs ?? [];
+  const pairs = debatingPairs(lobby.debate_pairs ?? [], lobby.members);
   const inPairs = new Set(pairs.flatMap(pair => pair.people.map(person => dashlessId(person.user_id))));
   const roster = rosterOrder(lobby.members).filter(member => !inPairs.has(dashlessId(member.user_id)));
   const speakers = roster.filter(publishes);

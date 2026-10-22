@@ -161,6 +161,20 @@ describe('LobbyPeople on desktop', () => {
     expect(within(daniel).getByRole('button', { name: 'Disagrees on 4 claims with Daniel' })).toBeInTheDocument();
   });
 
+  it('gives someone back from the picker their tile while their partner is still picking (GEO-3445)', () => {
+    // Leo came back to the room; Maya is still in the picker, whose session still names Leo.
+    const view = lobby(
+      roster.map(person => (person.user_id === 'Leo' ? { ...person, in_debate: false } : person)),
+      { debate_pairs: pairs }
+    );
+    renderPeople(view);
+
+    expect(screen.getAllByTestId('lobby-speaker-tile').map(tile => tile.getAttribute('aria-label'))).toContain('Leo');
+    expect(screen.getByRole('heading', { name: 'In a debate · 1' })).toBeInTheDocument();
+    expect(screen.getByTestId('lobby-debate-pair')).toHaveTextContent('Maya');
+    expect(screen.getByTestId('lobby-debate-pair')).not.toHaveTextContent('Leo');
+  });
+
   it('keeps a tile’s status line one height whether its speaker is talking or not', () => {
     const view = lobby(roster);
     const { rerender } = renderPeople(view);

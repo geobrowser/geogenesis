@@ -4,6 +4,7 @@ import { type DebateLobbyMember, type DebateLobbyRole, GeoChatRequestError } fro
 import {
   debatingCount,
   debatingLabel,
+  debatingPairs,
   disagreementCount,
   handoffLabel,
   hereNowLabel,
@@ -374,6 +375,28 @@ describe('pairs', () => {
     const pair = { people: [person('outsider', false), person('0193aaaabbbb')] };
     expect(pairSubject(pair, [debater])).toBe(subject);
     expect(pairSubject({ people: [person('outsider', false)] }, [debater])).toBeNull();
+  });
+
+  it('drops someone whose own row is out of the debate, keeping their partner and anyone outside the room (GEO-3445)', () => {
+    const picking = { ...member('maya', 'speaker'), in_debate: true };
+    const back = { ...member('leo', 'speaker'), in_debate: false };
+    const pair = { people: [person('maya'), person('leo')], progress: null };
+    expect(debatingPairs([pair], [picking, back])).toEqual([{ people: [person('maya')], progress: null }]);
+
+    const withOutsider = { people: [person('maya'), person('outsider', false)] };
+    expect(debatingPairs([withOutsider], [picking])).toEqual([withOutsider]);
+    // A row the roster lacks is left as the server paired it.
+    expect(debatingPairs([pair], [picking])).toEqual([pair]);
+    expect(debatingPairs([{ people: [person('leo')] }], [back])).toEqual([]);
+  });
+
+  it('hands back an unchanged pair as is', () => {
+    const pair = { people: [person('maya'), person('leo')] };
+    const both = [
+      { ...member('maya', 'speaker'), in_debate: true },
+      { ...member('leo', 'speaker'), in_debate: true },
+    ];
+    expect(debatingPairs([pair], both)[0]).toBe(pair);
   });
 });
 
