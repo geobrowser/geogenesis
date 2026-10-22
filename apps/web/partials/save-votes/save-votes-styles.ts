@@ -4,9 +4,9 @@ import type { AccountStepClasses } from '~/partials/explore/email-capture-accoun
 import { SUBTEXT_CLASS } from '~/partials/explore/email-capture-styles';
 
 /**
- * The save-votes sheet's own look (GEO-3439), drawn after Privy's sign-in screens: 44px pill fields and
- * buttons in place of the email capture's 28px ones, a back and close row, and a mail badge on the
- * code step. The heading and subtext are the email capture's own (`email-capture-styles`).
+ * The save-votes sheet's own look (GEO-3439), drawn after Privy's sign-in screens: pill fields and
+ * buttons in place of the email capture's 28px ones (44px centred, 40px in the corner card, 48px on a
+ * phone), a back and close row, and a mail badge on the code step. The heading and subtext are the email capture's own (`email-capture-styles`).
  *
  * `compact` is the corner card, a step smaller than the centred dialog. Both are the same bottom
  * sheet on a phone (`mobile:`, at most 639px), with touch-sized controls.
