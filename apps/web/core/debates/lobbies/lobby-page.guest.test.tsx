@@ -51,6 +51,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // The signed-out Remind me opens Privy, which needs the wallet provider (GEO-3289).
+vi.mock('./lobby-scheduled-requests', () => ({ LobbyScheduledRequests: () => null }));
+
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace }),

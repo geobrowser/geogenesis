@@ -179,9 +179,8 @@ describe('useLobbyGuestSession across tabs', () => {
     mocks.release.mockClear();
     await act(async () => {
       grant(true);
-      await new Promise(resolve => setTimeout(resolve, 0));
     });
-    expect(mocks.release).toHaveBeenCalledWith({ now: true });
+    await waitFor(() => expect(mocks.release).toHaveBeenCalledWith({ now: true }));
     expect(mocks.start).not.toHaveBeenCalled();
   });
 });

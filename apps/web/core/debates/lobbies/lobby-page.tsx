@@ -70,6 +70,8 @@ import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queue
 import { LobbyAnalyticsScope } from './lobby-room-analytics';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { LobbyPeople } from './lobby-roster';
+import { LobbyScheduleProvider } from './lobby-schedule';
+import { LobbyScheduledRequests } from './lobby-scheduled-requests';
 import { LobbyShowPeopleContext, LobbySlot, LobbySlotsProvider, useLobbySlotTargets } from './lobby-slots';
 import {
   FindDebateLink,
@@ -415,17 +417,19 @@ function AdmittedLobby({
 
   return (
     <LobbyAnalyticsScope lobby={lobby}>
-      <LobbyQueuedRequestProvider lobby={lobby} joined={state.status === 'joined'}>
-        <LobbyRoom
-          lobby={lobby}
-          state={state}
-          onRetry={() => void join(false)}
-          onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
-          voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
-          guestSession={guestSession}
-          exitHref={exitHref}
-        />
-      </LobbyQueuedRequestProvider>
+      <LobbyScheduleProvider lobby={lobby}>
+        <LobbyQueuedRequestProvider lobby={lobby} joined={state.status === 'joined'}>
+          <LobbyRoom
+            lobby={lobby}
+            state={state}
+            onRetry={() => void join(false)}
+            onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
+            voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
+            guestSession={guestSession}
+            exitHref={exitHref}
+          />
+        </LobbyQueuedRequestProvider>
+      </LobbyScheduleProvider>
     </LobbyAnalyticsScope>
   );
 }
@@ -649,6 +653,7 @@ function LobbyRoom({
           />
         ) : null}
         <LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />
+        {!guest && state.status === 'joined' ? <LobbyScheduledRequests lobby={lobby} /> : null}
         {tabbed ? <LobbyPhoneTabs ids={tabIds} tab={tab} onTab={setTab} claimsMark={claimsMark} /> : null}
 
         <div
