@@ -77,6 +77,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'microsoftCalendar',
+    label: 'Outlook Calendar',
+    description:
+      'Connect Outlook Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Microsoft Calendar configured.',
+    enabledByDefault: false,
+  },
+  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',

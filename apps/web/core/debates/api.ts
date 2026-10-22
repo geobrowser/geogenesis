@@ -1214,9 +1214,18 @@ export async function replaceDebateSchedule(
 
 /** Why a connected calendar last failed to sync. */
 export type CalendarConnectionError =
-  'invalid_grant' | 'scope_missing' | 'provider_unavailable' | 'rate_limited' | 'unknown';
+  | 'invalid_grant'
+  | 'scope_missing'
+  /** Microsoft only: the account has no mailbox Graph can read, so another account is needed. */
+  | 'mailbox_unavailable'
+  /** geo-chat's own provider client was refused; ours to fix, never the user's. */
+  | 'provider_misconfigured'
+  | 'provider_unavailable'
+  | 'rate_limited'
+  | 'unknown';
 
-export type GoogleCalendarConnection = {
+/** A connected calendar account, the same for every provider. */
+export type CalendarConnection = {
   account_email: string | null;
   /** `needs_reconnect` stops syncing until the user connects again. */
   status: 'ok' | 'needs_reconnect' | 'error';
@@ -1226,7 +1235,15 @@ export type GoogleCalendarConnection = {
   last_error: CalendarConnectionError | null;
 };
 
-export type CalendarConnections = { google: GoogleCalendarConnection | null };
+export type CalendarProvider = 'google' | 'microsoft';
+
+/** `providers` and `microsoft` are absent from a geo-chat that only knows Google. */
+export type CalendarConnections = {
+  /** The providers geo-chat has configured, in display order. */
+  providers?: string[];
+  google: CalendarConnection | null;
+  microsoft?: CalendarConnection | null;
+};
 
 /** An absolute busy window from the viewer's own connected calendar. */
 export type CalendarBusyInterval = {
@@ -1234,21 +1251,25 @@ export type CalendarBusyInterval = {
   end: string;
 };
 
-/** Every calendar route answers 404 `calendar_disabled` while geo-chat runs without Google Calendar configured. */
+/**
+ * 404 `calendar_disabled` while geo-chat has no calendar provider configured. A provider's own
+ * routes answer it while that provider is off.
+ */
 export async function getCalendarConnections(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
   return geoChatRequest<CalendarConnections>('/me/calendar', { auth: true, getPrivyIdentityToken, accountKey });
 }
 
 /**
- * Returns Google's consent URL; geo-chat redirects back to `returnTo` with `?calendar=…`.
+ * Returns the provider's consent URL; geo-chat redirects back to `returnTo` with `?calendar=…`.
  * Credentials included for geo-chat's browser-binding cookie.
  */
-export async function connectGoogleCalendar(
+export async function connectCalendar(
+  provider: CalendarProvider,
   returnTo: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
-  return geoChatRequest<{ authorization_url: string }>('/me/calendar/google/connect', {
+  return geoChatRequest<{ authorization_url: string }>(`/me/calendar/${provider}/connect`, {
     method: 'POST',
     body: { return_to: returnTo },
     auth: true,
@@ -1259,8 +1280,12 @@ export async function connectGoogleCalendar(
 }
 
 /** Syncs now. 429 `rate_limited` within a minute of the last refresh. */
-export async function refreshGoogleCalendar(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
-  return geoChatRequest<CalendarConnections>('/me/calendar/google/refresh', {
+export async function refreshCalendar(
+  provider: CalendarProvider,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<CalendarConnections>(`/me/calendar/${provider}/refresh`, {
     method: 'POST',
     auth: true,
     getPrivyIdentityToken,
@@ -1269,11 +1294,12 @@ export async function refreshGoogleCalendar(getPrivyIdentityToken: GetPrivyIdent
 }
 
 /** Idempotent: 204 whether or not anything was connected. */
-export async function disconnectGoogleCalendar(
+export async function disconnectCalendar(
+  provider: CalendarProvider,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
-  return geoChatRequest<void>('/me/calendar/google', {
+  return geoChatRequest<void>(`/me/calendar/${provider}`, {
     method: 'DELETE',
     auth: true,
     getPrivyIdentityToken,

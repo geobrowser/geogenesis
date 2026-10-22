@@ -10,6 +10,9 @@ import { OwnScheduleModal } from './own-schedule-modal';
 
 const mocks = vi.hoisted(() => ({
   flagOn: false,
+  microsoftFlagOn: false,
+  microsoftConnected: false,
+  sectionProviders: [] as unknown[],
   connectionsEnabled: [] as boolean[],
   busyRanges: [] as unknown[],
   connected: true,
@@ -18,7 +21,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: (id: string) => id === 'googleCalendar' && mocks.flagOn,
+  useFeatureFlag: (id: string) =>
+    (id === 'googleCalendar' && mocks.flagOn) || (id === 'microsoftCalendar' && mocks.microsoftFlagOn),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -31,6 +35,7 @@ vi.mock('~/core/debates/calendar-hooks', () => ({
     mocks.connectionsEnabled.push(enabled);
     return {
       google: enabled ? (mocks.connected ? { status: 'ok' } : null) : undefined,
+      microsoft: enabled ? (mocks.microsoftConnected ? { status: 'ok' } : null) : undefined,
       disabled: mocks.disabled,
     };
   },
@@ -40,20 +45,34 @@ vi.mock('~/core/debates/calendar-hooks', () => ({
   },
 }));
 
-vi.mock('./google-calendar-section', () => ({
-  GoogleCalendarSection: ({ unsavedChanges, returned }: { unsavedChanges: boolean; returned: unknown }) => (
-    <section
-      aria-label="Google Calendar"
-      data-unsaved={String(unsavedChanges)}
-      data-returned={JSON.stringify(returned)}
-    />
-  ),
+vi.mock('./calendar-section', () => ({
+  CalendarSection: ({
+    providers,
+    unsavedChanges,
+    returned,
+  }: {
+    providers: unknown;
+    unsavedChanges: boolean;
+    returned: unknown;
+  }) => {
+    mocks.sectionProviders.push(providers);
+    return (
+      <section
+        aria-label="Google Calendar"
+        data-unsaved={String(unsavedChanges)}
+        data-returned={JSON.stringify(returned)}
+      />
+    );
+  },
 }));
 
 vi.mock('./copy-availability-link', () => ({ CopyOwnAvailabilityLinkButton: () => null }));
 
 beforeEach(() => {
   mocks.flagOn = false;
+  mocks.microsoftFlagOn = false;
+  mocks.microsoftConnected = false;
+  mocks.sectionProviders = [];
   mocks.connected = true;
   mocks.disabled = false;
   mocks.connectionsEnabled = [];
@@ -90,13 +109,17 @@ describe('OwnScheduleModal Google Calendar', () => {
         open
         onOpenChange={() => {}}
         surface="google_calendar"
-        calendarReturn={{ outcome: 'connected', reason: null }}
+        calendarReturn={{ provider: 'google', outcome: 'connected', reason: null }}
       />
     );
 
     const section = within(await screen.findByRole('dialog')).getByRole('region', { name: 'Google Calendar' });
     expect(section).toHaveAttribute('data-unsaved', 'false');
-    expect(JSON.parse(section.getAttribute('data-returned')!)).toEqual({ outcome: 'connected', reason: null });
+    expect(JSON.parse(section.getAttribute('data-returned')!)).toEqual({
+      provider: 'google',
+      outcome: 'connected',
+      reason: null,
+    });
   });
 
   it('marks the draft unsaved once the grid changes', async () => {
@@ -129,5 +152,33 @@ describe('OwnScheduleModal Google Calendar', () => {
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).queryByRole('region', { name: 'Google Calendar' })).not.toBeInTheDocument();
+  });
+
+  it('offers Google alone with only its flag on', async () => {
+    mocks.flagOn = true;
+    render(<OwnScheduleModal open onOpenChange={() => {}} surface="navbar" />);
+
+    await screen.findByRole('dialog');
+    expect(mocks.sectionProviders.at(-1)).toEqual(['google']);
+  });
+
+  it('offers Outlook with only its flag on, shading busy time from an Outlook connection', async () => {
+    mocks.microsoftFlagOn = true;
+    mocks.connected = false;
+    mocks.microsoftConnected = true;
+    render(<OwnScheduleModal open onOpenChange={() => {}} surface="navbar" />);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(mocks.sectionProviders.at(-1)).toEqual(['microsoft']);
+    expect(within(dialog).getByText('Busy on your calendar')).toBeInTheDocument();
+  });
+
+  it('offers both with both flags on', async () => {
+    mocks.flagOn = true;
+    mocks.microsoftFlagOn = true;
+    render(<OwnScheduleModal open onOpenChange={() => {}} surface="navbar" />);
+
+    await screen.findByRole('dialog');
+    expect(mocks.sectionProviders.at(-1)).toEqual(['google', 'microsoft']);
   });
 });

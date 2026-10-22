@@ -5,14 +5,15 @@ import * as React from 'react';
 import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { calendarBusyWindow } from '~/core/availability/calendar-busy';
 import type { ScheduleEditorSurface } from '~/core/availability/schedule-analytics';
+import type { CalendarProvider } from '~/core/debates/api';
 import { useCalendarBusy, useCalendarConnections } from '~/core/debates/calendar-hooks';
 import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { AvailabilityModal } from './availability-modal';
+import type { CalendarReturn } from './calendar-return-url';
+import { CalendarSection } from './calendar-section';
 import { CopyOwnAvailabilityLinkButton } from './copy-availability-link';
-import type { CalendarReturn } from './google-calendar-return-url';
-import { GoogleCalendarSection } from './google-calendar-section';
 
 type Props = {
   open: boolean;
@@ -22,7 +23,7 @@ type Props = {
   onSaved?: (blocks: AvailabilityBlock[]) => void;
   /** Which control opened it, for the saved event. */
   surface: ScheduleEditorSurface;
-  /** The outcome of connecting Google Calendar, when reopened on the way back. */
+  /** The outcome of connecting a calendar, when reopened on the way back. */
   calendarReturn?: CalendarReturn | null;
 };
 
@@ -31,17 +32,29 @@ type Props = {
  * debates hub's header calendar and banner, and your own availability link all open.
  */
 export function OwnScheduleModal(props: Props) {
-  // A separate component, so the calendar reads are not even set up while the flag is off.
-  return useFeatureFlag('googleCalendar') ? <ScheduleEditorWithCalendar {...props} /> : <ScheduleEditor {...props} />;
+  const google = useFeatureFlag('googleCalendar');
+  const microsoft = useFeatureFlag('microsoftCalendar');
+  const providers: CalendarProvider[] = [
+    ...(google ? ['google' as const] : []),
+    ...(microsoft ? ['microsoft' as const] : []),
+  ];
+
+  // A separate component, so the calendar reads are not even set up while both flags are off.
+  return providers.length > 0 ? (
+    <ScheduleEditorWithCalendar {...props} providers={providers} />
+  ) : (
+    <ScheduleEditor {...props} />
+  );
 }
 
-/** Google Calendar above the grid, and its busy time shaded on it. */
-function ScheduleEditorWithCalendar(props: Props) {
-  const { google, disabled } = useCalendarConnections(props.open);
-  // Asked for only once there is a connection to have produced any.
+/** Connected calendars above the grid, and their merged busy time shaded on it. */
+function ScheduleEditorWithCalendar({ providers, ...props }: Props & { providers: CalendarProvider[] }) {
+  const { google, microsoft, disabled } = useCalendarConnections(props.open);
+  // Asked for only once there is a connection to have produced any. Busy time is merged server-side.
+  const connected = Boolean(google || microsoft);
   const busyRange = React.useMemo(
-    () => (props.open && google ? calendarBusyWindow(new Date()) : null),
-    [props.open, google]
+    () => (props.open && connected ? calendarBusyWindow(new Date()) : null),
+    [props.open, connected]
   );
   const { intervals } = useCalendarBusy(busyRange);
 
@@ -52,7 +65,11 @@ function ScheduleEditorWithCalendar(props: Props) {
         disabled
           ? undefined
           : ({ unsavedChanges }) => (
-              <GoogleCalendarSection unsavedChanges={unsavedChanges} returned={props.calendarReturn ?? null} />
+              <CalendarSection
+                providers={providers}
+                unsavedChanges={unsavedChanges}
+                returned={props.calendarReturn ?? null}
+              />
             )
       }
       busyIntervals={busyRange ? intervals : undefined}
