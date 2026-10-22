@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { type AnalyticsProperties } from '~/core/analytics';
+import { currentAuthAttempt } from '~/core/auth-attempt';
 import { useGoogleSignInEnabled, useGoogleSignInOffered } from '~/core/auth/google-sign-in';
 import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { useSetToast } from '~/core/hooks/use-toast';
@@ -28,8 +29,10 @@ export function GoogleOAuthHost() {
 function GoogleOAuthCompleter() {
   const { initOAuth, state } = useLoginWithOAuth();
   const setToast = useSetToast();
-  // Privy strips the return's parameters once it is done, so remember whether this load was one.
+  // Privy strips the return's parameters once it is done, so remember whether this load was one, and
+  // which attempt it returned to: a sign-in started meanwhile replaces that one.
   const [isReturn] = useState(isReturningFromPrivyRedirect);
+  const [returnAttemptId] = useState(() => (isReturn ? currentAuthAttempt()?.id : undefined));
   // Settled once the return has failed or a new sign-in starts from this page.
   const settled = useRef(false);
   useEffect(() => {
@@ -45,9 +48,9 @@ function GoogleOAuthCompleter() {
   useEffect(() => {
     if (!isReturn || settled.current || state.status !== 'error') return;
     settled.current = true;
-    failRedirectedPrivyAuth();
+    if (returnAttemptId) failRedirectedPrivyAuth(returnAttemptId);
     setToast(<>Google sign-in didn't complete. Try again.</>);
-  }, [isReturn, state.status, setToast]);
+  }, [isReturn, returnAttemptId, state.status, setToast]);
   return null;
 }
 

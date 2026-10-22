@@ -57,10 +57,9 @@ export function cancelPrivyAuth(account: ExitedFlowAccount = null) {
   runSignInAbandoned();
 }
 
-/** A redirect sign-in came back failed: close the attempt the redirect's start left open. */
-export function failRedirectedPrivyAuth() {
-  claimRedirectedAuthAttempt();
-  cancelPrivyAuth();
+/** A redirect sign-in came back failed: close attempt `id`, unless a newer sign-in has replaced it. */
+export function failRedirectedPrivyAuth(id: string) {
+  if (claimRedirectedAuthAttempt(id)) cancelPrivyAuth();
 }
 
 /**

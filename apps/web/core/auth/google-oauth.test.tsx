@@ -17,10 +17,14 @@ const mocks = vi.hoisted(() => ({
   useLoginWithOAuth: vi.fn(),
   setToast: vi.fn(),
   failRedirectedPrivyAuth: vi.fn(),
+  attemptId: undefined as string | undefined,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({ useLoginWithOAuth: mocks.useLoginWithOAuth }));
 vi.mock('~/core/hooks/use-prepare-onboarding', () => ({ usePrepareOnboarding: () => vi.fn() }));
+vi.mock('~/core/auth-attempt', () => ({
+  currentAuthAttempt: () => (mocks.attemptId ? { id: mocks.attemptId } : undefined),
+}));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => mocks.setToast }));
 vi.mock('~/core/privy-auth-events', () => ({
   beginPrivyAuth: vi.fn(),
@@ -54,6 +58,7 @@ function renderHost(flag: boolean) {
 
 beforeEach(() => {
   mocks.state = { status: 'initial' };
+  mocks.attemptId = 'attempt-a';
   mocks.useLoginWithOAuth.mockImplementation(() => ({ initOAuth: mocks.initOAuth, state: mocks.state }));
 });
 
@@ -94,6 +99,26 @@ describe('a failed return from Google', () => {
     host.setState({ ...failed });
 
     expect(mocks.failRedirectedPrivyAuth).toHaveBeenCalledTimes(1);
+    expect(mocks.failRedirectedPrivyAuth).toHaveBeenCalledWith('attempt-a');
+    expect(mocks.setToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the attempt the return loaded with, not one started since', () => {
+    window.history.replaceState({}, '', RETURN_URL);
+    const host = renderHost(true);
+    mocks.attemptId = 'attempt-b';
+    host.setState(failed);
+
+    expect(mocks.failRedirectedPrivyAuth).toHaveBeenCalledWith('attempt-a');
+    expect(mocks.setToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('still says so when no attempt was recorded', () => {
+    mocks.attemptId = undefined;
+    window.history.replaceState({}, '', RETURN_URL);
+    renderHost(true).setState(failed);
+
+    expect(mocks.failRedirectedPrivyAuth).not.toHaveBeenCalled();
     expect(mocks.setToast).toHaveBeenCalledTimes(1);
   });
 
