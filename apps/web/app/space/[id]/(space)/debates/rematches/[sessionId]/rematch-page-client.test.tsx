@@ -18,6 +18,7 @@ import {
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
+import type { DebateRoomPresence, DebateRoomPresenceState } from '~/core/debates/rooms/room-presence';
 
 import { DebateRematchPageClient, resolveLandingTab } from './rematch-page-client';
 
@@ -37,6 +38,8 @@ const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, N
 }));
 
 const mocks = vi.hoisted(() => ({
+  /** Bumped to remount the stubbed header's subtree, the way the real one does as voice connects. */
+  headerEpoch: 0,
   /** GEO-3223. Whether the viewport is a phone's. */
   isPhone: true,
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
@@ -250,7 +253,7 @@ vi.mock('./rematch-voice', () => ({
   // `exiting` is surfaced because that flag is where the header's layout stability is decided, and
   // the bug it exists for was in the wiring here rather than inside the header.
   RematchVoiceHeader: ({ leaveAction, exiting }: { leaveAction?: ReactNode; exiting?: boolean }) => (
-    <div data-testid="rematch-pair-header" data-exiting={exiting ? 'true' : undefined}>
+    <div key={mocks.headerEpoch} data-testid="rematch-pair-header" data-exiting={exiting ? 'true' : undefined}>
       {leaveAction}
     </div>
   ),
@@ -6135,6 +6138,164 @@ describe('inside a debate room', () => {
     expect(mocks.leaveMutate).not.toHaveBeenCalled();
   });
 
+  // GEO-3433. On 21 Oct a debater pressed Leave twice before their scheduled start, and came straight
+  // back both times.
+  describe('Leave while the other person is coming or here', () => {
+    const presenceOf = (state: DebateRoomPresenceState): DebateRoomPresence => ({
+      state,
+      opponentUserId: 'user-remote',
+      opponentPresent: state === 'present',
+    });
+    const inRoomWith = (presence: DebateRoomPresence | null, children: React.ReactElement) => (
+      <DebateRoomProvider roomId="room-1" presence={presence}>
+        {children}
+      </DebateRoomProvider>
+    );
+    const withPresence = (state: DebateRoomPresenceState, children: React.ReactElement) =>
+      inRoomWith(presenceOf(state), children);
+    const page = <DebateRematchPageClient sessionId="rematch-1" />;
+
+    const openLeaveDialog = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+      return screen.findByRole('dialog', { name: 'Leave the room?' });
+    };
+
+    it.each([['arrived_early'], ['waiting'], ['waiting_elsewhere'], ['present']] as const)(
+      'asks before leaving when %s, and Stay keeps you in the room',
+      async state => {
+        render(withPresence(state, <DebateRematchPageClient sessionId="rematch-1" />));
+
+        const leaveButton = screen.getByRole('button', { name: 'Leave' });
+        fireEvent.click(leaveButton);
+
+        const dialog = await screen.findByRole('dialog', { name: 'Leave the room?' });
+        expect(mocks.push).not.toHaveBeenCalled();
+        expect(dialog).toHaveTextContent(state === 'present' ? /is here/ : /isn’t here yet/);
+
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Stay' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        expect(mocks.push).not.toHaveBeenCalled();
+        expect(leaveButton).toHaveFocus();
+      }
+    );
+
+    it('leaves for Explore once confirmed', async () => {
+      render(withPresence('waiting', <DebateRematchPageClient sessionId="rematch-1" />));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Leave the room?' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Leave room' }));
+
+      expect(mocks.push).toHaveBeenCalledWith('/explore');
+      expect(mocks.leaveMutate).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('treats Escape as Stay, and hands focus back to Leave', async () => {
+      render(withPresence('waiting', page));
+      const dialog = await openLeaveDialog();
+
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(mocks.push).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Leave' })).toHaveFocus();
+    });
+
+    // jsdom does no hit-testing, so the structure is pinned as well: the card is the dialog and its
+    // parent is the full-screen layer, which is what makes a press beside the card a press outside.
+    it('treats a press beside the card as Stay', async () => {
+      render(withPresence('waiting', page));
+      const dialog = await openLeaveDialog();
+      const overlay = dialog.parentElement as HTMLElement;
+      expect(overlay).toHaveClass('fixed', 'inset-0');
+
+      // Radix starts listening for outside presses a tick after opening.
+      await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+      fireEvent.pointerDown(overlay, { button: 0 });
+      fireEvent.click(overlay);
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(mocks.push).not.toHaveBeenCalled();
+    });
+
+    // The real header swaps its subtree as voice connects, and remounts it on every reconnect.
+    it('keeps an open dialog mounted when the header remounts', async () => {
+      const { rerender } = render(withPresence('arrived_early', page));
+      const dialog = await openLeaveDialog();
+
+      mocks.headerEpoch += 1;
+      try {
+        rerender(withPresence('arrived_early', page));
+        expect(screen.getByRole('dialog', { name: 'Leave the room?' })).toBe(dialog);
+      } finally {
+        mocks.headerEpoch = 0;
+      }
+    });
+
+    it('closes when the other person leaves while it is open, rather than saying they never came', async () => {
+      const { rerender } = render(withPresence('present', page));
+      await openLeaveDialog();
+
+      rerender(withPresence('left', page));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.queryByText(/isn’t here yet/)).toBeNull();
+      expect(mocks.push).not.toHaveBeenCalled();
+    });
+
+    it('does not reopen by itself when presence drops and comes back', async () => {
+      const { rerender } = render(withPresence('waiting', page));
+      await openLeaveDialog();
+
+      rerender(inRoomWith(null, page));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      rerender(withPresence('waiting', page));
+
+      await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    // Leaving is what's left to do once they've gone or never came, so it isn't asked.
+    it.each([['left'], ['no_show']] as const)('leaves straight away when %s', state => {
+      render(withPresence(state, <DebateRematchPageClient sessionId="rematch-1" />));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(mocks.push).toHaveBeenCalledWith('/explore');
+    });
+
+    it('labels Leave and both answers for analytics', async () => {
+      render(withPresence('waiting', <DebateRematchPageClient sessionId="rematch-1" />));
+
+      const leaveButton = screen.getByRole('button', { name: 'Leave' });
+      expect(leaveButton).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Leave');
+
+      fireEvent.click(leaveButton);
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByRole('button', { name: 'Stay' })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Debate rematch Leave dialog stay'
+      );
+      expect(within(dialog).getByRole('button', { name: 'Leave room' })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Debate rematch Leave dialog leave room'
+      );
+    });
+  });
+
+  it('labels Back to lobby on the plain picker', () => {
+    rememberLobbyReturnDestination('lobby-1');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Back to lobby' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate rematch Back to lobby'
+    );
+  });
+
   // geo-chat expires a `browsing` session after 90s of either party being offline, which is what
   // waiting for someone looks like. Acting on it threw the waiting person out of the room.
   it.each([['ended'], ['expired']] as const)('does not navigate away on a %s session', async status => {
@@ -6958,5 +7119,98 @@ describe('desktop filter row', () => {
     fireEvent.change(searchBox(), { target: { value: 'newly' } });
 
     expect(within(pillRow()!).getAllByRole('button').length).toBeGreaterThan(before);
+  });
+});
+
+/**
+ * GEO-3433. Click analytics only see a control's `data-geo-analytics-label` (and its aria-label);
+ * visible text is stripped before the warehouse. A room control without one is a click nobody can
+ * name, so every control the room draws, on every tab and in its dialogs, has to carry a label.
+ * The pair header is stubbed here; its controls are covered in rematch-voice.test.tsx.
+ */
+describe('click analytics labels in a debate room', () => {
+  const CONTROLS = 'button, a[href], [role="button"], [role="tab"], [role="menuitem"], [role="radio"]';
+
+  const inLiveRoom = (children: ReactElement) => (
+    <DebateRoomProvider
+      roomId="room-1"
+      presence={{ state: 'present', opponentUserId: 'user-remote', opponentPresent: true }}
+      rejoin={vi.fn().mockResolvedValue(true)}
+    >
+      {children}
+    </DebateRoomProvider>
+  );
+
+  /**
+   * Every control on the page without a label and an intent, described by what it shows. Both, since
+   * a label that travels without its intent drops out of every query that filters on the intent.
+   */
+  function unlabeledControls() {
+    return [...document.body.querySelectorAll(CONTROLS)]
+      .filter(
+        control =>
+          !control.getAttribute('data-geo-analytics-label')?.trim() ||
+          !control.getAttribute('data-geo-analytics-intent')?.trim()
+      )
+      .map(control => `<${control.tagName.toLowerCase()}> ${control.textContent?.trim().slice(0, 60)}`);
+  }
+
+  function request(requesterUserId: string, recipientUserId: string) {
+    return {
+      id: 'request-1',
+      status: 'pending' as const,
+      claim: claimSummary(CLAIM_SHARED, 'A claim both participants chose'),
+      requester_user_id: requesterUserId,
+      recipient_user_id: recipientUserId,
+      requester_position: true,
+      requester_position_label: 'Agree',
+      recipient_position: false,
+      recipient_position_label: 'Disagree',
+      response_kind: 'stance' as const,
+      turn_format_id: 'standard',
+      created_at: '2026-07-10T10:00:00.000Z',
+      expires_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+    };
+  }
+
+  it('labels every control on every tab, the already-debated fold included', async () => {
+    mocks.isPhone = false;
+    mocks.session = session();
+    mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+    mocks.positions = [
+      position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+    ];
+
+    render(inLiveRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+    await settleTabSwap();
+
+    for (const tab of [/^Their positions/, /^My positions/, /^Matches/, /^Explore/]) {
+      fireEvent.click(screen.getByRole('button', { name: tab }));
+      await settleTabSwap();
+      const fold = screen.queryByRole('button', { name: /Already debated with Salina/ });
+      if (fold?.getAttribute('aria-expanded') === 'false') fireEvent.click(fold);
+      expect(unlabeledControls(), String(tab)).toEqual([]);
+    }
+    // Something was actually checked: a claim card's pills and its offer.
+    expect(screen.getAllByRole('button', { name: 'Request debate' }).length).toBeGreaterThan(0);
+  });
+
+  it('labels the incoming request dialog', async () => {
+    mocks.session = session({ status: 'request_pending', request: request('user-remote', 'user-local') });
+
+    render(inLiveRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(unlabeledControls()).toEqual([]);
+  });
+
+  it('labels the outbound request card', async () => {
+    mocks.session = session({ status: 'request_pending', request: request('user-local', 'user-remote') });
+
+    render(inLiveRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    expect(await screen.findByTestId('rematch-outbound-request')).toBeInTheDocument();
+    expect(unlabeledControls()).toEqual([]);
   });
 });
