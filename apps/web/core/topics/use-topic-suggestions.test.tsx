@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import { print } from 'graphql';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import { TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 
 import { type TopicOption, useTopicSearch, useTopicSuggestions } from './use-topic-suggestions';
 
@@ -47,7 +47,7 @@ describe('useTopicSearch', () => {
 });
 
 const SPACE = '224406e0de3c48d78ef12774111b8b2f';
-const tagged = { typeId: { is: TAG_PROPERTY_ID }, toEntityId: { is: CURATED_TOPIC_TAG_ID } };
+const tagged = { typeId: { is: TAG_PROPERTY_ID }, toEntityId: { is: 'be0299ee92dd4e7ab11bfb810643b288' } };
 const topics = (prefix: string, count: number): TopicOption[] =>
   Array.from({ length: count }, (_, i) => ({ id: `${prefix}${i}`, name: `${prefix} ${i}` }));
 
@@ -61,23 +61,23 @@ function suggestions(spaceIds = [SPACE]) {
 }
 
 /** The graph client is mocked at its decoded result, with two independently ranked lists. */
-function serveSuggestions(curated: TopicOption[], remaining: TopicOption[]) {
+function serveSuggestions(onboarding: TopicOption[], remaining: TopicOption[]) {
   mocks.graphql.mockImplementation(({ variables }) => {
-    const source = variables.filter.relations.some ? curated : remaining;
+    const source = variables.filter.relations.some ? onboarding : remaining;
     const page = source.slice(variables.offset, variables.offset + variables.first);
     return Effect.succeed({ topics: page, rawCount: page.length });
   });
 }
 
-describe('useTopicSuggestions curated-first pagination', () => {
-  it('fills the page with remaining topics once curated topics end, preserving both rankings', async () => {
-    const curated = topics('curated', 4);
+describe('useTopicSuggestions onboarding-first pagination', () => {
+  it('fills the page with remaining topics once onboarding topics end, preserving both rankings', async () => {
+    const onboarding = topics('onboarding', 4);
     const remaining = topics('remaining', 25);
-    serveSuggestions(curated, remaining);
+    serveSuggestions(onboarding, remaining);
     const { result } = suggestions();
     await waitFor(() => expect(result.current.suggestions).toHaveLength(20));
 
-    expect(result.current.suggestions).toEqual([...curated, ...remaining.slice(0, 16)]);
+    expect(result.current.suggestions).toEqual([...onboarding, ...remaining.slice(0, 16)]);
     expect(mocks.graphql.mock.calls[0][0].variables).toEqual({
       spaceIds: [SPACE],
       first: 20,
@@ -96,7 +96,7 @@ describe('useTopicSuggestions curated-first pagination', () => {
       await result.current.fetchMore();
     });
 
-    await waitFor(() => expect(result.current.suggestions).toEqual([...curated, ...remaining]));
+    await waitFor(() => expect(result.current.suggestions).toEqual([...onboarding, ...remaining]));
     expect(result.current.hasMore).toBe(false);
     expect(mocks.graphql.mock.calls[2][0].variables).toMatchObject({
       first: 20,
@@ -105,20 +105,20 @@ describe('useTopicSuggestions curated-first pagination', () => {
     });
   });
 
-  it('exhausts multiple curated pages before requesting any remaining topics', async () => {
-    const curated = topics('curated', 25);
+  it('exhausts multiple onboarding pages before requesting any remaining topics', async () => {
+    const onboarding = topics('onboarding', 25);
     const remaining = topics('remaining', 3);
-    serveSuggestions(curated, remaining);
+    serveSuggestions(onboarding, remaining);
     const { result } = suggestions();
     await waitFor(() => expect(result.current.suggestions).toHaveLength(20));
 
-    expect(result.current.suggestions).toEqual(curated.slice(0, 20));
+    expect(result.current.suggestions).toEqual(onboarding.slice(0, 20));
     expect(mocks.graphql).toHaveBeenCalledOnce();
     await act(async () => {
       await result.current.fetchMore();
     });
 
-    await waitFor(() => expect(result.current.suggestions).toEqual([...curated, ...remaining]));
+    await waitFor(() => expect(result.current.suggestions).toEqual([...onboarding, ...remaining]));
     expect(mocks.graphql.mock.calls[1][0].variables).toMatchObject({
       offset: 20,
       first: 20,
@@ -132,7 +132,7 @@ describe('useTopicSuggestions curated-first pagination', () => {
     expect(result.current.hasMore).toBe(false);
   });
 
-  it('returns the existing ranking immediately when there are no curated matches', async () => {
+  it('returns the existing ranking immediately when there are no onboarding matches', async () => {
     const remaining = topics('remaining', 7);
     serveSuggestions([], remaining);
     const { result } = suggestions();
@@ -142,17 +142,17 @@ describe('useTopicSuggestions curated-first pagination', () => {
     expect(mocks.graphql).toHaveBeenCalledTimes(2);
   });
 
-  it('moves past an exact curated page boundary without repeating curated topics', async () => {
-    const curated = topics('curated', 20);
+  it('moves past an exact onboarding page boundary without repeating onboarding topics', async () => {
+    const onboarding = topics('onboarding', 20);
     const remaining = topics('remaining', 2);
-    serveSuggestions(curated, remaining);
+    serveSuggestions(onboarding, remaining);
     const { result } = suggestions();
     await waitFor(() => expect(result.current.suggestions).toHaveLength(20));
     await act(async () => {
       await result.current.fetchMore();
     });
 
-    await waitFor(() => expect(result.current.suggestions).toEqual([...curated, ...remaining]));
+    await waitFor(() => expect(result.current.suggestions).toEqual([...onboarding, ...remaining]));
     expect(mocks.graphql.mock.calls[1][0].variables).toMatchObject({
       offset: 20,
       filter: { relations: { some: tagged } },
@@ -165,11 +165,11 @@ describe('useTopicSuggestions curated-first pagination', () => {
   });
 
   it('keeps a topic once if a tag change makes it reappear across tiers', async () => {
-    const curated = topics('curated', 1);
+    const onboarding = topics('onboarding', 1);
     const remaining = topics('remaining', 2);
-    serveSuggestions(curated, [...curated, ...remaining]);
+    serveSuggestions(onboarding, [...onboarding, ...remaining]);
     const { result } = suggestions();
-    await waitFor(() => expect(result.current.suggestions).toEqual([...curated, ...remaining]));
+    await waitFor(() => expect(result.current.suggestions).toEqual([...onboarding, ...remaining]));
   });
 
   it('does not query until there are spaces to rank suggestions from', () => {
@@ -177,9 +177,9 @@ describe('useTopicSuggestions curated-first pagination', () => {
     expect(mocks.graphql).not.toHaveBeenCalled();
   });
 
-  it('retries a failed curated read before allowing remaining topics through', async () => {
-    const curated = topics('curated', 1);
-    serveSuggestions(curated, topics('remaining', 1));
+  it('retries a failed onboarding read before allowing remaining topics through', async () => {
+    const onboarding = topics('onboarding', 1);
+    serveSuggestions(onboarding, topics('remaining', 1));
     mocks.graphql.mockImplementationOnce(() => Effect.fail(new Error('API unavailable')));
     const { result } = suggestions();
     await waitFor(() => expect(result.current.isError).toBe(true));
@@ -188,17 +188,17 @@ describe('useTopicSuggestions curated-first pagination', () => {
     await act(async () => {
       await result.current.refetch();
     });
-    await waitFor(() => expect(result.current.suggestions[0]).toEqual(curated[0]));
+    await waitFor(() => expect(result.current.suggestions[0]).toEqual(onboarding[0]));
     expect(mocks.graphql.mock.calls[1][0].variables.filter).toEqual({ relations: { some: tagged } });
   });
 
   it('advances by raw rows and fills a page when a decoded row is missing its name', async () => {
-    const curated = topics('curated', 20);
+    const onboarding = topics('onboarding', 20);
     mocks.graphql
-      .mockReturnValueOnce(Effect.succeed({ topics: curated.slice(0, 19), rawCount: 20 }))
-      .mockReturnValueOnce(Effect.succeed({ topics: curated.slice(19), rawCount: 1 }));
+      .mockReturnValueOnce(Effect.succeed({ topics: onboarding.slice(0, 19), rawCount: 20 }))
+      .mockReturnValueOnce(Effect.succeed({ topics: onboarding.slice(19), rawCount: 1 }));
     const { result } = suggestions();
-    await waitFor(() => expect(result.current.suggestions).toEqual(curated));
+    await waitFor(() => expect(result.current.suggestions).toEqual(onboarding));
 
     expect(mocks.graphql.mock.calls[1][0].variables).toMatchObject({
       offset: 20,

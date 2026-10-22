@@ -8,7 +8,7 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
-import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import { ONBOARDING_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
@@ -60,7 +60,7 @@ export function decodeTopicSearch(data: { search?: TopicRow[] | null }): TopicOp
   return decodeTopics(data.search);
 }
 
-type SuggestionCursor = { tier: 'curated' | 'remaining'; offset: number };
+type SuggestionCursor = { tier: 'onboarding' | 'remaining'; offset: number };
 type SuggestionPage = { topics: TopicOption[]; next: SuggestionCursor | null };
 
 /** Each tier keeps Gaia's ranking. Filters run on the server, before its first/offset pagination. */
@@ -88,9 +88,9 @@ async function fetchSuggestionPage(
           offset: cursor.offset,
           filter: {
             relations: {
-              [cursor.tier === 'curated' ? 'some' : 'none']: {
+              [cursor.tier === 'onboarding' ? 'some' : 'none']: {
                 typeId: { is: TAG_PROPERTY_ID },
-                toEntityId: { is: CURATED_TOPIC_TAG_ID },
+                toEntityId: { is: ONBOARDING_TOPIC_TAG_ID },
               },
             },
           },
@@ -102,8 +102,8 @@ async function fetchSuggestionPage(
 
     if (batch.rawCount === first) {
       cursor = { ...cursor, offset: cursor.offset + batch.rawCount };
-    } else if (cursor.tier === 'curated') {
-      // Curated tags are used across spaces, just as on topic pages. Once exhausted, fill the
+    } else if (cursor.tier === 'onboarding') {
+      // Onboarding tags are read across spaces, just as on topic pages. Once exhausted, fill the
       // rest of this page with untagged topics, then continue that tier on the next Show more.
       cursor = { tier: 'remaining', offset: 0 };
     } else {
@@ -114,14 +114,14 @@ async function fetchSuggestionPage(
   return { topics, next: cursor };
 }
 
-/** Curated topics first, then remaining topics; each tier preserves the existing space ranking. */
+/** Onboarding-tagged topics first, then remaining topics; each tier preserves the existing space ranking. */
 export function useTopicSuggestions(spaceIds: string[]) {
   const ids = React.useMemo(() => [...new Set(spaceIds.filter(Boolean).map(uuidToHex))].sort(), [spaceIds]);
 
   const query = useInfiniteQuery({
-    queryKey: ['topic-suggestions-for-spaces', 'curated-first', ids],
+    queryKey: ['topic-suggestions-for-spaces', ONBOARDING_TOPIC_TAG_ID, ids],
     queryFn: ({ pageParam, signal }) => fetchSuggestionPage(ids, pageParam, signal),
-    initialPageParam: { tier: 'curated', offset: 0 } as SuggestionCursor,
+    initialPageParam: { tier: 'onboarding', offset: 0 } as SuggestionCursor,
     getNextPageParam: lastPage => lastPage.next ?? undefined,
     enabled: ids.length > 0,
     staleTime: 5 * 60_000,
