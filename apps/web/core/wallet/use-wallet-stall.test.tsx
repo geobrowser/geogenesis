@@ -3,11 +3,13 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useWalletStall } from './use-wallet-stall';
-import { RECONNECT_WINDOW_MS, WALLET_STALL_GRACE_MS, WALLET_STALL_RELOAD_KEY } from './wallet-stall';
+import { AUTO_RESTART_MS, RECONNECT_WINDOW_MS, WALLET_STALL_GRACE_MS, WALLET_STALL_RELOAD_KEY } from './wallet-stall';
 
 const mocks = vi.hoisted(() => ({
   wallets: [] as Array<{ walletClientType: string }>,
+  linkedAccounts: [] as Array<{ type: string; walletClientType?: string }>,
   retryEmbeddedWalletSetup: vi.fn(),
+  restartPrivy: vi.fn(),
   invalidateQueries: vi.fn(),
   capture: vi.fn(),
   reload: vi.fn(),
@@ -15,7 +17,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
   useWallets: () => ({ wallets: mocks.wallets }),
+  usePrivy: () => ({ user: { linkedAccounts: mocks.linkedAccounts } }),
   retryEmbeddedWalletSetup: mocks.retryEmbeddedWalletSetup,
+  restartPrivy: mocks.restartPrivy,
 }));
 vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
@@ -37,7 +41,9 @@ const signedInNoAccount: Props = { authenticated: true, address: null, error: nu
 beforeEach(() => {
   vi.useFakeTimers();
   mocks.wallets = [];
+  mocks.linkedAccounts = [{ type: 'wallet', walletClientType: 'privy' }];
   mocks.retryEmbeddedWalletSetup.mockReset();
+  mocks.restartPrivy.mockReset();
   mocks.invalidateQueries.mockReset().mockResolvedValue(undefined);
   mocks.capture.mockReset();
   mocks.reload.mockReset();
@@ -166,5 +172,78 @@ describe('useWalletStall', () => {
     act(() => result.current.reconnect());
 
     expect(mocks.retryEmbeddedWalletSetup).toHaveBeenCalledTimes(1);
+  });
+
+  it('restarts Privy on Reconnect when no wallet reached the page', () => {
+    const { result } = setup(signedInNoAccount);
+    act(() => vi.advanceTimersByTime(WALLET_STALL_GRACE_MS));
+
+    act(() => result.current.reconnect());
+
+    expect(mocks.restartPrivy).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves Privy alone on Reconnect when the wallet is there and the account is what failed', () => {
+    mocks.wallets = [{ walletClientType: 'privy' }];
+    const { result } = setup({ ...signedInNoAccount, error: new Error('zerodev') });
+    act(() => vi.advanceTimersByTime(WALLET_STALL_GRACE_MS));
+
+    act(() => result.current.reconnect());
+
+    expect(mocks.restartPrivy).not.toHaveBeenCalled();
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['smart-account'] });
+  });
+
+  it('restarts Privy once on its own after its handshake has given up, and reports that recovery', () => {
+    const { rerender } = setup(signedInNoAccount);
+    act(() => vi.advanceTimersByTime(AUTO_RESTART_MS - 1));
+    expect(mocks.restartPrivy).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(mocks.restartPrivy).toHaveBeenCalledTimes(1);
+
+    act(() => vi.advanceTimersByTime(AUTO_RESTART_MS * 2));
+    expect(mocks.restartPrivy).toHaveBeenCalledTimes(1);
+
+    mocks.wallets = [{ walletClientType: 'privy' }];
+    rerender({ ...signedInNoAccount, address: '0xabc' });
+
+    expect(events().at(-1)).toEqual(
+      expect.objectContaining({
+        stall_phase: 'ended',
+        recovered_by: 'restart',
+        privy_restarts: 1,
+        reconnect_attempts: 0,
+        account_has_wallet: true,
+      })
+    );
+  });
+
+  it('does not restart on its own after a Reconnect already did', () => {
+    const { result } = setup(signedInNoAccount);
+    act(() => vi.advanceTimersByTime(WALLET_STALL_GRACE_MS));
+    act(() => result.current.reconnect());
+    sessionStorage.setItem(WALLET_STALL_RELOAD_KEY, '1');
+
+    act(() => vi.advanceTimersByTime(AUTO_RESTART_MS));
+
+    expect(mocks.restartPrivy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not restart on its own when the wallet is there and only the account is slow', () => {
+    mocks.wallets = [{ walletClientType: 'privy' }];
+    setup(signedInNoAccount);
+
+    act(() => vi.advanceTimersByTime(AUTO_RESTART_MS));
+
+    expect(mocks.restartPrivy).not.toHaveBeenCalled();
+  });
+
+  it('reports whether the account has a wallet at all', () => {
+    mocks.linkedAccounts = [];
+    setup(signedInNoAccount);
+    act(() => vi.advanceTimersByTime(WALLET_STALL_GRACE_MS));
+
+    expect(events()[0]).toEqual(expect.objectContaining({ account_has_wallet: false }));
   });
 });

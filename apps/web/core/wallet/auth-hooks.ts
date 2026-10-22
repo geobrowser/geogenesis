@@ -17,6 +17,7 @@ import {
   realPrivyReady,
   registerInstance,
   requestRealAuth,
+  restartAuthHost,
   sessionDetected,
   subscribe,
   unregisterInstance,
@@ -265,4 +266,9 @@ export async function toViemAccount(...args: Parameters<typeof Auth.toViemAccoun
 
 export function retryEmbeddedWalletSetup() {
   void import('@geogenesis/auth').then(auth => auth.retryEmbeddedWalletSetup());
+}
+
+/** Remounts Privy in place to get a wallet iframe that gave up connecting going again (GEO-3449). */
+export function restartPrivy() {
+  restartAuthHost();
 }

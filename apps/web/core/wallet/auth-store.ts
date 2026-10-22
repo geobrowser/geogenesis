@@ -39,6 +39,10 @@ type State = {
   hostFailed: boolean;
   /** Bumped by a retry so the host loader runs again. */
   hostAttempt: number;
+  /** Bumped to remount the Privy host in place (`restartAuthHost`). */
+  hostKey: number;
+  /** A remounted host has not reported ready yet; what the last one published stands until it does. */
+  restarting: boolean;
   privy: PrivyValue | null;
   wallets: WalletsValue | null;
   identityToken: IdentityTokenValue | null;
@@ -50,6 +54,8 @@ const initialState: State = {
   requested: false,
   hostFailed: false,
   hostAttempt: 0,
+  hostKey: 0,
+  restarting: false,
   privy: null,
   wallets: null,
   identityToken: null,
@@ -124,8 +130,30 @@ function shallowEqual(a: unknown, b: unknown) {
   return keys.every(key => Object.is(left[key], right[key]));
 }
 
+/**
+ * GEO-3449. Unmounts the Privy host and mounts a fresh one, without touching the app beside it.
+ *
+ * The one way back for an embedded wallet that never reaches `useWallets()`. Privy lists it only
+ * once its hidden wallet iframe answers a handshake, which it retries for about 40 seconds and then
+ * abandons without telling anyone (`onLoadFailed: () => null` in 3.32). Nothing in Privy's API asks
+ * again; a new `PrivyProvider` builds a new iframe and does.
+ *
+ * A fresh Privy starts out not ready and signed out. Published as it is, that would read as a
+ * sign-out to everything downstream, so the new host's slices are held back until it is ready and
+ * the last host's values stand in the meantime.
+ */
+export function restartAuthHost() {
+  setState({ hostKey: state.hostKey + 1, restarting: state.privy !== null });
+}
+
 /** Called by the host after its hooks render. Quiet when nothing changed. */
 export function publish<K extends Slice>(slice: K, value: State[K]) {
+  if (state.restarting) {
+    // The host publishes `privy` first, so the slices after it in the same pass go through.
+    if (slice !== 'privy' || !(value as PrivyValue | null)?.ready) return;
+    setState({ restarting: false, privy: value as PrivyValue });
+    return;
+  }
   if (shallowEqual(state[slice], value)) return;
   setState({ [slice]: value } as Partial<State>);
 }
