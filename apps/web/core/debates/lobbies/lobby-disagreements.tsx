@@ -34,6 +34,7 @@ export type LobbyDisagreement = {
   theirLabel: string;
   /** Whether a lobby-scoped request can go to them on this claim now. */
   requestable: boolean;
+  previouslyDebated: boolean;
 };
 
 /**
@@ -73,6 +74,7 @@ export function lobbyDisagreements(
         viewerLabel: viewer.position_label,
         theirLabel: theirs.position_label,
         requestable: person.requestable,
+        previouslyDebated: person.previously_debated ?? false,
       },
     ];
   });
@@ -155,6 +157,20 @@ export function LobbyDisagreementsList({
     setShown({ claims, rows });
   }
   const unlisted = Math.max(0, count - rows.length);
+  const fresh = rows.filter(entry => !entry.previouslyDebated);
+  const debated = rows.filter(entry => entry.previouslyDebated);
+  const [showDebated, setShowDebated] = React.useState(false);
+  const debatedListId = React.useId();
+
+  const renderRows = (entries: LobbyDisagreement[]) => (
+    <ul className="flex flex-col">
+      {entries.map(entry => (
+        <li key={entry.row.claim.id} className="border-t border-grey-01 first:border-t-0">
+          <DisagreementRow lobbyId={lobby.lobby_id} member={member} entry={entry} />
+        </li>
+      ))}
+    </ul>
+  );
 
   return (
     <div
@@ -179,13 +195,31 @@ export function LobbyDisagreementsList({
           emptyMessage={LOBBY_DISAGREEMENTS_COPY.unlisted(count, false)}
           loadingFallback={<HubSkeleton rows={2} />}
         >
-          <ul className="flex flex-col">
-            {rows.map(entry => (
-              <li key={entry.row.claim.id} className="border-t border-grey-01 first:border-t-0">
-                <DisagreementRow lobbyId={lobby.lobby_id} member={member} entry={entry} />
-              </li>
-            ))}
-          </ul>
+          {fresh.length > 0 ? (
+            renderRows(fresh)
+          ) : debated.length > 0 ? (
+            <Text as="p" variant="footnote" color="grey-04" className="py-2">
+              You and {name} have already debated all the claims listed here.
+            </Text>
+          ) : null}
+          {debated.length > 0 ? (
+            <div className="border-t border-grey-01">
+              <button
+                type="button"
+                aria-expanded={showDebated}
+                aria-controls={debatedListId}
+                {...debateActionAnalyticsAttributes(
+                  'hub',
+                  showDebated ? 'Lobby already debated collapse' : 'Lobby already debated expand'
+                )}
+                onClick={() => setShowDebated(value => !value)}
+                className="w-full py-2.5 text-left text-button text-grey-04 hover:text-text"
+              >
+                {showDebated ? 'See less' : 'See more'} · Already debated ({debated.length})
+              </button>
+              <div id={debatedListId}>{showDebated ? renderRows(debated) : null}</div>
+            </div>
+          ) : null}
           {unlisted > 0 ? (
             <Text as="p" variant="footnote" color="grey-04" className="pt-1">
               {LOBBY_DISAGREEMENTS_COPY.unlisted(unlisted, true)}
@@ -234,6 +268,11 @@ function DisagreementRow({
       <Text as="p" variant="metadataMedium" className="line-clamp-3">
         {entry.row.claim.claim}
       </Text>
+      {entry.previouslyDebated ? (
+        <Text as="p" variant="footnote" color="grey-04">
+          Already debated together
+        </Text>
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Text as="p" variant="footnote" color="grey-04">
           You: {entry.viewerLabel} · {name}: {entry.theirLabel}
