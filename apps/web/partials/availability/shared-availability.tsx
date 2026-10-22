@@ -9,7 +9,7 @@ import { isDebateProfileMissing } from '~/core/debates/api';
 import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { useDisagreementCount } from '~/core/debates/matchmaking/use-disagreement-count';
-import { useDebateRoom, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
+import { useDebateRoom, useRoomFinished, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { opponentOf, requestById } from '~/core/debates/rooms/room-opponent';
 import { noticeFrom, sameId } from '~/core/debates/rooms/room-presence';
 import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
@@ -58,6 +58,8 @@ export function AvailabilityDeepLink() {
 
   return (
     <SharedAvailabilityModal
+      // A new link starts its own decision rather than inheriting the last one's.
+      key={rescheduleRequestId ?? profileSpaceId}
       open
       profileSpaceId={profileSpaceId}
       rescheduleRequestId={rescheduleRequestId}
@@ -250,8 +252,9 @@ export function SharedAvailabilityModal({
  * debate's room is open, and the viewer is the one not there. `null` while that is still being read,
  * so the week is not drawn and then swapped. `false` for anything that is not a reschedule, for a
  * signed-out viewer (who sees the week's own sign-in first, and is decided again once signed in), and
- * once any read fails, since that is
- * no reason to withhold the week the link has always opened.
+ * once a read fails, which is no reason to withhold the week the link has always opened.
+ *
+ * Not a debate that already happened, though geo-chat lists its room as joinable until it is swept.
  *
  * Not the person waiting: the running-late email gives them this same link as its Reschedule, and
  * "I'm running late" is the wrong question for someone already in the room. They are inside now, or
@@ -266,10 +269,16 @@ function useRoomOpenFor(requestId: string | null, auth: { ready: boolean; authen
   const requests = useScheduledDebates(reading);
   const rooms = useUpcomingDebateRooms(reading);
   const viewerId = useCurrentGeoChatUserId();
-  const request = reading ? requestById(requests.data?.requests, requestId) : undefined;
-  const roomId = request?.room_id ?? null;
-  const roomView = useDebateRoom(roomId ?? '', reading && roomId !== null);
   const [settled, setSettled] = React.useState<boolean | null>(null);
+  const request = reading ? requestById(requests.data?.requests, requestId) : undefined;
+  const roomId = noticeRequestState(request) === 'active' ? (request?.room_id ?? null) : null;
+  const room = roomId ? (rooms.data?.rooms.find(row => sameId(row.room_id, roomId)) ?? null) : null;
+  const open = room?.joinable ? room : null;
+  // A debate that already happened is listed as joinable until its room is swept.
+  const finished = useRoomFinished(open);
+  // Who is inside and who said they are late. Read only while it can still change the answer: the
+  // room view polls every few seconds, and the week can be open for as long as someone browses it.
+  const roomView = useDebateRoom(open?.room_id ?? '', open !== null && finished === false && settled === null);
 
   const live = (() => {
     if (requestId === null) return false;
@@ -277,9 +286,9 @@ function useRoomOpenFor(requestId: string | null, auth: { ready: boolean; authen
     if (!auth.authenticated) return false;
     if (requests.isError || rooms.isError) return false;
     if (requests.isPending || rooms.isPending) return null;
-    if (noticeRequestState(request) !== 'active' || !roomId) return false;
-    if (!rooms.data.rooms.some(room => sameId(room.room_id, roomId) && room.joinable)) return false;
-    // The room view says who is inside and who said they are late.
+    if (!open) return false;
+    if (finished === null) return null;
+    if (finished) return false;
     if (roomView.isError) return true;
     if (!roomView.data || !viewerId) return null;
     const inside = roomView.data.occupants.some(userId => sameId(userId, viewerId));

@@ -257,6 +257,19 @@ export function useFinishedRoomIds(rooms: UpcomingDebateRoom[], enabled = true):
   return React.useMemo(() => new Set(finished ? finished.split(',') : []), [finished]);
 }
 
+/**
+ * Whether one listed room's debate has already happened, as `useFinishedRoomIds` judges a list:
+ * geo-chat goes on listing a converted room as joinable until the empty-room sweep closes it.
+ * `null` while its session is read. A room nobody has been in has no session, so it has not.
+ */
+export function useRoomFinished(room: UpcomingDebateRoom | null): boolean | null {
+  const sessionId = room?.rematch_session_id ?? null;
+  const session = useRoomSession(sessionId);
+  if (!sessionId) return false;
+  if (session.isPending) return null;
+  return session.data?.status === 'converted';
+}
+
 /** A room's session, on the same cache entry as `useDebateRematch`. */
 export function useRoomSession(sessionId: string | null) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();

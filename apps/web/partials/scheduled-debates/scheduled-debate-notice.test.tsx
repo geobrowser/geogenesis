@@ -35,6 +35,7 @@ const state = vi.hoisted(() => ({
   cant: null as unknown as Mutation,
   viewerName: 'Jordan' as string | null,
   noProfiles: false,
+  finished: false as boolean | null,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({ useGeoChatAuth: () => ({ authenticated: true, ready: true }) }));
@@ -43,7 +44,10 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
   useReportRunningLate: () => state.late,
   useCantMakeIt: () => state.cant,
 }));
-vi.mock('~/core/debates/rooms/hooks', () => ({ useUpcomingDebateRooms: () => state.rooms }));
+vi.mock('~/core/debates/rooms/hooks', () => ({
+  useUpcomingDebateRooms: () => state.rooms,
+  useRoomFinished: (room: unknown) => (room ? state.finished : false),
+}));
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => VIEWER }));
 vi.mock('~/core/debates/matchmaking/use-geo-chat-user-summaries', () => ({
   useGeoChatUserSummaries: (ids: string[]) =>
@@ -101,6 +105,7 @@ beforeEach(() => {
   state.cant = idle();
   state.viewerName = 'Jordan';
   state.noProfiles = false;
+  state.finished = false;
 });
 
 afterEach(cleanup);
@@ -180,8 +185,9 @@ describe('ScheduledDebateNoticeDialog', () => {
 
       expect(screen.getByText('Your debate with Maya')).toBeInTheDocument();
       expect(heading()).toHaveTextContent('Tell Maya you’re running late');
-      expect(screen.getByRole('radio', { name: '10 min' })).toBeChecked();
-      await user.click(screen.getByRole('radio', { name: '15 min' }));
+      expect(screen.getByRole('button', { name: '10 min', pressed: true })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '15 min' }));
+      expect(screen.getByRole('button', { name: '15 min', pressed: true })).toBeInTheDocument();
       await user.type(screen.getByLabelText('Note for Maya (optional)'), '  Train is delayed  ');
       // Board 1b has no preview and no way back: it is where the email lands.
       expect(screen.queryByText('What Maya sees')).not.toBeInTheDocument();
@@ -324,6 +330,30 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(heading()).toHaveTextContent('Your debate is cancelled. We’ve let Maya know.');
       expect(screen.queryByText('This debate is no longer on.')).not.toBeInTheDocument();
     });
+  });
+
+  // geo-chat lists a room whose debate already happened as joinable until it is swept.
+  it('treats a debate that already happened as over, with nothing to press', () => {
+    state.finished = true;
+    open('late');
+    expect(screen.getByText('This debate is no longer on.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send to Maya' })).not.toBeInTheDocument();
+  });
+
+  // The pressed button is gone once the screen changes, so the new screen's heading takes focus.
+  it('moves focus to the new screen’s heading after a press', async () => {
+    const user = userEvent.setup();
+    open('decide', vi.fn());
+    await user.click(screen.getByRole('button', { name: 'I’m running late' }));
+    expect(heading()).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(heading()).toHaveFocus();
+  });
+
+  it('keeps a visible title on a screen without its own heading', () => {
+    state.requests = { data: { requests: [] }, isPending: false, isError: false };
+    open('late');
+    expect(screen.getByRole('heading', { name: 'Running late' })).toBeInTheDocument();
   });
 
   describe('a debate that is no longer on', () => {

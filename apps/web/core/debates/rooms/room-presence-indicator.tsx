@@ -6,9 +6,15 @@ import cx from 'classnames';
 
 import { Text } from '~/design-system/text';
 
+import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
+
+import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { useDebateRoomContext } from './room-context';
 import { ROOM_LATE_NOTICE, UNNAMED_OPPONENT, roomPresenceLabel, roomPresenceNote } from './room-copy';
+import { requestForRoom } from './room-opponent';
 import type { DebateRoomPresence, DebateRoomPresenceState } from './room-presence';
 import { formatClockTime } from './room-time';
+import { useScheduledDebates } from './scheduling-hooks';
 
 /**
  * Who else is in the room (GEO-2941). Small, because a room is the debate-again page rather than a
@@ -45,20 +51,8 @@ export function DebateRoomPresenceIndicator({
         </Text>
       </div>
 
-      {late && (
-        <div className="flex max-w-full flex-col gap-1 rounded-lg border border-grey-02 bg-white px-4 py-3 text-center">
-          <Text as="p" variant="metadataMedium">
-            {ROOM_LATE_NOTICE.title(opponentName, late.minutes)}
-          </Text>
-          {late.note && (
-            <Text as="p" variant="footnote" color="grey-04">
-              “{late.note}”
-            </Text>
-          )}
-          <Text as="p" variant="footnote" color="grey-04">
-            {ROOM_LATE_NOTICE.expected(formatClockTime(late.expectedAt))}
-          </Text>
-        </div>
+      {late && presence.opponentUserId && (
+        <LateCard late={late} opponentName={opponentName} opponentUserId={presence.opponentUserId} />
       )}
 
       {note && (
@@ -84,4 +78,64 @@ function PresenceDot({ state }: { state: DebateRoomPresenceState }) {
   };
 
   return <span aria-hidden className={cx('size-2 shrink-0 rounded-full', tone[state])} />;
+}
+
+/**
+ * What the waiting debater reads once the other said they are running late (GEO-3427, board 6b):
+ * how late, what they wrote, and a footer row with when to expect them and Reschedule, which moves
+ * this debate to a time in the late debater's week without leaving the room. The timeline and
+ * Leave on the board are GEO-3428's.
+ */
+function LateCard({
+  late,
+  opponentName,
+  opponentUserId,
+}: {
+  late: NonNullable<DebateRoomPresence['opponentLate']>;
+  opponentName: string;
+  opponentUserId: string;
+}) {
+  const roomId = useDebateRoomContext()?.roomId ?? null;
+  const requests = useScheduledDebates(roomId !== null);
+  const request = roomId ? requestForRoom(requests.data?.requests, roomId) : undefined;
+  const [rescheduling, setRescheduling] = React.useState(false);
+
+  return (
+    <div className="flex w-full max-w-[560px] flex-col gap-3 rounded-xl border border-grey-02 bg-white px-5 py-4">
+      <div className="flex flex-col gap-1">
+        <Text as="p" variant="bodySemibold">
+          {ROOM_LATE_NOTICE.title(opponentName, late.minutes)}
+        </Text>
+        {late.note && (
+          <Text as="p" variant="metadata" color="grey-04">
+            “{late.note}”
+          </Text>
+        )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-grey-02 pt-3">
+        <Text as="p" variant="metadata" color="grey-04" className="min-w-[180px] flex-1">
+          {ROOM_LATE_NOTICE.expected(formatClockTime(late.expectedAt))}
+        </Text>
+        {request?.status === 'accepted' && (
+          <HubPillButton
+            analyticsLabel="Room late notice Reschedule"
+            analyticsIntent="reschedule_scheduled_debate"
+            onClick={() => setRescheduling(true)}
+          >
+            {ROOM_LATE_NOTICE.reschedule}
+          </HubPillButton>
+        )}
+      </div>
+      {request && (
+        <PeerAvailabilityBookingModal
+          open={rescheduling}
+          userId={opponentUserId}
+          peerName={opponentName === UNNAMED_OPPONENT ? null : opponentName}
+          rescheduleRequestId={request.request_id}
+          entry="room_late_notice"
+          onClose={() => setRescheduling(false)}
+        />
+      )}
+    </div>
+  );
 }

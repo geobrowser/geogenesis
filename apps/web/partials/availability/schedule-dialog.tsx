@@ -16,10 +16,13 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   title: string;
   /**
-   * The title for assistive tech only, for a dialog whose content draws its own heading where its
-   * design puts it (GEO-3427's Running late screens, under an avatar).
+   * The title names the dialog for assistive tech only, for content that draws its own heading where
+   * its design puts it (GEO-3427's Running late screens, under an avatar). Not a heading itself
+   * then, so the content's is the only one.
    */
   hideTitle?: boolean;
+  /** Before everything else on the header row, opposite Close: a step's Back. */
+  headerLeading?: React.ReactNode;
   /** A line under the title. */
   description?: string;
   /** Beside the close button. */
@@ -43,6 +46,7 @@ export function ScheduleDialog({
   onOpenChange,
   title,
   hideTitle = false,
+  headerLeading,
   description,
   headerAction,
   closeButtonProps,
@@ -88,12 +92,17 @@ export function ScheduleDialog({
               widthClassName
             )}
           >
-            <div className={cx('flex shrink-0 items-start gap-4', hideTitle ? 'justify-end' : 'justify-between')}>
+            <div className="flex shrink-0 items-start justify-between gap-4">
+              {headerLeading}
               <div className={cx('flex min-w-0 flex-col gap-1', hideTitle && 'sr-only')}>
                 <Title asChild>
-                  <Text as="h2" variant="smallTitle">
-                    {title}
-                  </Text>
+                  {hideTitle ? (
+                    <span>{title}</span>
+                  ) : (
+                    <Text as="h2" variant="smallTitle">
+                      {title}
+                    </Text>
+                  )}
                 </Title>
                 {description ? (
                   <Description asChild>
@@ -103,7 +112,8 @@ export function ScheduleDialog({
                   </Description>
                 ) : null}
               </div>
-              <div className="flex shrink-0 items-center gap-4">
+              {/* `ml-auto`: with the title hidden, Close is otherwise the only thing on the row. */}
+              <div className="ml-auto flex shrink-0 items-center gap-4">
                 {headerAction}
                 <button
                   type="button"

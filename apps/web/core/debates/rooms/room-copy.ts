@@ -49,6 +49,7 @@ export const ROOM_LATE_NOTICE = {
   title: (opponentName: string, minutes: number | null) =>
     minutes ? `${opponentName} is running about ${minutes} minutes late` : `${opponentName} is running late`,
   expected: (time: string) => `Expected by about ${time}`,
+  reschedule: 'Reschedule',
 } as const;
 
 /**

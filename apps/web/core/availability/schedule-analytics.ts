@@ -51,7 +51,9 @@ export type ScheduleEntry =
   /** A row's chips or Schedule in the calendar's People panel (GEO-3220). */
   | 'calendar_people_panel'
   /** Can't make it's "Suggest another time instead" (GEO-3427). */
-  | 'cant_make_it';
+  | 'cant_make_it'
+  /** Reschedule on the waiting room's running-late card (GEO-3427, board 6b). */
+  | 'room_late_notice';
 
 /** Which control opened the viewer's own schedule editor. */
 export type ScheduleEditorSurface =

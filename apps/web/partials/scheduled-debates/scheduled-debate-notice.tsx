@@ -19,7 +19,7 @@ import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/de
 import { HubPillButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { formatDebateTime } from '~/core/debates/matchmaking/scheduled-debates-section';
 import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
-import { useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
+import { useRoomFinished, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { SCHEDULED_NOTICE_COPY as COPY } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestById, useRequestOpponent } from '~/core/debates/rooms/room-opponent';
 import { sameId } from '~/core/debates/rooms/room-presence';
@@ -88,6 +88,12 @@ type Props = {
  */
 export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onClose, onReschedule, children }: Props) {
   const [step, setStep] = React.useState<ScheduledNoticeStep>(initialStep);
+  // Once a press has swapped the screen, each new one's heading takes focus: the button is gone.
+  const [moved, setMoved] = React.useState(false);
+  const go = (next: ScheduledNoticeStep) => {
+    setMoved(true);
+    setStep(next);
+  };
   const [outcome, setOutcome] = React.useState<Outcome | null>(null);
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
@@ -104,7 +110,11 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
   const opponent = useRequestOpponent(request);
   const name = opponentName(opponent);
   const roomId = request?.room_id ?? null;
-  const room = roomId ? (rooms.data?.rooms.find(row => sameId(row.room_id, roomId)) ?? null) : null;
+  const listed = roomId ? (rooms.data?.rooms.find(row => sameId(row.room_id, roomId)) ?? null) : null;
+  // A debate that already happened stays listed as joinable until its room is swept: it is over,
+  // with no room to join and nobody left to be late for.
+  const finished = useRoomFinished(listed);
+  const room = finished ? null : listed;
 
   if (suggesting && request && opponentUserId) {
     return (
@@ -120,14 +130,19 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
     );
   }
 
-  // Each screen draws its own heading where its board puts it, so the frame's title is for
-  // assistive tech only.
-  const shell = (title: string, body: React.ReactNode) => (
+  // A step or outcome draws its own heading where its board puts it, so the frame's title then only
+  // names the dialog; a state message keeps it as its heading. `back` sits opposite Close.
+  const shell = (
+    title: string,
+    body: React.ReactNode,
+    { ownHeading = false, back }: { ownHeading?: boolean; back?: () => void } = {}
+  ) => (
     <ScheduleDialog
       open={open}
       onOpenChange={next => !next && onClose()}
       title={title}
-      hideTitle
+      hideTitle={ownHeading}
+      headerLeading={back && <BackButton onClick={back} />}
       widthClassName="w-[26rem]"
       closeButtonProps={analytics('Close', 'close_scheduled_notice')}
     >
@@ -141,7 +156,7 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
     return shell(
       outcome.message,
       <>
-        <Heading>{outcome.message}</Heading>
+        <Heading focus>{outcome.message}</Heading>
         <Actions>
           {outcome.joinRoomId && <JoinRoom roomId={outcome.joinRoomId} onJoin={onClose} label="Join the room" />}
           <HubPillButton
@@ -154,7 +169,8 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
             {COPY.done}
           </HubPillButton>
         </Actions>
-      </>
+      </>,
+      { ownHeading: true }
     );
   }
 
@@ -165,7 +181,8 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
   // Swapping the step out over one dropped poll would lose what was typed, and a cancel in flight.
   if (requests.isError && !requests.data) return shell(title, <Notice>{COPY.state.error}</Notice>);
 
-  const state = noticeRequestState(request);
+  const state = finished ? 'over' : noticeRequestState(request);
+  if (finished === null) return shell(title, <Notice>{COPY.loading}</Notice>);
   if (state !== 'active' || !request) {
     return shell(
       title,
@@ -188,8 +205,9 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
     );
   }
 
-  // Back to the choices, from a step reached through them.
-  const back = fromDecide && step !== 'decide' ? () => setStep('decide') : undefined;
+  // Back to the choices, from a step reached through them; its heading takes focus on the way in,
+  // since the button that was pressed is gone.
+  const back = fromDecide && step !== 'decide' ? () => go('decide') : undefined;
 
   switch (step) {
     case 'decide':
@@ -200,11 +218,13 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
           opponent={opponent}
           startsAt={request.scheduled_start_at}
           room={room}
-          onLate={() => setStep('late')}
-          onCant={() => setStep('cant')}
+          onLate={() => go('late')}
+          onCant={() => go('cant')}
           onReschedule={onReschedule}
           onJoin={onClose}
-        />
+          focusHeading={moved}
+        />,
+        { ownHeading: true }
       );
     case 'late':
       return shell(
@@ -220,8 +240,8 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
               <DebateHeader opponent={opponent} name={name} startsAt={request.scheduled_start_at} />
             )
           }
-          onBack={back}
-          onCant={() => setStep('cant')}
+          focusHeading={moved}
+          onCant={() => go('cant')}
           onSent={expectedAt =>
             setOutcome({
               message: COPY.late.sent(name, formatClockTime(expectedAt)),
@@ -230,7 +250,8 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
               joinRoomId: room?.joinable ? room.room_id : null,
             })
           }
-        />
+        />,
+        { ownHeading: true, back }
       );
     case 'cant':
       return shell(
@@ -238,11 +259,12 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
         <CantStep
           requestId={request.request_id}
           name={name}
-          onBack={back}
-          onLate={() => setStep('late')}
+          focusHeading={moved}
+          onLate={() => go('late')}
           onSuggest={note => setSuggesting({ note })}
           onSent={() => setOutcome({ message: COPY.cant.sent(name), joinRoomId: null })}
-        />
+        />,
+        { ownHeading: true, back }
       );
   }
 }
@@ -256,6 +278,7 @@ function DecideStep({
   onCant,
   onReschedule,
   onJoin,
+  focusHeading,
 }: {
   name: string;
   opponent: DebateParticipantSummary | null;
@@ -265,6 +288,7 @@ function DecideStep({
   onCant: () => void;
   onReschedule?: () => void;
   onJoin: () => void;
+  focusHeading: boolean;
 }) {
   // Re-read each minute, so "started 3 minutes ago" keeps up while the dialog is open.
   const now = useMinuteNow();
@@ -273,7 +297,9 @@ function DecideStep({
     <>
       <div className="flex flex-col items-center gap-3.5 text-center">
         <OpponentAvatar opponent={opponent} name={name} size={64} />
-        <Heading>{COPY.decide.heading(name, startOffset(new Date(startsAt).getTime() - now))}</Heading>
+        <Heading focus={focusHeading}>
+          {COPY.decide.heading(name, startOffset(new Date(startsAt).getTime() - now))}
+        </Heading>
         {room?.others_present && (
           <span className="inline-flex items-center gap-2 rounded-full border border-grey-02 px-3 py-1.5 text-metadata">
             <span aria-hidden className="size-2 rounded-full bg-green" />
@@ -315,7 +341,7 @@ function LateStep({
   variant,
   opensAt,
   header,
-  onBack,
+  focusHeading,
   onCant,
   onSent,
 }: {
@@ -324,7 +350,7 @@ function LateStep({
   variant: 'email' | 'decide';
   opensAt: string | null;
   header?: React.ReactNode;
-  onBack?: () => void;
+  focusHeading: boolean;
   onCant: () => void;
   onSent: (expectedAt: string) => void;
 }) {
@@ -334,9 +360,10 @@ function LateStep({
   const noteId = React.useId();
   const viewerId = useCurrentGeoChatUserId();
   const viewerIds = React.useMemo(() => (viewerId ? [viewerId] : []), [viewerId]);
-  const viewerName = useGeoChatUserSummaries(viewerIds, viewerId !== null)[0]?.display_name || null;
-  const sent = noticeNote(note);
   const fromEmail = variant === 'email';
+  // Only board 3's preview names the viewer.
+  const viewerName = useGeoChatUserSummaries(viewerIds, !fromEmail && viewerId !== null)[0]?.display_name || null;
+  const sent = noticeNote(note);
 
   const cantInstead = fromEmail && (
     <QuietButton onClick={onCant} {...analytics('Cant make it at all', 'open_cant_make_it')}>
@@ -346,13 +373,12 @@ function LateStep({
 
   return (
     <>
-      {onBack && <BackButton onClick={onBack} />}
       {header}
       {fromEmail ? (
-        <Heading>{COPY.lateFromEmail.title(name)}</Heading>
+        <Heading focus={focusHeading}>{COPY.lateFromEmail.title(name)}</Heading>
       ) : (
         <div className="flex flex-col gap-2">
-          <Heading>{COPY.late.title}</Heading>
+          <Heading focus={focusHeading}>{COPY.late.title}</Heading>
           <Text as="p" color="grey-04">
             {COPY.late.lead(name)}
           </Text>
@@ -367,12 +393,12 @@ function LateStep({
         </>
       ) : (
         <>
-          <div role="radiogroup" aria-label={COPY.late.title} className="grid grid-cols-3 gap-2.5">
+          {/* Toggle buttons rather than a radio group: three choices, each a press, no arrow keys. */}
+          <div role="group" aria-label={COPY.late.title} className="grid grid-cols-3 gap-2.5">
             {RUNNING_LATE_MINUTES.map(choice => (
               <HubPillButton
                 key={choice}
-                role="radio"
-                aria-checked={minutes === choice}
+                aria-pressed={minutes === choice}
                 size="large"
                 variant={minutes === choice ? 'primary' : 'secondary'}
                 className="w-full rounded-xl"
@@ -426,14 +452,14 @@ function LateStep({
 function CantStep({
   requestId,
   name,
-  onBack,
+  focusHeading,
   onLate,
   onSuggest,
   onSent,
 }: {
   requestId: string;
   name: string;
-  onBack?: () => void;
+  focusHeading: boolean;
   onLate: () => void;
   onSuggest: (note: string | undefined) => void;
   onSent: () => void;
@@ -444,9 +470,8 @@ function CantStep({
 
   return (
     <>
-      {onBack && <BackButton onClick={onBack} />}
       <div className="flex flex-col gap-2">
-        <Heading>{COPY.cant.title}</Heading>
+        <Heading focus={focusHeading}>{COPY.cant.title}</Heading>
         <Text as="p" color="grey-04">
           {COPY.cant.lead(name)}
         </Text>
@@ -527,11 +552,19 @@ function OpponentAvatar({
   );
 }
 
-function Heading({ children }: { children: React.ReactNode }) {
+/**
+ * A screen's heading. `focus` takes it there on the way in, when the screen replaced the one whose
+ * button was pressed, so a screen reader announces where they are rather than nothing.
+ */
+function Heading({ children, focus = false }: { children: React.ReactNode; focus?: boolean }) {
+  const ref = React.useRef<HTMLHeadingElement>(null);
+  React.useEffect(() => {
+    if (focus) ref.current?.focus();
+  }, [focus]);
   return (
-    <Text as="h2" variant="mediumTitle">
+    <h2 ref={ref} tabIndex={-1} className="text-mediumTitle focus:outline-hidden">
       {children}
-    </Text>
+    </h2>
   );
 }
 
@@ -547,7 +580,7 @@ function BackButton({ onClick }: { onClick: () => void }) {
       aria-label={COPY.back}
       onClick={onClick}
       {...analytics('Back', 'back_to_scheduled_notice_choices')}
-      className="-mt-2 -ml-2 grid size-11 place-items-center text-text transition-opacity hover:opacity-70"
+      className="-m-3 grid size-10 shrink-0 place-items-center text-text transition-opacity hover:opacity-70"
     >
       <ArrowLeft />
     </button>
