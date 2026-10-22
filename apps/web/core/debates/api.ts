@@ -121,6 +121,8 @@ export type DebateMediaArtifactKind =
   | 'final_video_hevc'
   | 'preview_image'
   | 'social_video'
+  /** The share video without spoken-word captions (GEO-3442); absent on debates rendered before it. */
+  | 'social_video_uncaptioned'
   | 'social_preview_image'
   | 'speaker_still_slot_1'
   | 'speaker_still_slot_2'

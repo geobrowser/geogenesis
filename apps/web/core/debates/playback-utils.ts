@@ -45,6 +45,11 @@ export function hasSocialVideo(media: DebateMediaResponse | undefined): boolean 
   return media?.artifacts.some(artifact => artifact.kind === 'social_video') ?? false;
 }
 
+/** Only debates rendered since GEO-3442 have a share video without captions. */
+export function hasUncaptionedSocialVideo(media: DebateMediaResponse | undefined): boolean {
+  return media?.artifacts.some(artifact => artifact.kind === 'social_video_uncaptioned') ?? false;
+}
+
 /**
  * The debate row's own turn allowance, or `null` when it cannot be trusted (GEO-2956).
  *

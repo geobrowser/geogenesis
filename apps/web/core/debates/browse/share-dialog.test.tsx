@@ -10,20 +10,33 @@ import { parseShareLink } from '~/core/sharing/share-link';
 
 import { DebateShareDialog } from './share-dialog';
 
-const mocks = vi.hoisted(() => ({ capture: vi.fn(), download: vi.fn(), retry: vi.fn(), status: 'ready' }));
+const mocks = vi.hoisted(() => ({
+  capture: vi.fn(),
+  download: vi.fn(),
+  retry: vi.fn(),
+  status: 'ready',
+  artifacts: [{ kind: 'social_video' }] as { kind: string }[],
+  prepared: vi.fn(),
+}));
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
 vi.mock('~/core/debates/hooks', () => ({
-  useDebateMedia: () => ({ data: { artifacts: [{ kind: 'social_video' }] } }),
+  useDebateMedia: () => ({ data: { artifacts: mocks.artifacts } }),
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, vi.fn()] }));
 vi.mock('../social-video-share', () => ({
   downloadPreparedVideo: mocks.download,
-  usePreparedSocialVideo: () => ({
-    status: mocks.status,
-    downloadUrl: 'blob:video',
-    file: { name: 'video.mp4' },
-    retry: mocks.retry,
-  }),
+  usePreparedSocialVideo: (_debateId: string, options: { enabled: boolean; captions?: string }) => {
+    mocks.prepared(options);
+    const captions = options.captions ?? 'captioned';
+    return {
+      status: mocks.status,
+      downloadUrl: `blob:${captions}`,
+      file: { name: `${captions}.mp4` },
+      progressPercent: null,
+      error: null,
+      retry: mocks.retry,
+    };
+  },
 }));
 const debate = { id: 'debate', claim: { claim: 'Private claim text' } } as Debate;
 const cases = [
@@ -32,6 +45,11 @@ const cases = [
   ['Share on LinkedIn', 'linkedin'],
   ['Download debate video', 'download'],
 ] as const;
+/** The download hands off from the caption step, after the Download tile opens it. */
+function press(label: string) {
+  fireEvent.click(screen.getByRole('button', { name: label }));
+  if (label === 'Download debate video') fireEvent.click(screen.getByRole('button', { name: 'With captions' }));
+}
 const completed = () => mocks.capture.mock.calls.filter(([event]) => event === 'action_completed');
 function mount(data = debate, spaceId = 'space') {
   render(
@@ -46,6 +64,7 @@ function mount(data = debate, spaceId = 'space') {
 }
 beforeEach(() => {
   mocks.status = 'ready';
+  mocks.artifacts = [{ kind: 'social_video' }];
 });
 afterEach(() => {
   delete window.lytics;
@@ -54,31 +73,49 @@ afterEach(() => {
   mocks.capture.mockReset();
   mocks.download.mockReset();
   mocks.retry.mockReset();
+  mocks.prepared.mockReset();
 });
 
-it.each(cases)('records %s failures around the actual handoff', (label, method) => {
-  const error = new Error('handoff failed');
-  const handoff = () => {
-    throw error;
-  };
-  vi.spyOn(window, 'open').mockImplementation(handoff);
-  mocks.download.mockImplementation(handoff);
-  const reported: unknown[] = [];
-  const onError = (event: ErrorEvent) => {
-    reported.push(event.error);
-    event.preventDefault();
-  };
-  window.addEventListener('error', onError);
-  try {
-    mount();
-    fireEvent.click(screen.getByRole('button', { name: label }));
-    expect(reported).toContain(error); // preserve the original thrown-handler behavior
-    expect(completed()).toHaveLength(1);
-    expect(completed()[0][1]).toMatchObject({ outcome: 'failed', failure_code: 'unavailable', target_id: 'debate' });
-    expect(mocks.capture).not.toHaveBeenCalledWith('debate_share_action', expect.objectContaining({ method }));
-  } finally {
-    window.removeEventListener('error', onError);
+it.each(cases.filter(([, method]) => method !== 'download'))(
+  'records %s failures around the actual handoff',
+  (label, method) => {
+    const error = new Error('handoff failed');
+    const handoff = () => {
+      throw error;
+    };
+    vi.spyOn(window, 'open').mockImplementation(handoff);
+    mocks.download.mockImplementation(handoff);
+    const reported: unknown[] = [];
+    const onError = (event: ErrorEvent) => {
+      reported.push(event.error);
+      event.preventDefault();
+    };
+    window.addEventListener('error', onError);
+    try {
+      mount();
+      press(label);
+      expect(reported).toContain(error); // preserve the original thrown-handler behavior
+      expect(completed()).toHaveLength(1);
+      expect(completed()[0][1]).toMatchObject({ outcome: 'failed', failure_code: 'unavailable', target_id: 'debate' });
+      expect(mocks.capture).not.toHaveBeenCalledWith('debate_share_action', expect.objectContaining({ method }));
+    } finally {
+      window.removeEventListener('error', onError);
+    }
   }
+);
+
+it('records a failed download and keeps the error inside the sheet', () => {
+  mocks.download.mockImplementation(() => {
+    throw new Error('download failed');
+  });
+  mount();
+  press('Download debate video');
+  expect(completed()).toHaveLength(1);
+  expect(completed()[0][1]).toMatchObject({ outcome: 'failed', failure_code: 'unavailable', target_id: 'debate' });
+  expect(mocks.capture).not.toHaveBeenCalledWith(
+    'debate_share_action',
+    expect.objectContaining({ method: 'download' })
+  );
 });
 
 it.each(cases)('records %s only after the synchronous handoff returns', (label, method) => {
@@ -90,7 +127,7 @@ it.each(cases)('records %s only after the synchronous handoff returns', (label, 
   const open = vi.spyOn(window, 'open').mockImplementation(handoff);
   mocks.download.mockImplementation(handoff);
   mount();
-  fireEvent.click(screen.getByRole('button', { name: label }));
+  press(label);
   expect(method === 'download' ? mocks.download : open).toHaveBeenCalledTimes(1);
   expect(outcomesAtHandoff).toBe(0);
   expect(completed()).toHaveLength(1);
@@ -104,9 +141,54 @@ it.each(cases)('records %s only after the synchronous handoff returns', (label, 
 it('retries preparation without claiming a completed download', () => {
   mocks.status = 'error';
   mount();
-  fireEvent.click(screen.getByRole('button', { name: 'Retry preparing debate video' }));
+  press('Download debate video');
   expect(mocks.retry).toHaveBeenCalledTimes(1);
   expect(completed()).toHaveLength(0);
+  expect(mocks.download).not.toHaveBeenCalled();
+});
+
+it('asks about captions before saving anything, and Back saves nothing', () => {
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Download debate video' }));
+  expect(screen.getByRole('heading', { name: 'Download video' })).toBeTruthy();
+  expect(mocks.download).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Back to share options' }));
+  expect(screen.getByRole('button', { name: 'Share on Reddit' })).toBeTruthy();
+  expect(mocks.download).not.toHaveBeenCalled();
+  expect(completed()).toHaveLength(0);
+});
+
+it('downloads the captioned video and records that it had captions', () => {
+  mount();
+  press('Download debate video');
+  expect(mocks.download).toHaveBeenCalledWith('blob:captioned', 'captioned.mp4');
+  expect(mocks.capture).toHaveBeenCalledWith('debate_share_action', expect.objectContaining({ captions: true }));
+});
+
+it('fetches the clean video only once chosen and downloads it when ready', () => {
+  mocks.artifacts = [{ kind: 'social_video' }, { kind: 'social_video_uncaptioned' }];
+  mount();
+  // Opening the sheet prepares only the captioned file.
+  expect(mocks.prepared).toHaveBeenCalledWith(expect.objectContaining({ captions: 'uncaptioned', enabled: false }));
+  expect(mocks.prepared).not.toHaveBeenCalledWith(expect.objectContaining({ captions: 'uncaptioned', enabled: true }));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Download debate video' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Without captions' }));
+  expect(mocks.prepared).toHaveBeenCalledWith(expect.objectContaining({ captions: 'uncaptioned', enabled: true }));
+  expect(mocks.download).toHaveBeenCalledWith('blob:uncaptioned', 'uncaptioned.mp4');
+  expect(mocks.capture).toHaveBeenCalledWith('debate_share_action', expect.objectContaining({ captions: false }));
+});
+
+it('marks the clean video unavailable for a debate rendered before it existed', () => {
+  mount();
+  fireEvent.click(screen.getByRole('button', { name: 'Download debate video' }));
+  const clean = screen.getByRole<HTMLButtonElement>('button', { name: /Without captions/ });
+  expect(clean.disabled).toBe(true);
+  expect(screen.getByText('Not available for this debate')).toBeTruthy();
+  fireEvent.click(clean);
+  expect(mocks.prepared).not.toHaveBeenCalledWith(expect.objectContaining({ captions: 'uncaptioned', enabled: true }));
+  expect(mocks.download).not.toHaveBeenCalled();
 });
 
 const realDebate = {
@@ -231,7 +313,7 @@ it('gives repeated copies different IDs and never counts downloads as link hando
   const ids = write.mock.calls.map(([url]) => parseShareLink(new URL(url).searchParams)!.share_id);
   expect(ids[0]).not.toBe(ids[1]);
   expect(handoffs().map(([, props]) => props.share_id)).toEqual(ids);
-  fireEvent.click(screen.getByRole('button', { name: 'Download debate video' }));
+  press('Download debate video');
   expect(handoffs()).toHaveLength(2);
 });
 

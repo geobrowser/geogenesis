@@ -16,17 +16,17 @@ import { copyShareLink, observeShareLinkHandoff } from '~/core/sharing/share-han
 import { type ShareMethod as LinkShareMethod, type ShareLink, createShareLink } from '~/core/sharing/share-link';
 import { NavUtils } from '~/core/utils/utils';
 
+import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Close } from '~/design-system/icons/close';
 import { Download } from '~/design-system/icons/download';
 import { Link } from '~/design-system/icons/link';
 import { LinkedIn } from '~/design-system/icons/linkedin';
 import { Reddit } from '~/design-system/icons/reddit';
-import { RetrySmall } from '~/design-system/icons/retry-small';
 import { XIcon } from '~/design-system/icons/x';
-import { Spinner } from '~/design-system/spinner';
 
-import { hasSocialVideo } from '../playback-utils';
-import { downloadPreparedVideo, usePreparedSocialVideo } from '../social-video-share';
+import { hasSocialVideo, hasUncaptionedSocialVideo } from '../playback-utils';
+import { SocialVideoCaptionChoiceRows, useSocialVideoCaptionChoice } from '../social-video-caption-choice';
+import { type PreparedSocialVideo, type SocialVideoCaptions, downloadPreparedVideo } from '../social-video-share';
 import { xShareMessage } from './x-share-message';
 
 type Props = {
@@ -46,7 +46,7 @@ const LINKEDIN_TEXT_MAX = 700;
 
 /**
  * The Share sheet for a debate: one-tap social hand-offs (Reddit, X, LinkedIn), a copy-link button,
- * and a download of the prepared debate video.
+ * and a download of the prepared debate video, with or without captions (GEO-3442).
  */
 export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerRef }: Props) {
   const getContext = useActionContext('share_dialog', 'debate', debate.id, {
@@ -56,10 +56,12 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   });
   const media = useDebateMedia(debate.id, open);
   const socialVideoReady = hasSocialVideo(media.data);
-
-  // Prepare only while the sheet is open: closing aborts the in-flight fetch and revokes the blob.
-  const download = useDebateVideoDownload(debate.id, open && socialVideoReady);
+  const [step, setStep] = React.useState<'share' | 'captions'>('share');
   const [, setToast] = useToast();
+
+  React.useEffect(() => {
+    if (!open) setStep('share');
+  }, [open]);
 
   React.useEffect(() => {
     if (open) pushMarketingEvent('geo_share_open', { debate_id: debate.id, space_id: spaceId });
@@ -89,7 +91,12 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   };
 
   // Preserve synchronous user activation and the handler's original errors.
-  const handoffShare = (method: ShareMethod, handoff: () => void, link?: ShareLink) => {
+  const handoffShare = (
+    method: ShareMethod,
+    handoff: () => void,
+    link?: ShareLink,
+    properties: Record<string, unknown> = {}
+  ) => {
     const context = getContext();
     const recordHandoff = link
       ? observeShareLinkHandoff(link, { ...context, space_id: spaceId }, participants)
@@ -105,7 +112,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
       throw error;
     }
     try {
-      capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method });
+      capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method, ...properties });
     } catch {}
     pushMarketingEvent('geo_share', { debate_id: debate.id, space_id: spaceId, share_method: method });
   };
@@ -165,6 +172,33 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     }
   };
 
+  const downloadVideo = (video: PreparedSocialVideo, captions: SocialVideoCaptions) => {
+    const { downloadUrl, file } = video;
+    if (!downloadUrl || !file) return;
+    handoffShare('download', () => downloadPreparedVideo(downloadUrl, file.name), undefined, {
+      captions: captions === 'captioned',
+    });
+    setStep('share');
+  };
+
+  // Prepare only while the sheet is open: closing aborts the in-flight fetch and revokes the blob.
+  const captionChoice = useSocialVideoCaptionChoice({
+    debateId: debate.id,
+    enabled: open && socialVideoReady,
+    includePreview: false,
+    uncaptionedAvailable: hasUncaptionedSocialVideo(media.data),
+    handoff: (video, captions) => {
+      try {
+        downloadVideo(video, captions);
+      } catch {
+        // Only reached when the clean file finishes after the click, outside any handler.
+        setToast(<span>Could not download the video.</span>);
+      }
+    },
+    // A download needs no gesture, so a file that finishes preparing after the choice still saves.
+    canHandoffWithoutGesture: () => true,
+  });
+
   return (
     <Root open={open} onOpenChange={onOpenChange}>
       <Portal>
@@ -177,10 +211,23 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
           }}
           className="fixed top-1/2 left-1/2 z-[1001] -translate-x-1/2 -translate-y-1/2 focus:outline-hidden"
         >
-          <div className="flex h-[142px] w-[316px] max-w-[calc(100vw-2rem)] flex-col rounded-xl bg-white px-6 py-5 shadow-card">
+          <div className="flex min-h-[142px] w-[316px] max-w-[calc(100vw-2rem)] flex-col rounded-xl bg-white px-6 py-5 shadow-card">
             <div className="relative flex items-center justify-center">
+              {step === 'captions' && (
+                <button
+                  type="button"
+                  aria-label="Back to share options"
+                  onClick={() => {
+                    captionChoice.cancel();
+                    setStep('share');
+                  }}
+                  className="absolute left-0 grid size-4 place-items-center text-grey-04 transition-colors hover:text-text"
+                >
+                  <ArrowLeft />
+                </button>
+              )}
               <Title className="m-0 text-[22.4px] leading-[21px] font-medium tracking-[-0.672px] text-[#212B2E]">
-                Share
+                {step === 'captions' ? 'Download video' : 'Share'}
               </Title>
               <button
                 type="button"
@@ -192,46 +239,35 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
               </button>
             </div>
 
-            <div className="mt-5 flex justify-center gap-4">
-              <ShareAction label="Reddit" ariaLabel="Share on Reddit" onClick={onReddit} tile={<Reddit />} />
-              <ShareAction label="X" ariaLabel="Share on X" onClick={onX} tile={<XTile />} />
-              <ShareAction label="Linkedin" ariaLabel="Share on LinkedIn" onClick={onLinkedIn} tile={<LinkedIn />} />
-              <ShareAction
-                label="Copy link"
-                ariaLabel="Copy link"
-                onClick={onCopy}
-                tile={<GlyphTile icon={<Link />} />}
-              />
-              {socialVideoReady && (
-                <ShareAction
-                  label={download.status === 'error' ? 'Retry' : 'Download'}
-                  ariaLabel={download.status === 'error' ? 'Retry preparing debate video' : 'Download debate video'}
-                  onClick={() => {
-                    if (download.status === 'ready') {
-                      handoffShare('download', download.download);
-                      return;
-                    } else if (download.status === 'error') {
-                      setToast(<span>{download.error ?? 'Could not prepare the video for download.'}</span>);
-                    }
-                    download.download();
-                  }}
-                  disabled={download.status === 'preparing'}
-                  tile={
-                    <GlyphTile
-                      icon={
-                        download.status === 'preparing' ? (
-                          <Spinner />
-                        ) : download.status === 'error' ? (
-                          <RetrySmall />
-                        ) : (
-                          <Download />
-                        )
-                      }
-                    />
-                  }
+            {step === 'captions' ? (
+              <div className="mt-5">
+                <SocialVideoCaptionChoiceRows
+                  options={captionChoice.options}
+                  onChoose={captionChoice.choose}
+                  readyAction="download"
                 />
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="mt-5 flex justify-center gap-4">
+                <ShareAction label="Reddit" ariaLabel="Share on Reddit" onClick={onReddit} tile={<Reddit />} />
+                <ShareAction label="X" ariaLabel="Share on X" onClick={onX} tile={<XTile />} />
+                <ShareAction label="Linkedin" ariaLabel="Share on LinkedIn" onClick={onLinkedIn} tile={<LinkedIn />} />
+                <ShareAction
+                  label="Copy link"
+                  ariaLabel="Copy link"
+                  onClick={onCopy}
+                  tile={<GlyphTile icon={<Link />} />}
+                />
+                {socialVideoReady && (
+                  <ShareAction
+                    label="Download"
+                    ariaLabel="Download debate video"
+                    onClick={() => setStep('captions')}
+                    tile={<GlyphTile icon={<Download />} />}
+                  />
+                )}
+              </div>
+            )}
           </div>
         </Content>
       </Portal>
@@ -280,28 +316,4 @@ function XTile() {
 
 function GlyphTile({ icon }: { icon: React.ReactNode }) {
   return <span className="grid size-10 place-items-center rounded-full bg-divider text-text">{icon}</span>;
-}
-
-type DownloadStatus = 'preparing' | 'ready' | 'error';
-
-/**
- * Prepares the debate's social video as soon as the sheet opens, so that pressing Download hands off
- * an already-ready blob synchronously.
- */
-function useDebateVideoDownload(debateId: string, enabled: boolean) {
-  const prepared = usePreparedSocialVideo(debateId, { enabled, includePreview: false });
-
-  const status: DownloadStatus = prepared.status;
-
-  const download = () => {
-    if (prepared.status === 'ready' && prepared.downloadUrl && prepared.file) {
-      downloadPreparedVideo(prepared.downloadUrl, prepared.file.name);
-      return;
-    }
-    if (prepared.status === 'error') {
-      prepared.retry();
-    }
-  };
-
-  return { status, error: prepared.error, download };
 }

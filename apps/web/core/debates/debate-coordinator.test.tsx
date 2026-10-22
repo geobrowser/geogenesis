@@ -15,6 +15,7 @@ import {
 } from './rematch-join-intent';
 
 const mocks = vi.hoisted(() => ({
+  media: { artifacts: [{ kind: 'social_video' }] } as { artifacts: { kind: string }[] },
   leaveRematchMutate: vi.fn(),
   push: vi.fn(),
   /** The room view the page at `/debate/{id}` loaded, read by the coordinator from the cache. */
@@ -84,6 +85,7 @@ vi.mock('./hooks', () => ({
   useDebateActivity: () => ({ data: mocks.activity, refetch: mocks.refetch }),
   useDebateSharePrompts: () => ({ data: { prompts: mocks.prompts }, isFetching: mocks.promptsFetching }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
+  useDebateMedia: () => ({ data: mocks.media }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallengeMutate, isPending: false, error: null }),
   useLeaveDebateRematch: () => ({ mutate: mocks.leaveRematchMutate, isPending: false, error: null }),
@@ -170,6 +172,7 @@ vi.mock('~/core/state/feature-flags', async importOriginal => ({
 beforeEach(() => {
   sessionStorage.clear();
   mocks.roomAtPath = null;
+  mocks.media = { artifacts: [{ kind: 'social_video' }] };
   mocks.push.mockReset();
   mocks.mediaMutate.mockReset();
   mocks.handleMutate.mockReset();
@@ -1415,6 +1418,7 @@ describe('DebateCoordinator', () => {
 
     const view = render(<DebateCoordinator />);
     fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'With captions' }));
 
     const file = mocks.canShare.mock.calls.at(-1)?.[0].files[0] as File;
     expect(file).toBeInstanceOf(File);
@@ -1427,6 +1431,7 @@ describe('DebateCoordinator', () => {
       expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
         debate_id: 'debate-1',
         method: 'native_share',
+        captions: true,
       });
       expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object));
     });
@@ -1477,6 +1482,7 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
     fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'With captions' }));
 
     await waitFor(() => expect(mocks.share).toHaveBeenCalled());
     expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -1491,13 +1497,14 @@ describe('DebateCoordinator', () => {
     mocks.share.mockRejectedValueOnce(new Error('Share service unavailable')).mockResolvedValueOnce(undefined);
 
     render(<DebateCoordinator />);
-    const shareButton = await screen.findByRole('button', { name: 'Share video' });
-    fireEvent.click(shareButton);
+    fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    const captioned = await screen.findByRole('button', { name: 'With captions' });
+    fireEvent.click(captioned);
 
     expect(await screen.findByText('Share service unavailable')).toBeInTheDocument();
     expect(mocks.handleMutate).not.toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' });
 
-    fireEvent.click(shareButton);
+    fireEvent.click(captioned);
     await waitFor(() =>
       expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object))
     );
@@ -1511,6 +1518,7 @@ describe('DebateCoordinator', () => {
 
     const view = render(<DebateCoordinator />);
     fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'With captions' }));
 
     expect(mocks.downloadClick).toHaveBeenCalledTimes(1);
     const downloadLink = mocks.downloadClick.mock.instances[0] as HTMLAnchorElement;
@@ -1520,6 +1528,7 @@ describe('DebateCoordinator', () => {
     expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
       debate_id: 'debate-1',
       method: 'download',
+      captions: true,
     });
     await waitFor(() =>
       expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object))
@@ -1531,6 +1540,89 @@ describe('DebateCoordinator', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mocks.handleMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches the video without captions only once it is chosen, then needs a tap to share it', async () => {
+    showSharePrompt();
+    mocks.media = { artifacts: [{ kind: 'social_video' }, { kind: 'social_video_uncaptioned' }] };
+    mockArtifactUrls();
+    let resolveClean: ((response: Response) => void) | undefined;
+    mocks.fetch.mockImplementation((url: string) =>
+      url.includes('no-captions')
+        ? new Promise<Response>(resolve => (resolveClean = resolve))
+        : Promise.resolve(videoResponse())
+    );
+    mocks.canShare.mockReturnValue(true);
+    mocks.share.mockResolvedValue(undefined);
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    expect(mocks.mediaMutate).not.toHaveBeenCalledWith(
+      { debateId: 'debate-1', request: { kind: 'social_video_uncaptioned' } },
+      expect.any(Object)
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Without captions' }));
+    expect(mocks.mediaMutate).toHaveBeenCalledWith(
+      { debateId: 'debate-1', request: { kind: 'social_video_uncaptioned' } },
+      expect.any(Object)
+    );
+    expect(await screen.findByRole('button', { name: /Without captions/ })).toBeDisabled();
+
+    resolveClean?.(videoResponse());
+    // The share sheet only opens from a tap, so a file that finishes later waits for one.
+    expect(await screen.findByText('Ready. Tap to share.')).toBeInTheDocument();
+    expect(mocks.share).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Without captions/ }));
+    const file = mocks.share.mock.calls[0]?.[0].files[0] as File;
+    expect(file.name).toBe('debate-debate-1-social-no-captions.mp4');
+    await waitFor(() => {
+      expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
+        debate_id: 'debate-1',
+        method: 'native_share',
+        captions: false,
+      });
+      expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object));
+    });
+  });
+
+  it('downloads the video without captions as soon as it is ready when sharing files is unsupported', async () => {
+    showSharePrompt();
+    mocks.media = { artifacts: [{ kind: 'social_video' }, { kind: 'social_video_uncaptioned' }] };
+    mockArtifactUrls();
+    mocks.fetch.mockImplementation(() => Promise.resolve(videoResponse()));
+    mocks.canShare.mockReturnValue(false);
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Without captions' }));
+
+    await waitFor(() => expect(mocks.downloadClick).toHaveBeenCalledTimes(1));
+    const downloadLink = mocks.downloadClick.mock.instances[0] as HTMLAnchorElement;
+    expect(downloadLink.download).toBe('debate-debate-1-social-no-captions.mp4');
+    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
+      debate_id: 'debate-1',
+      method: 'download',
+      captions: false,
+    });
+  });
+
+  it('marks the video without captions unavailable for a debate rendered before it existed', async () => {
+    showSharePrompt();
+    mockArtifactUrls();
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
+
+    expect(screen.getByRole('button', { name: /Without captions/ })).toBeDisabled();
+    expect(screen.getByText('Not available for this debate')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Without captions/ }));
+    expect(mocks.mediaMutate).not.toHaveBeenCalledWith(
+      { debateId: 'debate-1', request: { kind: 'social_video_uncaptioned' } },
+      expect.any(Object)
+    );
+    expect(mocks.downloadClick).not.toHaveBeenCalled();
   });
 
   it('shows a retryable preparation error and retries the same social MP4', async () => {
@@ -1545,6 +1637,7 @@ describe('DebateCoordinator', () => {
       debate_id: 'debate-1',
       stage: 'video_download',
       error_name: 'Error',
+      captions: true,
     });
     fireEvent.click(screen.getByRole('button', { name: 'Retry preparation' }));
 
@@ -1631,12 +1724,13 @@ describe('DebateCoordinator', () => {
     mocks.share.mockReturnValue(new Promise<void>(resolve => (resolveShare = resolve)));
 
     render(<DebateCoordinator />);
-    const shareButton = await screen.findByRole('button', { name: 'Share video' });
-    fireEvent.click(shareButton);
-    fireEvent.click(shareButton);
+    fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    const captioned = await screen.findByRole('button', { name: 'With captions' });
+    fireEvent.click(captioned);
+    fireEvent.click(captioned);
 
     expect(mocks.share).toHaveBeenCalledTimes(1);
-    expect(await screen.findByRole('button', { name: 'Sharing…' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'With captions' })).toBeDisabled());
 
     resolveShare?.();
     await waitFor(() => expect(mocks.handleMutate).toHaveBeenCalledTimes(1));
@@ -1653,6 +1747,7 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
     fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'With captions' }));
 
     expect(
       await screen.findByText("The video was handed off, but Geo couldn't finish updating this prompt. Try again.")
@@ -1730,7 +1825,9 @@ function mockArtifactUrls() {
     const url =
       variables.request.kind === 'social_preview_image'
         ? 'https://video.test/social-preview.jpg'
-        : 'https://video.test/social.mp4';
+        : variables.request.kind === 'social_video_uncaptioned'
+          ? 'https://video.test/social-no-captions.mp4'
+          : 'https://video.test/social.mp4';
     options.onSuccess({ upload: { url } });
   });
 }
