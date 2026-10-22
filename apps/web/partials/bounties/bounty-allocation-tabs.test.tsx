@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   pay: vi.fn(async () => ({ status: 'paid' as const })),
   // Person entity → personal space, as the graph resolves pages to spaces.
   spaceByPerson: new Map<string, string>(),
+  // Ids the graph knows as PERSONAL spaces (besides any a person resolves to).
+  personalSpaces: new Set(['aaaa0000000000000000000000000001', 'bbbb0000000000000000000000000002']),
   lookupFails: false,
   pendingPayout: null as PendingPayout | null,
   searchPick: null as { spaceId: string; personId: string; name: string | null } | null,
@@ -45,6 +47,12 @@ vi.mock('~/core/io/subgraph/fetch-personal-spaces-by-page-ids', () => ({
   fetchPersonalSpacesByPageIds: async (ids: string[]) => {
     if (mocks.lookupFails) throw new Error('graph down');
     return new Map(ids.flatMap(id => (mocks.spaceByPerson.has(id) ? [[id, mocks.spaceByPerson.get(id)!]] : [])));
+  },
+}));
+vi.mock('~/core/io/subgraph/fetch-personal-space-ids', () => ({
+  fetchPersonalSpaceIds: async (ids: string[]) => {
+    const known = new Set([...mocks.personalSpaces, ...mocks.spaceByPerson.values()]);
+    return new Set(ids.filter(id => known.has(id)));
   },
 }));
 vi.mock('./curator-search', () => ({
@@ -134,6 +142,7 @@ beforeEach(() => {
   mocks.pay.mockClear();
   mocks.spaceByPerson = new Map();
   mocks.lookupFails = false;
+  mocks.personalSpaces = new Set([ALICE, BOB]);
   mocks.pendingPayout = null;
   mocks.searchPick = null;
 });
@@ -284,5 +293,52 @@ describe('BountyAllocationTabs', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Finish payout' }));
     expect(await screen.findByRole('dialog')).toHaveTextContent("won't pay twice");
+  });
+
+  // A curator-app allocation to a person who has no personal space: the graph knows the id
+  // as neither a space nor a space's page. It must not be paid as a person entity.
+  it('will not pay or allocate a curator whose id is not a personal space and fronts none', async () => {
+    const NO_SPACE = 'cccc00000000000000000000000000c3';
+    mocks.names.set(NO_SPACE, 'Pat');
+    const orphan: BountyDetail = {
+      ...detail,
+      bounty: { ...detail.bounty, allocatedIds: [ALICE, NO_SPACE] },
+      interest: [{ id: 'i-pat', fromEntityId: NO_SPACE, spaceId: 's' }],
+    };
+    render(<BountyAllocationTabs detail={orphan} roles={{ ...viewer, isEditor: true }} />);
+    expect(await screen.findByText("No personal space, so they can't be paid or allocated here.")).toBeInTheDocument();
+
+    const rows = screen.getAllByTestId('curator-row');
+    const patRow = rows.find(row => within(row).queryByText('Pat'))!;
+    const aliceRow = rows.find(row => within(row).queryByText('Alice'))!;
+    expect(within(patRow).getByRole('button', { name: 'Pay' })).toBeDisabled();
+    expect(within(aliceRow).getByRole('button', { name: 'Pay' })).toBeEnabled();
+    // Remove still works, so the row can be cleaned up.
+    fireEvent.click(within(patRow).getByRole('button', { name: 'Remove' }));
+    expect(mocks.remove).toHaveBeenCalledWith({ id: NO_SPACE, targetIds: [NO_SPACE] });
+
+    // Interest written from inside the bounty space by that person can't be allocated either.
+    fireEvent.click(screen.getByRole('tab', { name: /Interested/ }));
+    const interestRow = screen.getAllByTestId('curator-row').find(row => within(row).queryByText('Pat'))!;
+    expect(within(interestRow).queryByRole('button', { name: 'Allocate' })).toBeNull();
+    expect(within(interestRow).getByText('Allocated')).toBeInTheDocument();
+  });
+
+  it('will not allocate an interested person who has no personal space', async () => {
+    const NO_SPACE = 'cccc00000000000000000000000000c3';
+    mocks.names.set(NO_SPACE, 'Pat');
+    const interestedOnly: BountyDetail = {
+      ...detail,
+      // Legacy interest written into the bounty's own space from a person entity.
+      interest: [...detail.interest, { id: 'i-pat', fromEntityId: NO_SPACE, spaceId: 's' }],
+    };
+    render(<BountyAllocationTabs detail={interestedOnly} roles={{ ...viewer, isEditor: true }} />);
+    fireEvent.click(screen.getByRole('tab', { name: /Interested/ }));
+    await screen.findByText("No personal space, so they can't be paid or allocated here.");
+    const rows = screen.getAllByTestId('curator-row');
+    const patRow = rows.find(row => within(row).queryByText('Pat'))!;
+    const bobRow = rows.find(row => within(row).queryByText('Bob'))!;
+    expect(within(patRow).getByRole('button', { name: 'Allocate' })).toBeDisabled();
+    expect(within(bobRow).getByRole('button', { name: 'Allocate' })).toBeEnabled();
   });
 });

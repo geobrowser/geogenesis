@@ -30,10 +30,12 @@ export function useBountiesEnabled(): boolean {
 /**
  * Payouts attached to a REVIEW stay off here: the review flow pays the
  * submission's creator entity, which can be a person rather than the curator's
- * space. Direct payouts to an allocated curator (`useDirectPayout`) are on and
- * do what curator-app's `editors/bounty/$spaceId/payout/$bountyId` route does —
- * publish the Payout relation, then credit the curator points ledger (neo4j)
- * through curator-backend — so balances and rewards stay in step with the graph.
+ * space. Direct payouts to an allocated curator (`useDirectPayout`) are on, and
+ * run LEDGER FIRST: credit the curator points ledger (neo4j) through
+ * curator-backend, whose atomic balance check decides whether the payout
+ * happens, and only then publish the Payout relation. That is the reverse of
+ * curator-app's route, and deliberate: publishing first lets two payouts race
+ * for one balance and leaves a Payout in the graph that the ledger refused.
  */
 export const PAYOUT_AUTHORING_ENABLED = false;
 

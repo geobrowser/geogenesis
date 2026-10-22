@@ -16,7 +16,7 @@ import type { BountyDetail } from './fetch-bounty-detail';
 import { fetchPayoutItems } from './fetch-submissions';
 import { fetchSpaceBalance, ledgerMovedNoPoints, recordPayoutCredit } from './payout-credit';
 import { buildPayoutOps } from './payout-ops';
-import { loadPendingPayout, savePendingPayout } from './pending-payout-storage';
+import { clearPendingPayout, loadPendingPayouts, savePendingPayout } from './pending-payout-storage';
 import { bountyQueryKeys, useInvalidateSoon } from './use-bounties';
 
 export type PayoutRecipient = {
@@ -64,11 +64,26 @@ const PUBLISH_CONFIRM_DELAYS_MS = [2_000, 5_000, 10_000];
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
-/** Whether the bounty's Payouts (read from its own space) include this payout relation. */
-async function isPayoutInGraph(bountyId: string, spaceId: string, payoutRelationId: string): Promise<boolean> {
+/**
+ * Whether the bounty's Payouts (read from its own space) include this payout
+ * relation — or `unknown` when the read itself failed, which is not the same as
+ * absent: treating it as absent would propose a Payout that may already exist.
+ */
+async function isPayoutInGraph(
+  bountyId: string,
+  spaceId: string,
+  payoutRelationId: string
+): Promise<boolean | 'unknown'> {
   const items = await Effect.runPromise(fetchPayoutItems(bountyId, spaceId)).catch(() => null);
+  if (items === null) return 'unknown';
   const target = uuidToHex(payoutRelationId);
-  return items?.some(item => uuidToHex(item.id) === target) ?? false;
+  return items.some(item => uuidToHex(item.id) === target);
+}
+
+/** Merges payout lists by id; the first list wins on a clash. */
+function mergePending(primary: PendingPayout[], secondary: PendingPayout[]): PendingPayout[] {
+  const ids = new Set(primary.map(p => p.payoutRelationId));
+  return [...primary, ...secondary.filter(p => !ids.has(p.payoutRelationId))];
 }
 
 export function spaceBalanceQueryKey(spaceId: string) {
@@ -106,15 +121,42 @@ export function useDirectPayout(
   const queryClient = useQueryClient();
   const [busy, setBusy] = React.useState(false);
   const bountyId = detail?.bounty.id ?? null;
-  const [pendingPayout, setPendingPayoutState] = React.useState<PendingPayout | null>(null);
-  // Pick up a payout a previous visit left unfinished, so the editor can finish it.
+  // Every unfinished payout this tab knows of: stored ones (other visits and other
+  // tabs) plus its own, which matter on their own when storage is unavailable.
+  const [pendingPayouts, setPendingPayouts] = React.useState<PendingPayout[]>([]);
+  const pendingPayout = pendingPayouts[0] ?? null;
+
+  /** Re-reads storage; returns everything now known to be unfinished. */
+  const syncFromStorage = React.useCallback((): PendingPayout[] => {
+    const known = mergePending(bountyId ? loadPendingPayouts(bountyId) : [], pendingPayouts);
+    setPendingPayouts(known);
+    return known;
+  }, [bountyId, pendingPayouts]);
+
+  // Pick up payouts a previous visit left unfinished, and follow other tabs' payouts.
   React.useEffect(() => {
-    setPendingPayoutState(bountyId ? loadPendingPayout(bountyId) : null);
+    setPendingPayouts(bountyId ? loadPendingPayouts(bountyId) : []);
+    if (!bountyId) return;
+    const onStorage = () => setPendingPayouts(prev => mergePending(loadPendingPayouts(bountyId), prev));
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, [bountyId]);
-  const setPendingPayout = React.useCallback(
-    (pending: PendingPayout | null) => {
-      setPendingPayoutState(pending);
+
+  const keepPending = React.useCallback(
+    (pending: PendingPayout) => {
+      setPendingPayouts(prev =>
+        prev.some(p => p.payoutRelationId === pending.payoutRelationId)
+          ? prev.map(p => (p.payoutRelationId === pending.payoutRelationId ? pending : p))
+          : [...prev, pending]
+      );
       if (bountyId) savePendingPayout(bountyId, pending);
+    },
+    [bountyId]
+  );
+  const dropPending = React.useCallback(
+    (payoutRelationId: string) => {
+      setPendingPayouts(prev => prev.filter(p => p.payoutRelationId !== payoutRelationId));
+      if (bountyId) clearPendingPayout(bountyId, payoutRelationId);
     },
     [bountyId]
   );
@@ -140,7 +182,7 @@ export function useDirectPayout(
         if (!identityToken) {
           const message = 'Your sign-in expired. Sign in again, then pay.';
           if (firstAttempt) {
-            setPendingPayout(null);
+            dropPending(current.payoutRelationId);
             return { status: 'not-paid', message };
           }
           return { status: 'credit-unconfirmed', message };
@@ -160,29 +202,35 @@ export function useDirectPayout(
           // may have moved would vanish. A definite refusal (e.g. no balance) also clears
           // a stuck retry, so it can't block every later payout on the bounty.
           if (ledgerMovedNoPoints(error, firstAttempt)) {
-            setPendingPayout(null);
+            dropPending(current.payoutRelationId);
             void invalidate(); // the balance the dialog showed was evidently stale
             return { status: 'not-paid', message };
           }
           return { status: 'credit-unconfirmed', message };
         }
         current = { ...current, stage: 'publish' };
-        setPendingPayout(current);
+        keepPending(current);
         void invalidate();
       }
 
       const { id: bountyId, spaceId } = detail.bounty;
       const landed = () => isPayoutInGraph(bountyId, spaceId, current.payoutRelationId);
       const done = (): DirectPayoutOutcome => {
-        setPendingPayout(null);
+        dropPending(current.payoutRelationId);
         void invalidate();
         invalidateSoon();
         return { status: 'paid' };
       };
 
-      // An earlier attempt's proposal may have executed since (e.g. from Governance):
-      // recognise it rather than propose the same Payout twice.
-      if (pending.stage === 'publish' && (await landed())) return done();
+      // Finishing, the record may already exist — an earlier proposal executed late
+      // (e.g. from Governance), or another tab finished this payout. Recognise it
+      // rather than propose the same Payout twice; if the graph can't be read, don't
+      // guess. A brand-new payout's record can't exist yet, so it skips the check.
+      if (!firstAttempt) {
+        const before = await landed();
+        if (before === true) return done();
+        if (before === 'unknown') return { status: 'publish-unconfirmed' };
+      }
 
       const published = await publishOnce(makeProposal, {
         values: current.values,
@@ -195,17 +243,18 @@ export function useDirectPayout(
       // Paid only once the record is actually in the graph, not merely proposed.
       for (const delay of PUBLISH_CONFIRM_DELAYS_MS) {
         await wait(delay);
-        if (await landed()) return done();
+        if ((await landed()) === true) return done();
       }
       return { status: 'publish-unconfirmed' };
     },
-    [detail, invalidate, invalidateSoon, makeProposal, setPendingPayout, wait]
+    [detail, dropPending, invalidate, invalidateSoon, keepPending, makeProposal, wait]
   );
 
   const pay = React.useCallback(
     async (recipient: PayoutRecipient, amount: number): Promise<DirectPayoutOutcome> => {
-      // An unfinished payout must be finished, not paid over with a second one.
-      if (!detail || pendingPayout)
+      // An unfinished payout must be finished, not paid over with a second one —
+      // including one another tab started after this tab last read storage.
+      if (!detail || syncFromStorage().length > 0)
         return { status: 'not-paid', message: 'Finish the payout already in progress first.' };
       setBusy(true);
       try {
@@ -227,13 +276,13 @@ export function useDirectPayout(
         };
         // Recorded before the ledger call: if the tab dies mid-request, the
         // points may have moved and this is what lets the editor finish.
-        setPendingPayout(pending);
+        keepPending(pending);
         return await advance(pending, true);
       } finally {
         setBusy(false);
       }
     },
-    [advance, detail, pendingPayout, setPendingPayout]
+    [advance, detail, keepPending, syncFromStorage]
   );
 
   const finish = React.useCallback(async (): Promise<DirectPayoutOutcome> => {

@@ -12,7 +12,8 @@ import {
   PAYOUT_TYPE_ID,
 } from './ontology';
 import { PayoutCreditError } from './payout-credit';
-import { useDirectPayout } from './use-direct-payout';
+import { pendingPayoutStorageKey, savePendingPayout } from './pending-payout-storage';
+import { type PendingPayout, useDirectPayout } from './use-direct-payout';
 
 const mocks = vi.hoisted(() => ({
   makeProposal: vi.fn(),
@@ -24,12 +25,15 @@ const mocks = vi.hoisted(() => ({
   landed: new Set<string>(),
   /** Whether a successful publish shows up in the graph (an executed FAST proposal). */
   publishLands: true,
+  /** The graph read fails (subgraph/API error). */
+  graphDown: false,
 }));
 
 vi.mock('./fetch-submissions', async () => {
   const { Effect } = await import('effect');
   return {
-    fetchPayoutItems: () => Effect.succeed([...mocks.landed].map(id => ({ id }))),
+    fetchPayoutItems: () =>
+      mocks.graphDown ? Effect.fail(new Error('graph down')) : Effect.succeed([...mocks.landed].map(id => ({ id }))),
   };
 });
 
@@ -90,6 +94,7 @@ beforeEach(() => {
   mocks.calls = [];
   mocks.landed = new Set();
   mocks.publishLands = true;
+  mocks.graphDown = false;
   mocks.token = 'jwt';
   mocks.makeProposal.mockReset();
   mocks.recordPayoutCredit.mockReset();
@@ -258,5 +263,79 @@ describe('useDirectPayout', () => {
     });
     expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
     expect(result.current.pendingPayout).toBeNull();
+  });
+
+  // Copilot r4353760582: a failed graph read is not "absent".
+  it('on Finish, does not propose again when the graph cannot be read', async () => {
+    mocks.publishLands = false;
+    const { result } = renderHook(usePayout);
+    await payIbrahim(result);
+    expect(result.current.pendingPayout?.stage).toBe('publish');
+    // The first proposal executes, but the read that would show it fails.
+    mocks.landed.add(outerRelationId(mocks.makeProposal.mock.calls[0][0].relations));
+    mocks.graphDown = true;
+
+    await act(async () => {
+      expect(await result.current.finish()).toEqual({ status: 'publish-unconfirmed' });
+    });
+    expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+    expect(result.current.pendingPayout?.stage).toBe('publish');
+  });
+
+  it('on Finish, recognises a payout another tab already finished rather than proposing it again', async () => {
+    mocks.recordPayoutCredit.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    const { result } = renderHook(usePayout);
+    await payIbrahim(result);
+    expect(result.current.pendingPayout?.stage).toBe('credit');
+    // Meanwhile another tab credited and published it; the ledger answers "already processed".
+    mocks.landed.add(result.current.pendingPayout!.payoutRelationId);
+
+    await act(async () => {
+      expect(await result.current.finish()).toEqual({ status: 'paid' });
+    });
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+
+  // Copilot r4353760521: one browser, two tabs.
+  it('refuses a new payout when another tab has started one since this tab loaded', async () => {
+    const { result } = renderHook(usePayout);
+    await act(async () => {});
+    expect(result.current.pendingPayout).toBeNull();
+
+    const otherTab: PendingPayout = {
+      stage: 'publish',
+      payoutRelationId: 'ffff0000000000000000000000000099',
+      recipient: { spaceId: 'eeee0000000000000000000000000088', name: 'Other' },
+      amount: 40,
+      values: [],
+      relations: [],
+    };
+    savePendingPayout(BOUNTY, otherTab);
+
+    expect(await payIbrahim(result)).toMatchObject({ status: 'not-paid' });
+    expect(mocks.calls).toEqual([]);
+    expect(result.current.pendingPayout).toEqual(otherTab);
+    // The other tab's record is untouched.
+    expect(JSON.parse(window.localStorage.getItem(pendingPayoutStorageKey(BOUNTY))!)).toEqual({
+      [otherTab.payoutRelationId]: otherTab,
+    });
+  });
+
+  it('shows a payout another tab started, via the storage event', async () => {
+    const { result } = renderHook(usePayout);
+    await act(async () => {});
+    const otherTab: PendingPayout = {
+      stage: 'credit',
+      payoutRelationId: 'ffff0000000000000000000000000099',
+      recipient: { spaceId: 'eeee0000000000000000000000000088', name: 'Other' },
+      amount: 40,
+      values: [],
+      relations: [],
+    };
+    savePendingPayout(BOUNTY, otherTab);
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent('storage', { key: pendingPayoutStorageKey(BOUNTY) }));
+    });
+    expect(result.current.pendingPayout).toEqual(otherTab);
   });
 });
