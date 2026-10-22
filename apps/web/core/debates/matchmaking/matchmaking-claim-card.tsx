@@ -58,6 +58,11 @@ import type {
   MatchmakingReadiness,
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
+import {
+  type DebateAnalyticsAttributes,
+  type DebateAnalyticsSurface,
+  debateActionAnalyticsAttributes,
+} from './hub-analytics';
 import { hubCardMotion } from './hub-motion';
 import { useHubScrollSelector } from './hub-scroll';
 
@@ -166,6 +171,11 @@ type Props = {
    * gallery — and left unset where the pills should stay disabled signed out.
    */
   allowsSignedOutVotes?: boolean;
+  /**
+   * Names the card's clicks for analytics on this surface, e.g. "Debate rematch Claim card agree".
+   * Unset, the card's controls carry no label, as before.
+   */
+  analyticsSurface?: DebateAnalyticsSurface;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -211,6 +221,7 @@ export function MatchmakingClaimCard({
   allowsSignedOutVotes = false,
   hideEndSlot,
   endSlot,
+  analyticsSurface,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -258,6 +269,7 @@ export function MatchmakingClaimCard({
           claim={claim}
           positions={positions}
           readiness={readiness}
+          analyticsSurface={analyticsSurface}
           activeDebate={activeDebate}
           answersReady={answersReady}
           answersMayComeFromIndex={answersMayComeFromIndex}
@@ -277,6 +289,7 @@ export function MatchmakingClaimCard({
         <UnresolvableControls
           positions={positions}
           readiness={readiness}
+          analyticsSurface={analyticsSurface}
           claim={claim}
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
@@ -310,6 +323,7 @@ function ClaimHeader({
   isControversial,
   meta,
   onOpenClaim,
+  analytics,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
@@ -319,17 +333,24 @@ function ClaimHeader({
   /** Flagged beside the space chip — what kind of claim this is, which is the row's own question. */
   isControversial?: boolean;
   onOpenClaim?: () => void;
+  analytics?: DebateAnalyticsAttributes;
 }) {
   const claimTextClassName = 'claim-card-panel-title';
 
   const openable = isOnGraph ? (
     onOpenClaim ? (
-      <button type="button" onClick={onOpenClaim} className={`${claimTextClassName} text-left hover:underline`}>
+      <button
+        type="button"
+        onClick={onOpenClaim}
+        {...analytics}
+        className={`${claimTextClassName} text-left hover:underline`}
+      >
         {claim.claim}
       </button>
     ) : (
       <Link
         href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
+        {...analytics}
         className={`${claimTextClassName} hover:underline`}
       >
         {claim.claim}
@@ -765,6 +786,7 @@ function RespondableControls({
   headerMeta,
   hasFooter,
   noteFor,
+  analyticsSurface,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -799,6 +821,7 @@ function RespondableControls({
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
   headerMeta?: React.ReactNode;
+  analyticsSurface?: DebateAnalyticsSurface;
 }) {
   // One read for the card, and now the second half of what the card draws from. The header flags a
   // contested claim, the footer reports the split, and — since GEO-2823 — the viewer's own response
@@ -935,6 +958,7 @@ function RespondableControls({
         claim={claim}
         isOnGraph
         onOpenClaim={onOpenClaim}
+        analytics={analyticsSurface ? debateActionAnalyticsAttributes(analyticsSurface, 'Claim card title') : undefined}
         isControversial={summary.isControversial}
         meta={headerMeta}
         endSlot={
@@ -965,6 +989,7 @@ function RespondableControls({
         titleFor={actionTitle}
         noteFor={noteFor}
         localSide={localVoteSide}
+        analyticsSurface={analyticsSurface}
       />
       {responseError ? (
         <div role="alert" className="mt-2">
@@ -1137,12 +1162,14 @@ function UnresolvableControls({
   hideEndSlot,
   endSlot,
   headerMeta,
+  analyticsSurface,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: Debate | boolean | null;
   onOpenClaim?: () => void;
+  analyticsSurface?: DebateAnalyticsSurface;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
   headerMeta?: React.ReactNode;
@@ -1153,6 +1180,7 @@ function UnresolvableControls({
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
+        analytics={analyticsSurface ? debateActionAnalyticsAttributes(analyticsSurface, 'Claim card title') : undefined}
         meta={headerMeta}
         endSlot={
           /* The slot stays live even though the graph cannot resolve this claim, because nothing in
@@ -1207,6 +1235,7 @@ export function PositionRow({
   localSide = null,
   endSlot,
   showParticipants = true,
+  analyticsSurface,
 }: {
   positions: DebateClaimPositionSummary[];
   responseKind: ResponseKind;
@@ -1246,6 +1275,8 @@ export function PositionRow({
    * apart, and the nearer one reads as the voters.
    */
   showParticipants?: boolean;
+  /** Names the two pills for click analytics: "<surface> Claim card agree" / "… disagree". */
+  analyticsSurface?: DebateAnalyticsSurface;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
   const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
@@ -1298,6 +1329,11 @@ export function PositionRow({
             pending={pending}
             title={titleFor?.(true)}
             localOnly={localSide === true}
+            analytics={
+              analyticsSurface
+                ? debateActionAnalyticsAttributes(analyticsSurface, `Claim card ${copy.positiveAction.toLowerCase()}`)
+                : undefined
+            }
           />
           {localSide === true ? <LocalVoteNote /> : noteFor?.(true)}
         </div>
@@ -1313,6 +1349,11 @@ export function PositionRow({
             pending={pending}
             title={titleFor?.(false)}
             localOnly={localSide === false}
+            analytics={
+              analyticsSurface
+                ? debateActionAnalyticsAttributes(analyticsSurface, `Claim card ${copy.negativeAction.toLowerCase()}`)
+                : undefined
+            }
           />
           {localSide === false ? <LocalVoteNote /> : noteFor?.(false)}
         </div>
@@ -1365,6 +1406,7 @@ function PositionButton({
   pending,
   title,
   localOnly = false,
+  analytics,
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
@@ -1377,6 +1419,7 @@ function PositionButton({
   title?: string;
   /** The selection is a vote kept on this device, not yet counted. */
   localOnly?: boolean;
+  analytics?: DebateAnalyticsAttributes;
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
@@ -1429,6 +1472,7 @@ function PositionButton({
       aria-disabled={pending || undefined}
       disabled={disabled}
       title={title}
+      {...analytics}
       onClick={() => {
         if (!pending) onRespond(position);
       }}

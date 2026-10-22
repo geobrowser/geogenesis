@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { DebateTileChip, tileChipSurface } from '~/core/debates/debate-video-tile';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
@@ -321,6 +322,8 @@ function YouCard({
       <button
         type="button"
         onClick={voice.onAction}
+        // The fixed copy of the voice states ("Retry", "Enable audio"), never anything a person wrote.
+        {...debateActionAnalyticsAttributes('rematch', `Voice ${voice.actionLabel.toLowerCase()}`)}
         className={cx(PAIR_PILL, 'rounded-full bg-text text-white transition-opacity hover:opacity-80')}
       >
         {voice.actionLabel}
@@ -362,7 +365,12 @@ function YouCard({
             {live && voice.micFailureMessage ? (
               // A disabled button is out of the tab order, so the way back has to be text rather
               // than a tooltip on a control nobody can reach.
-              <button type="button" onClick={voice.onRetryMic} className="text-footnoteMedium text-text underline">
+              <button
+                type="button"
+                onClick={voice.onRetryMic}
+                {...debateActionAnalyticsAttributes('rematch', 'Retry microphone')}
+                className="text-footnoteMedium text-text underline"
+              >
                 Try again
               </button>
             ) : null}
@@ -438,6 +446,9 @@ function OpponentCard({
         data-testid="rematch-opponent-card"
         onClick={onOpen}
         aria-label={`Open ${name}’s personal space`}
+        // A fixed label, so the series doesn't split per opponent. The runtime still sends the
+        // aria-label, name included, as `element_aria_label`.
+        {...debateActionAnalyticsAttributes('rematch', 'Opponent card')}
         aria-describedby={describedBy}
         className={cx(
           CARD_SURFACE,
@@ -455,6 +466,7 @@ function OpponentCard({
           type="button"
           aria-label="Hide floating video"
           title="Hide floating video"
+          {...debateActionAnalyticsAttributes('rematch', 'Hide floating video')}
           onClick={event => {
             // Keyboard dismissal must leave focus in the visible picker. Pointer dismissal
             // should not focus the search box and open the phone's keyboard.
@@ -625,10 +637,12 @@ function UnmuteNotice({ opponentName, onUnmute, onDismiss }: PairHeaderNotice & 
       data-testid="rematch-unmute-notice"
       icon={<MicrophoneIcon muted />}
       onDismiss={onDismiss}
+      dismissAnalytics={debateActionAnalyticsAttributes('rematch', 'Unmute notice dismiss')}
       action={
         <button
           type="button"
           onClick={onUnmute}
+          {...debateActionAnalyticsAttributes('rematch', 'Unmute notice unmute')}
           className="h-7 shrink-0 rounded-full border border-grey-02 bg-white px-2.5 text-metadataMedium text-text transition-colors hover:border-grey-03"
         >
           Unmute
@@ -647,6 +661,7 @@ function UnmuteNotice({ opponentName, onUnmute, onDismiss }: PairHeaderNotice & 
  */
 function VoiceToast({ toast, opponentName }: { toast: PairHeaderToast; opponentName: string }) {
   const name = firstName(opponentName);
+  const analyticsToast = toast.kind === 'opponent-talking' ? 'Opponent talking toast' : 'Talking while muted toast';
 
   return (
     <div
@@ -662,6 +677,7 @@ function VoiceToast({ toast, opponentName }: { toast: PairHeaderToast; opponentN
       <button
         type="button"
         onClick={toast.onUnmute}
+        {...debateActionAnalyticsAttributes('rematch', `${analyticsToast} unmute`)}
         className="h-7 shrink-0 rounded-full bg-white px-2.5 text-metadataMedium text-text transition-opacity hover:opacity-80"
       >
         {toast.kind === 'opponent-talking' ? 'Unmute to reply' : 'Unmute'}
@@ -670,6 +686,7 @@ function VoiceToast({ toast, opponentName }: { toast: PairHeaderToast; opponentN
         type="button"
         onClick={toast.onDismiss}
         aria-label="Dismiss"
+        {...debateActionAnalyticsAttributes('rematch', `${analyticsToast} dismiss`)}
         className="grid size-7 shrink-0 place-items-center rounded-full text-grey-03 transition-colors hover:text-white"
       >
         <CloseSmall />
