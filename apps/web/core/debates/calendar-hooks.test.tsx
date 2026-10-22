@@ -161,6 +161,27 @@ describe('first sync', () => {
       vi.useRealTimers();
     }
   });
+  it('rereads busy time when one of two first syncs lands, while the other still runs', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const synced = { ...syncing, stale: false, last_success_at: '2026-10-22T14:03:11Z' };
+      mocks.getCalendarConnections
+        .mockResolvedValueOnce({ providers: ['google', 'microsoft'], google: syncing, microsoft: syncing })
+        .mockResolvedValue({ providers: ['google', 'microsoft'], google: synced, microsoft: syncing });
+      const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+      const { result } = renderHook(() => useCalendarConnections(true), { wrapper });
+      await waitFor(() => expect(isCalendarSyncing(result.current.google)).toBe(true));
+
+      await act(() => vi.advanceTimersByTimeAsync(CALENDAR_SYNCING_POLL_MS));
+      await waitFor(() => expect(result.current.google?.stale).toBe(false));
+
+      expect(isCalendarSyncing(result.current.microsoft)).toBe(true);
+      expect(invalidatedKeys(invalidate)).toEqual(expect.arrayContaining([debateQueryKeys.calendarBusyRoot('user-a')]));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('useCalendarBusy', () => {

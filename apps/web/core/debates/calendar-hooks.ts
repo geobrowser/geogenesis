@@ -47,8 +47,11 @@ export function isCalendarSyncing(connection: CalendarConnection | null | undefi
   return connection?.status === 'ok' && connection.stale && connection.last_success_at === null;
 }
 
-function anySyncing(data: CalendarConnections | undefined) {
-  return isCalendarSyncing(data?.google) || isCalendarSyncing(data?.microsoft);
+const PROVIDERS: CalendarProvider[] = ['google', 'microsoft'];
+
+/** The providers whose first sync is running, as one string so it compares by value. */
+function syncingProviders(data: CalendarConnections | undefined) {
+  return PROVIDERS.filter(provider => isCalendarSyncing(data?.[provider])).join(',');
 }
 
 /** The viewer's connected calendars. `enabled` is a calendar flag and the editor being open. */
@@ -61,14 +64,15 @@ export function useCalendarConnections(enabled: boolean) {
     queryKey: debateQueryKeys.calendarConnections(accountKey),
     queryFn: () => getCalendarConnections(getPrivyIdentityToken, accountKey),
     enabled: enabled && accountKey !== null,
-    refetchInterval: ({ state }) => (anySyncing(state.data) ? CALENDAR_SYNCING_POLL_MS : false),
+    refetchInterval: ({ state }) => (syncingProviders(state.data) ? CALENDAR_SYNCING_POLL_MS : false),
   });
 
-  // Busy time read during the first sync is empty, so read it again once the sync lands.
-  const syncing = anySyncing(query.data);
+  // Busy time read during a first sync is missing that calendar, so read it again as each one lands.
+  const syncing = syncingProviders(query.data);
   const wasSyncing = React.useRef(syncing);
   React.useEffect(() => {
-    if (wasSyncing.current && !syncing) invalidate();
+    const now = syncing.split(',');
+    if (wasSyncing.current && wasSyncing.current.split(',').some(provider => !now.includes(provider))) invalidate();
     wasSyncing.current = syncing;
   }, [syncing, invalidate]);
 
