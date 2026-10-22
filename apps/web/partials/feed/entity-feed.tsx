@@ -132,8 +132,6 @@ type EntityFeedProps = {
   typeCountsPending?: boolean;
   /** Start contextual feeds on only the types whose population count is non-zero. */
   selectTypesWithResultsByDefault?: boolean;
-  /** Optional Topic facet shown beside the type picker. */
-  topicOptions?: HubFilterOption<string>[];
   /** Optional endpoint that counts and prunes Topic options against this feed's current filters. */
   topicFacetEndpoint?: string;
   /** Keep the Topic picker visible while its options load or when the default list is empty. */
@@ -294,7 +292,6 @@ export function EntityFeed({
   typeCounts,
   typeCountsPending = false,
   selectTypesWithResultsByDefault = false,
-  topicOptions = [],
   topicFacetEndpoint,
   showTopicFilter = false,
   fixedParams = {},
@@ -320,7 +317,7 @@ export function EntityFeed({
   const spaceFilterVisible = moreFiltersRevealed && lockedSpaceId == null;
   const topicFilterVisible = showMoreFilters
     ? showTopicFilter && moreFiltersRevealed
-    : showTopicFilter || topicOptions.length > 0 || Boolean(topicFacetEndpoint);
+    : showTopicFilter || Boolean(topicFacetEndpoint);
   const typeSelectionTouchedRef = React.useRef(false);
   const contextualTypeDefaultAppliedRef = React.useRef(false);
   // A locked space is the whole filter; otherwise whatever the revealed space menu has ticked, and
@@ -448,7 +445,7 @@ export function EntityFeed({
         })
       );
     }
-    return topicOptions;
+    return [];
   }, [
     topicFacetEndpoint,
     topicFacets.data?.topics,
@@ -456,7 +453,6 @@ export function EntityFeed({
     exploreTopicFacet.topics,
     exploreTopicFacet.namesPending,
     selectedTopicIds,
-    topicOptions,
   ]);
 
   // A contextual feed prunes its selection against the settled REST payload; Explore prunes against
@@ -712,7 +708,6 @@ export function EntityFeed({
     'Any topic',
     () =>
       topicFacets.data?.topics.find(topic => normId(topic.id) === normId(selectedTopicIds[0]))?.name ??
-      topicOptions.find(option => normId(option.value) === normId(selectedTopicIds[0]))?.label ??
       availableTopicOptions.find(option => normId(option.value) === normId(selectedTopicIds[0]))?.label ??
       '1 topic',
     count => `${count} topics`

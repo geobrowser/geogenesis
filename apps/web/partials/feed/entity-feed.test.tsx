@@ -352,11 +352,6 @@ describe('EntityFeed card and query wiring', () => {
 });
 
 describe('EntityFeed contextual filters', () => {
-  const topicOptions = [
-    { value: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', label: 'Alignment' },
-    { value: 'cccccccccccccccccccccccccccccccc', label: 'Governance' },
-  ];
-
   function renderTopicFeed() {
     return render(
       <EntityFeed
@@ -367,7 +362,6 @@ describe('EntityFeed contextual filters', () => {
         showTypeFilter
         initialTypeIds={EXPLORE_ENTITY_TYPE_IDS}
         typeOptions={EXPLORE_ENTITY_TYPES}
-        topicOptions={topicOptions}
         fixedParams={{ topicId: 'topic-root', spaceId: 'space-route', spaceIds: 'space-route' }}
       />
     );
@@ -412,17 +406,6 @@ describe('EntityFeed contextual filters', () => {
 
     const request = new URL(await requestedUrl(), 'https://example.com');
     expect(request.searchParams.get('typeIds')).toBeNull();
-  });
-
-  it('sends selected child topics as additional narrowing', async () => {
-    renderTopicFeed();
-
-    pickOption('Alignment');
-
-    await waitFor(async () => {
-      const request = new URL(await requestedUrl(), 'https://example.com');
-      expect(request.searchParams.get('topicIds')).toBe('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
-    });
   });
 
   it('shows entity counts and removes settled zero-result Topic options', () => {
