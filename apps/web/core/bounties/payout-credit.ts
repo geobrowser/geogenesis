@@ -9,6 +9,8 @@
  * Mirrors curator-app's `recordPayoutCredit` (utils/manual-payout.ts),
  * including passing the outer Payout Recipient relation id as `payoutEntityId`.
  */
+import { uuidToHex } from '~/core/id/normalize';
+
 import { CURATOR_API_URL } from './config';
 
 const CREDIT_RETRY_DELAYS_MS = [0, 750, 1500, 3000] as const;
@@ -26,10 +28,6 @@ export class PayoutCreditError extends Error {
 /** Network failures and 5xx are worth retrying; a 4xx (not an editor, bad amount, low balance) is not. */
 export function isRetryableCreditError(error: unknown): boolean {
   return !(error instanceof PayoutCreditError) || error.status === null || error.status >= 500;
-}
-
-function hex(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
 }
 
 async function messageFrom(response: Response): Promise<string> {
@@ -67,14 +65,14 @@ export async function recordPayoutCredit(
     try {
       // The backend reads the new Payout from the graph, which can lag the
       // publish by a moment — hence retrying 5xx briefly.
-      const response = await fetchImpl(`${CURATOR_API_URL}/space/${hex(input.spaceId)}/payout`, {
+      const response = await fetchImpl(`${CURATOR_API_URL}/space/${uuidToHex(input.spaceId)}/payout`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${input.identityToken}` },
         body: JSON.stringify({
           amount: Math.round(input.amount),
-          bountyId: hex(input.bountyId),
-          payoutEntityId: hex(input.payoutEntityId),
-          recipientEntityId: hex(input.recipientEntityId),
+          bountyId: uuidToHex(input.bountyId),
+          payoutEntityId: uuidToHex(input.payoutEntityId),
+          recipientEntityId: uuidToHex(input.recipientEntityId),
         }),
       });
       if (!response.ok) throw new PayoutCreditError(await messageFrom(response), response.status);
@@ -93,7 +91,7 @@ export async function recordPayoutCredit(
 /** The space's spendable points balance, or null when the ledger can't be read. */
 export async function fetchSpaceBalance(spaceId: string, fetchImpl: typeof fetch = fetch): Promise<number | null> {
   try {
-    const response = await fetchImpl(`${CURATOR_API_URL}/space/${hex(spaceId)}`);
+    const response = await fetchImpl(`${CURATOR_API_URL}/space/${uuidToHex(spaceId)}`);
     if (!response.ok) return null;
     const body = (await response.json()) as { balance?: unknown };
     const balance = Number(body.balance);

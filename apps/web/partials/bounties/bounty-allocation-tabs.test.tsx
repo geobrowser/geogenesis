@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   pay: vi.fn(async () => ({ status: 'paid' as const })),
   // Person entity → personal space, as the graph resolves pages to spaces.
   spaceByPerson: new Map<string, string>(),
+  lookupFails: false,
   searchPick: null as { spaceId: string; personId: string; name: string | null } | null,
 }));
 
@@ -39,8 +40,10 @@ vi.mock('~/core/bounties/use-direct-payout', () => ({
   useSpaceBalance: () => ({ data: 6880, isLoading: false }),
 }));
 vi.mock('~/core/io/subgraph/fetch-personal-spaces-by-page-ids', () => ({
-  fetchPersonalSpacesByPageIds: async (ids: string[]) =>
-    new Map(ids.flatMap(id => (mocks.spaceByPerson.has(id) ? [[id, mocks.spaceByPerson.get(id)!]] : []))),
+  fetchPersonalSpacesByPageIds: async (ids: string[]) => {
+    if (mocks.lookupFails) throw new Error('graph down');
+    return new Map(ids.flatMap(id => (mocks.spaceByPerson.has(id) ? [[id, mocks.spaceByPerson.get(id)!]] : [])));
+  },
 }));
 vi.mock('./curator-search', () => ({
   CuratorSearch: ({
@@ -128,6 +131,7 @@ beforeEach(() => {
   mocks.remove.mockClear();
   mocks.pay.mockClear();
   mocks.spaceByPerson = new Map();
+  mocks.lookupFails = false;
   mocks.searchPick = null;
 });
 afterEach(cleanup);
@@ -209,5 +213,13 @@ describe('BountyAllocationTabs', () => {
     const full = { ...detail, bounty: { ...detail.bounty, maxContributors: 1 } };
     render(<BountyAllocationTabs detail={full} roles={{ ...viewer, isEditor: true }} />);
     expect(screen.queryByTestId('allocate-search')).not.toBeInTheDocument();
+  });
+
+  it('keeps Pay disabled when the person-to-space lookup fails, rather than paying a person entity', async () => {
+    mocks.lookupFails = true;
+    render(<BountyAllocationTabs detail={detail} roles={{ ...viewer, isEditor: true }} />);
+    // Let the failed lookup settle; Pay must never enable.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.getByRole('button', { name: 'Pay' })).toBeDisabled();
   });
 });

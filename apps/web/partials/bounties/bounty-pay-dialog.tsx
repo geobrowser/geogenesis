@@ -4,7 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
-import { formatPoints } from '~/core/bounties/payout';
+import { formatPoints, parseWholePoints } from '~/core/bounties/payout';
 import type { DirectPayoutOutcome, PayoutRecipient, PendingCredit } from '~/core/bounties/use-direct-payout';
 
 import { Button, SquareButton } from '~/design-system/button';
@@ -29,10 +29,9 @@ type Props = {
 
 /** First problem with the amount, or null. */
 export function validatePayoutAmount(raw: string, balance: number | null): string | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return 'Enter an amount.';
-  const amount = Number(trimmed);
-  if (!Number.isInteger(amount) || amount <= 0) return 'Amount must be a positive whole number of points.';
+  if (!raw.trim()) return 'Enter an amount.';
+  const amount = parseWholePoints(raw);
+  if (amount == null) return 'Amount must be a positive whole number of points.';
   if (balance != null && amount > balance) return `This space only has ${formatPoints(balance)} points.`;
   return null;
 }
@@ -85,7 +84,7 @@ export function BountyPayDialog({
       return;
     }
     setError(null);
-    handleOutcome(await onPay(Number(amount.trim())));
+    handleOutcome(await onPay(parseWholePoints(amount)!));
   };
 
   return (

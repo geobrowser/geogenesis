@@ -1,13 +1,12 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { usePersonalSpacesByPageIds } from '~/core/hooks/use-personal-spaces-by-page-ids';
 import { useSearch } from '~/core/hooks/use-search';
 import { uuidToHex } from '~/core/id/normalize';
-import { fetchPersonalSpacesByPageIds } from '~/core/io/subgraph/fetch-personal-spaces-by-page-ids';
 
 import { Text } from '~/design-system/text';
 
@@ -56,13 +55,8 @@ export function CuratorSearch({ placeholder, allocatedIds, onSelect }: Props) {
     restrictToFilterTypes: true,
     analyticsSurface: false,
   });
-  const personIds = React.useMemo(() => [...new Set(results.map(r => uuidToHex(r.id)))].sort(), [results]);
-  const spaces = useQuery({
-    queryKey: ['curator-search-spaces', personIds.join(',')],
-    enabled: personIds.length > 0,
-    staleTime: 5 * 60_000,
-    queryFn: () => fetchPersonalSpacesByPageIds(personIds),
-  });
+  const personIds = React.useMemo(() => results.map(r => r.id), [results]);
+  const spaces = usePersonalSpacesByPageIds(personIds);
   const matches = React.useMemo(() => filterToCurators(results, spaces.data ?? new Map()), [results, spaces.data]);
 
   const searching = query.trim() !== '' && (isLoading || (personIds.length > 0 && spaces.isLoading));

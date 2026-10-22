@@ -1,7 +1,5 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -11,8 +9,8 @@ import { useBountyAllocationActions } from '~/core/bounties/use-bounty-actions';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
 import { type PayoutRecipient, useDirectPayout, useSpaceBalance } from '~/core/bounties/use-direct-payout';
 import { useEntityNames } from '~/core/bounties/use-entity-names';
+import { usePersonalSpacesByPageIds } from '~/core/hooks/use-personal-spaces-by-page-ids';
 import { uuidToHex } from '~/core/id/normalize';
-import { fetchPersonalSpacesByPageIds } from '~/core/io/subgraph/fetch-personal-spaces-by-page-ids';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -52,12 +50,7 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
   // Payouts go to the curator's personal space. Allocations written by curator-app
   // point at the person entity instead, so map those people to their spaces; an id
   // missing from the map is already a space.
-  const spaceByPerson = useQuery({
-    queryKey: ['bounty-allocated-spaces', allocatedIds.join(',')],
-    enabled: roles.isEditor && allocatedIds.length > 0,
-    staleTime: 5 * 60_000,
-    queryFn: () => fetchPersonalSpacesByPageIds(allocatedIds),
-  });
+  const spaceByPerson = usePersonalSpacesByPageIds(allocatedIds, roles.isEditor);
   const recipientSpaceId = (id: string) => spaceByPerson.data?.get(id) ?? id;
 
   const spotsLeft =
@@ -119,7 +112,7 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
                   tab === 'allocated' ? (
                     <div className="flex shrink-0 items-center gap-2">
                       <SmallButton
-                        disabled={payout.busy || spaceByPerson.isLoading}
+                        disabled={payout.busy || !spaceByPerson.isSuccess}
                         onClick={() =>
                           setPaying({
                             recipient: { spaceId: recipientSpaceId(id), name: names.data?.get(id) ?? null },

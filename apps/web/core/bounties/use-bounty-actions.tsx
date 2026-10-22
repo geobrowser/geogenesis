@@ -18,7 +18,7 @@ import {
   groupRelationsBySpace,
 } from './interest-ops';
 import { reconcileDeletedRelations } from './reconcile-store';
-import { bountyQueryKeys } from './use-bounties';
+import { bountyQueryKeys, useInvalidateSoon } from './use-bounties';
 import type { BountyRoles } from './use-bounty-roles';
 
 type ActionState = { pending: boolean; error: string | null };
@@ -47,11 +47,7 @@ export function useBountyInterestActions(detail: BountyDetail | null | undefined
     [queryClient]
   );
 
-  // Re-invalidate on a short schedule after a publish; one immediate refetch
-  // usually beats the indexer and misses the new row.
-  const invalidateSoon = React.useCallback(() => {
-    for (const delay of [3_000, 7_000, 12_000]) window.setTimeout(() => void invalidate(), delay);
-  }, [invalidate]);
+  const invalidateSoon = useInvalidateSoon(invalidate);
 
   const expressInterest = React.useCallback(async () => {
     if (!detail || !roles.personalSpaceId) return false;

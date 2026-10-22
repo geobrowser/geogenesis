@@ -38,3 +38,11 @@ export function isBountyEnded(deadline: string | null, now: number = Date.now())
   const ms = Date.parse(deadline);
   return Number.isFinite(ms) && ms < now;
 }
+
+/** A typed points amount as a positive whole number, or null when it isn't one. */
+export function parseWholePoints(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const amount = Number(trimmed);
+  return Number.isInteger(amount) && amount > 0 ? amount : null;
+}

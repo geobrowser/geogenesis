@@ -11,9 +11,7 @@ import { usePublish } from '~/core/hooks/use-publish';
 import type { BountyDetail } from './fetch-bounty-detail';
 import { fetchSpaceBalance, recordPayoutCredit } from './payout-credit';
 import { buildPayoutOps } from './payout-ops';
-import { bountyQueryKeys } from './use-bounties';
-
-const REFETCH_DELAYS_MS = [3_000, 7_000, 12_000];
+import { bountyQueryKeys, useInvalidateSoon } from './use-bounties';
 
 export type PayoutRecipient = {
   /** The curator's personal space id — its system entity is the recipient. */
@@ -59,13 +57,15 @@ export function useDirectPayout(detail: BountyDetail | null | undefined) {
   const [busy, setBusy] = React.useState(false);
   const [pendingCredit, setPendingCredit] = React.useState<PendingCredit | null>(null);
 
+  const invalidate = React.useCallback(
+    () => queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all }),
+    [queryClient]
+  );
+  const invalidateSoon = useInvalidateSoon(invalidate);
   const refresh = React.useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all });
-    // New payouts take a few seconds to be indexed; one refetch usually misses them.
-    for (const delay of REFETCH_DELAYS_MS) {
-      window.setTimeout(() => void queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all }), delay);
-    }
-  }, [queryClient]);
+    void invalidate();
+    invalidateSoon();
+  }, [invalidate, invalidateSoon]);
 
   const credit = React.useCallback(
     async (pending: PendingCredit): Promise<DirectPayoutOutcome> => {
