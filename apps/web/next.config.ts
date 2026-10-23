@@ -143,6 +143,8 @@ const nextConfig: NextConfig = {
     : undefined,
   experimental: {
     turbopackRustReactCompiler: true,
+    // Also drops Turbopack's server and client source maps on previews (GEO-3453).
+    ...(isVercelPreview ? { turbopackSourceMaps: false } : {}),
     ...turbopackOptimizations,
     optimizePackageImports,
   },
