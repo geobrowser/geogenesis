@@ -197,8 +197,12 @@ export function PeerAvailabilityBookingModal({
                     noneWork.mutate(
                       { requestId: rescheduleRequestId },
                       {
-                        onSuccess: () => {
-                          setToast(<span>{noTimeWorksSentMessage(peerFirst, agreed)}</span>);
+                        onSuccess: result => {
+                          // The endpoint returns the resolved request, not an email receipt. An
+                          // untouched own invite is withdrawn without sending free times at all.
+                          setToast(
+                            <span>{result.status === 'declined' ? 'Request declined.' : 'Debate cancelled.'}</span>
+                          );
                           close();
                         },
                       }
@@ -231,7 +235,7 @@ export function PeerAvailabilityBookingModal({
             : null,
         }}
       />
-      {step === 'warn' && active && (
+      {props.open && step === 'warn' && warnsOnClose && active && (
         <RescheduleCloseWarning
           open
           peerFirstName={peerFirst}
@@ -248,11 +252,6 @@ export function PeerAvailabilityBookingModal({
       )}
     </>
   );
-}
-
-/** Said once "None of these work" has gone through (GEO-3429). An unanswered invite was declined, not cancelled. */
-function noTimeWorksSentMessage(peerFirstName: string, agreed: boolean) {
-  return `${agreed ? 'Debate cancelled. ' : ''}We’ve sent ${peerFirstName} your free times to pick from.`;
 }
 
 /** geo-chat's refusals of a move, said plainly; anything else keeps its own message. */

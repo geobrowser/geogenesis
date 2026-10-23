@@ -476,7 +476,7 @@ describe('moving a debate', () => {
 
   it('calls it off when no time works, then closes and says so', async () => {
     const { user, onClose } = moving('accepted');
-    mocks.noneWork.mockImplementation((_vars, options) => options?.onSuccess?.());
+    mocks.noneWork.mockImplementation((_vars, options) => options?.onSuccess?.({ status: 'cancelled' }));
 
     await user.click(screen.getByRole('button', { name: 'none work' }));
 
@@ -484,9 +484,45 @@ describe('moving a debate', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     // No "still on" warning on the way out: it isn't.
     expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
-    expect(
-      await screen.findByText('Debate cancelled. We’ve sent Ada your free times to pick from.')
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Debate cancelled.')).toBeInTheDocument();
+  });
+
+  it('does not promise emailed free times when withdrawing an unanswered own invite', async () => {
+    const ownInvite = {
+      request_id: REQUEST_ID,
+      status: 'pending',
+      scheduled_start_at: START,
+      room_id: null,
+      invited_by_user_id: 'user-me',
+      proposed_by_user_id: 'user-me',
+      reschedule_count: 0,
+      viewer_must_answer: false,
+      participants: [
+        { user_id: 'user-me', accepted: true },
+        { user_id: 'user-them', accepted: null },
+      ],
+    };
+    mocks.requests = [ownInvite];
+    // geo-chat returns a cancelled request without sending an email for this withdrawal.
+    mocks.noneWork.mockImplementation((_vars, options) => options?.onSuccess?.({ ...ownInvite, status: 'cancelled' }));
+    const onClose = vi.fn();
+    render(
+      withToast(
+        <PeerAvailabilityBookingModal
+          open
+          userId="user-them"
+          peerName="Ada"
+          rescheduleRequestId={REQUEST_ID}
+          onClose={onClose}
+        />
+      )
+    );
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'none work' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Debate cancelled.')).toBeInTheDocument();
+    expect(screen.queryByText(/sent .*free times/)).not.toBeInTheDocument();
   });
 
   it('warns before closing on an agreed debate, and Keep closes', async () => {
@@ -510,6 +546,35 @@ describe('moving a debate', () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'pick' })).toBeInTheDocument();
+  });
+
+  it('drops the close warning when the opponent proposes a new, unaccepted time', async () => {
+    const onClose = vi.fn();
+    const modal = () => (
+      <PeerAvailabilityBookingModal
+        open
+        userId="user-them"
+        peerName="Ada"
+        rescheduleRequestId={REQUEST_ID}
+        onClose={onClose}
+      />
+    );
+    const agreed = { request_id: REQUEST_ID, status: 'accepted', scheduled_start_at: START, room_id: 'room-1' };
+    mocks.requests = [agreed];
+    const { rerender } = render(modal());
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText('Close'));
+    expect(screen.getByRole('dialog', { name: /^Your debate is still on/ })).toBeInTheDocument();
+
+    mocks.requests = [{ ...agreed, status: 'pending', room_id: null, scheduled_start_at: '2026-10-23T17:00:00Z' }];
+    rerender(modal());
+
+    expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('current')).toHaveTextContent('2026-10-23T17:00:00Z pending');
+    expect(onClose).not.toHaveBeenCalled();
+    await user.click(screen.getByLabelText('Close'));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mocks.reschedule).not.toHaveBeenCalled();
   });
 
   it("opens Can't make it from the warning", async () => {
@@ -600,11 +665,21 @@ describe('moving a debate', () => {
 
   it('says an unanswered invite was not cancelled', async () => {
     const { user } = moving('pending');
-    mocks.noneWork.mockImplementation((_vars, options) => options?.onSuccess?.());
+    mocks.noneWork.mockImplementation((_vars, options) => options?.onSuccess?.({ status: 'declined' }));
 
     await user.click(screen.getByRole('button', { name: 'none work' }));
 
-    expect(await screen.findByText('We’ve sent Ada your free times to pick from.')).toBeInTheDocument();
+    expect(await screen.findByText('Request declined.')).toBeInTheDocument();
+    expect(screen.queryByText(/Debate cancelled/)).not.toBeInTheDocument();
+  });
+
+  it('confirms the returned outcome when an agreed debate became pending before cancellation', async () => {
+    const { user } = moving('accepted');
+    mocks.noneWork.mockImplementation((_vars, options) => options?.onSuccess?.({ status: 'declined' }));
+
+    await user.click(screen.getByRole('button', { name: 'none work' }));
+
+    expect(await screen.findByText('Request declined.')).toBeInTheDocument();
     expect(screen.queryByText(/Debate cancelled/)).not.toBeInTheDocument();
   });
 
