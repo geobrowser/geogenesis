@@ -110,6 +110,33 @@ vi.mock('./rooms/hooks', () => ({
 vi.mock('./rooms/room-opponent', async importOriginal => ({
   ...(await importOriginal<typeof import('./rooms/room-opponent')>()),
   useUpcomingRoomOpponent: () => null,
+  useUpcomingRoomRequest: (room: UpcomingDebateRoom) =>
+    room.kind === 'lobby' ? undefined : { request_id: `request-for-${room.room_id}` },
+}));
+
+// GEO-3427's dialog is its own suite. Here it only has to say which request and step it was opened
+// on, and report a send or a close.
+vi.mock('~/partials/scheduled-debates/scheduled-debate-notice', () => ({
+  ScheduledDebateNoticeDialog: ({
+    requestId,
+    initialStep,
+    onSent,
+    onClose,
+  }: {
+    requestId: string;
+    initialStep: string;
+    onSent?: () => void;
+    onClose: () => void;
+  }) => (
+    <div role="dialog" aria-label={`notice ${initialStep} ${requestId}`}>
+      <button type="button" onClick={onSent}>
+        Send notice
+      </button>
+      <button type="button" onClick={onClose}>
+        Close notice
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('./debate-attention', () => ({
@@ -1123,15 +1150,54 @@ describe('DebateCoordinator', () => {
     expect(await screen.findByRole('button', { name: 'Join lobby' })).toBeInTheDocument();
   });
 
-  it('snoozes a room for the session on Not now', async () => {
+  it('snoozes a reminded lobby for the session on Not now', async () => {
     mocks.pathname = '/space/space-1/claims';
-    mocks.upcomingRooms = [upcomingRoom()];
+    mocks.upcomingRooms = [upcomingRoom({ kind: 'lobby', name: 'Debate hour' })];
 
     render(<DebateCoordinator />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Not now' }));
 
-    await waitFor(() => expect(screen.queryByText(/Your debate/)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Debate hour is open')).not.toBeInTheDocument());
+  });
+
+  // GEO-3430. Not now on a booked debate hid it on one device and told the person waiting nothing.
+  describe('a booked debate banner', () => {
+    it('cannot be put away without a word: closing Running late unsent leaves it up', async () => {
+      mocks.pathname = '/space/space-1/claims';
+      mocks.upcomingRooms = [upcomingRoom({ due: true, others_present: true })];
+
+      render(<DebateCoordinator />);
+
+      await screen.findByText('Your debate room is open');
+      expect(screen.queryByRole('button', { name: 'Not now' })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Running late' }));
+      expect(screen.getByRole('dialog', { name: 'notice late request-for-room-1' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close notice' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByText('Your debate room is open')).toBeInTheDocument();
+    });
+
+    it('goes once the other debater has been told, and the confirmation outlives it', async () => {
+      mocks.pathname = '/space/space-1/claims';
+      mocks.upcomingRooms = [upcomingRoom()];
+
+      const { rerender } = render(<DebateCoordinator />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Can’t make it' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Send notice' }));
+
+      await waitFor(() => expect(screen.queryByText('Your debate room is open')).not.toBeInTheDocument());
+      // A cancel drops the room from the list; the dialog is still up to say it worked.
+      mocks.upcomingRooms = [];
+      rerender(<DebateCoordinator />);
+      expect(screen.getByRole('dialog', { name: 'notice cant request-for-room-1' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close notice' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 
   // GEO-2941. A source-debate-less rematch is the branch this coordinator pushes a focused tab

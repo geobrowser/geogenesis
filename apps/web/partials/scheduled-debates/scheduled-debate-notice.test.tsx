@@ -342,6 +342,33 @@ describe('ScheduledDebateNoticeDialog', () => {
     });
   });
 
+  // GEO-3430. The join banner stays up until the other debater has been told something.
+  describe('onSent', () => {
+    it.each([
+      ['late', 'Send to Maya', () => succeedWith(state.late, { expected_at: '2026-10-21T17:13:00.000Z', note: null })],
+      ['cant', 'Cancel the debate', () => succeedWith(state.cant, {})],
+    ] as const)('hears a %s that went through, once', async (step, send, succeed) => {
+      succeed();
+      const onSent = vi.fn();
+      render(
+        <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep={step} onClose={vi.fn()} onSent={onSent} />
+      );
+      expect(onSent).not.toHaveBeenCalled();
+
+      await userEvent.setup().click(screen.getByRole('button', { name: send }));
+      expect(onSent).toHaveBeenCalledTimes(1);
+    });
+
+    it('hears nothing while the send has not gone through', async () => {
+      const onSent = vi.fn();
+      render(
+        <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={vi.fn()} onSent={onSent} />
+      );
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel the debate' }));
+      expect(onSent).not.toHaveBeenCalled();
+    });
+  });
+
   // geo-chat lists a room whose debate already happened as joinable until it is swept.
   it('treats a debate that already happened as over, with nothing to press', () => {
     state.finished = true;
