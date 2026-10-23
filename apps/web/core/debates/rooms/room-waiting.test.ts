@@ -100,23 +100,17 @@ describe('showsWaitingStatus', () => {
 
 describe('nudgeButtonState', () => {
   it('waits out the 15 minutes as Nudged, then is ready again', () => {
-    expect(nudgeButtonState(room, false, at('2026-10-21T17:10:00.000Z'))).toEqual({
-      kind: 'nudged',
-      until: at('2026-10-21T17:19:00.000Z'),
-    });
-    expect(nudgeButtonState(room, false, at('2026-10-21T17:19:00.000Z'))).toEqual({ kind: 'ready' });
+    expect(nudgeButtonState(room, false, at('2026-10-21T17:10:00.000Z'))).toBe('nudged');
+    expect(nudgeButtonState(room, false, at('2026-10-21T17:19:00.000Z'))).toBe('ready');
   });
 
   it('stays Nudged for good once both are used', () => {
-    expect(nudgeButtonState({ ...room, viewer_next_nudge_at: null }, false, Date.now())).toEqual({
-      kind: 'nudged',
-      until: null,
-    });
+    expect(nudgeButtonState({ ...room, viewer_next_nudge_at: null }, false, Date.now())).toBe('nudged');
   });
 
   it('has nobody to nudge once they said they are on their way, or from an older geo-chat', () => {
-    expect(nudgeButtonState(room, true, Date.now())).toEqual({ kind: 'hidden' });
+    expect(nudgeButtonState(room, true, Date.now())).toBe('hidden');
     const { viewer_next_nudge_at: _next, ...older } = room;
-    expect(nudgeButtonState(older, false, Date.now())).toEqual({ kind: 'hidden' });
+    expect(nudgeButtonState(older, false, Date.now())).toBe('hidden');
   });
 });

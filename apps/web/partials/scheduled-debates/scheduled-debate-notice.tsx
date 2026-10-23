@@ -206,31 +206,19 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
 
   switch (step) {
     case 'decide':
-      return shell(
-        title,
-        <DecideStep
-          name={name}
-          opponent={opponent}
-          startsAt={request.scheduled_start_at}
-          room={room}
-          onLate={() => go('late')}
-          onCant={() => go('cant')}
-          onReschedule={onReschedule}
-          onJoin={onClose}
-          focusHeading={moved}
-        />,
-        { ownHeading: true }
-      );
     case 'nudge':
       return shell(
         title,
-        <NudgeStep
+        <DecideStep
+          variant={step}
           name={name}
           opponent={opponent}
           startsAt={request.scheduled_start_at}
           room={room}
           onLate={() => go('late')}
           onCant={() => go('cant')}
+          // Board 2's alone: a nudge is answered by coming, being late, or not coming.
+          onReschedule={step === 'decide' ? onReschedule : undefined}
           onJoin={onClose}
           focusHeading={moved}
         />,
@@ -279,7 +267,14 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
   }
 }
 
+/**
+ * The three-way choice. As `decide` it is board 2, the reschedule link once the room is open. As
+ * `nudge` it is board 6c, the popup a nudge from the waiting debater puts on screen (GEO-3428): who is
+ * waiting and since when, with Running late and Can't make it side by side and nothing else. Either
+ * way the last two go on in this dialog, so nobody is taken off the page they were on to answer.
+ */
 function DecideStep({
+  variant,
   name,
   opponent,
   startsAt,
@@ -290,6 +285,7 @@ function DecideStep({
   onJoin,
   focusHeading,
 }: {
+  variant: 'decide' | 'nudge';
   name: string;
   opponent: DebateParticipantSummary | null;
   startsAt: string;
@@ -302,33 +298,68 @@ function DecideStep({
 }) {
   // Re-read each minute, so "started 3 minutes ago" keeps up while the dialog is open.
   const now = useMinuteNow();
+  const offset = startOffset(new Date(startsAt).getTime() - now);
+  const nudge = variant === 'nudge';
+  const late = (
+    <HubPillButton
+      size="large"
+      className="w-full"
+      onClick={onLate}
+      {...pill(nudge ? 'Nudge running late' : 'Running late', 'open_running_late')}
+    >
+      {nudge ? ROOM_NUDGE_POPUP.late : COPY.decide.late}
+    </HubPillButton>
+  );
+  const cant = (
+    <HubPillButton
+      size="large"
+      className="w-full"
+      onClick={onCant}
+      {...pill(nudge ? 'Nudge cant make it' : 'Cant make it', 'open_cant_make_it')}
+    >
+      {nudge ? ROOM_NUDGE_POPUP.cant : COPY.decide.cant}
+    </HubPillButton>
+  );
 
   return (
     <>
       <div className="flex flex-col items-center gap-3.5 text-center">
-        <OpponentAvatar opponent={opponent} name={name} size={64} />
+        <OpponentAvatar opponent={opponent} name={name} size={nudge ? 52 : 64} />
         <Heading focus={focusHeading}>
-          {COPY.decide.heading(name, startOffset(new Date(startsAt).getTime() - now))}
+          {nudge ? ROOM_NUDGE_POPUP.heading(name) : COPY.decide.heading(name, offset)}
         </Heading>
-        {room?.others_present && (
-          <span className="inline-flex items-center gap-2 rounded-full border border-grey-02 px-3 py-1.5 text-metadata">
-            <span aria-hidden className="size-2 rounded-full bg-green" />
-            {COPY.decide.waiting(name)}
-          </span>
+        {nudge ? (
+          <Text as="p" variant="metadata" color="grey-04">
+            {ROOM_NUDGE_POPUP.lead(name, formatTime(startsAt), offset)}
+          </Text>
+        ) : (
+          room?.others_present && (
+            <span className="inline-flex items-center gap-2 rounded-full border border-grey-02 px-3 py-1.5 text-metadata">
+              <span aria-hidden className="size-2 rounded-full bg-green" />
+              {COPY.decide.waiting(name)}
+            </span>
+          )
         )}
       </div>
       <div className="flex flex-col gap-2.5">
         {room?.joinable && <JoinRoom roomId={room.room_id} onJoin={onJoin} label="Join now" />}
-        <HubPillButton size="large" className="w-full" onClick={onLate} {...pill('Running late', 'open_running_late')}>
-          {COPY.decide.late}
-        </HubPillButton>
-        <HubPillButton size="large" className="w-full" onClick={onCant} {...pill('Cant make it', 'open_cant_make_it')}>
-          {COPY.decide.cant}
-        </HubPillButton>
+        {nudge ? (
+          <div className="grid grid-cols-2 gap-2.5">
+            {late}
+            {cant}
+          </div>
+        ) : (
+          <>
+            {late}
+            {cant}
+          </>
+        )}
       </div>
-      <Text as="p" variant="footnote" color="grey-04" className="text-center">
-        {COPY.decide.explainer(name)}
-      </Text>
+      {!nudge && (
+        <Text as="p" variant="footnote" color="grey-04" className="text-center">
+          {COPY.decide.explainer(name)}
+        </Text>
+      )}
       {onReschedule && (
         <Actions>
           <QuietButton onClick={onReschedule} {...analytics('Reschedule instead', 'reschedule_scheduled_debate')}>
@@ -336,68 +367,6 @@ function DecideStep({
           </QuietButton>
         </Actions>
       )}
-    </>
-  );
-}
-
-/**
- * The popup a nudge puts on the other debater's screen (GEO-3428, board 6c): who is waiting, since
- * when, and Join now, Running late and Can't make it. The last two go on in this dialog, so nobody is
- * taken off the page they were on to answer.
- */
-function NudgeStep({
-  name,
-  opponent,
-  startsAt,
-  room,
-  onLate,
-  onCant,
-  onJoin,
-  focusHeading,
-}: {
-  name: string;
-  opponent: DebateParticipantSummary | null;
-  startsAt: string;
-  room: UpcomingDebateRoom | null;
-  onLate: () => void;
-  onCant: () => void;
-  onJoin: () => void;
-  focusHeading: boolean;
-}) {
-  const now = useMinuteNow();
-  const started = new Date(startsAt).getTime();
-  const ago = Number.isNaN(started) ? null : Math.max(1, Math.floor((now - started) / 60_000));
-
-  return (
-    <>
-      <div className="flex flex-col items-center gap-3.5 text-center">
-        <OpponentAvatar opponent={opponent} name={name} size={52} />
-        <Heading focus={focusHeading}>{ROOM_NUDGE_POPUP.heading(name)}</Heading>
-        <Text as="p" variant="metadata" color="grey-04">
-          {ROOM_NUDGE_POPUP.lead(name, formatTime(startsAt), ago)}
-        </Text>
-      </div>
-      <div className="flex flex-col gap-2.5">
-        {room?.joinable && <JoinRoom roomId={room.room_id} onJoin={onJoin} label="Join now" />}
-        <div className="grid grid-cols-2 gap-2.5">
-          <HubPillButton
-            size="large"
-            className="w-full"
-            onClick={onLate}
-            {...pill('Nudge running late', 'open_running_late')}
-          >
-            {ROOM_NUDGE_POPUP.late}
-          </HubPillButton>
-          <HubPillButton
-            size="large"
-            className="w-full"
-            onClick={onCant}
-            {...pill('Nudge cant make it', 'open_cant_make_it')}
-          >
-            {ROOM_NUDGE_POPUP.cant}
-          </HubPillButton>
-        </div>
-      </div>
     </>
   );
 }

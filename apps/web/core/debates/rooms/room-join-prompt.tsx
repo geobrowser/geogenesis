@@ -13,14 +13,11 @@ import { ThreadAvatar } from '~/partials/comments/thread-avatar';
 import type { UpcomingDebateRoom } from '../api';
 import { routeIntoDebate } from '../lobbies/step-out';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
-import { useServerClock } from '../matchmaking/use-request-countdown';
+import { useServerNow } from '../matchmaking/use-request-countdown';
 import { LOBBY_JOIN_PROMPT, ROOM_JOIN_PROMPT } from './room-copy';
 import { opponentName, useUpcomingRoomOpponent } from './room-opponent';
 import { debateRoomPath } from './room-routes';
 import { startOffset } from './room-time';
-
-/** Minute-grained copy, so a quarter-minute tick is never more than 15s stale. */
-const TICK_MS = 15_000;
 
 /**
  * The offer to join a scheduled debate (GEO-2941), never a redirect. Shown at the top of whatever
@@ -32,7 +29,8 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
   const [joining, setJoining] = React.useState(false);
   const [, startJoining] = React.useTransition();
   const opponent = useUpcomingRoomOpponent(room);
-  const now = useNow();
+  // Minute-grained copy, so the default quarter-minute tick is never more than 15s stale.
+  const now = useServerNow();
 
   const name = opponentName(opponent);
   const schedule = scheduleLabel(new Date(room.starts_at).getTime() - now);
@@ -128,19 +126,4 @@ export function scheduleLabel(untilStartMs: number): string | null {
   if (offset === null) return null;
   if (offset === 'now') return ROOM_JOIN_PROMPT.startingNow;
   return 'in' in offset ? ROOM_JOIN_PROMPT.scheduledIn(offset.in) : ROOM_JOIN_PROMPT.scheduledAgo(offset.ago);
-}
-
-/** The server's clock where it has synced, so a skewed laptop does not misreport the start. */
-function useNow() {
-  const clock = useServerClock();
-  const [now, setNow] = React.useState(() => Date.now());
-
-  React.useEffect(() => {
-    const read = () => (clock ? clock.now() : Date.now());
-    setNow(read());
-    const interval = setInterval(() => setNow(read()), TICK_MS);
-    return () => clearInterval(interval);
-  }, [clock]);
-
-  return now;
 }

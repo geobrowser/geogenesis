@@ -7,10 +7,10 @@ import cx from 'classnames';
 import { Text } from '~/design-system/text';
 
 import { GeoChatRequestError } from '../api';
-import { useMinuteNow } from '../lobbies/use-minute-now';
 import { debateAnalyticsLabel } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { formatTime } from '../matchmaking/scheduled-debate-format';
+import { useServerNow } from '../matchmaking/use-request-countdown';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { useDebateRoomContext } from './room-context';
 import { ROOM_WAITING_STATUS as COPY } from './room-copy';
@@ -54,12 +54,16 @@ export function RoomWaitingStatus({
   const room = context?.room ?? null;
   const presence = context?.presence ?? null;
   const viewerId = useCurrentGeoChatUserId();
-  const now = useMinuteNow();
+  // geo-chat's clock, since `viewer_next_nudge_at` is its time: a fast laptop would re-enable Nudge
+  // early, and the press would only be refused. Re-read every 15s, so Nudge is back within that.
+  const now = useServerNow();
 
   if (!room || !viewerId || !presence?.opponentUserId || !showsWaitingStatus(presence.state)) return null;
   const opponentUserId = presence.opponentUserId;
 
   const late = Boolean(presence.opponentLate);
+  // Not after they came and went: the pill above already says they left.
+  const heading = late || presence.state === 'left' ? null : COPY.heading(opponentName);
   const timeline = roomWaitingTimeline(room, opponentUserId, viewerId);
   const seen = opponentPresence(room, opponentUserId);
   const lastOnline = seen?.last_online_at ? minutesSince(seen.last_online_at, now) : null;
@@ -70,11 +74,11 @@ export function RoomWaitingStatus({
       data-testid="room-waiting-status"
       className="mx-auto mb-3 flex w-full max-w-[560px] flex-col gap-3.5 rounded-lg border border-grey-02 bg-white px-5 py-4 mobile:px-4"
     >
-      {(!late || presenceLine) && (
+      {(heading || presenceLine) && (
         <div className="flex flex-col gap-1.5">
-          {!late && (
+          {heading && (
             <Text as="p" variant="metadataMedium">
-              {COPY.heading(opponentName)}
+              {heading}
             </Text>
           )}
           {presenceLine && (
@@ -93,7 +97,7 @@ export function RoomWaitingStatus({
       {timeline.length > 0 && (
         <ol
           aria-label={COPY.timelineLabel(opponentName)}
-          className={cx('flex flex-col gap-2', (!late || presenceLine) && 'border-t border-grey-02 pt-3')}
+          className={cx('flex flex-col gap-2', (heading || presenceLine) && 'border-t border-grey-02 pt-3')}
         >
           {timeline.map(entry => (
             <li key={`${entry.kind}:${entry.at}`} className="flex gap-3">
@@ -113,11 +117,7 @@ export function RoomWaitingStatus({
       )}
       <div className="flex flex-wrap items-center gap-2 border-t border-grey-02 pt-3">
         {!late && (
-          <NudgeButton
-            roomId={room.room_id}
-            state={nudgeButtonState(room, late, Date.now())}
-            opponentName={opponentName}
-          />
+          <NudgeButton roomId={room.room_id} state={nudgeButtonState(room, late, now)} opponentName={opponentName} />
         )}
         <span className="flex-1" />
         {!late && (
@@ -147,8 +147,8 @@ function entryText(entry: RoomWaitingEntry, name: string, viewerName: string | n
 }
 
 /**
- * Nudge, then "Nudged" until geo-chat's next time (15 minutes, or never after the second). No copy
- * under it, Preston's call. A refusal that means the room moved on says so in a line beside it.
+ * Nudge, then "Nudged" until geo-chat's next time (15 minutes, or never after the second), read on
+ * the card's server clock. No copy under it, Preston's call. A refusal that means the room moved on says so in a line beside it.
  */
 function NudgeButton({
   roomId,
@@ -160,29 +160,21 @@ function NudgeButton({
   opponentName: string;
 }) {
   const nudge = useNudgeDebateRoom(roomId);
-  // Re-renders the button when the wait ends, which the minute clock alone would round up.
-  const [, setTick] = React.useState(0);
-  const until = state.kind === 'nudged' ? state.until : null;
-  React.useEffect(() => {
-    if (until === null) return;
-    const timer = setTimeout(() => setTick(tick => tick + 1), Math.max(0, until - Date.now()) + 250);
-    return () => clearTimeout(timer);
-  }, [until]);
 
-  if (state.kind === 'hidden') return null;
+  if (state === 'hidden') return null;
   const refusal = refusalText(nudge.error, opponentName);
   return (
     <>
       <HubPillButton
-        variant={state.kind === 'ready' ? 'primary' : 'secondary'}
-        disabled={state.kind !== 'ready' || nudge.isPending}
+        variant={state === 'ready' ? 'primary' : 'secondary'}
+        disabled={state !== 'ready' || nudge.isPending}
         pending={nudge.isPending}
         pendingLabel={COPY.nudging}
         analyticsLabel={debateAnalyticsLabel('room', 'Waiting status nudge')}
         analyticsIntent="nudge_scheduled_debate"
         onClick={() => nudge.mutate()}
       >
-        {state.kind === 'ready' ? COPY.nudge : COPY.nudgedDone}
+        {state === 'ready' ? COPY.nudge : COPY.nudgedDone}
       </HubPillButton>
       {refusal && (
         <span role="status">

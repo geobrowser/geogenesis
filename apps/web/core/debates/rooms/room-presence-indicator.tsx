@@ -5,6 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import dynamic from 'next/dynamic';
 
+import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
+
 import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
@@ -163,7 +165,7 @@ export function RoomRescheduleButton({
   opponentName: string;
   opponentUserId: string;
   analyticsAction: string;
-  entry: 'room_late_notice' | 'room_waiting_status';
+  entry: Extract<ScheduleEntry, 'room_late_notice' | 'room_waiting_status'>;
   className?: string;
 }) {
   const roomId = useDebateRoomContext()?.roomId ?? null;

@@ -18,7 +18,7 @@ vi.mock('./room-opponent', async importOriginal => ({
   ...(await importOriginal<typeof import('./room-opponent')>()),
   useUpcomingRoomOpponent: () => mocks.opponent,
 }));
-vi.mock('../matchmaking/use-request-countdown', () => ({ useServerClock: () => ({ now: () => mocks.now }) }));
+vi.mock('../matchmaking/use-request-countdown', () => ({ useServerNow: () => mocks.now }));
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => <span data-testid="avatar" /> }));
 
 const { DebateRoomJoinPrompt, scheduleLabel } = await import('./room-join-prompt');

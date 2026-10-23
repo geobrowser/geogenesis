@@ -85,7 +85,6 @@ export const ROOM_WAITING_STATUS = {
   nudge: 'Nudge',
   nudging: 'Nudging…',
   nudgedDone: 'Nudged',
-  reschedule: 'Reschedule',
   /** A refusal that means the room moved on between the press and the answer. */
   nudgeRefused: {
     already_here: (name: string) => `${name} just came in.`,
@@ -99,13 +98,13 @@ export const ROOM_WAITING_STATUS = {
  * 6c). Join now, Running late and Can't make it are the notice dialog's own.
  */
 export const ROOM_NUDGE_POPUP = {
-  title: 'Your debate',
   heading: (name: string) => `${name} is waiting for you`,
-  lead: (name: string, time: string, ago: number | null) =>
-    ago === null
-      ? `Your ${time} debate has started and ${name} is in the room.`
-      : `Your ${time} debate started ${ago} ${ago === 1 ? 'minute' : 'minutes'} ago and ${name} is in the room.`,
-  join: 'Join now',
+  /** `offset` is `startOffset`'s, as board 2's heading reads it; a nudge only comes after the start. */
+  lead: (name: string, time: string, offset: { in: number } | { ago: number } | 'now' | null) => {
+    if (offset === 'now') return `Your ${time} debate is starting now and ${name} is in the room.`;
+    if (offset === null || 'in' in offset) return `Your ${time} debate has started and ${name} is in the room.`;
+    return `Your ${time} debate started ${offset.ago} ${offset.ago === 1 ? 'minute' : 'minutes'} ago and ${name} is in the room.`;
+  },
   late: 'Running late',
   cant: 'Can’t make it',
 } as const;

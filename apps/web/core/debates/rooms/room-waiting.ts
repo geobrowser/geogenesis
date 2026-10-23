@@ -58,14 +58,13 @@ export function showsWaitingStatus(state: DebateRoomPresenceState | null | undef
 /**
  * What the Nudge button does now: `ready` to press, `nudged` while it waits out the 15 minutes or
  * once both are used, and `hidden` when there is nobody to nudge (they said they are on their way,
- * or a geo-chat that predates nudges). `until` is when a waiting button becomes pressable again.
+ * or a geo-chat that predates nudges). `now` is the server's clock, as `viewer_next_nudge_at` is.
  */
-export type NudgeButtonState = { kind: 'ready' } | { kind: 'nudged'; until: number | null } | { kind: 'hidden' };
+export type NudgeButtonState = 'ready' | 'nudged' | 'hidden';
 
 export function nudgeButtonState(room: DebateRoomView, opponentLate: boolean, now: number): NudgeButtonState {
-  if (opponentLate || room.viewer_next_nudge_at === undefined) return { kind: 'hidden' };
-  if (room.viewer_next_nudge_at === null) return { kind: 'nudged', until: null };
+  if (opponentLate || room.viewer_next_nudge_at === undefined) return 'hidden';
+  if (room.viewer_next_nudge_at === null) return 'nudged';
   const next = new Date(room.viewer_next_nudge_at).getTime();
-  if (Number.isNaN(next) || now >= next) return { kind: 'ready' };
-  return { kind: 'nudged', until: next };
+  return Number.isNaN(next) || now >= next ? 'ready' : 'nudged';
 }

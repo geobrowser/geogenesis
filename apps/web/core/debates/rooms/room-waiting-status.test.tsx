@@ -19,6 +19,9 @@ vi.mock('./room-context', () => ({
   useDebateRoomContext: () => ({ roomId: 'room-1', room: state.room, presence: state.presence }),
 }));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'maya' }));
+// The card reads geo-chat's clock; `serverAhead` puts it ahead of this machine's.
+const clock = vi.hoisted(() => ({ serverAhead: 0 }));
+vi.mock('../matchmaking/use-request-countdown', () => ({ useServerNow: () => Date.now() + clock.serverAhead }));
 vi.mock('./scheduling-hooks', () => ({
   useNudgeDebateRoom: () => state.nudge,
   useScheduledDebates: () => ({
@@ -61,6 +64,7 @@ function show() {
 
 afterEach(() => {
   cleanup();
+  clock.serverAhead = 0;
   state.nudge = { mutate: vi.fn(), isPending: false, error: null };
 });
 
@@ -149,6 +153,29 @@ describe('RoomWaitingStatus', () => {
     expect(screen.queryByText('Jordan hasn’t joined yet')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Nudge/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+  });
+
+  // The pill says "Jordan left"; the card must not say they never came.
+  it('drops the heading after they came and left, keeping the rest', () => {
+    state.room = baseRoom();
+    state.presence = { ...waiting, state: 'left' };
+    show();
+    expect(screen.queryByText('Jordan hasn’t joined yet')).not.toBeInTheDocument();
+    expect(screen.getByText('Last online 12 minutes ago')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nudge' })).toBeEnabled();
+  });
+
+  // `viewer_next_nudge_at` is geo-chat's time, so it is compared with geo-chat's clock.
+  it('reads Nudge readiness on the server clock, not this machine’s', () => {
+    state.room = { ...baseRoom(), viewer_next_nudge_at: new Date(Date.now() + 2 * 60_000).toISOString() };
+    state.presence = waiting;
+    show();
+    expect(screen.getByRole('button', { name: 'Nudged' })).toBeDisabled();
+    cleanup();
+
+    clock.serverAhead = 3 * 60_000;
+    show();
+    expect(screen.getByRole('button', { name: 'Nudge' })).toBeEnabled();
   });
 
   it('is not shown before the start or once they are here', () => {

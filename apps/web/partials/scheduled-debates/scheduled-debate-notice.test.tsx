@@ -155,6 +155,31 @@ describe('ScheduledDebateNoticeDialog: the nudge popup', () => {
     expect(state.late.mutate).not.toHaveBeenCalled();
   });
 
+  // Rounded as board 2 and the join banner round it (`startOffset`).
+  it('says starting now in the first minute after the start', () => {
+    state.requests = {
+      data: { requests: [agreed({ scheduled_start_at: new Date(Date.now() - 20_000).toISOString() })] },
+      isPending: false,
+      isError: false,
+    };
+    render(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />);
+    expect(screen.getByText(/debate is starting now and Maya is in the room\./)).toBeInTheDocument();
+  });
+
+  it('has no explainer or Reschedule instead, which are board 2’s', () => {
+    render(
+      <ScheduledDebateNoticeDialog
+        open
+        requestId={REQUEST}
+        initialStep="nudge"
+        onClose={() => {}}
+        onReschedule={() => {}}
+      />
+    );
+    expect(screen.queryByText(/After Can’t make it you can suggest another time/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reschedule instead' })).not.toBeInTheDocument();
+  });
+
   it('answers in place, with a way back to the popup', async () => {
     render(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />);
     const user = userEvent.setup();
