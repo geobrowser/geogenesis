@@ -59,6 +59,7 @@ import type {
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import {
+  type DebateActionAnalyticsSurface,
   type DebateAnalyticsAttributes,
   type DebateAnalyticsSurface,
   debateActionAnalyticsAttributes,
@@ -1276,7 +1277,7 @@ export function PositionRow({
    */
   showParticipants?: boolean;
   /** Names the two pills for click analytics: "<surface> Claim card agree" / "… disagree". */
-  analyticsSurface?: DebateAnalyticsSurface;
+  analyticsSurface?: DebateActionAnalyticsSurface;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
   const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;

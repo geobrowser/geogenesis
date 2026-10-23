@@ -1,11 +1,13 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
 
 import { DebatesPageClient } from './debates-page-client';
+import { openDebateFeedPanelAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   play: vi.fn(() => Promise.resolve()),
@@ -78,8 +80,23 @@ vi.mock('~/core/debates/browse/use-debate-end-card', () => ({
   useDebateEndCard: () => ({}),
 }));
 
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: () => <div data-testid="entity-vote-buttons" />,
+// The claim's response reads reach Privy and the sync store; they have their own suites. Here the
+// card only has to draw its Agree and Disagree.
+vi.mock('~/core/debates/browse/use-debate-claim-response', () => ({
+  useDebateClaimResponse: () => ({
+    responseKind: 'stance',
+    summary: { isLoading: true },
+    control: {
+      optimisticPositions: [],
+      viewerPosition: null,
+      respond: vi.fn(),
+      canRespond: true,
+      isResponseSubmitting: false,
+      actionTitle: () => '',
+      localVoteSide: null,
+      responseError: null,
+    },
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -199,7 +216,9 @@ describe('DebatesPageClient browse feed', () => {
     // voting now happens on the end-of-debate scorecard and in the claims panel.
     expect(screen.getAllByText('Alex').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Sam').length).toBeGreaterThan(0);
-    expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
+    // The claim is voted on from the card; the debate's own up/down vote is gone (GEO-3454).
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Disagree' })).toBeInTheDocument();
 
     // The feed holds full recordings until the viewer presses Play (feed-full-playback.ts).
     const play = await screen.findByRole('button', { name: 'Play debate' });
@@ -234,7 +253,9 @@ describe('DebatesPageClient browse feed', () => {
     );
 
     render(<DebatesPageClient spaceId="space-1" />);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Claims (0)' })[0]);
+    // Opened through the feed's panel slot: the card's claims pill is gone, and what opens the panel
+    // now (the end card) is stubbed here.
+    act(() => getDefaultStore().set(openDebateFeedPanelAtom, 'claims'));
     expect(mocks.claimsPanelMounts).toEqual(['debate-1']);
 
     const secondItem = observed.find(entry => entry.element.textContent?.includes('Second claim'))!;

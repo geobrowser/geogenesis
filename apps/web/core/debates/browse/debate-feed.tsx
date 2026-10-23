@@ -15,7 +15,6 @@ import { isRemovedDebateAnswer } from '~/core/debates/debate-removal';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
-import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useComments } from '~/core/hooks/use-comments';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
@@ -28,6 +27,7 @@ import { Text } from '~/design-system/text';
 
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 
+import { DebateClaimFooter } from './debate-claim-footer';
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
 import { DebateFeedPlayer } from './debate-feed-player';
@@ -46,9 +46,11 @@ const PAGE_SIZE = 5;
 /** How many cards past the active one open their recordings. See the `preload` prop below. */
 const PRELOAD_AHEAD = 2;
 const DEBATE_COLUMN_STYLE = {
-  // Grow or shrink the media with the viewport while reserving the navbar,
-  // claim title, media gap, and vertical breathing room.
-  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
+  // Grow or shrink the media with the viewport while reserving the navbar, the 20px above the
+  // card, and the card's chrome under the media: frame, meta row, a two-line claim, the pill row
+  // and the split band. Measured in Chrome (GEO-3454), that chrome is 169px with two claim lines,
+  // so a 900px viewport ends the card about 15px above the fold.
+  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 2rem), calc(82.9dvh - 12.75rem)), 640px)',
 } as React.CSSProperties;
 
 export function DebatesBrowseFeed({
@@ -598,9 +600,6 @@ function DebateFeedItem({
   // Same arguments as the Comments panel's own useComments, so the two share a
   // cache entry and posting there updates this count without a refetch.
   const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId });
-  // Same query key as the Claims panel's own hook, for the same reason as comments above: the
-  // badge and the panel share one cache entry, so opening the panel doesn't refetch.
-  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -617,85 +616,70 @@ function DebateFeedItem({
     return () => observer.disconnect();
   }, [onActivate, root]);
 
-  const interactionProps = {
-    entityId: debate.id,
-    spaceId,
-    commentCount,
-    claimsCount: claims.totalCount,
-    onComment: onOpenComments,
-    onClaims: () => onOpenClaims(),
-    onShare: share.onOpen,
-    shareOpen: share.open,
-  };
-
   return (
     <section
       ref={itemRef}
       // 20px below the navbar, per the design — the media sizing has slack to absorb it, so
-      // the claim header doesn't need to sit flush against the chrome. `md:py-3` still wins on
+      // the card doesn't need to sit flush against the chrome. `md:py-3` still wins on
       // mobile: Tailwind emits variant utilities after unprefixed ones, so no `md:pt-3` needed.
       className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:px-2 md:py-3"
     >
-      {/* The whole debate lifts with the nudge — title, media and controls together — so the
+      {/* The whole debate lifts with the nudge — media, claim and controls together — so the
           gesture reads as the feed scrolling rather than as one element twitching. Shared
           animation props keep the card and the indicator in step. */}
       <div
-        className={cx('flex items-stretch gap-3', scrollHint?.isVisible && scrollHintBounceProps.className)}
-        style={scrollHint?.isVisible ? scrollHintBounceProps.style : undefined}
+        className={cx(
+          'relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]',
+          scrollHint?.isVisible && scrollHintBounceProps.className
+        )}
+        style={{ ...DEBATE_COLUMN_STYLE, ...(scrollHint?.isVisible ? scrollHintBounceProps.style : undefined) }}
       >
-        <div
-          className="relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
-          style={DEBATE_COLUMN_STYLE}
-        >
-          {/* 20px under the phone bar with the item's 12px: the gap the design leaves under the navbar. */}
-          <div className="md:mt-2">
-            <DebateTitleHeader
-              key={debate.claim.claim}
-              claim={debate.claim.claim}
-              claimEntityId={debate.claim.claim_entity_id}
-              spaceId={spaceId}
-              spaceName={spaceName}
-              spaceImage={spaceImage}
-              topics={topics}
-            />
-          </div>
-          <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer
-              debate={debate}
-              active={active}
-              preload={preload}
-              buffer={buffer}
-              holdFullPlayback={holdFullPlayback}
-              releaseMedia={releaseMedia}
-              initialSeekSeconds={initialSeekSeconds}
-              onOpenClaims={onOpenClaims}
-              onPlaybackRequest={onPlaybackRequest}
-              onPlaybackState={onPlaybackState}
-            />
-          </div>
-          {/* Mobile: horizontal bar below the videos. Wrapper controls display so
-              it doesn't collide with the bar's own `flex`. */}
-          <div className="mt-3 hidden md:block">
-            <DebateInteractionBar
-              orientation="horizontal"
-              {...interactionProps}
-              overflow={<DebateOverflowMenu debate={debate} variant="pill" />}
-            />
-          </div>
-          {/* `top-full` hangs it just below the debate without taking part in the column's
-              height, which the media sizing has no room to spare for. */}
-          {scrollHint?.isVisible && (
-            <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-4" />
-          )}
-        </div>
-        {/* Desktop: vertical rail to the right of the videos. */}
-        <div className="flex flex-col justify-end md:hidden">
-          <DebateInteractionBar
-            orientation="vertical"
-            {...interactionProps}
-            overflow={<DebateOverflowMenu debate={debate} variant="circle" />}
+        {/* One card: the videos, then the claim they argue and the reader's side on it (GEO-3454).
+            The frame is the card's, so the player draws none of its own. */}
+        <div className="flex flex-col overflow-hidden rounded-xl border border-grey-02 bg-white">
+          <DebateFeedPlayer
+            debate={debate}
+            active={active}
+            preload={preload}
+            buffer={buffer}
+            holdFullPlayback={holdFullPlayback}
+            releaseMedia={releaseMedia}
+            initialSeekSeconds={initialSeekSeconds}
+            framed
+            onOpenClaims={onOpenClaims}
+            onPlaybackRequest={onPlaybackRequest}
+            onPlaybackState={onPlaybackState}
+          />
+          <DebateClaimFooter
+            claim={debate.claim}
+            // The cards the feed is about to reach read theirs too, so a side is there to take
+            // the moment one arrives.
+            enabled={active || preload}
+            meta={<DebateMeta spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} topics={topics} />}
+            title={
+              <DebateClaimTitle
+                key={debate.claim.claim}
+                claim={debate.claim.claim}
+                claimEntityId={debate.claim.claim_entity_id}
+                spaceId={spaceId}
+              />
+            }
+            actions={
+              <DebateInteractionBar
+                commentCount={commentCount}
+                onComment={onOpenComments}
+                onShare={share.onOpen}
+                shareOpen={share.open}
+                overflow={<DebateOverflowMenu debate={debate} variant="pill" />}
+              />
+            }
           />
         </div>
+        {/* `top-full` hangs it just below the debate without taking part in the column's
+            height, which the media sizing has no room to spare for. */}
+        {scrollHint?.isVisible && (
+          <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-4" />
+        )}
       </div>
       <DebateShareDialog
         open={share.open}
@@ -709,7 +693,7 @@ function DebateFeedItem({
 }
 
 /**
- * Lines the claim title shows before it offers to expand.
+ * Lines the claim title shows before it is cut off.
  *
  * Must agree with the `line-clamp-2` literal on the heading below — Tailwind only emits classes it
  * can read as literals, so the class cannot be built from this and the two are kept together
@@ -717,91 +701,77 @@ function DebateFeedItem({
  */
 const CLAIM_CLAMP_LINES = 2;
 
-function DebateTitleHeader({
-  claim,
-  claimEntityId,
+/** The space the debate is in, and the claim's topics after it. */
+function DebateMeta({
   spaceId,
   spaceName,
   spaceImage,
   topics,
 }: {
-  claim: string;
-  claimEntityId: string;
   spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
   topics: string[];
 }) {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      {/* `min-w-0` again on the anchor: the truncation chain runs parent → anchor → text, and
+          a link left at its default `min-width: auto` would refuse to shrink and push the
+          topics off the row instead of ellipsing the name. */}
+      <Link href={NavUtils.toSpace(spaceId)} className="flex min-w-0 items-center gap-1.5 hover:underline">
+        <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
+          <Avatar avatarUrl={spaceImage} value={spaceName} size={16} />
+        </span>
+        <Text as="span" variant="metadata" color="text" className="truncate !leading-[13px] !tracking-[-0.35px]">
+          {spaceName}
+        </Text>
+      </Link>
+      {topics.map(topic => (
+        <React.Fragment key={topic}>
+          <Text as="span" variant="metadata" color="grey-04" className="!leading-[13px] !tracking-[-0.35px]">
+            ·
+          </Text>
+          <Text as="span" variant="metadata" color="grey-04" className="truncate !leading-[13px] !tracking-[-0.35px]">
+            {topic}
+          </Text>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The claim being debated, as the card's title — set as the explore claim card sets one, since the
+ * two now share the rest of their anatomy. Two lines, which is what the column's height budget
+ * reserves; the whole claim is on hover when it runs longer, and on the claim page it links to.
+ */
+function DebateClaimTitle({
+  claim,
+  claimEntityId,
+  spaceId,
+}: {
+  claim: string;
+  claimEntityId: string;
+  spaceId: string;
+}) {
   const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
-  const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
-
-  React.useEffect(() => setIsClaimExpanded(false), [claim]);
-
-  const isClaimOverflowing = useLineClampOverflow(claimElement, {
-    maxLines: CLAIM_CLAMP_LINES,
-    enabled: !isClaimExpanded,
-    contentKey: claim,
-  });
+  const isClaimOverflowing = useLineClampOverflow(claimElement, { maxLines: CLAIM_CLAMP_LINES, contentKey: claim });
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          {/* `min-w-0` again on the anchor: the truncation chain runs parent → anchor → text, and
-              a link left at its default `min-width: auto` would refuse to shrink and push the
-              topics off the row instead of ellipsing the name. */}
-          <Link href={NavUtils.toSpace(spaceId)} className="flex min-w-0 items-center gap-1.5 hover:underline">
-            <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
-              <Avatar avatarUrl={spaceImage} value={spaceName} size={16} />
-            </span>
-            <Text as="span" variant="metadata" color="text" className="truncate !leading-[13px] !tracking-[-0.35px]">
-              {spaceName}
-            </Text>
-          </Link>
-          {topics.map(topic => (
-            <React.Fragment key={topic}>
-              <Text as="span" variant="metadata" color="grey-04" className="!leading-[13px] !tracking-[-0.35px]">
-                ·
-              </Text>
-              <Text
-                as="span"
-                variant="metadata"
-                color="grey-04"
-                className="truncate !leading-[13px] !tracking-[-0.35px]"
-              >
-                {topic}
-              </Text>
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
-      <h2
-        ref={setClaimElement}
-        title={isClaimOverflowing ? claim : undefined}
-        className={`text-cardEntityTitle !text-[22.4px] !leading-[21px] !tracking-[-0.672px] text-text md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
-          isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
-        }`}
+    <h2
+      ref={setClaimElement}
+      title={isClaimOverflowing ? claim : undefined}
+      className="line-clamp-2 text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-pretty text-text"
+    >
+      <Link
+        href={NavUtils.toEntity(spaceId, claimEntityId)}
+        entityId={claimEntityId}
+        spaceId={spaceId}
+        className="hover:underline"
       >
-        <Link
-          href={NavUtils.toEntity(spaceId, claimEntityId)}
-          entityId={claimEntityId}
-          spaceId={spaceId}
-          className="hover:underline"
-        >
-          {claim}
-        </Link>
-      </h2>
-      {isClaimOverflowing && (
-        <button
-          type="button"
-          aria-expanded={isClaimExpanded}
-          onClick={() => setIsClaimExpanded(expanded => !expanded)}
-          className="hidden self-start text-[16px] leading-5 text-grey-04 underline-offset-2 hover:underline md:inline-flex"
-        >
-          {isClaimExpanded ? 'Show less' : 'Show more'}
-        </button>
-      )}
-    </div>
+        {claim}
+      </Link>
+    </h2>
   );
 }
 

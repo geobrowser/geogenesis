@@ -7,6 +7,7 @@ import { useSetAtom } from 'jotai';
 
 import { ActionSurfaceArticle, useActionScope } from '~/core/action-context-provider';
 import type { Debate } from '~/core/debates/api';
+import { DebateClaimFooter } from '~/core/debates/browse/debate-claim-footer';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
@@ -16,7 +17,6 @@ import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
-import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
@@ -38,39 +38,34 @@ const ACTIVATE_RATIO = 0.6;
 const DEACTIVATE_RATIO = 0.4;
 
 /**
- * How wide the card's column — meta row, title, media and bar — is allowed to get.
+ * How wide the card's column — the framed media, meta row, claim, pill row and split band — is
+ * allowed to get.
  *
  * Width is what sets height here, so this is really a height budget. The two tiles are
- * `aspect-480/289` with an 8px gap between them, so the media is `1.2042 × width + 8` — measured
- * at 682px against a predicted 682.3px on a 560px column. Everything else is a reserve, and
- * `calc(83dvh - 178px)` is `width ≤ (dvh − 44 − 170) / 1.2042`: the 44px app header, and ~170px
- * for the card's own chrome.
+ * `aspect-480/289` with no gap, inside the card's 1px frame, so the media is `1.2042 × (width − 2)`.
+ * Everything else is a reserve, and `calc(83dvh - 214px)` is `width ≤ (dvh − 44 − 32 − 180) / 1.2042`:
+ * the 44px app header, the article's 32px of padding, and 180px for the card's chrome under the
+ * media.
  *
- * That reserve is deliberately loose rather than exact, because the chrome is not one fixed
- * number. Measured, it is 128px with a one-line heading and 151px with the two lines the clamp
- * allows — leaving about 19px spare at the worst case the heading can reach.
+ * Measured in Chrome (GEO-3454), that chrome is 154px with a one-line claim and 177px with the two
+ * lines the clamp allows, borders included — so the worst case the claim can reach still leaves a
+ * few pixels spare. The meta row carries the Join chip, which is what makes it taller here than on
+ * the full-screen card.
  *
- * Which is what absorbs a meta row that wraps. That row is `flex-wrap`, and its widest state
- * ("Membership pending" beside a long space name) does take a second line — measured at 41px
- * against the usual 24px. It only does so once the column is down at its 320px floor, where the
- * clamp has stopped binding and there is far more than 17px going spare; and even inside the
- * binding range the worst case would be 168px against the 170px reserved. Verified by measurement
- * across widths 390–1440 and heights 600–1000 with that state forced: nothing overflows.
- *
- * So the column tracks the viewport rather than sitting at a fixed 480px — 486px at an 800px
- * viewport, 403px at 700px — up to the 560px cap, which the budget clears from about an 890px
+ * So the column tracks the viewport rather than sitting at a fixed width — 533px at a 900px
+ * viewport, 450px at 800px — up to the 560px cap, which the budget clears from about a 930px
  * viewport and which is there so a tall display gets a wider card and not a different design.
- * The 320px floor gives the promise up below roughly a 600px viewport, where honouring it would
+ * The 320px floor gives the promise up below roughly a 640px viewport, where honouring it would
  * mean a video too small to read a face in.
  *
  * The same trick, and the same reason, as `--debate-feed-column-width` on the full-screen feed:
  * `dvh` there too, because the media has to fit the viewport it is being watched in.
  *
- * Keep the arithmetic and the layout together — a change to `py-4`, the title clamp, the bar or
- * the media gap moves the 178px, and nothing else will notice.
+ * Keep the arithmetic and the layout together — a change to `py-4`, the claim clamp, the pill row
+ * or the split band moves the 214px, and nothing else will notice.
  */
 const DEBATE_CARD_COLUMN_STYLE = {
-  '--debate-card-column-width': 'clamp(320px, calc(83dvh - 178px), 560px)',
+  '--debate-card-column-width': 'clamp(320px, calc(83dvh - 214px), 560px)',
 } as React.CSSProperties;
 
 /**
@@ -86,7 +81,7 @@ const DEBATE_CARD_COLUMN_STYLE = {
  * given, so this is right at 840px and at any other width a host passes.
  */
 const DEBATE_CARD_FULL_WIDTH_STYLE = {
-  '--debate-card-column-width': 'max(320px, min(calc(83dvh - 178px), 100%))',
+  '--debate-card-column-width': 'max(320px, min(calc(83dvh - 214px), 100%))',
 } as React.CSSProperties;
 
 type DebateExploreFeedCardProps = {
@@ -348,12 +343,6 @@ export function DebateExploreFeedCard({
   }, [debateId, readyDebate, setClaimsPanel]);
   const share = useDebateShareAction();
   const { commentsTarget, openComments } = useEntityCommentsPanel();
-  // Nulls read as "not enabled", which is how the count stands down with the media above. Shares a
-  // cache entry with the Claims panel, so opening the panel doesn't refetch what this loaded.
-  const { claims } = useDebateTranscriptClaims(
-    mediaMounted ? readyDebate.id : null,
-    mediaMounted ? readyDebate.claim.space_id : null
-  );
   // The feed's count is server-rendered and frozen: posting from the panel this pill opens writes
   // the new row into the comments cache and nothing re-runs that count, so the number sat one
   // behind the list it describes until a reload. This follows the cache instead, and costs no
@@ -367,82 +356,41 @@ export function DebateExploreFeedCard({
   }
 
   /**
-   * Comments and counts differ from the full-screen feed only in where they come from and where
-   * they lead, never in how they look:
+   * Comments and share differ from the full-screen feed only in where they come from and where they
+   * lead, never in how they look:
    *  - Comments open the app's global panel, as they do from every other explore card, instead of
    *    the feed's own side rail.
    *  - The comment count starts from the one the explore feed server-rendered for the card and
    *    then follows the comments cache, rather than reading a thread of its own per card.
-   *  - Claims and Share stand down until the debate is both resolved and in the media window —
-   *    votes and comments need no debate, those two do — so the footer is present from the first
-   *    paint and doesn't shift the card under the reader when the geo-chat lookups land.
+   *  - Share stands down until the debate is both resolved and in the media window — comments need
+   *    no debate, share does — so the row is present from the first paint and doesn't shift the
+   *    card under the reader when the geo-chat lookups land.
    */
-  const interactionProps = {
-    entityId: item.entityId,
-    spaceId: item.spaceId,
-    commentCount,
-    commentsPanelOpen: commentsTarget?.entityId === item.entityId,
-    onComment: () => openComments(item.entityId, item.spaceId, 'debate'),
-    claimsCount: claims.totalCount,
-    // See the prop's own note: an explore card can be a data block row listing a debate from
-    // another space, and only the lookup finds that space's votes.
-    responseKind: 'infer' as const,
-    onClaims: mediaMounted ? () => openClaims() : undefined,
-    onShare: mediaMounted ? share.onOpen : undefined,
-    shareOpen: share.open,
-    // The feed pre-mounts cards far below the fold; their vote counts load as they approach.
-    nearViewport,
-  };
+  const actions = (
+    <DebateInteractionBar
+      commentCount={commentCount}
+      commentsPanelOpen={commentsTarget?.entityId === item.entityId}
+      onComment={() => openComments(item.entityId, item.spaceId, 'debate')}
+      onShare={mediaMounted ? share.onOpen : undefined}
+      shareOpen={share.open}
+    />
+  );
 
   return (
-    <ActionSurfaceArticle
-      ref={setContainer}
-      className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0"
-    >
-      {/* Meta, title, media and the interaction bar share one column, capped so the whole card
-          fits the viewport it is watched in — see {@link DEBATE_CARD_COLUMN_STYLE}. A cap rather
-          than the full column width because feed columns, especially data blocks, can be much
-          wider and a full-bleed video dwarfs the card. Capping the column rather than the media
-          alone is what lines "Join a debate" up with the videos' right edge instead of the card's,
-          and what keeps the bar beneath the videos the same width as them. */}
+    <ActionSurfaceArticle ref={setContainer} className="flex flex-col border-b border-divider py-4 last:border-b-0">
+      {/* The card is one column, capped so the whole card fits the viewport it is watched in — see
+          {@link DEBATE_CARD_COLUMN_STYLE}. A cap rather than the full column width because feed
+          columns, especially data blocks, can be much wider and a full-bleed video dwarfs the card. */}
       <div
-        className="flex w-full max-w-[var(--debate-card-column-width)] min-w-0 flex-col gap-2"
+        className={cx(
+          'flex w-full max-w-[var(--debate-card-column-width)] min-w-0 flex-col overflow-hidden border border-grey-02 bg-white',
+          compactChrome ? 'rounded-lg' : 'rounded-xl'
+        )}
         style={fullWidth ? DEBATE_CARD_FULL_WIDTH_STYLE : DEBATE_CARD_COLUMN_STYLE}
       >
-        {/* The way out of the card and into the debate at full size. This corner used to hold
-            "View all", a link to the space's whole debates list. Since GEO-2879 headed the card
-            with the claim, the entity link moved here so it says "bigger" rather than competing
-            with the claim for the heading. The shared metadata keeps fallback cards identical. */}
-        <DebateExploreMetaRow
-          item={item}
-          hideSpaceLink={hideSpaceLink}
-          hideJoinButton={hideJoinButton}
-          compact={compactChrome}
-          endSlot={
-            <div className="ml-auto flex shrink-0 items-center gap-1">
-              {endSlot}
-              <FullscreenLink
-                requiresFullPage
-                href={NavUtils.toEntity(item.spaceId, item.entityId)}
-                entityId={item.entityId}
-                spaceId={item.spaceId}
-                ariaLabel="Watch this debate full screen"
-              />
-            </div>
-          }
-        />
-
-        {/* Two lines, as the full-screen header clamps the same claim to, and what this card's
-            height budget is calculated against — a third line is 23px the viewport was not
-            promised. Only the debate card asks for it, because only the debate card has fixed
-            aspect-ratio media whose height follows from the space the title leaves it. */}
-        <ExploreCardTitle
-          item={item}
-          opensSidePanel={titleOpensSidePanel}
-          clamped
-          showFullTextOnHover={compactChrome}
-        />
-
+        {/* The videos first, then the claim they argue and the reader's side on it, in one frame —
+            the same card the full-screen feed draws (GEO-3454). The frame is the card's, so the
+            player and its stand-ins draw no corners of their own. */}
         <div onClickCapture={mediaMounted && onPlaybackRequest ? requestPlayback : undefined}>
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
@@ -457,21 +405,52 @@ export function DebateExploreFeedCard({
               onOpenClaims={openClaims}
             />
           ) : item.debatePosters ? (
-            <DebatePosterSkeleton debateId={debateId} posters={item.debatePosters} compact={compactChrome} />
+            <DebatePosterSkeleton debateId={debateId} posters={item.debatePosters} />
           ) : (
             <DebateVideoSkeleton />
           )}
         </div>
 
-        {/* Beneath the videos, the same width as them. Full screen carries this bar in a rail down
-            the media's right at desktop widths and moves it here at narrow ones; a card is short
-            and wide where full screen is tall, so it takes the horizontal arrangement at every
-            width. Same component, same controls, same counts — only the axis differs, and that is
-            a difference full screen already makes with itself. Wrapper carries the margin so it
-            doesn't collide with the bar's own `flex`. */}
-        <div className="mt-1">
-          <DebateInteractionBar orientation="horizontal" compact={compactChrome} {...interactionProps} />
-        </div>
+        <DebateClaimFooter
+          claim={mediaMounted ? readyDebate.claim : null}
+          enabled={mediaMounted}
+          // The way out of the card and into the debate at full size sits at the end of the meta
+          // row. The shared metadata keeps fallback cards' space and offer identical; the type tag
+          // is left to them, since the card's own shape says what it is.
+          meta={
+            <DebateExploreMetaRow
+              item={item}
+              hideSpaceLink={hideSpaceLink}
+              hideJoinButton={hideJoinButton}
+              hideTypeTag
+              compact={compactChrome}
+              endSlot={
+                <div className="ml-auto flex shrink-0 items-center gap-1">
+                  {endSlot}
+                  <FullscreenLink
+                    requiresFullPage
+                    href={NavUtils.toEntity(item.spaceId, item.entityId)}
+                    entityId={item.entityId}
+                    spaceId={item.spaceId}
+                    ariaLabel="Watch this debate full screen"
+                  />
+                </div>
+              }
+            />
+          }
+          // Two lines, as the full-screen title clamps the same claim to, and what this card's
+          // height budget is calculated against — a third line is 23px the viewport was not
+          // promised.
+          title={
+            <ExploreCardTitle
+              item={item}
+              opensSidePanel={titleOpensSidePanel}
+              clamped
+              showFullTextOnHover={compactChrome}
+            />
+          }
+          actions={actions}
+        />
       </div>
 
       {/* On `readyDebate`, not on `mediaMounted` like the controls that open these. What the media
@@ -528,6 +507,7 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
       releaseMedia={releaseMedia}
       holdFullPlayback={DEBATE_FEED_HOLDS_FULL_PLAYBACK}
       reducedOverlays={reducedOverlays}
+      framed
       onOpenClaims={onOpenClaims}
     />
   );
@@ -542,14 +522,12 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
 function DebatePosterSkeleton({
   debateId,
   posters,
-  compact,
 }: {
   debateId: string;
   posters: NonNullable<ExploreFeedItem['debatePosters']>;
-  compact: boolean;
 }) {
   return (
-    <div className={cx('flex flex-col overflow-hidden', compact ? 'rounded-lg' : 'rounded-xl')} aria-hidden="true">
+    <div className="flex flex-col overflow-hidden" aria-hidden="true">
       {[posters.slot1, posters.slot2].map((src, index) => (
         <div key={index} className="relative aspect-480/289 w-full overflow-hidden bg-grey-01">
           {src ? (
@@ -576,9 +554,9 @@ function DebatePosterSkeleton({
 
 function DebateVideoSkeleton() {
   return (
-    <div className="flex flex-col gap-2" aria-hidden="true">
-      <div className="aspect-480/289 w-full animate-pulse rounded-lg bg-grey-01" />
-      <div className="aspect-480/289 w-full animate-pulse rounded-lg bg-grey-01" />
+    <div className="flex flex-col" aria-hidden="true">
+      <div className="aspect-480/289 w-full animate-pulse bg-grey-01" />
+      <div className="aspect-480/289 w-full animate-pulse bg-grey-01" />
     </div>
   );
 }

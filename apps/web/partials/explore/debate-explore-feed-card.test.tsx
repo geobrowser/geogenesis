@@ -68,24 +68,27 @@ vi.mock('~/core/debates/hooks', () => ({
 }));
 
 // The card renders the real `DebateInteractionBar` — sharing it with the full-screen feed is the
-// point of these assertions — so only its vote control is stood in for. The real one reaches the
-// sync store, Privy and the onboarding atoms, none of which this card's behavior depends on.
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: ({
-    entityId,
-    presentation,
-    responseKind,
+// point of these assertions. The claim footer around it is stood in for: its reads and pills are
+// covered by debate-claim-footer.test.tsx, and here it only has to place what the card hands it.
+vi.mock('~/core/debates/browse/debate-claim-footer', () => ({
+  DebateClaimFooter: ({
+    claim,
+    enabled,
+    meta,
+    title,
+    actions,
   }: {
-    entityId: string;
-    presentation?: string;
-    responseKind?: string | null;
+    claim: Debate['claim'] | null;
+    enabled: boolean;
+    meta: React.ReactNode;
+    title: React.ReactNode;
+    actions: React.ReactNode;
   }) => (
-    <div
-      data-testid="vote-buttons"
-      data-entity={entityId}
-      data-presentation={presentation}
-      data-response-kind={responseKind ?? 'inferred'}
-    />
+    <div data-testid="claim-footer" data-claim={claim?.claim_entity_id ?? 'none'} data-enabled={String(enabled)}>
+      {meta}
+      {title}
+      {actions}
+    </div>
   ),
 }));
 
@@ -99,6 +102,8 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
       releaseMedia,
       holdFullPlayback,
       reducedOverlays,
+      framed,
+      onOpenClaims,
     }: {
       debate: Debate;
       active: boolean;
@@ -106,6 +111,8 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
       releaseMedia?: boolean;
       holdFullPlayback?: boolean;
       reducedOverlays?: boolean;
+      framed?: boolean;
+      onOpenClaims?: () => void;
     }) => (
       <>
         <button
@@ -117,8 +124,13 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
           data-buffer={buffer ? 'true' : 'false'}
           data-hold-full-playback={holdFullPlayback ? 'true' : 'false'}
           data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
+          data-framed={framed ? 'true' : 'false'}
           onClick={mocks.playerToggle}
         />
+        {/* Stands in for the claims chip on the video, now the card's only way into the panel. */}
+        <button type="button" data-testid="video-claims" onClick={onOpenClaims}>
+          Claims on the video
+        </button>
         {mocks.withEndCard ? (
           <div data-debate-end-card>
             <button type="button" data-testid="end-card-vote" onClick={mocks.endCardVote} />
@@ -140,16 +152,6 @@ vi.mock('~/core/debates/browse/use-debate-share-action', () => ({
 
 vi.mock('~/core/debates/browse/share-dialog', () => ({
   DebateShareDialog: () => null,
-}));
-
-vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
-  useDebateTranscriptClaims: () => ({
-    // Deliberately not the item's `commentCount`: equal counts would let the comment and claims
-    // wirings be swapped without a test noticing.
-    claims: { byAuthorSpaceId: new Map(), unattributed: [], totalCount: 18 },
-    isLoading: false,
-    error: null,
-  }),
 }));
 
 vi.mock('~/core/debates/browse/debate-claims-panel', () => ({
@@ -447,11 +449,11 @@ describe('DebateExploreFeedCard', () => {
 
     expect(screen.getByText('Fashion').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
     expect(screen.getByTestId('player')).toHaveAttribute('data-reduced-overlays', 'true');
-    expect(screen.getByTestId('vote-buttons').parentElement).toHaveClass('gap-2');
-    expect(screen.getByTestId('vote-buttons').parentElement).not.toHaveClass('justify-between', 'gap-1');
-    expect(screen.getByRole('button', { name: /^Comments/ })).toHaveClass('gap-1', 'px-1.5');
-    expect(screen.getByRole('button', { name: 'Share debate' })).toHaveClass('size-7', 'px-0');
-    expect(screen.getByRole('button', { name: 'Share debate' }).textContent).toBe('');
+    // The rail is narrow, so Share drops to its icon there; it reads the row's own width rather
+    // than the viewport's.
+    const share = screen.getByRole('button', { name: 'Share debate' });
+    expect(share).toHaveClass('@max-[400px]:size-7', '@max-[400px]:px-0');
+    expect(share.querySelector('.\\@max-\\[400px\\]\\:hidden')).toHaveTextContent('Share');
   });
 
   it('renders the fallback when the debate is not watchable', () => {
@@ -776,12 +778,12 @@ describe('DebateExploreFeedCard', () => {
 
     intersectAll(0.7);
     expect(screen.getByTestId('player')).toBeDefined();
-    expect(screen.getByRole('button', { name: /^Claims/ })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Claims on the video' })).toBeDefined();
 
     // A row stays in the infinite feed, but its media/query subtree does not.
     intersectAll(0);
     expect(screen.queryByTestId('player')).toBeNull();
-    expect(screen.queryByRole('button', { name: /^Claims/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Claims on the video' })).toBeNull();
 
     // Re-entering the look-ahead band restores a warm, inactive player before it is visible.
     intersectAll(0.1);
@@ -806,7 +808,7 @@ describe('DebateExploreFeedCard', () => {
     intersectAll(0.7);
 
     // Both cards offer the control, which is the precondition the bug needed.
-    const claimsButtons = screen.queryAllByRole('button', { name: /^Claims/ });
+    const claimsButtons = screen.queryAllByRole('button', { name: 'Claims on the video' });
     expect(claimsButtons).toHaveLength(2);
 
     fireEvent.click(claimsButtons[0]);
@@ -832,7 +834,7 @@ describe('DebateExploreFeedCard', () => {
     );
     intersectAll(0.7);
 
-    for (const button of screen.queryAllByRole('button', { name: /^Claims/ })) fireEvent.click(button);
+    for (const button of screen.queryAllByRole('button', { name: 'Claims on the video' })) fireEvent.click(button);
     fireEvent.click(screen.getByText('Close'));
 
     expect(screen.queryAllByTestId('claims-panel')).toHaveLength(0);
@@ -878,7 +880,7 @@ describe('DebateExploreFeedCard', () => {
       screen.queryAllByTestId('entity-side-panel').length + screen.queryAllByTestId('claims-panel').length;
     expect(openPanels()).toBe(1);
 
-    fireEvent.click(screen.getByRole('button', { name: /^Claims/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Claims on the video' }));
     expect(screen.queryAllByTestId('claims-panel')).toHaveLength(1);
     expect(openPanels()).toBe(1);
 
@@ -898,13 +900,13 @@ describe('DebateExploreFeedCard', () => {
     renderCard();
     intersectAll(0.7);
 
-    fireEvent.click(screen.getByRole('button', { name: /^Claims/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Claims on the video' }));
     expect(screen.getByTestId('claims-panel')).toBeDefined();
 
     // The player and the control that opened it both stand down; what is open stays open.
     intersectAll(0);
     expect(screen.queryByTestId('player')).toBeNull();
-    expect(screen.queryByRole('button', { name: /^Claims/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Claims on the video' })).toBeNull();
     expect(screen.getByTestId('claims-panel')).toBeDefined();
 
     // And its own close control is still the way out, rather than a scroll back and forth.
@@ -950,7 +952,7 @@ describe('DebateExploreFeedCard', () => {
     expect(isActive()).toBe('false');
   });
 
-  it('shows Claims and Share actions once the debate is ready, opening the claims panel on demand', () => {
+  it('shows Share once the debate is ready, and opens the claims panel from the video', () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     renderCard();
@@ -959,7 +961,7 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByRole('button', { name: 'Share debate' })).toBeDefined();
 
     expect(screen.queryByTestId('claims-panel')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /^Claims/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Claims on the video' }));
     expect(screen.getByTestId('claims-panel')).toBeDefined();
 
     fireEvent.click(screen.getByText('Close'));
@@ -972,20 +974,18 @@ describe('DebateExploreFeedCard', () => {
     renderCard();
     intersectAll(0.1);
 
-    // The shared bar in its horizontal arrangement, beneath the videos - not the inline arrows the
-    // other explore cards use.
-    expect(screen.getByTestId('vote-buttons').getAttribute('data-presentation')).toBe('debate-horizontal');
-
-    // Counts come from what the card already has: the feed's comment count and the shared
-    // transcript-claims query, rather than a thread fetch per card.
+    // Comments and share sit at the end of the claim's Agree/Disagree row, which replaced the
+    // debate's up/down vote and its claims count (GEO-3454).
+    const footer = screen.getByTestId('claim-footer');
     const comments = screen.getByRole('button', { name: /^Comments/ });
+    expect(footer).toContainElement(comments);
+    expect(footer).toContainElement(screen.getByRole('button', { name: 'Share debate' }));
+    expect(screen.queryByRole('button', { name: /^Claims \(/ })).toBeNull();
+
+    // The count comes from what the card already has: the feed's comment count, rather than a
+    // thread fetch per card.
     expect(comments.textContent).toBe('3');
-    expect(screen.getByRole('button', { name: /^Claims/ }).textContent).toBe('18');
     expect(comments).toHaveAttribute('data-geo-analytics-label', 'Debate comments');
-    expect(screen.getByRole('button', { name: /^Claims/ })).toHaveAttribute(
-      'data-geo-analytics-label',
-      'Debate claims'
-    );
 
     // Marked as an opener so pressing it while the global comments panel is open switches the
     // panel to this debate instead of reading as an outside click that dismisses it.
@@ -997,9 +997,28 @@ describe('DebateExploreFeedCard', () => {
     );
   });
 
-  it('keeps votes and comments while the debate is still loading', () => {
+  // GEO-3454: the video and the claim are one framed card, and Agree/Disagree act on the claim
+  // being debated, read once the debate is resolved and in the media window.
+  it('frames the video and the claim as one card, voting on the debate claim', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     renderCard();
-    expect(screen.getByTestId('vote-buttons')).toBeDefined();
+    intersectAll(0.1);
+
+    const player = screen.getByTestId('player');
+    expect(player).toHaveAttribute('data-framed', 'true');
+    const card = screen.getByTestId('claim-footer').parentElement;
+    expect(card).toHaveClass('overflow-hidden', 'rounded-xl', 'border');
+    expect(card).toContainElement(player);
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-claim', watchableDebate().claim.claim_entity_id);
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-enabled', 'true');
+    // The card's shape says what it is; the fallback card keeps its type tag.
+    expect(screen.queryByText('Debate')).toBeNull();
+  });
+
+  it('keeps the claim row and comments while the debate is still loading', () => {
+    renderCard();
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-claim', 'none');
     expect(screen.getByRole('button', { name: /^Comments/ })).toBeDefined();
   });
 
@@ -1017,7 +1036,7 @@ describe('DebateExploreFeedCard', () => {
 
       expect(column(container).className).toContain('max-w-[var(--debate-card-column-width)]');
       expect(column(container).style.getPropertyValue('--debate-card-column-width')).toBe(
-        'clamp(320px, calc(83dvh - 178px), 560px)'
+        'clamp(320px, calc(83dvh - 214px), 560px)'
       );
     });
 
@@ -1030,7 +1049,7 @@ describe('DebateExploreFeedCard', () => {
 
       expect(column(container).className).toContain('max-w-[var(--debate-card-column-width)]');
       expect(column(container).style.getPropertyValue('--debate-card-column-width')).toBe(
-        'max(320px, min(calc(83dvh - 178px), 100%))'
+        'max(320px, min(calc(83dvh - 214px), 100%))'
       );
     });
   });
@@ -1063,12 +1082,6 @@ describe('DebateExploreFeedCard', () => {
    * — which an explore card does whenever a data block row carries a debate from another space.
    * The full-screen feed names it, because it only ever shows a space its own debates.
    */
-  it('lets the vote control work out the response kind, so it can resolve the home space', () => {
-    renderCard();
-
-    expect(screen.getByTestId('vote-buttons').getAttribute('data-response-kind')).toBe('inferred');
-  });
-
   /**
    * The app's comments panel is an in-flow panel with no dialog role and no focus trap, so the
    * control that opens it says how it stands without sending a reader looking for a dialog.
@@ -1092,9 +1105,8 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByRole('button', { name: 'Share debate' }).getAttribute('aria-haspopup')).toBe('dialog');
   });
 
-  it('hides Claims and Share while the debate is still loading', () => {
+  it('hides Share while the debate is still loading', () => {
     renderCard();
-    expect(screen.queryByRole('button', { name: /^Claims/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /share/i })).toBeNull();
   });
 

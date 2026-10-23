@@ -15,12 +15,9 @@ const mocks = vi.hoisted(() => ({
   processedIds: null as string[] | null,
   mediaLoading: false,
   mediaError: false,
-  entityVoteProps: [] as Array<Record<string, unknown>>,
   /** Debate entity ids in "Best" order. Empty = the ranking covers nothing, so recency stands. */
   bestOrderIds: [] as string[],
   bestOrderLoading: false,
-  /** Claims extracted from the transcript, as the count badge sees them. */
-  claimsCount: 0,
   /** The anchor fetched by id when it is not in the space listing (GEO-2764). */
   anchorDebate: null as ReturnType<typeof completedDebate> | null,
   anchorLoading: false,
@@ -82,13 +79,6 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [], isLoading: false }),
 }));
 
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: (props: Record<string, unknown>) => {
-    mocks.entityVoteProps.push(props);
-    return <div data-testid={`entity-votes-${String(props.presentation)}`} />;
-  },
-}));
-
 vi.mock('./debate-feed-player', async () => {
   const React = await import('react');
   return {
@@ -99,6 +89,8 @@ vi.mock('./debate-feed-player', async () => {
       buffer,
       releaseMedia,
       holdFullPlayback,
+      framed,
+      onOpenClaims,
       onPlaybackState,
     }: {
       debate: Debate;
@@ -107,6 +99,8 @@ vi.mock('./debate-feed-player', async () => {
       buffer?: boolean;
       releaseMedia?: boolean;
       holdFullPlayback?: boolean;
+      framed?: boolean;
+      onOpenClaims?: () => void;
       onPlaybackState?: (state: typeof mocks.playerState) => void;
     }) => {
       const state = JSON.stringify(mocks.playerState);
@@ -119,7 +113,13 @@ vi.mock('./debate-feed-player', async () => {
           data-buffer={buffer ? 'true' : 'false'}
           data-release-media={releaseMedia ? 'true' : 'false'}
           data-hold-full-playback={holdFullPlayback ? 'true' : 'false'}
-        />
+          data-framed={framed ? 'true' : 'false'}
+        >
+          {/* Stands in for the claims chip on the video, now the only way into the claims panel. */}
+          <button type="button" onClick={onOpenClaims}>
+            Claims on the video
+          </button>
+        </div>
       );
     },
   };
@@ -127,6 +127,29 @@ vi.mock('./debate-feed-player', async () => {
 
 // Stubbed so these tests assert only where the nudge is placed; its bounce/dismiss
 // lifecycle is covered by debate-scroll-hint.test.tsx.
+// The footer's own reads and pills are covered by debate-claim-footer.test.tsx. Here it only has
+// to place what the feed hands it, and say which claim it was handed.
+vi.mock('./debate-claim-footer', () => ({
+  DebateClaimFooter: ({
+    claim,
+    enabled,
+    meta,
+    title,
+    actions,
+  }: {
+    claim: Debate['claim'] | null;
+    enabled: boolean;
+    meta: React.ReactNode;
+    title: React.ReactNode;
+    actions: React.ReactNode;
+  }) => (
+    <div data-testid="claim-footer" data-claim={claim?.claim_entity_id} data-enabled={String(enabled)}>
+      {meta}
+      {title}
+      {actions}
+    </div>
+  ),
+}));
 vi.mock('./debate-scroll-hint', () => ({
   useDebateScrollHint: (enabled: boolean) => ({ isVisible: enabled, isLeaving: false }),
   scrollHintBounceProps: { className: 'bounce-stub', style: { animationIterationCount: 6 } },
@@ -154,19 +177,10 @@ vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 7, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
-vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
-  useDebateTranscriptClaims: () => ({
-    claims: { all: [], byAuthorSpaceId: new Map(), unattributed: [], totalCount: mocks.claimsCount },
-    isLoading: false,
-    error: null,
-  }),
-}));
-
 beforeEach(() => {
   vi.useFakeTimers();
   vi.resetAllMocks();
   observers = [];
-  mocks.entityVoteProps.length = 0;
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
   mocks.processedIds = null;
   mocks.anchorDebate = null;
@@ -174,7 +188,6 @@ beforeEach(() => {
   mocks.anchorError = null;
   mocks.bestOrderIds = [];
   mocks.bestOrderLoading = false;
-  mocks.claimsCount = 0;
   mocks.mediaLoading = false;
   mocks.mediaError = false;
   mocks.playerState = { ready: false, playing: false, autoplayBlocked: false, error: false };
@@ -257,19 +270,34 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     // so grouping them lets a regression on any single class slip through.
     expect(feedItem).not.toHaveClass('items-center');
     expect(feedItem).not.toHaveClass('pb-[2.75rem]');
-    const mediaColumn = screen.getByTestId('player-debate-1').parentElement?.parentElement;
-    assert(mediaColumn, 'Expected the debate player to be rendered inside the media column');
+    const player = screen.getByTestId('player-debate-1');
+    // GEO-3454: the video and the claim under it are one card, and the card draws the frame.
+    const card = player.parentElement;
+    assert(card, 'Expected the debate player to be rendered inside the card');
+    expect(card).toHaveClass('overflow-hidden', 'rounded-xl', 'border');
+    expect(player).toHaveAttribute('data-framed', 'true');
+    expect(card).toContainElement(screen.getByTestId('claim-footer'));
+    expect(within(card).getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
+    const mediaColumn = card.parentElement;
+    assert(mediaColumn, 'Expected the card to be rendered inside the media column');
     expect(mediaColumn).toHaveClass('min-w-0', 'w-[var(--debate-feed-column-width)]', 'md:w-[calc(100vw-1rem)]');
     expect(mediaColumn).toHaveStyle({
-      '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
+      '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 2rem), calc(82.9dvh - 12.75rem)), 640px)',
     });
-    expect(screen.getByTestId('entity-votes-debate-horizontal')).toBeInTheDocument();
-    expect(screen.getByTestId('entity-votes-debate-vertical')).toBeInTheDocument();
-    expect(mocks.entityVoteProps).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ entityId: 'debate-1', spaceId: 'space-1', responseKind: 'curation' }),
-      ])
-    );
+  });
+
+  // GEO-3454: the debate is judged through its claim now. The footer carries Agree/Disagree on the
+  // claim; nothing in the card votes on the debate itself, and the claims count left the row.
+  it('votes on the claim, not the debate, and keeps comments and share', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const footer = screen.getByTestId('claim-footer');
+    expect(footer).toHaveAttribute('data-claim', 'claim-entity-debate-1');
+    expect(footer).toHaveAttribute('data-enabled', 'true');
+    expect(within(footer).getByRole('button', { name: 'Comments (7)' })).toBeInTheDocument();
+    expect(within(footer).getByRole('button', { name: 'Share debate' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Claims \(/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /upvote|downvote/i })).not.toBeInTheDocument();
   });
 
   it('renders when ResizeObserver is unavailable', () => {
@@ -354,7 +382,9 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     }
   });
 
-  it('clamps long claims and lets mobile users expand them', () => {
+  // Two lines is what the column's height budget reserves for the claim, so a longer one stays
+  // clamped and offers the whole text on hover rather than growing the card.
+  it('clamps long claims to two lines and names the whole claim on hover', () => {
     const restore = stubHeadingMetrics({ contentHeight: 74, clampedHeight: 48 });
 
     try {
@@ -364,15 +394,8 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
 
       const heading = screen.getByRole('heading', { name: claim });
       expect(heading).toHaveClass('line-clamp-2');
-      expect(heading).not.toHaveClass('min-h-[42px]');
       expect(heading).toHaveAttribute('title', claim);
-
-      const toggle = screen.getByRole('button', { name: 'Show more' });
-      expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      fireEvent.click(toggle);
-
-      expect(heading).toHaveClass('md:line-clamp-none');
-      expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
     } finally {
       restore();
     }
@@ -508,11 +531,12 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     expect(screen.queryByText('Removed view')).not.toBeInTheDocument();
   });
 
-  it('puts the overflow menu in both orientations of the bar', () => {
+  it('puts the overflow menu at the end of the card actions', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    expect(screen.getByTestId('overflow-pill-debate-1')).toBeInTheDocument();
-    expect(screen.getByTestId('overflow-circle-debate-1')).toBeInTheDocument();
+    expect(within(screen.getByTestId('claim-footer')).getByTestId('overflow-pill-debate-1')).toBeInTheDocument();
+    // The desktop rail beside the video is gone, and its circle variant with it.
+    expect(screen.queryByTestId('overflow-circle-debate-1')).not.toBeInTheDocument();
   });
 
   // The contrast that makes the case above load-bearing: a transient failure is *unknown*, so it
@@ -626,7 +650,7 @@ describe('DebatesBrowseFeed comments', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^Claims/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Claims on the video' })[0]);
     expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
 
@@ -657,7 +681,7 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
 
   it('moves the claims panel to the next debate on scroll', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
-    fireEvent.click(screen.getAllByRole('button', { name: /^Claims/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Claims on the video' })[0]);
     expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
 
     activateDebate('Adjacent debate');
