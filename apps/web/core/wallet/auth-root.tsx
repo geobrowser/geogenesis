@@ -3,8 +3,6 @@
 import * as React from 'react';
 
 import { getState, isRealAuthWanted, markHostFailed, requestRealAuth, subscribe } from './auth-store';
-// EXPERIMENT ONLY (GEO-3453): static import, undoing #2930's on-demand chunk.
-import * as PrivyHostModule from './privy-host';
 
 /**
  * How long after load a signed-out page waits before loading Privy anyway.
@@ -22,7 +20,7 @@ type HostModule = typeof import('./privy-host');
 let hostModule: Promise<HostModule> | null = null;
 
 function loadHost() {
-  hostModule ??= Promise.resolve(PrivyHostModule);
+  hostModule ??= import('./privy-host');
   return hostModule;
 }
 
