@@ -2,10 +2,10 @@
 # EXPERIMENT ONLY (GEO-3453), not for master: runs `next build` while sampling
 # the build container's cgroup memory, then prints the peak.
 # OOM_EXPERIMENT_RUN: bump to force a new preview build of the same variant.
-OOM_EXPERIMENT_RUN=8
+OOM_EXPERIMENT_RUN=9
 # Per-variant knobs: extra env for next build, and extra next build flags.
-OOM_EXPERIMENT_ENV="TOKIO_WORKER_THREADS=2 RAYON_NUM_THREADS=2"
-OOM_EXPERIMENT_NEXT_ARGS=""
+OOM_EXPERIMENT_ENV=""
+OOM_EXPERIMENT_NEXT_ARGS="--webpack"
 
 log=/tmp/oom-mem.tsv
 cg=""
