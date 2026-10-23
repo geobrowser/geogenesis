@@ -1,7 +1,7 @@
 import { DEEP_LINK_MODALS, toModal } from '~/core/deep-links/modal-deep-link';
 import { NavUtils } from '~/core/utils/utils';
 
-import type { RunningLateMinutes, ScheduledDebateRequest } from '../api';
+import type { RunningLateMinutes, ScheduledDebateRequest, UpcomingDebateRoom } from '../api';
 
 /**
  * Running late and Can't make it (GEO-3427): what a debater who won't be there on time tells the
@@ -68,4 +68,15 @@ export function noticeRequestState(request: ScheduledDebateRequest | undefined):
   // A moved debate is pending again, waiting on whoever has to accept the new time.
   if (request.status === 'pending') return 'moved';
   return 'over';
+}
+
+/**
+ * Whether decide's "{Name} is in the room, waiting for you" shows. It needs them there now, so it
+ * reads the live count: by `others_present` alone, a tab that crashed or lost its connection keeps
+ * the pill up until the room closes (GEO-3450). Falls back to `others_present` on a geo-chat that
+ * predates `others_live`.
+ */
+export function otherDebaterWaiting(room: UpcomingDebateRoom | null): boolean {
+  if (!room) return false;
+  return room.others_live ?? room.others_present;
 }

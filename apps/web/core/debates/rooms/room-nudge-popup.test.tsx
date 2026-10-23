@@ -98,6 +98,12 @@ describe('RoomNudgePopup', () => {
     expect(shown()).not.toBeInTheDocument();
   });
 
+  // GEO-3450: a crashed tab keeps `others_present` true; the live count says she is not there.
+  it('does not say the waiter is in the room when only a dead tab of theirs is', () => {
+    render(popup([room(FIRST, { others_present: true, others_live: false })]));
+    expect(shown()).not.toBeInTheDocument();
+  });
+
   it('steps aside while it is not allowed, and comes back only if the nudge still stands', () => {
     const { rerender } = render(popup([room(FIRST)]));
     rerender(popup([room(FIRST)], false));

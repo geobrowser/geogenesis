@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 
 import type { UpcomingDebateRoom } from '../api';
 import { requestForRoom } from './room-opponent';
-import type { ScheduledNoticeAnswer } from './scheduled-notice';
+import { type ScheduledNoticeAnswer, otherDebaterWaiting } from './scheduled-notice';
 import { useScheduledNoticeOpen } from './scheduled-notice-open';
 import { useScheduledDebates } from './scheduling-hooks';
 
@@ -24,9 +24,11 @@ function nudgeKey(room: UpcomingDebateRoom) {
 /**
  * A nudge still asks something: the viewer has not joined or said they are late since (geo-chat
  * clears `nudged_at` then), and the one who nudged is still in the room, as the popup says they are.
+ * "In the room" is the live count the decide screen's pill reads (GEO-3450), not `others_present`,
+ * which a crashed tab keeps true.
  */
 function standingNudge(room: UpcomingDebateRoom) {
-  return room.kind !== 'lobby' && Boolean(room.nudged_at) && room.others_present;
+  return room.kind !== 'lobby' && Boolean(room.nudged_at) && otherDebaterWaiting(room);
 }
 
 type Held = { key: string; roomId: string; requestId: string; answer: ScheduledNoticeAnswer };

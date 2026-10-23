@@ -31,6 +31,7 @@ import {
   type ScheduledNoticeStep,
   noticeNote,
   noticeRequestState,
+  otherDebaterWaiting,
 } from '~/core/debates/rooms/scheduled-notice';
 import { useHoldScheduledNotice } from '~/core/debates/rooms/scheduled-notice-open';
 import { useCantMakeIt, useReportRunningLate } from '~/core/debates/rooms/scheduling-hooks';
@@ -67,6 +68,8 @@ type Props = {
   requestId: string;
   initialStep: ScheduledNoticeStep;
   onClose: () => void;
+  /** Told when a late notice or a cancel has gone through, before its confirmation shows. */
+  onSent?: () => void;
   /**
    * Board 2's "Reschedule instead". Only the reschedule link offers it, and it owns the week: there it
    * swaps this dialog for the calendar the link would otherwise have opened.
@@ -98,6 +101,7 @@ export function ScheduledDebateNoticeDialog({
   requestId,
   initialStep,
   onClose,
+  onSent,
   onReschedule,
   onAnswerChange,
   children,
@@ -112,6 +116,11 @@ export function ScheduledDebateNoticeDialog({
   // The nudge popup steps aside for any other notice dialog (GEO-3428); it is not one itself.
   useHoldScheduledNotice(open && initialStep !== 'nudge');
   const [outcome, setOutcome] = React.useState<Outcome | null>(null);
+  // Every outcome is something sent; `onSent` hears of it as the confirmation replaces the step.
+  const sent = (next: Outcome) => {
+    setOutcome(next);
+    onSent?.();
+  };
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
   const answer: ScheduledNoticeAnswer = outcome ? 'sent' : step === initialStep && !suggesting ? 'open' : 'answering';
@@ -263,7 +272,7 @@ export function ScheduledDebateNoticeDialog({
           focusHeading={moved}
           onCant={() => go('cant')}
           onSent={expectedAt =>
-            setOutcome({
+            sent({
               message: COPY.late.sent(name, formatTime(expectedAt)),
               // Only into a room that is open. A late notice can be sent the day before, from the
               // calendar invite, and Join would land on "the room opens at…".
@@ -282,7 +291,7 @@ export function ScheduledDebateNoticeDialog({
           focusHeading={moved}
           onLate={() => go('late')}
           onSuggest={note => setSuggesting({ note })}
-          onSent={() => setOutcome({ message: COPY.cant.sent(name), joinRoomId: null })}
+          onSent={() => sent({ message: COPY.cant.sent(name), joinRoomId: null })}
         />,
         { ownHeading: true, back }
       );
@@ -355,7 +364,7 @@ function DecideStep({
             {ROOM_NUDGE_POPUP.lead(name, formatTime(startsAt), offset)}
           </Text>
         ) : (
-          room?.others_present && (
+          otherDebaterWaiting(room) && (
             <span className="inline-flex items-center gap-2 rounded-full border border-grey-02 px-3 py-1.5 text-metadata">
               <span aria-hidden className="size-2 rounded-full bg-green" />
               {COPY.decide.waiting(name)}
