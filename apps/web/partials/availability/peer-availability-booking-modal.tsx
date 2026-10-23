@@ -81,13 +81,16 @@ export function PeerAvailabilityBookingModal({
   const state = noticeRequestState(request);
   const active = state === 'active' || state === 'moved' ? request : undefined;
   const agreed = state === 'active';
-  // The zone the week is drawn in, from the query the week itself reads (no second request), so the
-  // warning names the time as the card and the chips do.
-  const viewerTimezone = usePeerSchedule(rescheduleRequestId && agreed ? userId : null).schedule?.viewerTimezone;
+  // From the room's late notice the viewer is the one waiting: "they will expect you" is the wrong
+  // way round, and "none of these work" would tell the late one the waiter can't make it.
+  const fromWaitingRoom = entry === 'room_late_notice';
   // Closing without a new time leaves an agreed debate on, which is easy to miss when you meant to
-  // move it; so it asks first (board 4b). Not from the room's late notice: there the viewer is the
-  // one waiting, and "they will expect you" is the wrong way round.
-  const warnsOnClose = agreed && entry !== 'room_late_notice';
+  // move it; so it asks first (board 4b).
+  const warnsOnClose = agreed && !fromWaitingRoom;
+  // The zone the week is drawn in, from the query the week itself reads (no second request), so the
+  // warning names the time as the card and the chips do. Read only while a warning can show.
+  const viewerTimezone = usePeerSchedule(rescheduleRequestId && warnsOnClose && props.open ? userId : null).schedule
+    ?.viewerTimezone;
   const [step, setStep] = React.useState<'week' | 'warn' | 'cant'>('week');
   // One request at a time: a move and "none of these work" racing would leave the other debater
   // with both emails and the move undone.
@@ -100,12 +103,11 @@ export function PeerAvailabilityBookingModal({
     mutation.reset();
     noneWork.reset();
   };
-  // Not while a move or "none of these work" is in flight: "still on" may be about to be untrue, and
-  // closing would drop the confirmation of what lands. A new request (the People tab) still closes
-  // mid-flight, detaching its late success, as it always has.
+  // While a move or "none of these work" is in flight, "still on" may be about to be untrue, so it
+  // closes without the warning. Never held open: a request with no timeout can hang (a Privy token
+  // stall), and the week must always let go.
   const requestClose = () => {
-    if (rescheduleRequestId && busy) return;
-    if (warnsOnClose) setStep('warn');
+    if (warnsOnClose && !busy) setStep('warn');
     else close();
   };
 
@@ -152,7 +154,7 @@ export function PeerAvailabilityBookingModal({
           // Kept while its refusal shows: the refetch it triggers can resolve the request, and the
           // error is the only thing saying why the screen changed.
           noTimeWorks:
-            (active || noneWork.error) && rescheduleRequestId
+            (active || noneWork.error) && rescheduleRequestId && !fromWaitingRoom
               ? {
                   onPress: () =>
                     noneWork.mutate(
@@ -165,7 +167,8 @@ export function PeerAvailabilityBookingModal({
                       }
                     ),
                   pending: noneWork.isPending,
-                  disabled: busy,
+                  // Nothing left to call off once the request has resolved; its refusal still shows.
+                  disabled: busy || !active,
                   error: noneWork.error ? noticeFailureMessage(noneWork.error, 'cant') : null,
                 }
               : null,

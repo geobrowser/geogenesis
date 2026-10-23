@@ -792,6 +792,22 @@ describe('moving a debate', () => {
     expect(tuesday.getByRole('button', { name: /^\+2 more times/ })).toBeInTheDocument();
   });
 
+  it('opens a day on a picked slot the current time pushed past the fold', () => {
+    render(
+      <PeerAvailabilityView
+        schedule={schedule({ slots: [9, 10, 11, 12, 13].map(hour => slot(hour, true, 22)) })}
+        peerName="Ada"
+        now={NOW}
+        booking={moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } })}
+        initialSelectedStart="2026-09-22T12:00:00Z"
+      />
+    );
+
+    const tuesday = within(day('2026-09-22'));
+    expect(tuesday.getByRole('button', { name: /at 12pm/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(tuesday.getByRole('button', { name: /^Show less/ })).toBeInTheDocument();
+  });
+
   it('holds both actions while the other is in flight', async () => {
     const { user } = setupBooking(
       moving({

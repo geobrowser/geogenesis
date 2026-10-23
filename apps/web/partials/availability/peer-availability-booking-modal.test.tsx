@@ -525,14 +525,25 @@ describe('moving a debate', () => {
   });
 
   // Review of #2979: one request at a time, and no "still on" while one is in flight.
-  it('holds Propose while None of these work is in flight, and ignores Close', async () => {
+  it('holds Propose while None of these work is in flight', () => {
     mocks.noneWorkPending = true;
-    const { user, onClose } = moving('accepted');
+    moving('accepted');
 
     expect(screen.getByLabelText('propose disabled')).toHaveTextContent('yes');
     expect(screen.getByRole('button', { name: 'none work' })).toBeDisabled();
-    await user.click(screen.getByLabelText('Close'));
-    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  // Never held open: a request with no timeout can hang, and "still on" may be about to be untrue.
+  it.each([
+    ['the Close button', (user: ReturnType<typeof userEvent.setup>) => user.click(screen.getByLabelText('Close'))],
+    ['Escape', (user: ReturnType<typeof userEvent.setup>) => user.keyboard('{Escape}')],
+  ])('closes with %s, without the warning, while a request is in flight', async (_how, press) => {
+    mocks.noneWorkPending = true;
+    const { user, onClose } = moving('accepted');
+
+    await press(user);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
   });
 
@@ -555,6 +566,8 @@ describe('moving a debate', () => {
       />
     );
     expect(screen.getByLabelText('none work error')).toHaveTextContent('gone');
+    // Nothing left to call off.
+    expect(screen.getByRole('button', { name: 'none work' })).toBeDisabled();
   });
 
   it('says an unanswered invite was not cancelled', async () => {
@@ -570,6 +583,8 @@ describe('moving a debate', () => {
   it('closes from the room without the warning: the viewer is the one waiting', async () => {
     const { user, onClose } = moving('accepted', vi.fn(), { entry: 'room_late_notice' });
 
+    // Nor "none of these work", which would tell the late one the waiter can't make it.
+    expect(screen.queryByRole('button', { name: 'none work' })).not.toBeInTheDocument();
     await user.click(screen.getByLabelText('Close'));
 
     expect(onClose).toHaveBeenCalledTimes(1);

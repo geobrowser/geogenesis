@@ -96,6 +96,8 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
   const [outcome, setOutcome] = React.useState<Outcome | null>(null);
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
+  // The note, kept for coming back from the week to this screen (GEO-3429's close warning).
+  const [cantNote, setCantNote] = React.useState('');
   // Board 3 and its Back belong to arriving through board 2; an email's button lands on board 1b.
   const fromDecide = initialStep === 'decide';
 
@@ -119,8 +121,12 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
         rescheduleRequestId={request.request_id}
         rescheduleNote={suggesting.note}
         entry="cant_make_it"
-        // Its close warning's Can't make it comes back here rather than opening a second one.
-        onCantMakeIt={() => setSuggesting(null)}
+        // Its close warning's Can't make it comes back here, note and all, rather than opening a
+        // second one.
+        onCantMakeIt={() => {
+          setCantNote(suggesting.note ?? '');
+          setSuggesting(null);
+        }}
         onClose={onClose}
       />
     );
@@ -256,6 +262,7 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
           requestId={request.request_id}
           name={name}
           focusHeading={moved}
+          initialNote={cantNote}
           onLate={() => go('late')}
           onSuggest={note => setSuggesting({ note })}
           onSent={() => setOutcome({ message: COPY.cant.sent(name), joinRoomId: null })}
@@ -449,6 +456,7 @@ function CantStep({
   requestId,
   name,
   focusHeading,
+  initialNote = '',
   onLate,
   onSuggest,
   onSent,
@@ -456,11 +464,13 @@ function CantStep({
   requestId: string;
   name: string;
   focusHeading: boolean;
+  /** What was typed before going to the week and back. */
+  initialNote?: string;
   onLate: () => void;
   onSuggest: (note: string | undefined) => void;
   onSent: () => void;
 }) {
-  const [note, setNote] = React.useState('');
+  const [note, setNote] = React.useState(initialNote);
   const cancel = useCantMakeIt();
   const noteId = React.useId();
 

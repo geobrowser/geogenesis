@@ -600,7 +600,10 @@ function DayColumn({
 }) {
   // Opened on a preselected slot past the fold, the pick has to be visible.
   const [expanded, setExpanded] = React.useState(
-    () => day.slots.findIndex(slot => slot.start === selectedStart) >= SLOTS_PER_DAY
+    () =>
+      selectedStart !== null &&
+      day.slots.some(slot => slot.start === selectedStart) &&
+      !foldedSlots(day.slots).some(slot => slot.start === selectedStart)
   );
   const empty = day.slots.length === 0;
   const shown = expanded ? day.slots : foldedSlots(day.slots);
