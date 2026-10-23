@@ -76,9 +76,9 @@ function compareWhenSaid(
  * - A claim with neither a graph match nor a minted id is skipped. Those are payloads written
  *   before geo-chat minted ids (geo-chat#201); the publisher would mint a fresh id for them at
  *   publish time, so there is no id to request now that would still mean the same claim later.
- * - A claim geo-chat classified as not contestable is skipped: the publisher does not tag it as a
- *   debate claim, so it is not a motion anyone can take a side on. An absent classification (an
- *   older payload) is kept.
+ * - A claim geo-chat classified as not contestable is skipped: the publisher does not offer it for
+ *   debate (no Potential debate tag), so it is not a motion anyone can take a side on. An absent
+ *   classification (an older payload) is kept.
  * - Two claims resolving to one id — both matched to the same published claim — list once.
  */
 export function fromThisDebateCandidates(

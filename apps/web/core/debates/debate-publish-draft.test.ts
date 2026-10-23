@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
-import { DEBATE_TAG_ID } from '~/core/debates/ontology';
+import { FROM_DEBATE_TAG_ID, POTENTIAL_DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { Publish } from '~/core/utils/publish';
 
@@ -462,7 +462,7 @@ describe('buildDebatePublishDraft', () => {
     expect(topicRelations.find(r => r.fromEntity.id === EXISTING)?.toEntity.name).toBe(TOPIC.name);
   });
 
-  it('tags only contestable claims as Debate, minted or reused, once per entity', () => {
+  it('tags only contestable claims Potential debate, minted or reused, once per entity', () => {
     const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
     const draft = buildDebatePublishDraft(
       baseInput({
@@ -489,11 +489,45 @@ describe('buildDebatePublishDraft', () => {
       }),
       { createEntityId: idFactory(), createPosition: () => 'a0' }
     );
-    const tags = draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID);
+    const tags = draft.relations.filter(
+      r => r.type.id === TAG_PROPERTY_ID && r.toEntity.id === POTENTIAL_DEBATE_TAG_ID
+    );
     expect(tags.map(r => r.fromEntity.id).sort()).toEqual([claimIdByName(draft, 'A broad position.'), EXISTING].sort());
-    expect(tags.every(r => r.toEntity.id === DEBATE_TAG_ID)).toBe(true);
-    // The narrow claim is still published as a Claim, it just carries no Debate tag.
+    expect(tags.every(r => r.toEntity.name === 'Potential debate')).toBe(true);
+    // The narrow claim is still published as a Claim, it just carries no Potential debate tag.
     expect(claimIdByName(draft, 'A narrow fact.')).toBeTruthy();
+  });
+
+  it('tags every published claim From a debate, minted or reused, once per entity', () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const TAGGED_BEFORE = '7c0d2b9e4a1f4c3d8e5b6a7f8c9d0e1f';
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          { text: 'A broad position.', isFactual: false, turnIndex: 0, isContestable: true },
+          // Provenance is not candidacy: the narrow fact came out of this debate too.
+          { text: 'A narrow fact.', isFactual: true, turnIndex: 0, isContestable: false },
+          // One reused entity behind two restatements gets one tag, not two.
+          { text: 'Restated once.', isFactual: null, turnIndex: 1, existingClaimEntityId: EXISTING },
+          { text: 'Restated twice.', isFactual: null, turnIndex: 1, existingClaimEntityId: EXISTING },
+          // The reuse policy saw this entity already tagged in the space: left alone.
+          {
+            text: 'Tagged by an earlier debate.',
+            isFactual: null,
+            turnIndex: 1,
+            existingClaimEntityId: TAGGED_BEFORE,
+            fromDebateTagged: true,
+          },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    const tags = draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID && r.toEntity.id === FROM_DEBATE_TAG_ID);
+    expect(tags.map(r => r.fromEntity.id).sort()).toEqual(
+      [claimIdByName(draft, 'A broad position.'), claimIdByName(draft, 'A narrow fact.'), EXISTING].sort()
+    );
+    expect(tags.every(r => r.toEntity.name === 'From a debate')).toBe(true);
+    expect(draft.relations.some(r => r.fromEntity.id === TAGGED_BEFORE && r.type.id === TAG_PROPERTY_ID)).toBe(false);
   });
 
   it('tags one motion when a proposition is extracted twice and matched to nothing', () => {
@@ -508,7 +542,10 @@ describe('buildDebatePublishDraft', () => {
       }),
       { createEntityId: idFactory(), createPosition: () => 'a0' }
     );
-    expect(draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID)).toHaveLength(1);
+    const tags = draft.relations.filter(r => r.type.id === TAG_PROPERTY_ID);
+    expect(tags.filter(r => r.toEntity.id === POTENTIAL_DEBATE_TAG_ID)).toHaveLength(1);
+    // Provenance is per entity, and these are two entities.
+    expect(tags.filter(r => r.toEntity.id === FROM_DEBATE_TAG_ID)).toHaveLength(2);
   });
 
   it('treats dashed and dashless forms of one topic as a single relation', () => {
@@ -627,7 +664,12 @@ describe('buildDebatePublishDraft', () => {
         draft.values.find(v => v.entity.id === STABLE && v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID)?.value
       ).toBe('true');
       expect(blockAuthoringClaim(draft, STABLE)).toBe(YES_SPACE);
-      expect(draft.relations.some(r => r.fromEntity.id === STABLE && r.type.id === TAG_PROPERTY_ID)).toBe(true);
+      expect(
+        draft.relations
+          .filter(r => r.fromEntity.id === STABLE && r.type.id === TAG_PROPERTY_ID)
+          .map(r => r.toEntity.id)
+          .sort()
+      ).toEqual([POTENTIAL_DEBATE_TAG_ID, FROM_DEBATE_TAG_ID].sort());
     });
 
     it('lets an existing entity win over the stable id, which then goes unused', () => {
@@ -668,7 +710,11 @@ describe('buildDebatePublishDraft', () => {
       const from = (propertyId: string) =>
         draft.relations.filter(r => r.fromEntity.id === STABLE && r.type.id === propertyId);
       expect(from(TYPES_PROPERTY_ID)).toHaveLength(1);
-      expect(from(TAG_PROPERTY_ID)).toHaveLength(1);
+      expect(
+        from(TAG_PROPERTY_ID)
+          .map(r => r.toEntity.id)
+          .sort()
+      ).toEqual([POTENTIAL_DEBATE_TAG_ID, FROM_DEBATE_TAG_ID].sort());
       expect(from(SOURCES_PROPERTY_ID)).toHaveLength(1);
       const statements = draft.relations.filter(
         r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID && r.toEntity.id === STABLE
@@ -744,7 +790,7 @@ describe('buildDebatePublishDraft', () => {
       expect(a.id).toMatch(/^[0-9a-f]{32}$/);
       expect(a.entityId).toMatch(/^[0-9a-f]{32}$/);
       expect(a.id).not.toBe(a.entityId);
-      expect(stableClaimRelationIds(STABLE, TAG_PROPERTY_ID, DEBATE_TAG_ID).id).not.toBe(a.id);
+      expect(stableClaimRelationIds(STABLE, TAG_PROPERTY_ID, POTENTIAL_DEBATE_TAG_ID).id).not.toBe(a.id);
       expect(stableClaimRelationIds(OTHER_STABLE, TYPES_PROPERTY_ID, CLAIM_TYPE_ID).id).not.toBe(a.id);
     });
 
@@ -762,9 +808,14 @@ describe('buildDebatePublishDraft', () => {
       const from = (id: string, propertyId: string) =>
         draft.relations.filter(r => r.fromEntity.id === id && r.type.id === propertyId);
       expect(from(STABLE, TYPES_PROPERTY_ID)).toHaveLength(1);
-      expect(from(STABLE, TAG_PROPERTY_ID)).toHaveLength(1);
+      expect(
+        from(STABLE, TAG_PROPERTY_ID)
+          .map(r => r.toEntity.id)
+          .sort()
+      ).toEqual([POTENTIAL_DEBATE_TAG_ID, FROM_DEBATE_TAG_ID].sort());
       expect(from(STABLE, TOPICS_PROPERTY_ID).map(r => r.toEntity.id)).toEqual([TOPIC]);
-      expect(from(OTHER_STABLE, TAG_PROPERTY_ID)).toHaveLength(0);
+      // Not contestable, so no motion tag — but it is from this debate.
+      expect(from(OTHER_STABLE, TAG_PROPERTY_ID).map(r => r.toEntity.id)).toEqual([FROM_DEBATE_TAG_ID]);
     });
 
     it('writes nothing that names the debate, so the full publish still sees it unpublished', () => {

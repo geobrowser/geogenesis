@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
+import { DEBATE_TAG_ID, FROM_DEBATE_TAG_ID, POTENTIAL_DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { ENTITY_ID_BATCH_CONCURRENCY, ENTITY_ID_BATCH_SIZE } from '~/core/io/queries';
 
 import type { DebateClaimInput } from '../debate-publish-draft';
@@ -111,11 +112,10 @@ describe('applyClaimReusePolicy', () => {
     expect(result[0].isContestable).toBe(true);
   });
 
-  it('does not re-tag a reused entity that already carries the Debate tag', async () => {
+  it('does not re-tag a reused entity that already carries the Potential debate tag', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
     const lookup = vi.fn<ExistingClaimLookup>(async () => [
-      { id: EXISTING, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }], tagIds: [DEBATE_TAG] },
+      { id: EXISTING, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }], tagIds: [POTENTIAL_DEBATE_TAG_ID] },
     ]);
 
     const result = await applyClaimReusePolicy(
@@ -126,6 +126,28 @@ describe('applyClaimReusePolicy', () => {
 
     expect(result[0].existingClaimEntityId).toBe(EXISTING);
     expect(result[0].isContestable).toBe(false);
+  });
+
+  it('does not offer a reused entity a curator already chose, which carries the Debate tag', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const lookup = vi.fn<ExistingClaimLookup>(async () => [
+      { id: EXISTING, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }], tagIds: [DEBATE_TAG_ID] },
+    ]);
+
+    const result = await applyClaimReusePolicy(
+      [{ text: 'Matched.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING, isContestable: true }],
+      SPACE,
+      { enabled: true, lookup }
+    );
+
+    expect(result[0].existingClaimEntityId).toBe(EXISTING);
+    expect(result[0].isContestable).toBe(false);
+  });
+
+  it('pins the on-graph ids of the tags the policy subtracts', () => {
+    expect(DEBATE_TAG_ID).toBe('55c95b2626f8482cb9739ea99dfde438');
+    expect(POTENTIAL_DEBATE_TAG_ID).toBe('b63a27fd937e472092c0ef8d2a1168e5');
+    expect(FROM_DEBATE_TAG_ID).toBe('dbf13e0d452a4ebd831d9d800883a30a');
   });
 
   it('tags a reused entity that is not yet a debate claim', async () => {
@@ -141,6 +163,40 @@ describe('applyClaimReusePolicy', () => {
     );
 
     expect(result[0].isContestable).toBe(true);
+  });
+
+  it('marks a reused entity that already carries the From a debate tag, so it is not tagged again', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const lookup = vi.fn<ExistingClaimLookup>(async () => [
+      { id: EXISTING, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }], tagIds: [FROM_DEBATE_TAG_ID] },
+    ]);
+
+    const result = await applyClaimReusePolicy(
+      [{ text: 'Matched.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING, isContestable: true }],
+      SPACE,
+      { enabled: true, lookup }
+    );
+
+    expect(result[0].existingClaimEntityId).toBe(EXISTING);
+    expect(result[0].fromDebateTagged).toBe(true);
+    // The two tags are independent: this entity is a candidate motion for the first time.
+    expect(result[0].isContestable).toBe(true);
+  });
+
+  it('leaves the From a debate mark off a reused entity that does not carry the tag here', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const lookup = vi.fn<ExistingClaimLookup>(async () => [
+      { id: EXISTING, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }], tagIds: [POTENTIAL_DEBATE_TAG_ID] },
+    ]);
+
+    const result = await applyClaimReusePolicy(
+      [{ text: 'Matched.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING, isContestable: true }],
+      SPACE,
+      { enabled: true, lookup }
+    );
+
+    expect(result[0].fromDebateTagged).toBeUndefined();
+    expect(result[0].isContestable).toBe(false);
   });
 
   it('subtracts topics the reused entity already carries and keeps the rest', async () => {
