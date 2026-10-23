@@ -770,7 +770,6 @@ describe('moving a debate', () => {
     const onPress = vi.fn();
     const { user } = setupBooking(moving({ noTimeWorks: { onPress, pending: false, error: null } }));
 
-    expect(screen.getByText('Cancels 5pm and sends Ada your free times to choose from.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Ask Ada to pick a time' }));
     expect(onPress).toHaveBeenCalledTimes(1);
 

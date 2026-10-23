@@ -242,9 +242,7 @@ export function PeerAvailabilityView({
   const moving = currentStart && booking?.moving ? booking.moving : null;
   const movingTime = moving ? viewerDayAndTime(moving.startsAt, schedule.viewerTimezone) : null;
   const first = firstName(name) ?? name;
-  const alternative = booking?.noTimeWorks ? (
-    <NoTimeWorks peerFirstName={first} time={movingTime?.time ?? null} {...booking.noTimeWorks} />
-  ) : null;
+  const alternative = booking?.noTimeWorks ? <NoTimeWorks peerFirstName={first} {...booking.noTimeWorks} /> : null;
 
   return (
     <div className={cx('flex min-h-0 flex-col gap-5 md:gap-4', className)}>
@@ -371,19 +369,16 @@ function MovingCard({
 
 /**
  * "None of these work?" (GEO-3429, board 4): for someone who can't make the booked time or any of
- * theirs. One press calls it off and hands the other person the viewer's free times, which the line
- * under it says first.
+ * theirs. One press calls it off and hands the other person the viewer's free times.
  */
 function NoTimeWorks({
   peerFirstName,
-  time,
   onPress,
   pending,
   disabled = false,
   error,
 }: {
   peerFirstName: string;
-  time: string | null;
   onPress: () => void;
   pending: boolean;
   disabled?: boolean;
@@ -403,9 +398,6 @@ function NoTimeWorks({
           {pending ? 'Sending…' : `Ask ${peerFirstName} to pick a time`}
         </button>
       </div>
-      <Text as="p" variant="footnote" color="grey-04">
-        Cancels {time ?? 'this debate'} and sends {peerFirstName} your free times to choose from.
-      </Text>
       {error && (
         <Text as="p" variant="footnote" color="red-01">
           {error}
