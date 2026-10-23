@@ -1,5 +1,7 @@
 'use client';
 
+import type { ActiveResponseDirection, ResponseKind } from '~/core/responses/entity-response';
+
 /**
  * Conversion events for the marketing tags in Google Tag Manager (GTM-KJQ3T7W9), which forwards them
  * to Meta. Each fires from the same place as the Geo analytics event it mirrors, so the counts the
@@ -40,8 +42,21 @@ export type MarketingEventParams = {
   /** The voted entity: a claim or other entity, or the debate for a winner vote. */
   target_id?: string;
   vote_kind?: 'debate_winner' | 'stance' | 'curation';
+  /** The side picked: agree/disagree on a stance, up/down on curation. Unset on a debate winner vote. */
+  vote_direction?: MarketingVoteDirection;
   share_method?: string;
 };
+
+export type MarketingVoteDirection = 'agree' | 'disagree' | 'up' | 'down';
+
+/** The side a stance or curation vote took, in the words the vote controls use. */
+export function marketingVoteDirection(
+  responseKind: ResponseKind,
+  direction: ActiveResponseDirection
+): MarketingVoteDirection {
+  if (responseKind === 'stance') return direction === 'positive' ? 'agree' : 'disagree';
+  return direction === 'positive' ? 'up' : 'down';
+}
 
 /**
  * Unmuted playback, in view and in the foreground, that counts as watching a debate: 30s, the bar
@@ -59,6 +74,7 @@ const EMPTY_PARAMS: { [K in keyof Required<MarketingEventParams>]: undefined } =
   space_name: undefined,
   target_id: undefined,
   vote_kind: undefined,
+  vote_direction: undefined,
   share_method: undefined,
 };
 

@@ -14,11 +14,11 @@ vi.mock('~/core/explore/fetch-explore-feed', () => ({
 }));
 vi.mock('~/core/explore/resolve-explore-feed-request-context', () => ({
   resolveExploreFeedRequestContext: async (...args: unknown[]) => ({
-    ...mocks.context(...args),
     browse: { featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null },
     memberOrEditorSpaceIds: [],
     walletAddress: null,
     personalMemberSpaceId: null,
+    ...mocks.context(...args),
   }),
 }));
 vi.mock('~/core/explore/fresh-slot/fresh-slot-store', () => ({
@@ -65,6 +65,17 @@ describe('GET /api/explore/feed', () => {
     await GET(new Request('https://example.com/api/explore/feed?sort=best'));
 
     expect(sentArgs().freshSlot).toEqual({ config: FRESH_ON, revision: 4 });
+  });
+
+  it('hands the feed the member space it resolved, so the feed does not look it up again', async () => {
+    mocks.context.mockReturnValue({ walletAddress: '0xabc', personalMemberSpaceId: 'member-space' });
+
+    await GET(new Request('https://example.com/api/explore/feed?sort=new'));
+
+    expect(mocks.fetchFeed.mock.calls[0]?.[0]).toMatchObject({
+      walletAddress: '0xabc',
+      viewerMemberSpaceId: 'member-space',
+    });
   });
 
   it.each(['new', 'top', 'for-you'])('does not read the fresh slot for %s', async sort => {
@@ -169,6 +180,46 @@ describe('GET /api/explore/feed', () => {
 
   describe('personalized For you (GEO-3140)', () => {
     const item = (entityId: string, ranking?: object) => ({ entityId, ...(ranking ? { ranking } : {}) });
+
+    it('uses the topic stream for verified viewers while onboarding follows are pending, then personalizes again', async () => {
+      mocks.viewer.mockResolvedValue('aaaaaaaa000040008000000000000001');
+      mocks.fetchFeed.mockResolvedValue({ items: [], nextCursor: 'w1:22:' });
+      const topic = '8cb0a2b4adbf4627aa080cec5112099a';
+      const url = `https://example.com/api/explore/feed?sort=for-you&followedTopicIds=${topic}`;
+      const response = await GET(new Request(`${url}&pendingTopicFollows=1`));
+
+      expect(sentArgs().reorderWindow).toBeUndefined();
+      expect(sentArgs().forYouTopicIds).toEqual([topic]);
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+      expect((await response.json()).nextCursor).toBe('w1:22:');
+
+      mocks.fetchFeed.mockClear();
+      await GET(new Request(url));
+      expect(sentArgs().reorderWindow).toBeTypeOf('function');
+      expect(sentArgs().forYouTopicIds).toEqual([]);
+    });
+
+    it.each(['best', 'new', 'top'])('does not change %s for a pending onboarding signal', async sort => {
+      vi.stubEnv('NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED', 'true');
+      mocks.viewer.mockResolvedValue('aaaaaaaa000040008000000000000001');
+      await GET(
+        new Request(
+          `https://example.com/api/explore/feed?sort=${sort}&pendingTopicFollows=1&followedTopicIds=8cb0a2b4adbf4627aa080cec5112099a`
+        )
+      );
+
+      expect(sentArgs().forYouTopicIds).toEqual([]);
+      if (sort === 'best') expect(sentArgs().reorderWindow).toBeTypeOf('function');
+    });
+
+    it('does not disable personalization for a pending flag with no valid topic ids', async () => {
+      mocks.viewer.mockResolvedValue('aaaaaaaa000040008000000000000001');
+      await GET(
+        new Request('https://example.com/api/explore/feed?sort=for-you&pendingTopicFollows=1&followedTopicIds=invalid')
+      );
+
+      expect(sentArgs().reorderWindow).toBeTypeOf('function');
+    });
 
     it('personalizes only for a verified viewer, ignoring followed topics', async () => {
       mocks.viewer.mockResolvedValue('aaaaaaaa000040008000000000000001');

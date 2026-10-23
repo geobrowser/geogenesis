@@ -1,16 +1,14 @@
 'use client';
 
 import { usePrivy } from '~/core/wallet/auth-hooks';
+import { accountHasEmbeddedWallet } from '~/core/wallet/embedded-wallet';
 
 import { Button } from '~/design-system/button';
 
 export function ExportWalletButton() {
   const { ready, authenticated, user, exportWallet } = usePrivy();
   const isAuthenticated = ready && authenticated;
-  // check that your user has an embedded wallet
-  const hasEmbeddedWallet = !!user?.linkedAccounts.find(
-    account => account.type === 'wallet' && account.walletClientType === 'privy' && account.chainType === 'ethereum'
-  );
+  const hasEmbeddedWallet = accountHasEmbeddedWallet(user);
 
   return (
     <Button onClick={exportWallet} disabled={!isAuthenticated || !hasEmbeddedWallet}>

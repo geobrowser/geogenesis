@@ -35,7 +35,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => <div data-testid="avatar" /> }));
 
-vi.mock('~/core/claims/browse/use-claim-response-state', () => ({
+vi.mock('~/core/claims/browse/use-claim-response-state', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/claims/browse/use-claim-response-state')>()),
   useClaimResponseState: () => ({
     responseKind: mocks.responseKind,
     isResponseKindResolved: true,

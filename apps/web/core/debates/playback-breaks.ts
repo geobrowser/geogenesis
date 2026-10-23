@@ -2,6 +2,7 @@ import { firstName } from '~/partials/profile/claim-response-tag';
 
 import type {
   Debate,
+  DebateMediaEarlyEndGap,
   DebateMediaResponse,
   DebateMediaRoundPick,
   DebateMediaTurnSegment,
@@ -10,6 +11,9 @@ import type {
   ParticipantSlot,
 } from './api';
 import { isOpenRoundsDebate, openRoundsRequiredRebuttalRounds } from './open-rounds';
+import { type BreakCut, mergeBreakCuts } from './playback-timeline';
+
+export type { BreakCut } from './playback-timeline';
 
 /**
  * The breaks between Open rounds in a published debate (GEO-3277), on the web player's clock.
@@ -68,6 +72,7 @@ export type PlayerBreak = {
 type PlayerEarlyEnd = {
   turnIndex: number;
   nextTurnIndex: number;
+  kind?: DebateMediaEarlyEndGap['kind'];
   startMs: number;
   endMs: number;
   /** Who ended their turn early, and who speaks next; null where the media lacks either turn. */
@@ -106,8 +111,14 @@ export function playbackBreaksFrom(
 
   // The round ended when its last turn did; the pick window runs from there. Falls back to the
   // break's own start, which is where a render that never cut the window put it.
-  const roundEndMs = (roundIndex: number, fallbackMs: number) =>
-    segments.find(segment => segment.turn_index === roundIndex * 2 + 1)?.output_end_ms ?? fallbackMs;
+  const roundEndMs = (roundIndex: number, fallbackMs: number) => {
+    const lastTurn = roundIndex * 2 + 1;
+    return (
+      media.early_end_gaps?.find(gap => gap.kind === 'turn_end' && gap.turn_index === lastTurn)?.source_end_ms ??
+      segments.find(segment => segment.turn_index === lastTurn)?.output_end_ms ??
+      fallbackMs
+    );
+  };
 
   const breaks: PlayerBreak[] = (media.condensed_breaks ?? []).map(entry => ({
     kind: entry.kind,
@@ -154,6 +165,7 @@ export function playbackBreaksFrom(
   return {
     breaks: breaks.sort((a, b) => a.decidingStartMs - b.decidingStartMs),
     earlyEnds: (media.early_end_gaps ?? []).map(gap => ({
+      ...(gap.kind && { kind: gap.kind }),
       turnIndex: gap.turn_index,
       nextTurnIndex: gap.next_turn_index,
       startMs: gap.source_start_ms,
@@ -223,13 +235,6 @@ export function breakAnimationPositionMs(breaks: readonly PlayerBreak[], playhea
   return current ? current.decidingStartMs + breakElapsedMs(current, playheadMs) : playheadMs;
 }
 
-export type BreakCut = {
-  /** When to cut: midway through a round title's hold, or at an early end's quiet. */
-  atMs: number;
-  /** Where to: the silent tail before the next turn, or the end after the final End. */
-  toMs: number;
-};
-
 /**
  * Every cut the player makes, in order. Round breaks retain the front and tail of the silence,
  * cutting midway through the announcement so the frame blend finishes before its exit. An early
@@ -237,12 +242,11 @@ export type BreakCut = {
  * the next speaker's first, is cut straight away, as the rendered video cuts it.
  */
 export function breakCuts(breaks: PlaybackBreaks): BreakCut[] {
-  return [
+  // Adjacent tail/start cuts seek once, without briefly showing an intermediate timer.
+  return mergeBreakCuts([
     ...breaks.breaks.map(cutForBreak),
     ...breaks.earlyEnds.map(entry => ({ atMs: entry.startMs, toMs: entry.endMs })),
-  ]
-    .filter(cut => cut.toMs > cut.atMs)
-    .sort((a, b) => a.atMs - b.atMs);
+  ]);
 }
 
 /**
@@ -278,7 +282,9 @@ export type EarlyEndCue = {
 
 /** "Ended early" and whose turn it is, over an early end's quiet and a moment past it. */
 export function earlyEndCueAt(earlyEnds: readonly PlayerEarlyEnd[], playheadMs: number): EarlyEndCue | null {
-  const current = earlyEnds.find(entry => playheadMs >= entry.startMs && playheadMs < entry.endMs + EARLY_END_HOLD_MS);
+  const current = earlyEnds.find(
+    entry => !entry.kind && playheadMs >= entry.startMs && playheadMs < entry.endMs + EARLY_END_HOLD_MS
+  );
   if (!current?.endedSlot || !current.nextSlot) return null;
   return {
     endedSlot: current.endedSlot,

@@ -53,6 +53,9 @@ const fields = new Set<string>([
   'marketing_handoff_id',
   // How many device votes a save sign-in was started for (GEO-3214).
   'local_vote_count',
+  // Why the save sheet was open when that sign-in started: the navbar's centred sheet and the corner
+  // card share one email field, so this is what tells their sign-ins apart (GEO-3400).
+  'prompt_reason',
 ]);
 
 const sourceIdentifierFields = new Set(['link_source', 'marketing_page', 'marketing_cta', 'marketing_handoff_id']);
@@ -216,6 +219,16 @@ export function openAuthAttempt(properties: AnalyticsProperties = { auth_trigger
   attempt.openedAt = Date.now();
   save(attempt);
   captureAuthEvent('auth_prompt_viewed', attemptProperties(attempt));
+}
+/**
+ * On a redirect's return, takes over this tab's attempt `id` so the return can end it as its starter
+ * would. False once another attempt has replaced it or it has ended.
+ */
+export function claimRedirectedAuthAttempt(id: string) {
+  const attempt = currentAuthAttempt();
+  if (!attempt || attempt.id !== id || attempt.endedAt) return false;
+  ownedAttemptId = id;
+  return true;
 }
 /** Outcomes only the document that started the attempt can record: the visitor left this one. */
 const ENDED_BY_LEAVING: ReadonlySet<AuthAttemptOutcome> = new Set([

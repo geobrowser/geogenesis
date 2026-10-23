@@ -40,15 +40,16 @@ export function toAvailability(
   });
 }
 
-// geo-chat request ids are UUIDs, written dashed.
-const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// geo-chat request ids are UUIDs, dashed in the links it writes and dashless in its JSON.
+const REQUEST_ID = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
 
 /**
- * The request a link asks to reschedule, or null for an ordinary booking link. Anything that is
- * not a request id is ignored rather than refused: the link still opens the week, and booking from
- * it proposes a new request, which is the best that a garbled link can mean.
+ * The scheduled request a link's `modalTarget` names, or null when it names none. Here that is the
+ * request to reschedule: anything else is ignored rather than refused, so the link still opens the
+ * week, and booking from it proposes a new request, the best a garbled link can mean. The Running
+ * late and Can't make it links (GEO-3427) read their request with this too.
  */
-export function rescheduleRequestIdFromTarget(target: string | null): string | null {
+export function requestIdFromTarget(target: string | null): string | null {
   return target && REQUEST_ID.test(target) ? target : null;
 }
 

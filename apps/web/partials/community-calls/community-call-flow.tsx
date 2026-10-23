@@ -158,6 +158,8 @@ export function CommunityCallFlow({ spaceId, callId }: { spaceId: string; callId
         occurrenceEnd={joinedOccurrenceEnd}
         audio={joined.settings.audioEnabled}
         video={joined.settings.videoEnabled}
+        audioDeviceId={joined.settings.audioDeviceId}
+        videoDeviceId={joined.settings.videoDeviceId}
         backHref={backHref}
       />
     );

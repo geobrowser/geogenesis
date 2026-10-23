@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { type DebateAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { equals as idEquals } from '~/core/id/normalize';
 
 import { Text } from '~/design-system/text';
@@ -29,6 +30,7 @@ export function RematchRequestControl({
   requestError,
   variant,
   className,
+  analytics,
 }: {
   session: DebateRematchSession | null;
   claimId: string;
@@ -46,6 +48,7 @@ export function RematchRequestControl({
   requestError?: string | null;
   variant?: React.ComponentProps<typeof RequestDebateControl>['variant'];
   className?: string;
+  analytics?: DebateAnalyticsAttributes;
 }) {
   const gate = debateRequestGate({
     chatPosition,
@@ -90,6 +93,7 @@ export function RematchRequestControl({
       }
       variant={variant}
       className={className}
+      analytics={analytics}
     />
   );
 }

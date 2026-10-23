@@ -121,6 +121,8 @@ export type DebateMediaArtifactKind =
   | 'final_video_hevc'
   | 'preview_image'
   | 'social_video'
+  /** The share video without spoken-word captions (GEO-3442); absent on debates rendered before it. */
+  | 'social_video_uncaptioned'
   | 'social_preview_image'
   | 'speaker_still_slot_1'
   | 'speaker_still_slot_2'
@@ -182,6 +184,9 @@ export type DebateMediaTurnSegment = {
   output_end_ms: number;
   duration_ms: number;
   countdown_start_ms?: number;
+  /** Original clock deadline and allowance, independent of trimmed turn edges (GEO-3408). */
+  countdown_end_ms?: number;
+  countdown_duration_ms?: number;
   /** The same turn on the raw recordings' clock (GEO-3293). Absent where the two clocks agree: a
    * fixed format, or a render with no edits. See `recording-clock.ts`. */
   source_start_ms?: number;
@@ -210,8 +215,10 @@ export type DebateMediaCondensedBreak = {
   speed: number;
 };
 
-/** An early end inside a round, cut down to a short quiet at `output_ms` (GEO-3276). */
+/** A served turn-edge silence cut (GEO-3408), or a legacy End turn handoff (GEO-3276). */
 export type DebateMediaEarlyEndGap = {
+  /** Absent on legacy End turn handoffs. Turn-edge edits have no on-screen cue. */
+  kind?: 'turn_start' | 'turn_end';
   turn_index: number;
   next_turn_index: number;
   output_ms: number;
@@ -1121,6 +1128,8 @@ type RequestOptions = {
   signal?: AbortSignal;
   /** Let the request outlive the document. For anything sent from `pagehide`. */
   keepalive?: boolean;
+  /** Send and accept cookies cross-origin, for a route that binds a cookie to the browser. */
+  credentials?: RequestCredentials;
 };
 
 const geoChatSessionStorageKey = 'geo:chat-session';
@@ -1200,6 +1209,118 @@ export async function replaceDebateSchedule(
     auth: true,
     getPrivyIdentityToken,
     accountKey,
+  });
+}
+
+/** Why a connected calendar last failed to sync. */
+export type CalendarConnectionError =
+  | 'invalid_grant'
+  | 'scope_missing'
+  /** Microsoft only: the account has no mailbox Graph can read, so another account is needed. */
+  | 'mailbox_unavailable'
+  /** geo-chat's own provider client was refused; ours to fix, never the user's. */
+  | 'provider_misconfigured'
+  | 'provider_unavailable'
+  | 'rate_limited'
+  | 'unknown';
+
+/** A connected calendar account, the same for every provider. */
+export type CalendarConnection = {
+  account_email: string | null;
+  /** `needs_reconnect` stops syncing until the user connects again. */
+  status: 'ok' | 'needs_reconnect' | 'error';
+  /** No successful sync in 48h (or ever), so its busy time is not being applied. */
+  stale: boolean;
+  last_success_at: string | null;
+  last_error: CalendarConnectionError | null;
+};
+
+export type CalendarProvider = 'google' | 'microsoft';
+
+/** `providers` and `microsoft` are absent from a geo-chat that only knows Google. */
+export type CalendarConnections = {
+  /** The providers geo-chat has configured, in display order. */
+  providers?: string[];
+  google: CalendarConnection | null;
+  microsoft?: CalendarConnection | null;
+};
+
+/** An absolute busy window from the viewer's own connected calendar. */
+export type CalendarBusyInterval = {
+  start: string;
+  end: string;
+};
+
+/**
+ * 404 `calendar_disabled` while geo-chat has no calendar provider configured. A provider's own
+ * routes answer it while that provider is off.
+ */
+export async function getCalendarConnections(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
+  return geoChatRequest<CalendarConnections>('/me/calendar', { auth: true, getPrivyIdentityToken, accountKey });
+}
+
+/**
+ * Returns the provider's consent URL; geo-chat redirects back to `returnTo` with `?calendar=…`.
+ * Credentials included for geo-chat's browser-binding cookie.
+ */
+export async function connectCalendar(
+  provider: CalendarProvider,
+  returnTo: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<{ authorization_url: string }>(`/me/calendar/${provider}/connect`, {
+    method: 'POST',
+    body: { return_to: returnTo },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    credentials: 'include',
+  });
+}
+
+/** Syncs now. 429 `rate_limited` within a minute of the last refresh. */
+export async function refreshCalendar(
+  provider: CalendarProvider,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<CalendarConnections>(`/me/calendar/${provider}/refresh`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Idempotent: 204 whether or not anything was connected. */
+export async function disconnectCalendar(
+  provider: CalendarProvider,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<void>(`/me/calendar/${provider}`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** The viewer's own merged busy time, clipped to `[from, to)`. geo-chat caps the window at 92 days. */
+export async function getCalendarBusy(
+  { from, to }: { from: string; to: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ from, to });
+
+  return geoChatRequest<{ intervals: CalendarBusyInterval[] }>(`/me/calendar-busy?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
   });
 }
 
@@ -2024,6 +2145,20 @@ export type DebateRoomWaiting =
   | { reason: 'opponent_in_another_debate' }
   | { reason: 'no_show' };
 
+/**
+ * Something a participant told the other one (GEO-3427), kept on the room so whoever is waiting in it
+ * can read it. `running_late` carries when they expect to arrive; `cant_make_it` is the reason a
+ * `cancelled` or `rescheduled` room closed, and is returned on the closed room for that reason.
+ */
+export type DebateRoomNotice = {
+  user_id: string;
+  kind: 'running_late' | 'cant_make_it';
+  at: string;
+  /** `running_late` only. geo-chat holds the room's no-show grace open until a little after this. */
+  expected_at: string | null;
+  note: string | null;
+};
+
 export type DebateRoomView = {
   room_id: string;
   /** Never withheld. A lobby answers `not_a_participant` here; read it from `/debate-lobbies/{id}`. */
@@ -2047,6 +2182,13 @@ export type DebateRoomView = {
    * is not admitted — the id is a capability, and `rematch_livekit_token` trades one for a token.
    */
   rematch_session_id: string | null;
+  /** Absent from a geo-chat that predates GEO-3427. Returned on a closed room too, to a participant. */
+  notices?: DebateRoomNotice[];
+  /**
+   * Whether the viewer has arrived: joined at or after the start (GEO-3427). A look in before the
+   * start does not count. Absent from an older geo-chat.
+   */
+  viewer_arrived?: boolean;
 };
 
 /** A row in "your upcoming debates". Feeds the join prompt and the Requests tab (GEO-2940). */
@@ -2359,12 +2501,13 @@ export async function createScheduledDebate(
  * to pending: its room closes and its time is freed, and accepting the new time books a new room.
  *
  * Refusals, all `409` except the last: `reschedule_refused` (five moves already, or declined,
- * expired, cancelled or superseded), `debate_already_started` (someone has joined the room),
+ * expired, cancelled or superseded), `debate_already_started` (both debaters are in the room, or their debate has begun),
  * `schedule_conflict` (the viewer already has a debate then), and `403 not_a_participant`.
  */
 export async function rescheduleScheduledDebate(
   requestId: string,
-  body: { scheduled_start_at: string; scheduled_end_at: string },
+  /** `note` is kept on the room for the other debater; the email does not carry it (GEO-3427). */
+  body: { scheduled_start_at: string; scheduled_end_at: string; note?: string },
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
@@ -2396,17 +2539,58 @@ export async function respondToScheduledDebate(
 /**
  * Calls a scheduled debate off (GEO-3093). While pending only whoever proposed the current time may
  * withdraw it; once accepted either debater may. geo-chat closes the room as `cancelled`, frees the
- * slot for both people and withdraws the calendar invite. It refuses with `409
- * debate_already_started` once anyone has joined the room, and `409 request_not_cancellable` once the
- * request is already resolved.
+ * slot for both people and withdraws the calendar invite. A debater who cancels an agreed debate is
+ * telling the other one they can't make it (GEO-3427): that is the email they get. `note` is kept on
+ * the room, not put in the email.
+ *
+ * It refuses with `409 debate_already_started` once both debaters are in the room or their debate
+ * has begun (the other one waiting inside does not stop it: they are who it releases), `409
+ * request_not_cancellable` once the request is already resolved, and `409 request_not_active` once
+ * its room has already closed, as a no-show say. Someone cancelling from inside the room, the one
+ * waiting, sends a plain cancel: their note is not kept.
  */
 export async function cancelScheduledDebate(
   requestId: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
+  accountKey: string | null,
+  body?: { note?: string }
 ) {
   return geoChatRequest<ScheduledDebateRequest>(`/scheduled-debates/${requestId}/cancel`, {
     method: 'POST',
+    // No body at all without a note, as before: an older geo-chat reads none.
+    body: body?.note ? body : undefined,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** The lateness someone can report, in minutes. geo-chat refuses anything else. */
+export const RUNNING_LATE_MINUTES = [5, 10, 15] as const;
+export type RunningLateMinutes = (typeof RUNNING_LATE_MINUTES)[number];
+
+export type RunningLateResponse = { expected_at: string; note: string | null };
+
+/**
+ * Tells the other debater the viewer is running late (GEO-3427). geo-chat records it on the room,
+ * emails them, and holds the room's no-show grace open until a little after `expected_at`, which is
+ * `minutes` after the start (or after now, once the start has passed). Saying it again replaces it.
+ *
+ * Refusals: `400 invalid_late_minutes` / `note_too_long`, `403 not_a_participant`, `404
+ * request_not_found`, `409 request_not_active` (not an agreed debate, or its room has closed) and
+ * `409 already_joined` (the viewer already arrived: joined at or after the start), `409 too_early`
+ * (the room has not opened yet), `409 debate_already_started` (their debate has begun) and `409
+ * running_late_limit` (they have said it three times already for this debate).
+ */
+export async function reportRunningLate(
+  requestId: string,
+  body: { minutes: RunningLateMinutes; note?: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<RunningLateResponse>(`/scheduled-debates/${requestId}/running-late`, {
+    method: 'POST',
+    body,
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -2645,7 +2829,11 @@ export async function getDebateLobby(
 }
 
 /** A lobby member on one side of an "In this room" claim. */
-export type DebateLobbyClaimParticipant = DebateParticipantSummary & { requestable: boolean };
+export type DebateLobbyClaimParticipant = DebateParticipantSummary & {
+  requestable: boolean;
+  /** This person and the viewer already debated this claim together. Absent on older geo-chat. */
+  previously_debated?: boolean;
+};
 
 /** One side of an "In this room" claim. The viewer is never counted in it. */
 export type DebateLobbyClaimSide = {
@@ -3624,6 +3812,7 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     signal: options.signal,
     keepalive: options.keepalive,
+    credentials: options.credentials,
   });
 
   if (!response.ok) {

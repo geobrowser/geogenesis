@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   authAttemptForAction,
   beginAuthAttempt,
+  claimRedirectedAuthAttempt,
   completeAuthAction,
   currentAuthAttempt,
   finishAuthAttempt,
@@ -114,6 +115,45 @@ describe('durable sign-in attempts', () => {
       expect(capture.mock.calls.filter(([event]) => event === 'auth_action_completed')).toHaveLength(0);
     }
   );
+  // GEO-3139: a headless Google sign-in starts on one load and fails on the return's.
+  it('lets a redirect return close the attempt its start left open in this tab', async () => {
+    const attempt = beginAuthAttempt(entry);
+    vi.resetModules();
+    const returned = await import('./auth-attempt');
+
+    returned.finishAuthAttempt('closed');
+    expect(returned.currentAuthAttempt()?.endedAt).toBeUndefined();
+
+    expect(returned.claimRedirectedAuthAttempt(attempt.id)).toBe(true);
+    returned.finishAuthAttempt('closed');
+    expect(capture).toHaveBeenCalledWith(
+      'auth_attempt_completed',
+      expect.objectContaining({ auth_attempt_id: attempt.id, outcome: 'closed' })
+    );
+  });
+  it('claims nothing without an open attempt in this tab', () => {
+    expect(claimRedirectedAuthAttempt('gone')).toBe(false);
+    expect(currentAuthAttempt()).toBeUndefined();
+  });
+  it('leaves a sign-in started after the return to its own starter', async () => {
+    const returnedTo = beginAuthAttempt(entry);
+    vi.resetModules();
+    const returned = await import('./auth-attempt');
+    const newer = returned.beginAuthAttempt({ ...entry, auth_control: 'navbar' });
+    capture.mockClear();
+
+    expect(returned.claimRedirectedAuthAttempt(returnedTo.id)).toBe(false);
+    expect(returned.currentAuthAttempt()?.id).toBe(newer.id);
+    expect(returned.currentAuthAttempt()?.endedAt).toBeUndefined();
+    // Only its starter could record the replaced attempt as superseded; the return does not end it.
+    expect(returned.readAuthAttempt(returnedTo.id)?.endedAt).toBeUndefined();
+    expect(capture).not.toHaveBeenCalled();
+  });
+  it('claims nothing once the attempt has ended', () => {
+    const attempt = beginAuthAttempt(entry);
+    finishAuthAttempt('signed_in');
+    expect(claimRedirectedAuthAttempt(attempt.id)).toBe(false);
+  });
   it('does not guess between concurrent attempts when completing in a new tab', () => {
     const first = beginAuthAttempt(entry);
     localStorage.setItem('geo:auth-attempt:v1:other-tab', JSON.stringify({ ...first, id: 'other-tab' }));

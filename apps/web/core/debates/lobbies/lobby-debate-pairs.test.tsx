@@ -1,10 +1,18 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { Provider, createStore } from 'jotai';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyMember, DebateLobbyPairPerson } from '../api';
 import { LobbyDebatePairs } from './lobby-debate-pairs';
+import type { LobbyPageView } from './lobby-view';
+
+vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => true }));
+vi.mock('~/core/debates/browse/use-open-debater-profile', () => ({ useOpenDebaterProfile: () => vi.fn() }));
+vi.mock('./lobby-schedule', () => ({
+  LobbyScheduleSection: ({ member }: { member: DebateLobbyMember }) => <div>Schedule {member.user_id}</div>,
+}));
 
 afterEach(cleanup);
 
@@ -64,6 +72,47 @@ describe('LobbyDebatePairs', () => {
     expect(cards[0]!.textContent).toBe('Ana vs. BenCats are better · round 2 of 3Recording');
     expect(cards[1]!.textContent).toBe('Cyround 1');
     expect(cards[2]!.textContent).toBe('Di');
+  });
+
+  it.each(['Ana', 'Ben'])('opens %s’s own menu from a pair, including a partner outside the roster', name => {
+    const view = {
+      lobby_id: 'lobby',
+      members: [member('Ana')],
+      viewer: { kind: 'member', role: 'speaker', hosting: false, creator: false },
+    } as LobbyPageView;
+    render(
+      <LobbyDebatePairs
+        pairs={[{ people: [person('Ana'), person('Ben', false)] }]}
+        members={view.members}
+        lobby={view}
+        viewerId="me"
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name }));
+    expect(screen.getByTestId('lobby-person-card')).toHaveTextContent(`${name} is in a debate`);
+    expect(screen.getByText(`Schedule ${name}`)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Request a debate/ })).toBeNull();
+  });
+
+  it('never offers host controls or counts their opening for a partner outside the lobby', () => {
+    const view = {
+      lobby_id: 'lobby',
+      members: [member('Ana')],
+      viewer: { kind: 'member', role: 'host', hosting: true, creator: true },
+    } as LobbyPageView;
+    render(
+      <LobbyDebatePairs
+        pairs={[{ people: [person('Ana'), person('Ben', false)] }]}
+        members={view.members}
+        lobby={view}
+        viewerId="me"
+      />
+    );
+    const ben = screen.getByRole('button', { name: 'Ben' });
+    expect(ben).not.toHaveAttribute('data-geo-analytics-intent', 'open_lobby_host_controls');
+    fireEvent.click(ben);
+    expect(screen.queryByText('Host controls')).toBeNull();
+    expect(screen.getByText('Schedule Ben')).toBeInTheDocument();
   });
 
   it('draws nothing when nobody is debating', () => {

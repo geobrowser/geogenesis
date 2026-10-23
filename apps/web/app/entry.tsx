@@ -15,6 +15,7 @@ import { DebateMediaSessionProvider } from '~/core/debates/media-session';
 import { PlaybackDiagnostics } from '~/core/debates/playback-diagnostics';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
 import { requestsAnyModal } from '~/core/deep-links/modal-deep-link';
+import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
@@ -57,6 +58,7 @@ import {
   rankingFullscreenActiveAtom,
   rankingFullscreenFocusTargetAtom,
 } from '~/atoms';
+import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 // Opened on demand, so none of these is needed to paint or hydrate a page. Each renders nothing
@@ -105,6 +107,14 @@ const PendingPersonalSpaceRunner = dynamic(
   () =>
     import('~/partials/onboarding/pending-personal-space-runner').then(m => ({
       default: m.PendingPersonalSpaceRunner,
+    })),
+  { ssr: false }
+);
+
+const PendingTopicFollowsRunner = dynamic(
+  () =>
+    import('~/partials/onboarding/pending-topic-follows-runner').then(m => ({
+      default: m.PendingTopicFollowsRunner,
     })),
   { ssr: false }
 );
@@ -213,6 +223,9 @@ function ReviewChangesGate() {
 
 // Also shows itself to a signed-out visitor who already has local votes (the return-visit prompt).
 function SaveVotesGate() {
+  // The sheet mounts only once there is something to ask, often pages after the landing, so whether
+  // the visit came from one of our emails is noted here, on arrival (GEO-3374).
+  React.useEffect(() => noteEmailArrival(), []);
   const prompt = useSaveVotesPrompt();
   const { votes } = useLocalVotes();
   const { ready, authenticated } = usePrivy();
@@ -228,6 +241,11 @@ function OnboardingGate() {
 function PendingPersonalSpaceGate() {
   const pending = useAtomValue(pendingPersonalSpaceAtom);
   return useSticky(pending !== null) ? <PendingPersonalSpaceRunner /> : null;
+}
+
+function PendingTopicFollowsGate() {
+  const held = useAtomValue(feedTopicsAtom);
+  return useSticky((held?.topics?.length ?? 0) > 0) ? <PendingTopicFollowsRunner /> : null;
 }
 
 function PendingCreatedSpaceGate() {
@@ -339,6 +357,7 @@ export function App({ children }: { children: React.ReactNode }) {
             <SaveVotesGate />
           </React.Suspense>
           <PendingPersonalSpaceGate />
+          <PendingTopicFollowsGate />
           <PendingActionsRunner />
           <LocalVotesSaver />
           <CreateSpaceDialogGate />

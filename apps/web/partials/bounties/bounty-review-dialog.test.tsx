@@ -116,7 +116,9 @@ describe('BountyReviewDialog', () => {
     const { onSubmit } = setup();
     rateAll();
     expect(screen.queryByText('Payout (points)')).not.toBeInTheDocument();
-    expect(screen.getByTestId('payout-authoring-note')).toHaveTextContent(/issued from the curator app/);
+    expect(screen.getByTestId('payout-authoring-note')).toHaveTextContent(
+      /use Pay next to the curator under Allocated/
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ pass: true, payoutAmount: null });

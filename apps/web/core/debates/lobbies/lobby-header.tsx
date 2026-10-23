@@ -38,10 +38,10 @@ export const LOBBY_HEADER_COPY = {
   raisedHands: (count: number) => `Raised hands · ${count}`,
 } as const;
 
-/** "Hosted by Adam and Priya · Voice only · Not recorded". */
+/** "Hosted by Adam and Priya · Video on · Not recorded". */
 export function lobbyMetaLabel(lobby: Pick<LobbyPageView, 'members'>) {
   const hosts = hostsLabel(lobby.members.filter(isHosting));
-  return [hosts ? `Hosted by ${hosts}` : 'No host here', 'Voice only', 'Not recorded'].join(' · ');
+  return [hosts ? `Hosted by ${hosts}` : 'No host here', 'Video on', 'Not recorded'].join(' · ');
 }
 
 function useCopyLink(lobbyId: string) {

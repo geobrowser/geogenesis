@@ -7,7 +7,7 @@ import * as React from 'react';
 import { PAYOUT_AUTHORING_ENABLED } from '~/core/bounties/config';
 import type { BountyReview } from '~/core/bounties/fetch-submissions';
 import type { GroupedSubmission } from '~/core/bounties/group-submissions';
-import { formatPayoutRange, payoutRange } from '~/core/bounties/payout';
+import { formatPayoutRange, parseWholePoints, payoutRange } from '~/core/bounties/payout';
 import { type ReviewRatings, starsToRating } from '~/core/bounties/review-ops';
 import type { BoardBounty } from '~/core/bounties/types';
 import type { ReviewOutcome, ReviewSubmitInput } from '~/core/bounties/use-review-payout-actions';
@@ -41,10 +41,8 @@ export type ReviewFormState = {
 export function validateReviewForm(state: ReviewFormState): string | null {
   if (RATING_LABELS.some(({ key }) => state.stars[key] < 1)) return 'Rate every category before submitting.';
   if (!state.pass) return null;
-  const trimmed = state.payoutAmount.trim();
-  if (!trimmed) return null;
-  const amount = Number(trimmed);
-  if (!Number.isInteger(amount) || amount <= 0) {
+  if (!state.payoutAmount.trim()) return null;
+  if (parseWholePoints(state.payoutAmount) == null) {
     return 'Payout must be a positive whole number of points — or leave it blank to save the review without a payout.';
   }
   return null;
@@ -219,7 +217,7 @@ export function BountyReviewDialog({
 
                 {state.pass && !PAYOUT_AUTHORING_ENABLED ? (
                   <Text variant="footnote" color="grey-04" data-testid="payout-authoring-note">
-                    Payouts are issued from the curator app for now.
+                    To pay, use Pay next to the curator under Allocated.
                   </Text>
                 ) : null}
 
