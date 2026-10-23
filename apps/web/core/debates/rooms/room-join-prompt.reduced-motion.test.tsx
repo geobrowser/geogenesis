@@ -25,6 +25,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('./room-opponent', async importOriginal => ({
   ...(await importOriginal<typeof import('./room-opponent')>()),
   useUpcomingRoomOpponent: () => null,
+  useUpcomingRoomRequest: () => undefined,
 }));
 vi.mock('../matchmaking/use-request-countdown', () => ({
   useServerClock: () => ({ now: () => Date.parse('2026-09-21T08:52:00.000Z') }),
@@ -47,7 +48,7 @@ describe('DebateRoomJoinPrompt with reduced motion', () => {
   // The banner is mounted app-wide, outside the hub's own MotionConfig, so it needs its own.
   // Well inside the 200ms slide: with motion on, it would still be part-way down here.
   it('arrives without sliding in', async () => {
-    render(<DebateRoomJoinPrompt room={ROOM} onNotNow={vi.fn()} />);
+    render(<DebateRoomJoinPrompt room={ROOM} onDismiss={vi.fn()} onNotice={vi.fn()} />);
     const card = screen.getByText('Your debate room is open').closest('.shadow-card') as HTMLElement;
 
     await act(() => new Promise(resolve => setTimeout(resolve, 30)));

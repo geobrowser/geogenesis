@@ -2,11 +2,18 @@ import { describe, expect, it } from 'vitest';
 
 import { requestIdFromTarget } from '~/core/availability/availability-deep-link';
 
-import { GeoChatRequestError, type ScheduledDebateRequest } from '../api';
+import { GeoChatRequestError, type ScheduledDebateRequest, type UpcomingDebateRoom } from '../api';
 import { SCHEDULED_NOTICE_COPY } from './room-copy';
 import { requestById } from './room-opponent';
 import { startOffset } from './room-time';
-import { NOTICE_NOTE_MAX, noticeNote, noticeRequestState, toCantMakeIt, toRunningLate } from './scheduled-notice';
+import {
+  NOTICE_NOTE_MAX,
+  noticeNote,
+  noticeRequestState,
+  otherDebaterWaiting,
+  toCantMakeIt,
+  toRunningLate,
+} from './scheduled-notice';
 import { cancelFailureMessage, noticeFailureMessage } from './scheduling-refusals';
 
 const DASHED = '6676b145-0970-4c1c-bfbc-7497d9721b39';
@@ -66,6 +73,33 @@ describe('noticeRequestState', () => {
   it('finds the request a dashed link names in a dashless list', () => {
     expect(requestById([request()], DASHED)?.request_id).toBe(DASHED.replace(/-/g, ''));
     expect(requestById([request()], null)).toBeUndefined();
+  });
+});
+
+describe('otherDebaterWaiting', () => {
+  const room = (overrides: Partial<UpcomingDebateRoom>): UpcomingDebateRoom => ({
+    room_id: 'room-1',
+    starts_at: '2026-10-21T17:00:00.000Z',
+    opens_at: '2026-10-21T16:50:00.000Z',
+    joinable: true,
+    due: true,
+    others_present: true,
+    ...overrides,
+  });
+
+  // A tab that crashed without sending its leave still counts in `others_present` (GEO-3450).
+  it('trusts the live count over the bare join rule', () => {
+    expect(otherDebaterWaiting(room({ others_live: false }))).toBe(false);
+    expect(otherDebaterWaiting(room({ others_present: false, others_live: true }))).toBe(true);
+  });
+
+  it('falls back to others_present on a geo-chat without the live count', () => {
+    expect(otherDebaterWaiting(room({}))).toBe(true);
+    expect(otherDebaterWaiting(room({ others_present: false }))).toBe(false);
+  });
+
+  it('says nobody is waiting in a room it cannot see', () => {
+    expect(otherDebaterWaiting(null)).toBe(false);
   });
 });
 

@@ -6,6 +6,7 @@
  *     /explore?modal=debates&modalTarget=requests:<req>  one scheduled request   GEO-3431
  *     /space/<id>?modal=availability                   a person's bookable week
  *     <any page>?modal=schedule                        the viewer's own schedule editor
+ *     <any page>?modal=email-settings                  the viewer's email settings (every email's footer)
  *     /explore?modal=running-late&modalTarget=<req>    Running late, from an email   GEO-3427
  *     /explore?modal=cant-make-it&modalTarget=<req>    Can't make it, from an email
  *
@@ -54,6 +55,7 @@ export const DEEP_LINK_MODALS = {
   roomAccess: 'room-access',
   availability: 'availability',
   schedule: 'schedule',
+  emailSettings: 'email-settings',
   // GEO-3427: a scheduling email's Running late and Can't make it. `modalTarget` is the request.
   runningLate: 'running-late',
   cantMakeIt: 'cant-make-it',
