@@ -332,11 +332,24 @@
      with `width - 244`; it needs 272px of that, which puts the switch at 516px, rounded to 520px.
      Change `claim-pills-wide` and this has to move with it.
 
+   `claim-row-end-inline` — the width at which a row with an end slot (the debate card's comments
+     and share, GEO-3454) can keep it beside both pills. With no faces in the pills, a 3-digit
+     comment count and Share down to its icon, Chrome clipped "Disagree" by 15px in a 294px row, 7px
+     at 310px and 2px at 320px — each pixel of row gives each pill half of one — and drew it whole
+     at 330px, so the row needs 324px; rounded to 330px. Under it the end slot drops to its own line
+     beneath the pills.
+
+   `claim-row-wide-end-inline` — the same, for an end slot carrying a third action (the debate's "…"
+     for people who may remove it): a fixed 28px button and an 8px gap more, so 324 + 36 = 360px,
+     rounded to 370px.
+
    One is a floor and the other a ceiling on purpose: the pill row is stacked until it earns two
    columns, while the card starts from the wide arrangement and gives it up — the shape each
    component already had, so neither set of base rules had to be rewritten. */
 @custom-variant claim-pills-wide (@container (width >= 272px));
 @custom-variant claim-card-narrow (@container (width < 520px));
+@custom-variant claim-row-end-inline (@container (width >= 330px));
+@custom-variant claim-row-wide-end-inline (@container (width >= 370px));
 
 /* Shared claim-card chrome.
    The matchmaking card uses these directly; mobile Explore applies the same utilities through the

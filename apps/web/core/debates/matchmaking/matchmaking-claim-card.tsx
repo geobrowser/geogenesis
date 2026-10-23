@@ -59,6 +59,7 @@ import type {
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import {
+  type DebateActionAnalyticsSurface,
   type DebateAnalyticsAttributes,
   type DebateAnalyticsSurface,
   debateActionAnalyticsAttributes,
@@ -1234,6 +1235,7 @@ export function PositionRow({
   noteFor,
   localSide = null,
   endSlot,
+  endSlotWraps,
   showParticipants = true,
   analyticsSurface,
 }: {
@@ -1268,6 +1270,14 @@ export function PositionRow({
   /** A compact third action, kept beside both positions at narrow and wide card widths. */
   endSlot?: React.ReactNode;
   /**
+   * Let the end slot drop to its own line under the pills when the row is too narrow for all three.
+   * For an end slot wider than one compact action — the debate card's comments and share, which
+   * would otherwise squeeze the labels to "Dis..." — at the width that end slot needs:
+   * `claim-row-end-inline` for those two, `claim-row-wide-end-inline` with the debate's "…" as well.
+   * The claim list leaves it off and keeps its three columns.
+   */
+  endSlotWraps?: 'compact' | 'wide';
+  /**
    * False to leave the ready-to-debate faces out of the pills.
    *
    * Those faces are the people standing ready to argue each side — a matchmaking fact. On a surface
@@ -1276,7 +1286,7 @@ export function PositionRow({
    */
   showParticipants?: boolean;
   /** Names the two pills for click analytics: "<surface> Claim card agree" / "… disagree". */
-  analyticsSurface?: DebateAnalyticsSurface;
+  analyticsSurface?: DebateActionAnalyticsSurface;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
   const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
@@ -1300,7 +1310,13 @@ export function PositionRow({
       <div
         className={cx(
           'grid gap-2',
-          endSlot ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]' : 'grid-cols-1 claim-pills-wide:grid-cols-2'
+          !endSlot
+            ? 'grid-cols-1 claim-pills-wide:grid-cols-2'
+            : endSlotWraps === 'compact'
+              ? 'grid-cols-2 claim-row-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+              : endSlotWraps === 'wide'
+                ? 'grid-cols-2 claim-row-wide-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+                : 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
         )}
       >
         {/* The note shares its button's grid cell rather than sitting in one of
@@ -1357,7 +1373,17 @@ export function PositionRow({
           />
           {localSide === false ? <LocalVoteNote /> : noteFor?.(false)}
         </div>
-        {endSlot ? <div className="flex h-7 shrink-0 items-center">{endSlot}</div> : null}
+        {endSlot ? (
+          <div
+            className={cx(
+              'flex h-7 shrink-0 items-center',
+              endSlotWraps === 'compact' && 'col-span-2 claim-row-end-inline:col-span-1',
+              endSlotWraps === 'wide' && 'col-span-2 claim-row-wide-end-inline:col-span-1'
+            )}
+          >
+            {endSlot}
+          </div>
+        ) : null}
       </div>
     </div>
   );
