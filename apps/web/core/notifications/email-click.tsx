@@ -4,9 +4,9 @@ import * as React from 'react';
 
 import { readEmailClick } from '~/core/deep-links/ref-email';
 import { readSession, writeSession } from '~/core/utils/session-storage';
-import { storedPrivyAccessToken } from '~/core/wallet/privy-session';
+import { hasPersistedPrivySession } from '~/core/wallet/privy-session';
 
-import { geoNotificationsApiUrl, reportEmailClick } from './api';
+import { NotificationsRequestError, geoNotificationsApiUrl, reportEmailClick } from './api';
 
 const REPORTED_KEY = 'geo:email-click:';
 
@@ -17,9 +17,10 @@ const REPORTED_KEY = 'geo:email-click:';
  * automation (`navigator.webdriver`) doesn't either, nor a tab opened in the background until it is
  * looked at. Works signed out: the send names the recipient.
  *
- * Once per send and link per browser session, so a reload or a later visit to the same URL in the
- * tab doesn't count again. The URL keeps its parameters: the analytics landing URL joins the
- * session to the send. Mounted once, app-wide.
+ * Once per send and link per tab, once the service has answered, so a reload doesn't count again
+ * but a report that failed is tried again on the next load. Two tabs opened from the same link are
+ * collapsed by the service, which drops a repeat within half an hour. The URL keeps its parameters:
+ * the analytics landing URL joins the session to the send. Mounted once, app-wide.
  */
 export function EmailClickReporter() {
   React.useEffect(() => {
@@ -29,18 +30,24 @@ export function EmailClickReporter() {
     const key = `${REPORTED_KEY}${click.sendId}:${click.link ?? ''}`;
     if (readSession(key)) return;
 
+    // This page load reports at most once, even with storage blocked.
+    let sent = false;
     const report = () => {
-      if (document.visibilityState !== 'visible' || readSession(key)) return;
+      if (sent || document.visibilityState !== 'visible') return;
+      sent = true;
       document.removeEventListener('visibilitychange', report);
-      // With storage blocked a reload reports again; the service drops a repeat within half an hour.
-      writeSession(key, '1');
-      void reportEmailClick(baseUrl, {
+      reportEmailClick(baseUrl, {
         send_id: click.sendId,
         link: click.link,
-        signed_in: storedPrivyAccessToken() !== null,
-      }).catch(() => {
-        // Offline or the service is down: this click goes uncounted, the visit still counts.
-      });
+        signed_in: hasPersistedPrivySession(),
+      }).then(
+        () => writeSession(key, '1'),
+        (error: unknown) => {
+          // An unknown send won't become known; anything else (offline, the service down) is tried
+          // again on the next load of this link.
+          if (error instanceof NotificationsRequestError && error.status === 404) writeSession(key, '1');
+        }
+      );
     };
     report();
     document.addEventListener('visibilitychange', report);

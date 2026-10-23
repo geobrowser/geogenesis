@@ -5,12 +5,12 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  stored: null as string | null,
+  session: false,
   report: vi.fn(),
 }));
 
 vi.mock('~/core/wallet/privy-session', () => ({
-  storedPrivyAccessToken: () => mocks.stored,
+  hasPersistedPrivySession: () => mocks.session,
 }));
 vi.mock('./api', async importOriginal => ({
   ...(await importOriginal<typeof import('./api')>()),
@@ -19,6 +19,7 @@ vi.mock('./api', async importOriginal => ({
 }));
 
 const { EmailClickReporter } = await import('./email-click');
+const { NotificationsRequestError } = await import('./api');
 
 const SEND = '3b0c2c8e-9a51-4d7e-8f43-2f1c6a0d9e11';
 
@@ -39,7 +40,7 @@ beforeEach(() => {
   visibility = 'visible';
   vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
   window.sessionStorage.clear();
-  mocks.stored = null;
+  mocks.session = false;
   mocks.report = vi.fn(async () => ({ outcome: 'counted' }));
 });
 afterEach(() => {
@@ -56,8 +57,8 @@ describe('EmailClickReporter', () => {
     expect(mocks.report).toHaveBeenCalledWith('https://n.example', { send_id: SEND, link: 'claim', signed_in: false });
   });
 
-  it('says when the browser has a Geo session', () => {
-    mocks.stored = 'token';
+  it('says when the browser holds a Privy session', () => {
+    mocks.session = true;
     land(`?ref_send=${SEND}`);
     render(<EmailClickReporter />);
     expect(mocks.report).toHaveBeenCalledWith('https://n.example', { send_id: SEND, link: null, signed_in: true });
@@ -73,9 +74,10 @@ describe('EmailClickReporter', () => {
     expect(mocks.report).toHaveBeenCalledTimes(1);
   });
 
-  it('counts a link once per session: a reload does not count again, another link does', () => {
+  it('counts a link once per tab once the service answered: a reload does not count again, another link does', async () => {
     land(`?ref_send=${SEND}&ref_link=main`);
     render(<EmailClickReporter />);
+    await act(async () => {});
     cleanup();
     render(<EmailClickReporter />);
     expect(mocks.report).toHaveBeenCalledTimes(1);
@@ -104,13 +106,44 @@ describe('EmailClickReporter', () => {
     expect(mocks.report).not.toHaveBeenCalled();
   });
 
-  it('lets a failed report go quietly', async () => {
+  it('tries a failed report again on the next load', async () => {
     mocks.report = vi.fn(async () => {
       throw new Error('offline');
     });
     land(`?ref_send=${SEND}`);
     render(<EmailClickReporter />);
     await act(async () => {});
+    cleanup();
+    render(<EmailClickReporter />);
+    await act(async () => {});
+    expect(mocks.report).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a send the service does not know', async () => {
+    mocks.report = vi.fn(async () => {
+      throw new NotificationsRequestError('unknown send', 404);
+    });
+    land(`?ref_send=${SEND}`);
+    render(<EmailClickReporter />);
+    await act(async () => {});
+    cleanup();
+    render(<EmailClickReporter />);
+    expect(mocks.report).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports once per load with session storage blocked, however often the tab is shown', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    visibility = 'hidden';
+    land(`?ref_send=${SEND}`);
+    render(<EmailClickReporter />);
+    becomeVisible();
+    visibility = 'hidden';
+    becomeVisible();
     expect(mocks.report).toHaveBeenCalledTimes(1);
   });
 });
