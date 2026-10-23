@@ -1274,6 +1274,7 @@ export function PositionRow({
    * For an end slot wider than one compact action — the debate card's comments and share, which
    * would otherwise squeeze the labels to "Dis..." — at the width that end slot needs:
    * `claim-row-end-inline` for those two, `claim-row-wide-end-inline` with the debate's "…" as well.
+   * Phones keep these actions inline with tighter pills and icon-only supporting actions.
    * The claim list leaves it off and keeps its three columns.
    */
   endSlotWraps?: 'compact' | 'wide';
@@ -1291,6 +1292,7 @@ export function PositionRow({
   const copy = CLAIM_RESPONSE_COPY;
   const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
   const againstSide = showParticipants ? positions.find(position => position.position === false) : undefined;
+  const compactMobileActions = Boolean(endSlot && endSlotWraps);
 
   // Two across where there is room for both labels whole, stacked where there is not.
   //
@@ -1306,7 +1308,7 @@ export function PositionRow({
   // run out of room. Keep that row three columns at every card width instead of letting the nested
   // PositionRow stack while the comments pill remains stranded beside it.
   return (
-    <div className="@container">
+    <div className={compactMobileActions ? '@container/debate-actions' : '@container'}>
       <div
         className={cx(
           'grid gap-2',
@@ -1316,7 +1318,8 @@ export function PositionRow({
               ? 'grid-cols-2 claim-row-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
               : endSlotWraps === 'wide'
                 ? 'grid-cols-2 claim-row-wide-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
-                : 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+                : 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]',
+          compactMobileActions && 'md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_auto] md:gap-1'
         )}
       >
         {/* The note shares its button's grid cell rather than sitting in one of
@@ -1336,6 +1339,7 @@ export function PositionRow({
             // it had one, which would now let geo-chat print "Verify" on a claim minted before the
             // vocabularies merged — a word this app has no way to publish any more.
             label={copy.positiveAction}
+            compactMobile={compactMobileActions}
             summary={forSide}
             responseKind={responseKind}
             position
@@ -1356,6 +1360,7 @@ export function PositionRow({
         <div className="flex flex-col">
           <PositionButton
             label={copy.negativeAction}
+            compactMobile={compactMobileActions}
             summary={againstSide}
             responseKind={responseKind}
             position={false}
@@ -1377,6 +1382,7 @@ export function PositionRow({
           <div
             className={cx(
               'flex h-7 shrink-0 items-center',
+              compactMobileActions && 'md:col-span-1',
               endSlotWraps === 'compact' && 'col-span-2 claim-row-end-inline:col-span-1',
               endSlotWraps === 'wide' && 'col-span-2 claim-row-wide-end-inline:col-span-1'
             )}
@@ -1433,6 +1439,7 @@ function PositionButton({
   title,
   localOnly = false,
   analytics,
+  compactMobile = false,
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
@@ -1446,6 +1453,8 @@ function PositionButton({
   /** The selection is a vote kept on this device, not yet counted. */
   localOnly?: boolean;
   analytics?: DebateAnalyticsAttributes;
+  /** Fit the debate card's response pills beside its supporting actions on phones. */
+  compactMobile?: boolean;
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
@@ -1464,17 +1473,18 @@ function PositionButton({
   // already has — the two systems agree, and the pill borrows it rather than inventing a shade.
   const className = cx(
     '@container flex min-h-7 items-center justify-center rounded-full border px-3 text-button text-text',
+    compactMobile && 'md:px-1.5 md:text-[15px] md:@max-[280px]/debate-actions:px-1',
     selected ? 'border-transparent bg-divider' : 'border-dashed border-grey-03 bg-white'
   );
   // Icon, label and faces are one centred group at a single 6px gap, per the Figma card. They used
   // to be two groups pushed to opposite ends by `justify-between`, which left the faces adrift at
   // the far edge of a wide pill instead of reading as part of the label they belong to.
   const content = (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className={cx('flex min-w-0 items-center gap-1.5', compactMobile && 'md:gap-1')}>
       {/* Thumbs for a stance, chevrons for a factual claim — see `ResponsePositionIcon`. Filled,
           where the glyph has a filled form, so the pill reads as taken even in a screenshot; a
           chevron has none, and leans on the pill's own fill below. */}
-      <span className="shrink-0">
+      <span className={cx('shrink-0', compactMobile && 'md:@max-[280px]/debate-actions:hidden')}>
         <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
       </span>
       <span className="truncate">

@@ -65,7 +65,7 @@ export function DebateInteractionBar({
   const commentsLabel = `Comments (${commentCount})`;
 
   return (
-    <div className={cx('flex items-center gap-2', className)}>
+    <div className={cx('flex items-center gap-2 md:gap-1', className)}>
       <PillAction
         onClick={onComment}
         icon={<Comment />}
@@ -146,6 +146,9 @@ function PillAction({
       className={cx(
         PILL_ACTION_CLASS,
         'gap-1.5 px-2.5',
+        // Keep the count in the accessible label when a narrow phone card needs icon-only actions.
+        actionKind === 'comments' &&
+          'md:gap-1 md:px-1.5 md:@max-[300px]/debate-actions:size-7 md:@max-[300px]/debate-actions:justify-center md:@max-[300px]/debate-actions:px-0',
         collapsesLabel === 'compact' && '@max-[400px]:size-7 @max-[400px]:justify-center @max-[400px]:px-0',
         collapsesLabel === 'wide' && '@max-[420px]:size-7 @max-[420px]:justify-center @max-[420px]:px-0'
       )}
@@ -157,6 +160,7 @@ function PillAction({
         color="text"
         className={cx(
           'tabular-nums',
+          actionKind === 'comments' && 'md:@max-[300px]/debate-actions:hidden',
           collapsesLabel === 'compact' && '@max-[400px]:hidden',
           collapsesLabel === 'wide' && '@max-[420px]:hidden'
         )}
