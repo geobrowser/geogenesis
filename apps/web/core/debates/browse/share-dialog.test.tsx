@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   artifacts: [{ kind: 'social_video' }] as { kind: string }[],
   prepared: vi.fn(),
   canShareVideo: false,
+  coarsePointer: true,
   handoff: vi.fn(),
   windowOpen: vi.fn(),
   toast: vi.fn(),
@@ -79,6 +80,11 @@ beforeEach(() => {
   // jsdom has no Web Share API; the dialog probes it for real, so give it one to answer.
   Object.defineProperty(navigator, 'share', { configurable: true, value: vi.fn() });
   Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => mocks.canShareVideo });
+  mocks.coarsePointer = true;
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) => ({ matches: query.includes('coarse') ? mocks.coarsePointer : false }) as MediaQueryList
+  );
 });
 afterEach(() => {
   delete (navigator as { share?: unknown }).share;
@@ -369,6 +375,19 @@ it.each([
 
   expect(screen.getByRole('button', { name: ariaLabel })).toBeTruthy();
   expect(screen.getByText(label)).toBeTruthy();
+});
+
+it('downloads the video on a desktop pointer, even where canShare accepts the file', () => {
+  mocks.canShareVideo = true;
+  mocks.coarsePointer = false;
+  mount();
+
+  expect(screen.getByText('Download')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Download debate video' }));
+  fireEvent.click(screen.getByRole('button', { name: 'With captions' }));
+
+  expect(mocks.handoff).not.toHaveBeenCalled();
+  expect(mocks.download).toHaveBeenCalledTimes(1);
 });
 
 const shareVideo = (captions = 'With captions') => {

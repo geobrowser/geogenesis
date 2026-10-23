@@ -70,6 +70,9 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   const [step, setStep] = React.useState<'share' | 'captions'>('share');
   const [, setToast] = useToast();
 
+  const [isTouchDevice, setIsTouchDevice] = React.useState(false);
+  React.useEffect(() => setIsTouchDevice(window.matchMedia?.('(pointer: coarse)').matches ?? false), []);
+
   const sharingRef = React.useRef(false);
 
   React.useEffect(() => {
@@ -193,7 +196,9 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     });
 
   const videoHandoffMethod = (file: File) =>
-    getPreparedSocialVideoHandoffMethod(videoShareData(file, NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))));
+    isTouchDevice
+      ? getPreparedSocialVideoHandoffMethod(videoShareData(file, NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))))
+      : 'download';
 
   const downloadVideo = (video: PreparedSocialVideo, captions: SocialVideoCaptions) => {
     const { downloadUrl, file } = video;
