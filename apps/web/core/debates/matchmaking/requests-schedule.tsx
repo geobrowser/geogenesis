@@ -903,10 +903,11 @@ function HistoryRow({
   item: DebateHistoryItem;
   lookUp: (userId: string | null) => DebateParticipantSummary | null;
 }) {
-  const names = item.other_user_ids.map(id => opponentName(lookUp(id)));
+  // geo-chat names them itself (`others`); the lookup covers a response from before it did.
+  const names = item.other_user_ids.map((id, index) => opponentName(item.others?.[index] ?? lookUp(id)));
   const name = names[0] ?? 'someone';
   const outcome = historyOutcomeLabel(item);
-  const claim = item.claim?.name ?? null;
+  const claim = item.claim?.claim ?? null;
 
   const title =
     item.kind === 'debate'

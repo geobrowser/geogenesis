@@ -4236,12 +4236,10 @@ export type DebateHistoryItem = {
   outcome: string;
   /** geo-chat user ids of everyone else involved, the viewer left out. */
   other_user_ids: string[];
-  claim: {
-    debate_claim_id: string;
-    claim_entity_id: string | null;
-    name: string | null;
-    space_id?: string | null;
-  } | null;
+  /** The same people, named, in the same order (geo-chat#299). Optional so an older response still reads. */
+  others?: DebateParticipantSummary[];
+  /** The request lists' own claim shape: `claim` is the text, `id` the debate claim row. */
+  claim: DebateClaimSummary | null;
   debate_id: string | null;
   lobby: { room_id: string; name: string } | null;
   scheduled_start_at: string | null;
