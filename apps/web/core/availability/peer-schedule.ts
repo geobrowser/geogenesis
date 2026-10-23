@@ -57,6 +57,11 @@ export type PeerDaySlot = {
   label: string;
   /** Their wall clock minus the viewer's, at this instant. Signed, and DST-correct. */
   offsetMinutes: number;
+  /**
+   * The time the debate being moved is booked for (GEO-3429). Drawn so the viewer can see what they
+   * are moving away from, and never pickable: proposing the same time again would move nothing.
+   */
+  current?: true;
 };
 
 export type PeerDay = {
@@ -125,14 +130,9 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
       // clock in its own zone, so the edges are its to disagree with rather than ours to force.
       if (!day) continue;
 
-      const peer = zonedParts(instant, peerZone);
-      day.slots.push({
-        start: instant.toISOString(),
-        viewerIsFree: instant.getTime() < viewerWindowOpens ? null : slot.viewerIsFree,
-        minutes: viewer.minutes,
-        label: formatTime(viewer.minutes),
-        offsetMinutes: wallMinutes(peer) - wallMinutes(viewer),
-      });
+      day.slots.push(
+        daySlot(instant, viewer, peerZone, instant.getTime() < viewerWindowOpens ? null : slot.viewerIsFree)
+      );
     }
   }
 
@@ -140,6 +140,51 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
     day.slots.sort((a, b) => a.minutes - b.minutes);
   }
   return days;
+}
+
+/** One chip at `instant`, whose wall clock in the viewer's zone is `viewer`. */
+function daySlot(
+  instant: Date,
+  viewer: ZonedParts,
+  peerZone: string | undefined,
+  viewerIsFree: boolean | null
+): PeerDaySlot {
+  return {
+    start: instant.toISOString(),
+    viewerIsFree,
+    minutes: viewer.minutes,
+    label: formatTime(viewer.minutes),
+    offsetMinutes: wallMinutes(zonedParts(instant, peerZone)) - wallMinutes(viewer),
+  };
+}
+
+/**
+ * The days with the time being moved marked (GEO-3429): its own chip when it is one of their free
+ * times, otherwise added to its day, since geo-chat leaves out time already committed to a debate.
+ * Unchanged when that time is not in the drawn week.
+ */
+export function markCurrent(days: PeerDay[], schedule: PeerSchedule, currentStart: string | null): PeerDay[] {
+  const at = currentStart ? Date.parse(currentStart) : Number.NaN;
+  if (Number.isNaN(at)) return days;
+  const instant = new Date(at);
+  const viewerZone = usableZone(schedule.viewerTimezone);
+  const viewer = zonedParts(instant, viewerZone);
+  if (!days.some(day => day.date === viewer.date)) return days;
+
+  return days.map(day => {
+    if (day.date !== viewer.date) return day;
+    if (day.slots.some(slot => Date.parse(slot.start) === at)) {
+      return {
+        ...day,
+        slots: day.slots.map(slot => (Date.parse(slot.start) === at ? { ...slot, current: true as const } : slot)),
+      };
+    }
+    const slot: PeerDaySlot = {
+      ...daySlot(instant, viewer, usableZone(schedule.peerTimezone), null),
+      current: true,
+    };
+    return { ...day, slots: [...day.slots, slot].sort((a, b) => a.minutes - b.minutes) };
+  });
 }
 
 /**
@@ -311,6 +356,21 @@ export function formatViewerInstant(iso: string, viewerTimezone: string | undefi
   if (Number.isNaN(at.getTime())) return iso;
   const zone = usableZone(viewerTimezone);
   return at.toLocaleString(undefined, zone ? { timeZone: zone } : undefined);
+}
+
+/**
+ * An instant as the week's own labels name it, in the grid's zone: `Thu, Oct 22` and `1:00pm`. For
+ * the reschedule screen's "moving your debate" card (GEO-3429), so it reads like the chips beneath.
+ */
+export function viewerDayAndTime(
+  iso: string,
+  viewerTimezone: string | undefined
+): { day: string; time: string } | null {
+  const at = Date.parse(iso);
+  if (Number.isNaN(at)) return null;
+  const { date, minutes } = zonedParts(new Date(at), usableZone(viewerTimezone));
+  const { weekdayLabel, dayLabel } = dayLabels(date);
+  return { day: `${weekdayLabel}, ${dayLabel}`, time: formatTime(minutes) };
 }
 
 /**

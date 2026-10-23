@@ -2620,6 +2620,25 @@ export async function cancelScheduledDebate(
   });
 }
 
+/**
+ * "None of these work" on the reschedule screen (GEO-3429): the viewer can't make the booked time or
+ * any of the other debater's free times. geo-chat calls the debate off (cancelling it, or declining
+ * an invite the viewer had not answered, with the same refusals as those) and emails the other
+ * debater a few of the viewer's free times to pick from.
+ */
+export async function noTimeWorks(
+  requestId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>(`/scheduled-debates/${requestId}/no-time-works`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 /** The lateness someone can report, in minutes. geo-chat refuses anything else. */
 export const RUNNING_LATE_MINUTES = [5, 10, 15] as const;
 export type RunningLateMinutes = (typeof RUNNING_LATE_MINUTES)[number];

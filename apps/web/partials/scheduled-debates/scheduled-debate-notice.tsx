@@ -16,7 +16,7 @@ import { useGeoChatAuth } from '~/core/debates/hooks';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
-import { HubPillButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
+import { HubPillButton, HubQuietButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { formatDebateTime, formatTime } from '~/core/debates/matchmaking/scheduled-debate-format';
 import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
 import { useRequestRoom } from '~/core/debates/rooms/request-room';
@@ -123,6 +123,9 @@ export function ScheduledDebateNoticeDialog({
   };
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
+  // Can't make it's note, held here so it survives the step unmounting: going to the week and back
+  // (GEO-3429's close warning), or to Running late and back.
+  const [cantNote, setCantNote] = React.useState('');
   const answer: ScheduledNoticeAnswer = outcome ? 'sent' : step === initialStep && !suggesting ? 'open' : 'answering';
   React.useEffect(() => {
     onAnswerChange?.(answer);
@@ -151,6 +154,9 @@ export function ScheduledDebateNoticeDialog({
         rescheduleRequestId={request.request_id}
         rescheduleNote={suggesting.note}
         entry="cant_make_it"
+        // Its close warning's Can't make it comes back here, note and all, rather than opening a
+        // second one.
+        onCantMakeIt={() => setSuggesting(null)}
         onClose={onClose}
       />
     );
@@ -289,6 +295,8 @@ export function ScheduledDebateNoticeDialog({
           requestId={request.request_id}
           name={name}
           focusHeading={moved}
+          note={cantNote}
+          onNoteChange={setCantNote}
           onLate={() => go('late')}
           onSuggest={note => setSuggesting({ note })}
           onSent={() => sent({ message: COPY.cant.sent(name), joinRoomId: null })}
@@ -393,9 +401,9 @@ function DecideStep({
       )}
       {onReschedule && (
         <Actions>
-          <QuietButton onClick={onReschedule} {...analytics('Reschedule instead', 'reschedule_scheduled_debate')}>
+          <HubQuietButton onClick={onReschedule} {...analytics('Reschedule instead', 'reschedule_scheduled_debate')}>
             {COPY.decide.reschedule}
-          </QuietButton>
+          </HubQuietButton>
         </Actions>
       )}
     </>
@@ -438,9 +446,9 @@ function LateStep({
   const sent = noticeNote(note);
 
   const cantInstead = fromEmail && (
-    <QuietButton onClick={onCant} {...analytics('Cant make it at all', 'open_cant_make_it')}>
+    <HubQuietButton onClick={onCant} {...analytics('Cant make it at all', 'open_cant_make_it')}>
       {COPY.late.cantInstead}
-    </QuietButton>
+    </HubQuietButton>
   );
 
   return (
@@ -525,6 +533,8 @@ function CantStep({
   requestId,
   name,
   focusHeading,
+  note,
+  onNoteChange,
   onLate,
   onSuggest,
   onSent,
@@ -532,11 +542,13 @@ function CantStep({
   requestId: string;
   name: string;
   focusHeading: boolean;
+  /** Held by the dialog, so leaving the step and coming back keeps it. */
+  note: string;
+  onNoteChange: (note: string) => void;
   onLate: () => void;
   onSuggest: (note: string | undefined) => void;
   onSent: () => void;
 }) {
-  const [note, setNote] = React.useState('');
   const cancel = useCantMakeIt();
   const noteId = React.useId();
 
@@ -548,7 +560,7 @@ function CantStep({
           {COPY.cant.lead(name)}
         </Text>
       </div>
-      <NoteField id={noteId} label={COPY.cant.noteLabel(name)} rows={3} value={note} onChange={setNote} />
+      <NoteField id={noteId} label={COPY.cant.noteLabel(name)} rows={3} value={note} onChange={onNoteChange} />
       {cancel.isError && <ErrorLine>{noticeFailureMessage(cancel.error, 'cant')}</ErrorLine>}
       <Actions>
         <HubPillButton
@@ -574,9 +586,9 @@ function CantStep({
         <Text as="p" variant="footnote" color="grey-04" className="text-center">
           {COPY.cant.suggestHint(name)}
         </Text>
-        <QuietButton onClick={onLate} {...analytics('Only running late', 'open_running_late')}>
+        <HubQuietButton onClick={onLate} {...analytics('Only running late', 'open_running_late')}>
           {COPY.cant.lateInstead}
-        </QuietButton>
+        </HubQuietButton>
       </Actions>
     </>
   );
@@ -683,17 +695,6 @@ function JoinRoom({
     >
       {label === 'Join now' ? COPY.decide.join : COPY.late.join}
     </Link>
-  );
-}
-
-/** The step's way sideways: to the other choice, or to the calendar. */
-function QuietButton(props: React.ComponentProps<'button'>) {
-  return (
-    <button
-      type="button"
-      className="self-center px-3 py-2 text-metadata text-text underline underline-offset-2 hover:opacity-70"
-      {...props}
-    />
   );
 }
 

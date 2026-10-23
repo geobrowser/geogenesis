@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
@@ -24,6 +24,7 @@ import {
   createScheduledDebate,
   listAdminScheduledDebates,
   listScheduledDebates,
+  noTimeWorks,
   nudgeDebateRoom,
   reportRunningLate,
   rescheduleScheduledDebate,
@@ -157,6 +158,17 @@ export function useCreateScheduledDebate() {
   );
 }
 
+/**
+ * What a move, a cancel or "none of these work" leaves stale: the requests, the upcoming rooms (an
+ * agreed debate's room closes), and every availability read, since the time is free again for both.
+ */
+function invalidateFreedTime(queryClient: QueryClient, accountKey: string | null) {
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.peerScheduleRoot(accountKey) });
+}
+
 /** Moves an existing request to a new time: "Choose different time" in the scheduling emails. */
 export function useRescheduleScheduledDebate() {
   const queryClient = useQueryClient();
@@ -195,10 +207,7 @@ export function useRescheduleScheduledDebate() {
       // Settled, as cancel is: a refusal means the list the viewer acted on is stale. Moving an
       // accepted debate also closes its room and frees its slot for both people, so the upcoming
       // rooms and the availability reads go too, not only the requests.
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: ['debates', 'account', accountKey, 'peer-schedule'] });
+      invalidateFreedTime(queryClient, accountKey);
     },
   });
 }
@@ -261,10 +270,7 @@ export function useCancelScheduledDebate() {
     onSettled: () => {
       // Settled rather than succeeded: a refusal (someone joined, or it was already resolved) means
       // the list the viewer pressed on is stale, and the refetch is what corrects it.
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: ['debates', 'account', accountKey, 'peer-schedule'] });
+      invalidateFreedTime(queryClient, accountKey);
     },
   });
 }
@@ -276,6 +282,28 @@ export function useCancelScheduledDebate() {
 export function useCantMakeIt() {
   const getContext = useActionContext('scheduled_debate_notice', 'entity', '');
   return useObservedMutation(useCancelScheduledDebate(), 'cant_make_it', ({ requestId }) =>
+    getContext({ target_type: 'scheduled_debate_request', target_id: requestId })
+  );
+}
+
+/**
+ * "None of these work" on the reschedule screen (GEO-3429): calls the debate off and emails the other
+ * debater the viewer's free times. Observed as its own action, beside Can't make it, so the outcome
+ * measurement (GEO-3432) can count it; geo-chat also tags its cancelled or declined event.
+ */
+export function useNoTimeWorks() {
+  // The week's component, as moving a request from it is: this is pressed there, not on the notice.
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const mutation = useMutation<ScheduledDebateRequest, Error, { requestId: string }>({
+    mutationFn: ({ requestId }) => noTimeWorks(requestId, getPrivyIdentityToken, accountKey),
+    onSettled: () => {
+      // As cancel: the time is free again for both, and a refusal means the list is stale.
+      invalidateFreedTime(queryClient, accountKey);
+    },
+  });
+  return useObservedMutation(mutation, 'no_time_works', ({ requestId }) =>
     getContext({ target_type: 'scheduled_debate_request', target_id: requestId })
   );
 }

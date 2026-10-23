@@ -60,6 +60,8 @@ export type ScheduleEntry =
   | 'cant_make_it'
   /** Reschedule on the waiting room's running-late notice (GEO-3427, board 6b). */
   | 'room_late_notice'
+  /** A time button in the "none of these work" email, which opens the mover's week with it picked (GEO-3429). */
+  | 'no_time_works_link'
   | 'room_waiting_status';
 
 /** Which control opened the viewer's own schedule editor. */

@@ -73,12 +73,19 @@ vi.mock('~/partials/availability/peer-availability-booking-modal', () => ({
     rescheduleRequestId,
     rescheduleNote,
     userId,
+    onCantMakeIt,
   }: {
     rescheduleRequestId: string;
     rescheduleNote?: string;
     userId: string;
+    onCantMakeIt?: () => void;
   }) => (
-    <div data-testid="week" data-request={rescheduleRequestId} data-note={rescheduleNote ?? ''} data-user={userId} />
+    <div data-testid="week" data-request={rescheduleRequestId} data-note={rescheduleNote ?? ''} data-user={userId}>
+      {/* The week's close warning, reduced to its Can't make it (GEO-3429). */}
+      <button type="button" onClick={onCantMakeIt}>
+        warning: I cant make it
+      </button>
+    </div>
   ),
 }));
 
@@ -444,6 +451,48 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(week).toHaveAttribute('data-note', 'Sorry!');
       expect(week).toHaveAttribute('data-user', MAYA);
       expect(state.cant.mutate).not.toHaveBeenCalled();
+    });
+
+    // GEO-3429: closing that week and choosing I can't make it comes back here, with the note.
+    it('comes back from the week with the note still typed', async () => {
+      const user = userEvent.setup();
+      open('cant');
+      await user.type(screen.getByLabelText('Add a note for Maya (optional)'), 'Flight delayed');
+      await user.click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+      await user.click(screen.getByRole('button', { name: 'warning: I cant make it' }));
+
+      expect(screen.queryByTestId('week')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Add a note for Maya (optional)')).toHaveValue('Flight delayed');
+    });
+
+    it('hands the week the latest note on a second Suggest', async () => {
+      const user = userEvent.setup();
+      open('cant');
+      await user.type(screen.getByLabelText('Add a note for Maya (optional)'), 'A');
+      await user.click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+      await user.click(screen.getByRole('button', { name: 'warning: I cant make it' }));
+      const field = screen.getByLabelText('Add a note for Maya (optional)');
+      await user.clear(field);
+      await user.type(field, 'B');
+      await user.click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+
+      expect(screen.getByTestId('week')).toHaveAttribute('data-note', 'B');
+    });
+
+    // The note lives with the dialog, so a newer one survives a hop to Running late and back.
+    it('keeps the latest note across Running late and back', async () => {
+      const user = userEvent.setup();
+      open('cant');
+      await user.type(screen.getByLabelText('Add a note for Maya (optional)'), 'A');
+      await user.click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+      await user.click(screen.getByRole('button', { name: 'warning: I cant make it' }));
+      const field = screen.getByLabelText('Add a note for Maya (optional)');
+      await user.clear(field);
+      await user.type(field, 'B');
+      await user.click(screen.getByRole('button', { name: 'I’m only running late' }));
+      await user.click(screen.getByRole('button', { name: 'I can’t make it at all' }));
+
+      expect(screen.getByLabelText('Add a note for Maya (optional)')).toHaveValue('B');
     });
 
     // The cancel refetches the list, which then says the debate is off. That is the news being

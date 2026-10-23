@@ -101,6 +101,7 @@ vi.mock('./peer-availability-booking-modal', () => ({
     userId,
     peerName,
     rescheduleRequestId,
+    initialSelectedStart,
     entry,
     disagreementCount,
     onClose,
@@ -110,6 +111,7 @@ vi.mock('./peer-availability-booking-modal', () => ({
     userId: string;
     peerName?: string | null;
     rescheduleRequestId?: string | null;
+    initialSelectedStart?: string | null;
     entry?: string | null;
     disagreementCount?: number | null;
     onClose: () => void;
@@ -121,6 +123,7 @@ vi.mock('./peer-availability-booking-modal', () => ({
         data-user-id={userId}
         data-peer-name={peerName ?? ''}
         data-reschedule={rescheduleRequestId ?? ''}
+        data-picked={initialSelectedStart ?? ''}
         data-entry={entry ?? ''}
         data-disagreements={disagreementCount ?? ''}
       >
@@ -378,6 +381,18 @@ describe('AvailabilityDeepLink', () => {
       'data-reschedule',
       '6676b145-0970-4c1c-bfbc-7497d9721b39'
     );
+  });
+
+  // GEO-3429: a time button in the "none of these work" email.
+  it('opens the week with the time the link picked, to book rather than move', () => {
+    search = 'modal=availability&modalTarget=2026-10-23T13:00:00Z';
+    profile = { isPending: false, isError: false, data: { user: person, is_self: false } };
+    render(<AvailabilityDeepLink />);
+
+    const modal = screen.getByTestId('booking-modal');
+    expect(modal).toHaveAttribute('data-picked', '2026-10-23T13:00:00.000Z');
+    expect(modal).toHaveAttribute('data-reschedule', '');
+    expect(modal).toHaveAttribute('data-entry', 'no_time_works_link');
   });
 
   describe('once the room is open (GEO-3427)', () => {
