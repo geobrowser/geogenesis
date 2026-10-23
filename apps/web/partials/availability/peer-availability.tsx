@@ -242,6 +242,9 @@ export function PeerAvailabilityView({
   const moving = currentStart && booking?.moving ? booking.moving : null;
   const movingTime = moving ? viewerDayAndTime(moving.startsAt, schedule.viewerTimezone) : null;
   const first = firstName(name) ?? name;
+  const alternative = booking?.noTimeWorks ? (
+    <NoTimeWorks peerFirstName={first} time={movingTime?.time ?? null} {...booking.noTimeWorks} />
+  ) : null;
 
   return (
     <div className={cx('flex min-h-0 flex-col gap-5 md:gap-4', className)}>
@@ -299,35 +302,35 @@ export function PeerAvailabilityView({
           <WeekGrid days={days} peerName={name} selectedStart={selectedStart} onSelect={setSelectedStart} />
         </>
       )}
-      <div className={cx('flex shrink-0 flex-col gap-4', booking && 'border-t border-divider pt-4')}>
-        {booking && week === 'slots' ? (
-          <BookingFooter
-            booking={booking}
-            clock={clock}
-            // The slot, not the raw pick: a pick that became the time being moved (GEO-3429), or a
-            // slot a refetch dropped, is no longer one, and must not be sent.
-            startsAt={selectedSlot?.start ?? null}
-            viewerIsFree={selectedSlot?.viewerIsFree ?? null}
-            viewerTimezone={schedule.viewerTimezone}
-            zoneNote={zoneNote}
-          />
-        ) : booking && week === 'empty' ? (
-          <RequestAnyway
-            booking={booking}
-            clock={clock}
-            viewerTimezone={schedule.viewerTimezone}
-            notBefore={notBefore}
-            zoneNote={zoneNote}
-          />
-        ) : (
-          <Text as="p" variant="footnote" color="grey-04">
-            {zoneNote}
-          </Text>
-        )}
-        {booking?.noTimeWorks && (
-          <NoTimeWorks peerFirstName={first} time={movingTime?.time ?? null} {...booking.noTimeWorks} />
-        )}
-      </div>
+      <Text as="p" variant="footnote" color="grey-04" className="shrink-0">
+        {zoneNote}
+      </Text>
+      {booking && (week !== 'unknown' || alternative) && (
+        <div className="flex shrink-0 flex-col gap-4 border-t border-divider pt-4">
+          {week === 'slots' ? (
+            <BookingFooter
+              booking={booking}
+              clock={clock}
+              // The slot, not the raw pick: a pick that became the time being moved (GEO-3429), or a
+              // slot a refetch dropped, is no longer one, and must not be sent.
+              startsAt={selectedSlot?.start ?? null}
+              viewerIsFree={selectedSlot?.viewerIsFree ?? null}
+              viewerTimezone={schedule.viewerTimezone}
+              alternative={alternative}
+            />
+          ) : week === 'empty' ? (
+            <RequestAnyway
+              booking={booking}
+              clock={clock}
+              viewerTimezone={schedule.viewerTimezone}
+              notBefore={notBefore}
+              alternative={alternative}
+            />
+          ) : (
+            alternative
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -387,7 +390,7 @@ function NoTimeWorks({
   error: string | null;
 }) {
   return (
-    <div className="flex shrink-0 flex-col gap-1">
+    <div className="flex min-w-0 flex-1 flex-col gap-1">
       <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
         <span className="text-chat text-grey-04">None of these work?</span>
         <button
@@ -419,35 +422,31 @@ function BookingFooter({
   startsAt,
   viewerIsFree,
   viewerTimezone,
-  zoneNote,
+  alternative,
 }: {
   booking: PeerAvailabilityBooking;
   clock: () => number;
   startsAt: string | null;
   viewerIsFree: boolean | null;
   viewerTimezone: string;
-  /** Which zone the grid is in, shown until a pick replaces it with the picked time. */
-  zoneNote: string;
+  alternative: React.ReactNode;
 }) {
   const selected = startsAt ? viewerDayAndTime(startsAt, viewerTimezone) : null;
 
   return (
     <div className="flex shrink-0 flex-col gap-2">
-      <div className="flex items-center justify-between gap-4 mobile:flex-col mobile:items-stretch">
-        {selected ? (
-          <div className="flex min-w-0 flex-col gap-1">
-            <Text as="span" variant="footnote" color="grey-04">
-              {booking.mode === 'reschedule' ? 'New time' : 'Selected time'}
-            </Text>
-            <Text as="span" variant="metadataMedium">
-              {selected.day} · {selected.time}
-            </Text>
-          </div>
-        ) : (
-          <Text as="span" variant="footnote" color="grey-04" className="min-w-0">
-            {zoneNote}
+      {selected && (
+        <div className="flex min-w-0 flex-col gap-1">
+          <Text as="span" variant="footnote" color="grey-04">
+            {booking.mode === 'reschedule' ? 'New time' : 'Selected time'}
           </Text>
-        )}
+          <Text as="span" variant="metadataMedium">
+            {selected.day} · {selected.time}
+          </Text>
+        </div>
+      )}
+      <div className="flex items-baseline justify-between gap-4 mobile:flex-col mobile:items-stretch">
+        {alternative}
         <SendRequest
           booking={booking}
           clock={clock}
@@ -492,7 +491,7 @@ function SendRequest({
   const passed = passedFor !== null && passedFor === startsAt;
 
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1 mobile:items-stretch">
+    <div className="ml-auto flex shrink-0 flex-col items-end gap-1 mobile:ml-0 mobile:items-stretch">
       <button
         type="button"
         disabled={!startsAt || booking.pending || booking.disabled}
@@ -533,13 +532,13 @@ function RequestAnyway({
   clock,
   viewerTimezone,
   notBefore,
-  zoneNote,
+  alternative,
 }: {
   booking: PeerAvailabilityBooking;
   clock: () => number;
   viewerTimezone: string;
   notBefore: number;
-  zoneNote: string;
+  alternative: React.ReactNode;
 }) {
   const [local, setLocal] = React.useState('');
   const picked = viewerInputInstant(local, viewerTimezone);
@@ -548,7 +547,12 @@ function RequestAnyway({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-end justify-between gap-4 mobile:flex-col mobile:items-stretch">
+      <div
+        className={cx(
+          'flex gap-4 mobile:flex-col mobile:items-stretch',
+          alternative ? 'flex-col' : 'items-end justify-between'
+        )}
+      >
         <label className="flex min-w-0 flex-col gap-2 text-chatMedium text-text">
           {booking.mode === 'reschedule' ? 'Suggest a new time' : 'Suggest a time'}
           <input
@@ -560,17 +564,17 @@ function RequestAnyway({
             className="h-10 w-64 max-w-full min-w-0 rounded-md border border-grey-02 bg-white px-3 text-metadata focus:border-text focus:outline-hidden mobile:w-full"
           />
         </label>
-        <SendRequest
-          booking={booking}
-          clock={clock}
-          startsAt={startsAt}
-          viewerIsFree={null}
-          viewerTimezone={viewerTimezone}
-        />
+        <div className="flex items-baseline justify-between gap-4 mobile:flex-col mobile:items-stretch">
+          {alternative}
+          <SendRequest
+            booking={booking}
+            clock={clock}
+            startsAt={startsAt}
+            viewerIsFree={null}
+            viewerTimezone={viewerTimezone}
+          />
+        </div>
       </div>
-      <Text as="p" variant="footnote" color="grey-04">
-        {zoneNote}
-      </Text>
       {booking.error && (
         <Text as="p" variant="footnote" color="red-01">
           {booking.error}

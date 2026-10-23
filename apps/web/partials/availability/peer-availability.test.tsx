@@ -569,14 +569,13 @@ describe('a week with nothing in it', () => {
 describe('zone line', () => {
   const ZONE = 'Times shown in your zone, UTC. Ada is in UTC, same time as you.';
 
-  // It sits where "Pick a time above." used to, and a pick takes its place with the picked time.
-  it('fills the footer until a time is picked', async () => {
+  it('stays with the calendar when a time is picked', async () => {
     const { user } = setupBooking(booking(), { slots: [slot(16)] });
     expect(screen.getByText(ZONE)).toBeInTheDocument();
     expect(screen.queryByText('Pick a time above.')).not.toBeInTheDocument();
 
     await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
-    expect(screen.queryByText(ZONE)).not.toBeInTheDocument();
+    expect(screen.getByText(ZONE)).toBeInTheDocument();
   });
 
   it('still shows without a footer to sit in', () => {
