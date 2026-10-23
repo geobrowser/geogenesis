@@ -4262,7 +4262,7 @@ export async function listDebateHistory(
 ) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set('cursor', cursor);
-  return geoChatRequest<DebateHistoryResponse>(`/debates/history?${params.toString()}`, {
+  return geoChatRequest<DebateHistoryResponse>(`/me/debate-history?${params.toString()}`, {
     auth: true,
     getPrivyIdentityToken,
     accountKey,
