@@ -2832,3 +2832,55 @@ describe('claims the viewer has already answered', () => {
     });
   });
 });
+
+// GEO-3463. The side panel draws the list behind one search field and one Filters button, and hands
+// it the tab's own Sort and narrowing.
+describe('in the side panel', () => {
+  const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
+  const panelFilters = (overrides = {}) => ({
+    sort: { options: [{ value: 'best', label: 'Best' }], value: 'best', onChange: vi.fn() },
+    toggles: [],
+    ...overrides,
+  });
+
+  it('swaps the menus row for a search field and a Filters button', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    render(<ClaimsTab panelFilters={panelFilters()} />);
+    await showAllClaims();
+
+    expect(await screen.findByText('A tagged claim')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Search claims' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any space/ })).not.toBeInTheDocument();
+  });
+
+  it('asks the graph for Newest when the tab sorts by it', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    render(<ClaimsTab panelFilters={panelFilters({ graphOrder: 'newest' })} />);
+    await showAllClaims();
+
+    expect(mocks.taggedFiltersAskedFor.at(-1)).toMatchObject({ order: 'newest' });
+  });
+
+  it('leaves out what the tab’s predicate rejects', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'A tagged claim'),
+      featuredClaim(FEATURED_B, 'Another tagged claim'),
+    ];
+    render(
+      <ClaimsTab panelFilters={panelFilters()} keepClaim={entry => entry.claim.claim !== 'Another tagged claim'} />
+    );
+    await showAllClaims();
+
+    expect(await screen.findByText('A tagged claim')).toBeInTheDocument();
+    expect(screen.queryByText('Another tagged claim')).not.toBeInTheDocument();
+  });
+
+  it('reads the selection of the list it is told to, not its own variant’s', async () => {
+    const store = createStore();
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
+    render(<ClaimsTab variant="positions" atomsFrom="explore" panelFilters={panelFilters()} />, store);
+
+    expect(screen.getByRole('textbox', { name: 'Search claims' })).toHaveValue('nuclear');
+  });
+});

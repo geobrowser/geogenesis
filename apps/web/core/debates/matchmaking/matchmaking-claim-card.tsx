@@ -9,7 +9,6 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { useActionContext } from '~/core/action-context-provider';
-import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
 import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
@@ -63,6 +62,7 @@ import {
   type DebateAnalyticsSurface,
   debateActionAnalyticsAttributes,
 } from './hub-analytics';
+import { CardEndSlot } from './hub-claim-end-slot';
 import { hubCardMotion } from './hub-motion';
 import { useHubScrollSelector } from './hub-scroll';
 
@@ -176,6 +176,14 @@ type Props = {
    * Unset, the card's controls carry no label, as before.
    */
   analyticsSurface?: DebateAnalyticsSurface;
+  /**
+   * Whether anyone on the other side of this claim is online right now (GEO-3463). Inside a hub
+   * surface, `false` makes Schedule the card's main action instead of Debate now — Matches sets it
+   * for the claims "Include people who are offline" brings in, where only offline people hold the
+   * other side. Unset, the card decides from its own match lookup, which only ever names someone
+   * online. Ignored outside a hub surface (see `HubAskProvider`).
+   */
+  someoneOnline?: boolean;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -222,6 +230,7 @@ export function MatchmakingClaimCard({
   hideEndSlot,
   endSlot,
   analyticsSurface,
+  someoneOnline,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -284,6 +293,7 @@ export function MatchmakingClaimCard({
           endSlot={endSlot}
           headerMeta={headerMeta}
           hasFooter={Boolean(footer)}
+          someoneOnline={someoneOnline}
         />
       ) : (
         <UnresolvableControls
@@ -296,6 +306,7 @@ export function MatchmakingClaimCard({
           hideEndSlot={hideEndSlot}
           endSlot={endSlot}
           headerMeta={headerMeta}
+          someoneOnline={someoneOnline}
         />
       )}
 
@@ -787,6 +798,7 @@ function RespondableControls({
   hasFooter,
   noteFor,
   analyticsSurface,
+  someoneOnline,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -822,6 +834,7 @@ function RespondableControls({
   endSlot?: React.ReactNode;
   headerMeta?: React.ReactNode;
   analyticsSurface?: DebateAnalyticsSurface;
+  someoneOnline?: boolean;
 }) {
   // One read for the card, and now the second half of what the card draws from. The header flags a
   // contested claim, the footer reports the split, and — since GEO-2823 — the viewer's own response
@@ -964,10 +977,11 @@ function RespondableControls({
         endSlot={
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              someoneOnline={someoneOnline}
+              analyticsSurface={analyticsSurface}
               // `undefined` until the reads have landed, so a card that cannot yet say which side
               // the viewer holds does not read as saying they hold none.
               viewerPosition={sideKnown ? viewerPosition : undefined}
@@ -1163,6 +1177,7 @@ function UnresolvableControls({
   endSlot,
   headerMeta,
   analyticsSurface,
+  someoneOnline,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -1173,6 +1188,7 @@ function UnresolvableControls({
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
   headerMeta?: React.ReactNode;
+  someoneOnline?: boolean;
 }) {
   return (
     <>
@@ -1195,10 +1211,11 @@ function UnresolvableControls({
              is not the safe direction to be wrong in. */
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              someoneOnline={someoneOnline}
+              analyticsSurface={analyticsSurface}
               // No response control here, so there is no optimistic side to read — geo-chat's is
               // the only answer this card has about where the viewer stands, and where it is silent
               // this card genuinely does not know. Not `?? null`: on the Matches tab this readiness

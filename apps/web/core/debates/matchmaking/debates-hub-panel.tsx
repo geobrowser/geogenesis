@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, motion } from 'framer-motion';
+import { useAtomValue, useSetAtom } from 'jotai';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -24,44 +25,45 @@ import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popov
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useLobbyLineup } from '../lobbies/live-lobbies';
-import { UpcomingLobbiesCard } from '../lobbies/lobbies-card';
-import { LobbySpotlight } from '../lobbies/lobby-spotlight';
 import { ClaimsTab } from './claims-tab';
 import { calendarHref } from './debate-calendar-route';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { hubAnalyticsAttributes } from './hub-analytics';
+import { HubAskProvider } from './hub-ask-context';
 import { HubHeaderControls } from './hub-header-controls';
+import { HubLiveStrip } from './hub-live-strip';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
 import { HUB_ICON_BUTTON_CLASS_NAME, hubPillClassName } from './hub-pill-button';
-import { LobbyTab } from './lobby-tab';
+import { NoTimesNudge } from './no-times-nudge';
+import { PanelExploreTab, PanelMatchesTab } from './panel-claim-tabs';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
 import { ScrollableTabRow } from './scrollable-tab-row';
-import { SetScheduleBanner } from './set-schedule-banner';
 import { SIGNED_OUT_TABS } from './signed-out-tabs';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useHubFilterOwner } from './use-hub-filter-owner';
 import { useRequestsTabCount } from './use-requests-tab-count';
 import { isWorkspaceList, useWorkspaceQuery, workspaceHref } from './use-workspace-query';
-import { type DebatesHubTab } from '~/atoms';
+import { type DebatesHubTab, debatesHubExploreShowAtom } from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
 const MOBILE_SHEET_TOP_OFFSET_PX = 120;
 
-// Reading order, widest to narrowest: everything you could debate, then who is around, then the
-// two lists that only exist once matchmaking has produced something. The landing tab is set
-// separately, by `DEFAULT_TAB` in use-debates-hub — it happens to agree with this order, but
-// reordering here does not move it.
+// GEO-3463: four tabs, People first. Who is around comes before what to debate, because People is
+// the tab people actually use most (52 of 66 panel users, 30 Sep–13 Oct); then the claims you could
+// debate now, then everything else, then what is waiting on you. "Live" became Matches — it always
+// listed claims, never lobbies — and "My positions" became one of Explore's Shows.
+//
+// The ids stay the ones links and the full-screen hub already use: `lobby` is the matches list
+// (`?tab=matches` was renamed onto it long ago), and `positions` still opens, on Explore's Show.
+// The landing tab is `DEFAULT_TAB` in use-debates-hub, which agrees with this order.
 const TABS: { id: DebatesHubTab; label: string }[] = [
-  { id: 'lobby', label: 'Live' },
   { id: 'people', label: 'People' },
+  { id: 'lobby', label: 'Matches' },
   { id: 'explore', label: 'Explore' },
-  // "My", because the debate-again picker beside it lists two people's positions and says whose
-  // each is (GEO-3148). One word for one list on both surfaces.
-  { id: 'positions', label: 'My positions' },
   { id: 'requests', label: 'Requests' },
 ];
 
@@ -79,7 +81,7 @@ function tabsFor(authenticated: boolean) {
  */
 function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHubTab {
   if (authenticated || SIGNED_OUT_TABS.includes(activeTab)) return activeTab;
-  return 'explore';
+  return 'people';
 }
 
 export function DebatesHubPanel() {
@@ -180,7 +182,10 @@ export function DebatesHubPanel() {
   // header stands.
   const body = (
     <ActionContextProvider value={{ overlay: 'debates_hub_sheet', component: 'debate_matchmaking' }}>
-      <DebatesHubSurface activeTab={activeTab} onTabChange={setTab} onClose={isMobile ? close : undefined} />
+      {/* One reading of the open ask for every card, row and the strip (GEO-3463). */}
+      <HubAskProvider>
+        <DebatesHubSurface activeTab={activeTab} onTabChange={setTab} onClose={isMobile ? close : undefined} />
+      </HubAskProvider>
     </ActionContextProvider>
   );
 
@@ -254,11 +259,9 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 
   const requestCount = useRequestsTabCount({ authenticated, activity, requests });
   const lobbyLineup = useLobbyLineup();
-  // A live lobby, or one opening within 15 minutes, takes the banner's place above the tabs
-  // (GEO-3268). The schedule banner comes back once neither is true.
-  const lobbySpotlight = lobbyLineup.live.length > 0 || lobbyLineup.soon !== null;
+  const setExploreShow = useSetAtom(debatesHubExploreShowAtom);
   const scrollRef = React.useRef<HTMLDivElement>(null);
-  // Shared so the banner can hand focus up to the header's calendar when it leaves.
+  // The availability pill, which the schedule editor hands focus back to when it closes.
   const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   // One scroll container is shared by all four tabs, so a scrolled People list would otherwise
@@ -270,6 +273,15 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
     },
     [onTabChange]
   );
+
+  // "My positions" is a Show on Explore now (GEO-3463). A link or an older caller asking for the
+  // positions tab lands there with it chosen, rather than on a tab that no longer exists.
+  // Signed out there are no positions to show, so it is plain Explore.
+  React.useEffect(() => {
+    if (requestedTab !== 'positions' || !ready) return;
+    if (authenticated) setExploreShow('mine');
+    onTabChange('explore');
+  }, [authenticated, onTabChange, ready, requestedTab, setExploreShow]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -294,10 +306,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         </HubHeaderControls>
       </div>
 
-      {lobbySpotlight ? <LobbySpotlight lineup={lobbyLineup} /> : null}
-      {/* Kept mounted under the spotlight: it holds the schedule dialog, which a lobby going live
-          would otherwise close mid-edit. */}
-      <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} hidden={lobbySpotlight} />
+      {/* At most one 44px strip before the tabs, and none at all when there is nothing for it to say
+          (GEO-3463). The lobby spotlight, the upcoming lobbies card and the schedule banner used to
+          stack here — about 520px at an 800px window before the first person or claim. */}
+      <HubLiveStrip lineup={lobbyLineup} />
 
       {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
           restoration, so a row drawn before then is the signed-out one — a returning viewer would
@@ -357,17 +369,15 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             corrects both. One render, but it is the wrong viewer's data. */}
         {!ready || !filtersReconciled ? null : (
           <>
-            {/* Requests lists the lobbies the viewer is going to or hosts itself (GEO-3292). */}
-            {activeTab === 'requests' ? null : <UpcomingLobbiesCard />}
+            {/* Upcoming lobbies are not above any tab any more (GEO-3463): the next one is in the strip,
+                the ones the viewer is going to are in Requests, and all of them are on the calendar. */}
             <HubSwap activeKey={activeTab}>
               {activeTab === 'requests' ? (
                 <RequestsTab focusedRequestId={focusedRequestId} />
               ) : activeTab === 'lobby' ? (
-                <LobbyTab onTabChange={changeTab} />
-              ) : activeTab === 'explore' ? (
-                <ClaimsTab />
-              ) : activeTab === 'positions' ? (
-                <ClaimsTab variant="positions" />
+                <PanelMatchesTab onTabChange={changeTab} />
+              ) : activeTab === 'explore' || activeTab === 'positions' ? (
+                <PanelExploreTab onTabChange={changeTab} />
               ) : (
                 <PeopleTab onTabChange={changeTab} />
               )}
@@ -388,6 +398,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         )}
       </motion.div>
 
+      {!ready || !filtersReconciled ? null : <NoTimesNudge />}
       {!ready || !filtersReconciled ? null : <ExpandToWorkspaceLink activeTab={activeTab} />}
     </div>
   );
@@ -422,10 +433,16 @@ function CalendarButton() {
   );
 }
 
-/** The way out to the full-screen hub, carrying the list on this tab and what narrows it. */
+/**
+ * The way out to the full-screen hub, carrying the list on this tab and what narrows it. Explore on
+ * My positions is full screen's positions list, which still has a list of its own there.
+ */
 function ExpandToWorkspaceLink({ activeTab }: { activeTab: DebatesHubTab }) {
   const { close } = useDebatesHub();
-  const query = useWorkspaceQuery(isWorkspaceList(activeTab) ? activeTab : null);
+  const { authenticated } = useGeoChatAuth();
+  const show = useAtomValue(debatesHubExploreShowAtom);
+  const list = activeTab === 'explore' && authenticated && show === 'mine' ? 'positions' : activeTab;
+  const query = useWorkspaceQuery(isWorkspaceList(list) ? list : null);
 
   return (
     <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">

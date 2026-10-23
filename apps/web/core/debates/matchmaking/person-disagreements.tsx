@@ -16,7 +16,22 @@ import { ResponsePositionIcon } from '~/design-system/icons/response-position-ic
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import type { ClaimMatch } from './disagreement-counts';
+import { debateAnalyticsLabel } from './hub-analytics';
+import { HubPillButton } from './hub-pill-button';
 import { PersonSpaceIcon } from './person-space-icons';
+
+/**
+ * "Debate on this" under each claim (GEO-3463), offered while the person is online. It sends an
+ * ordinary claim request for that claim, which geo-chat fans out to the people who hold the other
+ * side, this person among them.
+ */
+export type PersonMatchesDebate = {
+  onDebate: (match: ClaimMatch) => void;
+  /** Set while a request is out or the viewer can't ask: every button greys out, as the row's does. */
+  disabledReason?: string | null;
+  /** The claim whose request is in flight, so only its button says so. */
+  pendingClaimId?: string | null;
+};
 
 export function PersonMatches({
   personName,
@@ -27,6 +42,9 @@ export function PersonMatches({
   popoverPortal,
   triggerAttributes,
   hideWhenDetached = true,
+  open,
+  onOpenChange,
+  debate,
 }: {
   personName: string;
   matches: ClaimMatch[];
@@ -38,13 +56,17 @@ export function PersonMatches({
   triggerAttributes?: Readonly<Record<`data-${string}`, string>>;
   /** Off when the row sits inside another popover; see `PersonRow`'s `hidePopoversWhenDetached`. */
   hideWhenDetached?: boolean;
+  /** Controlled by the panel row, so its hover card can stay shut while this is open. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  debate?: PersonMatchesDebate;
 }) {
   const firstClaimRef = React.useRef<HTMLAnchorElement>(null);
   const count = matches.length;
   if (count === 0) return null;
 
   return (
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>
         <button
           type="button"
@@ -94,6 +116,28 @@ export function PersonMatches({
                     labelsById={labelsById}
                     className="px-3 py-2.5"
                   />
+                  {/* A sibling of the link, never inside it: a button nested in an anchor is invalid
+                      and its press would also follow the link. */}
+                  {debate ? (
+                    <div className="flex justify-end px-3 pb-2.5">
+                      <HubPillButton
+                        variant="primary"
+                        analyticsSurface="hub"
+                        analyticsLabel={debateAnalyticsLabel('hub', 'Debate on this')}
+                        disabled={Boolean(debate.disabledReason) || Boolean(debate.pendingClaimId)}
+                        pending={
+                          debate.pendingClaimId !== null &&
+                          debate.pendingClaimId !== undefined &&
+                          normId(debate.pendingClaimId) === normId(match.claimId)
+                        }
+                        pendingLabel="Requesting…"
+                        title={debate.disabledReason ?? undefined}
+                        onClick={() => debate.onDebate(match)}
+                      >
+                        Debate on this
+                      </HubPillButton>
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>

@@ -269,6 +269,58 @@ export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
 export const debatesHubPeopleOnlineOnlyAtom = atom(false);
 
 /**
+ * The side panel's Sort, one per tab (GEO-3463). Sort lives in the Filters popover and never counts
+ * as a filter, so these sit beside the filters rather than in them — Clear all leaves them alone.
+ * Session-scoped like the rest of the bar. The defaults are the orders the tabs had before Sort
+ * existed: People by most matches, both claim lists by Explore's ranking.
+ */
+export type DebatesHubPeopleSort = 'matches' | 'online' | 'az';
+export type DebatesHubMatchesSort = 'best' | 'newest' | 'people';
+export type DebatesHubExploreSort = 'best' | 'newest';
+export const debatesHubPeopleSortAtom = atom<DebatesHubPeopleSort>('matches');
+export const debatesHubMatchesSortAtom = atom<DebatesHubMatchesSort>('best');
+export const debatesHubExploreSortAtom = atom<DebatesHubExploreSort>('best');
+
+/**
+ * Matches' "Include people who are offline" (GEO-3463). Off by default: Matches is claims you could
+ * debate now. On, it adds claims where only offline people hold the other side, which the card
+ * offers as Schedule rather than Debate now.
+ */
+export const debatesHubMatchesIncludeOfflineAtom = atom(false);
+
+/**
+ * Explore's "Someone online to debate" (GEO-3463, decision 39). On, Explore lists only claims where
+ * someone online holds a side — the list the old Live tab opened on, moved behind a filter so
+ * Matches can mean only matches.
+ */
+export const debatesHubExploreSomeoneOnlineAtom = atom(false);
+
+/**
+ * Whether Explore's Show is on "My positions" (GEO-3463). The positions list used to be a tab of its
+ * own; it is now one of Explore's three Shows. Session-scoped: it is a list you look at, not how you
+ * like to arrive.
+ */
+export const debatesHubExploreShowMineAtom = atom(false);
+
+export type DebatesHubExploreShow = 'unanswered' | 'all' | 'mine';
+
+/**
+ * Explore's Show control: Not answered (the default), All, or My positions.
+ *
+ * Not answered and All are the stored "hide my positions" preference the tab already had (GEO-2863),
+ * so the panel and full screen keep agreeing about it. My positions swaps the list itself, so it is
+ * its own flag and leaves that preference where the viewer put it.
+ */
+export const debatesHubExploreShowAtom = atom(
+  (get): DebatesHubExploreShow =>
+    get(debatesHubExploreShowMineAtom) ? 'mine' : get(debatesHubHideMyPositionsAtom) ? 'unanswered' : 'all',
+  (_get, set, next: DebatesHubExploreShow) => {
+    set(debatesHubExploreShowMineAtom, next === 'mine');
+    if (next !== 'mine') set(debatesHubHideMyPositionsAtom, next === 'unanswered');
+  }
+);
+
+/**
  * Whether each claim-browse surface's membership default has been applied or forfeited this session.
  *
  * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
@@ -346,6 +398,12 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(lobbyExploreSpaceSeedSpentAtom, false);
   set(debatesHubPeopleSpaceIdsAtom, []);
   set(debatesHubPeopleOnlineOnlyAtom, false);
+  set(debatesHubPeopleSortAtom, 'matches');
+  set(debatesHubMatchesSortAtom, 'best');
+  set(debatesHubExploreSortAtom, 'best');
+  set(debatesHubMatchesIncludeOfflineAtom, false);
+  set(debatesHubExploreSomeoneOnlineAtom, false);
+  set(debatesHubExploreShowMineAtom, false);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
   set(debatesHubLobbyMoveSpentAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than

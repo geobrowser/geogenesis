@@ -169,8 +169,17 @@ describe('the page it asks for', () => {
     const { result } = renderClaims();
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    expect(sentQuery()).toContain('RANKING_SCORE_DESC');
-    expect(sentQuery()).not.toContain('ID_DESC');
+    expect(sentVariables().orderBy).toEqual(['RANKING_SCORE_DESC']);
+  });
+
+  it('orders by creation time, ties broken by id, when the panel asks for Newest', async () => {
+    // GEO-3463. The id tiebreak is what keeps a cursor from skipping or repeating claims created
+    // in the same block.
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, order: 'newest' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().orderBy).toEqual(['CREATED_AT_DESC', 'ID_DESC']);
   });
 
   it('asks for one page rather than the whole tag', async () => {

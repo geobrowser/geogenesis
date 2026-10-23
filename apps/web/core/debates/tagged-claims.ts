@@ -56,11 +56,12 @@ const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
     $filter: EntityFilter!
     $first: Int!
     $after: Cursor
+    $orderBy: [EntitiesOrderBy!]
   ) {
     entitiesConnection(
       first: $first
       after: $after
-      orderBy: [RANKING_SCORE_DESC]
+      orderBy: $orderBy
       typeIds: { in: [$claimTypeId] }
       filter: $filter
     ) {
@@ -224,6 +225,20 @@ export type TaggedClaimFilters = {
    * Undefined or empty adds nothing.
    */
   searchTopicIds?: string[];
+  /**
+   * The browsed list's order (GEO-3463). `best` (the default) is Explore's ranking; `newest` is
+   * creation time, newest first. A running search keeps its own relevance order either way: the
+   * search ranks its hits, and re-sorting them by age would bury the claim the viewer typed.
+   */
+  order?: TaggedClaimOrder;
+};
+
+export type TaggedClaimOrder = 'best' | 'newest';
+
+/** The graph's ordering for each order. `ID_DESC` breaks ties, so a cursor never skips or repeats. */
+const ORDER_BY: Record<TaggedClaimOrder, string[]> = {
+  best: ['RANKING_SCORE_DESC'],
+  newest: ['CREATED_AT_DESC', 'ID_DESC'],
 };
 
 /** The topics a search also matches, or `null` when it adds none — the shape the keys carry. */
@@ -454,12 +469,14 @@ function fetchTaggedClaimsPage({
   filter,
   first,
   after,
+  order = 'best',
   signal,
 }: {
   tagId: string;
   filter: ReturnType<typeof taggedEntityFilter>;
   first: number;
   after: string | null;
+  order?: TaggedClaimOrder;
   signal?: AbortSignal;
 }) {
   return Effect.runPromise(
@@ -475,6 +492,7 @@ function fetchTaggedClaimsPage({
         filter,
         first,
         after,
+        orderBy: ORDER_BY[order],
       },
       signal,
     })
@@ -559,6 +577,7 @@ export const taggedClaimsQueryKey = (
     filters.excludeAnsweredBy ?? null,
     searchTopicKey(filters),
     filters.spaceMatch ?? 'any',
+    filters.order ?? 'best',
   ] as const;
 
 const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
@@ -592,6 +611,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
         filter: taggedEntityFilter(tagId, filters, null),
         first: TAGGED_CLAIMS_PAGE_SIZE,
         after: pageParam,
+        order: filters.order,
         signal,
       }),
     getNextPageParam: page => (page.hasNextPage ? page.endCursor : undefined),

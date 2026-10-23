@@ -4221,3 +4221,51 @@ function decodeGeoChatAccessToken(token: string | undefined): { user_id?: string
     return null;
   }
 }
+
+/** One past request, invite, debate or lobby in the viewer's history (GEO-3464). */
+export type DebateHistoryKind = 'claim_request' | 'challenge' | 'scheduled_invite' | 'debate' | 'lobby';
+
+export type DebateHistoryItem = {
+  /** Unique across kinds, e.g. `claim_request:<uuid>`. */
+  id: string;
+  kind: DebateHistoryKind;
+  occurred_at: string;
+  /** `null` for debates and lobbies, which have no sender. */
+  direction: 'outgoing' | 'incoming' | null;
+  /** How it ended, from the viewer's side. Read through `historyOutcomeLabel`, which knows the values. */
+  outcome: string;
+  /** geo-chat user ids of everyone else involved, the viewer left out. */
+  other_user_ids: string[];
+  claim: {
+    debate_claim_id: string;
+    claim_entity_id: string | null;
+    name: string | null;
+    space_id?: string | null;
+  } | null;
+  debate_id: string | null;
+  lobby: { room_id: string; name: string } | null;
+  scheduled_start_at: string | null;
+};
+
+export type DebateHistoryResponse = {
+  items: DebateHistoryItem[];
+  next_cursor: string | null;
+};
+
+/** The viewer's history, newest first, a page at a time (GEO-3464). */
+export async function listDebateHistory(
+  cursor: string | null,
+  limit: number,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+  return geoChatRequest<DebateHistoryResponse>(`/debates/history?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}

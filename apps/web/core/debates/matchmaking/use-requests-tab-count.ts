@@ -3,42 +3,49 @@
 import type { DebateActivity, DebateRequestsResponse } from '../api';
 import { useOpenScheduledRequests } from '../rooms/scheduled-awaiting';
 import { useScheduledDebates } from '../rooms/scheduling-hooks';
+import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
 /**
- * The Requests tab's badge: everything pending that the tab lists, in both directions.
+ * How many things are waiting on the viewer's answer (GEO-3463): live requests sent to them, a
+ * challenge sent to them, and scheduled invites they have not answered.
  *
- * Deliberately broader than the navbar button, which counts only what is waiting on the viewer —
- * that one is asking for attention, where this one says how much the tab holds. A scheduled request
- * you sent is still pending until they answer, and belongs in the count for the same reason it
- * belongs in the list.
+ * The Requests tab's badge, its "Needs you (N)" filter and the navbar button all read this one
+ * number, so none of them can say something different. It used to count everything pending in both
+ * directions on the tab and only the incoming half on the navbar; what you sent is now on the strip
+ * above the tabs, and the badge means "you have something to answer".
  *
- * Scheduled requests come from the list itself, so the number cannot disagree with the rows
- * underneath it; until that list lands, the navbar's "awaiting your answer" count stands in, which
- * is the most the badge knew before.
+ * `fetchScheduled` is off for the navbar, which mounts on every page: it reads the scheduled list
+ * only if something else already loaded it, and stands in with activity's "awaiting your answer"
+ * count otherwise — the same fallback the tab uses until its list lands.
  */
 export function useRequestsTabCount({
   authenticated,
   activity,
   requests,
+  fetchScheduled = true,
 }: {
   authenticated: boolean;
   activity: DebateActivity | undefined;
   requests: DebateRequestsResponse | undefined;
+  fetchScheduled?: boolean;
 }) {
-  const scheduled = useScheduledDebates(authenticated);
+  const scheduled = useScheduledDebates(authenticated && fetchScheduled);
   const openScheduled = useOpenScheduledRequests(scheduled.data?.requests);
+  const viewerId = useCurrentGeoChatUserId();
 
   const incoming = useUnexpiredRequests(requests?.incoming ?? []);
-  // `??`, as every surface that draws the sent request derives it, so the count matches the card.
-  const outbound = useLiveRequest(requests?.outbound ?? activity?.outbound_request);
-  // The claimless challenge sits in the tab under Sent or Received, whichever way it points.
   const challenge = useLiveRequest(activity?.challenge);
 
   if (!authenticated) return 0;
 
   const instantIncoming = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
-  const scheduledPending = scheduled.data ? openScheduled.length : (activity?.scheduled_awaiting_answer_count ?? 0);
+  // A challenge counts only once it is known to be addressed to the viewer: one they sent is theirs
+  // to wait on, not to answer.
+  const challengeToViewer = challenge && viewerId !== null && challenge.recipient.user_id === viewerId ? 1 : 0;
+  const scheduledToAnswer = scheduled.data
+    ? openScheduled.filter(request => request.viewer_must_answer).length
+    : (activity?.scheduled_awaiting_answer_count ?? 0);
 
-  return instantIncoming + (outbound ? 1 : 0) + (challenge ? 1 : 0) + scheduledPending;
+  return instantIncoming + challengeToViewer + scheduledToAnswer;
 }

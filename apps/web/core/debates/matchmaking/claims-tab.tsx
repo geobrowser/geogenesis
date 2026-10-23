@@ -29,6 +29,7 @@ import {
 } from '../tagged-claims';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { useClaimOrderFacts } from './claim-order-facts';
 import { claimRowKey } from './claim-row-key';
 import { fromClaimsFilterSearch } from './claims-filter-params';
 import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
@@ -37,6 +38,7 @@ import { useDebateRequests } from './hooks';
 import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubFacetRail } from './hub-facet-rail';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
+import { HubFiltersBar, type PanelListFilters, panelFacetOptions, sortClaimRows } from './hub-filters';
 import { HubCardList } from './hub-motion';
 import { useHubScrollSelector } from './hub-scroll';
 import { HubQueryState, HubSkeleton, exploreClaimsAction } from './hub-states';
@@ -243,8 +245,24 @@ export function ClaimsTab({
   onTabChange,
   layout = 'panel',
   scopePicker,
+  atomsFrom,
+  panelFilters,
+  keepClaim,
 }: {
   variant?: ClaimsListVariant;
+  /**
+   * Whose search and space/topic selection this list reads, when not its own variant's (GEO-3463).
+   * The panel's Explore swaps between three lists under its Show control and Matches between two,
+   * and what the viewer typed or picked should not change when the list under it does.
+   */
+  atomsFrom?: ClaimsListVariant;
+  /**
+   * The side panel's one search field and Filters button in place of the menus row (GEO-3463), with
+   * this tab's Sort and switches. Panel layout only; the workspace keeps its rail.
+   */
+  panelFilters?: PanelListFilters;
+  /** Leaves out rows the list's source cannot narrow by itself, e.g. claims with nobody on the other side. */
+  keepClaim?: (entry: MatchmakingClaim) => boolean;
   /** Draws each claim in place of the default card, for a host with its own offer (the lobby). */
   renderClaim?: (entry: MatchmakingClaim, card: ClaimCardDefaults) => React.ReactElement;
   /** The claims on screen, after each change. */
@@ -288,9 +306,10 @@ export function ClaimsTab({
   scopePicker?: React.ReactNode;
 } = {}) {
   const isLobby = variant === 'lobby';
-  const atoms = VARIANT_ATOMS[variant];
+  const atoms = VARIANT_ATOMS[atomsFrom ?? variant];
   const { analyticsSurface, hidesAnswered } = LIST_SURFACE[variant];
   const workspace = layout === 'workspace';
+  const panelMode = panelFilters !== undefined && !workspace;
   const queryClient = useQueryClient();
   const { authenticated, accountKey } = useGeoChatAuth();
   // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
@@ -485,8 +504,9 @@ export function ClaimsTab({
       spaceIds,
       eligibleSpaceIds,
       excludeAnsweredBy,
+      order: panelFilters?.graphOrder,
     }),
-    [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, excludeAnsweredBy, spaceIds]
+    [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, excludeAnsweredBy, panelFilters?.graphOrder, spaceIds]
   );
 
   // Held while the space gates are still resolving: they pass everything until they land, so asking
@@ -703,7 +723,7 @@ export function ClaimsTab({
   // rather than which list this is: keyed on it, pressing the switch would re-sort every surviving
   // row to the server's current ranking.
   const keyedSpaceIds = graphSourced ? spaceIds : debouncedSpaceIds;
-  const listKey = `${debouncedSearch}|${keyedSpaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}`;
+  const listKey = `${debouncedSearch}|${keyedSpaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}|${taggedFilters.order ?? 'best'}`;
 
   const claims = useStableListOrder(graphSourced ? taggedEntries : serverClaims, claimRowKey, listKey);
 
@@ -819,7 +839,7 @@ export function ClaimsTab({
   }
   const answersSettled = answersSettledForRef.current === listKey;
 
-  const visibleClaims = useCollapseAnswered(claims, {
+  const collapsedClaims = useCollapseAnswered(claims, {
     keyOf: claimRowKey,
     answeredStateOf,
     enabled: collapsesAnswered,
@@ -827,6 +847,19 @@ export function ClaimsTab({
     // answered ones are taken back a moment later — the first-paint problem again, one page down.
     classifying: answersInFlight,
   });
+
+  // The panel's own narrowing and Sort on top of the source's (GEO-3463). The predicate covers what
+  // the source cannot be asked for, and the client sort covers lists the server orders its own way
+  // (geo-chat's), where the whole list is small enough to be in hand.
+  const clientSort = panelFilters?.clientSort;
+  const { facts: orderFacts } = useClaimOrderFacts(
+    React.useMemo(() => collapsedClaims.map(entry => entry.claim.claim_entity_id), [collapsedClaims]),
+    clientSort === 'best' || clientSort === 'newest'
+  );
+  const visibleClaims = React.useMemo(() => {
+    const kept = keepClaim ? collapsedClaims.filter(keepClaim) : collapsedClaims;
+    return clientSort ? sortClaimRows(kept, clientSort, orderFacts) : kept;
+  }, [clientSort, collapsedClaims, keepClaim, orderFacts]);
 
   // The topic menu, from the server's count over the tag. It describes every claim the current
   // filters allow rather than the pages loaded so far — which is what a client-side version could
@@ -855,6 +888,10 @@ export function ClaimsTab({
   // keeps the previous filter's numbers on screen rather than blinking — which is exactly the
   // window this flag exists to mark, or the old counts read as current for a debounce plus a
   // request. `facetsSettled` is the same question these menus already answer with.
+  const panelSpaceLabels = useSpaceLabels(
+    React.useMemo(() => (panelMode ? facetSpaces.map(space => space.id) : []), [facetSpaces, panelMode])
+  );
+
   const countsPending =
     searchSettling || indexedCountsPending || (graphSourced && (topicsSettling || spacesSettling || !facetsSettled));
 
@@ -1044,52 +1081,96 @@ export function ClaimsTab({
       }
     >
       <HubStickyControls workspaceStickyOffset={workspace} topClassName={stickyTopClassName}>
+        {panelFilters && panelMode ? (
+          <HubFiltersBar
+            analyticsSurface={analyticsSurface}
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search claims"
+            sort={panelFilters.sort}
+            choice={panelFilters.choice}
+            toggles={panelFilters.toggles}
+            facets={{
+              heading: 'Spaces and topics',
+              options: panelFacetOptions({
+                spaces: facetSpaces,
+                topics: facetTopics,
+                spaceIds,
+                topicIds,
+                listedCount: hasNextPage ? 0 : visibleClaims.length,
+                labelsById: panelSpaceLabels.labelsById,
+                labelsLoading: panelSpaceLabels.isLoading,
+              }),
+              pickedIds: [...spaceIds, ...topicIds],
+              onToggle: option =>
+                option.kind === 'space'
+                  ? onSpaceToggle(option.id)
+                  : setTopicIds(current => toggleId(current, option.id)),
+              onClear: () => {
+                onSpacesClear();
+                setTopicIds([]);
+              },
+              countsPending,
+            }}
+            resultCount={hasNextPage ? null : visibleClaims.length}
+            onClearAll={() => {
+              onSpacesClear();
+              setTopicIds([]);
+              panelFilters.onClearExtras?.();
+            }}
+          />
+        ) : null}
         {/* Pinned above the filters, the way the matches list pins it. A request sent from here used
             to vanish the moment it was sent — the card that sent it looks exactly as it did before,
             and the only evidence was on another tab. It rides inside the sticky block rather than
             above it because two stickies would both claim `top-0` and overlap, and this one is
             conditional so the filters could not be offset by a known height. */}
-        {outbound ? <OutboundRequestCard request={outbound} /> : null}
+        {/* The panel says all of this in the strip above the tabs instead (GEO-3463). */}
+        {outbound && !panelMode ? <OutboundRequestCard request={outbound} /> : null}
 
-        <Input
-          withSearchIcon
-          value={search}
-          onChange={event => setSearch(event.currentTarget.value)}
-          placeholder="Search claims"
-          aria-label="Search claims"
-        />
+        {panelMode ? null : (
+          <Input
+            withSearchIcon
+            value={search}
+            onChange={event => setSearch(event.currentTarget.value)}
+            placeholder="Search claims"
+            aria-label="Search claims"
+          />
+        )}
 
-        <SpaceTopicFilters
-          analyticsSurface={analyticsSurface}
-          leading={scopePicker}
-          menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
-          spaceIds={spaceIds}
-          onSpaceToggle={onSpaceToggle}
-          onSpacesClear={onSpacesClear}
-          topicIds={topicIds}
-          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-          onTopicsClear={() => setTopicIds([])}
-          facetSpaces={facetSpaces}
-          facetTopics={facetTopics}
-          countsPending={countsPending}
-          // Lobby passes its own ("Matches only"); Explore draws the one that hides answered claims.
-          // Positions draws neither: it *is* the list of answered claims, so hiding them there
-          // could only empty it — a broken tab rather than a filter — and the state cannot be set
-          // from the one place it must not apply. Nor is it drawn signed out, where the viewer has
-          // no positions for it to hide and it would be a switch with nothing behind it.
-          //
-          trailing={
-            isLobby ? (
-              trailing
-            ) : filter === 'mine' || !authenticated || !hidesAnswered ? null : (
-              <HideMyPositionsSwitch
-                analyticsSurface={analyticsSurface}
-                checked={hideMyPositions}
-                onChange={setHideMyPositions}
-              />
-            )
-          }
-        />
+        {panelMode ? null : (
+          <SpaceTopicFilters
+            analyticsSurface={analyticsSurface}
+            leading={scopePicker}
+            menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
+            spaceIds={spaceIds}
+            onSpaceToggle={onSpaceToggle}
+            onSpacesClear={onSpacesClear}
+            topicIds={topicIds}
+            onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+            onTopicsClear={() => setTopicIds([])}
+            facetSpaces={facetSpaces}
+            facetTopics={facetTopics}
+            countsPending={countsPending}
+            // Lobby passes its own ("Matches only"); Explore draws the one that hides answered claims.
+            // Positions draws neither: it *is* the list of answered claims, so hiding them there
+            // could only empty it — a broken tab rather than a filter — and the state cannot be set
+            // from the one place it must not apply. Nor is it drawn signed out, where the viewer has
+            // no positions for it to hide and it would be a switch with nothing behind it.
+            //
+            trailing={
+              isLobby ? (
+                trailing
+              ) : filter === 'mine' || !authenticated || !hidesAnswered ? null : (
+                <HideMyPositionsSwitch
+                  analyticsSurface={analyticsSurface}
+                  checked={hideMyPositions}
+                  onChange={setHideMyPositions}
+                />
+              )
+            }
+          />
+        )}
       </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">

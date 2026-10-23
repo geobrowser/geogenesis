@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   blocks: [] as AvailabilityBlock[],
   saveSurfaces: [] as string[],
   updateAvailability: vi.fn(),
+  canHost: false,
 }));
 
 // The pill reads `../hooks`; the schedule editor it opens reads the same module by its alias.
@@ -39,6 +40,14 @@ vi.mock('~/core/debates/hooks', () => ({
 // The copy-link row reads the personal space through the wallet stack; it has its own tests.
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
 
+// Hosting is a feature flag; the dialog it opens has its own suite.
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (name: string) => (name === 'lobbyHosting' ? mocks.canHost : false),
+}));
+vi.mock('../lobbies/open-lobby-dialog', () => ({
+  OpenLobbyDialog: () => <div role="dialog" aria-label="Open a debate lobby" />,
+}));
+
 const { HubHeaderControls } = await import('./hub-header-controls');
 
 beforeAll(() => {
@@ -59,6 +68,7 @@ afterEach(() => {
     available: false,
     blocks: [],
     saveSurfaces: [],
+    canHost: false,
   });
   mocks.updateAvailability.mockReset();
 });
@@ -105,7 +115,7 @@ describe('HubHeaderControls', () => {
     render(<HubHeaderControls />);
 
     await user.click(pill());
-    expect(await screen.findByRole('button', { name: /^Set my availability/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^Set my times/ })).toBeInTheDocument();
   });
 
   it('reads My availability back and opens its editor, attributed to the header', async () => {
@@ -123,7 +133,7 @@ describe('HubHeaderControls', () => {
     await user.click(pill());
     const menu = await screen.findByRole('dialog', { name: 'Your availability' });
     // The whole row is the button, named for what it does.
-    const row = within(menu).getByRole('button', { name: /^Edit my availability/ });
+    const row = within(menu).getByRole('button', { name: /^Edit my times/ });
     expect(row).toHaveTextContent(/Mon–Fri 6 – 8pm/);
 
     await user.click(row);
@@ -141,7 +151,7 @@ describe('HubHeaderControls', () => {
     rerender(<HubHeaderControls analyticsSurface="calendar" />);
     expect(pill()).toHaveAttribute('data-geo-analytics-label', 'Debate calendar Availability menu');
     await user.click(pill());
-    expect(await screen.findByRole('button', { name: /^Set my availability/ })).toHaveAttribute(
+    expect(await screen.findByRole('button', { name: /^Set my times/ })).toHaveAttribute(
       'data-geo-analytics-label',
       'Debate calendar Schedule calendar'
     );
@@ -152,7 +162,7 @@ describe('HubHeaderControls', () => {
     render(<HubHeaderControls analyticsSurface="calendar" />);
 
     await user.click(pill());
-    await user.click(await screen.findByRole('button', { name: /^Set my availability/ }));
+    await user.click(await screen.findByRole('button', { name: /^Set my times/ }));
     await screen.findByRole('dialog', { name: /schedule/i });
 
     expect(new Set(mocks.saveSurfaces)).toEqual(new Set(['calendar']));
@@ -164,6 +174,31 @@ describe('HubHeaderControls', () => {
     render(<HubHeaderControls scheduleButtonRef={ref} />);
 
     expect(ref.current).toBe(pill());
+  });
+
+  // GEO-3463: Open a lobby left the card above the panel's tabs for this menu, last, under the link.
+  it('offers hosts Open a lobby as the last row, which opens the dialog', async () => {
+    mocks.canHost = true;
+    const user = userEvent.setup();
+    render(<HubHeaderControls />);
+
+    await user.click(pill());
+    const menu = await screen.findByRole('dialog', { name: 'Your availability' });
+    const rows = within(menu).getAllByRole('button');
+    expect(rows.at(-1)).toHaveTextContent('Open a lobby');
+    expect(rows.at(-1)).toHaveAttribute('data-geo-analytics-label', 'Open a lobby');
+
+    await user.click(rows.at(-1)!);
+    expect(await screen.findByRole('dialog', { name: 'Open a debate lobby' })).toBeInTheDocument();
+  });
+
+  it('keeps Open a lobby from people who cannot host', async () => {
+    const user = userEvent.setup();
+    render(<HubHeaderControls />);
+
+    await user.click(pill());
+    const menu = await screen.findByRole('dialog', { name: 'Your availability' });
+    expect(within(menu).queryByRole('button', { name: 'Open a lobby' })).not.toBeInTheDocument();
   });
 
   it('draws nothing but its children signed out', () => {

@@ -324,7 +324,7 @@ const LOBBY_LIST_STALE_MS = 30_000;
  * roster is only a fallback while that loads: it covers people who are online, and whoever invited
  * you usually is not.
  */
-function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipantSummary[]) {
+export function useParticipantLookup(enabled: boolean, requestPeople: DebateParticipantSummary[]) {
   const roster = useDebatePeople(enabled);
 
   return React.useMemo(() => {
@@ -608,8 +608,14 @@ export function CancelScheduled({
   kind,
   opponent,
   analyticsSurface = 'hub',
+  compact = false,
 }: {
   analyticsSurface?: DebateAnalyticsSurface;
+  /**
+   * The Requests timeline's one-line actions (GEO-3463): the pill sizes to its label rather than the
+   * card, and the confirm step keeps its two buttons on one line under the question.
+   */
+  compact?: boolean;
   requestId: string;
   kind: keyof typeof CANCEL_COPY;
   opponent: DebateParticipantSummary | null;
@@ -633,7 +639,7 @@ export function CancelScheduled({
     return (
       <div className="flex flex-col gap-2">
         <HubPillButton
-          className="w-full"
+          className={compact ? undefined : 'w-full'}
           analyticsSurface={analyticsSurface}
           analyticsLabel={debateAnalyticsLabel(analyticsSurface, label)}
           analyticsIntent={intent}
@@ -642,7 +648,7 @@ export function CancelScheduled({
             setConfirming(true);
           }}
         >
-          {copy.action}
+          {compact ? 'Cancel' : copy.action}
         </HubPillButton>
         {error && (
           <Text as="p" variant="footnote" color="red-01">
@@ -658,7 +664,7 @@ export function CancelScheduled({
       <Text as="p" variant="footnote">
         {copy.question(opponentName(opponent))}
       </Text>
-      <div className="grid grid-cols-2 gap-2">
+      <div className={compact ? 'flex flex-nowrap gap-1.5' : 'grid grid-cols-2 gap-2'}>
         <HubPillButton
           analyticsSurface={analyticsSurface}
           analyticsLabel={debateAnalyticsLabel(analyticsSurface, `Keep ${kind}`)}
@@ -845,7 +851,7 @@ function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
 }
 
 /** The card's one button: its words, and its analytics label and intent. */
-const LOBBY_ACTIONS = {
+export const LOBBY_ACTIONS = {
   view: ['View lobby', 'View scheduled lobby', 'view_scheduled_lobby'],
   join: ['Join lobby', 'Join scheduled lobby', 'join_scheduled_lobby'],
   open: ['Open lobby', 'Open scheduled lobby', 'open_scheduled_lobby'],

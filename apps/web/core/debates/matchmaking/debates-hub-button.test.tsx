@@ -42,6 +42,13 @@ vi.mock('./hooks', () => ({
   useDebateRequests: () => ({ data: undefined, isLoading: false, error: null }),
 }));
 
+// The badge is the panel's needs-you count (GEO-3463), which reads the scheduled list from cache only
+// and the viewer's id for challenges. Neither is loaded here, so activity's counts stand in.
+vi.mock('../rooms/scheduling-hooks', () => ({
+  useScheduledDebates: () => ({ data: undefined }),
+}));
+vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'user-a' }));
+
 function renderButton({ compact = false }: { compact?: boolean } = {}) {
   const store = createStore();
   return render(
