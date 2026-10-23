@@ -28,7 +28,6 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { Search } from '~/design-system/icons/search';
 import { Input } from '~/design-system/input';
-import { ResizableContainer } from '~/design-system/resizable-container';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { AdvancedSearchFilters, type FacetScope, type SearchFilterTag } from './advanced-search-filters';
@@ -235,27 +234,30 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   }, [search.query, filterTypeIds, filterTags, scope]);
 
   useEffect(() => {
-    setSelectedIndex(prev => (prev >= search.results.length ? 0 : prev));
+    setSelectedIndex(prev => (search.results.length === 0 ? prev : prev >= search.results.length ? 0 : prev));
   }, [search.results.length]);
 
   useEffect(() => {
     if (!hasResults) return;
 
-    const element = document.querySelector(`#search-result-${selectedIndex}`);
+    const list = resultsScrollRef.current;
+    const element = document.getElementById(`search-result-${selectedIndex}`);
+    if (!list || !element) return;
 
-    if (element) {
-      element.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
+    const listRect = list.getBoundingClientRect();
+    const elRect = element.getBoundingClientRect();
+    if (elRect.top < listRect.top) {
+      list.scrollTop -= listRect.top - elRect.top;
+    } else if (elRect.bottom > listRect.bottom) {
+      list.scrollTop += elRect.bottom - listRect.bottom;
     }
   }, [hasResults, selectedIndex]);
 
   return (
-    <Command.Dialog open={open} onOpenChange={handleOpenChange} label="Entity search">
+    <Command.Dialog open={open} onOpenChange={handleOpenChange} label="Entity search" shouldFilter={false}>
       <Dialog.Title className="sr-only">Entity search</Dialog.Title>
       <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center">
-        <div className="pointer-events-auto mt-32 w-full max-w-[434px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-dropdown">
+        <div className="pointer-events-auto mt-32 w-full max-w-[434px] overflow-clip rounded-lg border border-grey-02 bg-white shadow-dropdown">
           <Command.List>
             {view === 'createEntity' && (
               <CreateNewEntityInSpace
@@ -338,62 +340,52 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                     </div>
                   ) : null}
                 </div>
-                <ResizableContainer duration={0.15}>
-                  <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
-                    {search.isEmpty ? (
-                      isValidEntityId ? (
-                        <div className="px-2 pb-1">
-                          <EntityIdNotFound setIsCreatingNewEntity={setIsCreatingNewEntity} />
-                        </div>
-                      ) : (
-                        <Command.Empty className="px-2 pb-2">No results found for {search.query}</Command.Empty>
-                      )
-                    ) : null}
-                    {search.results.map((result, i) => (
-                      <motion.div
-                        key={result.id}
-                        initial={{ opacity: 0, y: -5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.02 * i }}
-                        className="border-b border-divider last:border-none"
-                      >
-                        <div>
-                          <Command.Item
-                            onMouseEnter={() => {
-                              router.prefetch(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
-                              hydrate([result.id]);
-                            }}
-                            onSelect={() => {
-                              trackSelection(result, i, 'search_results');
-                              router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
-                              onQueryChange('');
-                              setOpenSpacesIndex(null);
-                              onDone();
-                            }}
-                          >
-                            <ResultContent
-                              id={`search-result-${i}`}
-                              // The onClick behavior is handled by cmdk.
-                              onClick={() => {}}
-                              // A real destination, so the row can be opened in a new tab, middle
-                              // clicked, or right clicked like any other link (GEO-2701). The same
-                              // one cmdk pushes on a plain click.
-                              href={NavUtils.toEntity(result.spaces[0].spaceId, result.id)}
-                              result={result}
-                              active={i === selectedIndex}
-                              onChooseSpace={() => setOpenSpacesIndex(i)}
-                            />
-                          </Command.Item>
-                        </div>
-                      </motion.div>
-                    ))}
-                    {search.isFetchingNextPage ? (
-                      <div className="flex items-center justify-center py-2 text-smallButton">
-                        <Dots />
+                <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
+                  {search.isEmpty ? (
+                    isValidEntityId ? (
+                      <div className="px-2 pb-1">
+                        <EntityIdNotFound setIsCreatingNewEntity={setIsCreatingNewEntity} />
                       </div>
-                    ) : null}
-                  </ResultsList>
-                </ResizableContainer>
+                    ) : (
+                      <Command.Empty className="px-2 pb-2">No results found for {search.query}</Command.Empty>
+                    )
+                  ) : null}
+                  {search.results.map((result, i) => (
+                    <div key={result.id} className="border-b border-divider last:border-none">
+                      <Command.Item
+                        onMouseEnter={() => {
+                          router.prefetch(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
+                          hydrate([result.id]);
+                        }}
+                        onSelect={() => {
+                          trackSelection(result, i, 'search_results');
+                          router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
+                          onQueryChange('');
+                          setOpenSpacesIndex(null);
+                          onDone();
+                        }}
+                      >
+                        <ResultContent
+                          id={`search-result-${i}`}
+                          // The onClick behavior is handled by cmdk.
+                          onClick={() => {}}
+                          // A real destination, so the row can be opened in a new tab, middle
+                          // clicked, or right clicked like any other link (GEO-2701). The same
+                          // one cmdk pushes on a plain click.
+                          href={NavUtils.toEntity(result.spaces[0].spaceId, result.id)}
+                          result={result}
+                          active={i === selectedIndex}
+                          onChooseSpace={() => setOpenSpacesIndex(i)}
+                        />
+                      </Command.Item>
+                    </div>
+                  ))}
+                  {search.isFetchingNextPage ? (
+                    <div className="flex items-center justify-center py-2 text-smallButton">
+                      <Dots />
+                    </div>
+                  ) : null}
+                </ResultsList>
               </>
             )}
             {view === 'selectSpace' && (

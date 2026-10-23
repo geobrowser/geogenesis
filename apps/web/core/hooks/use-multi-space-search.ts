@@ -14,6 +14,7 @@ import { useSyncEngine } from '../sync/use-sync-engine';
 import type { SearchResult } from '../types';
 import { isSearchCancellation } from './search-cancellation';
 import { useDebouncedValue } from './use-debounced-value';
+import { useLastSettled } from './use-last-settled';
 import { searchResultMatchesAllowedTypes } from './use-search';
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -67,6 +68,8 @@ export function useMultiSpaceSearch({
 
   const first = Math.min(pageCount * pageSize, MAX_ROWS_PER_SPACE);
 
+  const settleKey = `${cappedQuery}|${spaceKey}|${filterTypeKey ?? ''}|${filterTagKey ?? ''}|${includeNonCanonical}`;
+
   const queries = useQueries({
     queries: spaceIds.map(spaceId => ({
       enabled: shouldSearch,
@@ -110,7 +113,7 @@ export function useMultiSpaceSearch({
     })),
   });
 
-  const results = React.useMemo(() => {
+  const resultsNow = React.useMemo(() => {
     const lists = queries.map(q => q.data?.results ?? []);
     const byId = new Map<string, SearchResult>();
     const order: string[] = [];
@@ -136,11 +139,30 @@ export function useMultiSpaceSearch({
   }, [queries]);
 
   const isFetching = queries.some(q => q.isFetching);
+
+  const results = useLastSettled(resultsNow, isFetching, settleKey);
+
+  const totalsBySpaceRef = React.useRef<Map<string, number>>(new Map());
+  const totalsSettleKeyRef = React.useRef(settleKey);
+  if (totalsSettleKeyRef.current !== settleKey) {
+    totalsSettleKeyRef.current = settleKey;
+    totalsBySpaceRef.current = new Map();
+  }
+  for (let i = 0; i < spaceIds.length; i++) {
+    const total = queries[i]?.data?.total;
+    if (typeof total === 'number') totalsBySpaceRef.current.set(spaceIds[i], total);
+  }
+
   const isFirstLoad = shouldSearch && pageCount === 1 && queries.some(q => q.isPending);
   const isQuerySyncing = query !== debouncedQuery;
   const isLoading = shouldSearch && (isQuerySyncing || isFirstLoad);
   const isFetchingNextPage = pageCount > 1 && isFetching;
-  const hasNextPage = first < MAX_ROWS_PER_SPACE && queries.some(q => (q.data ? q.data.total > first : false));
+  const hasNextPage =
+    first < MAX_ROWS_PER_SPACE &&
+    spaceIds.some(id => {
+      const total = totalsBySpaceRef.current.get(id);
+      return total !== undefined && total > first;
+    });
 
   const fetchNextPage = React.useCallback(() => {
     if (!hasNextPage || isFetching) return;
