@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -18,11 +19,12 @@ import { hostsLabel } from '~/core/debates/lobbies/lobby-format';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
-import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
+import { SCHEDULED_NOTICE_COPY, UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useOpenScheduledRequests } from '~/core/debates/rooms/scheduled-awaiting';
+import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
 import { useCancelScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
 import { cancelFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
@@ -37,6 +39,7 @@ import { useDebatePeople } from './hooks';
 import { type DebateAnalyticsSurface, debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
+import { HUB_STICKY_CONTROLS_SELECTOR, scrollToSection, useHubScrollSelector } from './hub-scroll';
 import { RequestParties } from './request-parties';
 import { RequestSection } from './request-section';
 import { formatDebateSlot, formatDebateTime, formatTime } from './scheduled-debate-format';
@@ -52,8 +55,54 @@ export { formatDebateSlot, formatDebateTime } from './scheduled-debate-format';
  * Scheduled debates in the Requests tab (GEO-2939, GEO-2940). Answering and joining both happen
  * here, so neither depends on an email arriving or a popup being caught.
  */
-export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
+export function ScheduledDebatesSection({
+  content,
+  focusedRequestId = null,
+}: {
+  content: ScheduledContent;
+  /** A scheduled request a link asked to see (GEO-3431): outlined, and scrolled to once. */
+  focusedRequestId?: string | null;
+}) {
   const { answerable, upcoming, lobbies, people, requestsError, roomsError, lobbiesError } = content;
+  // Not until every read has landed: a section that loads above it would push the card back out of
+  // view after the scroll.
+  const focusedId = content.loading ? null : focusedRequestId;
+  const isFocused = (requestId: string | null) =>
+    focusedId !== null && requestId !== null && sameId(focusedId, requestId);
+  const hubScrollSelector = useHubScrollSelector();
+  React.useEffect(() => {
+    if (!focusedId) return;
+    // Only the hub's box, the way the lobby's sections jump: `scrollIntoView` scrolls every ancestor.
+    // Clear of the Requests tab's filter bar, pinned to the top of that box.
+    const node = document.querySelector<HTMLElement>(FOCUSED_CARD);
+    if (!node) return;
+    const scroller = hubScrollSelector ? node.closest<HTMLElement>(hubScrollSelector) : null;
+    const stickyBar = scroller?.querySelector<HTMLElement>(HUB_STICKY_CONTROLS_SELECTOR);
+    scrollToSection(node, scroller, stickyBar?.getBoundingClientRect().height ?? 0);
+    // And focus, for a keyboard or screen reader: the hub is not modal, so focus is still on the page.
+    node.focus({ preventScroll: true });
+  }, [focusedId, hubScrollSelector]);
+  // A link to a request that is no longer here (answered, withdrawn or lapsed since the email, or
+  // another account's) says so rather than opening on nothing, in the Running late dialog's words.
+  // Never for an accepted one: its card is under Upcoming debates, which another read fills, so it
+  // can be a poll behind (or that read failed); either way the debate is on. And not when the
+  // requests read failed: the read-failed line already says why.
+  const { data: scheduledRequests } = useScheduledDebates();
+  const linkedShown =
+    answerable.some(request => isFocused(request.request_id)) || upcoming.some(row => isFocused(row.requestId));
+  const linkedState =
+    focusedId !== null && !linkedShown && !requestsError
+      ? noticeRequestState(scheduledRequests?.requests.find(request => sameId(request.request_id, focusedId)))
+      : null;
+  // A pending one not listed lapsed at its start, which reads as over.
+  const linkGone = linkedState === 'missing' ? 'missing' : linkedState && linkedState !== 'active' ? 'over' : null;
+  const linkGoneNotice = linkGone && (
+    <div role="status">
+      <Text as="p" variant="footnote" color="grey-04">
+        {SCHEDULED_NOTICE_COPY.state[linkGone]}
+      </Text>
+    </div>
+  );
   const { answer, busy, error: conflict } = useScheduledDebateAnswer();
   const viewerId = useCurrentGeoChatUserId();
   const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0, people);
@@ -80,10 +129,11 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
 
-  if (!hasScheduledContent(content)) return null;
+  if (!hasScheduledContent(content)) return linkGoneNotice || null;
 
   return (
     <>
+      {linkGoneNotice}
       {(upcoming.length > 0 || roomsError) && (
         <RequestSection label="Upcoming debates">
           {upcoming.map(({ room, opponentUserId, scheduledEndAt, requestId }) => (
@@ -94,6 +144,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
               scheduledEndAt={scheduledEndAt}
               opponent={lookUp(opponentUserId)}
               viewer={viewer}
+              focused={isFocused(requestId)}
               onReschedule={reschedulerFor(requestId, opponentUserId, 'requests_reschedule')}
             />
           ))}
@@ -126,6 +177,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
                   opponent={lookUp(opponentUserId)}
                   viewer={viewer}
                   viewerId={viewerId}
+                  focused={isFocused(request.request_id)}
                   busy={busy}
                   onAnswer={answer}
                   onReschedule={reschedulerFor(
@@ -161,6 +213,9 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   );
 }
 
+/** The card a link asked for (`ScheduleCard`'s `data-focused`), which the section scrolls to. */
+const FOCUSED_CARD = '[data-focused]';
+
 /** A debate being moved: whose week to open, the request it moves, and which button asked. */
 type Rescheduling = { requestId: string; opponentUserId: string; opponentName: string | null; entry: ScheduleEntry };
 
@@ -180,6 +235,8 @@ export type ScheduledContent = {
   roomsError: Error | null;
   /** The lobby list, which hosted lobbies and hosts' names come from. */
   lobbiesError: Error | null;
+  /** Any of the three reads still on its first load. */
+  loading: boolean;
 };
 
 /** Anything for this section to show, a failed read included: one is not an empty schedule. */
@@ -256,6 +313,7 @@ export function useScheduledContent(): ScheduledContent {
     requestsError: requests.error ?? null,
     roomsError: rooms.error ?? null,
     lobbiesError: lobbyList.error ?? null,
+    loading: Boolean(requests.isLoading || rooms.isLoading || lobbyList.isLoading),
   };
 }
 
@@ -295,9 +353,12 @@ function UpcomingRow({
   scheduledEndAt,
   opponent,
   viewer,
+  focused,
   onReschedule,
 }: {
   room: UpcomingDebateRoom;
+  /** A link asked for this debate's request (GEO-3431): accepted since the email went out. */
+  focused: boolean;
   requestId: string | null;
   scheduledEndAt: string | null;
   opponent: DebateParticipantSummary | null;
@@ -314,6 +375,7 @@ function UpcomingRow({
 
   return (
     <ScheduleCard
+      focused={focused}
       parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={
         room.due
@@ -371,8 +433,11 @@ export function ScheduledRow({
   onAnswer,
   onReschedule,
   ref,
+  focused = false,
   analyticsSurface = 'hub',
 }: {
+  /** A link asked for this request (GEO-3431). */
+  focused?: boolean;
   /** From `HubCardList`, whose `popLayout` measures the card on its way out. */
   ref?: React.Ref<HTMLElement>;
   analyticsSurface?: DebateAnalyticsSurface;
@@ -394,10 +459,10 @@ export function ScheduledRow({
   const viewerAccepted =
     viewerId !== null && request.participants.some(entry => entry.accepted === true && sameId(entry.user_id, viewerId));
   const withdrawable = !request.viewer_must_answer && (proposedByViewer || viewerAccepted);
-
   return (
     <ScheduleCard
       ref={ref}
+      focused={focused}
       parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
       status={`${
@@ -659,8 +724,11 @@ function ScheduleCard({
   actions,
   ref,
   testId,
+  focused = false,
 }: {
   ref?: React.Ref<HTMLElement>;
+  /** A link asked for this card (GEO-3431): outlined. `ScheduledDebatesSection` scrolls to it. */
+  focused?: boolean;
   /** Who it is with: the "You vs Them" strip for a debate, the lobby's name and host for a lobby. */
   parties: React.ReactNode;
   testId?: string;
@@ -675,8 +743,15 @@ function ScheduleCard({
     <motion.article
       ref={ref}
       {...hubCardMotion}
-      className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
+      className={cx(
+        'flex w-full flex-col gap-3 rounded-lg border bg-white p-3',
+        // The border is the marker; the browser's ring for a focus set from code would be a second one.
+        focused ? 'border-text outline-none' : 'border-grey-02'
+      )}
       data-testid={testId}
+      data-focused={focused || undefined}
+      aria-current={focused || undefined}
+      tabIndex={focused ? -1 : undefined}
     >
       {/* The time on its own line, with where things stand under it: side by side, a slot and a
           sentence crowd each other out at this width, and it was the status that lost. */}
