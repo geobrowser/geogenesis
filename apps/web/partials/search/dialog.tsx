@@ -10,7 +10,6 @@ import { useRouter } from 'next/navigation';
 
 import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
-import { useMultiSpaceSearch } from '~/core/hooks/use-multi-space-search';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSearchResultAction } from '~/core/hooks/use-search-result-action';
@@ -62,10 +61,7 @@ const persistCanonicalOnly = (canonicalOnly: boolean) => {
   } catch {}
 };
 
-type SearchScope = { kind: 'canonical' } | { kind: 'all' } | { kind: 'spaces'; ids: string[] };
-
-// Stable empty list so a non-space scope doesn't mint a new array identity each render.
-const EMPTY_SPACE_IDS: string[] = [];
+type SearchScope = { kind: 'canonical' } | { kind: 'all' } | { kind: 'space'; id: string };
 
 export const SearchDialog = ({ open, onDone }: Props) => {
   if (!open) return null;
@@ -88,11 +84,8 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
 
   const filterPopoverHost = useElevatedPopoverPortal();
 
-  const selectedSpaceIds = scope.kind === 'spaces' ? scope.ids : EMPTY_SPACE_IDS;
+  const selectedSpaceId = scope.kind === 'space' ? scope.id : null;
   const canonicalOnly = scope.kind === 'canonical';
-
-  const singleSpaceId = selectedSpaceIds.length === 1 ? selectedSpaceIds[0] : undefined;
-  const multiSpaceMode = selectedSpaceIds.length > 1;
   const includeNonCanonical = scope.kind !== 'canonical';
 
   const filterByTypes = filterTypeIds.length > 0 ? filterTypeIds : undefined;
@@ -101,50 +94,29 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     [filterTags]
   );
 
-  const singleSearch = useSearch({
-    enabled: open && !multiSpaceMode,
+  const search = useSearch({
+    enabled: open,
     includeNonCanonical,
-    filterBySpace: singleSpaceId,
+    filterBySpace: selectedSpaceId ?? undefined,
     analyticsSurface: 'global',
     filterByTypes,
     filterByTags: filterByTagIds,
   });
-  const multiSearch = useMultiSpaceSearch({
-    enabled: open && multiSpaceMode,
-    spaceIds: selectedSpaceIds,
-    includeNonCanonical,
-    filterByTypes,
-    filterByTags: filterByTagIds,
-  });
-  const search = multiSpaceMode ? multiSearch : singleSearch;
 
-  const onQueryChange = useCallback(
-    (value: string) => {
-      singleSearch.onQueryChange(value);
-      multiSearch.onQueryChange(value);
-    },
-    [singleSearch.onQueryChange, multiSearch.onQueryChange]
-  );
+  const { fetchNextPage, hasNextPage, isFetchingNextPage, onQueryChange } = search;
 
-  const { fetchNextPage, hasNextPage, isFetchingNextPage } = search;
-
-  const facetScope: FacetScope = singleSpaceId
-    ? { mode: 'space', spaceId: singleSpaceId }
-    : multiSpaceMode
-      ? { mode: 'spaces', spaceIds: selectedSpaceIds }
-      : { mode: 'global', includeNonCanonical };
+  const facetScope: FacetScope = selectedSpaceId
+    ? { mode: 'space', spaceId: selectedSpaceId }
+    : { mode: 'global', includeNonCanonical };
 
   const toggleFilterType = useCallback((id: string) => {
     setFilterTypeIds(prev => (prev.includes(id) ? prev.filter(typeId => typeId !== id) : [...prev, id]));
   }, []);
   const clearFilterTypes = useCallback(() => setFilterTypeIds([]), []);
   const toggleSpaceSelected = useCallback((id: string) => {
-    setScope(prev => {
-      if (prev.kind !== 'spaces') return { kind: 'spaces', ids: [id] };
-      const ids = prev.ids.includes(id) ? prev.ids.filter(spaceId => spaceId !== id) : [...prev.ids, id];
-      // Clearing the last space returns to Canonical only, not an unscoped "All spaces".
-      return ids.length === 0 ? { kind: 'canonical' } : { kind: 'spaces', ids };
-    });
+    // Picking a space replaces the current one; clearing it returns to Canonical only, not an
+    // unscoped "All spaces".
+    setScope(prev => (prev.kind === 'space' && prev.id === id ? { kind: 'canonical' } : { kind: 'space', id }));
   }, []);
   const addFilterTag = useCallback((tag: SearchFilterTag) => {
     setFilterTags(prev => (prev.some(existing => existing.id === tag.id) ? prev : [...prev, tag]));
@@ -325,7 +297,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                       <AdvancedSearchFilters
                         canonicalOnly={canonicalOnly}
                         onToggleCanonicalOnly={toggleCanonicalOnly}
-                        selectedSpaceIds={selectedSpaceIds}
+                        selectedSpaceId={selectedSpaceId}
                         onToggleSpace={toggleSpaceSelected}
                         typeIds={filterTypeIds}
                         onToggleType={toggleFilterType}

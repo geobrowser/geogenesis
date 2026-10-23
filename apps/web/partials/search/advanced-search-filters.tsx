@@ -22,35 +22,21 @@ import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 
 export type SearchFilterTag = { id: string; name: string | null };
 
-export type FacetScope =
-  | { mode: 'global'; includeNonCanonical: boolean }
-  | { mode: 'space'; spaceId: string }
-  | { mode: 'spaces'; spaceIds: string[] };
+export type FacetScope = { mode: 'global'; includeNonCanonical: boolean } | { mode: 'space'; spaceId: string };
 
-function facetSearchScope(scope: FacetScope): {
-  includeNonCanonical?: boolean;
-  filterBySpace?: string;
-  alsoSearchSpaceIds?: string[];
-  replaceScopeWithAlsoSearchSpaceIds?: boolean;
-} {
+function facetSearchScope(scope: FacetScope): { includeNonCanonical?: boolean; filterBySpace?: string } {
   switch (scope.mode) {
     case 'global':
       return { includeNonCanonical: scope.includeNonCanonical };
     case 'space':
       return { filterBySpace: scope.spaceId, includeNonCanonical: true };
-    case 'spaces':
-      return {
-        includeNonCanonical: false,
-        alsoSearchSpaceIds: scope.spaceIds,
-        replaceScopeWithAlsoSearchSpaceIds: true,
-      };
   }
 }
 
 type Props = {
   canonicalOnly: boolean;
   onToggleCanonicalOnly: () => void;
-  selectedSpaceIds: string[];
+  selectedSpaceId: string | null;
   onToggleSpace: (id: string) => void;
   typeIds: string[];
   onToggleType: (id: string) => void;
@@ -82,13 +68,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
  * canonical-only scope) and type are select-style popovers that float over the results (see
  * `portalContainer` — must be outside the dialog's overflow clipping); tags are a free entity
  * search. Type and tag feed `useSearch` (`filterByTypes` / `filterByTags`); their option lists are
- * scoped to mirror the results through `facetScope` (see `facetSearchScope`). Picking spaces
- * restricts the results — one via SPACE_SINGLE, several via a fan-out — rather than widening them.
+ * scoped to mirror the results through `facetScope` (see `facetSearchScope`). Picking a space
+ * restricts the results to it via SPACE_SINGLE. It is single-select because `/search` has no
+ * multi-space restrict parameter.
  */
 export function AdvancedSearchFilters({
   canonicalOnly,
   onToggleCanonicalOnly,
-  selectedSpaceIds,
+  selectedSpaceId,
   onToggleSpace,
   typeIds,
   onToggleType,
@@ -116,7 +103,7 @@ export function AdvancedSearchFilters({
         <SpaceFilter
           canonicalOnly={canonicalOnly}
           onToggleCanonicalOnly={onToggleCanonicalOnly}
-          selectedSpaceIds={selectedSpaceIds}
+          selectedSpaceId={selectedSpaceId}
           onToggleSpace={onToggleSpace}
           container={portalContainer}
           onOpenChange={open => notifyMenuOpen('space', open)}
@@ -359,14 +346,14 @@ function TypeFilter({
 function SpaceFilter({
   canonicalOnly,
   onToggleCanonicalOnly,
-  selectedSpaceIds,
+  selectedSpaceId,
   onToggleSpace,
   container,
   onOpenChange,
 }: {
   canonicalOnly: boolean;
   onToggleCanonicalOnly: () => void;
-  selectedSpaceIds: string[];
+  selectedSpaceId: string | null;
   onToggleSpace: (id: string) => void;
   container: HTMLElement | null;
   onOpenChange?: (open: boolean) => void;
@@ -381,13 +368,11 @@ function SpaceFilter({
     seenRef.current.set(space.id, { name: space.name, image: space.image });
   }
 
-  const selected = React.useMemo(() => new Set(selectedSpaceIds), [selectedSpaceIds]);
-
   const rows = React.useMemo(() => {
     const byId = new Map<string, { id: string; name: string | null; image: string | null }>();
-    for (const id of selectedSpaceIds) {
-      const meta = seenRef.current.get(id);
-      byId.set(id, { id, name: meta?.name ?? null, image: meta?.image ?? null });
+    if (selectedSpaceId) {
+      const meta = seenRef.current.get(selectedSpaceId);
+      byId.set(selectedSpaceId, { id: selectedSpaceId, name: meta?.name ?? null, image: meta?.image ?? null });
     }
     for (const space of spaces) {
       byId.set(space.id, { id: space.id, name: space.name, image: space.image });
@@ -398,16 +383,13 @@ function SpaceFilter({
       all.sort(compareBySpaceRank(space => space.id));
     }
     return all;
-  }, [selectedSpaceIds, spaces, query]);
+  }, [selectedSpaceId, spaces, query]);
 
-  const selectedName = selectedSpaceIds.length === 1 ? (seenRef.current.get(selectedSpaceIds[0])?.name ?? null) : null;
   const label = canonicalOnly
     ? 'Canonical only'
-    : selectedSpaceIds.length === 0
-      ? 'All spaces'
-      : selectedSpaceIds.length === 1
-        ? (selectedName ?? '1 space')
-        : `${selectedSpaceIds.length} spaces`;
+    : selectedSpaceId
+      ? (seenRef.current.get(selectedSpaceId)?.name ?? '1 space')
+      : 'All spaces';
 
   return (
     <FilterDropdown
@@ -430,7 +412,7 @@ function SpaceFilter({
             <span className="min-w-0 flex-1 truncate text-text">Canonical only</span>
           </OptionRow>
           {rows.map(space => {
-            const isSelected = selected.has(space.id);
+            const isSelected = space.id === selectedSpaceId;
             return (
               <OptionRow key={space.id} selected={isSelected} onClick={() => onToggleSpace(space.id)}>
                 <CheckboxVisual checked={isSelected} />

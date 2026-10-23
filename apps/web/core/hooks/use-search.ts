@@ -60,7 +60,6 @@ interface SearchOptions {
    * asked for unrestricted results.
    */
   alsoSearchSpaceIds?: string[];
-  replaceScopeWithAlsoSearchSpaceIds?: boolean;
   /** Stable analytics classification for the surface. Inferred for shared entity pickers; false disables tracking. */
   analyticsSurface?: SearchAnalyticsSurface | false;
 }
@@ -108,7 +107,6 @@ export function useSearch({
   pageSize = DEFAULT_SEARCH_PAGE_SIZE,
   includeNonCanonical,
   alsoSearchSpaceIds,
-  replaceScopeWithAlsoSearchSpaceIds,
   analyticsSurface,
 }: SearchOptions = {}) {
   const { store } = useSyncEngine();
@@ -121,7 +119,6 @@ export function useSearch({
     filterBySpace,
     includeNonCanonical,
     alsoSearchSpaceIds,
-    replaceScopeWithAlsoSearchSpaceIds,
     globalAdditionalSpaceIds,
   });
 
