@@ -44,14 +44,16 @@ export function useDebatesPanelDeepLink() {
 
   // With the link's request when it named one, and otherwise exactly as before, so every other
   // link opens the hub the way it always has.
-  const openOn = (target: DebatesHubTab | undefined) => (requestId ? open(target, requestId) : open(target));
+  const openOn = (target: DebatesHubTab | undefined, request: string | null) =>
+    request ? open(target, request) : open(target);
 
-  // The tab to open once the sign-in this hook started settles, either way.
-  const pendingTabRef = React.useRef<DebatesHubTab | null>(null);
+  // The tab and request to open once the sign-in this hook started settles, either way. Both kept
+  // here, not read from the link: the link is cleared on arrival, long before sign-in settles.
+  const pendingRef = React.useRef<{ tab: DebatesHubTab; requestId: string | null } | null>(null);
   const openPending = () => {
-    const pending = pendingTabRef.current;
-    pendingTabRef.current = null;
-    if (pending) openOn(pending);
+    const pending = pendingRef.current;
+    pendingRef.current = null;
+    if (pending) openOn(pending.tab, pending.requestId);
   };
 
   const signIn = usePrivySignIn(openPending, {
@@ -85,13 +87,13 @@ export function useDebatesPanelDeepLink() {
     enabled: ready || !needsSignIn,
     run: () => {
       if (needsSignIn && !authenticated) {
-        pendingTabRef.current = tab;
+        pendingRef.current = tab ? { tab, requestId } : null;
         signIn();
         return;
       }
       // `undefined` rather than null: `open()` falls back to the hub's own landing tab, so this
       // module never has a second opinion about what that is.
-      openOn(tab ?? undefined);
+      openOn(tab ?? undefined, requestId);
     },
   });
 }

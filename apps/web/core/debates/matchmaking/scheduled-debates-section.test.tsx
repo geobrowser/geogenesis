@@ -609,6 +609,7 @@ describe('a link to one request', () => {
     const [card] = focusedCards();
     expect(card).toHaveAttribute('aria-current', 'true');
     expect(card).toHaveFocus();
+    expect(card).toHaveClass('outline-none');
   });
 
   it('says a request that is no longer open is no longer on, in the Running late dialog’s words', () => {
@@ -626,11 +627,25 @@ describe('a link to one request', () => {
     expect(focusedCards()).toHaveLength(0);
   });
 
-  it('says nothing about the link while loading, or when the read failed', () => {
+  it('says nothing about the link while loading, or when a read its card could be in failed', () => {
     const { rerender } = setup({ answerable: [], focusedRequestId: 'request-1', loading: true });
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
 
     rerender(sectionFor({ focusedRequestId: 'request-1', requestsError: new Error('down') }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    // Accepted, so its card would be under Upcoming debates, which could not be read.
+    mocks.requests = [mine({ status: 'accepted', room_id: 'room-1' })];
+    rerender(sectionFor({ focusedRequestId: 'request-1', roomsError: new Error('down') }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  // Accepted between two polls: the requests read has it, the rooms read (its own timer, no refetch
+  // on focus) has not caught up. The debate is on, so nothing says otherwise.
+  it('says nothing for a request accepted before its room has been read', () => {
+    mocks.requests = [mine({ status: 'accepted', room_id: 'room-1' })];
+    setup({ upcoming: [], focusedRequestId: 'request-1' });
+
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 

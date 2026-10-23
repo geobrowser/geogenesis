@@ -84,18 +84,22 @@ export function ScheduledDebatesSection({
   }, [focusedId, hubScrollSelector]);
   // A link to a request that is no longer here (answered, withdrawn or lapsed since the email, or
   // another account's) says so rather than opening on nothing, in the Running late dialog's words.
-  // Not when the read failed: "Could not read your scheduled debates" already says why.
+  // Never for an accepted one: its card is under Upcoming debates, which another read fills, so it
+  // can be a poll behind (or that read failed); either way the debate is on. And not when the
+  // requests read failed: the read-failed line already says why.
   const { data: scheduledRequests } = useScheduledDebates();
   const linkedShown =
     answerable.some(request => isFocused(request.request_id)) || upcoming.some(row => isFocused(row.requestId));
-  const linkGone =
+  const linkedState =
     focusedId !== null && !linkedShown && !requestsError
       ? noticeRequestState(scheduledRequests?.requests.find(request => sameId(request.request_id, focusedId)))
       : null;
+  // A pending one not listed lapsed at its start, which reads as over.
+  const linkGone = linkedState === 'missing' ? 'missing' : linkedState && linkedState !== 'active' ? 'over' : null;
   const linkGoneNotice = linkGone && (
     <div role="status">
       <Text as="p" variant="footnote" color="grey-04">
-        {SCHEDULED_NOTICE_COPY.state[linkGone === 'missing' ? 'missing' : 'over']}
+        {SCHEDULED_NOTICE_COPY.state[linkGone]}
       </Text>
     </div>
   );
@@ -741,7 +745,8 @@ function ScheduleCard({
       {...hubCardMotion}
       className={cx(
         'flex w-full flex-col gap-3 rounded-lg border bg-white p-3',
-        focused ? 'border-text' : 'border-grey-02'
+        // The border is the marker; the browser's ring for a focus set from code would be a second one.
+        focused ? 'border-text outline-none' : 'border-grey-02'
       )}
       data-testid={testId}
       data-focused={focused || undefined}

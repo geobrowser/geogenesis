@@ -106,6 +106,27 @@ describe('a link to one scheduled request', () => {
     expect(mocks.open).toHaveBeenCalledWith('requests', REQUEST);
   });
 
+  // The link is cleared on arrival, and the hook renders again before Privy calls back.
+  it('keeps the request when sign-in settles after the link was cleared', () => {
+    mocks.search = `modal=debates&modalTarget=requests:${REQUEST}`;
+    const { rerender } = renderHook(() => useDebatesPanelDeepLink());
+    mocks.search = '';
+    rerender();
+
+    mocks.signInComplete?.();
+    expect(mocks.open).toHaveBeenCalledWith('requests', REQUEST);
+  });
+
+  it('keeps it when sign-in is dismissed after the link was cleared, too', () => {
+    mocks.search = `modal=debates&modalTarget=requests:${REQUEST}`;
+    const { rerender } = renderHook(() => useDebatesPanelDeepLink());
+    mocks.search = '';
+    rerender();
+
+    mocks.signInOptions?.onError?.();
+    expect(mocks.open).toHaveBeenCalledWith('requests', REQUEST);
+  });
+
   it('keeps the request through sign-in, and in the link a new account comes back to', () => {
     mocks.search = `modal=debates&modalTarget=requests:${REQUEST}&via=email`;
     renderHook(() => useDebatesPanelDeepLink());
