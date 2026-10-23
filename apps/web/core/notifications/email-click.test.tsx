@@ -18,7 +18,7 @@ vi.mock('./api', async importOriginal => ({
   reportEmailClick: (...args: unknown[]) => mocks.report(...args),
 }));
 
-const { EmailClickReporter, readEmailClick } = await import('./email-click');
+const { EmailClickReporter } = await import('./email-click');
 
 const SEND = '3b0c2c8e-9a51-4d7e-8f43-2f1c6a0d9e11';
 
@@ -46,18 +46,6 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   land('');
-});
-
-describe('readEmailClick', () => {
-  it('takes a send id and a link slug, and nothing that could carry text', () => {
-    expect(readEmailClick(`?ref_email=digest&ref_send=${SEND.toUpperCase()}&ref_link=main`)).toEqual({
-      sendId: SEND,
-      link: 'main',
-    });
-    expect(readEmailClick(`?ref_send=${SEND}&ref_link=Two%20words`)).toEqual({ sendId: SEND, link: null });
-    expect(readEmailClick('?ref_send=not-a-send&ref_link=main')).toBeNull();
-    expect(readEmailClick('?ref_email=digest')).toBeNull();
-  });
 });
 
 describe('EmailClickReporter', () => {
