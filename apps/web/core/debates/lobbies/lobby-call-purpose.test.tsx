@@ -227,3 +227,22 @@ describe('one room at a time', () => {
     expect(otherLobbyIdFrom(error)).toBe('abcdef');
   });
 });
+
+describe('error copy in a space call', () => {
+  it('names the call where the lobby codes name the lobby', async () => {
+    const { lobbyErrorMessage, moderationErrorMessage } = await import('./lobby-format');
+    const full = new GeoChatRequestError('full', 'lobby_voice_full', 409, null, { limit: 40 });
+    expect(lobbyErrorMessage(full, 'x', 'call')).toBe(
+      'Voice is full in this call (40 people). You can still follow along here.'
+    );
+    expect(lobbyErrorMessage(full, 'x')).toBe(
+      'Voice is full in this lobby (40 people). You can still follow along here.'
+    );
+    const removed = new GeoChatRequestError('removed', 'lobby_removed', 409);
+    expect(lobbyErrorMessage(removed, 'x', 'call')).toBe('A host removed you from this call.');
+    const banned = new GeoChatRequestError('banned', 'lobby_banned', 403);
+    expect(lobbyErrorMessage(banned, 'x', 'call')).toBe('You can’t join this call.');
+    const absent = new GeoChatRequestError('absent', 'lobby_not_present', 409);
+    expect(moderationErrorMessage(absent, undefined, 'call')).toBe('Join the call to moderate.');
+  });
+});

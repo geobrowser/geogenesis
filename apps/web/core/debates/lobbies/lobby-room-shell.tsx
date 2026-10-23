@@ -44,6 +44,7 @@ export const LOBBY_ROOM_COPY = {
   guestElsewhere: 'You’re listening in another tab.',
   guestPaused: 'You’re not listening in this tab.',
   guestListeningOff: 'Listening without an account has been turned off for this lobby. Create an account to join.',
+  callGuestListeningOff: 'Listening without an account has been turned off for this call. Create an account to join.',
 } as const;
 
 type LobbyGuestSession = ReturnType<typeof useLobbyGuestSession>;
@@ -151,7 +152,10 @@ export function LobbyRoomShell({
             retry: 'Listen here',
           }
         : guestEnded && guestEndedAt !== null && guestViewAt >= guestEndedAt
-          ? { message: LOBBY_ROOM_COPY.guestListeningOff, retry: null }
+          ? {
+              message: call ? LOBBY_ROOM_COPY.callGuestListeningOff : LOBBY_ROOM_COPY.guestListeningOff,
+              retry: null,
+            }
           : null;
   // One automatic reconnect per page for a guest join dropped before it connected.
   const guestAutoRetryLeftRef = React.useRef(true);

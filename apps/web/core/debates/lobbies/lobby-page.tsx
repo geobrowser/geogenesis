@@ -56,7 +56,7 @@ import { useLobbyHighlights } from './lobby-highlights-hooks';
 import { usePreOpenHosts } from './lobby-host-lobbies';
 import { EndPickerLeftBehind } from './lobby-left-picker';
 import { LobbyHostLists, LobbyRemovedNotice } from './lobby-moderation';
-import { useIsCallRoom, useLobbyRoomPurpose } from './lobby-purpose';
+import { type LobbyRoomNoun, useIsCallRoom, useLobbyRoomPurpose } from './lobby-purpose';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
 import { LobbyAnalyticsScope } from './lobby-room-analytics';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
@@ -76,12 +76,15 @@ import { type LobbyPageView, isMemberView, lobbyViewForGuest, lobbyViewForMember
 import { useMinuteNow } from './use-minute-now';
 
 export const LOBBY_COPY = {
-  leaveOther: (name: string | null) => (name ? `Leave ${name}?` : 'Leave your other lobby?'),
+  leaveOther: (name: string | null, other: LobbyRoomNoun = 'lobby') =>
+    name ? `Leave ${name}?` : `Leave your other ${other}?`,
   oneLobby: (name: string) => `You can be in one lobby at a time. Joining ${name} will leave it.`,
   oneRoom: (name: string) => `You can be in one call or lobby at a time. Joining ${name} will leave it.`,
   scheduled: 'Debate lobby · scheduled',
   guestBeforeOpen: 'No account? You can still join and listen when it opens.',
-  movedToOther: (name: string | null) => `You joined ${name ?? 'another lobby'} in another tab.`,
+  movedToOther: (name: string | null, other: LobbyRoomNoun = 'lobby') =>
+    `You joined ${name ?? `another ${other}`} in another tab.`,
+  guestRemovedFromCall: 'A host removed you from this call.',
   guestRemoved: LOBBY_STATE_COPY.removed,
   guestRemovedInvite: 'Create an account to come back and take part.',
   guestElsewhere: LOBBY_ROOM_COPY.guestElsewhere,
@@ -257,7 +260,10 @@ function LobbyAccess({
             <LobbyTitle lobby={lobby} />
             <LobbyGuestBanner
               lobbyId={lobby.lobby_id}
-              message={{ title: LOBBY_COPY.guestRemoved, detail: LOBBY_COPY.guestRemovedInvite }}
+              message={{
+                title: purpose.purpose === 'call' ? LOBBY_COPY.guestRemovedFromCall : LOBBY_COPY.guestRemoved,
+                detail: LOBBY_COPY.guestRemovedInvite,
+              }}
             />
           </LobbyShell>
         );
@@ -445,7 +451,7 @@ function ConfirmLeaveOtherLobby({
   return (
     <LobbyShell>
       <Text as="h1" variant="smallTitle">
-        {LOBBY_COPY.leaveOther(other?.name ?? null)}
+        {LOBBY_COPY.leaveOther(other?.name ?? null, other?.purpose === 'call' ? 'call' : 'lobby')}
       </Text>
       <Text as="p" variant="metadata" color="grey-04">
         {calls ? LOBBY_COPY.oneRoom(lobby.name) : LOBBY_COPY.oneLobby(lobby.name)}
@@ -488,7 +494,7 @@ function MovedToOtherLobby({
     <LobbyShell>
       <LobbyTitle lobby={lobby} />
       <Text as="p" variant="metadata">
-        {LOBBY_COPY.movedToOther(other?.name ?? null)}
+        {LOBBY_COPY.movedToOther(other?.name ?? null, other?.purpose === 'call' ? 'call' : 'lobby')}
       </Text>
       <div className="flex flex-wrap gap-2">
         {otherLobbyId ? (

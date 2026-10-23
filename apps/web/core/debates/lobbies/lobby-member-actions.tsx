@@ -110,13 +110,15 @@ export function LobbyMemberActions({
               ? STEP_DOWN_LABEL
               : call && action === 'remove'
                 ? 'Remove from call'
-                : MEMBER_ACTION_LABEL[action]}
+                : call && action === 'ban'
+                  ? 'Ban from call'
+                  : MEMBER_ACTION_LABEL[action]}
           </button>
         ))
       )}
       {moderate.isError ? (
         <Text as="p" variant="footnote" color="red-01" className="px-3 pb-2">
-          {moderationErrorMessage(moderate.error)}
+          {moderationErrorMessage(moderate.error, undefined, call ? 'call' : 'lobby')}
         </Text>
       ) : null}
     </div>

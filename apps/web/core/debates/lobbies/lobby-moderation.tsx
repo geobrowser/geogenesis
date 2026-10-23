@@ -21,6 +21,7 @@ import {
 } from './lobby-format';
 import { guestCountLabel } from './lobby-guest';
 import { LobbyPersonName } from './lobby-people';
+import { useLobbyRoomNoun } from './lobby-purpose';
 import { FindDebateLink } from './lobby-state-cards';
 import type { LobbyMemberViewer, MemberLobbyPageView } from './lobby-view';
 import { useLobbyBans, useLobbyModerationLog, useModerateLobbyMember, useRemoveLobbyGuests } from './moderation-hooks';
@@ -63,6 +64,7 @@ type HostTab = 'hands' | 'banned' | 'log';
 export function LobbyHostLists({ lobby }: { lobby: MemberLobbyPageView }) {
   const ended = lobby.access.status === 'closed';
   const [tab, setTab] = React.useState<HostTab>(ended ? 'banned' : 'hands');
+  const room = useLobbyRoomNoun();
   const hands = raisedHands(lobby.members);
   const bans = useLobbyBans(lobby.lobby_id, lobby.viewer.hosting || (ended && lobby.viewer.role === 'host'));
   const banned = bans.data ?? [];
@@ -94,7 +96,7 @@ export function LobbyHostLists({ lobby }: { lobby: MemberLobbyPageView }) {
           <RaisedHands lobby={lobby} hands={hands} />
         ) : tab === 'banned' ? (
           bans.isError ? (
-            <EmptyRow>{moderationErrorMessage(bans.error, 'Could not load the banned list.')}</EmptyRow>
+            <EmptyRow>{moderationErrorMessage(bans.error, 'Could not load the banned list.', room)}</EmptyRow>
           ) : (
             <BannedList lobby={lobby} banned={banned} loading={bans.isPending} />
           )
@@ -116,6 +118,7 @@ export const REMOVE_GUESTS_COPY = {
 /** Removes every guest at once: guests are anonymous, so there is nobody to pick. */
 function LobbyRemoveGuests({ lobby }: { lobby: MemberLobbyPageView }) {
   const remove = useRemoveLobbyGuests(lobby.lobby_id);
+  const room = useLobbyRoomNoun();
   const [confirming, setConfirming] = React.useState(false);
   const count = lobby.guest_count ?? 0;
   if (count === 0 && !remove.isSuccess) return null;
@@ -159,7 +162,7 @@ function LobbyRemoveGuests({ lobby }: { lobby: MemberLobbyPageView }) {
       )}
       {remove.isError ? (
         <Text as="p" variant="footnote" color="red-01">
-          {moderationErrorMessage(remove.error)}
+          {moderationErrorMessage(remove.error, undefined, room)}
         </Text>
       ) : null}
     </div>
@@ -168,6 +171,7 @@ function LobbyRemoveGuests({ lobby }: { lobby: MemberLobbyPageView }) {
 
 function RaisedHands({ lobby, hands }: { lobby: MemberLobbyPageView; hands: MemberLobbyPageView['members'] }) {
   const moderate = useModerateLobbyMember(lobby.lobby_id);
+  const room = useLobbyRoomNoun();
   if (hands.length === 0) return <EmptyRow>No hands raised.</EmptyRow>;
 
   return (
@@ -191,7 +195,7 @@ function RaisedHands({ lobby, hands }: { lobby: MemberLobbyPageView; hands: Memb
           />
         ))}
       </ul>
-      {moderate.isError ? <ErrorRow>{moderationErrorMessage(moderate.error)}</ErrorRow> : null}
+      {moderate.isError ? <ErrorRow>{moderationErrorMessage(moderate.error, undefined, room)}</ErrorRow> : null}
     </>
   );
 }
@@ -215,6 +219,7 @@ function BannedList({
   loading: boolean;
 }) {
   const moderate = useModerateLobbyMember(lobby.lobby_id);
+  const room = useLobbyRoomNoun();
   // Undoing a ban needs a host by role; the acting host only reads the list.
   const canUnban = lobby.viewer.role === 'host' && lobby.access.status === 'admitted';
 
@@ -252,9 +257,9 @@ function BannedList({
           ))}
         </ul>
       )}
-      {moderate.isError ? <ErrorRow>{moderationErrorMessage(moderate.error)}</ErrorRow> : null}
+      {moderate.isError ? <ErrorRow>{moderationErrorMessage(moderate.error, undefined, room)}</ErrorRow> : null}
       <Text as="p" variant="footnote" color="grey-04" className="px-3 py-2">
-        Bans apply to this lobby only. Guests without an account can be removed but not banned.
+        Bans apply to this {room} only. Guests without an account can be removed but not banned.
       </Text>
     </>
   );
@@ -262,7 +267,8 @@ function BannedList({
 
 function ModerationLog({ lobbyId }: { lobbyId: string }) {
   const log = useLobbyModerationLog(lobbyId, true);
-  if (log.isError) return <EmptyRow>{moderationErrorMessage(log.error, 'Could not load the log.')}</EmptyRow>;
+  const room = useLobbyRoomNoun();
+  if (log.isError) return <EmptyRow>{moderationErrorMessage(log.error, 'Could not load the log.', room)}</EmptyRow>;
   if (!log.data) return <EmptyRow>Loading…</EmptyRow>;
   if (log.data.length === 0) return <EmptyRow>Nothing yet.</EmptyRow>;
 
@@ -319,11 +325,12 @@ function ErrorRow({ children }: { children: React.ReactNode }) {
 
 /** Removed, or unbanned since: say so and let them come back by choice. Never rejoins by itself. */
 export function LobbyRemovedNotice({ onRejoin, unbanned = false }: { onRejoin: () => void; unbanned?: boolean }) {
+  const room = useLobbyRoomNoun();
   return (
     <div className="flex min-h-[calc(100dvh-2.75rem)] items-center justify-center px-5 py-8" role="status">
       <div className="flex max-w-md flex-col gap-3 rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
         <Text as="h1" variant="bodySemibold">
-          {unbanned ? 'A host lifted your ban' : 'A host removed you from this lobby'}
+          {unbanned ? 'A host lifted your ban' : `A host removed you from this ${room}`}
         </Text>
         <Text as="p" variant="metadata" color="grey-04">
           {unbanned ? 'Rejoin to come back.' : 'You can rejoin, but please follow the hosts’ lead.'}

@@ -30,6 +30,7 @@ import {
   onGuestTabLockLost,
   releaseGuestTabLock,
 } from './lobby-guest-tab-lock';
+import { useLobbyRoomNoun } from './lobby-purpose';
 
 /** While visible; every 30s hidden, and at once on focus. The server caches each lobby for 2s. */
 export const GUEST_VIEW_POLL_MS = 5_000;
@@ -103,6 +104,7 @@ export function useLobbyGuestSession(
   { listen, signedIn, member }: { listen: boolean; signedIn: boolean; member: LobbyMemberPath }
 ) {
   const id = dashlessId(lobbyId);
+  const room = useLobbyRoomNoun();
   const [state, setState] = React.useState<GuestSessionState>({ status: 'idle', attempt: 0 });
   // Read by answers and events that land between renders.
   const stateRef = React.useRef(state);
@@ -229,7 +231,7 @@ export function useLobbyGuestSession(
           send({
             type: 'refused',
             attempt,
-            message: lobbyErrorMessage(error, 'Couldn’t start listening. Try again.'),
+            message: lobbyErrorMessage(error, 'Couldn’t start listening. Try again.', room),
             retryAt: delay === null ? null : Date.now() + delay,
             retryable: !isGuestListeningOff(error),
           });
@@ -238,7 +240,7 @@ export function useLobbyGuestSession(
       .finally(() => {
         if (inflightRef.current === attempt) inflightRef.current = null;
       });
-  }, [id, runCommand, send, startingAttempt]);
+  }, [id, room, runCommand, send, startingAttempt]);
 
   // Heartbeat while listening; only `lapsed` starts again. `checkNow` beats at once.
   const session = state.status === 'listening' ? state.session : null;

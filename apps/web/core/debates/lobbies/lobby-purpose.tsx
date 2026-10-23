@@ -18,6 +18,13 @@ export function useLobbyRoomPurpose() {
   return React.useContext(LobbyPurposeContext);
 }
 
+/** The word for this room in copy shared by lobbies and calls. */
+export type LobbyRoomNoun = 'lobby' | 'call';
+
+export function useLobbyRoomNoun(): LobbyRoomNoun {
+  return React.useContext(LobbyPurposeContext).purpose;
+}
+
 export function useIsCallRoom() {
   return React.useContext(LobbyPurposeContext).purpose === 'call';
 }

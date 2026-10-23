@@ -145,7 +145,7 @@ export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, '
         className={hand.isError ? 'min-w-0 flex-1' : 'min-w-0 flex-1 md:hidden'}
       >
         {hand.isError
-          ? handErrorMessage(hand.error)
+          ? handErrorMessage(hand.error, call ? 'call' : 'lobby')
           : raised
             ? LOBBY_CONTROL_COPY.handRaised
             : call
@@ -156,12 +156,12 @@ export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, '
   );
 }
 
-function handErrorMessage(error: unknown) {
+function handErrorMessage(error: unknown, room: 'lobby' | 'call') {
   if (error instanceof GeoChatRequestError) {
-    if (error.code === 'lobby_not_present') return 'Join the lobby to raise your hand.';
+    if (error.code === 'lobby_not_present') return `Join the ${room} to raise your hand.`;
     if (error.code === 'lobby_stepped_out') return 'You’re in a debate. Raise your hand once you’re back in the room.';
   }
-  return lobbyErrorMessage(error, 'Could not change your hand. Try again.');
+  return lobbyErrorMessage(error, 'Could not change your hand. Try again.', room);
 }
 
 function HandIcon() {

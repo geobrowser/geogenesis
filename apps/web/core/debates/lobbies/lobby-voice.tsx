@@ -46,6 +46,7 @@ import { tokenAllowsCamera } from '../livekit-grant';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { createLobbyCamera } from './lobby-camera';
 import { lobbyErrorMessage } from './lobby-format';
+import { useLobbyRoomNoun } from './lobby-purpose';
 import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
 import { registerLobbyCapture, reportLobbyCamera, reportLobbyMic } from './step-out';
@@ -140,6 +141,7 @@ export function LobbyVoice({
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const queryClient = useQueryClient();
   const devices = useInitialMediaDevices();
+  const room = useLobbyRoomNoun();
   // Before the first connect only: changing options later would rebuild the room.
   const [joinChoice, setJoinChoice] = React.useState<LobbyVoiceJoinChoice | null>(null);
   const roomOptions = React.useMemo(
@@ -325,7 +327,7 @@ export function LobbyVoice({
     }
     if (token.error) {
       return {
-        message: lobbyErrorMessage(token.error, 'Voice is unavailable right now.'),
+        message: lobbyErrorMessage(token.error, 'Voice is unavailable right now.', room),
         actionLabel: 'Try again',
         onAction: retry,
       };

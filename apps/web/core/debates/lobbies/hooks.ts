@@ -57,6 +57,7 @@ import {
   otherLobbyIdFrom,
 } from './lobby-format';
 import { readGuestSecret } from './lobby-guest-secret';
+import { useLobbyRoomNoun } from './lobby-purpose';
 import { carryLobbyJoinChoice, forgetLobbyDevices, registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
@@ -371,6 +372,7 @@ export function useLobbyPresence(
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
   const connectionId = useConnectionId();
+  const room = useLobbyRoomNoun();
   const [state, setRenderedState] = React.useState<LobbyPresenceState>({ status: 'idle' });
   // Current as of the last update rather than the last render, so `stepOut` sees a server
   // step-out that landed in the same tick as the routing.
@@ -468,10 +470,13 @@ export function useLobbyPresence(
           });
           return;
         }
-        setState({ status: 'failed', message: lobbyErrorMessage(error, 'Could not join this lobby. Try again.') });
+        setState({
+          status: 'failed',
+          message: lobbyErrorMessage(error, `Could not join this ${room}. Try again.`, room),
+        });
       }
     },
-    [accountKey, connectionId, enqueue, lobbyId, setState, store]
+    [accountKey, connectionId, enqueue, lobbyId, room, setState, store]
   );
 
   const sendLeave = React.useCallback(
