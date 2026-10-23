@@ -22,6 +22,7 @@ import { Download } from '~/design-system/icons/download';
 import { Link } from '~/design-system/icons/link';
 import { LinkedIn } from '~/design-system/icons/linkedin';
 import { Reddit } from '~/design-system/icons/reddit';
+import { Upload } from '~/design-system/icons/upload';
 import { XIcon } from '~/design-system/icons/x';
 
 import { hasSocialVideo } from '../playback-utils';
@@ -31,6 +32,10 @@ import {
   SOCIAL_VIDEO_VARIANTS,
   type SocialVideoCaptions,
   downloadPreparedVideo,
+  getPreparedSocialVideoHandoffMethod,
+  handoffPreparedSocialVideo,
+  isAbortError,
+  socialVideoShareData,
 } from '../social-video-share';
 import { xShareMessage } from './x-share-message';
 
@@ -51,7 +56,8 @@ const LINKEDIN_TEXT_MAX = 700;
 
 /**
  * The Share sheet for a debate: one-tap social hand-offs (Reddit, X, LinkedIn), a copy-link button,
- * and a download of the prepared debate video, with or without captions (GEO-3442).
+ * and the prepared debate video, with or without captions (GEO-3442). The video goes to the system
+ * share sheet where the device accepts the file, and downloads everywhere else.
  */
 export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerRef }: Props) {
   const getContext = useActionContext('share_dialog', 'debate', debate.id, {
@@ -63,6 +69,11 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   const socialVideoReady = hasSocialVideo(media.data);
   const [step, setStep] = React.useState<'share' | 'captions'>('share');
   const [, setToast] = useToast();
+
+  const [isTouchDevice, setIsTouchDevice] = React.useState(false);
+  React.useEffect(() => setIsTouchDevice(window.matchMedia?.('(pointer: coarse)').matches ?? false), []);
+
+  const sharingRef = React.useRef(false);
 
   React.useEffect(() => {
     if (!open) setStep('share');
@@ -177,6 +188,18 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     }
   };
 
+  const videoShareData = (file: File, url: string) =>
+    socialVideoShareData({
+      title: debate.claim.claim,
+      text: `${xShareMessage(debate.claim.claim, SHARE_TAGLINE)} ${url}`,
+      file,
+    });
+
+  const videoHandoffMethod = (file: File) =>
+    isTouchDevice
+      ? getPreparedSocialVideoHandoffMethod(videoShareData(file, NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))))
+      : 'download';
+
   const downloadVideo = (video: PreparedSocialVideo, captions: SocialVideoCaptions) => {
     const { downloadUrl, file } = video;
     if (!downloadUrl || !file) return;
@@ -186,6 +209,42 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     setStep('share');
   };
 
+  const shareVideo = async (video: PreparedSocialVideo, captions: SocialVideoCaptions) => {
+    const { downloadUrl, file } = video;
+    if (!downloadUrl || !file) return;
+    if (sharingRef.current) return;
+    sharingRef.current = true;
+
+    const link = shareLink('native_share');
+    const context = getContext();
+    const recordHandoff = observeShareLinkHandoff(link, { ...context, space_id: spaceId }, participants);
+    const operation = observeOperation('share', 'debate', debate.id, undefined, context);
+    const { captions: captioned } = SOCIAL_VIDEO_VARIANTS[captions];
+    try {
+      const { text } = videoShareData(file, link.url);
+
+      const method = await handoffPreparedSocialVideo({
+        debateId: debate.id,
+        title: debate.claim.claim,
+        text,
+        file,
+        downloadUrl,
+        captions,
+      });
+      if (method === 'native_share') recordHandoff('composer_requested');
+      operation.succeeded({ method });
+      capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method, captions: captioned });
+      pushMarketingEvent('geo_share', { debate_id: debate.id, space_id: spaceId, share_method: method });
+      setStep('share');
+    } catch (error) {
+      if (isAbortError(error)) return;
+      operation.failed('unavailable');
+      setToast(<span>Could not share the video.</span>);
+    } finally {
+      sharingRef.current = false;
+    }
+  };
+
   // Prepare only while the sheet is open: closing aborts the in-flight fetch and revokes the blob.
   const captionChoice = useSocialVideoCaptionChoice({
     debateId: debate.id,
@@ -193,6 +252,10 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     enabled: open && socialVideoReady,
     includePreview: false,
     handoff: (video, captions) => {
+      if (video.file && videoHandoffMethod(video.file) === 'native_share') {
+        void shareVideo(video, captions);
+        return;
+      }
       try {
         downloadVideo(video, captions);
       } catch {
@@ -200,9 +263,15 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
         setToast(<span>Could not download the video.</span>);
       }
     },
-    // A download needs no gesture, so a file that finishes preparing after the choice still saves.
-    canHandoffWithoutGesture: () => true,
+    // A download can start on its own once the file is ready; the share sheet only opens from a tap.
+    canHandoffWithoutGesture: video => video.file !== null && videoHandoffMethod(video.file) === 'download',
   });
+  const preparedVideo = captionChoice.captioned;
+
+  const handoffMethod = videoHandoffMethod(
+    preparedVideo.file ?? new File([], 'debate-social.mp4', { type: 'video/mp4' })
+  );
+  const sharesVideo = handoffMethod === 'native_share';
 
   return (
     <Root open={open} onOpenChange={onOpenChange}>
@@ -232,7 +301,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
                 </button>
               )}
               <Title className="m-0 text-[22.4px] leading-[21px] font-medium tracking-[-0.672px] text-[#212B2E]">
-                {step === 'captions' ? 'Download video' : 'Share'}
+                {step === 'captions' ? (sharesVideo ? 'Share video' : 'Download video') : 'Share'}
               </Title>
               <button
                 type="button"
@@ -249,7 +318,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
                 <SocialVideoCaptionChoiceRows
                   options={captionChoice.options}
                   onChoose={captionChoice.choose}
-                  readyAction="download"
+                  readyAction={sharesVideo ? 'share' : 'download'}
                 />
               </div>
             ) : (
@@ -265,10 +334,10 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
                 />
                 {socialVideoReady && (
                   <ShareAction
-                    label="Download"
-                    ariaLabel="Download debate video"
+                    label={sharesVideo ? 'Share video' : 'Download'}
+                    ariaLabel={sharesVideo ? 'Share debate video' : 'Download debate video'}
                     onClick={() => setStep('captions')}
-                    tile={<GlyphTile icon={<Download />} />}
+                    tile={<GlyphTile icon={sharesVideo ? <Upload /> : <Download />} />}
                   />
                 )}
               </div>

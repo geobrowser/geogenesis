@@ -1,7 +1,7 @@
 import { uuidToHex } from '~/core/id/normalize';
 import { isValidId } from '~/core/utils/space-url';
 
-export const SHARE_METHODS = ['copy_link', 'x', 'linkedin', 'reddit'] as const;
+export const SHARE_METHODS = ['copy_link', 'x', 'linkedin', 'reddit', 'native_share'] as const;
 export const SHARE_CONTENT_TYPES = ['debate', 'lobby', 'availability'] as const;
 export type ShareMethod = (typeof SHARE_METHODS)[number];
 export type ShareContentType = (typeof SHARE_CONTENT_TYPES)[number];

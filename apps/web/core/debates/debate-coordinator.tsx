@@ -56,6 +56,7 @@ import {
   getPreparedSocialVideoHandoffMethod,
   handoffPreparedSocialVideo,
   isAbortError,
+  socialVideoShareData,
 } from './social-video-share';
 import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
 import { useDebateInteractionReporter } from './use-debate-interaction-reporter';
@@ -720,7 +721,9 @@ function DebateSharePromptDialog({
     // A file that finishes after the tap may still download, but must not open the share sheet:
     // browsers refuse that outside a gesture. The ready row then asks for one more tap.
     canHandoffWithoutGesture: video =>
-      video.file !== null && getPreparedSocialVideoHandoffMethod(video.file) === 'download',
+      video.file !== null &&
+      getPreparedSocialVideoHandoffMethod(socialVideoShareData({ title: prompt.claim, file: video.file })) ===
+        'download',
   });
   const preparedVideo = captionChoice.captioned;
   // Probed with an empty MP4 until the real file arrives: the share capability depends on the
@@ -728,9 +731,12 @@ function DebateSharePromptDialog({
   const handoffMethod = React.useMemo(
     () =>
       getPreparedSocialVideoHandoffMethod(
-        preparedVideo.file ?? new File([], 'debate-social.mp4', { type: 'video/mp4' })
+        socialVideoShareData({
+          title: prompt.claim,
+          file: preparedVideo.file ?? new File([], 'debate-social.mp4', { type: 'video/mp4' }),
+        })
       ),
-    [preparedVideo.file]
+    [preparedVideo.file, prompt.claim]
   );
   const share = () => {
     if (handoffCompleted) {
