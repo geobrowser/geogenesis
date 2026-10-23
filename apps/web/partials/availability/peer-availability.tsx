@@ -239,21 +239,17 @@ export function PeerAvailabilityView({
         }.`
       : 'Times shown in your local time.';
   const week = !schedule.theirWeekKnown ? 'unknown' : !schedule.peerHasSchedule || !hasAnySlot ? 'empty' : 'slots';
-  // A bookable week carries the zone in its footer, beside Send. Every other state has no footer,
-  // so it gets the line on its own at the bottom.
-  const zoneInFooter = Boolean(booking) && week === 'slots';
-
   const moving = currentStart && booking?.moving ? booking.moving : null;
   const movingTime = moving ? viewerDayAndTime(moving.startsAt, schedule.viewerTimezone) : null;
   const first = firstName(name) ?? name;
 
   return (
-    <div className={cx('flex min-h-0 flex-col gap-4', className)}>
+    <div className={cx('flex min-h-0 flex-col gap-5 md:gap-4', className)}>
       {/* Which debate this moves, before anything else (GEO-3429): the week alone reads like a new
-          booking. Right padding for the close button, which sits over it. */}
+          booking. The context sits on the same white surface as the close button. */}
       {moving && movingTime && <MovingCard peerFirstName={first} time={movingTime} agreed={moving.agreed} />}
       {/* Right padding keeps the heading clear of the modal's close button, which sits over it. */}
-      <header className={cx('flex shrink-0 flex-col gap-1', !moving && 'pr-8')}>
+      <header className={cx('flex shrink-0 flex-col gap-1', !moving && 'pr-10')}>
         <Text as="h2" variant="smallTitle">
           When {name} is free
         </Text>
@@ -280,12 +276,9 @@ export function PeerAvailabilityView({
         <Empty
           action={
             booking && (
-              <RequestAnyway
-                booking={booking}
-                clock={clock}
-                viewerTimezone={schedule.viewerTimezone}
-                notBefore={notBefore}
-              />
+              <Text as="p" variant="footnote" color="grey-04">
+                You can still ask for a time below.
+              </Text>
             )
           }
         >
@@ -304,28 +297,37 @@ export function PeerAvailabilityView({
           )}
           <Legend peerName={name} showMutual={schedule.viewerHasSchedule} />
           <WeekGrid days={days} peerName={name} selectedStart={selectedStart} onSelect={setSelectedStart} />
-          {booking && (
-            <BookingFooter
-              booking={booking}
-              clock={clock}
-              // The slot, not the raw pick: a pick that became the time being moved (GEO-3429), or a
-              // slot a refetch dropped, is no longer one, and must not be sent.
-              startsAt={selectedSlot?.start ?? null}
-              viewerIsFree={selectedSlot?.viewerIsFree ?? null}
-              viewerTimezone={schedule.viewerTimezone}
-              zoneNote={zoneNote}
-            />
-          )}
         </>
       )}
-      {!zoneInFooter && (
-        <Text as="p" variant="footnote" color="grey-04" className="shrink-0">
-          {zoneNote}
-        </Text>
-      )}
-      {booking?.noTimeWorks && (
-        <NoTimeWorks peerFirstName={first} time={movingTime?.time ?? null} {...booking.noTimeWorks} />
-      )}
+      <div className={cx('flex shrink-0 flex-col gap-4', booking && 'border-t border-divider pt-4')}>
+        {booking && week === 'slots' ? (
+          <BookingFooter
+            booking={booking}
+            clock={clock}
+            // The slot, not the raw pick: a pick that became the time being moved (GEO-3429), or a
+            // slot a refetch dropped, is no longer one, and must not be sent.
+            startsAt={selectedSlot?.start ?? null}
+            viewerIsFree={selectedSlot?.viewerIsFree ?? null}
+            viewerTimezone={schedule.viewerTimezone}
+            zoneNote={zoneNote}
+          />
+        ) : booking && week === 'empty' ? (
+          <RequestAnyway
+            booking={booking}
+            clock={clock}
+            viewerTimezone={schedule.viewerTimezone}
+            notBefore={notBefore}
+            zoneNote={zoneNote}
+          />
+        ) : (
+          <Text as="p" variant="footnote" color="grey-04">
+            {zoneNote}
+          </Text>
+        )}
+        {booking?.noTimeWorks && (
+          <NoTimeWorks peerFirstName={first} time={movingTime?.time ?? null} {...booking.noTimeWorks} />
+        )}
+      </div>
     </div>
   );
 }
@@ -347,7 +349,7 @@ function MovingCard({
   return (
     <section
       aria-label={`Moving your debate with ${peerFirstName}`}
-      className="flex shrink-0 flex-col gap-1 rounded-lg bg-grey-01 px-4 py-3 pr-10"
+      className="flex shrink-0 flex-col gap-1.5 border-b border-divider pr-10 pb-5 md:pb-4"
     >
       <Text as="p" variant="footnoteMedium" color="grey-04" className="tracking-wide uppercase">
         Moving your debate with {peerFirstName}
@@ -385,17 +387,15 @@ function NoTimeWorks({
   error: string | null;
 }) {
   return (
-    <div className="flex shrink-0 flex-col items-center gap-0.5 border-t border-grey-02 pt-3 text-center">
-      <div className="flex flex-wrap items-center justify-center gap-x-1.5">
-        <Text as="span" variant="metadata" color="grey-04">
-          None of these work?
-        </Text>
+    <div className="flex shrink-0 flex-col gap-1">
+      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
+        <span className="text-chat text-grey-04">None of these work?</span>
         <button
           type="button"
           disabled={pending || disabled}
           {...debateActionAnalyticsAttributes('peer-availability', 'None of these work', 'no_time_works')}
           onClick={onPress}
-          className="py-1 text-metadataMedium text-text underline underline-offset-2 disabled:opacity-40"
+          className="text-chatMedium text-text underline decoration-grey-03 underline-offset-4 transition-colors hover:decoration-text disabled:opacity-40"
         >
           {pending ? 'Sending…' : `Ask ${peerFirstName} to pick a time`}
         </button>
@@ -429,12 +429,25 @@ function BookingFooter({
   /** Which zone the grid is in, shown until a pick replaces it with the picked time. */
   zoneNote: string;
 }) {
+  const selected = startsAt ? viewerDayAndTime(startsAt, viewerTimezone) : null;
+
   return (
     <div className="flex shrink-0 flex-col gap-2">
-      <div className="flex items-center justify-between gap-3">
-        <Text as="span" variant="footnote" color="grey-04" className="min-w-0">
-          {startsAt ? formatViewerInstant(startsAt, viewerTimezone) : zoneNote}
-        </Text>
+      <div className="flex items-center justify-between gap-4 mobile:flex-col mobile:items-stretch">
+        {selected ? (
+          <div className="flex min-w-0 flex-col gap-1">
+            <Text as="span" variant="footnote" color="grey-04">
+              {booking.mode === 'reschedule' ? 'New time' : 'Selected time'}
+            </Text>
+            <Text as="span" variant="metadataMedium">
+              {selected.day} · {selected.time}
+            </Text>
+          </div>
+        ) : (
+          <Text as="span" variant="footnote" color="grey-04" className="min-w-0">
+            {zoneNote}
+          </Text>
+        )}
         <SendRequest
           booking={booking}
           clock={clock}
@@ -479,7 +492,7 @@ function SendRequest({
   const passed = passedFor !== null && passedFor === startsAt;
 
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1">
+    <div className="flex shrink-0 flex-col items-end gap-1 mobile:items-stretch">
       <button
         type="button"
         disabled={!startsAt || booking.pending || booking.disabled}
@@ -497,7 +510,7 @@ function SendRequest({
           setPassedFor(null);
           booking.onRequest(startsAt, { viewerIsFree, viewerTimezone });
         }}
-        className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white disabled:opacity-40"
+        className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-full bg-text px-5 py-2 text-metadataMedium text-white transition-colors hover:bg-text/90 disabled:bg-grey-01 disabled:text-grey-03"
       >
         {booking.pending ? 'Sending…' : booking.mode === 'reschedule' ? 'Propose new time' : 'Send request'}
       </button>
@@ -520,11 +533,13 @@ function RequestAnyway({
   clock,
   viewerTimezone,
   notBefore,
+  zoneNote,
 }: {
   booking: PeerAvailabilityBooking;
   clock: () => number;
   viewerTimezone: string;
   notBefore: number;
+  zoneNote: string;
 }) {
   const [local, setLocal] = React.useState('');
   const picked = viewerInputInstant(local, viewerTimezone);
@@ -532,19 +547,19 @@ function RequestAnyway({
   const startsAt = picked && picked.getTime() > notBefore ? picked.toISOString() : null;
 
   return (
-    <div className="mt-3 flex flex-col items-center gap-2">
-      <Text as="p" variant="footnote" color="grey-04">
-        You can still ask for a time.
-      </Text>
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        <input
-          type="datetime-local"
-          aria-label="Time to request"
-          min={viewerInputValue(notBefore, viewerTimezone)}
-          value={local}
-          onChange={event => setLocal(event.target.value)}
-          className="rounded border border-grey-02 px-2 py-1 text-footnote"
-        />
+    <div className="flex flex-col gap-2">
+      <div className="flex items-end justify-between gap-4 mobile:flex-col mobile:items-stretch">
+        <label className="flex min-w-0 flex-col gap-2 text-chatMedium text-text">
+          {booking.mode === 'reschedule' ? 'Suggest a new time' : 'Suggest a time'}
+          <input
+            type="datetime-local"
+            aria-label="Time to request"
+            min={viewerInputValue(notBefore, viewerTimezone)}
+            value={local}
+            onChange={event => setLocal(event.target.value)}
+            className="h-10 w-64 max-w-full min-w-0 rounded-md border border-grey-02 bg-white px-3 text-metadata focus:border-text focus:outline-hidden mobile:w-full"
+          />
+        </label>
         <SendRequest
           booking={booking}
           clock={clock}
@@ -553,6 +568,9 @@ function RequestAnyway({
           viewerTimezone={viewerTimezone}
         />
       </div>
+      <Text as="p" variant="footnote" color="grey-04">
+        {zoneNote}
+      </Text>
       {booking.error && (
         <Text as="p" variant="footnote" color="red-01">
           {booking.error}
@@ -793,7 +811,7 @@ export function LegendItem({ swatch, children }: { swatch: string; children: Rea
 
 function Hint({ children }: { children: React.ReactNode }) {
   return (
-    <div className="shrink-0 rounded-lg bg-[#EFE2FF] px-3 py-2">
+    <div className="shrink-0 rounded-md bg-grey-01 px-3 py-2">
       <Text as="p" variant="footnote">
         {children}
       </Text>
@@ -808,8 +826,8 @@ function Empty({ children, action }: { children: React.ReactNode; action?: React
   // Centred with `m-auto` on an inner block, which, unlike `justify-center`, never pushes the top of
   // overflowing content out of reach.
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-dashed border-grey-02 p-6">
-      <div className="m-auto flex flex-col items-center">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto text-center">
+      <div className="m-auto flex w-full flex-col items-center gap-2 rounded-lg bg-grey-01 px-6 py-8">
         <Text as="p" variant="metadata" color="grey-04">
           {children}
         </Text>

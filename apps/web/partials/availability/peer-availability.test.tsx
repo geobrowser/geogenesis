@@ -471,9 +471,8 @@ describe('what the footer has to say', () => {
     // 16:00Z is noon in New York.
     await user.click(within(day('2026-09-21')).getByRole('button', { name: /12pm/ }));
 
-    expect(
-      screen.getByText(new Date('2026-09-21T16:00:00Z').toLocaleString(undefined, { timeZone: 'America/New_York' }))
-    ).toBeInTheDocument();
+    expect(screen.getByText('Selected time')).toBeInTheDocument();
+    expect(screen.getByText('Mon, Sep 21 · 12pm')).toBeInTheDocument();
     expect(screen.queryByText(/Ada.s time:/)).not.toBeInTheDocument();
   });
 
