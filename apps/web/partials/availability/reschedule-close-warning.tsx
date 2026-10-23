@@ -5,7 +5,7 @@ import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/re
 import cx from 'classnames';
 
 import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
-import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
+import { HubPillButton, HubQuietButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { formatDebateTime, formatTime } from '~/core/debates/matchmaking/scheduled-debate-format';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
@@ -79,14 +79,12 @@ export function RescheduleCloseWarning({
             >
               Keep {time}
             </HubPillButton>
-            <button
-              type="button"
-              {...debateActionAnalyticsAttributes('peer-availability', 'Back to times', 'back_to_peer_availability')}
+            <HubQuietButton
               onClick={onBack}
-              className="self-center px-3 py-2 text-metadata text-text underline underline-offset-2"
+              {...debateActionAnalyticsAttributes('peer-availability', 'Back to times', 'back_to_peer_availability')}
             >
               Back to times
-            </button>
+            </HubQuietButton>
           </div>
         </Content>
       </Portal>

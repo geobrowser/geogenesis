@@ -130,14 +130,9 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
       // clock in its own zone, so the edges are its to disagree with rather than ours to force.
       if (!day) continue;
 
-      const peer = zonedParts(instant, peerZone);
-      day.slots.push({
-        start: instant.toISOString(),
-        viewerIsFree: instant.getTime() < viewerWindowOpens ? null : slot.viewerIsFree,
-        minutes: viewer.minutes,
-        label: formatTime(viewer.minutes),
-        offsetMinutes: wallMinutes(peer) - wallMinutes(viewer),
-      });
+      day.slots.push(
+        daySlot(instant, viewer, peerZone, instant.getTime() < viewerWindowOpens ? null : slot.viewerIsFree)
+      );
     }
   }
 
@@ -145,6 +140,22 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
     day.slots.sort((a, b) => a.minutes - b.minutes);
   }
   return days;
+}
+
+/** One chip at `instant`, whose wall clock in the viewer's zone is `viewer`. */
+function daySlot(
+  instant: Date,
+  viewer: ZonedParts,
+  peerZone: string | undefined,
+  viewerIsFree: boolean | null
+): PeerDaySlot {
+  return {
+    start: instant.toISOString(),
+    viewerIsFree,
+    minutes: viewer.minutes,
+    label: formatTime(viewer.minutes),
+    offsetMinutes: wallMinutes(zonedParts(instant, peerZone)) - wallMinutes(viewer),
+  };
 }
 
 /**
@@ -168,13 +179,8 @@ export function markCurrent(days: PeerDay[], schedule: PeerSchedule, currentStar
         slots: day.slots.map(slot => (Date.parse(slot.start) === at ? { ...slot, current: true as const } : slot)),
       };
     }
-    const peer = zonedParts(instant, usableZone(schedule.peerTimezone));
     const slot: PeerDaySlot = {
-      start: instant.toISOString(),
-      viewerIsFree: null,
-      minutes: viewer.minutes,
-      label: formatTime(viewer.minutes),
-      offsetMinutes: wallMinutes(peer) - wallMinutes(viewer),
+      ...daySlot(instant, viewer, usableZone(schedule.peerTimezone), null),
       current: true,
     };
     return { ...day, slots: [...day.slots, slot].sort((a, b) => a.minutes - b.minutes) };

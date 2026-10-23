@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { GeoChatRequestError, type ScheduledDebateRequest } from '~/core/debates/api';
 import { requestById } from '~/core/debates/rooms/room-opponent';
+import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
 import {
   useCreateScheduledDebate,
   useNoTimeWorks,
@@ -69,8 +70,10 @@ export function PeerAvailabilityBookingModal({
   // every reschedule surface already reads. Until it lands the week shows as it always has.
   const requests = useScheduledDebates(Boolean(rescheduleRequestId) && props.open);
   const request = requestById(requests.data?.requests, rescheduleRequestId);
-  const active = request && (request.status === 'accepted' || request.status === 'pending') ? request : undefined;
-  const agreed = active?.status === 'accepted';
+  // Agreed ('active'), or pending again for an answer ('moved'); anything resolved has nothing to move.
+  const state = noticeRequestState(request);
+  const active = state === 'active' || state === 'moved' ? request : undefined;
+  const agreed = state === 'active';
   // Closing without a new time leaves an agreed debate on, which is easy to miss when you meant to
   // move it; so it asks first (board 4b). "Can't make it" from there swaps to that screen.
   const [step, setStep] = React.useState<'week' | 'warn' | 'cant'>('week');
@@ -177,7 +180,7 @@ export function PeerAvailabilityBookingModal({
 }
 
 /** Said once "None of these work" has gone through (GEO-3429). */
-export function noTimeWorksSentMessage(peerFirstName: string) {
+function noTimeWorksSentMessage(peerFirstName: string) {
   return `Debate cancelled. We’ve sent ${peerFirstName} your free times to pick from.`;
 }
 

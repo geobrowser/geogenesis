@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
@@ -157,6 +157,17 @@ export function useCreateScheduledDebate() {
   );
 }
 
+/**
+ * What a move, a cancel or "none of these work" leaves stale: the requests, the upcoming rooms (an
+ * agreed debate's room closes), and every availability read, since the time is free again for both.
+ */
+function invalidateFreedTime(queryClient: QueryClient, accountKey: string | null) {
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.peerScheduleRoot(accountKey) });
+}
+
 /** Moves an existing request to a new time: "Choose different time" in the scheduling emails. */
 export function useRescheduleScheduledDebate() {
   const queryClient = useQueryClient();
@@ -195,10 +206,7 @@ export function useRescheduleScheduledDebate() {
       // Settled, as cancel is: a refusal means the list the viewer acted on is stale. Moving an
       // accepted debate also closes its room and frees its slot for both people, so the upcoming
       // rooms and the availability reads go too, not only the requests.
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: ['debates', 'account', accountKey, 'peer-schedule'] });
+      invalidateFreedTime(queryClient, accountKey);
     },
   });
 }
@@ -261,10 +269,7 @@ export function useCancelScheduledDebate() {
     onSettled: () => {
       // Settled rather than succeeded: a refusal (someone joined, or it was already resolved) means
       // the list the viewer pressed on is stale, and the refetch is what corrects it.
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: ['debates', 'account', accountKey, 'peer-schedule'] });
+      invalidateFreedTime(queryClient, accountKey);
     },
   });
 }
@@ -292,11 +297,8 @@ export function useNoTimeWorks() {
   const mutation = useMutation<ScheduledDebateRequest, Error, { requestId: string }>({
     mutationFn: ({ requestId }) => noTimeWorks(requestId, getPrivyIdentityToken, accountKey),
     onSettled: () => {
-      // As cancel: the slot is free again for both, and a refusal means the list is stale.
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: ['debates', 'account', accountKey, 'peer-schedule'] });
+      // As cancel: the time is free again for both, and a refusal means the list is stale.
+      invalidateFreedTime(queryClient, accountKey);
     },
   });
   return useObservedMutation(mutation, 'no_time_works', ({ requestId }) =>

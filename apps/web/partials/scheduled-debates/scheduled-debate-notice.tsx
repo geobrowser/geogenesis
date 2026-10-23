@@ -16,7 +16,7 @@ import { useGeoChatAuth } from '~/core/debates/hooks';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
-import { HubPillButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
+import { HubPillButton, HubQuietButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { formatDebateTime, formatTime } from '~/core/debates/matchmaking/scheduled-debate-format';
 import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
 import { useRequestRoom } from '~/core/debates/rooms/request-room';
@@ -315,9 +315,9 @@ function DecideStep({
       </Text>
       {onReschedule && (
         <Actions>
-          <QuietButton onClick={onReschedule} {...analytics('Reschedule instead', 'reschedule_scheduled_debate')}>
+          <HubQuietButton onClick={onReschedule} {...analytics('Reschedule instead', 'reschedule_scheduled_debate')}>
             {COPY.decide.reschedule}
-          </QuietButton>
+          </HubQuietButton>
         </Actions>
       )}
     </>
@@ -360,9 +360,9 @@ function LateStep({
   const sent = noticeNote(note);
 
   const cantInstead = fromEmail && (
-    <QuietButton onClick={onCant} {...analytics('Cant make it at all', 'open_cant_make_it')}>
+    <HubQuietButton onClick={onCant} {...analytics('Cant make it at all', 'open_cant_make_it')}>
       {COPY.late.cantInstead}
-    </QuietButton>
+    </HubQuietButton>
   );
 
   return (
@@ -496,9 +496,9 @@ function CantStep({
         <Text as="p" variant="footnote" color="grey-04" className="text-center">
           {COPY.cant.suggestHint(name)}
         </Text>
-        <QuietButton onClick={onLate} {...analytics('Only running late', 'open_running_late')}>
+        <HubQuietButton onClick={onLate} {...analytics('Only running late', 'open_running_late')}>
           {COPY.cant.lateInstead}
-        </QuietButton>
+        </HubQuietButton>
       </Actions>
     </>
   );
@@ -605,17 +605,6 @@ function JoinRoom({
     >
       {label === 'Join now' ? COPY.decide.join : COPY.late.join}
     </Link>
-  );
-}
-
-/** The step's way sideways: to the other choice, or to the calendar. */
-function QuietButton(props: React.ComponentProps<'button'>) {
-  return (
-    <button
-      type="button"
-      className="self-center px-3 py-2 text-metadata text-text underline underline-offset-2 hover:opacity-70"
-      {...props}
-    />
   );
 }
 

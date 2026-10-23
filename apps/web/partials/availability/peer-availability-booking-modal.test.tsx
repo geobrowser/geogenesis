@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   /** Swapped for a real mutation where the timing of a settle is what is under test. */
   useCreate: null as (() => unknown) | null,
   /** The viewer's scheduled requests, as the reschedule screen reads the one it moves (GEO-3429). */
-  requests: [] as { request_id: string; status: string; scheduled_start_at: string }[],
+  requests: [] as { request_id: string; status: string; scheduled_start_at: string; room_id: string | null }[],
   noneWork: vi.fn(),
   noneWorkReset: vi.fn(),
 }));
@@ -399,7 +399,15 @@ describe('moving a debate', () => {
   const REQUEST_ID = '6676b145-0970-4c1c-bfbc-7497d9721b39';
   const START = '2026-10-22T17:00:00Z';
   const moving = (status: 'accepted' | 'pending', onClose = vi.fn()) => {
-    mocks.requests = [{ request_id: REQUEST_ID.replace(/-/g, ''), status, scheduled_start_at: START }];
+    // An agreed debate has its room; a pending one has none yet.
+    mocks.requests = [
+      {
+        request_id: REQUEST_ID.replace(/-/g, ''),
+        status,
+        scheduled_start_at: START,
+        room_id: status === 'accepted' ? 'room-1' : null,
+      },
+    ];
     render(
       withToast(
         <PeerAvailabilityBookingModal
