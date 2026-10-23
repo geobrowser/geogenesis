@@ -495,49 +495,18 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(screen.getByLabelText('Add a note for Maya (optional)')).toHaveValue('B');
     });
 
-    it('closes after cancelling without another confirmation to dismiss', async () => {
+    // The cancel refetches the list, which then says the debate is off. That is the news being
+    // confirmed, not a reason to swap the confirmation for "no longer on".
+    it('keeps saying it is cancelled once the list says so too', async () => {
       succeedWith(state.cant, {});
-      const onClose = vi.fn();
-      function Flow() {
-        const [open, setOpen] = React.useState(true);
-        return (
-          <ScheduledDebateNoticeDialog
-            open={open}
-            requestId={REQUEST}
-            initialStep="decide"
-            onClose={() => {
-              onClose();
-              setOpen(false);
-            }}
-          />
-        );
-      }
-      const { rerender } = render(<Flow />);
-      const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: 'I can’t make it' }));
-      await user.click(screen.getByRole('button', { name: 'Cancel the debate' }));
-      expect(onClose).toHaveBeenCalledTimes(1);
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      const { rerender } = renderOpen('cant');
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel the debate' }));
+      expect(heading()).toHaveTextContent('Your debate is cancelled. We’ve let Maya know.');
 
       state.requests = { data: { requests: [agreed({ status: 'cancelled' })] }, isPending: false, isError: false };
-      rerender(<Flow />);
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      rerender(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={vi.fn()} />);
+      expect(heading()).toHaveTextContent('Your debate is cancelled. We’ve let Maya know.');
       expect(screen.queryByText('This debate is no longer on.')).not.toBeInTheDocument();
-    });
-
-    it('stays open with the error if cancellation fails', async () => {
-      const onClose = vi.fn();
-      const dialog = <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={onClose} />;
-      const { rerender } = render(dialog);
-      const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: 'Cancel the debate' }));
-      state.cant.isError = true;
-      state.cant.error = new Error('Connection lost. Try again.');
-      rerender(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={onClose} />);
-
-      expect(onClose).not.toHaveBeenCalled();
-      expect(screen.getByText('Connection lost. Try again.')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Cancel the debate' })).toBeEnabled();
     });
   });
 
@@ -560,14 +529,11 @@ describe('ScheduledDebateNoticeDialog', () => {
 
     it('hears nothing while the send has not gone through', async () => {
       const onSent = vi.fn();
-      const onClose = vi.fn();
       render(
-        <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={onClose} onSent={onSent} />
+        <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={vi.fn()} onSent={onSent} />
       );
       await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel the debate' }));
       expect(onSent).not.toHaveBeenCalled();
-      expect(onClose).not.toHaveBeenCalled();
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
   });
 
