@@ -608,16 +608,19 @@ describe('moving a debate', () => {
     expect(screen.queryByText(/Debate cancelled/)).not.toBeInTheDocument();
   });
 
-  it('closes from the room without the warning: the viewer is the one waiting', async () => {
-    const { user, onClose } = moving('accepted', vi.fn(), { entry: 'room_late_notice' });
+  it.each(['room_late_notice', 'room_waiting_status'] as const)(
+    'closes from %s without the warning: the viewer is the one waiting',
+    async entry => {
+      const { user, onClose } = moving('accepted', vi.fn(), { entry });
 
-    // Nor "none of these work", which would tell the late one the waiter can't make it.
-    expect(screen.queryByRole('button', { name: 'none work' })).not.toBeInTheDocument();
-    await user.click(screen.getByLabelText('Close'));
+      // Nor "none of these work", which would tell the late one the waiter can't make it.
+      expect(screen.queryByRole('button', { name: 'none work' })).not.toBeInTheDocument();
+      await user.click(screen.getByLabelText('Close'));
 
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
-  });
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
+    }
+  );
 
   it("hands Can't make it back to a caller that is that screen, rather than opening a second", async () => {
     const onCantMakeIt = vi.fn();
@@ -709,5 +712,42 @@ describe('moving a debate', () => {
 
       expect(onClose).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// GEO-3428: moving a debate is answering for it, so no nudge popup opens over the week.
+describe('the nudge popup', () => {
+  it('is held back while a week is open, booking or moving', async () => {
+    const { useScheduledNoticeOpen } = await import('~/core/debates/rooms/scheduled-notice-open');
+    function Probe() {
+      return <output aria-label="notice open">{String(useScheduledNoticeOpen())}</output>;
+    }
+    const { rerender } = render(
+      <>
+        <Probe />
+        <PeerAvailabilityBookingModal open userId="user-them" peerName="Ada" onClose={vi.fn()} />
+      </>
+    );
+    expect(screen.getByLabelText('notice open')).toHaveTextContent('true');
+    rerender(
+      <>
+        <Probe />
+        <PeerAvailabilityBookingModal
+          open
+          userId="user-them"
+          peerName="Ada"
+          rescheduleRequestId="req-1"
+          onClose={vi.fn()}
+        />
+      </>
+    );
+    expect(screen.getByLabelText('notice open')).toHaveTextContent('true');
+    rerender(
+      <>
+        <Probe />
+        <PeerAvailabilityBookingModal open={false} userId="user-them" peerName="Ada" onClose={vi.fn()} />
+      </>
+    );
+    expect(screen.getByLabelText('notice open')).toHaveTextContent('false');
   });
 });

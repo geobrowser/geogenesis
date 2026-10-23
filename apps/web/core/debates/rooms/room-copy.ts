@@ -56,6 +56,63 @@ export const ROOM_LATE_NOTICE = {
 } as const;
 
 /**
+ * What the debater waiting in a scheduled room reads about the other one (GEO-3428, boards 6 and
+ * 6b): whether they are on Geo, what we sent them, the nudges, and the way out.
+ */
+export const ROOM_WAITING_STATUS = {
+  heading: (name: string) => `${name} hasn’t joined yet`,
+  online: 'Online now',
+  lastOnline: (ago: string) => `Last online ${ago}`,
+  /** "12 minutes ago", for the last-online line. */
+  ago: (minutes: number) => {
+    if (minutes < 1) return 'just now';
+    if (minutes < 60) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+  },
+  timelineLabel: (name: string) => `What we’ve told ${name}`,
+  roomOpen: (name: string) => `Room opened. We emailed ${name}.`,
+  /** The viewer's own name is in the email's subject; without it, the line says what it said. */
+  opponentWaiting: (name: string, viewer: string | null) =>
+    viewer
+      ? `${name} hadn’t joined. We emailed again: “${viewer} is waiting for you”.`
+      : `${name} hadn’t joined. We emailed again to say you’re waiting.`,
+  nudged: (name: string, channel: 'popup' | 'email') =>
+    channel === 'email' ? `You nudged ${name} by email.` : `You nudged ${name} on Geo.`,
+  runningLate: (name: string) => `${name} said they’re running late.`,
+  nudge: 'Nudge',
+  nudging: 'Nudging…',
+  nudgedDone: 'Nudged',
+  /** A refusal that means the room moved on between the press and the answer. */
+  nudgeRefused: {
+    already_here: (name: string) => `${name} just came in.`,
+    running_late: (name: string) => `${name} just said they’re running late.`,
+    /** Off Geo with no email address: a retry cannot help. */
+    cant_reach: (name: string) => `${name} isn’t on Geo and has no email we can use, so we can’t nudge them.`,
+    forbidden: 'You can’t nudge this person.',
+    other: (name: string) => `Couldn’t nudge ${name}. Try again in a moment.`,
+  },
+} as const;
+
+/**
+ * The popup a nudge puts on the other debater's screen, wherever they are on Geo (GEO-3428, board
+ * 6c). Join now, Running late and Can't make it are the notice dialog's own.
+ */
+export const ROOM_NUDGE_POPUP = {
+  heading: (name: string) => `${name} is waiting for you`,
+  /** `offset` is `startOffset`'s, as board 2's heading reads it; a nudge only comes after the start. */
+  lead: (name: string, time: string, offset: { in: number } | { ago: number } | 'now' | null) => {
+    if (offset === 'now') return `Your ${time} debate is starting now and ${name} is in the room.`;
+    if (offset === null || 'in' in offset) return `Your ${time} debate has started and ${name} is in the room.`;
+    return `Your ${time} debate started ${offset.ago} ${offset.ago === 1 ? 'minute' : 'minutes'} ago and ${name} is in the room.`;
+  },
+  late: 'Running late',
+  cant: 'Can’t make it',
+} as const;
+
+/**
  * Why a room someone was waiting in closed (GEO-3427): the other debater said they can't make it. A
  * `rescheduled` room closed because they proposed a new time with it.
  */
@@ -81,7 +138,8 @@ export const ROOM_JOIN_PROMPT = {
   opponentJoined: (opponentName: string) => `${opponentName} is waiting`,
   opponentNotJoined: (opponentName: string) => `${opponentName} hasn’t joined yet`,
   join: 'Join debate',
-  notNow: 'Not now',
+  late: 'Running late',
+  cant: 'Can’t make it',
 } as const;
 
 /** The same banner for a lobby the viewer asked to be reminded of (GEO-3133). */
@@ -89,6 +147,7 @@ export const LOBBY_JOIN_PROMPT = {
   title: (name: string | undefined) => (name ? `${name} is open` : 'Your lobby is open'),
   subtitle: 'A debate lobby you asked to be reminded of',
   join: 'Join lobby',
+  notNow: 'Not now',
 } as const;
 
 /**
@@ -117,7 +176,7 @@ export const ROOM_NO_ACCESS = {
  * calendar invite, or the reschedule link once the room is open.
  */
 export const SCHEDULED_NOTICE_COPY = {
-  title: { decide: 'Your debate', late: 'Running late', cant: 'Can’t make it' },
+  title: { decide: 'Your debate', nudge: 'Your debate', late: 'Running late', cant: 'Can’t make it' },
   decide: {
     /** Board 2's heading: where the debate stands now, from the same minutes the join prompt counts. */
     heading: (name: string, offset: { in: number } | { ago: number } | 'now' | null) => {

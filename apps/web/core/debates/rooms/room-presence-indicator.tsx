@@ -5,6 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import dynamic from 'next/dynamic';
 
+import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
+
 import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
@@ -114,11 +116,6 @@ export function RoomLateNotice({
   opponentName: string;
   opponentUserId: string;
 }) {
-  const roomId = useDebateRoomContext()?.roomId ?? null;
-  const requests = useScheduledDebates(roomId !== null);
-  const request = roomId ? requestForRoom(requests.data?.requests, roomId) : undefined;
-  const [rescheduling, setRescheduling] = React.useState(false);
-
   return (
     <div
       role="status"
@@ -142,10 +139,46 @@ export function RoomLateNotice({
         <span className="hidden max-[767px]:inline">{ROOM_LATE_NOTICE.expectedLeadShort}</span>{' '}
         <span className="text-chatMedium whitespace-nowrap text-text">{formatTime(late.expectedAt)}</span>
       </p>
+      <RoomRescheduleButton
+        opponentName={opponentName}
+        opponentUserId={opponentUserId}
+        analyticsAction="Late notice reschedule"
+        entry="room_late_notice"
+        className="pt-1 max-[767px]:pt-0"
+      />
+    </div>
+  );
+}
+
+/**
+ * Reschedule from the room: the other debater's week, moving this debate, without leaving the room.
+ * The button is drawn only for a debate that is still agreed, which the request list says.
+ * The late notice (GEO-3427) and the waiting card (GEO-3428) each offer it.
+ */
+export function RoomRescheduleButton({
+  opponentName,
+  opponentUserId,
+  analyticsAction,
+  entry,
+  className,
+}: {
+  opponentName: string;
+  opponentUserId: string;
+  analyticsAction: string;
+  entry: Extract<ScheduleEntry, 'room_late_notice' | 'room_waiting_status'>;
+  className?: string;
+}) {
+  const roomId = useDebateRoomContext()?.roomId ?? null;
+  const requests = useScheduledDebates(roomId !== null);
+  const request = roomId ? requestForRoom(requests.data?.requests, roomId) : undefined;
+  const [rescheduling, setRescheduling] = React.useState(false);
+
+  return (
+    <>
       {request?.status === 'accepted' && (
-        <div className="pt-1 max-[767px]:pt-0">
+        <div className={className}>
           <HubPillButton
-            analyticsLabel={debateAnalyticsLabel('room', 'Late notice reschedule')}
+            analyticsLabel={debateAnalyticsLabel('room', analyticsAction)}
             analyticsIntent="reschedule_scheduled_debate"
             onClick={() => setRescheduling(true)}
             className="bg-white"
@@ -154,16 +187,17 @@ export function RoomLateNotice({
           </HubPillButton>
         </div>
       )}
+      {/* Kept up once open: a move sends the request back to pending, and the week shows that it was sent. */}
       {request && rescheduling && (
         <PeerAvailabilityBookingModal
           open={rescheduling}
           userId={opponentUserId}
           peerName={opponentName === UNNAMED_OPPONENT ? null : opponentName}
           rescheduleRequestId={request.request_id}
-          entry="room_late_notice"
+          entry={entry}
           onClose={() => setRescheduling(false)}
         />
       )}
-    </div>
+    </>
   );
 }

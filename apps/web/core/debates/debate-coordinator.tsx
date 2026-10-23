@@ -12,6 +12,8 @@ import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
+import { ScheduledDebateNoticeDialog } from '~/partials/scheduled-debates/scheduled-debate-notice';
+
 import { activeDebate } from './activity-state';
 import { type DebateSharePrompt, GeoChatRequestError } from './api';
 import { ChallengeAcceptedPrompt } from './challenge-accepted-prompt';
@@ -43,7 +45,8 @@ import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
-import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
+import { DebateRoomJoinPrompt, type RoomJoinPromptNotice } from './rooms/room-join-prompt';
+import { RoomNudgePopup } from './rooms/room-nudge-popup';
 import { sameId } from './rooms/room-presence';
 import { debateRoomIdFromPath } from './rooms/room-routes';
 import { SocialVideoCaptionChoiceRows, useSocialVideoCaptionChoice } from './social-video-caption-choice';
@@ -284,6 +287,11 @@ export function DebateCoordinator() {
   // cannot offer a room that would refuse the join.
   const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
+  const snoozeRoom = (roomId: string) => setSnoozedRoomIds(current => [...current, roomId]);
+  // The join banner's Running late or Can't make it, open over the page (GEO-3430).
+  const [roomNotice, setRoomNotice] = React.useState<(RoomJoinPromptNotice & { roomId: string }) | null>(null);
+  // GEO-3428: while a nudge's popup is up, the join banner waits behind it: one prompt at a time.
+  const [nudgeOpen, setNudgeOpen] = React.useState(false);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
   const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
   // A room whose debate already happened is never offered again. Reminded lobbies ride the same
@@ -514,11 +522,34 @@ export function DebateCoordinator() {
           {pausedBannerText(gateway.pauseReason)}
         </div>
       )}
-      {promptedRoom && (
+      <RoomNudgePopup
+        // Per account: nothing held or seen carries over a sign-out or a switch.
+        key={geoChatAuth.accountKey ?? 'signed-out'}
+        rooms={joinableRooms}
+        // Not over an incoming request or the share prompt, which want an answer of their own.
+        // Off on any room page, a lobby's too (where `atRoom` is false): a live room is not the place.
+        enabled={roomIdAtPath === null && !activeFlow && !promptedRequest && !visibleSharePrompt}
+        onOpenChange={setNudgeOpen}
+      />
+      {promptedRoom && !nudgeOpen && (
         <DebateRoomJoinPrompt
           key={promptedRoom.room_id}
           room={promptedRoom}
-          onNotNow={() => setSnoozedRoomIds(current => [...current, promptedRoom.room_id])}
+          onDismiss={() => snoozeRoom(promptedRoom.room_id)}
+          onNotice={notice => setRoomNotice({ ...notice, roomId: promptedRoom.room_id })}
+        />
+      )}
+      {/* Here rather than in the banner: Can't make it drops the room from the list, and the banner
+          with it, before the dialog has said it worked. */}
+      {roomNotice && (
+        <ScheduledDebateNoticeDialog
+          key={`${roomNotice.step}:${roomNotice.requestId}`}
+          open
+          requestId={roomNotice.requestId}
+          initialStep={roomNotice.step}
+          // Told, the other debater knows something; until then the banner stays (GEO-3430).
+          onSent={() => snoozeRoom(roomNotice.roomId)}
+          onClose={() => setRoomNotice(null)}
         />
       )}
       {promptedDebate && currentUserId && !activity?.rematch && (
@@ -572,7 +603,8 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedChallengeId(promptedChallenge.id)}
         />
       )}
-      {promptedRequest && currentUserId && (
+      {/* Behind a nudge popup that is being answered (one that is not steps aside for this). */}
+      {promptedRequest && currentUserId && !nudgeOpen && (
         <IncomingRequestPopup
           key={promptedRequest.id}
           request={promptedRequest}
@@ -580,7 +612,7 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedRequestIds(current => [...current, promptedRequest.id])}
         />
       )}
-      {!activeFlow && !promptedRequest && visibleSharePrompt && (
+      {!activeFlow && !promptedRequest && !nudgeOpen && visibleSharePrompt && (
         <DebateSharePromptDialog
           key={visibleSharePrompt.id}
           prompt={visibleSharePrompt}

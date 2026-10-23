@@ -22,12 +22,15 @@ export function DebateExploreMetaRow({
   hideSpaceLink = false,
   hideJoinButton = false,
   compact = false,
+  hideTypeTag = false,
   endSlot,
 }: {
   item: ExploreFeedItem;
   hideSpaceLink?: boolean;
   hideJoinButton?: boolean;
   compact?: boolean;
+  /** Leave out the "Debate" tag: the playable card's shape says what it is (GEO-3454). */
+  hideTypeTag?: boolean;
   endSlot?: React.ReactNode;
 }) {
   const offer = useSpaceOffer(item, { hidden: hideJoinButton, joinVariant: 'pill' });
@@ -49,7 +52,7 @@ export function DebateExploreMetaRow({
           </Link>
         ) : null}
         {offer.shown}
-        {!compact ? <ExploreTypeTag>Debate</ExploreTypeTag> : null}
+        {!compact && !hideTypeTag ? <ExploreTypeTag>Debate</ExploreTypeTag> : null}
       </div>
       {endSlot}
       {offer.mounted}

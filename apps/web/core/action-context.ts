@@ -22,6 +22,7 @@ export const ACTION_COMPONENTS = [
   'bounty_interest',
   'debate_matchmaking',
   'scheduled_debate_notice',
+  'debate_room',
   'search',
   'ai_assistant',
   'create_space',
@@ -55,6 +56,7 @@ export type ActionKind =
   | 'running_late'
   | 'cant_make_it'
   | 'no_time_works'
+  | 'nudge'
   | 'search'
   | 'search_result'
   | 'assistant_message'

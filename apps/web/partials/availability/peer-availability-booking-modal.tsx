@@ -6,6 +6,7 @@ import { GeoChatRequestError, type ScheduledDebateRequest } from '~/core/debates
 import { usePeerSchedule } from '~/core/debates/hooks';
 import { requestById } from '~/core/debates/rooms/room-opponent';
 import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
+import { useHoldScheduledNotice } from '~/core/debates/rooms/scheduled-notice-open';
 import {
   useCreateScheduledDebate,
   useNoTimeWorks,
@@ -87,9 +88,9 @@ export function PeerAvailabilityBookingModal({
   const state = noticeRequestState(request);
   const active = state === 'active' || state === 'moved' ? request : undefined;
   const agreed = state === 'active';
-  // From the room's late notice the viewer is the one waiting: "they will expect you" is the wrong
-  // way round, and "none of these work" would tell the late one the waiter can't make it.
-  const fromWaitingRoom = entry === 'room_late_notice';
+  // From the room's late notice or waiting status the viewer is the one waiting: "they will expect
+  // you" is the wrong way round, and "none of these work" would say the waiter can't make it.
+  const fromWaitingRoom = entry === 'room_late_notice' || entry === 'room_waiting_status';
   // Closing without a new time leaves an agreed debate on, which is easy to miss when you meant to
   // move it; so it asks first (board 4b).
   const warnsOnClose = agreed && !fromWaitingRoom;
@@ -105,6 +106,9 @@ export function PeerAvailabilityBookingModal({
   const listLoading = Boolean(rescheduleRequestId) && requests.isLoading;
   // A Close pressed before the list says whether the debate was agreed.
   const [closeWaiting, setCloseWaiting] = React.useState(false);
+  // An open week is a dialog the nudge popup never stacks on (GEO-3428), whatever it is booking or
+  // moving. The popup comes back when the week closes, if its nudge still stands.
+  useHoldScheduledNotice(props.open);
 
   const close = () => {
     setCloseWaiting(false);

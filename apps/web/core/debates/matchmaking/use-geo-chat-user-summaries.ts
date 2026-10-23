@@ -1,13 +1,9 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
+import { usePersonalSpacesByPageIds } from '~/core/hooks/use-personal-spaces-by-page-ids';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
-import { personalSpacesByPageIdsQueryKey } from '~/core/io/query-keys';
-import { fetchPersonalSpacesByPageIds } from '~/core/io/subgraph/fetch-personal-spaces-by-page-ids';
-import { normId } from '~/core/utils/norm-id';
 
 import type { DebateParticipantSummary } from '../api';
 
@@ -20,15 +16,7 @@ import type { DebateParticipantSummary } from '../api';
  * rest.
  */
 export function useGeoChatUserSummaries(userIds: string[], enabled: boolean): DebateParticipantSummary[] {
-  const ids = React.useMemo(() => [...new Set(userIds.map(normId))].sort(), [userIds]);
-
-  const spaces = useQuery({
-    queryKey: personalSpacesByPageIdsQueryKey(ids),
-    queryFn: () => fetchPersonalSpacesByPageIds(ids),
-    enabled: enabled && ids.length > 0,
-    // Which space a person fronts does not change under them.
-    staleTime: 10 * 60_000,
-  });
+  const spaces = usePersonalSpacesByPageIds(userIds, enabled);
 
   const spaceIds = React.useMemo(() => [...(spaces.data?.values() ?? [])], [spaces.data]);
   const { profilesBySpaceId, isLoading: profilesLoading } = useProfilesBySpaceIds(spaceIds, enabled);
