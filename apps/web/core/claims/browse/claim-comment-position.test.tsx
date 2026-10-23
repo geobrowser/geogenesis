@@ -78,6 +78,7 @@ describe('claim comment position badges', () => {
           viewerDirection={null}
           viewerSpaceId={null}
           isViewerResponseLoading={false}
+          claimName={null}
         >
           <ClaimCommentPositionBadge authorSpaceId="author-space" />
         </ClaimCommentPositionProvider>
@@ -85,6 +86,75 @@ describe('claim comment position badges', () => {
     );
 
     expect(await screen.findByText('Disagree')).toBeInTheDocument();
+  });
+
+  /**
+   * The bug this closes, seen on testnet: a comment arguing *against* an extracted claim wore an
+   * "Agree" badge, because the only provider on the page was the page claim's and its author agrees
+   * with that. The badge sits under the extracted claim's sentence, so that is what a reader takes
+   * it to be about.
+   */
+  it('reports the nearest claim, not the page claim, when a provider is nested inside another', async () => {
+    mocks.getEntityResponders.mockImplementation((entityId: string) =>
+      Effect.succeed([{ userId: 'author-space', direction: entityId === 'extracted-claim' ? 'negative' : 'positive' }])
+    );
+
+    render(
+      wrapper(
+        client,
+        <ClaimCommentPositionProvider
+          entityId="page-claim"
+          spaceId="space-1"
+          responseKind="stance"
+          viewerDirection={null}
+          viewerSpaceId={null}
+          isViewerResponseLoading={false}
+          claimName={null}
+        >
+          <ClaimCommentPositionProvider
+            entityId="extracted-claim"
+            spaceId="space-1"
+            responseKind="stance"
+            viewerDirection={null}
+            viewerSpaceId={null}
+            isViewerResponseLoading={false}
+            claimName={null}
+          >
+            <ClaimCommentPositionBadge authorSpaceId="author-space" />
+          </ClaimCommentPositionProvider>
+        </ClaimCommentPositionProvider>
+      )
+    );
+
+    expect(await screen.findByText('Disagree')).toBeInTheDocument();
+    expect(screen.queryByText('Agree')).not.toBeInTheDocument();
+  });
+
+  // A word on its own does not say what it is a position on, and the claim it reports can be off
+  // screen by the time the reader reaches the badge.
+  it('names the claim the position is about', async () => {
+    mocks.getEntityResponders.mockReturnValue(
+      Effect.succeed([{ userId: 'author-space', direction: 'positive' as const }])
+    );
+
+    render(
+      wrapper(
+        client,
+        <ClaimCommentPositionProvider
+          entityId="claim-1"
+          spaceId="space-1"
+          responseKind="stance"
+          claimName="Remote work improves mental health"
+          viewerDirection={null}
+          viewerSpaceId={null}
+          isViewerResponseLoading={false}
+        >
+          <ClaimCommentPositionBadge authorSpaceId="author-space" />
+        </ClaimCommentPositionProvider>
+      )
+    );
+
+    expect(await screen.findByTitle('Agree: Remote work improves mental health')).toBeInTheDocument();
   });
 
   it('uses the viewer’s optimistic position and the claim’s factual vocabulary', async () => {
@@ -102,6 +172,7 @@ describe('claim comment position badges', () => {
           viewerDirection="positive"
           viewerSpaceId="viewer-space"
           isViewerResponseLoading
+          claimName={null}
         >
           <ClaimCommentPositionBadge authorSpaceId="viewer-space" />
         </ClaimCommentPositionProvider>
@@ -127,6 +198,7 @@ describe('claim comment position badges', () => {
           viewerDirection={null}
           viewerSpaceId="viewer-space"
           isViewerResponseLoading
+          claimName={null}
         >
           <ClaimCommentPositionBadge authorSpaceId="viewer-space" />
         </ClaimCommentPositionProvider>
@@ -151,6 +223,7 @@ describe('claim comment position badges', () => {
           viewerDirection={null}
           viewerSpaceId="viewer-space"
           isViewerResponseLoading={false}
+          claimName={null}
         >
           <span data-testid="claim-comment-position-empty">
             <ClaimCommentPositionBadge authorSpaceId="viewer-space" />

@@ -7,7 +7,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { reportBoundaryError } from '~/core/telemetry/logger';
 
 import { RankingBlock } from '../blocks/table/ranking-block';

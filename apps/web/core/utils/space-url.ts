@@ -61,6 +61,7 @@ export const SPACE_TAB_SEGMENTS = [
   'debug-peer-availability',
   'governance',
   'import',
+  'overview',
   'positions',
   'proposals',
   'questions',

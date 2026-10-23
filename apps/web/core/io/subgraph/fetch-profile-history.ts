@@ -15,18 +15,26 @@ import {
   normalizeEducation,
   normalizeEmployment,
 } from '~/core/profile/normalize-history';
+import { TAGLINE_PROPERTY } from '~/core/profile/profile-ontology';
 
+import { createBatchLoader } from '../batch-loader';
 import { graphql } from './graphql';
 
+type NetworkEntity = {
+  /** Optional because a partial answer can drop a selection rather than return it empty. */
+  tagline?: Array<{ text: string | null }>;
+  description?: Array<{ text: string | null }>;
+  employment: HistoryEdgeNode[];
+  education: HistoryEdgeNode[];
+} | null;
+
 interface NetworkResult {
-  entity: {
-    description: Array<{ text: string | null }>;
-    employment: HistoryEdgeNode[];
-    education: HistoryEdgeNode[];
-  } | null;
+  entity: NetworkEntity;
 }
 
 export interface ProfileHistory {
+  /** The line the person wrote about themselves; preferred over everything derived from it. */
+  tagline: string | null;
   description: string | null;
   employment: EmploymentCard[];
   education: EducationCard[];
@@ -130,9 +138,12 @@ const orgAvatar = `
  * what *this* space claims about them; what other spaces assert is a different
  * page, and worth designing rather than leaking into this one.
  */
-const profileHistoryQuery = (entityId: string, spaceId: string) => `
-  {
+const profileHistorySelection = (entityId: string, spaceId: string) => `
     entity(id: ${JSON.stringify(entityId)}) {
+      tagline: valuesList(first: 1, filter: {
+        propertyId: { is: ${JSON.stringify(TAGLINE_PROPERTY)} }
+        spaceId: { is: ${JSON.stringify(spaceId)} }
+      }) { text }
       description: valuesList(first: 1, filter: {
         propertyId: { is: ${JSON.stringify(DESCRIPTION_PROPERTY)} }
         spaceId: { is: ${JSON.stringify(spaceId)} }
@@ -158,8 +169,9 @@ const profileHistoryQuery = (entityId: string, spaceId: string) => `
         entity { ${nested(spaceId)} }
       }
     }
-  }
 `;
+
+const profileHistoryQuery = (entityId: string, spaceId: string) => `{ ${profileHistorySelection(entityId, spaceId)} }`;
 
 /** Keyed on the space too: the same person reads differently from each one. */
 export function profileHistoryQueryKey(entityId: string | undefined, spaceId: string | undefined) {
@@ -189,11 +201,42 @@ export async function fetchProfileHistory(entityId: string, spaceId: string): Pr
     throw new Error(`Failed to fetch profile history for ${entityId}`, { cause: result.left });
   }
 
-  const entity = result.right.entity;
+  return toProfileHistory(result.right.entity);
+}
 
+function toProfileHistory(entity: NetworkEntity): ProfileHistory {
   return {
-    description: entity?.description[0]?.text?.trim() || null,
+    // Indexed through `?.`: a partial answer that drops a selection entirely is a missing
+    // field here, not an empty list, and reading `[0]` off it threw the whole request away.
+    tagline: entity?.tagline?.[0]?.text?.trim() || null,
+    description: entity?.description?.[0]?.text?.trim() || null,
     employment: normalizeEmployment(entity?.employment ?? []),
     education: normalizeEducation(entity?.education ?? []),
   };
+}
+
+/** Histories per query: each is one aliased `entity` selection. */
+const MAX_HISTORY_BATCH = 20;
+
+const loadProfileHistoryBatched = createBatchLoader<ProfileHistory>({
+  fetchBatch: async keys => {
+    const pairs = keys.map(key => JSON.parse(key) as [string, string]);
+    const query = `{ ${pairs.map(([entityId, spaceId], index) => `p${index}: ${profileHistorySelection(entityId, spaceId)}`).join('\n')} }`;
+    const result = await Effect.runPromise(
+      Effect.either(graphql<Record<string, NetworkEntity>>({ query, endpoint: Environment.getConfig().api }))
+    );
+    if (Either.isLeft(result)) {
+      throw new Error('Failed to fetch profile histories', { cause: result.left });
+    }
+    return new Map(keys.map((key, index) => [key, toProfileHistory(result.right[`p${index}`] ?? null)]));
+  },
+  missing: key => {
+    throw new Error(`No profile history returned for ${key}`);
+  },
+  maxBatchSize: MAX_HISTORY_BATCH,
+});
+
+/** `fetchProfileHistory`, with calls in the same tick sent as one aliased query. Same answer, same key. */
+export function loadProfileHistory(entityId: string, spaceId: string): Promise<ProfileHistory> {
+  return loadProfileHistoryBatched(JSON.stringify([entityId, spaceId]));
 }

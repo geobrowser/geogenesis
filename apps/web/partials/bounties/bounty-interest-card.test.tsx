@@ -3,10 +3,12 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
+import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BountyDetail } from '~/core/bounties/fetch-bounty-detail';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
+import { pendingActionsAtom } from '~/core/state/pending-actions';
 
 import { BountyInterestCard, resolveInterestCardState } from './bounty-interest-card';
 
@@ -71,6 +73,8 @@ function roles(overrides: Partial<BountyRoles> = {}): BountyRoles {
 }
 
 beforeEach(() => {
+  // The queue lives in jotai's default store here; a press in one test must not carry into the next.
+  getDefaultStore().set(pendingActionsAtom, []);
   mocks.actions.expressInterest.mockClear();
   mocks.actions.cancelInterest.mockClear();
   mocks.actions.pending = false;
@@ -139,5 +143,25 @@ describe('BountyInterestCard', () => {
     mocks.actions.error = 'Could not record your interest.';
     render(<BountyInterestCard detail={detail()} roles={roles()} />);
     expect(screen.getByText('Could not record your interest.')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Interest pressed signed out is queued, and the card says so until the replay sends it. That has to
+ * hold once the account exists too — the state then reads `can-apply`, and a second live button there
+ * would race the replay.
+ */
+describe('interest queued before the account was ready', () => {
+  it('keeps showing it as saved once the account exists, with no second button to press', () => {
+    const view = render(
+      <BountyInterestCard detail={detail()} roles={roles({ isSignedIn: false, personalSpaceId: null })} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: "I'm interested" }));
+    expect(screen.getByText('Interest saved')).toBeInTheDocument();
+
+    view.rerender(<BountyInterestCard detail={detail()} roles={roles()} />);
+
+    expect(screen.getByText('Interest saved')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm interested" })).not.toBeInTheDocument();
   });
 });

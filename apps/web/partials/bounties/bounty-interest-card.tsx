@@ -6,8 +6,10 @@ import type { BountyDetail } from '~/core/bounties/fetch-bounty-detail';
 import { isBountyEnded } from '~/core/bounties/payout';
 import { useBountyInterestActions } from '~/core/bounties/use-bounty-actions';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
+import { useQueuedBountyInterest } from '~/core/bounties/use-queued-bounty-interest';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { uuidToHex } from '~/core/id/normalize';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -41,7 +43,34 @@ type Props = {
 export function BountyInterestCard({ detail, roles }: Props) {
   const state = resolveInterestCardState(detail, roles);
   const actions = useBountyInterestActions(detail, roles);
-  const openPrivySignIn = usePrivySignIn();
+  const openPrivySignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'bounty_interest',
+      target_id: detail.bounty.id,
+      target_type: 'bounty',
+      auth_control: 'express_interest',
+      auth_intent: 'bounty_interest',
+      auth_continuation: 'queued',
+    },
+  });
+  // Pressed before the account could publish it: queued, and drawn as applied, until it can.
+  const queuedInterest = useQueuedBountyInterest(detail.bounty.id, {
+    ready: !roles.isLoading && Boolean(roles.personalSpaceId),
+    alreadyInterested: roles.isInterested || roles.isAllocated,
+    eligible: state === 'can-apply',
+    register: actions.expressInterest,
+  });
+  const queueInterest = () => {
+    queuedInterest.queue();
+    // A dismissed sign-in withdraws it, so walking away never registers interest later.
+    if (state === 'signed-out') openPrivySignIn(undefined, { onCancel: queuedInterest.cancel });
+  };
+  // Without a space, only while one is being made — with no setup under way, nothing would publish it.
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const canQueue = state === 'signed-out' || (state === 'no-personal-space' && isAccountSetupPending);
+  // Through the replay as well: once the space exists the state reads `can-apply`, and dropping the
+  // queued view there put a second live "I'm interested" beside the replay, racing it.
+  const showQueued = queuedInterest.queued && (canQueue || state === 'can-apply');
 
   const copy: Record<InterestCardState, { title: string; body: string }> = {
     'signed-out': { title: 'Want to take on this bounty?', body: 'Express interest and an editor can allocate you.' },
@@ -64,27 +93,32 @@ export function BountyInterestCard({ detail, roles }: Props) {
       aria-label="Apply for this bounty"
       data-testid="bounty-interest-card"
       data-state={state}
-      className="flex flex-col gap-3 rounded-lg border border-grey-02 bg-white p-4 mobile:flex-row mobile:items-center mobile:justify-between"
+      className="flex flex-row items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white p-4 mobile:flex-col mobile:items-stretch mobile:justify-start"
     >
       <div className="flex flex-col gap-0.5">
-        <Text variant="smallTitle">{copy[state].title}</Text>
+        <Text variant="smallTitle">{showQueued ? 'Interest saved' : copy[state].title}</Text>
         <Text variant="metadata" color="grey-04">
-          {actions.error ?? copy[state].body}
+          {actions.error ??
+            (showQueued ? 'It will be sent to the editors as soon as your account is ready.' : copy[state].body)}
         </Text>
       </div>
-      {state === 'can-apply' ? (
+      {showQueued ? (
+        <Button variant="secondary" onClick={queuedInterest.cancel}>
+          Cancel interest
+        </Button>
+      ) : canQueue ? (
+        // Same affordance as upvote/downvote: the button is always there. Signed out it opens Privy;
+        // either way the interest is kept and sent once the account is ready.
+        <Button variant="primary" onClick={queueInterest}>
+          I&apos;m interested
+        </Button>
+      ) : state === 'can-apply' ? (
         <Button
           variant="primary"
           disabled={actions.pending || roles.isLoading}
           onClick={() => void actions.expressInterest()}
         >
           {actions.pending ? 'Saving…' : "I'm interested"}
-        </Button>
-      ) : state === 'signed-out' ? (
-        // Same affordance as upvote/downvote: the button is always there, and a
-        // signed-out click opens Privy sign-in directly.
-        <Button variant="primary" onClick={openPrivySignIn}>
-          I&apos;m interested
         </Button>
       ) : state === 'interested' ? (
         <Button variant="secondary" disabled={actions.pending} onClick={() => void actions.cancelInterest()}>

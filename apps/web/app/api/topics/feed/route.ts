@@ -6,11 +6,11 @@ import { parseExploreSort } from '~/core/explore/explore-feed-params';
 import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
 import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
-import { topicFeedFilter, topicFeedPopulationScopes } from '~/core/topics/browse/topic-feed-filter';
+import { topicFeedFilter } from '~/core/topics/browse/topic-feed-filter';
 import { parseTopicFeedSelectedIds, parseTopicFeedSpaceIds } from '~/core/topics/browse/topic-feed-params';
 import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
 
-/** Mixed Topic rabbit-hole feed: direct topic entities plus Debates reached through their Claim. */
+/** Mixed Topic feed: every entity is matched by its own Topics relations. */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const topicId = searchParams.get('topicId');
@@ -25,7 +25,6 @@ export async function GET(request: Request) {
   const selectedTopicIds = parseTopicFeedSelectedIds(searchParams.get('topicIds'), topicId);
   const requestedSpaceIds = parseTopicFeedSpaceIds(searchParams.get('spaceIds'), routeSpaceId);
   const { browse, memberOrEditorSpaceIds, walletAddress } = await resolveExploreFeedRequestContext(routeSpaceId);
-  const completePopulationScopes = topicFeedPopulationScopes(topicId, selectedTopicIds, typeIds);
 
   try {
     const result = await fetchExploreFeed({
@@ -38,8 +37,9 @@ export async function GET(request: Request) {
       memberOrEditorSpaceIds,
       typeIds,
       requireName: true,
+      // Best and New page through gaia's topic ranking table (GEO-3092); Top still uses the filter.
+      rankedTopicIds: [topicId, ...selectedTopicIds],
       entityFilter: topicFeedFilter(topicId, selectedTopicIds),
-      completePopulationScopes,
     });
     return NextResponse.json(result);
   } catch (error) {

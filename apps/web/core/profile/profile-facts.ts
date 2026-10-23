@@ -1,3 +1,4 @@
+import { uuidToHex } from '~/core/id/normalize';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 
 /**
@@ -64,6 +65,30 @@ export const NO_FACTS: ProfileFacts = {
  * above a list that does not contain them.
  */
 export const POSITION_VOTE_KINDS = [1] as const;
+
+/**
+ * Vote types that mean the position still stands: 0 agree, 1 disagree.
+ *
+ * Type 2 is "neither", and nobody picks it — taking a side back rewrites the row
+ * to it rather than deleting the row, because `userVotes` is unique per (user,
+ * claim, object type, space, kind). So a `votedBy` read without this counts
+ * claims the person no longer holds a position on: 17 of one account's 211, 12
+ * of another's 34 (GEO-2962). Every `votedBy` read that means "positions" passes
+ * it, so the count, the filter menus and the Top and Best orders all describe the
+ * same set as the New order, which drops the retractions itself.
+ */
+export const POSITION_VOTE_TYPES = [0, 1] as const;
+
+/** Entity filter shared by answered-claim counts and "Hide my positions" exclusions. */
+export function heldPositionFilter(personalSpaceId: string) {
+  return {
+    votedBy: {
+      userId: uuidToHex(personalSpaceId),
+      kinds: [...POSITION_VOTE_KINDS],
+      types: [...POSITION_VOTE_TYPES],
+    },
+  };
+}
 
 /**
  * Subspace relations that mean somebody vouched for this space.

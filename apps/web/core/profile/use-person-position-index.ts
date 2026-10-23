@@ -12,6 +12,7 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
+import { POSITION_VOTE_KINDS, POSITION_VOTE_TYPES, heldPositionFilter } from '~/core/profile/profile-facts';
 import { normId } from '~/core/utils/norm-id';
 
 /**
@@ -32,11 +33,29 @@ import { normId } from '~/core/utils/norm-id';
  *
  * `votedBy` does the work, from GEO-2913. Without it this would be the vote ids
  * first and then an `id: { in: … }` lookup, which is the two-step the count used
- * to do.
+ * to do. `votedByTypes` (GEO-2962) keeps a retracted position out, so a topic
+ * carried only by a claim somebody took their side back on is not offered with
+ * a count the list cannot fill — and the menus no longer wait on the vote table
+ * to say so.
  */
 const POSITION_INDEX_SOURCE = /* GraphQL */ `
-  query PersonPositionIndex($userId: UUID!, $topicsPropertyId: UUID!, $first: Int, $after: Cursor) {
-    entitiesConnection(votedBy: $userId, votedByKinds: [1, 2], first: $first, after: $after) {
+  query PersonPositionIndex(
+    $userId: UUID!
+    $kinds: [Int!]
+    $types: [Int!]
+    $topicsPropertyId: UUID!
+    $filter: EntityFilter
+    $first: Int
+    $after: Cursor
+  ) {
+    entitiesConnection(
+      votedBy: $userId
+      votedByKinds: $kinds
+      votedByTypes: $types
+      filter: $filter
+      first: $first
+      after: $after
+    ) {
       pageInfo {
         hasNextPage
         endCursor
@@ -443,37 +462,30 @@ export function reachableTopicFacets(topics: readonly PositionFacet[], selected:
   );
 }
 
-export function personPositionIndexQueryKey(spaceId: string) {
-  return ['person-position-index', ID.uuidToHex(spaceId)] as const;
+export function personPositionIndexQueryKey(spaceId: string, excludeAnsweredBy?: string | null) {
+  return [
+    'person-position-index',
+    ID.uuidToHex(spaceId),
+    excludeAnsweredBy ? ID.uuidToHex(excludeAnsweredBy) : null,
+  ] as const;
 }
 
 export function usePersonPositionIndex({
   spaceId,
   enabled = true,
-  answeredIds,
+  excludeAnsweredBy,
 }: {
   spaceId: string;
   enabled?: boolean;
-  /**
-   * The claims this person still answers, from the vote table.
-   *
-   * `votedBy` counts a retraction as a vote — it is a row rewritten to
-   * "neither", not a row removed — so without this the menus offer topics and
-   * spaces whose counts include claims the list below them does not show. On one
-   * account that is 17 of 211, and a topic carried only by a retracted claim
-   * offered a count of 1 over an empty list.
-   *
-   * Undefined means "not known yet", which narrows nothing — the alternative
-   * empties the menus while the vote read is out.
-   */
-  answeredIds?: ReadonlySet<string>;
+  /** Exclude the viewer's held positions before building facets or paginating cards. */
+  excludeAnsweredBy?: string | null;
 }) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: personPositionIndexQueryKey(spaceId),
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
+    queryKey: personPositionIndexQueryKey(spaceId, excludeAnsweredBy),
     enabled: enabled && spaceId !== '',
-    // Held longer than the list. The record's shape changes when this person
-    // votes, which is not something the reader of somebody else's profile does.
-    staleTime: 5 * 60_000,
+    // Refresh an exclusion whenever it is revisited: the viewer can answer claims
+    // on this screen. The unfiltered profile's facets can stay cached longer.
+    staleTime: excludeAnsweredBy ? 0 : 5 * 60_000,
     queryFn: async ({ signal }): Promise<{ entries: PositionIndexEntry[]; names: Map<string, string | null> }> => {
       const entries: PositionIndexEntry[] = [];
       const names = new Map<string, string | null>();
@@ -487,7 +499,10 @@ export function usePersonPositionIndex({
             decoder: decodePage,
             variables: {
               userId: ID.uuidToHex(spaceId),
+              kinds: [...POSITION_VOTE_KINDS],
+              types: [...POSITION_VOTE_TYPES],
               topicsPropertyId: TOPICS_PROPERTY_ID,
+              filter: excludeAnsweredBy ? { not: heldPositionFilter(excludeAnsweredBy) } : null,
               first: INDEX_PAGE_SIZE,
               after,
             },
@@ -512,19 +527,10 @@ export function usePersonPositionIndex({
     },
   });
 
-  /*
-   * Counted here rather than in the fetch, because what is counted depends on
-   * something the fetch cannot see.
-   *
-   * `answeredIds` arrives from a different request and changes without the index
-   * changing, so folding it into the query key would refetch the whole record
-   * every time the vote read settled. The entries are a few hundred at most and
-   * the facet pass is linear over them.
-   */
   const index = React.useMemo((): PersonPositionIndex => {
     if (!data) return EMPTY_POSITION_INDEX;
 
-    const entries = answeredIds ? data.entries.filter(entry => answeredIds.has(entry.entityId)) : data.entries;
+    const { entries } = data;
 
     return {
       entries,
@@ -533,7 +539,7 @@ export function usePersonPositionIndex({
       // space names up for the rows and would otherwise ask twice.
       spaces: facetsFrom(entries, entry => entry.spaceIds, new Map()),
     };
-  }, [answeredIds, data]);
+  }, [data]);
 
-  return { index, isLoading, isError };
+  return { index, isLoading, isFetching, isError, refetch };
 }

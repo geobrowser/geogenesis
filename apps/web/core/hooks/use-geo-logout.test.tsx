@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   setEditable: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   useLogout: ({ onSuccess }: { onSuccess: () => Promise<void> }) => {
     mocks.logoutSuccess = onSuccess;
   },
@@ -30,7 +30,7 @@ vi.mock('~/core/debates/api', () => ({ resetGeoChatSession: mocks.resetGeoChatSe
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
 vi.mock('~/core/state/editable-store', () => ({ useEditable: () => ({ setEditable: mocks.setEditable }) }));
 vi.mock('~/core/state/pending-personal-space', () => ({ pendingPersonalSpaceAtom: {} }));
-vi.mock('~/partials/onboarding/dialog', () => ({
+vi.mock('~/partials/onboarding/onboarding-atoms', () => ({
   avatarAtom: {},
   nameAtom: {},
   selectedTopicIdsAtom: {},
@@ -39,6 +39,7 @@ vi.mock('~/partials/onboarding/dialog', () => ({
   topicIdAtom: {},
 }));
 vi.mock('~/atoms/dismissed-hints', () => ({ dismissedHintsAtom: {} }));
+vi.mock('~/atoms/onboarding-feed-topics', () => ({ feedTopicsAtom: {}, NO_HELD_FEED_TOPICS: {} }));
 
 describe('useGeoLogoutCleanup', () => {
   beforeEach(() => {

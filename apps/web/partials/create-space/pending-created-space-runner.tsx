@@ -69,6 +69,7 @@ export function PendingCreatedSpaceRunner() {
       try {
         devLog('[create-space] background deploy started, jobId=%s', pending.jobId);
         const spaceId = await deploy({
+          attribution: pending.attribution,
           type: pending.type,
           spaceName: pending.spaceName,
           spaceImage: pending.spaceImage,

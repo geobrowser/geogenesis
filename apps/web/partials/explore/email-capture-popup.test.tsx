@@ -3,12 +3,18 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 
 import * as React from 'react';
 
-import { getDefaultStore } from 'jotai';
+import { Provider, createStore, getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { beginAuthAttempt, currentAuthAttempt, readAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
+import { GoogleOAuthHost } from '~/core/auth/google-oauth';
+import type { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { isChatOpenAtom } from '~/core/state/chat-store';
+import { featureFlagsStorageKey } from '~/core/state/feature-flags';
+import { toggleLocalVote } from '~/core/state/local-votes';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
+import { useIsEmailCaptureShowing } from './email-capture-presence';
 import { entitySidePanelAtom } from '~/atoms';
 
 const store = getDefaultStore();
@@ -26,18 +32,21 @@ const mocks = vi.hoisted(() => ({
   prepareOnboarding: vi.fn(),
   useGeoLoginWithEmail: vi.fn(),
   usePrivySignIn: vi.fn(),
-  usePrivySignInOptions: undefined as undefined | { analytics?: Record<string, unknown>; onError?: () => void },
+  usePrivySignInOptions: undefined as Parameters<typeof usePrivySignIn>[1],
   useLoginWithEmailArgs: undefined as unknown,
   signupCompleted: vi.fn(),
   trackPrivyAuth: vi.fn(),
+  capture: vi.fn(),
+  initOAuth: vi.fn(),
 }));
 
 vi.mock('~/core/analytics', () => ({
   signupCompleted: mocks.signupCompleted,
   trackPrivyAuth: mocks.trackPrivyAuth,
+  capture: mocks.capture,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: mocks.isModalOpen }),
   useLoginWithEmail: (args?: unknown) => {
     mocks.useGeoLoginWithEmail();
@@ -50,10 +59,11 @@ vi.mock('@geogenesis/auth', () => ({
       state: mocks.otpState,
     };
   },
+  useLoginWithOAuth: () => ({ initOAuth: mocks.initOAuth, state: { status: 'initial' } }),
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: (_onComplete?: () => void, options?: { analytics?: Record<string, unknown>; onError?: () => void }) => {
+  usePrivySignIn: (_onComplete?: () => void, options?: Parameters<typeof usePrivySignIn>[1]) => {
     mocks.usePrivySignIn();
     mocks.usePrivySignInOptions = options;
     return mocks.openPrivyModal;
@@ -83,6 +93,7 @@ function scrollPastTrigger() {
 }
 
 beforeEach(() => {
+  resetAuthAttempt();
   window.localStorage.clear();
   // A pending account attempt is session-scoped; left behind it resumes into the next test.
   window.sessionStorage.clear();
@@ -103,6 +114,7 @@ beforeEach(() => {
   mocks.trackPrivyAuth.mockReset();
   mocks.useLoginWithEmailArgs = undefined;
   mocks.otpState = { status: 'initial' };
+  mocks.initOAuth.mockReset().mockResolvedValue(undefined);
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ json: async () => ({ result: 'subscribed' }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -171,6 +183,37 @@ describe('ExploreEmailCapturePopup', () => {
   // at `z-100` the assistant's button drew over the "Remind me" button and took the click. A
   // stacking bug is invisible to every other test here, so this reads the number rather than
   // trusting the comment beside it.
+  // GEO-3214: a visitor with votes on this device gets the save sheet, which asks for the same email.
+  // GEO-3214: the save sheet waits behind this card, so the card has to say when it is up.
+  it('tells the save sheet it holds the corner while it is on screen', () => {
+    const Probe = () => <p>{useIsEmailCaptureShowing() ? 'corner taken' : 'corner free'}</p>;
+    render(
+      <>
+        <ExploreEmailCapturePopup />
+        <Probe />
+      </>
+    );
+    expect(screen.getByText('corner free')).toBeInTheDocument();
+
+    scrollPastTrigger();
+    expect(popup()).toBeInTheDocument();
+    expect(screen.getByText('corner taken')).toBeInTheDocument();
+  });
+
+  it('yields to the save sheet for a visitor with votes on this device', () => {
+    toggleLocalVote({
+      responseKind: 'stance',
+      entityId: 'claim',
+      spaceId: 'space',
+      direction: 'positive',
+      title: 'A claim',
+    });
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    expect(popup()).not.toBeInTheDocument();
+  });
+
   it('stacks above the chat launcher, which shares its corner', () => {
     render(<ExploreEmailCapturePopup />);
     scrollPastTrigger();
@@ -527,6 +570,27 @@ describe('ExploreEmailCapturePopup', () => {
   });
 
   describe('creating an account from the confirmation', () => {
+    it('captures the visitor before sending the code and clears it on dismissal', async () => {
+      window.lytics = { getContext: () => ({ anonymous_id: 'email-visitor', session_id: 'email-session' }) };
+      try {
+        await subscribeSuccessfully();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+        });
+        expect(JSON.parse(window.localStorage.getItem('geo:signup-visitor:v1')!)).toMatchObject({
+          anonymousId: 'email-visitor',
+          sessionId: 'email-session',
+        });
+        expect(mocks.sendCode).toHaveBeenCalledOnce();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Dismiss newsletter signup' }));
+        });
+        expect(window.localStorage.getItem('geo:signup-visitor:v1')).toBeNull();
+      } finally {
+        delete window.lytics;
+      }
+    });
+
     it('offers the account and a skip, rather than ending at the confirmation', async () => {
       await subscribeSuccessfully();
 
@@ -635,7 +699,8 @@ describe('ExploreEmailCapturePopup', () => {
       expect(window.localStorage.getItem('dismissedNotices')).toContain('exploreEmailCapture');
     });
 
-    it('submits the code and lets the session take over', async () => {
+    // GEO-3400: like Privy's own step, the sixth digit is the submit; there is no button to press.
+    it('submits the code on its sixth digit and lets the session take over', async () => {
       const view = await subscribeSuccessfully();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
@@ -643,12 +708,100 @@ describe('ExploreEmailCapturePopup', () => {
 
       mocks.otpState = { status: 'awaiting-code-input' };
       view.rerender(<ExploreEmailCapturePopup />);
-      fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '123456' } });
+      expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+        fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '123456' } });
       });
 
+      expect(mocks.loginWithCode).toHaveBeenCalledOnce();
       expect(mocks.loginWithCode).toHaveBeenCalledWith({ code: '123456' });
+
+      // A re-render is not a second try with the same code.
+      view.rerender(<ExploreEmailCapturePopup />);
+      expect(mocks.loginWithCode).toHaveBeenCalledOnce();
+    });
+
+    // Privy goes submitting → error with the wrong code still in the field. Coming out of `busy` must
+    // not send it again: each wrong try counts toward Privy retiring the code.
+    it('does not resend a wrong code as the verification fails', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      await act(async () => {
+        fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '111111' } });
+      });
+      expect(mocks.loginWithCode).toHaveBeenCalledOnce();
+
+      mocks.otpState = { status: 'submitting-code' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      mocks.otpState = { status: 'error' };
+      await act(async () => {
+        view.rerender(<ExploreEmailCapturePopup />);
+      });
+
+      expect(mocks.loginWithCode).toHaveBeenCalledOnce();
+      expect((screen.getByRole('textbox', { name: 'Verification code' }) as HTMLInputElement).value).toBe('');
+    });
+
+    // Copilot on #2933: the caret is kept at the end so typing fills the next box, but collapsing a
+    // selection too made select-all then paste append to a half-typed code instead of replacing it.
+    it('keeps a selection, so a paste over it replaces the code', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      const field = screen.getByRole('textbox', { name: 'Verification code' }) as HTMLInputElement;
+      fireEvent.change(field, { target: { value: '123' } });
+
+      field.setSelectionRange(0, 3);
+      fireEvent.select(field);
+      expect([field.selectionStart, field.selectionEnd]).toEqual([0, 3]);
+
+      // A plain caret still goes to the end.
+      field.setSelectionRange(1, 1);
+      fireEvent.select(field);
+      expect([field.selectionStart, field.selectionEnd]).toEqual([3, 3]);
+    });
+
+    it('draws a box per digit from the one field', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+
+      fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '427' } });
+
+      expect(screen.getAllByTestId('code-box').map(box => box.textContent)).toEqual(['4', '2', '7', '', '', '']);
+    });
+
+    it('empties the boxes after a wrong code, and takes the same code again', async () => {
+      const view = await subscribeSuccessfully();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      mocks.otpState = { status: 'awaiting-code-input' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      await act(async () => {
+        fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '111111' } });
+      });
+
+      mocks.otpState = { status: 'error' };
+      view.rerender(<ExploreEmailCapturePopup />);
+      const field = screen.getByRole('textbox', { name: 'Verification code' }) as HTMLInputElement;
+      expect(field.value).toBe('');
+      expect(screen.getByRole('alert')).toHaveTextContent('That code did not work.');
+
+      await act(async () => {
+        fireEvent.change(field, { target: { value: '111111' } });
+      });
+      expect(mocks.loginWithCode).toHaveBeenCalledTimes(2);
     });
 
     // Privy sends six digits and nothing else, so anything pasted around them is noise rather than
@@ -676,8 +829,9 @@ describe('ExploreEmailCapturePopup', () => {
       view.rerender(<ExploreEmailCapturePopup />);
 
       fireEvent.change(screen.getByRole('textbox', { name: 'Verification code' }), { target: { value: '123' } });
+      fireEvent.submit(screen.getByRole('textbox', { name: 'Verification code' }));
 
-      expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
+      expect(mocks.loginWithCode).not.toHaveBeenCalled();
     });
 
     // The other half of the same bug, and the one that made the step unusable even when the modal
@@ -853,11 +1007,8 @@ describe('ExploreEmailCapturePopup', () => {
       expect(screen.queryByRole('textbox', { name: 'Verification code' })).toBeNull();
     });
 
-    // 28px is the desktop frame's control height and fine with a cursor. On a phone it is a 28px
-    // touch target against 44pt in Apple's guidance and 48dp in Material, which is what made the
-    // card feel cramped. Pinned because the height is shared between the two rows and has drifted
-    // apart once already.
-    it('gives the code field and button a touch-sized height on the phone', async () => {
+    // 44px at every width, Privy's size: each box is a tap target as well as a digit (GEO-3400).
+    it('gives the code boxes a touch-sized height', async () => {
       const view = await subscribeSuccessfully();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
@@ -865,16 +1016,45 @@ describe('ExploreEmailCapturePopup', () => {
       mocks.otpState = { status: 'awaiting-code-input' };
       view.rerender(<ExploreEmailCapturePopup />);
 
-      expect(screen.getByRole('textbox', { name: 'Verification code' }).className).toContain('mobile:h-11');
-      expect(screen.getByRole('button', { name: 'Continue' }).className).toContain('mobile:h-11');
+      const boxes = screen.getAllByTestId('code-box');
+      expect(boxes).toHaveLength(6);
+      boxes.forEach(box => expect(box.className).toContain('h-11'));
     });
 
-    // Reports its own sign-in. Leaving it to the navbar looked tidy and was not: that button is
-    // replaced by a loading skeleton whenever `isUserLoading` is true — which flips back mid-session
-    // on a tab refocus — so a completion landing in that window was recorded by nobody. The navbar
-    // arms its tracker now, so this one cannot double-count.
-    it('reports the sign-in it started, attributed to this flow', async () => {
+    it('starts exactly one attributed attempt for the create-account press', async () => {
       await subscribeSuccessfully();
+      mocks.capture.mockClear();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      const starts = mocks.capture.mock.calls.filter(([event]) => event === 'auth_attempt_started');
+      expect(starts).toHaveLength(1);
+      expect(starts[0]?.[1]).toMatchObject({ component: 'explore_email_capture', auth_control: 'create_account' });
+    });
+
+    it('starts its own attributed email attempt when the document inherited another attempt', async () => {
+      await subscribeSuccessfully();
+      const inherited = beginAuthAttempt({ component: 'explore_email_capture', auth_control: 'create_account' });
+      // A fresh document has copied storage but no ownership of the earlier attempt.
+      resetAuthAttempt();
+      sessionStorage.setItem('geo:auth-attempt:active', inherited.id);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      expect(currentAuthAttempt()?.id).not.toBe(inherited.id);
+      expect(currentAuthAttempt()?.properties).toMatchObject({
+        component: 'explore_email_capture',
+        auth_control: 'create_account',
+        auth_trigger: 'control',
+      });
+      expect(readAuthAttempt(inherited.id)?.outcome).toBeUndefined();
+      expect(mocks.sendCode).toHaveBeenCalledOnce();
+    });
+
+    // The headless SDK calls the captured completion after its verification promise resolves,
+    // even when authentication has already unmounted this card.
+    it('reports completion after the card unmounts, attributed to this flow', async () => {
+      const view = await subscribeSuccessfully();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
       });
@@ -882,15 +1062,23 @@ describe('ExploreEmailCapturePopup', () => {
       const args = mocks.useLoginWithEmailArgs as { onComplete?: (a: unknown) => void } | undefined;
       expect(typeof args?.onComplete).toBe('function');
 
-      const completion = { user: { id: 'did:privy:new-user' }, isNewUser: true };
+      view.unmount();
+      const completion = {
+        user: { id: 'did:privy:new-user', email: { address: 'reader@example.com' } },
+        isNewUser: true,
+        wasAlreadyAuthenticated: false,
+      };
       args?.onComplete?.(completion);
 
-      expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(completion, {
-        auth_flow: 'manual_login',
-        link_source: 'explore_email_capture',
-        form_type: 'account',
-        signup_surface: 'explore_email_capture',
-      });
+      expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(
+        completion,
+        expect.objectContaining({
+          auth_flow: 'manual_login',
+          link_source: 'explore_email_capture',
+          form_type: 'account',
+          signup_surface: 'explore_email_capture',
+        })
+      );
     });
 
     // Both resend controls used to stay live while a verification was in flight, so pressing one
@@ -904,7 +1092,9 @@ describe('ExploreEmailCapturePopup', () => {
       mocks.otpState = { status: 'submitting-code' };
       view.rerender(<ExploreEmailCapturePopup />);
 
-      expect(screen.getByRole('button', { name: 'Send a new code' })).toBeDisabled();
+      // GEO-3400: "Verifying…" takes the resend line's place, so there is nothing to press.
+      expect(screen.queryByRole('button', { name: 'Send a new code' })).toBeNull();
+      expect(screen.getByText('Verifying…')).toBeInTheDocument();
     });
 
     it('says so when the code is refused, and offers a new one', async () => {
@@ -954,11 +1144,14 @@ describe('ExploreEmailCapturePopup', () => {
       });
 
       expect(mocks.openPrivyModal).toHaveBeenCalledTimes(1);
-      expect(mocks.usePrivySignInOptions?.analytics).toEqual({
-        link_source: 'explore_email_capture',
-        form_type: 'account',
-        signup_surface: 'explore_email_capture',
-      });
+      expect(mocks.usePrivySignInOptions?.resumeAuthAttempt).toBe(true);
+      expect(mocks.usePrivySignInOptions?.analytics).toEqual(
+        expect.objectContaining({
+          link_source: 'explore_email_capture',
+          form_type: 'account',
+          signup_surface: 'explore_email_capture',
+        })
+      );
       // The modal replaces the popup visually, but this hook must remain mounted until Privy
       // completes so its completion handler can attribute the signup to this surface.
       expect(popup()).toBeInTheDocument();
@@ -1057,5 +1250,68 @@ describe('ExploreEmailCapturePopup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong'));
+  });
+});
+
+// GEO-3139. The account offer is our own UI, so Google is our button here rather than Privy's modal.
+describe('ExploreEmailCapturePopup Google sign-in', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  /** Subscribes with the flag set, in a fresh store so the flag is read from storage. */
+  async function subscribeWithGoogleFlag(enabled: boolean) {
+    window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ googleSignIn: enabled }));
+    render(
+      <Provider store={createStore()}>
+        <GoogleOAuthHost />
+        <ExploreEmailCapturePopup />
+      </Provider>
+    );
+    scrollPastTrigger();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+    });
+  }
+
+  it('offers no Google button with the flag off', async () => {
+    await subscribeWithGoogleFlag(false);
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
+  });
+
+  it('starts Google sign-in under the popup attribution with the flag on', async () => {
+    await subscribeWithGoogleFlag(true);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    });
+
+    expect(mocks.initOAuth).toHaveBeenCalledWith({ provider: 'google' });
+    expect(mocks.prepareOnboarding).toHaveBeenCalled();
+    // Persisted before the redirect, so the completion after the reload is attributed to the popup.
+    expect(currentAuthAttempt()?.properties).toMatchObject({
+      component: 'explore_email_capture',
+      auth_control: 'continue_with_google',
+    });
+  });
+
+  // Privy refuses Google in in-app browsers, and a retry there can never work.
+  it('offers no Google button in an in-app browser', async () => {
+    vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue(
+      'Mozilla/5.0 (iPhone) Mobile/15E148 Instagram 320.0.0'
+    );
+    await subscribeWithGoogleFlag(true);
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /google/i })).not.toBeInTheDocument();
+  });
+
+  it('says so and ends the attempt when the redirect cannot start', async () => {
+    mocks.initOAuth.mockRejectedValue(new Error('blocked'));
+    await subscribeWithGoogleFlag(true);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Google sign-in did not start');
+    expect(currentAuthAttempt()?.outcome).toBe('closed');
   });
 });

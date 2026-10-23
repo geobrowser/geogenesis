@@ -1,16 +1,22 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
+import type { DebateLobbySummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { NavUtils } from '~/core/utils/utils';
 
+import type { UpcomingRoomRow } from './scheduled-debates-section';
+import type { UpcomingLobbyRow } from './upcoming-lobby-rows';
+
 const mocks = vi.hoisted(() => ({
-  respond: vi.fn(),
+  respond: vi.fn().mockResolvedValue({ outcome: 'recorded' }),
+  cancel: vi.fn(),
+  cancelPending: false,
+  cancelSuccess: false,
   pending: false,
   viewerId: 'user-me' as string | null,
   people: [] as { user_id: string; profile_space_id: string; display_name: string | null; avatar_cid: string | null }[],
@@ -19,6 +25,15 @@ const mocks = vi.hoisted(() => ({
   requestsError: null as Error | null,
   roomsError: null as Error | null,
   finishedRoomIds: new Set<string>() as ReadonlySet<string>,
+  graphPeople: [] as {
+    user_id: string;
+    profile_space_id: string;
+    display_name: string | null;
+    avatar_cid: string | null;
+  }[],
+  graphLookupIds: [] as string[],
+  lobbies: [] as DebateLobbySummary[],
+  lobbiesError: null as Error | null,
 }));
 
 const ADA = {
@@ -28,8 +43,15 @@ const ADA = {
   avatar_cid: null,
 };
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
-  useRespondToScheduledDebate: () => ({ mutate: mocks.respond, isPending: mocks.pending }),
+  useRespondToScheduledDebate: () => ({ mutateAsync: mocks.respond, isPending: mocks.pending }),
+  useCancelScheduledDebate: () => ({
+    mutate: mocks.cancel,
+    isPending: mocks.cancelPending,
+    isSuccess: mocks.cancelSuccess,
+  }),
   useScheduledDebates: () => ({ data: { requests: mocks.requests }, error: mocks.requestsError }),
 }));
 
@@ -38,21 +60,61 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
   useFinishedRoomIds: () => mocks.finishedRoomIds,
 }));
 
+vi.mock('~/core/debates/lobbies/hooks', () => ({
+  useDebateLobbies: (enabled: boolean) => ({
+    data: enabled ? { lobbies: mocks.lobbies } : undefined,
+    // Not gated: a disabled query keeps the error of its last failed read.
+    error: mocks.lobbiesError,
+  }),
+}));
+
 vi.mock('./hooks', () => ({
   useDebatePeople: () => ({ data: { people: mocks.people } }),
+}));
+
+vi.mock('./use-geo-chat-user-summaries', () => ({
+  useGeoChatUserSummaries: (ids: string[]) => {
+    mocks.graphLookupIds = ids;
+    return mocks.graphPeople;
+  },
+}));
+
+// The week itself is covered by its own suites; here it only matters what it is opened with.
+vi.mock('~/partials/availability/peer-availability-booking-modal', () => ({
+  PeerAvailabilityBookingModal: (props: {
+    open: boolean;
+    userId: string;
+    peerName?: string | null;
+    rescheduleRequestId?: string | null;
+    entry?: string | null;
+    onClose: () => void;
+  }) =>
+    props.open ? (
+      <div role="dialog" aria-label="week">
+        <output aria-label="week of">{props.userId}</output>
+        <output aria-label="week name">{props.peerName ?? ''}</output>
+        <output aria-label="moving">{props.rescheduleRequestId ?? ''}</output>
+        <output aria-label="entry">{props.entry ?? ''}</output>
+        <button type="button" onClick={props.onClose}>
+          close week
+        </button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.viewerId,
 }));
 
-const { ScheduledDebatesSection, useScheduledContent } = await import('./scheduled-debates-section');
+const { ScheduledDebatesSection, formatDebateSlot, formatDebateTime, useScheduledContent } =
+  await import('./scheduled-debates-section');
 
 const request = (overrides: Partial<ScheduledDebateRequest> = {}): ScheduledDebateRequest => ({
   request_id: 'request-1',
   status: 'pending',
-  scheduled_start_at: '2026-09-24T13:00:00Z',
-  scheduled_end_at: '2026-09-24T13:30:00Z',
+  // Far out: a request expires when its start arrives, and these are about everything else.
+  scheduled_start_at: '2099-09-24T13:00:00Z',
+  scheduled_end_at: '2099-09-24T13:30:00Z',
   invited_by_user_id: 'user-them',
   created_by_admin: false,
   proposed_by_user_id: 'user-them',
@@ -78,9 +140,12 @@ const room = (overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom =
 
 const setup = (content: {
   answerable?: ScheduledDebateRequest[];
-  upcoming?: { room: UpcomingDebateRoom; opponentUserId: string | null }[];
+  upcoming?: UpcomingRoomRow[];
+  lobbies?: UpcomingLobbyRow[];
+  people?: (typeof mocks.people)[number][];
   requestsError?: Error | null;
   roomsError?: Error | null;
+  lobbiesError?: Error | null;
 }) => ({
   user: userEvent.setup(),
   ...render(
@@ -88,22 +153,34 @@ const setup = (content: {
       content={{
         answerable: content.answerable ?? [],
         upcoming: content.upcoming ?? [],
+        lobbies: content.lobbies ?? [],
+        people: content.people ?? [],
         requestsError: content.requestsError ?? null,
         roomsError: content.roomsError ?? null,
+        lobbiesError: content.lobbiesError ?? null,
       }}
     />
   ),
 });
 
-const upcomingRow = (overrides: Partial<UpcomingDebateRoom> = {}, opponentUserId: string | null = 'user-them') => ({
+const upcomingRow = (
+  overrides: Partial<UpcomingDebateRoom> = {},
+  opponentUserId: string | null = 'user-them',
+  requestId: string | null = 'request-1'
+) => ({
   room: room(overrides),
   opponentUserId,
+  scheduledEndAt: null,
+  requestId,
 });
 
 afterEach(() => {
   cleanup();
-  mocks.respond = vi.fn();
+  mocks.respond = vi.fn().mockResolvedValue({ outcome: 'recorded' });
   mocks.pending = false;
+  mocks.cancel = vi.fn();
+  mocks.cancelPending = false;
+  mocks.cancelSuccess = false;
   mocks.viewerId = 'user-me';
   mocks.people = [];
   mocks.requests = [];
@@ -111,6 +188,10 @@ afterEach(() => {
   mocks.requestsError = null;
   mocks.roomsError = null;
   mocks.finishedRoomIds = new Set();
+  mocks.graphPeople = [];
+  mocks.graphLookupIds = [];
+  mocks.lobbies = [];
+  mocks.lobbiesError = null;
 });
 
 describe('answering in the tab', () => {
@@ -119,26 +200,54 @@ describe('answering in the tab', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('accepts a request pointed at the viewer', async () => {
-    const { user } = setup({ answerable: [request()] });
+  it('accepts a request and keeps its time range in the upcoming card', async () => {
+    const pending = request();
+    mocks.requests = [pending];
+    const ScheduledTab = () => <ScheduledDebatesSection content={useScheduledContent()} />;
+    const user = userEvent.setup();
+    const { rerender } = render(<ScheduledTab />);
+    const slot = screen.getByText(/ – /).textContent!;
 
     await user.click(screen.getByRole('button', { name: 'Accept' }));
 
     expect(mocks.respond).toHaveBeenCalledTimes(1);
     expect(mocks.respond.mock.calls[0][0]).toEqual({ requestId: 'request-1', accepted: true });
+
+    mocks.requests = [{ ...pending, status: 'accepted', room_id: 'room-1', viewer_must_answer: false }];
+    mocks.rooms = [room({ starts_at: pending.scheduled_start_at, joinable: false })];
+    rerender(<ScheduledTab />);
+
+    expect(screen.getByText('Upcoming debates')).toBeInTheDocument();
+    expect(screen.getByText(slot)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+  });
+
+  it('says it expires when it starts', () => {
+    setup({ answerable: [request()] });
+
+    expect(screen.getByText('Waiting on your answer · Expires at start')).toBeInTheDocument();
+  });
+
+  it('counts down in the last hour before it expires', () => {
+    const soon = new Date(Date.now() + 12 * 60_000 - 1_000).toISOString();
+    setup({
+      answerable: [
+        request({ scheduled_start_at: soon, scheduled_end_at: new Date(Date.now() + 42 * 60_000).toISOString() }),
+      ],
+    });
+
+    expect(screen.getByText('Waiting on your answer · Expires in 12m')).toBeInTheDocument();
   });
 
   it('offers no answer on one the viewer is not holding up', () => {
     setup({ answerable: [request({ viewer_must_answer: false })] });
 
-    expect(screen.getByText('Waiting on their answer')).toBeInTheDocument();
+    expect(screen.getByText('Not confirmed until Your opponent answers · Expires at start')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
   });
 
   it('reports a clash, which is a refusal rather than a failure', async () => {
-    mocks.respond = vi.fn((_vars, options) =>
-      options.onSuccess({ outcome: 'conflict', conflicting_start_at: '2026-09-24T13:00:00Z' })
-    );
+    mocks.respond = vi.fn().mockResolvedValue({ outcome: 'conflict', conflicting_start_at: '2026-09-24T13:00:00Z' });
     const { user } = setup({ answerable: [request()] });
 
     await user.click(screen.getByRole('button', { name: 'Accept' }));
@@ -147,7 +256,7 @@ describe('answering in the tab', () => {
   });
 
   it('reports a rejected answer rather than looking inert', async () => {
-    mocks.respond = vi.fn((_vars, options) => options.onError(new Error('Already answered.')));
+    mocks.respond = vi.fn().mockRejectedValue(new Error('Already answered.'));
     const { user } = setup({ answerable: [request()] });
 
     await user.click(screen.getByRole('button', { name: 'Decline' }));
@@ -160,8 +269,10 @@ describe('joining from the tab', () => {
   // The tab carries what the popup carries, since the popup can be dismissed.
   it('offers the way in, and says who is already there', () => {
     mocks.people = [ADA];
-    setup({ upcoming: [upcomingRow({ others_present: true, due: true })] });
+    const end = new Date(2026, 8, 24, 13, 30).toISOString();
+    setup({ upcoming: [{ ...upcomingRow({ others_present: true, due: true }), scheduledEndAt: end }] });
 
+    expect(screen.getByText(/Starting now · Ends at 1:30\s?PM/)).toBeInTheDocument();
     expect(screen.getByText('Ada is waiting for you now')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Join debate' })).toHaveAttribute('href', '/debate/room-1');
   });
@@ -170,7 +281,267 @@ describe('joining from the tab', () => {
     setup({ upcoming: [upcomingRow({ joinable: false })] });
 
     expect(screen.getByText(/^Opens at/)).toBeInTheDocument();
+    expect(screen.getByText(formatDebateTime(room().starts_at))).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Join debate' })).not.toBeInTheDocument();
+  });
+});
+
+describe('calling a scheduled debate off', () => {
+  it('asks before cancelling an accepted debate, and can be backed out of', async () => {
+    mocks.people = [ADA];
+    const { user } = setup({ upcoming: [upcomingRow({ joinable: false })] });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(screen.getByText('Cancel your debate with Ada? The time is freed up for both of you.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Keep it' }));
+    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Keep it' })).not.toBeInTheDocument();
+  });
+
+  it('cancels the request that booked the room once confirmed', async () => {
+    const { user } = setup({ upcoming: [upcomingRow({ joinable: true })] });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+
+    expect(mocks.cancel).toHaveBeenCalledTimes(1);
+    expect(mocks.cancel.mock.calls[0][0]).toEqual({ requestId: 'request-1' });
+    // Joining stays on offer beside it.
+    expect(screen.getByRole('link', { name: 'Join debate' })).toBeInTheDocument();
+  });
+
+  it('offers no cancel once the other debater is in the room', () => {
+    setup({ upcoming: [upcomingRow({ others_present: true })] });
+
+    expect(screen.queryByRole('button', { name: 'Cancel debate' })).not.toBeInTheDocument();
+  });
+
+  // The session is created on first join, so it outlives an arrival who has since left.
+  it('offers no cancel once anyone has been in the room', () => {
+    setup({ upcoming: [upcomingRow({ rematch_session_id: 'session-1' })] });
+
+    expect(screen.queryByRole('button', { name: 'Cancel debate' })).not.toBeInTheDocument();
+  });
+
+  it('offers no cancel for a room no request is known to own', () => {
+    setup({ upcoming: [upcomingRow({}, 'user-them', null)] });
+
+    expect(screen.queryByRole('button', { name: 'Cancel debate' })).not.toBeInTheDocument();
+  });
+
+  it("explains geo-chat's refusal once someone has joined", async () => {
+    const { GeoChatRequestError } = await import('~/core/debates/api');
+    mocks.cancel = vi.fn((_vars, options) =>
+      options.onError(new GeoChatRequestError('someone has already joined', 'debate_already_started', 409))
+    );
+    const { user } = setup({ upcoming: [upcomingRow()] });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+
+    expect(screen.getByText('This debate has already started, so it can no longer be cancelled.')).toBeInTheDocument();
+  });
+
+  it('says it is cancelled rather than offering it again before the list refreshes', () => {
+    mocks.cancelSuccess = true;
+    setup({ upcoming: [upcomingRow()] });
+
+    expect(screen.getByText('Cancelled')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel debate' })).not.toBeInTheDocument();
+  });
+
+  it('lets the proposer withdraw a pending request', async () => {
+    const { user } = setup({
+      answerable: [request({ viewer_must_answer: false, proposed_by_user_id: 'user-me' })],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Cancel request' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel request' }));
+
+    expect(mocks.cancel.mock.calls[0][0]).toEqual({ requestId: 'request-1' });
+  });
+
+  // geo-chat refuses it: someone who was asked says no with Decline, which is a truer record.
+  it('offers the invitee Decline rather than Cancel', () => {
+    setup({ answerable: [request()] });
+
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel request' })).not.toBeInTheDocument();
+  });
+
+  // GEO-3229: a match the Geo team arranged must not read as the other debater having asked.
+  it('says the Geo team arranged a pending match, before and after the viewer accepts', () => {
+    setup({
+      answerable: [
+        request({ request_id: 'asked', created_by_admin: true, proposed_by_user_id: null }),
+        request({
+          request_id: 'accepted',
+          created_by_admin: true,
+          proposed_by_user_id: null,
+          viewer_must_answer: false,
+        }),
+      ],
+    });
+
+    expect(screen.getAllByText('Arranged by the Geo team')).toHaveLength(2);
+  });
+
+  it('says which debater proposed a moved time on a Geo-arranged match, and nothing on a peer request', () => {
+    setup({
+      answerable: [
+        request({
+          request_id: 'theirs',
+          created_by_admin: true,
+          reschedule_count: 1,
+          proposed_by_user_id: 'user-them',
+        }),
+        request({
+          request_id: 'mine',
+          created_by_admin: true,
+          reschedule_count: 1,
+          proposed_by_user_id: 'user-me',
+          viewer_must_answer: false,
+        }),
+        request({ request_id: 'peer' }),
+      ],
+    });
+
+    expect(screen.getAllByText(/proposed this time/)).toHaveLength(2);
+    expect(screen.getByText('Arranged by the Geo team · You proposed this time')).toBeInTheDocument();
+    expect(screen.getAllByText(/Arranged by the Geo team/)).toHaveLength(2);
+  });
+
+  it('offers no cancel on a pending request someone else proposed', () => {
+    setup({
+      answerable: [
+        request({
+          viewer_must_answer: false,
+          proposed_by_user_id: 'user-admin',
+          participants: [
+            { user_id: 'user-me', accepted: null },
+            { user_id: 'user-them', accepted: null },
+          ],
+        }),
+      ],
+    });
+
+    expect(screen.queryByRole('button', { name: 'Cancel request' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel debate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+  });
+
+  // GEO-3233: an admin match neither debater proposed; the first to accept is not stuck.
+  it('lets someone who accepted cancel or reschedule before the partner answers', async () => {
+    mocks.people = [ADA];
+    const { user } = setup({
+      answerable: [request({ viewer_must_answer: false, proposed_by_user_id: null, created_by_admin: true })],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Reschedule' }));
+    expect(screen.getByLabelText('moving')).toHaveTextContent('request-1');
+    await user.click(screen.getByRole('button', { name: 'close week' }));
+
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    expect(mocks.cancel.mock.calls[0][0]).toEqual({ requestId: 'request-1' });
+  });
+});
+
+// Moving an agreed debate (geo-chat allows it until someone joins, like Cancel): the other debater's
+// week, in the same reschedule mode the scheduling emails' "Choose different time" opens.
+describe('moving a scheduled debate', () => {
+  it("opens the other debater's week to move this debate", async () => {
+    mocks.people = [ADA];
+    const { user } = setup({ upcoming: [upcomingRow({ joinable: false })] });
+    expect(screen.queryByRole('dialog', { name: 'week' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Reschedule' }));
+
+    expect(screen.getByLabelText('week of')).toHaveTextContent('user-them');
+    expect(screen.getByLabelText('week name')).toHaveTextContent('Ada');
+    expect(screen.getByLabelText('moving')).toHaveTextContent('request-1');
+    expect(screen.getByLabelText('entry')).toHaveTextContent('requests_reschedule');
+    // Offered beside Cancel, not instead of it.
+    expect(screen.getByRole('button', { name: 'Cancel debate' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'close week' }));
+    expect(screen.queryByRole('dialog', { name: 'week' })).not.toBeInTheDocument();
+  });
+
+  it('sits beside Join while the room is open', () => {
+    setup({ upcoming: [upcomingRow({ joinable: true })] });
+
+    expect(screen.getByRole('link', { name: 'Join debate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reschedule' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['the other debater is in the room', upcomingRow({ others_present: true })],
+    ['anyone has been in the room', upcomingRow({ rematch_session_id: 'session-1' })],
+    ['no request is known to own the room', upcomingRow({}, 'user-them', null)],
+    ['the other debater is not known', upcomingRow({}, null, 'request-1')],
+  ])('is not offered once %s', (_why, row) => {
+    setup({ upcoming: [row] });
+
+    expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+  });
+
+  it('is not offered on a request the viewer must still answer, which offers "Choose different time"', () => {
+    setup({ answerable: [request()] });
+
+    expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose different time' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose different time' })).toBeInTheDocument();
+  });
+});
+
+// The scheduling email's third answer to an invite (GEO-3232), in its words: the same move, on the
+// same week, so the other side is asked to accept the new time.
+describe('choosing a different time for an invite', () => {
+  it("opens the other debater's week to move the invite, beside Decline and Accept", async () => {
+    mocks.people = [ADA];
+    const { user } = setup({ answerable: [request()] });
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Choose different time' }));
+
+    expect(screen.getByLabelText('week of')).toHaveTextContent('user-them');
+    expect(screen.getByLabelText('week name')).toHaveTextContent('Ada');
+    expect(screen.getByLabelText('moving')).toHaveTextContent('request-1');
+    expect(screen.getByLabelText('entry')).toHaveTextContent('requests_new_time');
+    expect(mocks.respond).not.toHaveBeenCalled();
+  });
+
+  it('is offered on an admin-arranged invite, on the other debater’s week', async () => {
+    const { user } = setup({
+      answerable: [request({ invited_by_user_id: null, created_by_admin: true, proposed_by_user_id: 'user-admin' })],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Choose different time' }));
+
+    expect(screen.getByLabelText('week of')).toHaveTextContent('user-them');
+    expect(screen.getByLabelText('moving')).toHaveTextContent('request-1');
+  });
+
+  // Moving it accepts the new time on the viewer's behalf, so the card then waits on the other side
+  // and offers the accepted request's Reschedule (GEO-3233) instead.
+  it('is not offered once the invite is waiting on the other side', () => {
+    mocks.people = [ADA];
+    setup({ answerable: [request({ viewer_must_answer: false, proposed_by_user_id: 'user-me' })] });
+
+    expect(screen.queryByRole('button', { name: 'Choose different time' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Not confirmed until Ada answers/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reschedule' })).toBeInTheDocument();
+  });
+
+  it('is not offered while the other debater is not known', () => {
+    setup({ answerable: [request({ participants: [{ user_id: 'user-me', accepted: null }] })] });
+
+    expect(screen.queryByRole('button', { name: 'Choose different time' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
   });
 });
 
@@ -187,6 +558,48 @@ describe('naming the other person', () => {
 
     expect(screen.getByText('Your opponent')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Your opponent' })).not.toBeInTheDocument();
+  });
+
+  // The whole point of scheduling: whoever invited you is usually not online to be on the roster.
+  it('names an offline requester from the graph', () => {
+    setup({ answerable: [request()], people: [ADA] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toHaveAttribute('href', NavUtils.toSpace(ADA.profile_space_id));
+  });
+
+  it("prefers the graph's record of them over the roster's", () => {
+    mocks.people = [{ ...ADA, display_name: 'Ada (stale)' }];
+    setup({ answerable: [request()], people: [ADA] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+    expect(screen.queryByText('Ada (stale)')).not.toBeInTheDocument();
+  });
+
+  // A graph entry fills gaps rather than overwriting: a profile without a name must not turn an
+  // online person's roster name into their raw space id.
+  it("keeps the roster's name and face where the graph has none", () => {
+    mocks.people = [{ ...ADA, avatar_cid: 'ipfs://ada' }];
+    setup({ answerable: [request()], people: [{ ...ADA, display_name: null, avatar_cid: null }] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+    expect(screen.queryByText(ADA.profile_space_id)).not.toBeInTheDocument();
+    expect(screen.getByAltText('Ada')).toBeInTheDocument();
+  });
+
+  // The profile schema allows empty strings, and an empty name is as missing as a null one.
+  it("keeps the roster's name and face where the graph's are empty", () => {
+    mocks.people = [{ ...ADA, avatar_cid: 'ipfs://ada' }];
+    setup({ answerable: [request()], people: [{ ...ADA, display_name: '', avatar_cid: '' }] });
+
+    expect(screen.getByRole('link', { name: 'Ada' })).toBeInTheDocument();
+    expect(screen.getByAltText('Ada')).toBeInTheDocument();
+  });
+
+  it('puts the viewer on the left of the strip, as every request card does', () => {
+    setup({ answerable: [request()], people: [ADA, { ...ADA, user_id: 'user-me', display_name: 'Me' }] });
+
+    expect(screen.getByText('You')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Me' })).not.toBeInTheDocument();
   });
 
   it('never reads the viewer as their own opponent', () => {
@@ -206,33 +619,58 @@ describe('pairing a room with the request that booked it', () => {
     mocks.requests = [request({ status: 'accepted', room_id: dashed, viewer_must_answer: false })];
     mocks.rooms = [room({ room_id: dashed.replace(/-/g, '') })];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.upcoming).toHaveLength(1);
     expect(result.current.upcoming[0].opponentUserId).toBe('user-them');
+    expect(result.current.upcoming[0].scheduledEndAt).toBe(mocks.requests[0].scheduled_end_at);
+    expect(result.current.upcoming[0].requestId).toBe('request-1');
   });
 
   it('drops a room whose debate has already happened', () => {
     mocks.rooms = [room({ room_id: 'room-done' }), room({ room_id: 'room-open' })];
     mocks.finishedRoomIds = new Set(['room-done']);
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-open']);
+  });
+
+  it('looks up both sides in the graph, the viewer included', () => {
+    mocks.requests = [request(), request({ request_id: 'request-2' })];
+    mocks.graphPeople = [ADA];
+
+    const { result } = renderHook(() => useScheduledContent());
+
+    expect(mocks.graphLookupIds).toEqual(['user-me', 'user-them', 'user-me', 'user-them']);
+    expect(result.current.people).toEqual([ADA]);
   });
 
   it('leaves the opponent unknown when no request owns the room', () => {
     mocks.rooms = [room()];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.upcoming[0].opponentUserId).toBeNull();
+    expect(result.current.upcoming[0].scheduledEndAt).toBeNull();
+    expect(result.current.upcoming[0].requestId).toBeNull();
+  });
+
+  // geo-chat's sweeper expires an unanswered request once its start arrives, but only every minute.
+  it('drops a pending request whose start has passed', () => {
+    mocks.requests = [
+      request({ scheduled_start_at: '2020-01-01T13:00:00Z', scheduled_end_at: '2020-01-01T13:30:00Z' }),
+    ];
+
+    const { result } = renderHook(() => useScheduledContent());
+
+    expect(result.current.answerable).toHaveLength(0);
   });
 
   it('keeps an accepted request out of the answerable list', () => {
     mocks.requests = [request({ status: 'accepted', room_id: 'room-1' })];
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.answerable).toHaveLength(0);
   });
@@ -250,7 +688,7 @@ describe('a schedule that could not be read', () => {
   it('reports a failed room read too, not only a failed request read', () => {
     mocks.roomsError = new Error('Rooms are down.');
 
-    const { result } = renderHook(() => useScheduledContent(true));
+    const { result } = renderHook(() => useScheduledContent());
 
     expect(result.current.roomsError?.message).toBe('Rooms are down.');
     expect(result.current.requestsError).toBeNull();
@@ -270,5 +708,154 @@ describe('a schedule that could not be read', () => {
 
     expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
     expect(screen.getByText(/Could not read your upcoming debates/)).toBeInTheDocument();
+  });
+});
+
+describe('the slot in the header', () => {
+  const now = new Date(2026, 8, 28, 9, 0);
+  const at = (hour: number, minute = 0) => new Date(2026, 8, 29, hour, minute).toISOString();
+
+  it('names the day once and shares the period', () => {
+    expect(formatDebateSlot(at(11), at(11, 30), now)).toMatch(/^Tomorrow, 11:00 – 11:30\s?AM$/);
+  });
+
+  it('keeps both periods when the slot crosses noon', () => {
+    expect(formatDebateSlot(at(11, 45), at(12, 15), now)).toMatch(/^Tomorrow, 11:45\s?AM – 12:15\s?PM$/);
+  });
+
+  it('falls back to the start alone when the end is unusable', () => {
+    expect(formatDebateSlot(at(11), 'not a time', now)).toMatch(/^Tomorrow at 11:00\s?AM$/);
+  });
+});
+
+describe('lobbies among the upcoming debates (GEO-3292)', () => {
+  const lobbyRow = (overrides: Partial<UpcomingLobbyRow> = {}): UpcomingLobbyRow => ({
+    lobbyId: 'lobby-1',
+    name: 'Should cities ban cars?',
+    startsAt: '2099-09-24T14:00:00Z',
+    opensAt: '2099-09-24T13:50:00Z',
+    open: false,
+    hosts: [{ user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null }],
+    hosting: false,
+    onRoster: false,
+    ...overrides,
+  });
+
+  const lobbySummary = (overrides: Partial<DebateLobbySummary> = {}): DebateLobbySummary => ({
+    lobby_id: 'lobby-1',
+    name: 'Should cities ban cars?',
+    scheduled: true,
+    starts_at: '2099-09-24T14:00:00Z',
+    opens_at: '2099-09-24T13:50:00Z',
+    open: false,
+    hosts: [{ user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null }],
+    headcount: 0,
+    avatars: [],
+    debating_count: 0,
+    reminder_count: 3,
+    viewer_reminded: true,
+    viewer_on_roster: false,
+    ...overrides,
+  });
+
+  it('lists a lobby as a lobby, with its name and host, linking to its page', () => {
+    setup({ lobbies: [lobbyRow()] });
+
+    const card = screen.getByTestId('upcoming-lobby-card');
+    expect(card).toHaveTextContent('Debate lobby');
+    expect(card).toHaveTextContent('Should cities ban cars?');
+    expect(card).toHaveTextContent('Hosted by Bryan');
+    expect(card).toHaveTextContent(
+      `Opens at ${new Date('2099-09-24T13:50:00Z').toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+    );
+    expect(screen.getByRole('link', { name: 'View lobby' })).toHaveAttribute('href', '/debate/lobby-1');
+  });
+
+  it('offers Join once the lobby is open', () => {
+    setup({ lobbies: [lobbyRow({ open: true, startsAt: '2020-09-24T14:00:00Z' })] });
+
+    const card = screen.getByTestId('upcoming-lobby-card');
+    expect(card).toHaveTextContent('Starting now');
+    expect(card).toHaveTextContent('The lobby is open');
+    expect(screen.getByRole('link', { name: 'Join lobby' })).toHaveAttribute('href', '/debate/lobby-1');
+  });
+
+  it('tells a host it is theirs', () => {
+    setup({ lobbies: [lobbyRow({ hosting: true })] });
+
+    expect(screen.getByTestId('upcoming-lobby-card')).toHaveTextContent('You’re hosting');
+  });
+
+  it('lists lobbies under their own heading, apart from the debates', () => {
+    setup({
+      upcoming: [upcomingRow({ room_id: 'room-1', joinable: false })],
+      lobbies: [lobbyRow()],
+      people: [ADA],
+    });
+
+    expect(screen.getByText('Upcoming debates')).toBeInTheDocument();
+    expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
+    const lobbies = screen.getByText('Upcoming lobbies').closest('section') ?? document.body;
+    expect(lobbies).toContainElement(screen.getByTestId('upcoming-lobby-card'));
+  });
+
+  it('shows only Upcoming lobbies when lobbies are all there is', () => {
+    setup({ lobbies: [lobbyRow()] });
+
+    expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
+    expect(screen.queryByText('Upcoming debates')).not.toBeInTheDocument();
+  });
+
+  // An empty lobby sends nothing when its start passes, so only the clock can move the label.
+  it('says Starting now once the start passes, with no new read', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2099-09-24T13:59:30Z'));
+      setup({ lobbies: [lobbyRow({ open: true })] });
+      expect(screen.getByTestId('upcoming-lobby-card')).not.toHaveTextContent('Starting now');
+
+      act(() => vi.advanceTimersByTime(60_000));
+
+      expect(screen.getByTestId('upcoming-lobby-card')).toHaveTextContent('Starting now');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says Starting now once the start passes even if the door has not opened', () => {
+    setup({ lobbies: [lobbyRow({ open: false, startsAt: '2020-09-24T14:00:00Z' })] });
+
+    expect(screen.getByTestId('upcoming-lobby-card')).toHaveTextContent('Starting now');
+  });
+
+  // Hosted lobbies come only from the lobby list, so its failure must not read as "nothing hosted".
+  it('says the lobby list could not be read rather than showing nothing', () => {
+    setup({ lobbiesError: new Error('boom') });
+
+    expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
+    expect(screen.getByText('Could not read your lobbies: boom')).toBeInTheDocument();
+  });
+
+  it('carries a failed lobby list read out of the hook', () => {
+    mocks.lobbiesError = new Error('boom');
+    expect(renderHook(() => useScheduledContent()).result.current.lobbiesError?.message).toBe('boom');
+  });
+
+  it('builds Going lobbies from the upcoming rooms and names their host from the lobby list', () => {
+    mocks.rooms = [
+      room({ room_id: 'lobby-1', kind: 'lobby', name: 'Should cities ban cars?', joinable: false }),
+      room({ room_id: 'room-1' }),
+    ];
+    mocks.lobbies = [lobbySummary()];
+    const { result } = renderHook(() => useScheduledContent());
+
+    expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-1']);
+    expect(result.current.lobbies).toEqual([
+      expect.objectContaining({
+        lobbyId: 'lobby-1',
+        hosting: false,
+        hosts: [expect.objectContaining({ display_name: 'Bryan' })],
+      }),
+    ]);
   });
 });

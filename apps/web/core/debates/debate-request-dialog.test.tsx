@@ -1,10 +1,45 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRequestDialogParticipant } from './debate-request-dialog';
 import { DebateRequestDialog } from './debate-request-dialog';
+import { debateFormatById, defaultDebateFormatId } from './formats';
+
+const media = vi.hoisted(() => ({
+  releaseSession: vi.fn(),
+  beginSession: vi.fn(),
+  stopMedia: vi.fn(),
+  ensurePreview: vi.fn(),
+}));
+
+vi.mock('./media-session', () => ({
+  useOptionalDebateMediaSession: () => ({
+    previewState: 'idle',
+    previewError: null,
+    previewStream: null,
+    localTracksRef: { current: [] },
+    joinChoiceRef: { current: null },
+    ensurePreview: media.ensurePreview,
+    beginSession: media.beginSession,
+    releaseSession: media.releaseSession,
+    stopMedia: media.stopMedia,
+  }),
+  debateMediaSessionKey: (id: string) => `debate:${id}`,
+  debateRequestMediaSessionKey: (id: string) => `debate-request:${id}`,
+}));
+
+vi.mock('./debate-video-tile', () => ({
+  DebateVideoTile: ({ children, tileControls }: { children: React.ReactNode; tileControls: React.ReactNode }) => (
+    <div data-testid="tile">
+      {tileControls}
+      {children}
+    </div>
+  ),
+}));
 
 const participants: DebateRequestDialogParticipant[] = [
   {
@@ -28,13 +63,172 @@ const participants: DebateRequestDialogParticipant[] = [
 ];
 
 beforeEach(() => {
+  media.releaseSession.mockReset();
+  media.beginSession.mockReset();
+  media.stopMedia.mockReset();
+  media.ensurePreview.mockReset().mockResolvedValue([]);
   document.body.style.overflow = '';
   document.documentElement.style.overflow = '';
 });
 
 afterEach(cleanup);
 
+function choose(props: Partial<React.ComponentProps<typeof DebateRequestDialog>> = {}) {
+  return (
+    <DebateRequestDialog
+      media={{ kind: 'choose', sessionKey: 'debate-request:req-1' }}
+      claim="The protocol should ship debates"
+      participants={participants}
+      currentUserId="user-local"
+      formatId="standard"
+      busy={false}
+      error={null}
+      onAccept={vi.fn()}
+      onReject={vi.fn()}
+      {...props}
+    />
+  );
+}
+
+function renderChoose(props: Partial<React.ComponentProps<typeof DebateRequestDialog>> = {}) {
+  return render(choose(props));
+}
+
 describe('DebateRequestDialog', () => {
+  it('states Open rounds as a floor when the request carries no cap', () => {
+    render(
+      <DebateRequestDialog
+        media={{ kind: 'already-live' }}
+        claim="The protocol should ship debates"
+        participants={participants}
+        currentUserId="user-local"
+        formatId="open_rounds"
+        openRounds={null}
+        formatSummaryOnly
+        busy={false}
+        error={null}
+        onAccept={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'The protocol should ship debates' });
+    expect(within(dialog).getByText('Open rounds · at least 2 min')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/2 min total/)).not.toBeInTheDocument();
+  });
+
+  it('reads a request with no format id as the default, not as no time at all', () => {
+    const fallback = debateFormatById(defaultDebateFormatId)!;
+
+    render(
+      <DebateRequestDialog
+        media={{ kind: 'already-live' }}
+        claim="The protocol should ship debates"
+        participants={participants}
+        currentUserId="user-local"
+        formatId={null}
+        openRounds={null}
+        formatSummaryOnly
+        busy={false}
+        error={null}
+        onAccept={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'The protocol should ship debates' });
+    expect(within(dialog).getByText(new RegExp(fallback.label))).toBeInTheDocument();
+    expect(within(dialog).queryByText('0s total')).not.toBeInTheDocument();
+  });
+
+  it('names no format for an id it does not recognise', () => {
+    render(
+      <DebateRequestDialog
+        media={{ kind: 'already-live' }}
+        claim="The protocol should ship debates"
+        participants={participants}
+        currentUserId="user-local"
+        formatId="a-format-from-a-newer-server"
+        openRounds={null}
+        formatSummaryOnly
+        busy={false}
+        error={null}
+        onAccept={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'The protocol should ship debates' });
+    expect(within(dialog).getByText('0s total')).toBeInTheDocument();
+    expect(within(dialog).queryByText(new RegExp(debateFormatById(defaultDebateFormatId)!.label))).toBeNull();
+  });
+
+  it('states the Open rounds cap when the request carries one', () => {
+    render(
+      <DebateRequestDialog
+        media={{ kind: 'already-live' }}
+        claim="The protocol should ship debates"
+        participants={participants}
+        currentUserId="user-local"
+        formatId="open_rounds"
+        openRounds={{ max_rebuttal_rounds: 3, rebuttal_turn_ms: 45_000 }}
+        formatSummaryOnly
+        busy={false}
+        error={null}
+        onAccept={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Open rounds · up to 6 min 30s total')).toBeInTheDocument();
+  });
+
+  it('releases the devices when a failed accept is followed by a dismissal', () => {
+    const view = renderChoose();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    view.rerender(choose({ error: 'Could not accept the request.' }));
+    expect(screen.getByText('Could not accept the request.')).toBeInTheDocument();
+
+    view.unmount();
+
+    expect(media.releaseSession).toHaveBeenCalledWith('debate-request:req-1');
+  });
+
+  it('keeps the devices alive when a retry succeeds after a failed accept', () => {
+    const view = renderChoose();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    view.rerender(choose({ error: 'Could not accept the request.' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    view.rerender(choose({ busy: true, error: null }));
+    view.unmount();
+
+    expect(media.releaseSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps the devices alive when accepting hands them on', () => {
+    const view = renderChoose();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    view.unmount();
+
+    expect(media.releaseSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps the devices alive when a pending accept settles with the card still mounted', () => {
+    const view = renderChoose();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    view.rerender(choose({ busy: true }));
+    view.rerender(choose({ busy: false }));
+    view.unmount();
+
+    expect(media.releaseSession).not.toHaveBeenCalled();
+  });
+
   it('renders the canonical request layout and optional format selector', () => {
     const accept = vi.fn();
     const reject = vi.fn();
@@ -42,6 +236,7 @@ describe('DebateRequestDialog', () => {
 
     render(
       <DebateRequestDialog
+        media={{ kind: 'already-live' }}
         claim="The protocol should ship debates"
         participants={[...participants].reverse()}
         currentUserId="user-local"
@@ -68,9 +263,7 @@ describe('DebateRequestDialog', () => {
     // reads "Verify"/"Dispute" on a claim it still calls factual, and this dialog is the invitation
     // to debate a claim whose pills can only publish an Agree.
     expect(within(within(dialog).getByText('You').parentElement!).getByText('Agree')).toBeInTheDocument();
-    expect(
-      within(within(dialog).getByText('Remote speaker').parentElement!).getByText('Disagree')
-    ).toBeInTheDocument();
+    expect(within(within(dialog).getByText('Remote speaker').parentElement!).getByText('Disagree')).toBeInTheDocument();
     expect(within(dialog).queryByText('Yes')).not.toBeInTheDocument();
     expect(within(dialog).queryByText('No')).not.toBeInTheDocument();
     expect(within(dialog).getAllByText('1m')).toHaveLength(2);
@@ -90,6 +283,7 @@ describe('DebateRequestDialog', () => {
   it('keeps the positive participant on the left and the negative participant on the right', () => {
     render(
       <DebateRequestDialog
+        media={{ kind: 'already-live' }}
         claim="Position order should be stable"
         participants={[
           {
@@ -132,6 +326,7 @@ describe('DebateRequestDialog', () => {
   it('locks scrolling and surfaces busy and error states', () => {
     const { unmount } = render(
       <DebateRequestDialog
+        media={{ kind: 'already-live' }}
         claim="A claim with an error"
         participants={participants}
         currentUserId="user-local"

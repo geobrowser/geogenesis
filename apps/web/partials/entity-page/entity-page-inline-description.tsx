@@ -3,8 +3,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useMutate } from '~/core/sync/use-mutate';
-import { useValue } from '~/core/sync/use-store';
+import { useEntityTextValue } from '~/core/sync/use-entity-text-value';
 
 import { ClampedText } from '~/design-system/clamped-text';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -20,56 +19,33 @@ import { PageStringField } from '~/design-system/editable-fields/editable-fields
  */
 export const ENTITY_DESCRIPTION_MAX_LINES = 3;
 
+/**
+ * An entity's description, under its name, read and written in place.
+ *
+ * Not rendered on a person's profile in either mode. There the description belongs to the
+ * About card, which both shows it and edits it — see `AboutSection`. This component used to
+ * take a `hideWhenReading` flag for that, which left the field under the name in edit mode and
+ * the text in the card, so the same sentence had two homes depending on the toggle.
+ */
 export function EntityPageInlineDescription({
   entityId,
   spaceId,
   fallbackDescription,
-  hideWhenReading = false,
 }: {
   entityId: string;
   spaceId: string;
   fallbackDescription?: string | null;
-  /** Shown only while editing. A profile reads its description in the rail's About section instead. */
-  hideWhenReading?: boolean;
 }) {
   const isEditing = useUserIsEditing(spaceId);
-  const { storage } = useMutate();
-
-  const rawValue = useValue({
-    selector: v =>
-      v.entity.id === entityId && v.spaceId === spaceId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
+  const { text: description, setValue } = useEntityTextValue({
+    entityId,
+    spaceId,
+    propertyId: SystemIds.DESCRIPTION_PROPERTY,
+    propertyName: 'Description',
+    fallback: fallbackDescription,
   });
 
-  const description = rawValue?.value ?? fallbackDescription ?? '';
-
   if (isEditing) {
-    const onChange = (next: string) => {
-      if (next === '' && rawValue) {
-        storage.values.delete(rawValue);
-        return;
-      }
-
-      if (!rawValue) {
-        if (next === '') return;
-        storage.values.set({
-          spaceId,
-          entity: { id: entityId, name: null },
-          property: {
-            id: SystemIds.DESCRIPTION_PROPERTY,
-            name: 'Description',
-            dataType: 'TEXT',
-          },
-          value: next,
-        });
-        return;
-      }
-
-      storage.values.update(rawValue, draft => {
-        draft.value = next;
-        draft.property.dataType = 'TEXT';
-      });
-    };
-
     return (
       <div className="-mt-3 mb-5 text-text">
         <PageStringField
@@ -77,13 +53,13 @@ export function EntityPageInlineDescription({
           placeholder="Add a description..."
           aria-label="Description"
           value={description}
-          onChange={onChange}
+          onChange={setValue}
         />
       </div>
     );
   }
 
-  if (!description || hideWhenReading) {
+  if (!description) {
     return null;
   }
 

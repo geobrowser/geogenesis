@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { HubPillButton } from './hub-pill-button';
+import { HubPillButton, hubPillClassName } from './hub-pill-button';
 
 afterEach(cleanup);
 
@@ -44,5 +44,13 @@ describe('HubPillButton', () => {
     const button = screen.getByRole('button');
     expect(button).toHaveAttribute('data-geo-analytics-intent', 'debate_rematch_action');
     expect(button).toHaveAttribute('data-geo-analytics-label', 'Rematch more claims');
+  });
+
+  // A picked value in a pill is not pressed as a whole, so it must not light up like a button does.
+  it('draws a tag with the secondary look and no hover of its own', () => {
+    const tag = hubPillClassName('tag').split(' ');
+    expect(tag).toEqual(expect.arrayContaining(['border', 'border-grey-02', 'text-text', 'text-metadata', 'h-7']));
+    expect(tag.some(name => name.startsWith('hover:'))).toBe(false);
+    expect(hubPillClassName('secondary').split(' ')).toContain('hover:bg-grey-01');
   });
 });

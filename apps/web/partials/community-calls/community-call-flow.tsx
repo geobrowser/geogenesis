@@ -1,6 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -21,6 +20,7 @@ import { CommunityCallToken, ViewerToken } from '~/core/community-calls/types';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { getEntity, getSpace } from '~/core/io/queries';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { LiveRoom } from './live-room';
 import { PreJoin, PreJoinSettings } from './pre-join';
@@ -158,6 +158,8 @@ export function CommunityCallFlow({ spaceId, callId }: { spaceId: string; callId
         occurrenceEnd={joinedOccurrenceEnd}
         audio={joined.settings.audioEnabled}
         video={joined.settings.videoEnabled}
+        audioDeviceId={joined.settings.audioDeviceId}
+        videoDeviceId={joined.settings.videoDeviceId}
         backHref={backHref}
       />
     );

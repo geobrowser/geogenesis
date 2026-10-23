@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { type OperationContext, classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
@@ -70,6 +71,7 @@ function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
 }
 
 export function useRankingSubmissions(blockId: string, spaceId: string, blockName: string) {
+  const getContext = useActionContext('ranking_composer', 'ranking', blockId);
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
@@ -225,7 +227,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       }
 
       setIsSaving(true);
-      const operation = observeOperation('ranking', 'ranking', blockId, opportunity);
+      const operation = observeOperation('ranking', 'ranking', blockId, opportunity, getContext());
       try {
         const rankName = blockName.trim() || 'My ranking';
 
@@ -389,6 +391,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       }
     },
     [
+      getContext,
       blockId,
       blockName,
       isRolling,

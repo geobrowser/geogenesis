@@ -1,7 +1,7 @@
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
-import { EXPLORE_ENTITY_TYPE_IDS, EXPLORE_PAGE_SIZE, NEWS_STORY_TYPE_ID } from './explore-constants';
+import { EXPLORE_PAGE_SIZE, FEED_ENTITY_TYPE_IDS, NEWS_STORY_TYPE_ID } from './explore-constants';
 
 /**
  * Read-time diversity cap for the "Best" feed (GEO-2690).
@@ -69,15 +69,15 @@ const CLASSIFIES_LAST = [DEBATE_TYPE_ID, CLAIM_TYPE_ID];
  * Classification priority: one deterministic type per item, most specific first.
  *
  * Entities carry several `types` relations and the relation order is not meaningful, so the run cap
- * needs to pick one. Everything the menu knows about, in menu order, except the types above — which
+ * needs to pick one. Everything in `FEED_ENTITY_TYPES`, in that order, except the types above — which
  * go last so an entity that is both a Claim and something more specific is classified as the
  * something more specific. That is the more informative label and the safer default here: such an
  * item can break a claim run instead of extending one.
  *
- * Membership is still derived, so a type added to the menu is classifiable without a second edit;
+ * Membership is still derived, so a type added to that list is classifiable without a second edit;
  * only the ordering intent is stated by hand.
  */
-const TYPE_PRIORITY = [...EXPLORE_ENTITY_TYPE_IDS.filter(id => !CLASSIFIES_LAST.includes(id)), ...CLASSIFIES_LAST].map(
+const TYPE_PRIORITY = [...FEED_ENTITY_TYPE_IDS.filter(id => !CLASSIFIES_LAST.includes(id)), ...CLASSIFIES_LAST].map(
   normId
 );
 

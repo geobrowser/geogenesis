@@ -219,4 +219,40 @@ describe('PositionRow', () => {
       'bg-divider'
     );
   });
+
+  // A response confirms for 10-50s, and the pills drop presses for all of it. The wait cursor is
+  // the only thing left that says so on screen: the note that used to sit under the pills was
+  // taken out, because it read as a side not yet taken, and `aria-disabled` is heard rather than
+  // seen. Asserted so the next pass at quieting this row does not take the last cue with it.
+  describe('while a response is confirming', () => {
+    const pill = (label: string) => screen.getByText(label).closest('button') as HTMLElement;
+
+    it('puts a wait cursor on both pills', () => {
+      render(
+        <PositionRow positions={positions} responseKind="stance" viewerPosition={true} pending onRespond={() => {}} />
+      );
+
+      expect([...pill('Agree').classList]).toContain('cursor-progress');
+      expect([...pill('Disagree').classList]).toContain('cursor-progress');
+    });
+
+    it('leaves the pills looking taken, with no note under them', () => {
+      render(
+        <PositionRow positions={positions} responseKind="stance" viewerPosition={true} pending onRespond={() => {}} />
+      );
+
+      // The side still reads as held: full strength, and nothing announcing a wait. A pressable
+      // pill carries the fill on the button itself, not on an inner div as the read-only one does.
+      expect([...pill('Agree').classList]).toContain('bg-divider');
+      expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
+      // Dropped presses are still spoken, since a cursor is not.
+      expect(pill('Agree')).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('drops the cursor once the response lands', () => {
+      render(<PositionRow positions={positions} responseKind="stance" viewerPosition={true} onRespond={() => {}} />);
+
+      expect([...pill('Agree').classList]).not.toContain('cursor-progress');
+    });
+  });
 });

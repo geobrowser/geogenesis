@@ -11,6 +11,7 @@ import {
   DAY_INITIAL_HOUR,
   DAY_START_HOUR,
   SLOT_MINUTES,
+  WEEKDAY_LABELS,
   addDays,
   clampToDay,
   columnFor,
@@ -21,13 +22,13 @@ import {
   overlapDepths,
   weekDates,
 } from '~/core/availability/blocks';
+import { type BusyInterval, busySegmentsForDate } from '~/core/availability/calendar-busy';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Text } from '~/design-system/text';
 
 /** Height of one slot row. The whole grid's geometry follows from this. */
 const SLOT_PX = 24;
-const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const ROWS_PER_HOUR = 60 / SLOT_MINUTES;
 
 const KIND_LABELS: Record<BlockKind, string> = {
@@ -53,6 +54,9 @@ const KIND_COLORS: Record<BlockKind, string> = {
   exception: '#FFA998',
 };
 
+/** Hatching for busy time from the viewer's calendar: not a block kind, and not draggable. */
+const BUSY_PATTERN = 'repeating-linear-gradient(135deg, rgba(21, 21, 21, 0.1) 0 4px, transparent 4px 8px)';
+
 const minutesToTop = (minutes: number) => ((minutes - DAY_START_HOUR * 60) / SLOT_MINUTES) * SLOT_PX;
 
 type Drag =
@@ -74,12 +78,15 @@ export function AvailabilityCalendar({
   initialBlocks = [],
   onChange,
   actions,
+  busyIntervals,
   className,
 }: {
   initialBlocks?: AvailabilityBlock[];
   onChange?: (blocks: AvailabilityBlock[]) => void;
   /** Rendered in the footer row beside Clear all — the modal puts Cancel and Save here. */
   actions?: React.ReactNode;
+  /** The viewer's own calendar busy time, shaded under the blocks. Never a peer's. */
+  busyIntervals?: BusyInterval[];
   className?: string;
 }) {
   const [blocks, setBlocks] = React.useState(initialBlocks);
@@ -302,6 +309,11 @@ export function AvailabilityCalendar({
     [blocks, isoDates]
   );
 
+  const busyColumns = React.useMemo(
+    () => (busyIntervals ? dates.map(date => busySegmentsForDate(busyIntervals, date)) : null),
+    [busyIntervals, dates]
+  );
+
   const hours = Array.from({ length: DAY_END_HOUR - DAY_START_HOUR }, (_, index) => DAY_START_HOUR + index);
   const todayIso = today ? isoDate(today) : null;
 
@@ -331,6 +343,18 @@ export function AvailabilityCalendar({
             </button>
           ))}
         </div>
+        {busyIntervals ? (
+          <span
+            className="flex items-center gap-1.5 px-1 text-metadata text-grey-04"
+            title="Times your connected calendar shows you as busy. They’re left out of your debate availability."
+          >
+            <i
+              className="block size-2.5 rounded-full border border-grey-02"
+              style={{ backgroundImage: BUSY_PATTERN }}
+            />
+            Busy on your calendar
+          </span>
+        ) : null}
 
         <div className="ml-auto flex items-center gap-4">
           {/* Only once there is somewhere to come back from — on the current week it would be a
@@ -438,6 +462,21 @@ export function AvailabilityCalendar({
                       a lot of ruling for a grid whose blocks already say where they start. */}
                 {hours.map(hour => (
                   <div key={hour} className="border-b border-grey-02/60" style={{ height: SLOT_PX * ROWS_PER_HOUR }} />
+                ))}
+
+                {/* Under the blocks and out of the pointer's way: a drag over busy time still draws. */}
+                {busyColumns?.[weekday]?.map(segment => (
+                  <div
+                    key={`${segment.start}-${segment.end}`}
+                    aria-hidden
+                    data-busy
+                    className="pointer-events-none absolute inset-x-0"
+                    style={{
+                      top: minutesToTop(segment.start),
+                      height: ((segment.end - segment.start) / SLOT_MINUTES) * SLOT_PX,
+                      backgroundImage: BUSY_PATTERN,
+                    }}
+                  />
                 ))}
 
                 {columns[weekday]?.map(({ block, depth }) => (

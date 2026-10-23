@@ -1,6 +1,9 @@
-import { render } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, render as rtlRender } from '@testing-library/react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as React from 'react';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateClaim } from './api';
 import { trustedIndexedPosition, useBackfillReadinessForHeldPosition } from './backfill-readiness-for-held-position';
@@ -24,6 +27,16 @@ vi.mock('./hooks', () => ({
     getPrivyIdentityToken: () => Promise.resolve('token'),
   }),
 }));
+
+let queryClient = new QueryClient();
+
+function render(ui: React.ReactElement) {
+  return rtlRender(ui, {
+    wrapper: ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 function claim(overrides: Partial<DebateClaim> = {}): DebateClaim {
   return {
@@ -61,7 +74,9 @@ function withdrawn(overrides: Partial<DebateClaim> = {}) {
 
 describe('useBackfillReadinessForHeldPosition', () => {
   beforeEach(() => {
-    mocks.notify.mockClear();
+    queryClient = new QueryClient();
+    mocks.notify.mockReset();
+    mocks.notify.mockImplementation(() => Promise.resolve());
     mocks.ready = true;
     mocks.authenticated = true;
     mocks.accountKey = 'account-1';
@@ -205,5 +220,44 @@ describe('trustedIndexedPosition', () => {
   // read still holds the side being left. Reporting it would stand the viewer back up on that side.
   it('says nothing while the viewer’s own response is confirming', () => {
     expect(trustedIndexedPosition(summary('positive'), true)).toBeNull();
+  });
+});
+
+describe('useBackfillReadinessForHeldPosition after the write', () => {
+  beforeEach(() => {
+    queryClient = new QueryClient();
+    mocks.notify.mockReset();
+    mocks.notify.mockImplementation(() => Promise.resolve());
+    mocks.ready = true;
+    mocks.authenticated = true;
+    mocks.accountKey = 'account-1';
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('refetches the readiness reads once it lands, so surfaces gated on readiness catch up', async () => {
+    vi.useFakeTimers();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    render(<Harness debateClaim={claim()} />);
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+    expect(keys).toContainEqual(['debates', 'account', 'account-1', 'lobby-claims']);
+    expect(keys).toContainEqual(['debates', 'claims', 'space-1']);
+  });
+
+  it('tries again on a later change after a failed write, and refetches nothing for it', async () => {
+    mocks.notify.mockImplementationOnce(() => Promise.reject(new Error('rate limited')));
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { rerender } = render(<Harness debateClaim={claim()} />);
+    await act(async () => {});
+    expect(invalidate).not.toHaveBeenCalled();
+
+    // The same claim settling again, as a refetch reporting it ready then not would.
+    rerender(<Harness debateClaim={claim({ viewer_debate_ready: true })} />);
+    rerender(<Harness debateClaim={claim()} />);
+    expect(mocks.notify).toHaveBeenCalledTimes(2);
   });
 });

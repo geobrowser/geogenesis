@@ -3,6 +3,10 @@
 import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
+import { getGeoChatApiBaseUrl } from './geo-chat-public-base-url';
+import type { DebateExtractedClaimsResponse } from './server/extracted-claims';
+import type { RecordingUrlVariant } from './stream-playback';
+
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
 export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
@@ -94,6 +98,21 @@ export type DebateRecording = {
   height: number | null;
   framerate: number | null;
   video_bits_per_second: number | null;
+  /**
+   * MIME type of the recording's feed rendition (GEO-3118) — 480p-capped H.264, played on every
+   * device that can play it, though the variant is still called `mobile` — or null/absent until
+   * geo-chat has written one. Sign it with `getRecordingUrl(..., { variant: 'mobile' })`.
+   */
+  mobile_content_type?: string | null;
+  /**
+   * Whether geo-chat has this recording's Cloudflare Stream HLS copy. Absent from a server that
+   * predates Stream. Sign it with `variant: 'stream'`. See `stream-playback.ts`.
+   */
+  stream_ready?: boolean;
+  /** Whether geo-chat has this recording's 4-second preview clip. Sign it with `variant: 'preview'`. */
+  preview_ready?: boolean;
+  /** Where the preview clip starts in this recording, in whole seconds; absent until it is cut. */
+  preview_start_seconds?: number | null;
 };
 
 export type DebateMediaJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -102,7 +121,11 @@ export type DebateMediaArtifactKind =
   | 'final_video_hevc'
   | 'preview_image'
   | 'social_video'
+  /** The share video without spoken-word captions (GEO-3442); absent on debates rendered before it. */
+  | 'social_video_uncaptioned'
   | 'social_preview_image'
+  | 'speaker_still_slot_1'
+  | 'speaker_still_slot_2'
   | 'transcript_json'
   | 'subtitle_srt'
   | 'subtitle_vtt'
@@ -161,6 +184,73 @@ export type DebateMediaTurnSegment = {
   output_end_ms: number;
   duration_ms: number;
   countdown_start_ms?: number;
+  /** Original clock deadline and allowance, independent of trimmed turn edges (GEO-3408). */
+  countdown_end_ms?: number;
+  countdown_duration_ms?: number;
+  /** The same turn on the raw recordings' clock (GEO-3293). Absent where the two clocks agree: a
+   * fixed format, or a render with no edits. See `recording-clock.ts`. */
+  source_start_ms?: number;
+  source_end_ms?: number;
+};
+
+/**
+ * The media response serves times on two clocks: the *rendered video's* (`output_*`) and the raw
+ * recordings' (`source_*`), which is what the web player plays. An Open rounds render cuts the pick
+ * window and condenses breaks, so the two drift apart; `recording-clock.ts` reads the source side.
+ *
+ * A break between two Open rounds as a condensed render plays it (GEO-3276): its source stretch
+ * sped up to `duration_ms` with the sound muted, on the same output timeline as the turns.
+ * `round_index` is the round that ended at the break; `next_round_index` the one whose first turn
+ * starts at `output_end_ms`, absent after the final End.
+ */
+export type DebateMediaCondensedBreak = {
+  kind: 'lead_in' | 'extend' | 'final_end';
+  round_index: number;
+  next_round_index?: number | null;
+  output_start_ms: number;
+  output_end_ms: number;
+  duration_ms: number;
+  source_start_ms: number;
+  source_end_ms: number;
+  speed: number;
+};
+
+/** A served turn-edge silence cut (GEO-3408), or a legacy End turn handoff (GEO-3276). */
+export type DebateMediaEarlyEndGap = {
+  /** Absent on legacy End turn handoffs. Turn-edge edits have no on-screen cue. */
+  kind?: 'turn_start' | 'turn_end';
+  turn_index: number;
+  next_turn_index: number;
+  output_ms: number;
+  source_start_ms: number;
+  source_end_ms: number;
+  removed_ms: number;
+  quiet_kept_ms: number;
+};
+
+/** An Extend's reveal and count-in as the render kept it (GEO-3176), on both clocks. */
+export type DebateMediaRoundResult = {
+  round_index: number;
+  output_start_ms: number;
+  output_end_ms: number;
+  duration_ms: number;
+  source_start_ms: number;
+  source_end_ms: number;
+};
+
+/** Every pick a debater saved for a round, in order; the last one per slot is what counted. */
+export type DebateMediaRoundPick = {
+  round_index: number;
+  participant_slot: ParticipantSlot;
+  pick: OpenRoundPick;
+  previous_pick: OpenRoundPick | null;
+  turn_index: number;
+  during_decision: boolean;
+  at: string;
+  output_ms: number;
+  /** When the pick was made, on the raw recordings' clock (GEO-3293). A pick made in a pick window the
+   * render cut keeps its real time here, where `output_ms` puts it at the cut. */
+  source_ms?: number;
 };
 
 export type DebateMediaResponse = {
@@ -168,6 +258,11 @@ export type DebateMediaResponse = {
   artifacts: DebateMediaArtifact[];
   transcript_segment_count: number;
   turn_segments?: DebateMediaTurnSegment[];
+  /** Present only on an Open rounds debate rendered with condensed breaks (GEO-3276). */
+  condensed_breaks?: DebateMediaCondensedBreak[];
+  early_end_gaps?: DebateMediaEarlyEndGap[];
+  round_picks?: DebateMediaRoundPick[];
+  round_results?: DebateMediaRoundResult[];
   layout: DebateMediaRenderLayout;
   whisper_model_id: string;
 };
@@ -195,6 +290,10 @@ export type DebateTranscriptSegment = {
   sequence_index: number;
   start_ms: number;
   end_ms: number;
+  /** The line on the raw recordings' clock (GEO-3293). Absent on a fixed format, where the clocks
+   * agree, and on a line in a stretch an Open rounds render cut. */
+  source_start_ms?: number;
+  source_end_ms?: number;
   text: string;
   metadata: Record<string, unknown>;
   created_at: string;
@@ -236,6 +335,8 @@ export type Debate = {
   started_at: string | null;
   completed_at: string | null;
   rematch_session_id?: string | null;
+  /** Dashless. The lobby the debate was requested in (GEO-3126); absent otherwise. */
+  lobby_id?: string | null;
   participants: DebateParticipant[];
   turn_yields?: DebateTurnYield[];
   recordings: DebateRecording[];
@@ -243,6 +344,114 @@ export type Debate = {
   cancellation_reason: string | null;
   recording_cancelled_at: string | null;
   recording_cancelled_by: string | null;
+  /**
+   * Media processing state (GEO-2985). Sent by `GET /spaces/{id}/debates` only, and only by a
+   * geo-chat new enough to know it; absent on every by-id read and from an older geo-chat, so
+   * absence means "unknown", never "fine".
+   */
+  media?: DebateListingMediaState | null;
+  /**
+   * Open rounds (GEO-3166), built for the viewer. Present only when `turn_format_id` is
+   * `"open_rounds"`, in every status; absent on every fixed format, so absence means "fixed".
+   * The contract is geo-chat `docs/open-rounds-contract.md`. Read timing through
+   * `core/debates/open-rounds`, never by re-deriving it from these fields.
+   */
+  open_rounds?: DebateOpenRounds;
+};
+
+export type OpenRoundPick = 'extend' | 'end';
+export type OpenRoundsPhase = 'speaking' | 'deciding' | 'result' | 'finished';
+export type OpenRoundResolution = 'both_picked' | 'deadline';
+export type OpenRoundTurnRole = 'opening' | 'rebuttal';
+
+/** A slot's pick once its round has resolved. `null` means it never picked, which counted as End. */
+export type OpenRoundRevealedPick = {
+  participant_slot: ParticipantSlot;
+  pick: OpenRoundPick | null;
+};
+
+/** Every set and change of a pick, in order (for playback and analytics). */
+export type OpenRoundPickEvent = {
+  participant_slot: ParticipantSlot;
+  pick: OpenRoundPick;
+  previous_pick: OpenRoundPick | null;
+  turn_index: number;
+  during_decision: boolean;
+  at: string;
+};
+
+/** A resolved round. Only resolved rounds are listed, so nothing here is ever blind. */
+export type OpenRoundHistoryEntry = {
+  round_index: number;
+  ended_at?: string | null;
+  decision_deadline_at?: string | null;
+  decision_resolved_at: string;
+  outcome: OpenRoundPick;
+  resolution: OpenRoundResolution;
+  picks: OpenRoundRevealedPick[];
+  pick_events?: OpenRoundPickEvent[];
+};
+
+/**
+ * The per-viewer `open_rounds` block (contract §4). `phase` is the server's reading at `as_of`; the
+ * room advances it locally from the timestamps, so read the room's phase rather than this field.
+ */
+export type DebateOpenRounds = {
+  as_of: string;
+  max_rebuttal_rounds: number;
+  rebuttal_turn_ms: number;
+  decision_window_ms: number;
+  result_window_ms: number;
+  /**
+   * After an Extend, how long the opener is counted into the new round once the result window
+   * closes (GEO-3179), so the next round starts at `decision_resolved_at + result_window_ms +
+   * extend_count_in_ms`; `next_phase_starts_at` stays the end of the result window. An End goes to
+   * thanking at the end of the result window as before. Snapshotted per debate, and absent from a
+   * geo-chat that predates it, which reads as no count-in.
+   */
+  extend_count_in_ms?: number;
+  /**
+   * Rebuttal rounds every debate plays: rounds `1..=required_rebuttal_rounds` are appended with the
+   * opening, the rounds before the last of them run straight on, and the first Extend / End pick
+   * follows the last of them. Snapshotted per debate like the cap, and absent from a geo-chat that
+   * predates it, which reads as `0`: the opening ends on a pick, as it always did.
+   */
+  required_rebuttal_rounds?: number;
+  /**
+   * The pause before each required round's first turn, in which the room announces the round and
+   * counts its opener in, as it does after an Extend but with no picks to reveal. Snapshotted per
+   * debate, and absent from a geo-chat that predates it, which reads as `0`: the required round
+   * starts the moment the round before it ends.
+   */
+  required_round_lead_in_ms?: number;
+  /** The round this block describes. In `result` it is the round that just resolved. */
+  round_index: number;
+  phase: OpenRoundsPhase;
+  /** `round_index == max_rebuttal_rounds`: no pick, and its last turn goes straight to thanking. */
+  is_final_round: boolean;
+  can_pick: boolean;
+  round_ends_at: string | null;
+  decision_deadline_at: string | null;
+  decision_resolved_at: string | null;
+  /** `decision_resolved_at + result_window_ms`: the next turn, or thanking. */
+  next_phase_starts_at: string | null;
+  my_pick: OpenRoundPick | null;
+  /** A boolean for debaters; `null` for spectators and listings. Never the pick itself. */
+  opponent_has_picked: boolean | null;
+  outcome: OpenRoundPick | null;
+  resolution: OpenRoundResolution | null;
+  revealed_picks: OpenRoundRevealedPick[] | null;
+  /** One per entry of `turn_durations_ms`. */
+  turn_roles: OpenRoundTurnRole[];
+  rounds: OpenRoundHistoryEntry[];
+};
+
+export type DebateListingMediaState = {
+  /** `queued` | `running` | `succeeded` | `failed`, or null when no job has been enqueued. */
+  job_status: string | null;
+  has_final_video: boolean;
+  /** No video will be produced without an operator requeue: the job failed for good, or succeeded with no `final_video`. */
+  terminal: boolean;
 };
 
 export type DebateActivity = {
@@ -286,6 +495,8 @@ export type DebateChallenge = {
   rematch_session_id: string | null;
   created_at: string;
   expires_at: string;
+  /** Dashless. The lobby a scoped challenge was sent in; absent when unscoped. */
+  lobby_id?: string | null;
 };
 
 export type DebateChallengeActionResponse = {
@@ -299,6 +510,8 @@ export type DebateProfile = {
   available_to_debate: boolean;
   is_self: boolean;
   can_challenge: boolean;
+  /** Online but away for live requests (GEO-3119); see `DebatePerson.away`. */
+  away?: boolean;
 };
 
 export type DebateRematchParticipant = DebateParticipantSummary & {
@@ -319,6 +532,10 @@ export type DebateRematchRequest = {
   response_kind?: WireResponseKind | null;
   cancellation_reason?: string | null;
   turn_format_id: string;
+  /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
+  max_rebuttal_rounds?: number | null;
+  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  required_rebuttal_rounds?: number | null;
   created_at: string;
   expires_at: string;
 };
@@ -425,6 +642,92 @@ export type DebateClaim = {
   updated_at: string;
 };
 
+/* Moderation (GEO-3134). geo-chat enforces every rule; a refusal comes back as its error code. */
+
+/** The path segment of each per-member action. */
+export type DebateLobbyMemberAction =
+  'mute' | 'move-to-listeners' | 'move-to-speakers' | 'remove' | 'ban' | 'unban' | 'promote' | 'remove-host';
+
+/** Returns the caller's view. Hosting from inside the lobby only: `409 lobby_not_present` otherwise. */
+export async function moderateDebateLobbyMember(
+  lobbyId: string,
+  userId: string,
+  action: DebateLobbyMemberAction,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/members/${userId}/${action}`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Raising is for a connected listener; lowering is always allowed. */
+export async function setDebateLobbyHand(
+  lobbyId: string,
+  raised: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/hand`, {
+    method: raised ? 'PUT' : 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export type DebateLobbyBan = {
+  user: DebateLobbyPerson;
+  /** The role an unban restores. */
+  role: DebateLobbyRole;
+  banned_at: string;
+  /** `null` once their account is deleted. */
+  banned_by: DebateLobbyPerson | null;
+};
+
+/** Latest first. Hosts only; a host by role can still read it once the lobby has ended. */
+export async function getDebateLobbyBans(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<{ banned: DebateLobbyBan[] }>(`/debate-lobbies/${lobbyId}/bans`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export type DebateLobbyModerationEntry = {
+  id: number;
+  action: DebateLobbyModerationAction;
+  /** `null` for an automatic acting host change, or once the account is deleted. */
+  actor: DebateLobbyPerson | null;
+  /** `null` for `end`. */
+  target: DebateLobbyPerson | null;
+  at: string;
+};
+
+/** The latest 200, newest first. Hosts only, like the bans list. */
+export async function getDebateLobbyModerationLog(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<{ entries: DebateLobbyModerationEntry[] }>(`/debate-lobbies/${lobbyId}/moderation-log`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
 /* -------------------------------------------------------------------------------------------------
  * Matchmaking hub (GEO-2514)
  * -----------------------------------------------------------------------------------------------*/
@@ -452,6 +755,12 @@ export type DebateMatchmakingPresence = {
 export type DebatePerson = DebateParticipantSummary &
   DebateMatchmakingPresence & {
     can_challenge: boolean;
+    /**
+     * Online but not requestable for a live debate (GEO-3119): the tab is hidden, or nobody has used
+     * Geo in it for three minutes. The row offers Schedule instead of Request debate. Optional
+     * because an older geo-chat never lists such people at all.
+     */
+    away?: boolean;
   };
 
 export type DebatePeopleResponse = {
@@ -658,9 +967,15 @@ export type DebateRequest = {
   /** The current target. The server re-targets the request when a recipient dismisses or blocks. */
   recipient: DebateRequestParty;
   turn_format_id: string | null;
+  /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
+  max_rebuttal_rounds?: number | null;
+  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  required_rebuttal_rounds?: number | null;
   created_at: string;
   /** Fixed for the lifetime of the request, even as it advances between recipients. */
   expires_at: string;
+  /** The lobby a scoped request was made from; absent when unscoped. */
+  lobby_id?: string | null;
 };
 
 export type DebateRequestsResponse = {
@@ -679,6 +994,13 @@ export type CreateDebateRequestBody = {
   space_id: string;
   claim_entity_id: string;
   format_id?: string;
+  /** Dashless. Offers the request only to people requestable in that lobby (GEO-3130). */
+  lobby_id?: string;
+  /**
+   * Dashless. With `lobby_id`, offers the request to this one person and never re-targets it
+   * (GEO-3333). geo-chat without it ignores the field and offers it to the other side as before.
+   */
+  recipient_user_id?: string;
 };
 
 export type DismissDebateRequestBody = {
@@ -688,6 +1010,24 @@ export type DismissDebateRequestBody = {
 
 export type DebateBlocksResponse = {
   blocked: DebateParticipantSummary[];
+};
+
+/**
+ * A claim the viewer marked "Not interested" (GEO-2862). Private to the viewer and stored in
+ * geo-chat, not on-chain: it is a browsing preference, not a position, and it sits beside any
+ * position the viewer holds rather than replacing it. geo-chat leaves these claims out of the
+ * viewer's `/matchmaking/claims` rows and facets (except the `mine` filter).
+ */
+export type NotInterestedClaim = {
+  claim_entity_id: string;
+  /** geo-chat's synced copy of the claim text; `null` when it has not synced the claim. */
+  claim_text: string | null;
+  created_at: string;
+};
+
+/** Every write returns the whole list, newest first, so the undo list can render from it. */
+export type NotInterestedClaimsResponse = {
+  claims: NotInterestedClaim[];
 };
 
 export type ObjectStoreUpload = {
@@ -788,6 +1128,8 @@ type RequestOptions = {
   signal?: AbortSignal;
   /** Let the request outlive the document. For anything sent from `pagehide`. */
   keepalive?: boolean;
+  /** Send and accept cookies cross-origin, for a route that binds a cookie to the browser. */
+  credentials?: RequestCredentials;
 };
 
 const geoChatSessionStorageKey = 'geo:chat-session';
@@ -802,9 +1144,7 @@ const geoChatSessionRequests = new Map<string, Promise<GeoChatSession>>();
 let geoChatSessionEpoch = 0;
 let geoChatSessionAccountKey: string | null = null;
 
-export function getGeoChatApiBaseUrl() {
-  return (process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
-}
+export { getGeoChatApiBaseUrl };
 
 export function getCurrentGeoChatUserId() {
   const session = loadSession(null);
@@ -872,6 +1212,118 @@ export async function replaceDebateSchedule(
   });
 }
 
+/** Why a connected calendar last failed to sync. */
+export type CalendarConnectionError =
+  | 'invalid_grant'
+  | 'scope_missing'
+  /** Microsoft only: the account has no mailbox Graph can read, so another account is needed. */
+  | 'mailbox_unavailable'
+  /** geo-chat's own provider client was refused; ours to fix, never the user's. */
+  | 'provider_misconfigured'
+  | 'provider_unavailable'
+  | 'rate_limited'
+  | 'unknown';
+
+/** A connected calendar account, the same for every provider. */
+export type CalendarConnection = {
+  account_email: string | null;
+  /** `needs_reconnect` stops syncing until the user connects again. */
+  status: 'ok' | 'needs_reconnect' | 'error';
+  /** No successful sync in 48h (or ever), so its busy time is not being applied. */
+  stale: boolean;
+  last_success_at: string | null;
+  last_error: CalendarConnectionError | null;
+};
+
+export type CalendarProvider = 'google' | 'microsoft';
+
+/** `providers` and `microsoft` are absent from a geo-chat that only knows Google. */
+export type CalendarConnections = {
+  /** The providers geo-chat has configured, in display order. */
+  providers?: string[];
+  google: CalendarConnection | null;
+  microsoft?: CalendarConnection | null;
+};
+
+/** An absolute busy window from the viewer's own connected calendar. */
+export type CalendarBusyInterval = {
+  start: string;
+  end: string;
+};
+
+/**
+ * 404 `calendar_disabled` while geo-chat has no calendar provider configured. A provider's own
+ * routes answer it while that provider is off.
+ */
+export async function getCalendarConnections(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
+  return geoChatRequest<CalendarConnections>('/me/calendar', { auth: true, getPrivyIdentityToken, accountKey });
+}
+
+/**
+ * Returns the provider's consent URL; geo-chat redirects back to `returnTo` with `?calendar=…`.
+ * Credentials included for geo-chat's browser-binding cookie.
+ */
+export async function connectCalendar(
+  provider: CalendarProvider,
+  returnTo: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<{ authorization_url: string }>(`/me/calendar/${provider}/connect`, {
+    method: 'POST',
+    body: { return_to: returnTo },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    credentials: 'include',
+  });
+}
+
+/** Syncs now. 429 `rate_limited` within a minute of the last refresh. */
+export async function refreshCalendar(
+  provider: CalendarProvider,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<CalendarConnections>(`/me/calendar/${provider}/refresh`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Idempotent: 204 whether or not anything was connected. */
+export async function disconnectCalendar(
+  provider: CalendarProvider,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<void>(`/me/calendar/${provider}`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** The viewer's own merged busy time, clipped to `[from, to)`. geo-chat caps the window at 92 days. */
+export async function getCalendarBusy(
+  { from, to }: { from: string; to: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ from, to });
+
+  return geoChatRequest<{ intervals: CalendarBusyInterval[] }>(`/me/calendar-busy?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
 /** One window of availability, as absolute UTC instants — the only form two zones can compare. */
 export type ScheduleOverlapSlot = {
   start: string;
@@ -933,6 +1385,65 @@ export async function getScheduleOverlaps(
   });
 }
 
+/** One person the viewer could schedule with, whether or not they share a time (geo-chat#137, GEO-2937). */
+export type SchedulablePerson = {
+  user: DebateParticipantSummary;
+  online: boolean;
+  /**
+   * Shared 30-minute slots, soonest first, capped by `limit`. Empty when they share none. Only
+   * times still ahead when geo-chat answered (geo-chat#165), though they can pass before the next
+   * fetch.
+   */
+  slots: ScheduleOverlapSlot[];
+  /** More overlap exists than `limit` returned. */
+  truncated: boolean;
+  /**
+   * All of their free time still ahead (geo-chat#204, GEO-3153), whether or not the viewer shares it, merged into
+   * continuous windows, each flagged with whether the viewer is free for it. Committed time is
+   * already taken out, and `limit` never caps it. Optional only because builds before #204 omitted
+   * it; read a missing one as no free time.
+   */
+  their_windows?: AnnotatedSlot[];
+};
+
+/** What `/matchmaking/schedulable-people` answers. */
+export type SchedulablePeopleResponse = {
+  viewer_timezone: string;
+  /**
+   * False means the viewer has no availability saved. Since geo-chat#204 (GEO-3153) `people` is still
+   * filled for them, so this flag, not an empty list, is what says so. Older builds sent nobody.
+   */
+  viewer_has_schedule: boolean;
+  people: SchedulablePerson[];
+  /** The server's candidate scan was capped. */
+  truncated: boolean;
+};
+
+/**
+ * Everyone, online or not, with free time in the window; those sharing a slot with the viewer come
+ * first (GEO-2937).
+ *
+ * `spaces` narrows who is considered by membership, server-side; the calendar sends it once the
+ * unfiltered list hits its cap.
+ */
+export async function listSchedulablePeople(
+  { days, limit, spaces }: { days: number; limit: number; spaces?: string[] },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ days: String(days), limit: String(limit) });
+  // Membership, decided server-side, so it reaches past the candidate cap. See `useSchedulablePeople`.
+  if (spaces && spaces.length > 0) params.set('spaces', spaces.join(','));
+
+  return geoChatRequest<SchedulablePeopleResponse>(`/matchmaking/schedulable-people?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
 /**
  * Reports that a human did something. The strict half of presence.
  *
@@ -944,6 +1455,49 @@ export async function getScheduleOverlaps(
 export async function reportDebateInteraction(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
   return geoChatRequest<void>('/me/debate-interaction', {
     method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** geo-chat's refusal for a live request to someone online but away (GEO-3119). */
+export const RECIPIENT_AWAY_CODE = 'recipient_away';
+
+export type DebateRequestReceiptKind = 'challenge' | 'claim_request';
+export type DebateRequestReceiptStage = 'delivered' | 'seen';
+
+/**
+ * Records that a live request reached this recipient's screen, or that they were there to see it
+ * (GEO-3119), so an "I never got it" can be checked against the data. Idempotent on geo-chat's side,
+ * and fire-and-forget here: a lost receipt must never get in the way of answering the request.
+ */
+export async function reportDebateRequestReceipt(
+  receipt: { kind: DebateRequestReceiptKind; request_id: string; stage: DebateRequestReceiptStage },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<void>('/me/debate-request-receipts', {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    body: receipt,
+  });
+}
+
+/**
+ * Saves the zone this browser is in, so emails geo-chat sends while the person is away render in
+ * it. geo-chat prefers the zone on saved availability and falls back to this one, then to UTC.
+ */
+export async function reportBrowserTimezone(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  timezone: string
+) {
+  return geoChatRequest<void>('/me/timezone', {
+    method: 'PUT',
+    body: { timezone },
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -1210,6 +1764,58 @@ export async function getDebate(
   });
 }
 
+/** What `POST /debates/{id}/hide` and `/unhide` answer with: the debate's visibility afterwards. */
+export type DebateVisibilityResponse = {
+  debate_id: string;
+  hidden: boolean;
+  hidden_at: string | null;
+  /** Who hid it. Null when visible, or when an operator script hid it. */
+  hidden_by_user_id: string | null;
+  hidden_reason: string | null;
+};
+
+/** geo-chat's limit on a hide reason, in characters (`MAX_HIDE_REASON_CHARS`). */
+export const DEBATE_HIDE_REASON_MAX_CHARS = 500;
+
+/**
+ * Removes a completed debate from the product (GEO-2785): it leaves every listing, and every by-id
+ * read answers `debate_not_found`. geo-chat allows a participant or an editor of the debate's space,
+ * and refuses anyone else with `debate_visibility_forbidden`. Idempotent. A blank reason is sent as
+ * none, which is how geo-chat would read it anyway.
+ */
+export async function hideDebate(
+  debateId: string,
+  reason: string | null | undefined,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  const trimmed = reason?.trim();
+  return geoChatRequest<DebateVisibilityResponse>(`/debates/${debateId}/hide`, {
+    method: 'POST',
+    body: trimmed ? { reason: trimmed } : {},
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Restores a hidden debate. Narrower than {@link hideDebate}: a space editor may restore any, a
+ * participant only one they hid themselves. Idempotent.
+ */
+export async function unhideDebate(
+  debateId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateVisibilityResponse>(`/debates/${debateId}/unhide`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function getLiveKitToken(
   debateId: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
@@ -1293,6 +1899,31 @@ export async function endDebateTurn(
   return geoChatRequest<Debate>(`/debates/${debateId}/turns/${turnIndex}/end`, {
     method: 'POST',
     body: { ended_at_ms: endedAtMs },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Saves the viewer's Extend / End pick for an open round (contract §5). Idempotent, changeable until
+ * the round resolves, and answers with the full Debate built for the caller, so `my_pick` reflects
+ * the save. `roundIndex` is in the path so a late retry can never land on the next round.
+ *
+ * Refusals throw `GeoChatRequestError` carrying the contract's codes: `round_not_open`,
+ * `round_has_no_pick`, `round_already_resolved` (re-fetch for the outcome), `open_rounds_not_enabled`,
+ * `invalid_round_pick`, `debate_forbidden`, `debate_not_found`.
+ */
+export async function saveOpenRoundPick(
+  debateId: string,
+  roundIndex: number,
+  pick: OpenRoundPick,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<Debate>(`/debates/${debateId}/rounds/${roundIndex}/pick`, {
+    method: 'PUT',
+    body: { pick },
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -1436,8 +2067,14 @@ export async function getDebateProfile(
   });
 }
 
+export type CreateDebateChallengeBody = {
+  recipient_profile_space_id: string;
+  /** Dashless. Sent from a lobby: both people must be in it (GEO-3126). */
+  lobby_id?: string;
+};
+
 export async function createDebateChallenge(
-  request: { recipient_profile_space_id: string },
+  request: CreateDebateChallengeBody,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
@@ -1484,7 +2121,9 @@ export async function rejectDebateChallenge(
  * -----------------------------------------------------------------------------------------------*/
 
 /** Why a room stopped accepting joins. A closed room is a tombstone, not a 404. */
-export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled';
+/** `rescheduled`: the debate moved to a new time, and accepting it books a different room. */
+/** `ended`: a host ended the lobby (GEO-3128). */
+export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled' | 'rescheduled' | 'ended';
 
 /**
  * May the viewer open this room right now. Carried in a 200 body rather than an HTTP status, so a
@@ -1506,8 +2145,24 @@ export type DebateRoomWaiting =
   | { reason: 'opponent_in_another_debate' }
   | { reason: 'no_show' };
 
+/**
+ * Something a participant told the other one (GEO-3427), kept on the room so whoever is waiting in it
+ * can read it. `running_late` carries when they expect to arrive; `cant_make_it` is the reason a
+ * `cancelled` or `rescheduled` room closed, and is returned on the closed room for that reason.
+ */
+export type DebateRoomNotice = {
+  user_id: string;
+  kind: 'running_late' | 'cant_make_it';
+  at: string;
+  /** `running_late` only. geo-chat holds the room's no-show grace open until a little after this. */
+  expected_at: string | null;
+  note: string | null;
+};
+
 export type DebateRoomView = {
   room_id: string;
+  /** Never withheld. A lobby answers `not_a_participant` here; read it from `/debate-lobbies/{id}`. */
+  kind?: 'debate' | 'lobby';
   access: DebateRoomAccess;
   starts_at: string;
   opens_at: string;
@@ -1527,6 +2182,13 @@ export type DebateRoomView = {
    * is not admitted — the id is a capability, and `rematch_livekit_token` trades one for a token.
    */
   rematch_session_id: string | null;
+  /** Absent from a geo-chat that predates GEO-3427. Returned on a closed room too, to a participant. */
+  notices?: DebateRoomNotice[];
+  /**
+   * Whether the viewer has arrived: joined at or after the start (GEO-3427). A look in before the
+   * start does not count. Absent from an older geo-chat.
+   */
+  viewer_arrived?: boolean;
 };
 
 /** A row in "your upcoming debates". Feeds the join prompt and the Requests tab (GEO-2940). */
@@ -1545,6 +2207,10 @@ export type UpcomingDebateRoom = {
    * before anyone joins, `undefined` on a geo-chat that predates the field.
    */
   rematch_session_id?: string | null;
+  /** `lobby` for a lobby the viewer asked to be reminded of. Missing on a geo-chat that predates it. */
+  kind?: 'debate' | 'lobby';
+  /** The lobby's name. Absent for a two-person room. */
+  name?: string;
 };
 
 export type UpcomingDebateRoomsResponse = {
@@ -1626,10 +2292,26 @@ export type ScheduledDebateRequest = {
   participants: ScheduledDebateParticipant[];
   /** Whether the viewer is the one holding this up. */
   viewer_must_answer: boolean;
+  /**
+   * The time fell outside at least one debater's availability when the match was made. Only an
+   * admin can book such a time (GEO-2942), so only the admin calendar reads it.
+   */
+  outside_availability?: boolean;
+};
+
+/** An admin asking the viewer to add availability (GEO-3228); it lapses once they add some. */
+export type AvailabilityRequest = {
+  /** `no_availability`: nothing set yet. `more_times`: set, but it overlaps with nobody. */
+  kind: 'no_availability' | 'more_times';
+  requested_by_name: string | null;
+  requested_at: string;
+  expires_at: string;
 };
 
 export type ScheduledDebateRequestsResponse = {
   requests: ScheduledDebateRequest[];
+  /** Absent from a geo-chat that predates it. */
+  availability_requests?: AvailabilityRequest[];
 };
 
 /** Accepting can fail without being an error: the slot went while you were deciding. */
@@ -1655,12 +2337,181 @@ export async function listScheduledDebates(
   });
 }
 
+/** What `/admin/scheduled-debates` answers: every request in the window, in any status. */
+export type AdminScheduledDebatesResponse = {
+  matches: ScheduledDebateRequest[];
+};
+
+/** geo-chat's own ceiling on one page of the admin list. */
+export const ADMIN_SCHEDULED_DEBATES_LIMIT = 200;
+
+/**
+ * Every scheduled debate starting at or after `from`, for the admin calendar (GEO-2943).
+ *
+ * Gated server-side on an allowlist of personal space ids (GEO-2967): a viewer not on it gets 403,
+ * and a deployment with no admins configured answers 503 to everyone. Either refusal is how the
+ * client learns the viewer is not an admin; there is no separate "am I an admin" read.
+ */
+export async function listAdminScheduledDebates(
+  { from, limit }: { from: string; limit: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ from, limit: String(limit) });
+  return geoChatRequest<AdminScheduledDebatesResponse>(`/admin/scheduled-debates?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** One debater with a saved schedule, as `/admin/debate-schedules` lists them. */
+export type AdminScheduledDebater = {
+  user_id: string;
+  /** Their IANA zone. */
+  timezone: string;
+  block_count: number;
+};
+
+export type AdminDebateSchedulesResponse = {
+  debaters: AdminScheduledDebater[];
+  total: number;
+};
+
+/** geo-chat's page ceiling for the admin schedules list. */
+export const ADMIN_DEBATE_SCHEDULES_PAGE = 200;
+
+/** Everyone who has saved availability, a page at a time (GEO-2942). Admins only. */
+export async function listAdminDebateSchedules(
+  { limit, offset }: { limit: number; offset: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  return geoChatRequest<AdminDebateSchedulesResponse>(`/admin/debate-schedules?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** One candidate's shared time with the person the overlap is measured from. */
+export type ScheduleOverlapCandidate = {
+  with: string;
+  both_have_schedules: boolean;
+  /** Empty when they have no saved schedule. */
+  with_timezone: string;
+  slots: ScheduleOverlapSlot[];
+  truncated: boolean;
+};
+
+export type ScheduleOverlapBatchResponse = {
+  viewer_timezone: string;
+  viewer_has_schedule: boolean;
+  candidates: ScheduleOverlapCandidate[];
+};
+
+/**
+ * The half-hours two other people are both free (GEO-2942). The same matching a debater sees,
+ * measured from `of` rather than from the caller. Admins only.
+ */
+export async function adminScheduleOverlaps(
+  { of, users, days }: { of: string; users: string[]; days: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ of, users: users.join(','), days: String(days) });
+  return geoChatRequest<ScheduleOverlapBatchResponse>(`/admin/debate-schedules/overlaps?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/**
+ * Matches two debaters and invites both (GEO-2942). Whether the time is outside their availability
+ * is decided by geo-chat from their stored schedules and comes back as `outside_availability`.
+ */
+export async function createAdminScheduledDebate(
+  body: { first_user_id: string; second_user_id: string; scheduled_start_at: string; scheduled_end_at: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>('/admin/scheduled-debates', {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** What became of the email, as geo-notifications decided it. `no_email` is only for no address on file. */
+export type AvailabilityPromptOutcome =
+  'sent' | 'disabled_by_preference' | 'rate_limited' | 'channel_off' | 'failed' | 'no_email';
+
+/**
+ * `outcome` is absent from a geo-chat that predates GEO-3228, which answered `sent` alone. The person
+ * can also see the request on their Requests tab whatever happened to the email.
+ */
+export type AdminAvailabilityPromptResponse = {
+  sent: boolean;
+  outcome?: AvailabilityPromptOutcome;
+  variant?: 'no_availability' | 'more_times';
+};
+
+/** Emails someone asking them to set their availability (GEO-2942). Admins only. */
+export async function sendAdminAvailabilityPrompt(
+  userId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<AdminAvailabilityPromptResponse>('/admin/availability-prompts', {
+    method: 'POST',
+    body: { user_id: userId },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function createScheduledDebate(
   body: { opponent_user_id: string; scheduled_start_at: string; scheduled_end_at: string },
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
   return geoChatRequest<ScheduledDebateRequest>('/me/scheduled-debates', {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Moves a pending or accepted request to a new time. geo-chat flips who has to answer, so the other
+ * debater is asked to accept the new time and emailed that it moved. An accepted debate goes back
+ * to pending: its room closes and its time is freed, and accepting the new time books a new room.
+ *
+ * Refusals, all `409` except the last: `reschedule_refused` (five moves already, or declined,
+ * expired, cancelled or superseded), `debate_already_started` (both debaters are in the room, or their debate has begun),
+ * `schedule_conflict` (the viewer already has a debate then), and `403 not_a_participant`.
+ */
+export async function rescheduleScheduledDebate(
+  requestId: string,
+  /** `note` is kept on the room for the other debater; the email does not carry it (GEO-3427). */
+  body: { scheduled_start_at: string; scheduled_end_at: string; note?: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>(`/scheduled-debates/${requestId}/reschedule`, {
     method: 'POST',
     body,
     auth: true,
@@ -1685,16 +2536,825 @@ export async function respondToScheduledDebate(
   });
 }
 
+/**
+ * Calls a scheduled debate off (GEO-3093). While pending only whoever proposed the current time may
+ * withdraw it; once accepted either debater may. geo-chat closes the room as `cancelled`, frees the
+ * slot for both people and withdraws the calendar invite. A debater who cancels an agreed debate is
+ * telling the other one they can't make it (GEO-3427): that is the email they get. `note` is kept on
+ * the room, not put in the email.
+ *
+ * It refuses with `409 debate_already_started` once both debaters are in the room or their debate
+ * has begun (the other one waiting inside does not stop it: they are who it releases), `409
+ * request_not_cancellable` once the request is already resolved, and `409 request_not_active` once
+ * its room has already closed, as a no-show say. Someone cancelling from inside the room, the one
+ * waiting, sends a plain cancel: their note is not kept.
+ */
+export async function cancelScheduledDebate(
+  requestId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  body?: { note?: string }
+) {
+  return geoChatRequest<ScheduledDebateRequest>(`/scheduled-debates/${requestId}/cancel`, {
+    method: 'POST',
+    // No body at all without a note, as before: an older geo-chat reads none.
+    body: body?.note ? body : undefined,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** The lateness someone can report, in minutes. geo-chat refuses anything else. */
+export const RUNNING_LATE_MINUTES = [5, 10, 15] as const;
+export type RunningLateMinutes = (typeof RUNNING_LATE_MINUTES)[number];
+
+export type RunningLateResponse = { expected_at: string; note: string | null };
+
+/**
+ * Tells the other debater the viewer is running late (GEO-3427). geo-chat records it on the room,
+ * emails them, and holds the room's no-show grace open until a little after `expected_at`, which is
+ * `minutes` after the start (or after now, once the start has passed). Saying it again replaces it.
+ *
+ * Refusals: `400 invalid_late_minutes` / `note_too_long`, `403 not_a_participant`, `404
+ * request_not_found`, `409 request_not_active` (not an agreed debate, or its room has closed) and
+ * `409 already_joined` (the viewer already arrived: joined at or after the start), `409 too_early`
+ * (the room has not opened yet), `409 debate_already_started` (their debate has begun) and `409
+ * running_late_limit` (they have said it three times already for this debate).
+ */
+export async function reportRunningLate(
+  requestId: string,
+  body: { minutes: RunningLateMinutes; note?: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<RunningLateResponse>(`/scheduled-debates/${requestId}/running-late`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function listUpcomingDebateRooms(
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null,
   signal?: AbortSignal
 ) {
-  return geoChatRequest<UpcomingDebateRoomsResponse>('/me/debate-rooms', {
+  // Lobby rows are opt-in, so bundles that predate lobbies never see them.
+  return geoChatRequest<UpcomingDebateRoomsResponse>('/me/debate-rooms?include=lobbies', {
     auth: true,
     getPrivyIdentityToken,
     accountKey,
     signal,
+  });
+}
+
+/* Debate lobbies (GEO-3128): many-person rooms. Body ids are dashless; path ids take either. */
+
+/** geo-chat spells uuids with and without dashes; query keys use this one form. */
+export function dashlessId(id: string) {
+  return id.replace(/-/g, '').toLowerCase();
+}
+
+/** A ban is not a role; it shows as `access: { status: 'banned' }`. */
+export type DebateLobbyRole = 'host' | 'speaker' | 'listener';
+
+export type DebateLobbyAccess =
+  | { status: 'admitted' }
+  | { status: 'not_yet_open'; opens_at: string }
+  | { status: 'closed'; reason: DebateRoomClosedReason }
+  | { status: 'banned' };
+
+export type DebateLobbyMember = {
+  user_id: string;
+  profile_space_id: string;
+  display_name: string | null;
+  avatar_cid: string | null;
+  role: DebateLobbyRole;
+  creator: boolean;
+  /** Hosting for now because no host is present. `role` stays their own. */
+  acting_host: boolean;
+  on_roster_since: string;
+  /** Left to debate; still listed, without host powers, until back or it expires. */
+  stepped_out: boolean;
+  in_debate: boolean;
+  /**
+   * What `in_debate` is about (GEO-3130). `null` when not debating, when the viewer is not on this
+   * roster, or when a moderator hid the debate. Absent from a geo-chat that predates it.
+   */
+  in_debate_subject?: DebateLobbyDebateSubject | null;
+  /** A listener's raised hand (GEO-3134). Absent from a geo-chat that predates moderation. */
+  hand_raised_at?: string | null;
+  /** No completed debate yet (GEO-3126); absent from a geo-chat that predates it. */
+  newcomer?: boolean;
+  /** Their "available to debate" toggle, as the People tab reads it (GEO-3131). Absent from older geo-chat. */
+  available_to_debate?: boolean;
+  /** Who moved this listener there. Only for a hosting viewer; absent from older geo-chat. */
+  moved_to_listeners?: { by: DebateLobbyPerson | null; at: string } | null;
+};
+
+/** Someone in a debate pair; the partner may be off this lobby's roster. */
+export type DebateLobbyPairPerson = DebateLobbyPerson & { in_lobby: boolean };
+
+/**
+ * One debate a member is in (GEO-3131): two people, or one when the partner is hidden. No debate id
+ * and no claim; the claim is the members' `in_debate_subject`.
+ */
+export type DebateLobbyPair = {
+  people: DebateLobbyPairPerson[];
+  /** `null` before it starts and for a hidden debate; absent from older geo-chat. `rounds` is `null` for open rounds. */
+  progress?: { round: number | null; rounds: number | null; recording: boolean } | null;
+};
+
+export type DebateLobbyDebateSubject =
+  { phase: 'choosing_claim' } | { phase: 'on_claim'; claim_entity_id: string; claim_name: string; space_id: string };
+
+/** What a host did to someone, as `viewer.last_moderation` and the log spell it (GEO-3134). */
+export type DebateLobbyModerationAction =
+  | 'mute'
+  | 'move_to_listeners'
+  | 'move_to_speakers'
+  | 'kick'
+  | 'ban'
+  | 'unban'
+  | 'promote'
+  | 'remove_host'
+  | 'end'
+  /** Every guest without an account at once; no target (GEO-3129). */
+  | 'remove_guests';
+
+export type DebateLobbyView = {
+  lobby_id: string;
+  name: string;
+  access: DebateLobbyAccess;
+  starts_at: string;
+  opens_at: string;
+  scheduled: boolean;
+  /** `null` once the creator's account is deleted. */
+  created_by: string | null;
+  /** Hosts while no host is present; `null` whenever a host is in. */
+  acting_host_id: string | null;
+  /** Moves when the acting host changes. */
+  hosts_changed_at: string | null;
+  reminder_count: number;
+  /**
+   * Who runs the lobby, present or not: the creator first, the acting host last. Empty for a banned
+   * viewer. Absent from older geo-chat.
+   */
+  hosts?: DebateLobbyPerson[];
+  /** The roster, stepped-out members included, longest there first. Empty for a banned viewer. */
+  members: DebateLobbyMember[];
+  /** One per debate a member is in, in roster order (GEO-3131). Absent from older geo-chat. */
+  debate_pairs?: DebateLobbyPair[];
+  /** Live visitors without an account (GEO-3129); absent from a geo-chat that predates guests. */
+  guest_count?: number;
+  /** Host-picked claim list pages, in tab order (GEO-3273). Absent from older geo-chat. */
+  claim_lists?: DebateLobbyClaimList[];
+  /** Orders `claim_lists` against `debate.lobby_claim_lists_changed`; `null` before the first list. */
+  claim_lists_as_of?: string | null;
+  viewer: {
+    /** `null` before the viewer's first join. */
+    role: DebateLobbyRole | null;
+    creator: boolean;
+    /** Host powers now: a host, or the acting host. Gate host tools on this, not `role`. */
+    hosting: boolean;
+    reminded: boolean;
+    /** While in this lobby's voice: when voice stops holding off Away without input. */
+    voice_away_at: string | null;
+    /** This viewer has a live connection here; `false` while stepped out. */
+    connected: boolean;
+    stepped_out: boolean;
+    /** Removed by a host and not rejoined since; the page does not join by itself. GEO-3134. */
+    removed?: boolean;
+    /** GEO-3134; absent from a geo-chat that predates moderation. */
+    hand_raised_at?: string | null;
+    /** The latest action another person took on the viewer here; never `end`. */
+    last_moderation?: { action: DebateLobbyModerationAction; at: string } | null;
+    /** No completed debate yet (GEO-3126); absent from a geo-chat that predates it. */
+    newcomer?: boolean;
+  };
+};
+
+export type DebateLobbyPerson = {
+  user_id: string;
+  profile_space_id: string;
+  display_name: string | null;
+  avatar_cid: string | null;
+};
+
+export type DebateLobbySummary = {
+  lobby_id: string;
+  name: string;
+  scheduled: boolean;
+  starts_at: string;
+  opens_at: string;
+  open: boolean;
+  /** Every host, present or not, creator first, then the acting host. */
+  hosts: DebateLobbyPerson[];
+  headcount: number;
+  /** Up to five present people, longest-present first. */
+  avatars: DebateLobbyPerson[];
+  debating_count: number;
+  reminder_count: number;
+  viewer_reminded: boolean;
+  /** On the roster, stepped out included. */
+  viewer_on_roster: boolean;
+  /** When this row was read; orders card patches. `null` before the lobby's first broadcast; absent from older geo-chat. */
+  as_of?: string | null;
+};
+
+export type DebateLobbiesResponse = { lobbies: DebateLobbySummary[] };
+
+export async function listDebateLobbies(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateLobbiesResponse>('/debate-lobbies', {
+    // Signed out, the list a new account sees (GEO-3291); `true` signed in, so a failed token
+    // exchange is an error rather than a quietly anonymous list.
+    auth: accountKey ? true : 'optional',
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** Where a lobby stands for the calendar (GEO-3271). An ended lobby's `open` is false, so this tells it from upcoming. */
+export type DebateLobbyCalendarState = 'upcoming' | 'open' | 'ended';
+
+/** One lobby in `GET /debate-lobbies/calendar`: the list's row, plus its state and when it ended. */
+export type DebateLobbyCalendarRow = DebateLobbySummary & {
+  state: DebateLobbyCalendarState;
+  closed_at: string | null;
+};
+
+export type DebateLobbyCalendarResponse = { lobbies: DebateLobbyCalendarRow[] };
+
+/**
+ * Every lobby starting in `[from, to)`, soonest first (GEO-3271), with none of the list's caps and
+ * ended lobbies included. Account required. Up to 35 days; a lobby ended before it opened is left
+ * out by geo-chat, as a cancellation.
+ */
+export async function listDebateLobbyCalendar(
+  { from, to }: { from: Date; to: Date },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+  return geoChatRequest<DebateLobbyCalendarResponse>(`/debate-lobbies/calendar?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** 404 `lobby_not_found` for an id that is not a lobby, which includes a two-person room. */
+export async function getDebateLobby(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** A lobby member on one side of an "In this room" claim. */
+export type DebateLobbyClaimParticipant = DebateParticipantSummary & {
+  requestable: boolean;
+  /** This person and the viewer already debated this claim together. Absent on older geo-chat. */
+  previously_debated?: boolean;
+};
+
+/** One side of an "In this room" claim. The viewer is never counted in it. */
+export type DebateLobbyClaimSide = {
+  position: boolean;
+  position_label: string;
+  /** Other people in the room on this side. */
+  total_in_room: number;
+  /** Of those, how many the viewer can send a lobby-scoped request to now. */
+  requestable_count: number;
+  /** At most 8, requestable first. */
+  participants: DebateLobbyClaimParticipant[];
+};
+
+export type DebateLobbyClaim = MatchmakingReadiness & {
+  claim: DebateClaimSummary;
+  /** Someone is debating this claim now, anywhere. */
+  active_debate: boolean;
+  /** Always two, `true` first. */
+  positions: DebateLobbyClaimSide[];
+};
+
+/** `recent` when nobody in the room holds a position: recently voted claims, with empty sides. */
+export type DebateLobbyClaims = {
+  lobby_id: string;
+  source: 'room' | 'recent';
+  /** Most disagreeing pairs first. */
+  claims: DebateLobbyClaim[];
+  /**
+   * On how many claims the viewer and each other member disagree; the viewer has no entry. `null`
+   * for a guest; absent from older geo-chat.
+   */
+  disagreements?: { user_id: string; claims: number }[] | null;
+};
+
+/** At most this many `claimEntityIds` per read (`400 too_many_claim_ids`). */
+export const LOBBY_CLAIMS_MAX_IDS = 50;
+
+/** A claim id as the Explore filter takes it, dashless and lowercase, or null if it isn't uuid-shaped. */
+export function geoChatClaimId(id: string) {
+  const compact = dashlessId(id);
+  return /^[0-9a-f]{32}$/.test(compact) ? compact : null;
+}
+
+/**
+ * Roster members only. `404 lobby_not_found`, `403 lobby_banned`, `409 lobby_closed`,
+ * `403 lobby_not_member`.
+ *
+ * With `claimEntityIds` (uuid-shaped only, else `400 invalid_claim_entity_id`), only those claims, one
+ * entry per space row someone in the room holds a side on; `source` is then always `room` and
+ * `disagreements` null.
+ */
+export async function getDebateLobbyClaims(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal,
+  claimEntityIds?: readonly string[]
+) {
+  const query = claimEntityIds?.length ? `?claim_entity_ids=${claimEntityIds.map(dashlessId).join(',')}` : '';
+  return geoChatRequest<DebateLobbyClaims>(`/debate-lobbies/${lobbyId}/claims${query}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/* Highlights and room votes (GEO-3135). Claims are named by `DebateClaimSummary.id`. */
+
+export type DebateLobbyHighlight = {
+  claim: DebateClaimSummary;
+  /** `null` once that account is deleted. */
+  highlighted_by: DebateLobbyPerson | null;
+  highlighted_at: string;
+};
+
+export type DebateLobbyRoomVote = {
+  vote_id: string;
+  claim: DebateClaimSummary;
+  started_by: DebateLobbyPerson | null;
+  started_at: string;
+  /** Over the people in the room now; `eligible` is how many that is. */
+  tally: { agree: number; disagree: number; eligible: number };
+};
+
+/** Full state, as the GET and `debate.lobby_highlights_changed` both carry it. */
+export type DebateLobbyHighlights = {
+  lobby_id: string;
+  /** Orders the GET and events. `null` until the lobby's first highlight. */
+  as_of: string | null;
+  /** Newest first, at most 10. The voted claim is always among them. */
+  highlights: DebateLobbyHighlight[];
+  room_vote: DebateLobbyRoomVote | null;
+};
+
+export type DebateLobbyHighlightsResponse = DebateLobbyHighlights & {
+  /** The viewer's side on the running vote's claim: their hint, else their position. */
+  viewer: { room_vote_position: boolean | null };
+};
+
+/** Roster members only, with the same refusals as `getDebateLobbyClaims`. */
+export async function getDebateLobbyHighlights(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateLobbyHighlightsResponse>(`/debate-lobbies/${lobbyId}/highlights`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/**
+ * Host only, inside the room. Highlighting is idempotent: `409 lobby_highlight_limit` past 10.
+ * Removing a highlight also ends a vote on that claim.
+ */
+export async function setDebateLobbyHighlight(
+  lobbyId: string,
+  debateClaimId: string,
+  highlighted: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyHighlights>(`/debate-lobbies/${lobbyId}/highlights/${debateClaimId}`, {
+    method: highlighted ? 'PUT' : 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Host only. Also highlights the claim. Another running vote is `409 lobby_room_vote_running` with
+ * `details: { vote_id, debate_claim_id }` unless `replace` ends it.
+ */
+export async function startDebateLobbyRoomVote(
+  lobbyId: string,
+  body: { debate_claim_id: string; replace?: boolean },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyHighlights>(`/debate-lobbies/${lobbyId}/room-vote`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    body,
+  });
+}
+
+/** Host only. The claim stays highlighted; an already ended vote answers with the current state. */
+export async function endDebateLobbyRoomVote(
+  lobbyId: string,
+  voteId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyHighlights>(`/debate-lobbies/${lobbyId}/room-vote/${voteId}`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * A claim list page on a lobby (GEO-3273): a Geo page whose collection blocks hold claims, shown as
+ * its own tab. geo-chat stores only which page, from which space, and where; the graph has the rest.
+ */
+export type DebateLobbyClaimList = {
+  /** 32 hex. */
+  entity_id: string;
+  /** 32 hex. The same page can hold different blocks in different spaces, so this picks the copy. */
+  space_id: string;
+  position: number;
+  /** `null` once that account is deleted. */
+  added_by: DebateLobbyPerson | null;
+  added_at: string;
+};
+
+/** Full state, as the GET, every host action and `debate.lobby_claim_lists_changed` carry it. */
+export type DebateLobbyClaimLists = {
+  lobby_id: string;
+  /** `null` before any list was saved. */
+  as_of: string | null;
+  /** In position order. */
+  claim_lists: DebateLobbyClaimList[];
+};
+
+/** geo-chat's `MAX_CLAIM_LISTS`; a sixth is `409 lobby_claim_list_limit`. */
+export const LOBBY_CLAIM_LISTS_MAX = 5;
+
+/**
+ * Host only, inside the room. Adds the page at `position` (appends when omitted), or moves it there
+ * when already saved. A different `space_id` for a saved page switches it to that space's copy.
+ */
+export async function saveDebateLobbyClaimList(
+  lobbyId: string,
+  entityId: string,
+  body: { space_id: string; position?: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyClaimLists>(`/debate-lobbies/${lobbyId}/claim-lists/${entityId}`, {
+    method: 'PUT',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Host only, inside the room. Idempotent; the lists after it move up. */
+export async function removeDebateLobbyClaimList(
+  lobbyId: string,
+  entityId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyClaimLists>(`/debate-lobbies/${lobbyId}/claim-lists/${entityId}`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Counts the viewer's side in the tally while their on-chain write indexes; `null` is a removed
+ * side. Withdrawn (`position: undefined`) when the write fails. The response-indexed report
+ * replaces it either way.
+ */
+export async function setDebateLobbyRoomVoteHint(
+  lobbyId: string,
+  voteId: string,
+  position: boolean | null | undefined,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<void>(`/debate-lobbies/${lobbyId}/room-vote/${voteId}/hint`, {
+    method: position === undefined ? 'DELETE' : 'PUT',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    body: position === undefined ? undefined : { position },
+  });
+}
+
+/**
+ * The lobby the viewer is on the roster of. `current_lobby_id` survives a step-out and is null once
+ * they leave, are removed, or the lobby ends; `stepped_out` is false whenever it is null.
+ */
+export type DebateMyLobby = { current_lobby_id: string | null; stepped_out: boolean };
+
+export async function getMyDebateLobby(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateMyLobby>('/me/debate-lobby', { auth: true, getPrivyIdentityToken, accountKey, signal });
+}
+
+/**
+ * Without `starts_at` the lobby opens now. `claim_lists` are tabs it starts with, in pick order
+ * (GEO-3275); more than five is `409 lobby_claim_list_limit`, and a page given twice keeps its
+ * first place. Without the field the request is exactly the one before claim lists existed.
+ */
+export type CreateDebateLobbyRequest = {
+  name: string;
+  starts_at?: string;
+  claim_lists?: Array<{ entity_id: string; space_id: string }>;
+};
+
+/** Without `starts_at` the lobby opens now. A start opens it 10 minutes early. */
+export async function createDebateLobby(
+  body: CreateDebateLobbyRequest,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>('/debate-lobbies', {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Join or leave on one connection. A join while in another open lobby is `409
+ * already_in_another_lobby` unless `leave_other_lobby` confirms leaving it. A join after a host
+ * removed the viewer is `409 lobby_removed` unless `rejoin` says they chose to come back.
+ */
+export async function setDebateLobbyPresence(
+  lobbyId: string,
+  body: {
+    connection_id: string;
+    joined: boolean;
+    leave_other_lobby?: boolean;
+    rejoin?: boolean;
+    /** Ends this tab's guest session in the same join, so nobody is counted twice. */
+    guest_secret?: string;
+  },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  keepalive = false
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/presence`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    keepalive,
+  });
+}
+
+/** Why a heartbeat's connection is out of the lobby. Only `lapsed` should join again. */
+export type DebateLobbyGoneReason = 'lapsed' | 'moved' | 'stepped_out' | 'ended' | 'banned' | 'removed';
+
+export type DebateLobbyHeartbeat = {
+  /** This connection's lease is live; when `false`, `reason` says why. */
+  connection_alive: boolean;
+  voice_away_at: string | null;
+  reason: DebateLobbyGoneReason | null;
+  /** Dashless; the lobby they are in now, with `moved`. */
+  current_lobby_id: string | null;
+};
+
+/** Renews this connection's 120s lease. Rate limited to 30 a minute per person. */
+export async function sendDebateLobbyHeartbeat(
+  lobbyId: string,
+  body: { connection_id: string; voice_connected: boolean },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyHeartbeat>(`/debate-lobbies/${lobbyId}/heartbeat`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Drops this connection's lease but keeps the viewer on the roster, before routing into a debate.
+ * `409 lobby_not_present` when it held none. Joining again ends it.
+ */
+export async function stepOutOfDebateLobby(
+  lobbyId: string,
+  body: { connection_id: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/step-out`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Stepped out, leave for good. Does nothing when not stepped out. */
+export async function endDebateLobbyStepOut(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/step-out`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export type DebateLobbyVoiceToken = {
+  token: string;
+  url: string;
+  room_name: string;
+  /** Hosts, the acting host and speakers; listeners subscribe only. */
+  can_publish: boolean;
+  /** Join with the mic off; set once the room is crowded. Always false for a listener. */
+  start_muted: boolean;
+  expires_at: string;
+};
+
+/**
+ * A LiveKit token for this lobby, for a connection holding a live lease. LiveKit refreshes it for
+ * a connected client, so a new one is needed only to connect or fully reconnect.
+ */
+export async function getDebateLobbyVoiceToken(
+  lobbyId: string,
+  body: { connection_id: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyVoiceToken>(`/debate-lobbies/${lobbyId}/voice-token`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/* Guests without an account (GEO-3129, GEO-3131). No `Authorization`: a signed-in page uses the member routes. */
+
+/** The lobby as every guest sees it: `LobbyView` without `viewer`. */
+export type DebateLobbyGuestLobby = Omit<DebateLobbyView, 'viewer'>;
+
+export type DebateLobbyGuestView = {
+  lobby: DebateLobbyGuestLobby;
+  /** `null` unless the lobby is open. No viewer: nothing is requestable. */
+  claims: DebateLobbyClaims | null;
+  /** `null` unless the lobby is open. Ordered by its own `as_of`; the view has none, so its ETag holds. */
+  highlights: DebateLobbyHighlights | null;
+};
+
+/** `404 lobby_not_found`, `429 rate_limited`. Revalidates by `ETag`, so a poll is mostly a 304. */
+export async function getDebateLobbyGuestView(lobbyId: string, signal?: AbortSignal) {
+  return geoChatRequest<DebateLobbyGuestView>(`/debate-lobbies/${lobbyId}/guest-view`, { signal });
+}
+
+export type DebateLobbyGuestSession = {
+  guest_id: string;
+  /** Sent back on every guest call, and on the member join that replaces this session. */
+  guest_secret: string;
+  /** This page's admission of the session; heartbeat and leave name it, so an older page's calls are no-ops. */
+  admission: number;
+  lease_expires_at: string;
+  heartbeat_interval_seconds: number;
+  /** Listen-only: `can_publish` is false. */
+  voice: DebateLobbyVoiceToken;
+};
+
+/**
+ * Only `lapsed` should start again. `left` follows this tab's own leave or member join; `superseded`
+ * means a later admission (a reload, another tab) holds the session now.
+ */
+export type DebateLobbyGuestGoneReason = 'lapsed' | 'removed' | 'ended' | 'left' | 'superseded';
+
+export type DebateLobbyGuestHeartbeat = {
+  alive: boolean;
+  reason: DebateLobbyGuestGoneReason | null;
+  lease_expires_at: string | null;
+};
+
+/**
+ * Start listening, or resume with `guest_secret` after a reload or to reconnect. Refusal codes are
+ * mapped in `lobbyErrorMessage`; `403 lobby_guest_removed` means a host removed this secret.
+ */
+export async function startDebateLobbyGuest(lobbyId: string, body: { guest_secret?: string }) {
+  return geoChatRequest<DebateLobbyGuestSession>(`/debate-lobbies/${lobbyId}/guest`, { method: 'POST', body });
+}
+
+/** Renews the guest's 90s lease. Rate limited to 30 a minute per guest. */
+export async function sendDebateLobbyGuestHeartbeat(
+  lobbyId: string,
+  body: { guest_secret: string; admission: number }
+) {
+  return geoChatRequest<DebateLobbyGuestHeartbeat>(`/debate-lobbies/${lobbyId}/guest/heartbeat`, {
+    method: 'POST',
+    body,
+  });
+}
+
+/** Always `204`. Drops the guest from the count at once; a no-op for an older admission. */
+export async function leaveDebateLobbyGuest(
+  lobbyId: string,
+  body: { guest_secret: string; admission: number },
+  keepalive = false
+) {
+  return geoChatRequest<void>(`/debate-lobbies/${lobbyId}/guest/leave`, { method: 'POST', body, keepalive });
+}
+
+/** Host only. Removes every live guest; there is no identity to pick one by. */
+export async function removeDebateLobbyGuests(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/guests/remove`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Host only. Closes the lobby with reason `ended`. */
+export async function endDebateLobby(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/end`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Remind me. Setting it is `409 lobby_already_open` or `409 lobby_closed` when too late. */
+export async function setDebateLobbyReminder(
+  lobbyId: string,
+  reminded: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/reminder`, {
+    method: reminded ? 'PUT' : 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
   });
 }
 
@@ -1887,6 +3547,47 @@ export async function unblockDebateUser(
   });
 }
 
+export async function listNotInterestedClaims(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<NotInterestedClaimsResponse>('/me/not-interested-claims', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** Idempotent: marking a claim twice keeps the first mark. */
+export async function markClaimNotInterested(
+  claimEntityId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<NotInterestedClaimsResponse>(`/me/not-interested-claims/${encodeURIComponent(claimEntityId)}`, {
+    method: 'PUT',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Idempotent: clearing a claim that was never marked is not an error. */
+export async function clearClaimNotInterested(
+  claimEntityId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<NotInterestedClaimsResponse>(`/me/not-interested-claims/${encodeURIComponent(claimEntityId)}`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function handleDebateSharePrompt(
   promptId: string,
   action: 'shared' | 'dismissed',
@@ -1981,18 +3682,54 @@ export async function abortLocalRecordingMultipart(
   });
 }
 
+/**
+ * A signed recording URL. `url` is always the one to play: the file itself, the feed rendition,
+ * the preview clip's MP4, or (for `stream`) the HLS manifest. `expires_at` (RFC 3339) comes with
+ * Stream URLs, which outlive the 15-minute presigns by hours; the others leave it out.
+ */
+export type RecordingUrlResponse = {
+  url: string;
+  hls_url?: string;
+  dash_url?: string;
+  expires_at?: string;
+};
+
 export async function getRecordingUrl(
   debateId: string,
   filename: string,
   getPrivyIdentityToken?: GetPrivyIdentityToken,
-  accountKey?: string | null
+  accountKey?: string | null,
+  variant?: RecordingUrlVariant
 ) {
-  return geoChatRequest<{ url: string }>(`/debates/${debateId}/recordings/url`, {
+  return geoChatRequest<RecordingUrlResponse>(`/debates/${debateId}/recordings/url`, {
     method: 'POST',
-    body: { filename },
+    // `variant` only when asked for, so every other request is byte-for-byte what it was.
+    body: variant ? { filename, variant } : { filename },
     auth: 'optional',
     getPrivyIdentityToken,
     accountKey,
+  });
+}
+
+/**
+ * The claims geo-chat extracted from a debate (GEO-2870), as its media job committed them: the
+ * turns, and the claims keyed to them by `turn_index`. Empty arrays until extraction has run.
+ *
+ * The fast path. These land minutes after a debate ends, where the published graph claims wait on
+ * the composed video and the publish sweep (~27 min). GEO-2868 decided the debate-again flow reads
+ * them from here rather than publishing anything early.
+ */
+export async function getDebateExtractedClaims(
+  debateId: string,
+  getPrivyIdentityToken?: GetPrivyIdentityToken,
+  accountKey?: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateExtractedClaimsResponse>(`/debates/${debateId}/claims`, {
+    auth: 'optional',
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
   });
 }
 
@@ -2075,6 +3812,7 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     signal: options.signal,
     keepalive: options.keepalive,
+    credentials: options.credentials,
   });
 
   if (!response.ok) {
@@ -2091,14 +3829,38 @@ export class GeoChatRequestError extends Error {
   status: number;
   /** From `Retry-After`, where geo-chat sent one. */
   retryAfterMs: number | null;
+  /** geo-chat's optional `error.details`, e.g. `current_lobby_id` on `already_in_another_lobby`. */
+  details: Record<string, unknown> | null;
 
-  constructor(message: string, code: string | null, status: number, retryAfterMs: number | null = null) {
+  constructor(
+    message: string,
+    code: string | null,
+    status: number,
+    retryAfterMs: number | null = null,
+    details: Record<string, unknown> | null = null
+  ) {
     super(message);
     this.name = 'GeoChatRequestError';
     this.code = code;
     this.status = status;
     this.retryAfterMs = retryAfterMs;
+    this.details = details;
   }
+}
+
+/**
+ * A geo-chat failure in analytics terms: its code and status where it has them. Never the message,
+ * which is prose meant for a person and can name one.
+ */
+export function geoChatErrorProperties(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    return { error_code: error.code, http_status: error.status, error_name: 'GeoChatRequestError' };
+  }
+  return {
+    error_code: null,
+    http_status: null,
+    error_name: error instanceof Error ? error.name : typeof error,
+  };
 }
 
 /**
@@ -2134,6 +3896,15 @@ export class GeoChatSessionError extends GeoChatRequestError {
  */
 export function isGeoChatRefusal(error: unknown) {
   return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
+}
+
+/**
+ * `/debate-profiles/:spaceId` for a person geo-chat has never seen — they have not signed in to
+ * debate. By its code rather than its status: a 404 alone is also what a deployment without the
+ * route answers (see `isMatchmakingUnavailable`), and that is a failure, not a fact about them.
+ */
+export function isDebateProfileMissing(error: unknown) {
+  return error instanceof GeoChatRequestError && error.status === 404 && error.code === 'user_not_found';
 }
 
 /**
@@ -2219,13 +3990,17 @@ export async function retryDebatePhaseBoundaryRequest<T>(request: () => Promise<
 
 async function requestError(response: Response) {
   let code: string | null = null;
+  let details: Record<string, unknown> | null = null;
   let message = `${response.status} ${response.statusText}`;
   try {
     const responseBody = (await response.text()).trim();
     if (responseBody) {
       try {
-        const body = JSON.parse(responseBody) as { error?: { code?: string; message?: string } };
+        const body = JSON.parse(responseBody) as {
+          error?: { code?: string; message?: string; details?: Record<string, unknown> };
+        };
         code = body.error?.code ?? null;
+        details = body.error?.details ?? null;
         message = body.error?.message || message;
       } catch {
         message = responseBody;
@@ -2234,7 +4009,13 @@ async function requestError(response: Response) {
   } catch {
     // fall back to the status line built above
   }
-  return new GeoChatRequestError(message, code, response.status, retryAfterMs(response.headers?.get('retry-after')));
+  return new GeoChatRequestError(
+    message,
+    code,
+    response.status,
+    retryAfterMs(response.headers?.get('retry-after')),
+    details
+  );
 }
 
 /** `Retry-After` in milliseconds, given as delay-seconds or an HTTP date. */
@@ -2316,6 +4097,11 @@ export async function getGeoChatSession(
 
   geoChatSessionRequests.set(requestKey, request);
   return request;
+}
+
+/** The access token every tab and request currently shares, if one is stored. */
+export function getStoredGeoChatAccessToken() {
+  return loadStoredSession()?.session.access_token ?? null;
 }
 
 export function resetGeoChatSession() {

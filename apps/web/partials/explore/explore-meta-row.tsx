@@ -4,8 +4,10 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { FollowButton } from '~/core/follows/follow-button';
+import { useIsPersonalSpace } from '~/core/hooks/use-is-personal-space';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
@@ -13,6 +15,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
+import { ExploreTypeTag } from './explore-type-tag';
 import { MetaDot } from './meta-dot';
 import { SpaceThumb } from './space-thumb';
 
@@ -28,7 +31,7 @@ const RANKING_BLOCK_TYPE = normId(RANKING_BLOCK_TYPE_ID);
 export const META_SEGMENT_CLASS = 'text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04';
 
 /**
- * The line above every explore card: the space, what the thing is, and when it appeared.
+ * The line above every explore card: the space and what the thing is.
  *
  * One component because two card types draw it and a third could. It was copied rather than shared
  * when the claim card was written, and the copy did not survive contact: the segments ended up a
@@ -37,7 +40,7 @@ export const META_SEGMENT_CLASS = 'text-[14px] leading-[13px] font-normal tracki
  * None of that is visible in a diff of the two files — it took reading them class by class, twice.
  *
  * The dots live between segments rather than as a `gap`, because a segment that is absent must not
- * leave a separator behind: a claim with no timestamp ends after its type, not after a dot.
+ * leave a separator behind: a claim that is not Controversial ends after its type, not after a dot.
  */
 export function ExploreMetaRow({
   item,
@@ -52,7 +55,7 @@ export function ExploreMetaRow({
   hideSpaceLink?: boolean;
   hideJoinButton?: boolean;
   /**
-   * Segments this card adds, placed after the types and before the timestamp.
+   * Segments this card adds, placed after the types.
    *
    * Where a claim card puts Controversial — beside what kind of thing this is, which is the same
    * question, rather than down in the verdict where it would read as part of the number.
@@ -84,24 +87,16 @@ export function ExploreMetaRow({
     return out;
   }, [item.types]);
 
-  const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-
   const segments: { key: string; content: React.ReactNode; showOnCompactMobile: boolean }[] = [];
 
-  if (!hideJoinButton && !item.isMemberOrEditor) {
+  const offer = useSpaceOffer(item, { hidden: hideJoinButton });
+  if (offer.shown) {
     segments.push({
       key: 'join',
       // Joining is behaviour, not metadata. Compacting the row must never remove an action the
-      // ordinary Explore card offers; only the Claim type and age disappear on mobile.
+      // ordinary Explore card offers; only the Claim type disappears on mobile.
       showOnCompactMobile: true,
-      content: (
-        <ExploreJoinSpaceButton
-          spaceId={item.spaceId}
-          hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-          variant="compact"
-          label="Join"
-        />
-      ),
+      content: offer.shown,
     });
   }
 
@@ -110,12 +105,11 @@ export function ExploreMetaRow({
       key: 'types',
       showOnCompactMobile: false,
       content: (
-        <span className={`inline-flex min-w-0 flex-wrap items-center ${META_SEGMENT_CLASS}`}>
-          {types.map((type, index) => (
-            <React.Fragment key={type.id}>
-              {index > 0 ? <MetaDot /> : null}
-              <span className="truncate">{type.name}</span>
-            </React.Fragment>
+        <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+          {types.map(type => (
+            <ExploreTypeTag key={type.id} className="truncate">
+              {type.name}
+            </ExploreTypeTag>
           ))}
         </span>
       ),
@@ -125,14 +119,6 @@ export function ExploreMetaRow({
   extraSegments?.forEach((content, index) => {
     segments.push({ key: `extra-${index}`, content, showOnCompactMobile: true });
   });
-
-  if (timeAgo) {
-    segments.push({
-      key: 'time',
-      showOnCompactMobile: false,
-      content: <span className={`shrink-0 ${META_SEGMENT_CLASS}`}>{timeAgo}</span>,
-    });
-  }
 
   const showSpace = !hideSpaceLink;
   if (!showSpace && segments.length === 0 && !endSlot) return null;
@@ -205,6 +191,52 @@ export function ExploreMetaRow({
         metadata
       )}
       {endSlot}
+      {offer.mounted}
     </div>
   );
+}
+
+/**
+ * What a card offers about the space it was posted in: Join for a shared space you're not in, Follow
+ * for someone's personal space (GEO-3236), since nobody joins a person. Shared by every Explore meta
+ * row, so a debate card offers what a claim card does.
+ *
+ * `shown` is the control to draw, or null. `mounted` is a Follow for your own personal space, which
+ * draws nothing but must stay mounted: a follow pressed there while signed out is queued, and only a
+ * mounted Follow can see, once you've signed in, that it was yourself and drop it. Unmounted, it
+ * would wait in the queue for a control that never comes.
+ *
+ * The feed doesn't carry space types, so this asks whether the space is personal: one batched
+ * request for every card on screen, cached per space for the session. Join draws until the answer
+ * is in: nearly every card is in a shared space.
+ */
+export function useSpaceOffer(
+  item: ExploreFeedItem,
+  {
+    hidden = false,
+    joinVariant = 'compact',
+  }: { hidden?: boolean; joinVariant?: React.ComponentProps<typeof ExploreJoinSpaceButton>['variant'] } = {}
+): { shown: React.ReactNode; mounted: React.ReactNode } {
+  const isPersonal = useIsPersonalSpace(item.spaceId, { enabled: !hidden });
+  const { personalSpaceId } = usePersonalSpaceId();
+  if (hidden) return { shown: null, mounted: null };
+
+  if (isPersonal) {
+    const follow = <FollowButton target={{ kind: 'person', id: item.spaceId, name: item.spaceName }} />;
+    const isOwn = Boolean(personalSpaceId) && normId(personalSpaceId ?? '') === normId(item.spaceId);
+    return isOwn ? { shown: null, mounted: follow } : { shown: follow, mounted: null };
+  }
+  if (item.isMemberOrEditor) return { shown: null, mounted: null };
+  return {
+    shown: (
+      <ExploreJoinSpaceButton
+        spaceId={item.spaceId}
+        spaceName={item.spaceName}
+        hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
+        variant={joinVariant}
+        label="Join"
+      />
+    ),
+    mounted: null,
+  };
 }

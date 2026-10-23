@@ -1,0 +1,233 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  carryLobbyJoinChoice,
+  clearCarriedLobbyChoice,
+  debateEntryClick,
+  forgetLobbyDevices,
+  lobbyCaptureLive,
+  readCarriedLobbyChoice,
+  registerLobbyCapture,
+  registerLobbyStepOut,
+  releaseLobbyCapture,
+  reportLobbyCamera,
+  reportLobbyMic,
+  routeIntoDebate,
+} from './step-out';
+
+let clear: (() => void) | null = null;
+afterEach(() => {
+  clear?.();
+  clear = null;
+  forgetLobbyDevices();
+  clearCarriedLobbyChoice();
+  vi.useRealTimers();
+});
+
+function click(overrides: Partial<{ button: number; metaKey: boolean; defaultPrevented: boolean }> = {}) {
+  return {
+    button: 0,
+    metaKey: false,
+    ctrlKey: false,
+    shiftKey: false,
+    altKey: false,
+    defaultPrevented: false,
+    preventDefault: vi.fn(),
+    ...overrides,
+  } as unknown as React.MouseEvent & { preventDefault: ReturnType<typeof vi.fn> };
+}
+
+describe('the lobby capture registry', () => {
+  it('tracks each kind and releases only the one asked for', () => {
+    const releaseMic = vi.fn();
+    const releaseCamera = vi.fn();
+    const clearMic = registerLobbyCapture('audio', { on: true, release: releaseMic });
+    const clearCamera = registerLobbyCapture('video', { on: false, release: releaseCamera });
+    expect(lobbyCaptureLive('audio')).toBe(true);
+    expect(lobbyCaptureLive()).toBe(true);
+
+    releaseLobbyCapture('audio');
+    expect(releaseMic).toHaveBeenCalledTimes(1);
+    expect(releaseCamera).not.toHaveBeenCalled();
+
+    releaseLobbyCapture();
+    expect(releaseCamera).toHaveBeenCalledTimes(1);
+
+    clearMic();
+    clearCamera();
+    expect(lobbyCaptureLive()).toBe(false);
+  });
+
+  it('keeps a newer registration when an older one clears', () => {
+    const clearOld = registerLobbyCapture('audio', { on: true, release: vi.fn() });
+    const clearNew = registerLobbyCapture('audio', { on: false, release: vi.fn() });
+
+    clearOld();
+    expect(lobbyCaptureLive('audio')).toBe(true);
+    clearNew();
+    expect(lobbyCaptureLive('audio')).toBe(false);
+  });
+});
+
+describe('routeIntoDebate', () => {
+  it('navigates at once outside a lobby', () => {
+    const go = vi.fn();
+    routeIntoDebate(go);
+    expect(go).toHaveBeenCalledTimes(1);
+  });
+
+  it('steps out first from a lobby', async () => {
+    const order: string[] = [];
+    clear = registerLobbyStepOut(async () => {
+      order.push('step-out');
+    });
+    routeIntoDebate(() => order.push('go'));
+    expect(order).toEqual(['step-out']);
+    await vi.waitFor(() => expect(order).toEqual(['step-out', 'go']));
+  });
+});
+
+describe('carrying the lobby’s devices into a debate', () => {
+  /** A lobby whose step-out carries its mic, as the presence hook's does. */
+  function inLobbyWithMic(on: boolean | null) {
+    reportLobbyMic(on);
+    clear = registerLobbyStepOut(async () => carryLobbyJoinChoice());
+  }
+
+  it('carries an unmuted mic', () => {
+    inLobbyWithMic(true);
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true });
+  });
+
+  it('carries a muted mic', () => {
+    inLobbyWithMic(false);
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: false });
+  });
+
+  // Stepping out releases the lobby's camera first; the carry still says it was on.
+  it('carries the camera as it was before the step-out released it', () => {
+    inLobbyWithMic(true);
+    reportLobbyCamera(true);
+    const releaseCleanup = registerLobbyCapture('video', { on: true, release: () => reportLobbyCamera(false) });
+    routeIntoDebate(() => undefined);
+    releaseCleanup();
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true, cameraOn: true });
+  });
+
+  it('carries a camera that was off', () => {
+    inLobbyWithMic(true);
+    reportLobbyCamera(false);
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyChoice()).toEqual({ micOn: true, cameraOn: false });
+  });
+
+  it('carries nothing for a listener, after the lobby page is gone, or once spent', () => {
+    inLobbyWithMic(null);
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyChoice()).toBeNull();
+
+    reportLobbyMic(true);
+    forgetLobbyDevices();
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyChoice()).toBeNull();
+
+    reportLobbyMic(true);
+    routeIntoDebate(() => undefined);
+    clearCarriedLobbyChoice();
+    expect(readCarriedLobbyChoice()).toBeNull();
+  });
+
+  it('does not reach a debate entered from outside a lobby', () => {
+    inLobbyWithMic(true);
+    routeIntoDebate(() => undefined);
+    clear?.();
+    clear = null;
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyChoice()).toBeNull();
+  });
+
+  it('expires after a minute', () => {
+    vi.useFakeTimers();
+    inLobbyWithMic(true);
+    routeIntoDebate(() => undefined);
+    vi.advanceTimersByTime(61_000);
+    expect(readCarriedLobbyChoice()).toBeNull();
+  });
+});
+
+describe('debateEntryClick', () => {
+  it('leaves a link alone outside a lobby', () => {
+    const navigate = vi.fn();
+    const event = click();
+    debateEntryClick(navigate)(event);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('steps out before a plain click navigates, but not a new-tab click', async () => {
+    const stepOut = vi.fn(async () => undefined);
+    clear = registerLobbyStepOut(stepOut);
+    const navigate = vi.fn();
+
+    const newTab = click({ metaKey: true });
+    debateEntryClick(navigate)(newTab);
+    expect(newTab.preventDefault).not.toHaveBeenCalled();
+
+    const plain = click();
+    debateEntryClick(navigate)(plain);
+    expect(plain.preventDefault).toHaveBeenCalled();
+    expect(stepOut).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(navigate).toHaveBeenCalledTimes(1));
+  });
+});
+
+// A new way into a debate that skips the step-out drops the viewer off the lobby's roster.
+describe('every debate entry steps out of a lobby', () => {
+  const root = join(__dirname, '../../..');
+  // Not a debater entering a debate: lobby-to-lobby links, watching one live, sign-in, debug.
+  const allowed = new Set([
+    // GEO-3268: links into a lobby from the panel spotlight and row, the Debate button's hover list,
+    // the calendar and Explore.
+    'core/debates/lobbies/lobby-spotlight.tsx',
+    'core/debates/lobbies/live-lobbies-preview.tsx',
+    'core/debates/lobbies/upcoming-lobbies.tsx',
+    'core/debates/lobbies/lobbies-calendar.tsx',
+    'partials/explore/explore-live-lobbies-banner.tsx',
+    'core/debates/lobbies/lobby-page.tsx',
+    'core/debates/lobbies/lobby-state-cards.tsx',
+    'core/debates/lobbies/open-lobby-dialog.tsx',
+    'core/claims/browse/claim-end-slot.tsx',
+    'app/debate/[roomId]/room-page-client.tsx',
+    'app/space/[id]/(space)/debug-debate-rooms/debug-debate-rooms-page-client.tsx',
+    // The debate room itself, prefetching or leaving for the picker afterwards.
+    'app/space/[id]/(space)/debates/[debateId]/debate-room-page-client.tsx',
+  ]);
+
+  function sources(dir: string): string[] {
+    return readdirSync(dir).flatMap(name => {
+      const path = join(dir, name);
+      if (name === 'node_modules' || name.startsWith('.')) return [];
+      if (statSync(path).isDirectory()) return sources(path);
+      return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
+    });
+  }
+
+  it('routes through routeIntoDebate or debateEntryClick', () => {
+    const offenders = ['core', 'app', 'partials']
+      .flatMap(dir => sources(join(root, dir)))
+      .filter(path => {
+        const source = readFileSync(path, 'utf8');
+        const buildsDebatePath = /\b(debatePath|debateRematchPath|debateRoomPath)\(/.test(source);
+        const navigates = /router\.(push|replace)\(|<Link\b/.test(source);
+        const stepsOut = /\b(routeIntoDebate|debateEntryClick)\(/.test(source);
+        return buildsDebatePath && navigates && !stepsOut;
+      })
+      .map(path => relative(root, path))
+      .filter(path => !allowed.has(path));
+    expect(offenders).toEqual([]);
+  });
+});

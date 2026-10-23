@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import type { DebateClaimPositionSummary } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 
@@ -43,8 +44,10 @@ export function ClaimPositionCommentControl({
   pending,
   titleFor,
   noteFor,
+  localSide,
   positionRowClassName,
   positionRowEndSlot,
+  onActivityPublish,
 }: {
   entityId: string;
   spaceId: string;
@@ -54,11 +57,23 @@ export function ClaimPositionCommentControl({
   onRespond: (position: boolean) => void;
   /** False while signed out; the first click should open sign-in rather than an unusable composer. */
   promptForComment: boolean;
+  /**
+   * A comment appearing or disappearing here, for a host whose own count cannot see it.
+   *
+   * This composer publishes an ordinary top-level comment on the claim, and on the claim page that
+   * comment is inside the Activity heading's server aggregate — which nothing in the comment caches
+   * can move. The heading prefers that aggregate unconditionally, so without this it stayed one
+   * behind after a reader explained their position. Omitted on the Explore card, whose pill is
+   * derived from the comment list and corrects itself.
+   */
+  onActivityPublish?: (delta: number) => void;
   disabled?: boolean;
   /** The viewer's response is still confirming; presses are dropped. See `PositionRow`. */
   pending?: boolean;
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
+  /** The side held only on this device; see `PositionRow`. */
+  localSide?: boolean | null;
   positionRowClassName?: string;
   /** Compact action rendered after Disagree, such as the Explore comments-panel opener. */
   positionRowEndSlot?: React.ReactNode;
@@ -69,6 +84,9 @@ export function ClaimPositionCommentControl({
   const [actionsBelow, setActionsBelow] = React.useState(false);
   const composerRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  // Focused for a mouse and keyboard, where it saves a click. On a touch screen focusing raises the
+  // on-screen keyboard over the claim the viewer just answered, for an explanation that is optional.
+  const focusComposerOnOpen = !useMediaQuery('(hover: none), (pointer: coarse)');
   const { publishComment: submitComment } = usePublishComment(entityId, spaceId, {
     targetEntityType: 'claim',
     interactionSurface: 'claim_position_explanation',
@@ -130,7 +148,11 @@ export function ClaimPositionCommentControl({
     const text = comment.trim();
     if (!text) return;
     setIsSubmitting(true);
-    const result = await submitComment({ text });
+    const result = await submitComment({
+      text,
+      onOptimistic: () => onActivityPublish?.(1),
+      onFailed: () => onActivityPublish?.(-1),
+    });
 
     // A failed publish leaves the draft available to retry. Successful and queued comments already
     // have an optimistic row in the thread; closing here hands the reader from the composer to it.
@@ -158,6 +180,7 @@ export function ClaimPositionCommentControl({
           pending={pending}
           titleFor={titleFor}
           noteFor={noteFor}
+          localSide={localSide}
           endSlot={positionRowEndSlot}
         />
       </div>
@@ -198,7 +221,7 @@ export function ClaimPositionCommentControl({
                 }}
                 placeholder={`Why do you ${action.toLowerCase()}?`}
                 aria-label={`Why do you ${action.toLowerCase()}?`}
-                autoFocus
+                autoFocus={focusComposerOnOpen}
                 wrap="soft"
                 rows={1}
                 disabled={isSubmitting}

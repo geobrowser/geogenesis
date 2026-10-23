@@ -7,7 +7,16 @@ import { personalSpaceIdQueryKey } from './use-personal-space-id';
 
 type PersonalSpaceIdCache = { isRegistered: boolean; personalSpaceId: string | null };
 
-/** Prefer the live hook value; otherwise trust the sole cached smart account. */
+/**
+ * Prefer the live hook value; otherwise trust the cached smart account, if there is only one.
+ *
+ * "Only one" means one *account*, not one cache entry. The query is keyed on the wagmi wallet's
+ * address as well as the embedded wallet's, and the wagmi side is undefined until Privy's login
+ * sets the active wallet — so a fresh sign-up caches the same account under two keys. Counting
+ * entries read that as ambiguous and returned nothing, and a vote queued before sign-up then
+ * failed on replay with "You need a registered personal space to respond". Two genuinely
+ * different accounts are still ambiguous and still return null.
+ */
 export function readCachedSmartAccount(
   queryClient: QueryClient,
   live: GeoWalletClient | null | undefined
@@ -17,7 +26,8 @@ export function readCachedSmartAccount(
     .getQueriesData<GeoWalletClient | null>({ queryKey: ['smart-account'] })
     .map(([, cached]) => cached)
     .filter((cached): cached is GeoWalletClient => Boolean(cached));
-  return cachedAccounts.length === 1 ? cachedAccounts[0] : null;
+  const addresses = new Set(cachedAccounts.map(cached => cached.account.address.toLowerCase()));
+  return addresses.size === 1 ? cachedAccounts[0] : null;
 }
 
 export function readCachedPersonalSpace(
@@ -29,4 +39,20 @@ export function readCachedPersonalSpace(
     personalSpaceId: cached?.personalSpaceId ?? null,
     isRegistered: cached?.isRegistered ?? false,
   };
+}
+
+/**
+ * The registered personal space to write from: this render's when it has one, otherwise the cache's.
+ *
+ * For a write a queued action replays — through a closure taken at the press, before sign-up, when
+ * the render had no space; the cache has it by the time the runner fires. Null when neither has a
+ * registered space.
+ */
+export function readRegisteredPersonalSpaceId(
+  queryClient: QueryClient,
+  address: string | null | undefined,
+  live: { personalSpaceId: string | null; isRegistered: boolean }
+): string | null {
+  const space = live.personalSpaceId && live.isRegistered ? live : readCachedPersonalSpace(queryClient, address);
+  return space.isRegistered ? space.personalSpaceId : null;
 }

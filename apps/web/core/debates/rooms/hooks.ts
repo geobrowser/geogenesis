@@ -15,6 +15,7 @@ import {
 } from '../api';
 import { useDebateVisibility } from '../debate-attention';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import { useServerClock } from '../matchmaking/use-request-countdown';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { debateRoomOpponent, debateRoomPresence } from './room-presence';
 
@@ -45,7 +46,8 @@ export function useDebateRoom(roomId: string, enabled = true) {
     // `authenticated`, or the fetcher throws before it reaches the wire and the page reports a
     // failure at a viewer who has simply not signed in — or has, and Privy is still restoring.
     enabled: enabled && Boolean(roomId) && ready && authenticated,
-    refetchInterval: present ? ROOM_POLL_MS : false,
+    // A lobby is read from `/debate-lobbies/{id}`; its room view only says it is one.
+    refetchInterval: query => (query.state.data?.kind === 'lobby' ? false : present ? ROOM_POLL_MS : false),
   });
 }
 
@@ -56,7 +58,7 @@ export function useDebateRoom(roomId: string, enabled = true) {
  * The server parses this as a uuid and rejects anything else, so the fallback is uuid-shaped: a
  * page served over plain http on a LAN address has no `crypto.randomUUID`.
  */
-function useConnectionId() {
+export function useConnectionId() {
   const ref = React.useRef<string>('');
   if (!ref.current) ref.current = globalThis.crypto?.randomUUID?.() ?? fallbackUuid();
   return ref.current;
@@ -95,16 +97,30 @@ async function withRetry<T>(task: () => Promise<T>, shouldStop: () => boolean = 
   }
 }
 
+/** Past the start before announcing again, so the join lands after it on the server. */
+const START_MARGIN_MS = 1_000;
+/** Between joins after the start while geo-chat has not counted one as an arrival. */
+const ARRIVAL_RETRY_MS = 30_000;
+/** Enough to outlast a long drop at the start; a room that never counts one stops asking. */
+const MAX_ARRIVAL_TRIES = 20;
+/** `setTimeout` overflows past this; a room booked further ahead re-arms on waking. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+
 /**
  * Announces arrival once admitted, and departure on both exits: unmount is navigating within the
  * app, `pagehide` is closing the tab. A duplicate leave changes nothing. Everything the leave
  * needs is captured inside the effect: a ref written during render already holds the next room by
  * cleanup time.
  */
-export function useRoomPresence(roomId: string, admitted: boolean) {
+export function useRoomPresence(roomId: string, admitted: boolean, startsAt: string | null = null) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const connectionId = useConnectionId();
+  // The server's time where it has synced: the start below is the server's, and a laptop clock a
+  // few seconds behind would announce just before it and not count as arriving.
+  const clock = useServerClock(admitted && startsAt !== null);
+  const clockRef = React.useRef(clock);
+  clockRef.current = clock;
 
   // `getPrivyIdentityToken` only reads the current session, so holding it in a ref keeps a token
   // refresh from re-running the join/leave pair.
@@ -130,21 +146,70 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
 
     // An arrival nobody recorded is invisible to the opponent and counts towards a no-show, so a
     // dropped join is retried rather than swallowed. A refusal is reported by the room query's own
-    // `access`, which is the surface that explains it.
-    const announce = () =>
+    // `access`, which is the surface that explains it. Resolves the room as the join left it, or
+    // `null` once the retries are spent.
+    const announceRoom = (): Promise<DebateRoomView | null> =>
       withRetry(
         () => send(true),
         () => cancelled
       )
         .then(room => {
-          if (cancelled) return false;
+          if (cancelled) return null;
           queryClient.setQueryData(debateQueryKeys.room(accountKey, roomId), room);
-          return true;
+          return room;
         })
-        .catch(() => false);
+        .catch(() => null);
+    const announce = () => announceRoom().then(room => room !== null);
 
-    void announce();
+    // GEO-3427: geo-chat counts someone as having arrived by a join at or after the start, so that a
+    // tab left open from a look in before it (or a crashed one) does not count. A tab someone is
+    // actually waiting in says so again once the start passes; a dead one never does.
+    //
+    // Settled by geo-chat's own answer, `viewer_arrived`, not by a flag here or by this device's
+    // clock: a laptop a few seconds fast, or a network drop right at the start, would otherwise
+    // leave someone waiting in the room counted as absent for good. Until it says so the join is
+    // sent again: at the start, every so often after it, and on coming back to the tab.
+    const startMs = startsAt ? Date.parse(startsAt) : Number.NaN;
+    const now = () => clockRef.current?.now() ?? Date.now();
+    let startTimer: ReturnType<typeof setTimeout> | undefined;
+    let arrived = !Number.isFinite(startMs);
+    let tries = 0;
+    let inFlight = false;
+    const answered = (room: DebateRoomView | null) => {
+      if (cancelled || arrived) return;
+      // A geo-chat older than `viewer_arrived` has nothing to say: a join past the start has to do.
+      if (room?.viewer_arrived === true || (room && room.viewer_arrived === undefined && now() >= startMs)) {
+        arrived = true;
+        return;
+      }
+      clearTimeout(startTimer);
+      if (tries >= MAX_ARRIVAL_TRIES) return;
+      startTimer = setTimeout(arriveAtStart, startMs - now() > 0 ? 0 : ARRIVAL_RETRY_MS);
+    };
+    const arriveAtStart = () => {
+      if (cancelled || arrived || inFlight) return;
+      clearTimeout(startTimer);
+      const wait = startMs - now();
+      if (wait > 0) {
+        // Re-checked on waking, against the server's clock if it has synced since.
+        startTimer = setTimeout(arriveAtStart, Math.min(wait + START_MARGIN_MS, MAX_TIMEOUT_MS));
+        return;
+      }
+      inFlight = true;
+      tries += 1;
+      void announceRoom().then(room => {
+        inFlight = false;
+        answered(room);
+      });
+    };
+    // A phone can suspend the tab past the start, and its timer with it: coming back says so too.
+    const arriveOnReturn = () => {
+      if (document.visibilityState === 'visible') arriveAtStart();
+    };
+
+    void announceRoom().then(answered);
     announceRef.current = announce;
+    if (!arrived) document.addEventListener('visibilitychange', arriveOnReturn);
 
     // `pagehide` has no later, so the request is made rather than queued: a leave waiting behind
     // an in-flight join is never sent at all once the document freezes, and the server has no
@@ -168,12 +233,14 @@ export function useRoomPresence(roomId: string, admitted: boolean) {
     window.addEventListener('pageshow', restore);
     return () => {
       cancelled = true;
+      clearTimeout(startTimer);
+      document.removeEventListener('visibilitychange', arriveOnReturn);
       announceRef.current = null;
       window.removeEventListener('pagehide', departOnce);
       window.removeEventListener('pageshow', restore);
       void withRetry(() => send(false, true)).catch(() => undefined);
     };
-  }, [accountKey, admitted, connectionId, queryClient, roomId]);
+  }, [accountKey, admitted, connectionId, queryClient, roomId, startsAt]);
 
   // A join is also how a room gets a fresh session: geo-chat replaces an expired or ended one on the
   // next join, which an occupant who never left would otherwise not send.
@@ -254,6 +321,19 @@ export function useFinishedRoomIds(rooms: UpcomingDebateRoom[], enabled = true):
     .join(',');
 
   return React.useMemo(() => new Set(finished ? finished.split(',') : []), [finished]);
+}
+
+/**
+ * Whether one listed room's debate has already happened, as `useFinishedRoomIds` judges a list:
+ * geo-chat goes on listing a converted room as joinable until the empty-room sweep closes it.
+ * `null` while its session is read. A room nobody has been in has no session, so it has not.
+ */
+export function useRoomFinished(room: UpcomingDebateRoom | null): boolean | null {
+  const sessionId = room?.rematch_session_id ?? null;
+  const session = useRoomSession(sessionId);
+  if (!sessionId) return false;
+  if (session.isPending) return null;
+  return session.data?.status === 'converted';
 }
 
 /** A room's session, on the same cache entry as `useDebateRematch`. */

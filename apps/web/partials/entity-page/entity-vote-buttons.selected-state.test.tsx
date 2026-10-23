@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   optimisticResponse: undefined as 'positive' | 'negative' | undefined,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
   usePrivy: () => ({ authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
@@ -56,7 +56,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: {} }) }));
 
 vi.mock('~/core/io/queries', () => ({
-  getClaimResponseSummaryPage: () => Effect.succeed([]),
+  getClaimResponseSummaryPage: () => Effect.succeed({ items: [], endCursor: null, hasNextPage: false }),
   getEntityResponseCounts: () => Effect.succeed({ positive: 2, negative: 1 }),
   getEntityResponders: () => Effect.succeed([]),
   getSpaces: () => Effect.succeed([]),
@@ -64,6 +64,9 @@ vi.mock('~/core/io/queries', () => ({
 }));
 
 vi.mock('~/core/io/subgraph/fetch-profile', () => ({ fetchProfilesBySpaceIds: () => Effect.succeed([]) }));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: 'profile-1', isRegistered: true, isLoading: false }),
+}));
 vi.mock('~/core/state/pending-personal-space', () => ({ usePendingPersonalSpace: () => ({ isPending: false }) }));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
 vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({ ClaimResponderAvatars: () => null }));
@@ -73,10 +76,15 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-/** Inline draws up, the score, then down. The score is a popover trigger, hence the gap. */
+/**
+ * The two direction buttons, picked out by the `group/vote` marker they share rather than by
+ * position. The row's button order is not this file's subject and has already changed once — the
+ * responder faces became a popover trigger ahead of the up arrow, which silently shifted every
+ * index by one.
+ */
 function inlineButtons() {
-  const buttons = screen.getAllByRole('button');
-  return { up: buttons[0]!, down: buttons[2]! };
+  const [up, down] = screen.getAllByRole('button').filter(button => button.className.includes('group/vote'));
+  return { up: up!, down: down! };
 }
 
 beforeEach(() => {

@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 
 import { fetchTopicFeedFacets } from '~/core/topics/browse/topic-feed-facets';
 import { parseTopicFeedSelectedIds, parseTopicFeedSpaceIds } from '~/core/topics/browse/topic-feed-params';
-import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
+import { parseTopicFeedBodyTypeIds } from '~/core/topics/browse/topic-feed-types';
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
@@ -29,9 +29,7 @@ export async function POST(request: Request) {
   }
 
   const selectedTopicIds = parseTopicFeedSelectedIds(body?.selectedTopicIds, topicId);
-  const typeIds = Array.isArray(body?.typeIds)
-    ? parseTopicFeedTypeIds(body.typeIds.filter((id): id is string => typeof id === 'string').join(','))
-    : parseTopicFeedTypeIds(null);
+  const typeIds = parseTopicFeedBodyTypeIds(body?.typeIds);
   if (typeIds.length === 0) {
     return NextResponse.json({ topics: [] });
   }

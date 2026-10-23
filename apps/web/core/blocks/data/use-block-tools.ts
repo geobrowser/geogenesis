@@ -7,7 +7,7 @@ import * as React from 'react';
 import equal from 'fast-deep-equal';
 
 import { ID } from '~/core/id';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { reactiveRelations } from '~/core/sync/store';
 import { store } from '~/core/sync/use-sync-engine';
 import { Relation } from '~/core/types';
