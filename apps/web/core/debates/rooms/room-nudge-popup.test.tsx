@@ -178,7 +178,7 @@ describe('RoomNudgePopup', () => {
     expect(shown()).not.toBeInTheDocument();
   });
 
-  it('never interrupts a room, a debate or a reminded lobby', () => {
+  it('opens for nothing while not allowed, nor for a reminded lobby’s row', () => {
     render(popup([room(FIRST)], false));
     expect(shown()).not.toBeInTheDocument();
     cleanup();

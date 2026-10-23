@@ -522,7 +522,8 @@ export function DebateCoordinator() {
         key={geoChatAuth.accountKey ?? 'signed-out'}
         rooms={joinableRooms}
         // Not over an incoming request or the share prompt, which want an answer of their own.
-        enabled={!atRoom && !activeFlow && !promptedRequest && !visibleSharePrompt}
+        // Off on any room page, a lobby's too (where `atRoom` is false): a live room is not the place.
+        enabled={roomIdAtPath === null && !activeFlow && !promptedRequest && !visibleSharePrompt}
         onOpenChange={setNudgeOpen}
       />
       {promptedRoom && !nudgeOpen && (

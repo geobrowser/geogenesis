@@ -960,6 +960,15 @@ describe('DebateCoordinator', () => {
     }
   });
 
+  it('keeps the nudge popup off in a lobby', () => {
+    mocks.pathname = '/debate/lobby-1';
+    mocks.roomAtPath = { kind: 'lobby' };
+    nudgePopup.enabled = [];
+    render(<DebateCoordinator />);
+    expect(nudgePopup.enabled.length).toBeGreaterThan(0);
+    expect(nudgePopup.enabled).not.toContain(true);
+  });
+
   it('keeps the nudge popup off in a debate room', () => {
     mocks.pathname = '/debate/room-1';
     nudgePopup.enabled = [];
