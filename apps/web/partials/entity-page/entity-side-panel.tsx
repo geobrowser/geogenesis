@@ -168,7 +168,7 @@ function EntitySidePanelHeader({
       <button
         type="button"
         onClick={onClose}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01 lg:[&_svg]:rotate-90"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01 lg:hidden"
         aria-label="Close side panel"
       >
         <CloseSidePanel color="grey-04" />
@@ -184,7 +184,7 @@ function EntitySidePanelHeader({
         href={entityPageHref}
         entityId={entityId}
         spaceId={entitySpaceId}
-        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-grey-02 bg-white px-2 text-metadata font-medium text-text shadow-light transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:text-text"
+        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-grey-02 bg-white px-2 text-metadata font-medium text-text shadow-light transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:text-text lg:hidden"
         target={inRematch ? '_blank' : undefined}
         rel={inRematch ? 'noopener noreferrer' : undefined}
         aria-label={inRematch ? 'Open entity in new tab' : 'Open entity full page'}
@@ -230,7 +230,7 @@ function EntitySidePanelBody({
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-24 mobile:px-5">
         <Text variant="body" color="grey-04">
-          Could not load this entity in this space. Try opening it full page from the link in the header.
+          Could not load this entity in this space.
         </Text>
       </div>
     );
