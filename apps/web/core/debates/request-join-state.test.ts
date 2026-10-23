@@ -4,7 +4,6 @@ import {
   type DebateMediaPermission,
   describeFormatLine,
   describeJoinState,
-  describeMicOnlyJoinState,
   formatTotalSpeakingTime,
   isMediaBlocked,
   joinStateNeedsOpening,
@@ -190,13 +189,5 @@ describe('joinStateNeedsOpening', () => {
     expect(joinStateNeedsOpening({ audioMuted: true, videoEnabled: true }, ['audio', 'video'])).toBe(false);
     expect(joinStateNeedsOpening({ audioMuted: false, videoEnabled: false }, ['audio'])).toBe(false);
     expect(joinStateNeedsOpening({ audioMuted: true, videoEnabled: false }, [])).toBe(false);
-  });
-});
-
-describe('describeMicOnlyJoinState', () => {
-  it('says nothing about a camera', () => {
-    expect(describeMicOnlyJoinState(true).summary).toBe('Joining with mic on');
-    expect(describeMicOnlyJoinState(false).summary).toBe('Joining muted');
-    expect(describeMicOnlyJoinState(true).announcement).not.toMatch(/camera/);
   });
 });

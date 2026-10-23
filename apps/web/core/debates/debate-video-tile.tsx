@@ -22,6 +22,7 @@ import {
 import { RecordingCornerIndicator } from './recording-corner-indicator';
 import type { RecordingCountdownRingProps } from './recording-countdown-ring';
 import { recordingLabelTextShadow, recordingOverlayTextShadow } from './recording-overlay-styles';
+import { TurnFinishingIndicator } from './turn-finishing-indicator';
 
 export { recordingLabelTextShadow, recordingOverlayTextShadow } from './recording-overlay-styles';
 
@@ -133,6 +134,7 @@ export function DebateVideoTile({
   dimmed = false,
   finalSeconds = false,
   nextTurnName = null,
+  finishingSince = null,
   children,
 }: {
   participantPosition: boolean | null;
@@ -186,11 +188,20 @@ export function DebateVideoTile({
   finalSeconds?: boolean;
   /** Open rounds only: after you end your turn, whose turn it is now, on their tile. */
   nextTurnName?: string | null;
+  /**
+   * GEO-3407. When this speaker's turn ended (`Date.now()`), while their microphone is still open
+   * past the buzzer because they are finishing a sentence. Null otherwise. Holds the outline and puts
+   * `TurnFinishingIndicator` in the corner instead of the muted microphone, so the tile never shows
+   * them muted while they can still be heard.
+   */
+  finishingSince?: number | null;
   children: React.ReactNode;
 }) {
   const positionLabel = participantPosition === null ? null : responsePositionLabel(participantPosition);
+  const finishing = finishingSince !== null;
   const showInactiveIndicator =
-    showMutedIndicator || (inactive && !revealInactive && !countdown && !overlayText && !endingTurn);
+    !finishing && (showMutedIndicator || (inactive && !revealInactive && !countdown && !overlayText && !endingTurn));
+  const outlined = active || finishing;
   const upcoming = upcomingSeconds !== null && upcomingSeconds !== undefined;
 
   return (
@@ -199,16 +210,20 @@ export function DebateVideoTile({
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
       data-active-speaker={active ? 'true' : 'false'}
       data-final-seconds={openRounds && finalSeconds ? 'true' : undefined}
+      data-turn-finishing={finishing ? 'true' : undefined}
       style={openRounds ? ROOM_UI_FONT : undefined}
       className={cx(
-        'relative min-h-0 overflow-hidden bg-black shadow-card',
+        // Its own stacking context: the outline and badges inside are z-indexed against each other,
+        // and must stay under what the room lays across both tiles, like the vote card. A finishing
+        // speaker's outline, up during the vote (GEO-3407), otherwise painted over the card.
+        'relative isolate min-h-0 overflow-hidden bg-black shadow-card',
         openRounds ? '@container aspect-[8/5] rounded-[3cqw] text-white' : 'aspect-[5/3] rounded-lg',
-        active && ['outline-[3px]', openRounds ? '-outline-offset-3' : 'outline-offset-0'],
-        active && (openRounds ? (finalSeconds ? 'outline-[#FF4A26]' : 'outline-white') : 'outline-purple')
+        outlined && ['outline-[3px]', openRounds ? '-outline-offset-3' : 'outline-offset-0'],
+        outlined && (openRounds ? (finalSeconds ? 'outline-[#FF4A26]' : 'outline-white') : 'outline-purple')
       )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
-      {openRounds && active && (
+      {openRounds && outlined && (
         // A negative outline alone paints below positioned video content. Draw its inside edge
         // above the media so the white/red speaker border remains visible on a live camera too.
         <div
@@ -240,6 +255,7 @@ export function DebateVideoTile({
           muted={showInactiveIndicator}
           // The count-in's number is the countdown, so the timer steps aside for it.
           countdown={upcoming ? null : countdown}
+          finishingSince={finishingSince}
         />
       ) : (
         <>
@@ -255,6 +271,11 @@ export function DebateVideoTile({
             {showInactiveIndicator && <MutedMicrophoneIndicator />}
           </div>
           {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
+          {finishingSince !== null && !countdown && (
+            <div className="pointer-events-none absolute top-3 right-3 z-20">
+              <TurnFinishingIndicator startedAt={finishingSince} />
+            </div>
+          )}
         </>
       )}
 

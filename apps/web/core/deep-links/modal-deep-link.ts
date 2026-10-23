@@ -4,6 +4,9 @@
  *     /explore?modal=signin&via=marketing              GEO-2727
  *     /explore?modal=debates&modalTarget=people        GEO-2746
  *     /space/<id>?modal=availability                   a person's bookable week
+ *     <any page>?modal=schedule                        the viewer's own schedule editor
+ *     /explore?modal=running-late&modalTarget=<req>    Running late, from an email   GEO-3427
+ *     /explore?modal=cant-make-it&modalTarget=<req>    Can't make it, from an email
  *
  * The rule the repo already follows, written down: **a fragment addresses a position in the
  * document, a query param triggers an action.** `buildBlockLink` puts a block id in the fragment
@@ -49,6 +52,10 @@ export const DEEP_LINK_MODALS = {
   debates: 'debates',
   roomAccess: 'room-access',
   availability: 'availability',
+  schedule: 'schedule',
+  // GEO-3427: a scheduling email's Running late and Can't make it. `modalTarget` is the request.
+  runningLate: 'running-late',
+  cantMakeIt: 'cant-make-it',
 } as const;
 
 export type ModalDeepLink = (typeof DEEP_LINK_MODALS)[keyof typeof DEEP_LINK_MODALS];
@@ -94,10 +101,16 @@ export function modalVia(params: ReadableParams): string | null {
  * `replaceState` rewrites the whole URL, so a fragment left out here is a fragment thrown away.
  */
 export function urlWithoutModal(pathname: string, params: ReadableParams, hash = ''): string {
+  return urlWithoutParams(pathname, params, [MODAL_PARAM, MODAL_TARGET_PARAM, VIA_PARAM], hash);
+}
+
+/**
+ * The same URL with `keys` removed, every other param and the fragment kept: the clearing half of any
+ * one-shot link, `modal` or not. See `urlWithoutModal` for why the fragment has to be passed in.
+ */
+export function urlWithoutParams(pathname: string, params: ReadableParams, keys: readonly string[], hash = ''): string {
   const next = new URLSearchParams(params?.toString() ?? '');
-  next.delete(MODAL_PARAM);
-  next.delete(MODAL_TARGET_PARAM);
-  next.delete(VIA_PARAM);
+  for (const key of keys) next.delete(key);
   const search = next.toString();
   // Accepts `location.hash` as-is, which already carries the `#`, and tolerates a bare id.
   const fragment = !hash || hash === '#' ? '' : hash.startsWith('#') ? hash : `#${hash}`;

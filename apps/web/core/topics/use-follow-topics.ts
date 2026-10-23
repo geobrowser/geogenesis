@@ -37,7 +37,7 @@ type FollowVariables = { spaceId: string; topicIds: string[]; followKind: Follow
  * A topic follow is an Interested vote (GEO-3158), cast from the viewer's personal space: one user
  * operation for the whole selection. A follow skips topics already held Interested, and an unfollow
  * clears every Interested on the topic. Topics already being written by any mounted control are
- * skipped. Resolves false when signed out, blocked, or the write failed.
+ * skipped. Resolves false when signed out, any requested topic is blocked, or the write failed.
  *
  * The old topic follow, a `Following` relation, is never written or read; existing ones are left
  * where they are and count for nothing.
@@ -143,11 +143,14 @@ export function useFollowEntities({ kind }: { kind: FollowKind }) {
 
       const topicIds = [...new Set(free.map(topic => normId(topic.id)))];
       try {
-        return await mutateAsync(
+        const succeeded = await mutateAsync(
           kind === 'follow'
             ? { kind, spaceId: personalSpaceId, topicIds, topics: free, followKind }
             : { kind, spaceId: personalSpaceId, topicIds, followKind }
         );
+        // A batch may have sent only its free topics. Callers retaining work for retry must not
+        // discard the blocked ones: the other control's operation can still fail.
+        return succeeded && free.length === topics.length;
       } catch (error) {
         console.error(`[follow-topics] ${kind} failed:`, error);
         return false;

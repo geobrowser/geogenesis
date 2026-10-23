@@ -76,6 +76,35 @@ describe('playbackBreaksFrom', () => {
     expect(playbackBreaksFrom(openRounds(0), { round_results: [] }, older).breaks).toEqual([]);
   });
 
+  it('applies served turn-edge cuts without a cue or moving a round break into trimmed silence', () => {
+    const gap = (kind: 'turn_start' | 'turn_end', turn_index: number, start: number, end: number) => ({
+      kind,
+      turn_index,
+      next_turn_index: turn_index,
+      source_start_ms: start,
+      source_end_ms: end,
+      output_ms: 0,
+      removed_ms: end - start,
+      quiet_kept_ms: 300,
+    });
+    const cuts = [gap('turn_start', 0, 0, 2_700), gap('turn_end', 1, 100_300, 120_000)];
+    const playback = playbackBreaksFrom(openRounds(), { ...RENDERED_MEDIA, early_end_gaps: cuts }, [
+      { ...segments[0], output_start_ms: 2_700 },
+      { ...segments[1], output_end_ms: 100_300 },
+      ...segments.slice(2),
+    ]);
+    expect(breakCuts(playback)).toEqual(
+      expect.arrayContaining([
+        { atMs: 0, toMs: 2_700 },
+        { atMs: 100_300, toMs: 120_000 },
+      ])
+    );
+    expect(earlyEndCueAt(playback.earlyEnds, 2_800)).toBeNull();
+    expect(earlyEndCueAt(playback.earlyEnds, 120_100)).toBeNull();
+    expect(playback.breaks[0].decidingStartMs).toBe(120_000);
+    expect(silentAt(playback, 110_000)).toBe(true);
+  });
+
   it('is nothing for a fixed format or a debate with no media yet', () => {
     expect(playbackBreaksFrom({} as Debate, { round_results: [] }, []).breaks).toEqual([]);
     expect(playbackBreaksFrom(openRounds(), undefined, segments).breaks).toEqual([]);
@@ -139,6 +168,20 @@ describe('breakCuts', () => {
       { atMs: 270_944, toMs: 274_650 },
       { atMs: 321_086 + BREAK_PLAYED_MS.final_end, toMs: 333_481 },
     ]);
+  });
+
+  it('makes one seek across a silent tail and the following slow start', () => {
+    const base = BREAKS.earlyEnds[0];
+    expect(
+      breakCuts({
+        breaks: [],
+        picks: [],
+        earlyEnds: [
+          { ...base, kind: 'turn_end', startMs: 40_300, endMs: 60_000 },
+          { ...base, kind: 'turn_start', startMs: 60_000, endMs: 62_700 },
+        ],
+      })
+    ).toEqual([{ atMs: 40_300, toMs: 62_700 }]);
   });
 
   it('leaves a break shorter than its share whole', () => {

@@ -3,7 +3,7 @@
 import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep-link';
 import { usePathSegments } from '~/core/hooks/use-path-segments';
 
-import { AVAILABILITY_MODAL, profileSpaceIdFromPath, rescheduleRequestIdFromTarget } from './availability-deep-link';
+import { AVAILABILITY_MODAL, profileSpaceIdFromPath, requestIdFromTarget } from './availability-deep-link';
 
 /**
  * Hands `onArrive` the space a `?modal=availability` link landed on, once — or `null` when it
@@ -11,7 +11,7 @@ import { AVAILABILITY_MODAL, profileSpaceIdFromPath, rescheduleRequestIdFromTarg
  * a bad link does not keep firing on refresh.
  *
  * The second argument is the scheduled request the link asks to move, when it names one (see
- * `rescheduleRequestIdFromTarget`). The third is the link's `via` attribution, if it carried any.
+ * `requestIdFromTarget`). The third is the link's `via` attribution, if it carried any.
  *
  * No auth gate: the week itself asks a signed-out recipient to sign in, which keeps the link
  * working for exactly the people it is sent to.
@@ -21,7 +21,7 @@ export function useAvailabilityDeepLink(
 ) {
   const link = useDeepLinkParams(AVAILABILITY_MODAL);
   const profileSpaceId = profileSpaceIdFromPath(usePathSegments());
-  const rescheduleRequestId = rescheduleRequestIdFromTarget(link.target);
+  const rescheduleRequestId = requestIdFromTarget(link.target);
 
   useDeepLinkEffect({ ...link, run: () => onArrive(profileSpaceId, rescheduleRequestId, link.via) });
 }

@@ -17,8 +17,8 @@ import { useServerClock } from '../matchmaking/use-request-countdown';
 import { LOBBY_JOIN_PROMPT, ROOM_JOIN_PROMPT } from './room-copy';
 import { opponentName, useUpcomingRoomOpponent } from './room-opponent';
 import { debateRoomPath } from './room-routes';
+import { startOffset } from './room-time';
 
-const MINUTE_MS = 60_000;
 /** Minute-grained copy, so a quarter-minute tick is never more than 15s stale. */
 const TICK_MS = 15_000;
 
@@ -122,16 +122,12 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
   );
 }
 
-/**
- * Minutes to the start, or since it. Ahead of the start it rounds up, so the last minute reads
- * "in 1 min" rather than "in 0 mins"; the first minute after it reads as starting now rather than
- * "0 mins ago". `null` for an unparseable start, which has nothing honest to say.
- */
+/** Minutes to the start, or since it, as the prompt says them. See `startOffset` for the rounding. */
 export function scheduleLabel(untilStartMs: number): string | null {
-  if (!Number.isFinite(untilStartMs)) return null;
-  if (untilStartMs > 0) return ROOM_JOIN_PROMPT.scheduledIn(Math.ceil(untilStartMs / MINUTE_MS));
-  const elapsedMinutes = Math.floor(-untilStartMs / MINUTE_MS);
-  return elapsedMinutes < 1 ? ROOM_JOIN_PROMPT.startingNow : ROOM_JOIN_PROMPT.scheduledAgo(elapsedMinutes);
+  const offset = startOffset(untilStartMs);
+  if (offset === null) return null;
+  if (offset === 'now') return ROOM_JOIN_PROMPT.startingNow;
+  return 'in' in offset ? ROOM_JOIN_PROMPT.scheduledIn(offset.in) : ROOM_JOIN_PROMPT.scheduledAgo(offset.ago);
 }
 
 /** The server's clock where it has synced, so a skewed laptop does not misreport the start. */

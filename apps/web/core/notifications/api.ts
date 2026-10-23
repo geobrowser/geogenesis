@@ -42,7 +42,7 @@ async function notificationsRequest<T>(
   baseUrl: string,
   path: string,
   accessToken: string,
-  init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown } = {}
+  init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; keepalive?: boolean; signal?: AbortSignal } = {}
 ): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     method: init.method ?? 'GET',
@@ -51,6 +51,8 @@ async function notificationsRequest<T>(
       ...(init.body === undefined ? {} : { 'Content-Type': 'application/json' }),
     },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    keepalive: init.keepalive,
+    signal: init.signal,
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => null);
@@ -84,5 +86,20 @@ export function updateNotificationPreferences(
   return notificationsRequest<NotificationPreferences>(baseUrl, '/preferences', accessToken, {
     method: 'PUT',
     body: patch,
+  });
+}
+
+/**
+ * The seen ping (GEO-3371): this visit, and the browser's zone, which the retention emails are
+ * scheduled in. The service accepts a token that expired within the past week, so a visit counts
+ * even when Privy is too slow to hand out a fresh one. `keepalive` so it survives the page being
+ * hidden or closed right after it fires.
+ */
+export function sendSeenPing(baseUrl: string, accessToken: string, timeZone: string, signal?: AbortSignal) {
+  return notificationsRequest<{ local_date: string; new_day: boolean }>(baseUrl, '/me/seen', accessToken, {
+    method: 'POST',
+    body: { time_zone: timeZone },
+    keepalive: true,
+    signal,
   });
 }

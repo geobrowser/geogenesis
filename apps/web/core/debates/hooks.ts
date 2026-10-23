@@ -165,11 +165,19 @@ export const debateQueryKeys = {
     calendar
       ? (['debates', 'account', accountKey, 'schedulable-people', days, limit, 'calendar', spaces.join(',')] as const)
       : (['debates', 'account', accountKey, 'schedulable-people', days, limit] as const),
+  calendarConnections: (accountKey: string | null) => ['debates', 'account', accountKey, 'calendar'] as const,
+  /** Prefix-matchable, so a calendar change can drop every window at once. */
+  calendarBusyRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'calendar-busy'] as const,
+  calendarBusy: (accountKey: string | null, from: string, to: string) =>
+    ['debates', 'account', accountKey, 'calendar-busy', from, to] as const,
+  peerScheduleRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'peer-schedule'] as const,
   /** Keyed on the viewer as well as the peer: the answer is the pair, not the person. */
   peerSchedule: (accountKey: string | null, peerUserId: string, days: number) =>
     ['debates', 'account', accountKey, 'peer-schedule', peerUserId, days] as const,
   /** Viewer-specific: presence is answered from the viewer's own side of the access list. */
   room: (accountKey: string | null, roomId: string) => ['debates', 'account', accountKey, 'room', roomId] as const,
+  /** Every room view this account has read, to invalidate them together. */
+  roomRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'room'] as const,
   upcomingRooms: (accountKey: string | null) => ['debates', 'account', accountKey, 'upcoming-rooms'] as const,
   /** GEO-3133. Patched or refetched on `debate.lobbies_changed`. */
   lobbies: (accountKey: string | null) => ['debates', 'account', accountKey, 'lobbies'] as const,
@@ -666,9 +674,12 @@ export function useDebateSchedule() {
     queryFn: () => getDebateSchedule(getPrivyIdentityToken, accountKey),
   });
 
+  // Stable across renders and unchanged refetches: the editor tells edits apart by reference.
+  const blocks = React.useMemo(() => (query.data ? fromPayload(query.data.schedule) : undefined), [query.data]);
+
   return {
     ...query,
-    blocks: query.data ? fromPayload(query.data.schedule) : undefined,
+    blocks,
     /** Whether they have ever saved one, which several surfaces gate on. */
     isSet: query.data?.is_set ?? false,
   };

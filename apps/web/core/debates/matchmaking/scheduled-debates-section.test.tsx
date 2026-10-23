@@ -13,7 +13,7 @@ import type { UpcomingRoomRow } from './scheduled-debates-section';
 import type { UpcomingLobbyRow } from './upcoming-lobby-rows';
 
 const mocks = vi.hoisted(() => ({
-  respond: vi.fn(),
+  respond: vi.fn().mockResolvedValue({ outcome: 'recorded' }),
   cancel: vi.fn(),
   cancelPending: false,
   cancelSuccess: false,
@@ -46,7 +46,7 @@ const ADA = {
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
-  useRespondToScheduledDebate: () => ({ mutate: mocks.respond, isPending: mocks.pending }),
+  useRespondToScheduledDebate: () => ({ mutateAsync: mocks.respond, isPending: mocks.pending }),
   useCancelScheduledDebate: () => ({
     mutate: mocks.cancel,
     isPending: mocks.cancelPending,
@@ -176,7 +176,7 @@ const upcomingRow = (
 
 afterEach(() => {
   cleanup();
-  mocks.respond = vi.fn();
+  mocks.respond = vi.fn().mockResolvedValue({ outcome: 'recorded' });
   mocks.pending = false;
   mocks.cancel = vi.fn();
   mocks.cancelPending = false;
@@ -247,9 +247,7 @@ describe('answering in the tab', () => {
   });
 
   it('reports a clash, which is a refusal rather than a failure', async () => {
-    mocks.respond = vi.fn((_vars, options) =>
-      options.onSuccess({ outcome: 'conflict', conflicting_start_at: '2026-09-24T13:00:00Z' })
-    );
+    mocks.respond = vi.fn().mockResolvedValue({ outcome: 'conflict', conflicting_start_at: '2026-09-24T13:00:00Z' });
     const { user } = setup({ answerable: [request()] });
 
     await user.click(screen.getByRole('button', { name: 'Accept' }));
@@ -258,7 +256,7 @@ describe('answering in the tab', () => {
   });
 
   it('reports a rejected answer rather than looking inert', async () => {
-    mocks.respond = vi.fn((_vars, options) => options.onError(new Error('Already answered.')));
+    mocks.respond = vi.fn().mockRejectedValue(new Error('Already answered.'));
     const { user } = setup({ answerable: [request()] });
 
     await user.click(screen.getByRole('button', { name: 'Decline' }));
@@ -343,9 +341,7 @@ describe('calling a scheduled debate off', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
     await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
 
-    expect(
-      screen.getByText('Someone has already joined this debate, so it can no longer be cancelled.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('This debate has already started, so it can no longer be cancelled.')).toBeInTheDocument();
   });
 
   it('says it is cancelled rather than offering it again before the list refreshes', () => {

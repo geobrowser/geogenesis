@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { type DebateAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+
 import { CloseSmall } from '~/design-system/icons/close-small';
 
 /**
@@ -15,6 +17,7 @@ export function DebateNotice({
   children,
   action,
   onDismiss,
+  dismissAnalytics,
   'data-testid': testId,
 }: {
   icon: React.ReactNode;
@@ -23,6 +26,8 @@ export function DebateNotice({
   action?: React.ReactNode;
   /** Omitted while there is something the viewer still has to see through. */
   onDismiss?: () => void;
+  /** The dismiss button's click-analytics label and intent, which its bare "Dismiss" cannot tell apart. */
+  dismissAnalytics?: DebateAnalyticsAttributes;
   'data-testid'?: string;
 }) {
   return (
@@ -38,6 +43,7 @@ export function DebateNotice({
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss"
+          {...dismissAnalytics}
           className="grid size-7 shrink-0 place-items-center rounded-full text-grey-04 transition-colors hover:text-text"
         >
           <CloseSmall />

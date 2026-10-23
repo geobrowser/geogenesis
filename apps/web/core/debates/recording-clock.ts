@@ -21,8 +21,9 @@ export function turnOnRecordings(segment: DebateMediaTurnSegment): DebateMediaTu
     ...segment,
     output_start_ms: segment.source_start_ms,
     output_end_ms: segment.source_end_ms,
-    // Only served on the rendered clock. It sits inside its turn, so it moves with it.
+    // Clock endpoints move by the same offset even when they sit outside the retained turn.
     ...(segment.countdown_start_ms !== undefined && { countdown_start_ms: segment.countdown_start_ms + shift }),
+    ...(segment.countdown_end_ms !== undefined && { countdown_end_ms: segment.countdown_end_ms + shift }),
   };
 }
 

@@ -70,7 +70,9 @@ import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queue
 import { LobbyAnalyticsScope } from './lobby-room-analytics';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { LobbyPeople } from './lobby-roster';
-import { LobbySlot, LobbySlotsProvider, useLobbySlotTargets } from './lobby-slots';
+import { LobbyScheduleProvider } from './lobby-schedule';
+import { LobbyScheduledRequests } from './lobby-scheduled-requests';
+import { LobbyShowPeopleContext, LobbySlot, LobbySlotsProvider, useLobbySlotTargets } from './lobby-slots';
 import {
   FindDebateLink,
   LOBBY_STATE_COPY,
@@ -415,17 +417,19 @@ function AdmittedLobby({
 
   return (
     <LobbyAnalyticsScope lobby={lobby}>
-      <LobbyQueuedRequestProvider lobby={lobby} joined={state.status === 'joined'}>
-        <LobbyRoom
-          lobby={lobby}
-          state={state}
-          onRetry={() => void join(false)}
-          onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
-          voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
-          guestSession={guestSession}
-          exitHref={exitHref}
-        />
-      </LobbyQueuedRequestProvider>
+      <LobbyScheduleProvider lobby={lobby}>
+        <LobbyQueuedRequestProvider lobby={lobby} joined={state.status === 'joined'}>
+          <LobbyRoom
+            lobby={lobby}
+            state={state}
+            onRetry={() => void join(false)}
+            onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
+            voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
+            guestSession={guestSession}
+            exitHref={exitHref}
+          />
+        </LobbyQueuedRequestProvider>
+      </LobbyScheduleProvider>
     </LobbyAnalyticsScope>
   );
 }
@@ -589,6 +593,13 @@ function LobbyRoom({
   const claimsMark = useClaimsTabMark(highlights, !phone || tab === 'claims', lobby.claim_lists);
   const tabbed = phone && showClaims;
   const tabIds = useTabIds();
+  // From the speaker strip on Claims (GEO-3399). The strip's button is about to be hidden with the
+  // Claims panel, so focus goes to the People tab rather than being dropped on the page.
+  const peopleTabId = tabIds.people.tab;
+  const showPeople = React.useCallback(() => {
+    setTab('people');
+    document.getElementById(peopleTabId)?.focus();
+  }, [peopleTabId]);
   const onPeopleTab = !phone || !showClaims || tab === 'people';
   const onClaimsTab = !phone || tab === 'claims';
   const alone = showClaims && isAlone(lobby, guest ? null : currentUserId, guest, guestVoice !== null);
@@ -596,7 +607,10 @@ function LobbyRoom({
   // The empty-room block stands in for an empty roster's own line.
   const people =
     alone && lobby.members.length === 0 ? null : (
-      <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={ownAvailable} disagreements={disagreements} />
+      // A phone's speaker strip on Claims (GEO-3399) taps back to People.
+      <LobbyShowPeopleContext.Provider value={tabbed ? showPeople : null}>
+        <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={ownAvailable} disagreements={disagreements} />
+      </LobbyShowPeopleContext.Provider>
     );
   const availability = guest ? null : <HubHeaderControls analyticsSurface="lobby" />;
   const handControl =
@@ -639,6 +653,7 @@ function LobbyRoom({
           />
         ) : null}
         <LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />
+        {!guest && state.status === 'joined' ? <LobbyScheduledRequests lobby={lobby} /> : null}
         {tabbed ? <LobbyPhoneTabs ids={tabIds} tab={tab} onTab={setTab} claimsMark={claimsMark} /> : null}
 
         <div
@@ -705,6 +720,8 @@ function LobbyRoom({
                 columnScroll
               )}
             >
+              {/* The roster's speaker thumbnails (GEO-3399), drawn here so they stay in view on Claims. */}
+              {tabbed ? <div ref={slots.speakerStripRef} className="empty:hidden" /> : null}
               <HubScrollSelectorProvider value={columns ? HUB_SCROLL_SELECTOR : undefined}>
                 <LobbyClaimsArea lobby={lobby} />
               </HubScrollSelectorProvider>
