@@ -366,3 +366,40 @@ describe('a refused move', () => {
     expect(screen.getByLabelText('error')).toHaveTextContent('that time is already committed');
   });
 });
+
+// GEO-3428: moving a debate is answering for it, so no nudge popup opens over the week.
+describe('the nudge popup', () => {
+  it('is held back while a week is open, booking or moving', async () => {
+    const { useScheduledNoticeOpen } = await import('~/core/debates/rooms/scheduled-notice-open');
+    function Probe() {
+      return <output aria-label="notice open">{String(useScheduledNoticeOpen())}</output>;
+    }
+    const { rerender } = render(
+      <>
+        <Probe />
+        <PeerAvailabilityBookingModal open userId="user-them" peerName="Ada" onClose={vi.fn()} />
+      </>
+    );
+    expect(screen.getByLabelText('notice open')).toHaveTextContent('true');
+    rerender(
+      <>
+        <Probe />
+        <PeerAvailabilityBookingModal
+          open
+          userId="user-them"
+          peerName="Ada"
+          rescheduleRequestId="req-1"
+          onClose={vi.fn()}
+        />
+      </>
+    );
+    expect(screen.getByLabelText('notice open')).toHaveTextContent('true');
+    rerender(
+      <>
+        <Probe />
+        <PeerAvailabilityBookingModal open={false} userId="user-them" peerName="Ada" onClose={vi.fn()} />
+      </>
+    );
+    expect(screen.getByLabelText('notice open')).toHaveTextContent('false');
+  });
+});

@@ -7,6 +7,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '~/core/debates/api';
+import { useScheduledNoticeOpen } from '~/core/debates/rooms/scheduled-notice-open';
 
 import { ScheduledDebateNoticeDialog } from './scheduled-debate-notice';
 
@@ -146,6 +147,110 @@ function open(step: 'decide' | 'late' | 'cant', onReschedule?: () => void) {
   );
   return { onClose };
 }
+
+// GEO-3428, board 6c: the popup a nudge puts on screen.
+describe('ScheduledDebateNoticeDialog: the nudge popup', () => {
+  it('says who is waiting and since when, with Join now, Running late and Can’t make it', () => {
+    render(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />);
+
+    expect(heading()).toHaveTextContent('Maya is waiting for you');
+    expect(screen.getByText(/debate started 3 minutes ago and Maya is in the room\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Join now' })).toHaveAttribute('href', '/debate/room-1');
+    expect(screen.getByRole('button', { name: 'Running late' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Can’t make it' })).toBeInTheDocument();
+    expect(state.late.mutate).not.toHaveBeenCalled();
+  });
+
+  // Rounded as board 2 and the join banner round it (`startOffset`).
+  it('says starting now in the first minute after the start', () => {
+    state.requests = {
+      data: { requests: [agreed({ scheduled_start_at: new Date(Date.now() - 20_000).toISOString() })] },
+      isPending: false,
+      isError: false,
+    };
+    render(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />);
+    expect(screen.getByText(/debate is starting now and Maya is in the room\./)).toBeInTheDocument();
+  });
+
+  it('has no explainer or Reschedule instead, which are board 2’s', () => {
+    render(
+      <ScheduledDebateNoticeDialog
+        open
+        requestId={REQUEST}
+        initialStep="nudge"
+        onClose={() => {}}
+        onReschedule={() => {}}
+      />
+    );
+    expect(screen.queryByText(/After Can’t make it you can suggest another time/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reschedule instead' })).not.toBeInTheDocument();
+  });
+
+  // The popup steps aside for any other notice dialog; it must not count as one itself.
+  it('counts every step but the nudge as an open notice, until it closes', () => {
+    function Probe() {
+      return <span data-testid="probe">{String(useScheduledNoticeOpen())}</span>;
+    }
+    const { rerender } = render(
+      <>
+        <Probe />
+        <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />
+      </>
+    );
+    expect(screen.getByTestId('probe')).toHaveTextContent('false');
+    for (const step of ['decide', 'late', 'cant'] as const) {
+      rerender(
+        <>
+          <Probe />
+          <ScheduledDebateNoticeDialog key={step} open requestId={REQUEST} initialStep={step} onClose={() => {}} />
+        </>
+      );
+      expect(screen.getByTestId('probe')).toHaveTextContent('true');
+    }
+    rerender(
+      <>
+        <Probe />
+        <ScheduledDebateNoticeDialog open={false} requestId={REQUEST} initialStep="late" onClose={() => {}} />
+      </>
+    );
+    expect(screen.getByTestId('probe')).toHaveTextContent('false');
+  });
+
+  it('says where the answer stands: open, answering, back to open, and sent', async () => {
+    succeedWith(state.late, { expected_at: new Date(Date.now() + 10 * 60_000).toISOString(), note: null });
+    const onAnswerChange = vi.fn();
+    render(
+      <ScheduledDebateNoticeDialog
+        open
+        requestId={REQUEST}
+        initialStep="nudge"
+        onClose={() => {}}
+        onAnswerChange={onAnswerChange}
+      />
+    );
+    expect(onAnswerChange).toHaveBeenLastCalledWith('open');
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Running late' }));
+    expect(onAnswerChange).toHaveBeenLastCalledWith('answering');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(onAnswerChange).toHaveBeenLastCalledWith('open');
+    await user.click(screen.getByRole('button', { name: 'Running late' }));
+    await user.click(screen.getByRole('button', { name: /^Tell / }));
+    expect(onAnswerChange).toHaveBeenLastCalledWith('sent');
+  });
+
+  it('answers in place, with a way back to the popup', async () => {
+    render(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Running late' }));
+    expect(heading()).toHaveTextContent('How late will you be?');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(heading()).toHaveTextContent('Maya is waiting for you');
+    await user.click(screen.getByRole('button', { name: 'Can’t make it' }));
+    expect(heading()).toHaveTextContent('Can’t make it?');
+  });
+});
 
 describe('ScheduledDebateNoticeDialog', () => {
   // A mail scanner opening the link must not mark anyone late or cancel anything.

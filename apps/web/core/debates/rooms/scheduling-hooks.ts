@@ -24,6 +24,7 @@ import {
   createScheduledDebate,
   listAdminScheduledDebates,
   listScheduledDebates,
+  nudgeDebateRoom,
   reportRunningLate,
   rescheduleScheduledDebate,
   respondToScheduledDebate,
@@ -299,4 +300,22 @@ export function useReportRunningLate() {
   return useObservedMutation(mutation, 'running_late', ({ requestId }) =>
     getContext({ target_type: 'scheduled_debate_request', target_id: requestId })
   );
+}
+
+/**
+ * Nudge the other debater from the room (GEO-3428). Refetches the room either way, so the button
+ * and the timeline read what geo-chat recorded rather than what was pressed.
+ */
+export function useNudgeDebateRoom(roomId: string) {
+  const getContext = useActionContext('debate_room', 'entity', '');
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  const mutation = useMutation({
+    mutationFn: () => nudgeDebateRoom(roomId, getPrivyIdentityToken, accountKey),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.roomRoot(accountKey) });
+    },
+  });
+  return useObservedMutation(mutation, 'nudge', () => getContext({ target_type: 'debate_room', target_id: roomId }));
 }
