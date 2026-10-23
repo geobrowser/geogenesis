@@ -41,7 +41,6 @@ import {
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { castLocalVote } from '~/core/state/cast-local-vote';
-import { useHoldVote } from '~/core/state/held-votes';
 import { removeLocalVote, useLocalVote } from '~/core/state/local-votes';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
@@ -191,7 +190,6 @@ function EntityResponseButtons({
   // Known to be signed out — not still restoring a session, when `authenticated` reads false too.
   const signedOut = authReady && !authenticated;
   const authResolving = useAuthResolving();
-  const holdVote = useHoldVote();
   const queryClient = useQueryClient();
   // Signed in without a usable space, a vote is held only when one is on its way: being created for
   // a new account, or still loading for a returning one. With neither, nothing would ever publish it,
@@ -238,9 +236,8 @@ function EntityResponseButtons({
   //
   // Replayed through whichever control is mounted now (`useQueuedAction`): its response hook knows
   // the personal space, and keys the in-flight state this control draws by it.
-  const queuedVoteId = `entity-vote:${entityId}:${spaceId}`;
   const queuedVote = useQueuedAction({
-    id: queuedVoteId,
+    id: `entity-vote:${entityId}:${spaceId}`,
     component: 'entity_vote_buttons',
     label: 'your vote',
     // Held until the viewer's own side is known: right after sign-in it is still loading, and its
@@ -310,19 +307,26 @@ function EntityResponseButtons({
       // Signed out: vote on this device, with no sign-in in the way. The save sheet asks for an
       // account once there are a few.
       //
-      // Still resolving, the side is queued and held instead, app-wide (`HeldVotesRunner`).
+      // Still resolving, the side is queued with what to do if it resolves signed out: a device vote,
+      // or the prompt when there is no response kind to keep one under (`PendingActionsRunner`).
       // `!smartAccount` reads as signed out for that moment, and acting on it showed a signed-in
       // viewer the sign-in prompt — or, before that, dropped the press, which loses a fast tap on a
       // page that has only just loaded.
       if (authResolving) {
-        queueVoteWrite(direction);
-        holdVote({
-          actionId: queuedVoteId,
-          entityId,
-          spaceId,
-          responseKind,
-          title: entity?.name ?? '',
-          attribution: getContext(),
+        const attribution = getContext();
+        const title = entity?.name ?? '';
+        queuedVote.queue(direction, {
+          onSignedOut:
+            responseKind === null
+              ? {
+                  prompt: {
+                    ...attribution,
+                    auth_control: `${responseKind}_${direction}`,
+                    auth_intent: 'vote',
+                    auth_continuation: 'queued',
+                  },
+                }
+              : () => castLocalVote({ entityId, spaceId, responseKind, direction, title, attribution }),
         });
         return;
       }

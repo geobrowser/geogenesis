@@ -12,7 +12,7 @@ import { clearLocalVotes, readLocalVotes, toggleLocalVote } from '~/core/state/l
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 import { closeSaveVotesPrompt, readSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
-import { HeldVotesRunner } from '~/partials/held-votes-runner';
+import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
 
@@ -44,6 +44,7 @@ vi.mock('~/core/analytics', () => ({
   upvoted: vi.fn(),
   voteCast: vi.fn(),
 }));
+vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => vi.fn() }));
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponse: () => ({
     submitResponse: vi.fn(),
@@ -81,7 +82,7 @@ function wrapper({ children }: { children: ReactNode }) {
   return (
     <JotaiProvider store={store}>
       <QueryClientProvider client={client}>
-        <HeldVotesRunner />
+        <PendingActionsRunner />
         {children}
       </QueryClientProvider>
     </JotaiProvider>

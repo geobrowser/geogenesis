@@ -40,11 +40,9 @@ import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
 import { MobileBrowseDrawer } from '~/partials/browse-sidebar/mobile-browse-drawer';
 import { ChatLauncher } from '~/partials/chat/chat-launcher';
 import { createSpaceDialogOpenAtom } from '~/partials/create-space/create-space-state';
-import { DeferredSignInRunner } from '~/partials/deferred-sign-in-runner';
 import { EntityStickyHeaderHost } from '~/partials/entity-page/entity-sticky-header-host';
 import { PersonalProfileCreatePostSidePanelSync } from '~/partials/entity-page/personal-profile-create-post-side-panel-sync';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
-import { HeldVotesRunner } from '~/partials/held-votes-runner';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { stepAtom as onboardingStepAtom } from '~/partials/onboarding/onboarding-atoms';
@@ -342,8 +340,6 @@ export function App({ children }: { children: React.ReactNode }) {
           </React.Suspense>
           <PendingPersonalSpaceGate />
           <PendingActionsRunner />
-          <DeferredSignInRunner />
-          <HeldVotesRunner />
           <LocalVotesSaver />
           <CreateSpaceDialogGate />
           <PendingCreatedSpaceGate />

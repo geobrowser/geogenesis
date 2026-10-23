@@ -12,7 +12,7 @@ import { clearLocalVotes, readLocalVotes } from '~/core/state/local-votes';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 import { closeSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
-import { HeldVotesRunner } from '~/partials/held-votes-runner';
+import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
 
@@ -39,6 +39,7 @@ vi.mock('~/core/analytics', () => ({
   voteCast: vi.fn(),
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
+vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => vi.fn() }));
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponse: () => ({
     submitResponse: vi.fn(),
@@ -74,7 +75,7 @@ function wrapper({ children }: { children: ReactNode }) {
   return (
     <JotaiProvider store={store}>
       <QueryClientProvider client={client}>
-        <HeldVotesRunner />
+        <PendingActionsRunner />
         {children}
       </QueryClientProvider>
     </JotaiProvider>
@@ -120,6 +121,22 @@ describe('a vote pressed while sign-in is still resolving', () => {
     await waitFor(() => expect(queued()).toHaveLength(1));
     expect(mocks.promptSignIn).not.toHaveBeenCalled();
     expect(readLocalVotes().votes).toEqual([]);
+  });
+
+  it('drops the press of a signed-in viewer who signs out, rather than keeping it on this device', () => {
+    mocks.authReady = true;
+    mocks.authenticated = true;
+
+    const view = renderButtons();
+    fireEvent.click(upvote());
+    expect(queued()).toHaveLength(1);
+
+    mocks.authenticated = false;
+    view.rerender(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />);
+
+    expect(queued()).toEqual([]);
+    expect(readLocalVotes().votes).toEqual([]);
+    expect(mocks.promptSignIn).not.toHaveBeenCalled();
   });
 
   it('keeps the press on this device once signed out is known, rather than losing it', async () => {

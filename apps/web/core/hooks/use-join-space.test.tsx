@@ -5,10 +5,9 @@ import type { ReactNode } from 'react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { deferredSignInAtom } from '~/core/state/deferred-sign-in';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 
-import { DeferredSignInRunner } from '~/partials/deferred-sign-in-runner';
+import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 
 import { useJoinSpace } from './use-join-space';
 
@@ -29,6 +28,10 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () =>
 vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => ({ isPending: mocks.accountSetupPending }),
 }));
+vi.mock('~/core/wallet/auth-hooks', () => ({
+  usePrivy: () => ({ ready: true, authenticated: Boolean(mocks.smartAccount) }),
+}));
+vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => vi.fn() }));
 vi.mock('~/core/hooks/use-request-to-be-member', () => ({
   useRequestToBeMember: () => ({
     requestToBeMember: mocks.requestToBeMember,
@@ -44,8 +47,8 @@ const wrapper = ({ children }: { children: ReactNode }) => <JotaiProvider store=
 const renderJoin = () => renderHook(() => useJoinSpace({ spaceId: 'space-1' }), { wrapper });
 /** The app-level owner of a prompt deferred while sign-in resolves, mounted apart from the button. */
 const renderRunner = () => {
-  const runner = render(<DeferredSignInRunner />, { wrapper });
-  return { rerender: () => runner.rerender(<DeferredSignInRunner />) };
+  const runner = render(<PendingActionsRunner />, { wrapper });
+  return { rerender: () => runner.rerender(<PendingActionsRunner />) };
 };
 
 afterEach(cleanup);
@@ -171,7 +174,6 @@ describe('useJoinSpace', () => {
 
       expect(mocks.promptSignIn).not.toHaveBeenCalled();
       expect(queued()).toHaveLength(1);
-      expect(store.get(deferredSignInAtom)).toHaveLength(0);
     });
 
     it('prompts a beat later when the press turns out to have been made signed out', () => {

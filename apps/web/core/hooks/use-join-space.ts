@@ -5,7 +5,6 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useDeferSignIn } from '~/core/state/deferred-sign-in';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 
@@ -22,8 +21,8 @@ type UseJoinSpaceArgs = {
  * - Signed out: queue the request and open Privy. `PendingActionsRunner` submits it once the new
  *   account has a personal space; a dismissed sign-in withdraws it.
  * - Signed in, personal space still registering: queue the request the same way.
- * - Sign-in still resolving: queue the request, and leave asking for an account to
- *   `DeferredSignInRunner` once it is known whether to. `!smartAccount` reads as signed out for that
+ * - Sign-in still resolving: queue the request with a prompt for `PendingActionsRunner` to open if
+ *   it resolves signed out. `!smartAccount` reads as signed out for that
  *   moment, so prompting on it asked a signed-in viewer to sign in.
  *
  * Queued at the press either way, into the app-level queue rather than anything this button owns:
@@ -48,10 +47,8 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
     auth_continuation: 'queued',
   };
   const promptSignIn = usePrivySignIn(undefined, { analytics: signInAnalytics });
-  const deferSignIn = useDeferSignIn();
-  const joinActionId = `join:${spaceId}`;
   const queuedJoin = useQueuedAction({
-    id: joinActionId,
+    id: `join:${spaceId}`,
     component: 'join_space_button',
     label: 'your membership request',
     run: (_intent, { isCurrent }) => requestToBeMemberAsync({ fromQueue: true, isCurrent }).then(() => {}),
@@ -67,11 +64,11 @@ export function useJoinSpace({ spaceId, space }: UseJoinSpaceArgs) {
       return;
     }
     if (!smartAccount) {
-      queuedJoin.queue();
       if (authResolving) {
-        deferSignIn({ actionId: joinActionId, analytics: signInAnalytics });
+        queuedJoin.queue(undefined, { onSignedOut: { prompt: signInAnalytics } });
         return;
       }
+      queuedJoin.queue();
       promptSignIn(undefined, { onCancel: queuedJoin.cancel });
       return;
     }
