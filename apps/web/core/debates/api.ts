@@ -2159,6 +2159,34 @@ export type DebateRoomNotice = {
   note: string | null;
 };
 
+/** A reminder email Geo sent one participant about a room (GEO-3428). */
+export type DebateRoomReminder = {
+  /** Who it went to. */
+  user_id: string;
+  /** The room-open email ten minutes before, or "{other} is waiting for you" after the start. */
+  kind: 'room_open' | 'opponent_waiting';
+  at: string;
+};
+
+/** One nudge in a room (GEO-3428): a popup if the person nudged was on Geo, an email if not. */
+export type DebateRoomNudge = {
+  from_user_id: string;
+  to_user_id: string;
+  channel: 'popup' | 'email';
+  at: string;
+};
+
+/**
+ * Whether another participant is on Geo (GEO-3428), by the People tab's test: a visible tab with
+ * someone at it. Nothing else about what they are doing is ever sent.
+ */
+export type DebateRoomParticipantPresence = {
+  user_id: string;
+  online: boolean;
+  /** When they were last on Geo; `null` while online, and for someone never seen. */
+  last_online_at: string | null;
+};
+
 export type DebateRoomView = {
   room_id: string;
   /** Never withheld. A lobby answers `not_a_participant` here; read it from `/debate-lobbies/{id}`. */
@@ -2189,6 +2217,20 @@ export type DebateRoomView = {
    * start does not count. Absent from an older geo-chat.
    */
   viewer_arrived?: boolean;
+  /**
+   * The reminders Geo sent the other participants, oldest first (GEO-3428). Only emails that had an
+   * address to go to. Absent from an older geo-chat, and empty unless admitted.
+   */
+  reminders?: DebateRoomReminder[];
+  /** Every nudge in the room, oldest first (GEO-3428). */
+  nudges?: DebateRoomNudge[];
+  /** Whether each other participant is on Geo now, or when they last were (GEO-3428). */
+  presence?: DebateRoomParticipantPresence[];
+  /**
+   * When the viewer may nudge next (GEO-3428): the start before any nudge, 15 minutes after their
+   * last, and `null` once they have sent both. Absent from an older geo-chat.
+   */
+  viewer_next_nudge_at?: string | null;
 };
 
 /** A row in "your upcoming debates". Feeds the join prompt and the Requests tab (GEO-2940). */
@@ -2200,8 +2242,16 @@ export type UpcomingDebateRoom = {
   joinable: boolean;
   /** The scheduled start has passed — "starting now" rather than "at 9:00". */
   due: boolean;
-  /** Whether anyone else is already inside, so the prompt can say they are waiting. */
+  /**
+   * Whether anyone else is already inside, so the prompt can say they are waiting. By the bare
+   * join rule: a tab that crashed without leaving keeps it true until the room closes.
+   */
   others_present: boolean;
+  /**
+   * Whether anyone else is inside now and alive: a current join from someone seen in the last 90
+   * seconds (GEO-3450). Absent on a lobby row and from a geo-chat that predates it.
+   */
+  others_live?: boolean;
   /**
    * The session the room handed out, so the coordinator can tell it from a challenge's. `null`
    * before anyone joins, `undefined` on a geo-chat that predates the field.
@@ -2211,6 +2261,11 @@ export type UpcomingDebateRoom = {
   kind?: 'debate' | 'lobby';
   /** The lobby's name. Absent for a two-person room. */
   name?: string;
+  /**
+   * The latest nudge the other debater sent the viewer as a popup, while it stands: the viewer has
+   * not joined the room or said they are running late since (GEO-3428). Absent otherwise.
+   */
+  nudged_at?: string;
 };
 
 export type UpcomingDebateRoomsResponse = {
@@ -2591,6 +2646,38 @@ export async function reportRunningLate(
   return geoChatRequest<RunningLateResponse>(`/scheduled-debates/${requestId}/running-late`, {
     method: 'POST',
     body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export type NudgeDebateRoomResponse = {
+  channel: DebateRoomNudge['channel'];
+  at: string;
+  /** When the viewer may nudge again; `null` once they have used both. */
+  next_nudge_at: string | null;
+};
+
+/**
+ * Nudges the other debater from a scheduled room (GEO-3428): a popup on whatever Geo page they have
+ * open if they are there, an email with Join, Running late and Can't make it if not.
+ *
+ * Refusals, all `409` unless noted: `403 not_a_participant`, `404 room_not_found`,
+ * `request_not_active` (not an agreed debate, or its room has closed), `debate_already_started`,
+ * `cant_reach` (not on Geo and no email address, so nothing could reach them), `403 nudge_forbidden`
+ * (a block between the two),
+ * `too_early` (before the start), `not_in_room` (the viewer is not in the room now), `already_here`
+ * (the other debater is), `running_late` (they said they are on their way), `nudge_too_soon` (15
+ * minutes since the last) and `nudge_limit` (both used).
+ */
+export async function nudgeDebateRoom(
+  roomId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<NudgeDebateRoomResponse>(`/debate-rooms/${roomId}/nudge`, {
+    method: 'POST',
     auth: true,
     getPrivyIdentityToken,
     accountKey,

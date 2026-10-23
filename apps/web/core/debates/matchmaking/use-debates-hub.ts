@@ -17,7 +17,11 @@ const DEFAULT_TAB: DebatesHubTab = 'lobby';
 export function useDebatesHub() {
   const [state, setState] = useAtom(debatesHubAtom);
 
-  const open = React.useCallback((tab: DebatesHubTab = DEFAULT_TAB) => setState({ tab }), [setState]);
+  // `requestId` only when there is one, so every other open stores `{ tab }` exactly as before.
+  const open = React.useCallback(
+    (tab: DebatesHubTab = DEFAULT_TAB, requestId?: string) => setState(requestId ? { tab, requestId } : { tab }),
+    [setState]
+  );
   const close = React.useCallback(() => setState(null), [setState]);
   const toggle = React.useCallback(
     (tab: DebatesHubTab = DEFAULT_TAB) => setState(current => (current ? null : { tab })),
@@ -28,6 +32,8 @@ export function useDebatesHub() {
   return {
     isOpen: state !== null,
     activeTab: state?.tab ?? DEFAULT_TAB,
+    /** The scheduled request a link asked to see (GEO-3431), or null. */
+    focusedRequestId: state?.requestId ?? null,
     open,
     close,
     toggle,

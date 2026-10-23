@@ -30,6 +30,7 @@ import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-t
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { DebateOpenElsewhereScreen } from '~/core/debates/debate-room-holding-screens';
 import { claimDebateEntry, debateRoomClaimKey } from '~/core/debates/debate-tab-claims';
+import { toDebatesPanel } from '~/core/debates/debates-panel-deep-link';
 import { requestOpenRounds } from '~/core/debates/format-details';
 import { defaultDebateFormatId, isOpenRoundsFormatId } from '~/core/debates/formats';
 import {
@@ -100,6 +101,7 @@ import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { RoomLeaveDialog } from '~/core/debates/rooms/room-leave-dialog';
 import { roomLeaveNeedsConfirm } from '~/core/debates/rooms/room-presence';
 import { DebateRoomPresenceIndicator, RoomLateNotice } from '~/core/debates/rooms/room-presence-indicator';
+import { RoomWaitingStatus } from '~/core/debates/rooms/room-waiting-status';
 import {
   type TaggedClaimFilters,
   tagDisplaySpaceId,
@@ -124,7 +126,7 @@ import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
-import { NavUtils, validateSpaceId } from '~/core/utils/utils';
+import { validateSpaceId } from '~/core/utils/utils';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton } from '~/design-system/button';
@@ -2526,7 +2528,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const [confirmingLeave, setConfirmingLeave] = React.useState(false);
   const leaveButtonRef = React.useRef<HTMLButtonElement>(null);
-  const leaveRoom = () => router.push(NavUtils.toExplore());
+  // GEO-3428: out of a scheduled room onto the People tab, who is free to debate now, rather than
+  // Explore: someone giving up on a no-show still came to debate.
+  const leaveRoom = () => router.push(toDebatesPanel({ tab: 'people' }));
 
   // Once confirming no longer applies (they left, never came, or presence dropped), the request is
   // dropped too, so the dialog cannot reopen by itself when presence comes back.
@@ -2891,6 +2895,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             <DebateRoomPresenceIndicator
               presence={roomPresence}
               opponentName={remoteParticipant?.display_name || undefined}
+            />
+          )}
+          {/* GEO-3428: what the waiting debater can know about the other, Nudge, and the way out. */}
+          {inDebateRoom && (
+            <RoomWaitingStatus
+              opponentName={firstName(remoteParticipant?.display_name) ?? UNNAMED_OPPONENT}
+              viewerName={firstName(localParticipant?.display_name) ?? null}
             />
           )}
           <h1 className="sr-only">Pick a claim to debate</h1>

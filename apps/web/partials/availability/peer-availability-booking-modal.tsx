@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { GeoChatRequestError, type ScheduledDebateRequest } from '~/core/debates/api';
+import { useHoldScheduledNotice } from '~/core/debates/rooms/scheduled-notice-open';
 import { useCreateScheduledDebate, useRescheduleScheduledDebate } from '~/core/debates/rooms/scheduling-hooks';
 import { useSetToast } from '~/core/hooks/use-toast';
 
@@ -50,6 +51,9 @@ export function PeerAvailabilityBookingModal({
   const mutation = rescheduleRequestId ? reschedule : propose;
   const mode = rescheduleRequestId ? 'reschedule' : 'request';
   const setToast = useSetToast();
+  // An open week is a dialog the nudge popup never stacks on (GEO-3428), whatever it is booking or
+  // moving. The popup comes back when the week closes, if its nudge still stands.
+  useHoldScheduledNotice(props.open);
 
   const close = () => {
     onClose();
