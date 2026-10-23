@@ -12,8 +12,6 @@ type PreparationStatus = 'preparing' | 'ready' | 'error';
 
 export type SocialVideoHandoffMethod = 'native_share' | 'download';
 
-export type SocialVideoHandoffOutcome = SocialVideoHandoffMethod | 'unshareable';
-
 /** Whether the share video has its spoken-word captions burned in (GEO-3442). */
 export type SocialVideoCaptions = 'captioned' | 'uncaptioned';
 
@@ -207,7 +205,6 @@ export async function handoffPreparedSocialVideo({
   file,
   downloadUrl,
   captions = 'captioned',
-  onUnshareable,
 }: {
   debateId: string;
   title: string;
@@ -215,8 +212,7 @@ export async function handoffPreparedSocialVideo({
   file: File;
   downloadUrl: string;
   captions?: SocialVideoCaptions;
-  onUnshareable?: (info: { userActivationSpent: boolean }) => void;
-}): Promise<SocialVideoHandoffOutcome> {
+}): Promise<SocialVideoHandoffMethod> {
   const { captions: captioned } = SOCIAL_VIDEO_VARIANTS[captions];
   const payload = socialVideoShareData({ title, text, file });
   const method = getPreparedSocialVideoHandoffMethod(payload);
@@ -245,28 +241,17 @@ export async function handoffPreparedSocialVideo({
         // does: the retry button then looks like a remedy and is a dead end.
         if (!isUnretryableShareError(error)) throw error;
 
-        if (onUnshareable) onUnshareable({ userActivationSpent: true });
-        else downloadPreparedVideo(downloadUrl, file.name);
-
-        const outcome: SocialVideoHandoffOutcome = onUnshareable ? 'unshareable' : 'download';
+        downloadPreparedVideo(downloadUrl, file.name);
         captureSocialVideoEvent('debate_social_video_handoff_resolved', {
           debate_id: debateId,
-          method: outcome,
+          method: 'download',
           // So the rate of this is visible rather than inferred from an absence of share events.
           fell_back_from: 'native_share',
           error_name: errorName(error),
           captions: captioned,
         });
-        return outcome;
+        return 'download';
       }
-    } else if (onUnshareable) {
-      onUnshareable({ userActivationSpent: false });
-      captureSocialVideoEvent('debate_social_video_handoff_resolved', {
-        debate_id: debateId,
-        method: 'unshareable',
-        captions: captioned,
-      });
-      return 'unshareable';
     } else {
       downloadPreparedVideo(downloadUrl, file.name);
     }
@@ -302,17 +287,6 @@ export function getPreparedSocialVideoHandoffMethod(data: ShareData): SocialVide
     return navigator.canShare(data) ? 'native_share' : 'download';
   } catch {
     return 'download';
-  }
-}
-
-/** True when the native share sheet can take a video file. Empty probe file is enough — `canShare` checks the descriptor, not the bytes. */
-export function canNativeShareVideo(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
-  try {
-    return navigator.canShare({ files: [new File([], 'debate.mp4', { type: 'video/mp4' })] });
-  } catch {
-    return false;
   }
 }
 
