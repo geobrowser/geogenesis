@@ -332,10 +332,10 @@ export function DebateExploreFeedCard({
     const isReplay = target instanceof Element && target.closest('[data-end-card-replay]') !== null;
     if (onEndCard && !isReplay) return;
     if (!onPlaybackRequest) {
-      // An explicit media interaction can start a visible feed card before it reaches the autoplay
-      // threshold. Promote it before the player's handler runs, so an inactive player cannot
-      // immediately suspend the playback the viewer just requested.
-      if (onScreen) setActive(true);
+      // Let the player's handler keep the play request, but leave activation to visibility. Forcing
+      // this card active in place could play it over the previous card, and a toolbar resize would
+      // immediately undo that activation while it was still below the lower threshold.
+      if (!active) container?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       return;
     }
     if (active && playbackAllowed) {

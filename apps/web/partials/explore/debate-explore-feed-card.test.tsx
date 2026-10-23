@@ -304,10 +304,11 @@ function intersectAll(ratio: number) {
  * Only the card's own on-screen observer, leaving the near-viewport window (`rootMargin`) where it
  * is: a card scrolled just off screen is still in the look-ahead band and keeps its player mounted.
  */
-function intersectOnScreen(ratio: number) {
+function intersectOnScreen(ratio: number, target?: Element) {
   act(() => {
     for (const record of observers.filter(candidate => !candidate.options?.rootMargin)) {
       for (const element of record.elements) {
+        if (target && element !== target) continue;
         record.callback(
           [
             {
@@ -567,16 +568,63 @@ describe('DebateExploreFeedCard', () => {
       expect(player()).toHaveAttribute('data-active', 'true');
     });
 
-    it('lets an explicit play interaction activate a visible card before its autoplay threshold', () => {
+    it('scrolls a tapped card into view and keeps its play request through toolbar resizes', () => {
       const { player } = renderLandscapeCard();
+      const scrollIntoView = vi.fn();
+      Object.defineProperty(player().closest('article'), 'scrollIntoView', { value: scrollIntoView });
       expect(player()).toHaveAttribute('data-active', 'false');
       fireEvent.click(player());
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      expect(player()).toHaveAttribute('data-active', 'false');
+      // The player keeps the tap, but visibility decides when it may start.
+      expect(mocks.playerToggle).toHaveBeenCalledOnce();
+      vi.stubGlobal('innerHeight', 400);
+      fireEvent(window, new Event('resize'));
+      intersectOnScreen(0.1);
+      expect(player()).toHaveAttribute('data-active', 'false');
+      intersectOnScreen(0.25);
+      expect(player()).toHaveAttribute('data-active', 'true');
+      vi.stubGlobal('innerHeight', 450);
+      fireEvent(window, new Event('resize'));
+      intersectOnScreen(0.29);
       expect(player()).toHaveAttribute('data-active', 'true');
       expect(mocks.playerToggle).toHaveBeenCalledOnce();
-      // An explicit play does not pin media after it has left the screen.
       intersectOnScreen(0);
       expect(player()).toHaveAttribute('data-active', 'false');
     });
+  });
+
+  it('stops the previous Explore card when a tapped card scrolls into view', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    const { container } = render(
+      <QueryClientProvider client={client}>
+        <Provider>
+          <DebateExploreFeedCard item={item} fallback={<div />} />
+          <DebateExploreFeedCard item={{ ...item, entityId: 'debate-two' }} fallback={<div />} />
+        </Provider>
+      </QueryClientProvider>
+    );
+    intersectAll(0.1);
+    const [firstCard, secondCard] = container.querySelectorAll('article');
+    const [firstPlayer, secondPlayer] = screen.getAllByTestId('player');
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(secondCard, 'scrollIntoView', { value: scrollIntoView });
+    intersectOnScreen(0.7, firstCard);
+    intersectOnScreen(0.3, secondCard);
+    expect(firstPlayer).toHaveAttribute('data-active', 'true');
+    expect(secondPlayer).toHaveAttribute('data-active', 'false');
+
+    fireEvent.click(secondPlayer);
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    expect(firstPlayer).toHaveAttribute('data-active', 'true');
+    expect(secondPlayer).toHaveAttribute('data-active', 'false');
+    expect(mocks.playerToggle).toHaveBeenCalledOnce();
+
+    intersectOnScreen(0.4, firstCard);
+    intersectOnScreen(0.6, secondCard);
+    expect(firstPlayer).toHaveAttribute('data-active', 'false');
+    expect(secondPlayer).toHaveAttribute('data-active', 'true');
   });
 
   // The lead card used to stream both full recordings on arrival: 76.5 MB of an idle visit's 84 MB.
@@ -1075,6 +1123,7 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByRole('button', { name: 'Share debate' })).toBeDefined();
 
     expect(screen.queryByTestId('claims-panel')).toBeNull();
+    Object.defineProperty(screen.getByTestId('player').closest('article'), 'scrollIntoView', { value: vi.fn() });
     fireEvent.click(screen.getByRole('button', { name: 'Claims on the video' }));
     expect(screen.getByTestId('claims-panel')).toBeDefined();
 
