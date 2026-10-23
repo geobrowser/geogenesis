@@ -346,6 +346,22 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(screen.getByLabelText('Add a note for Maya (optional)')).toHaveValue('Flight delayed');
     });
 
+    // The note lives with the dialog, so a newer one survives a hop to Running late and back.
+    it('keeps the latest note across Running late and back', async () => {
+      const user = userEvent.setup();
+      open('cant');
+      await user.type(screen.getByLabelText('Add a note for Maya (optional)'), 'A');
+      await user.click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+      await user.click(screen.getByRole('button', { name: 'warning: I cant make it' }));
+      const field = screen.getByLabelText('Add a note for Maya (optional)');
+      await user.clear(field);
+      await user.type(field, 'B');
+      await user.click(screen.getByRole('button', { name: 'I’m only running late' }));
+      await user.click(screen.getByRole('button', { name: 'I can’t make it at all' }));
+
+      expect(screen.getByLabelText('Add a note for Maya (optional)')).toHaveValue('B');
+    });
+
     // The cancel refetches the list, which then says the debate is off. That is the news being
     // confirmed, not a reason to swap the confirmation for "no longer on".
     it('keeps saying it is cancelled once the list says so too', async () => {

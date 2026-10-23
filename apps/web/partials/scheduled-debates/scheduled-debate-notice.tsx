@@ -96,7 +96,8 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
   const [outcome, setOutcome] = React.useState<Outcome | null>(null);
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
-  // The note, kept for coming back from the week to this screen (GEO-3429's close warning).
+  // Can't make it's note, held here so it survives the step unmounting: going to the week and back
+  // (GEO-3429's close warning), or to Running late and back.
   const [cantNote, setCantNote] = React.useState('');
   // Board 3 and its Back belong to arriving through board 2; an email's button lands on board 1b.
   const fromDecide = initialStep === 'decide';
@@ -123,10 +124,7 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
         entry="cant_make_it"
         // Its close warning's Can't make it comes back here, note and all, rather than opening a
         // second one.
-        onCantMakeIt={() => {
-          setCantNote(suggesting.note ?? '');
-          setSuggesting(null);
-        }}
+        onCantMakeIt={() => setSuggesting(null)}
         onClose={onClose}
       />
     );
@@ -262,7 +260,8 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
           requestId={request.request_id}
           name={name}
           focusHeading={moved}
-          initialNote={cantNote}
+          note={cantNote}
+          onNoteChange={setCantNote}
           onLate={() => go('late')}
           onSuggest={note => setSuggesting({ note })}
           onSent={() => setOutcome({ message: COPY.cant.sent(name), joinRoomId: null })}
@@ -456,7 +455,8 @@ function CantStep({
   requestId,
   name,
   focusHeading,
-  initialNote = '',
+  note,
+  onNoteChange,
   onLate,
   onSuggest,
   onSent,
@@ -464,13 +464,13 @@ function CantStep({
   requestId: string;
   name: string;
   focusHeading: boolean;
-  /** What was typed before going to the week and back. */
-  initialNote?: string;
+  /** Held by the dialog, so leaving the step and coming back keeps it. */
+  note: string;
+  onNoteChange: (note: string) => void;
   onLate: () => void;
   onSuggest: (note: string | undefined) => void;
   onSent: () => void;
 }) {
-  const [note, setNote] = React.useState(initialNote);
   const cancel = useCantMakeIt();
   const noteId = React.useId();
 
@@ -482,7 +482,7 @@ function CantStep({
           {COPY.cant.lead(name)}
         </Text>
       </div>
-      <NoteField id={noteId} label={COPY.cant.noteLabel(name)} rows={3} value={note} onChange={setNote} />
+      <NoteField id={noteId} label={COPY.cant.noteLabel(name)} rows={3} value={note} onChange={onNoteChange} />
       {cancel.isError && <ErrorLine>{noticeFailureMessage(cancel.error, 'cant')}</ErrorLine>}
       <Actions>
         <HubPillButton

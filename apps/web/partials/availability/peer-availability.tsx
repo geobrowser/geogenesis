@@ -598,13 +598,15 @@ function DayColumn({
   selectedStart: string | null;
   onSelect: (start: string | null) => void;
 }) {
-  // Opened on a preselected slot past the fold, the pick has to be visible.
-  const [expanded, setExpanded] = React.useState(
-    () =>
-      selectedStart !== null &&
-      day.slots.some(slot => slot.start === selectedStart) &&
-      !foldedSlots(day.slots).some(slot => slot.start === selectedStart)
-  );
+  // A pick past the fold has to be visible: opened on one, or pushed there when the time being moved
+  // (GEO-3429) lands after the week has drawn. Derived rather than set at mount for that reason;
+  // pressing the expander is the viewer's own choice and wins from then on.
+  const [toggled, setToggled] = React.useState<boolean | null>(null);
+  const pickHidden =
+    selectedStart !== null &&
+    day.slots.some(slot => slot.start === selectedStart) &&
+    !foldedSlots(day.slots).some(slot => slot.start === selectedStart);
+  const expanded = toggled ?? pickHidden;
   const empty = day.slots.length === 0;
   const shown = expanded ? day.slots : foldedSlots(day.slots);
   const hidden = day.slots.length - shown.length;
@@ -671,7 +673,7 @@ function DayColumn({
                     'Show more times',
                     'expand_peer_availability_day'
                   ))}
-              onClick={() => setExpanded(current => !current)}
+              onClick={() => setToggled(!expanded)}
               className="rounded-md px-2 py-1 text-left text-footnote text-grey-04 transition-colors hover:text-text"
             >
               {expanded ? 'Show less' : `+${hidden} more`}

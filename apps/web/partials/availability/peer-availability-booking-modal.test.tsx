@@ -547,6 +547,27 @@ describe('moving a debate', () => {
     expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
   });
 
+  // As for a new request: a None of these work that lands after the week was closed neither
+  // toasts nor closes anything.
+  it('detaches a None of these work that settles after the week was closed', async () => {
+    let settle: () => void = () => {};
+    mocks.noneWork.mockImplementation((_vars, options) => {
+      settle = () => options?.onSuccess?.();
+    });
+    mocks.noneWorkReset.mockImplementation(() => {
+      settle = () => {};
+    });
+    const { user, onClose } = moving('accepted');
+
+    await user.click(screen.getByRole('button', { name: 'none work' }));
+    await user.click(screen.getByLabelText('Close'));
+    await user.click(screen.getByRole('button', { name: /^Keep / }));
+    act(() => settle());
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/your free times to pick from/)).not.toBeInTheDocument();
+  });
+
   it('holds None of these work while a move is in flight', () => {
     mocks.pending = true;
     moving('accepted');

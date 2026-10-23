@@ -808,6 +808,20 @@ describe('moving a debate', () => {
     expect(tuesday.getByRole('button', { name: /^Show less/ })).toBeInTheDocument();
   });
 
+  it('opens the day when the time being moved lands after a pick and pushes it past the fold', async () => {
+    const slots = [9, 10, 11, 12, 13].map(hour => slot(hour, true, 22));
+    const view = (book: PeerAvailabilityBooking) => (
+      <PeerAvailabilityView schedule={schedule({ slots })} peerName="Ada" now={NOW} booking={book} />
+    );
+    const user = userEvent.setup();
+    const { rerender } = render(view(moving({ moving: null })));
+    await user.click(within(day('2026-09-22')).getByRole('button', { name: /at 12pm/ }));
+
+    rerender(view(moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } })));
+
+    expect(within(day('2026-09-22')).getByRole('button', { name: /at 12pm/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('holds both actions while the other is in flight', async () => {
     const { user } = setupBooking(
       moving({
