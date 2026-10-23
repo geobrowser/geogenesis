@@ -36,9 +36,12 @@ import { useNudgeDebateRoom } from './scheduling-hooks';
  * person is not in it. Nothing else about the other person's activity is shown (no pages, devices or
  * dismissed prompts): Preston's call, 21 Oct.
  *
- * Once they said they are running late, the late notice in their video slot carries how late, the
- * note and Reschedule, so this keeps the timeline, drops its heading and Reschedule, and has nobody
- * to nudge.
+ * While their Running late estimate stands, the late notice in their video slot carries how late,
+ * the note and Reschedule, so this keeps the timeline, drops its heading and Reschedule, and has
+ * nobody to nudge (geo-chat refuses one then). Once the estimate lapses (the room calls it a
+ * no-show) or they came and went, there is no late notice, and Nudge and Reschedule are the
+ * waiter's again: geo-chat accepts a nudge then, and "they said ten minutes, it has been
+ * twenty-five" is when one is wanted most.
  */
 export function RoomWaitingStatus({
   opponentName,

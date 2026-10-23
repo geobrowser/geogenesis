@@ -221,6 +221,23 @@ describe('RoomWaitingStatus', () => {
     expect(screen.getByRole('button', { name: 'Nudged' })).toBeDisabled();
   });
 
+  // Copilot (round 4) asked to keep this timeline-only for good. The estimate lapsed, the room
+  // says no-show, and geo-chat accepts a nudge again: this pins that the waiter can.
+  it('gives Nudge and Reschedule back once a running-late estimate has lapsed', () => {
+    state.room = {
+      ...baseRoom(),
+      waiting: { reason: 'no_show' },
+      notices: [
+        { user_id: 'jordan', kind: 'running_late', at: minutesAgo(25), expected_at: minutesAgo(15), note: null },
+      ],
+    };
+    state.presence = { ...waiting, state: 'no_show', opponentLate: null };
+    show();
+    expect(screen.getByText('Jordan said they’re running late.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nudge' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Reschedule' })).toBeInTheDocument();
+  });
+
   it('is not shown before the start or once they are here', () => {
     state.room = baseRoom();
     for (const s of ['arrived_early', 'present'] as const) {
