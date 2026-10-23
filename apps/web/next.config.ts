@@ -124,6 +124,9 @@ const nextConfig: NextConfig = {
   // Drops `x-powered-by: Next.js`, which production sends today. Free, and there is no reason to
   // name the framework and its presence in a response.
   poweredByHeader: false,
+  // Browser-only packages, loaded with import() from client effects. Kept external on the server so
+  // Turbopack doesn't compile them for SSR (about 14 MB of source plus source maps) (GEO-3453).
+  serverExternalPackages: ['@livekit/krisp-noise-filter', 'mapbox-gl', 'hls.js'],
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
   agentRules: false,
