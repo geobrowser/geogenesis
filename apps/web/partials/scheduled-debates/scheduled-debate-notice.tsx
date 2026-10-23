@@ -65,6 +65,8 @@ type Props = {
   requestId: string;
   initialStep: ScheduledNoticeStep;
   onClose: () => void;
+  /** Told when a late notice or a cancel has gone through, before its confirmation shows. */
+  onSent?: () => void;
   /**
    * Board 2's "Reschedule instead". Only the reschedule link offers it, and it owns the week: there it
    * swaps this dialog for the calendar the link would otherwise have opened.
@@ -85,7 +87,15 @@ type Props = {
  * In the frame the other scheduling dialogs share. Nothing is sent until a confirm press: a link only
  * opens this, because mail scanners open links.
  */
-export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onClose, onReschedule, children }: Props) {
+export function ScheduledDebateNoticeDialog({
+  open,
+  requestId,
+  initialStep,
+  onClose,
+  onSent,
+  onReschedule,
+  children,
+}: Props) {
   const [step, setStep] = React.useState<ScheduledNoticeStep>(initialStep);
   // Once a press has swapped the screen, each new one's heading takes focus: the button is gone.
   const [moved, setMoved] = React.useState(false);
@@ -94,6 +104,11 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
     setStep(next);
   };
   const [outcome, setOutcome] = React.useState<Outcome | null>(null);
+  // Every outcome is something sent; `onSent` hears of it as the confirmation replaces the step.
+  const sent = (next: Outcome) => {
+    setOutcome(next);
+    onSent?.();
+  };
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
   // Board 3 and its Back belong to arriving through board 2; an email's button lands on board 1b.
@@ -237,7 +252,7 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
           focusHeading={moved}
           onCant={() => go('cant')}
           onSent={expectedAt =>
-            setOutcome({
+            sent({
               message: COPY.late.sent(name, formatTime(expectedAt)),
               // Only into a room that is open. A late notice can be sent the day before, from the
               // calendar invite, and Join would land on "the room opens at…".
@@ -256,7 +271,7 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
           focusHeading={moved}
           onLate={() => go('late')}
           onSuggest={note => setSuggesting({ note })}
-          onSent={() => setOutcome({ message: COPY.cant.sent(name), joinRoomId: null })}
+          onSent={() => sent({ message: COPY.cant.sent(name), joinRoomId: null })}
         />,
         { ownHeading: true, back }
       );
