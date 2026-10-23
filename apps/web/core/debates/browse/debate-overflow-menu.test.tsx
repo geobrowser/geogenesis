@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -8,7 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { Debate } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
 
-import { DebateOverflowMenu } from './debate-overflow-menu';
+import { DebateOverflowMenu, useCanRemoveDebate } from './debate-overflow-menu';
 
 const mocks = vi.hoisted(() => ({
   isEditor: false,
@@ -76,17 +76,21 @@ function openDialog() {
 }
 
 describe('DebateOverflowMenu (GEO-2785)', () => {
-  it('is not drawn for a viewer who is neither a debater nor an editor', () => {
+  // The host draws the menu on this answer, and makes room for it on the same one.
+  it('is not offered to a viewer who is neither a debater nor an editor', () => {
     mocks.viewerUserId = 'user-z';
-    render(<DebateOverflowMenu debate={debate} />);
-    expect(screen.queryByRole('button', { name: 'More debate options' })).not.toBeInTheDocument();
+    expect(renderHook(() => useCanRemoveDebate(debate)).result.current).toBe(false);
   });
 
   it.each([
     ['a participant', () => (mocks.viewerUserId = 'user-a')],
     ['an editor of the space', () => (mocks.isEditor = true)],
-  ])('offers Remove debate to %s', (_, arrange) => {
+  ])('is offered to %s', (_, arrange) => {
     arrange();
+    expect(renderHook(() => useCanRemoveDebate(debate)).result.current).toBe(true);
+  });
+
+  it('opens the Remove debate confirmation', () => {
     openDialog();
     expect(screen.getByRole('dialog', { name: 'Remove this debate?' })).toBeInTheDocument();
   });

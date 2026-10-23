@@ -6,6 +6,11 @@ import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 
+import {
+  DEBATE_CARD_WIDE_WRAPS_BELOW,
+  DEBATE_CARD_WRAPS_BELOW,
+  debateCardColumnWidth,
+} from './debate-card-column-width';
 import { DebatesBrowseFeed } from './debate-feed';
 import { debateFullscreenActiveAtom } from '~/atoms';
 
@@ -291,7 +296,7 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     assert(mediaColumn, 'Expected the card to be rendered inside the media column');
     expect(mediaColumn).toHaveClass('min-w-0', 'w-[var(--debate-feed-column-width)]', 'md:w-[calc(100vw-1rem)]');
     expect(mediaColumn).toHaveStyle({
-      '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 2rem), calc(82.9dvh - 13.65rem)), 640px)',
+      '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', DEBATE_CARD_WRAPS_BELOW)}), 640px)`,
     });
   });
 
@@ -551,8 +556,12 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     mocks.canRemove = true;
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    // The row makes room for the third action, so it wraps under the pills sooner.
+    // The row makes room for the third action, so it wraps under the pills sooner, and the column
+    // budgets that wrapped row from the wider edge.
     expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-wide-actions', 'true');
+    expect(screen.getByTestId('claim-footer').parentElement?.parentElement).toHaveStyle({
+      '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', DEBATE_CARD_WIDE_WRAPS_BELOW)}), 640px)`,
+    });
 
     // Once: the desktop rail beside the video, which drew a second one, is gone.
     expect(within(screen.getByTestId('claim-footer')).getAllByTestId('overflow-debate-1')).toHaveLength(1);

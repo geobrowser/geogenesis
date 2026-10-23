@@ -8,6 +8,7 @@ import { Provider, useAtomValue, useSetAtom } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
+import { DEBATE_CARD_WRAPS_BELOW, debateCardColumnWidth } from '~/core/debates/browse/debate-card-column-width';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { InsideMobileSheet } from '~/core/state/mobile-sheet-cover';
@@ -1055,20 +1056,20 @@ describe('DebateExploreFeedCard', () => {
 
       expect(column(container).className).toContain('max-w-[var(--debate-card-column-width)]');
       expect(column(container).style.getPropertyValue('--debate-card-column-width')).toBe(
-        'clamp(320px, calc(83dvh - 228px), 560px)'
+        `clamp(320px, ${debateCardColumnWidth('83dvh - 228px', DEBATE_CARD_WRAPS_BELOW)}, 560px)`
       );
     });
 
     it('raises the ceiling to the container under fullWidth without dropping the viewport budget', () => {
       // `fullWidth` means "this column is already the reading width, don't cap me at 560px". It
       // used to drop the `max-w` and the budget together, which on the claim page's 840px column
-      // made the card ~1140px tall — so on a 900px viewport the second debater and the interaction
-      // bar could not be seen together, which is the one thing the budget guarantees.
+      // made the card ~1140px tall — so on a 900px viewport the second debater and the claim under
+      // it could not be seen together, which is the one thing the budget guarantees.
       const { container } = renderCard({ fullWidth: true });
 
       expect(column(container).className).toContain('max-w-[var(--debate-card-column-width)]');
       expect(column(container).style.getPropertyValue('--debate-card-column-width')).toBe(
-        'max(320px, min(calc(83dvh - 228px), 100%))'
+        `max(320px, min(${debateCardColumnWidth('83dvh - 228px', DEBATE_CARD_WRAPS_BELOW)}, 100%))`
       );
     });
   });

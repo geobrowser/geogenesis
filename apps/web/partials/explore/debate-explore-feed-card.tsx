@@ -7,6 +7,7 @@ import { useSetAtom } from 'jotai';
 
 import { ActionSurfaceArticle, useActionScope } from '~/core/action-context-provider';
 import type { Debate } from '~/core/debates/api';
+import { DEBATE_CARD_WRAPS_BELOW, debateCardColumnWidth } from '~/core/debates/browse/debate-card-column-width';
 import { DebateClaimFooter } from '~/core/debates/browse/debate-claim-footer';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
@@ -50,25 +51,29 @@ const DEACTIVATE_RATIO = 0.4;
  * Measured in Chrome (GEO-3454), that chrome is 154px with a one-line claim and 177px with the two
  * lines the clamp allows, borders included, plus 17px under a signed-out vote's "Not counted yet"
  * note — so the worst case the card can reach still leaves a few pixels spare. The meta row carries
- * the Join chip, which is what makes it taller here than on the full-screen card. In a card narrower
- * than about 356px (`claim-row-end-inline`) the comments and share drop under the pills and add a
- * 36px row; that is a phone narrower than about 390px or the 320px floor, where the width rather
- * than the height binds and there is room for it.
+ * the Join chip, which is what makes it taller here than on the full-screen card.
+ *
+ * In a card narrower than 356px (a 330px row, `claim-row-end-inline`) the comments and share drop
+ * under the pills and add a 36px row the 197px does not hold, so there the card takes a budget 30px
+ * narrower that does; see `debateCardColumnWidth`.
  *
  * So the column tracks the viewport rather than sitting at a fixed width — 519px at a 900px
  * viewport, 436px at 800px — up to the 560px cap, which the budget clears from about a 950px
  * viewport and which is there so a tall display gets a wider card and not a different design.
- * The 320px floor gives the promise up below roughly a 660px viewport, where honouring it would
- * mean a video too small to read a face in.
+ * Under about a 704px viewport it steps down to the wrapped budget, and the 320px floor gives the
+ * promise up below about 696px, where honouring it would mean a video too small to read a face in.
  *
  * The same trick, and the same reason, as `--debate-feed-column-width` on the full-screen feed:
  * `dvh` there too, because the media has to fit the viewport it is being watched in.
  *
  * Keep the arithmetic and the layout together — a change to `py-4`, the claim clamp, the pill row
- * or the split band moves the 228px, and nothing else will notice.
+ * or the split band moves the 228px, a change to the row's wrap point moves the 356px, and nothing
+ * else will notice.
  */
+const DEBATE_CARD_COLUMN_BUDGET = debateCardColumnWidth('83dvh - 228px', DEBATE_CARD_WRAPS_BELOW);
+
 const DEBATE_CARD_COLUMN_STYLE = {
-  '--debate-card-column-width': 'clamp(320px, calc(83dvh - 228px), 560px)',
+  '--debate-card-column-width': `clamp(320px, ${DEBATE_CARD_COLUMN_BUDGET}, 560px)`,
 } as React.CSSProperties;
 
 /**
@@ -84,7 +89,7 @@ const DEBATE_CARD_COLUMN_STYLE = {
  * given, so this is right at 840px and at any other width a host passes.
  */
 const DEBATE_CARD_FULL_WIDTH_STYLE = {
-  '--debate-card-column-width': 'max(320px, min(calc(83dvh - 228px), 100%))',
+  '--debate-card-column-width': `max(320px, min(${DEBATE_CARD_COLUMN_BUDGET}, 100%))`,
 } as React.CSSProperties;
 
 type DebateExploreFeedCardProps = {

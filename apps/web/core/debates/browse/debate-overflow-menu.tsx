@@ -40,15 +40,14 @@ export function useCanRemoveDebate(debate: Debate): boolean {
 
 /**
  * The "…" beside a debate's actions. Holds only what a few viewers can do — removing the debate
- * (GEO-2785) — so it is not drawn at all for everyone else, and the bar reads as it always has.
+ * (GEO-2785) — so its host draws it only where {@link useCanRemoveDebate} says so, and the row reads
+ * as it always has for everyone else. The host asks rather than this, because the row makes room
+ * for the menu on the same answer, and two answers could disagree.
  */
 export function DebateOverflowMenu({ debate }: { debate: Debate }) {
-  const canRemove = useCanRemoveDebate(debate);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
-
-  if (!canRemove) return null;
 
   const trigger = (
     <button

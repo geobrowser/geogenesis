@@ -28,6 +28,11 @@ import { Text } from '~/design-system/text';
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 import { EXPLORE_CARD_TITLE_CLASS_NAME } from '~/partials/explore/explore-card-title';
 
+import {
+  DEBATE_CARD_WIDE_WRAPS_BELOW,
+  DEBATE_CARD_WRAPS_BELOW,
+  debateCardColumnWidth,
+} from './debate-card-column-width';
 import { DebateClaimFooter } from './debate-claim-footer';
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
@@ -46,14 +51,24 @@ import { debateFeedPanelAtom, debateFullscreenActiveAtom, openDebateFeedPanelAto
 const PAGE_SIZE = 5;
 /** How many cards past the active one open their recordings. See the `preload` prop below. */
 const PRELOAD_AHEAD = 2;
-const DEBATE_COLUMN_STYLE = {
-  // Grow or shrink the media with the viewport while reserving the navbar, the 20px above the
-  // card, and the card's chrome under the media: frame, meta row, a two-line claim, the pill row
-  // and the split band. Measured in Chrome (GEO-3454), that chrome is 169px with two claim lines and
-  // 17px more under a signed-out vote's "Not counted yet" note, so even then a 900px viewport ends
-  // the card about 15px above the fold.
-  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 2rem), calc(82.9dvh - 13.65rem)), 640px)',
-} as React.CSSProperties;
+/**
+ * How wide the debate card's column may get, which with its fixed-ratio media is really a height
+ * budget: grow or shrink the media with the viewport while reserving the navbar, the 20px above the
+ * card, and the card's chrome under the media — frame, meta row, a two-line claim, the pill row and
+ * the split band. Measured in Chrome (GEO-3454), that chrome is 169px with two claim lines and 17px
+ * more under a signed-out vote's "Not counted yet" note, so even then a 900px viewport ends the card
+ * about 15px above the fold. Where the card is narrow enough for its actions to wrap, the wrapped
+ * row is budgeted too; see `debateCardColumnWidth`. Phones are unaffected: their column is the
+ * screen width (`md:w-[...]`), not this.
+ */
+const debateColumnStyle = (wrapsBelow: number) =>
+  ({
+    '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', wrapsBelow)}), 640px)`,
+  }) as React.CSSProperties;
+
+const DEBATE_COLUMN_STYLE = debateColumnStyle(DEBATE_CARD_WRAPS_BELOW);
+/** With the "…" for people who may remove the debate, whose actions wrap sooner. */
+const DEBATE_COLUMN_WIDE_ACTIONS_STYLE = debateColumnStyle(DEBATE_CARD_WIDE_WRAPS_BELOW);
 
 export function DebatesBrowseFeed({
   spaceId,
@@ -636,7 +651,10 @@ function DebateFeedItem({
           'relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]',
           scrollHint?.isVisible && scrollHintBounceProps.className
         )}
-        style={{ ...DEBATE_COLUMN_STYLE, ...(scrollHint?.isVisible ? scrollHintBounceProps.style : undefined) }}
+        style={{
+          ...(canRemove ? DEBATE_COLUMN_WIDE_ACTIONS_STYLE : DEBATE_COLUMN_STYLE),
+          ...(scrollHint?.isVisible ? scrollHintBounceProps.style : undefined),
+        }}
       >
         {/* One card: the videos, then the claim they argue and the reader's side on it (GEO-3454).
             The frame is the card's, so the player draws none of its own. */}

@@ -87,8 +87,10 @@ export function DebateInteractionBar({
           expanded={shareOpen}
           // The row shares its width with Agree and Disagree, whose labels are the ones that must
           // stay whole. Read against the row's own container, not the viewport: the same card is a
-          // 320px explore column and a 640px full-screen one.
-          collapsesLabel
+          // 320px explore column and a 640px full-screen one. A labelled Share is ~48px wider, which
+          // a row of comments and share has room for above 400px, and one with the "…" only above
+          // ~408px — so that one gives its label up sooner.
+          collapsesLabel={overflow ? 'wide' : 'compact'}
         />
       )}
       {overflow}
@@ -105,7 +107,7 @@ function PillAction({
   expanded,
   open,
   commentsPanelOpener,
-  collapsesLabel = false,
+  collapsesLabel,
 }: {
   label: string;
   icon: React.ReactNode;
@@ -126,8 +128,11 @@ function PillAction({
   // See {@link InteractionBarProps.commentsPanelOpen}: marks this button to the global comments
   // panel as one of its openers.
   commentsPanelOpener?: boolean;
-  /** Drop to the icon alone in a narrow container; the accessible label still names the action. */
-  collapsesLabel?: boolean;
+  /**
+   * Drop to the icon alone in a narrow container; the accessible label still names the action.
+   * `'wide'` for a row that also carries the "…", which needs the room sooner.
+   */
+  collapsesLabel?: 'compact' | 'wide';
 }) {
   return (
     <button
@@ -141,7 +146,8 @@ function PillAction({
       className={cx(
         PILL_ACTION_CLASS,
         'gap-1.5 px-2.5',
-        collapsesLabel && '@max-[400px]:size-7 @max-[400px]:justify-center @max-[400px]:px-0'
+        collapsesLabel === 'compact' && '@max-[400px]:size-7 @max-[400px]:justify-center @max-[400px]:px-0',
+        collapsesLabel === 'wide' && '@max-[420px]:size-7 @max-[420px]:justify-center @max-[420px]:px-0'
       )}
     >
       <span className="text-text">{icon}</span>
@@ -149,7 +155,11 @@ function PillAction({
         as="span"
         variant="metadataMedium"
         color="text"
-        className={cx('tabular-nums', collapsesLabel && '@max-[400px]:hidden')}
+        className={cx(
+          'tabular-nums',
+          collapsesLabel === 'compact' && '@max-[400px]:hidden',
+          collapsesLabel === 'wide' && '@max-[420px]:hidden'
+        )}
       >
         {label}
       </Text>
