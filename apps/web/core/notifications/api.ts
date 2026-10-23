@@ -11,6 +11,8 @@
  */
 import { ID } from '~/core/id';
 
+import type { EmailGroup, EmailGroupSettings } from './email-groups';
+
 export function geoNotificationsApiUrl(): string | null {
   const configured = process.env.NEXT_PUBLIC_GEO_NOTIFICATIONS_API_URL?.trim();
   return configured ? configured.replace(/\/+$/, '') : null;
@@ -35,19 +37,35 @@ export type NotificationRegistration = {
 
 export type NotificationPreferences = {
   in_app_enabled: boolean;
+  /** The all-email switch. Off overrides every group; the groups keep their own values underneath. */
   email_enabled: boolean;
+  /**
+   * The five groups (GEO-3372). Absent from a service that predates them: settings then shows only the
+   * all-email switch.
+   */
+  email_groups?: EmailGroupSettings;
+  /** Where email goes, masked by the service (`jo•••@gmail.com`); null with no address on file. */
+  email?: string | null;
+};
+
+/** A change to the preferences: the all-email switch, one or more groups, or both. */
+export type NotificationPreferencesPatch = {
+  in_app_enabled?: boolean;
+  email_enabled?: boolean;
+  email_groups?: Partial<EmailGroupSettings>;
 };
 
 async function notificationsRequest<T>(
   baseUrl: string,
   path: string,
-  accessToken: string,
+  accessToken: string | null,
   init: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; keepalive?: boolean; signal?: AbortSignal } = {}
 ): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     method: init.method ?? 'GET',
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      ...(accessToken === null ? {} : { Authorization: `Bearer ${accessToken}` }),
       ...(init.body === undefined ? {} : { 'Content-Type': 'application/json' }),
     },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
@@ -81,7 +99,7 @@ export function getNotificationPreferences(baseUrl: string, accessToken: string)
 export function updateNotificationPreferences(
   baseUrl: string,
   accessToken: string,
-  patch: Partial<NotificationPreferences>
+  patch: NotificationPreferencesPatch
 ) {
   return notificationsRequest<NotificationPreferences>(baseUrl, '/preferences', accessToken, {
     method: 'PUT',
@@ -101,5 +119,45 @@ export function sendSeenPing(baseUrl: string, accessToken: string, timeZone: str
     body: { time_zone: timeZone },
     keepalive: true,
     signal,
+  });
+}
+
+/**
+ * The unsubscribe link in an email (GEO-3372 / GEO-3392). geo-notifications signs its `token` for one
+ * person and one group, so none of these calls needs a sign-in; `kind` and `send` say which email it
+ * came from and are passed back as they arrived. Reading it changes nothing (mail scanners open every
+ * link): only the `unsubscribe` action does, and `undo` reverses it within a day.
+ */
+export type UnsubscribeLinkParams = { token: string; kind: string | null; send: string | null };
+
+export type UnsubscribeState = {
+  /**
+   * `already_on`: Undo changed nothing because the group was on anyway (pressed twice, or switched back
+   * on in settings). `undo_expired`: Undo after a day, or after the preferences changed since.
+   */
+  state: 'ask' | 'done' | 'already_off' | 'undone' | 'already_on' | 'undo_expired';
+  group: EmailGroup;
+  group_name: string;
+  /** Masked, as on the settings dialog; null for someone with no address on file. */
+  email: string | null;
+  subscribed: boolean;
+  all_email_enabled: boolean;
+};
+
+function unsubscribePath({ token, kind, send }: UnsubscribeLinkParams) {
+  const params = new URLSearchParams({ token });
+  if (kind) params.set('kind', kind);
+  if (send) params.set('send', send);
+  return `/unsubscribe?${params.toString()}`;
+}
+
+export function getUnsubscribeState(baseUrl: string, link: UnsubscribeLinkParams) {
+  return notificationsRequest<UnsubscribeState>(baseUrl, unsubscribePath(link), null);
+}
+
+export function changeSubscription(baseUrl: string, link: UnsubscribeLinkParams, action: 'unsubscribe' | 'undo') {
+  return notificationsRequest<UnsubscribeState>(baseUrl, unsubscribePath(link), null, {
+    method: 'POST',
+    body: { action },
   });
 }

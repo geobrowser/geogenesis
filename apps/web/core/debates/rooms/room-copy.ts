@@ -81,7 +81,8 @@ export const ROOM_JOIN_PROMPT = {
   opponentJoined: (opponentName: string) => `${opponentName} is waiting`,
   opponentNotJoined: (opponentName: string) => `${opponentName} hasn’t joined yet`,
   join: 'Join debate',
-  notNow: 'Not now',
+  late: 'Running late',
+  cant: 'Can’t make it',
 } as const;
 
 /** The same banner for a lobby the viewer asked to be reminded of (GEO-3133). */
@@ -89,6 +90,7 @@ export const LOBBY_JOIN_PROMPT = {
   title: (name: string | undefined) => (name ? `${name} is open` : 'Your lobby is open'),
   subtitle: 'A debate lobby you asked to be reminded of',
   join: 'Join lobby',
+  notNow: 'Not now',
 } as const;
 
 /**
