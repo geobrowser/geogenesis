@@ -5,6 +5,7 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 
 import type { MatchmakingClaim } from '../api';
+import { useGeoChatAuth } from '../hooks';
 import { type ClaimsListVariant, ClaimsTab } from './claims-tab';
 import type { HubSortOption, PanelListFilters } from './hub-filters';
 import { MatchesList } from './matches-list';
@@ -112,28 +113,41 @@ export function PanelExploreTab({ onTabChange }: { onTabChange: (tab: DebatesHub
   const [sort, setSort] = useAtom(debatesHubExploreSortAtom);
   const [show, setShow] = useAtom(debatesHubExploreShowAtom);
   const [someoneOnline, setSomeoneOnline] = useAtom(debatesHubExploreSomeoneOnlineAtom);
+  // Show and "Someone online" are both about the viewer — what they have answered, who could debate
+  // *them* — so signed out there is only the tag to browse, and neither control is offered.
+  const { authenticated } = useGeoChatAuth();
 
-  const variant: ClaimsListVariant = show === 'mine' ? 'positions' : someoneOnline ? 'lobby' : 'explore';
+  const variant: ClaimsListVariant = !authenticated
+    ? 'explore'
+    : show === 'mine'
+      ? 'positions'
+      : someoneOnline
+        ? 'lobby'
+        : 'explore';
 
   const filters = React.useMemo<PanelListFilters>(
     () => ({
       sort: { options: EXPLORE_SORTS, value: sort, onChange: next => setSort(next as DebatesHubExploreSort) },
-      choice: {
-        heading: 'Show',
-        options: EXPLORE_SHOWS,
-        value: show,
-        defaultValue: 'unanswered',
-        onChange: next => setShow(next as DebatesHubExploreShow),
-      },
-      toggles: [
-        {
-          id: 'someone-online',
-          label: 'Someone online to debate',
-          chipLabel: 'Someone online',
-          checked: someoneOnline,
-          onChange: setSomeoneOnline,
-        },
-      ],
+      choice: authenticated
+        ? {
+            heading: 'Show',
+            options: EXPLORE_SHOWS,
+            value: show,
+            defaultValue: 'unanswered',
+            onChange: next => setShow(next as DebatesHubExploreShow),
+          }
+        : undefined,
+      toggles: authenticated
+        ? [
+            {
+              id: 'someone-online',
+              label: 'Someone online to debate',
+              chipLabel: 'Someone online',
+              checked: someoneOnline,
+              onChange: setSomeoneOnline,
+            },
+          ]
+        : [],
       onClearExtras: () => {
         setShow('unanswered');
         setSomeoneOnline(false);
@@ -142,7 +156,7 @@ export function PanelExploreTab({ onTabChange }: { onTabChange: (tab: DebatesHub
       graphOrder: variant === 'explore' ? sort : undefined,
       clientSort: variant === 'explore' ? undefined : sort,
     }),
-    [setShow, setSomeoneOnline, setSort, show, someoneOnline, sort, variant]
+    [authenticated, setShow, setSomeoneOnline, setSort, show, someoneOnline, sort, variant]
   );
 
   // What the chosen source cannot be asked for. `debate_now` keeps answered claims, so Not answered

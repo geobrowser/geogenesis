@@ -17,7 +17,13 @@ type ListProps = {
   keepClaim?: (entry: MatchmakingClaim) => boolean;
 };
 
-const seen = vi.hoisted(() => ({ claimsTab: null as ListProps | null, matchesList: null as ListProps | null }));
+const seen = vi.hoisted(() => ({
+  claimsTab: null as ListProps | null,
+  matchesList: null as ListProps | null,
+  authenticated: true,
+}));
+
+vi.mock('../hooks', () => ({ useGeoChatAuth: () => ({ authenticated: seen.authenticated }) }));
 
 // Both lists have their own suites; here it only matters which one each filter draws, and with what.
 vi.mock('./claims-tab', () => ({
@@ -59,6 +65,7 @@ afterEach(() => {
   cleanup();
   seen.claimsTab = null;
   seen.matchesList = null;
+  seen.authenticated = true;
 });
 
 describe('PanelMatchesTab', () => {
@@ -150,5 +157,15 @@ describe('PanelExploreTab', () => {
 
     expect(store.get(debatesHubExploreShowAtom)).toBe('unanswered');
     expect(seen.claimsTab?.panelFilters?.sort.value).toBe('newest');
+  });
+
+  it('offers a signed-out visitor only the tag, with Sort and spaces but no Show or online switch', () => {
+    seen.authenticated = false;
+    const store = renderTab(<PanelExploreTab onTabChange={vi.fn()} />);
+    act(() => store.set(debatesHubExploreShowAtom, 'mine'));
+
+    expect(seen.claimsTab?.variant).toBe('explore');
+    expect(seen.claimsTab?.panelFilters?.choice).toBeUndefined();
+    expect(seen.claimsTab?.panelFilters?.toggles).toEqual([]);
   });
 });
