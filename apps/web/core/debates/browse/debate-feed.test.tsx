@@ -12,7 +12,7 @@ import {
   debateCardColumnWidth,
 } from './debate-card-column-width';
 import { DebatesBrowseFeed } from './debate-feed';
-import { debateFullscreenActiveAtom } from '~/atoms';
+import { debateFeedPanelAtom, debateFullscreenActiveAtom, entitySidePanelAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   debates: [] as Debate[],
@@ -258,6 +258,46 @@ describe('DebatesBrowseFeed header links', () => {
     expect(screen.getAllByRole('link', { name: 'Fashion' })[0]).toHaveAttribute('href', '/space/space-1');
   });
 
+  it('opens the claim in the shared entity panel and replaces the debate panel without restarting the player', () => {
+    const store = createStore();
+    store.set(debateFeedPanelAtom, 'comments');
+    render(
+      <Provider store={store}>
+        <DebatesBrowseFeed spaceId="space-1" />
+      </Provider>
+    );
+    const player = screen.getByTestId('player-debate-1');
+    const link = screen.getByRole('link', { name: 'Debates are useful' });
+    expect(link).toHaveAttribute('data-entity-side-panel-opener');
+
+    expect(fireEvent.click(link)).toBe(false);
+
+    expect(store.get(entitySidePanelAtom)).toMatchObject({
+      entityId: 'claim-entity-debate-1',
+      spaceId: 'space-1',
+      openedWithMainViewEditing: false,
+    });
+    expect(store.get(debateFeedPanelAtom)).toBeNull();
+    expect(screen.getByTestId('player-debate-1')).toBe(player);
+  });
+
+  it.each([{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }])(
+    'preserves native claim link behavior for modified clicks: %j',
+    modifiers => {
+      const store = createStore();
+      render(
+        <Provider store={store}>
+          <DebatesBrowseFeed spaceId="space-1" />
+        </Provider>
+      );
+
+      const link = screen.getByRole('link', { name: 'Debates are useful' });
+      expect(fireEvent.click(link, modifiers)).toBe(true);
+      expect(store.get(entitySidePanelAtom)).toBeNull();
+      expect(link).toHaveAttribute('href', '/space/space-1/claim-entity-debate-1');
+    }
+  );
+
   // Truncation runs parent -> anchor -> text, and an anchor at its default `min-width: auto` would
   // refuse to shrink, pushing the topics off the row instead of ellipsing the name.
   it('keeps the space link shrinkable so the name still truncates', () => {
@@ -297,14 +337,11 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     expect(mediaColumn).toHaveClass(
       'min-w-0',
       'w-[var(--debate-feed-column-width)]',
-      // Phones size to the height left under the browser's toolbars too, not just the screen width,
-      // and reserve the "Show more" row when the claim has one.
-      'md:w-[var(--debate-feed-phone-column-width)]',
-      'md:has-[[data-claim-expander]]:w-[var(--debate-feed-phone-column-width-more)]'
+      // Phones size to the height left under the browser's toolbars too, not just the screen width.
+      'md:w-[var(--debate-feed-phone-column-width)]'
     );
     expect(mediaColumn).toHaveStyle({
       '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 197px), calc(100cqw - 2rem))',
-      '--debate-feed-phone-column-width-more': 'clamp(240px, calc(83dvh - 219px), calc(100cqw - 2rem))',
     });
     // 16px either side on a phone, not 8.
     expect(feedItem).not.toHaveClass('md:px-2');
@@ -372,10 +409,8 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
   }
 
   /**
-   * GEO-2756. The old check was `scrollHeight > clientHeight`, and the claim title's leading is
-   * tighter than its glyphs — so every title measured two pixels over its own box and the control
-   * was offered permanently. It only ever showed on mobile, which is where it was reported, because
-   * the button is `hidden md:inline-flex` and `md` here is `max-width: 767px`.
+   * GEO-2756. The title's leading is tighter than its glyphs. Those extra two pixels must not
+   * produce a redundant tooltip for a claim that already fits.
    */
   it('offers no expand control for a claim that fits', () => {
     const restore = stubHeadingMetrics({ contentHeight: 26, clampedHeight: 24 });
@@ -410,28 +445,30 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
   });
 
   // Two lines is what the column's height budget reserves for the claim. A longer one stays
-  // clamped, names the whole claim on hover, and lets phones — no hover, no height budget — expand.
-  it('clamps long claims and lets mobile users expand them', () => {
+  // clamped and names the whole claim on hover. Clicking opens the entity panel on every size.
+  it('keeps long claims clamped without a Show more control and opens the complete claim in the panel', () => {
     const restore = stubHeadingMetrics({ contentHeight: 74, clampedHeight: 48 });
 
     try {
       const claim = 'A claim long enough to wrap beyond the two lines reserved by the debate header';
       mocks.debates = [completedDebate('debate-1', claim, '2026-07-02T00:01:10.000Z')];
-      render(<DebatesBrowseFeed spaceId="space-1" />);
+      const store = createStore();
+      render(
+        <Provider store={store}>
+          <DebatesBrowseFeed spaceId="space-1" />
+        </Provider>
+      );
 
       const heading = screen.getByRole('heading', { name: claim });
       expect(heading).toHaveClass('line-clamp-2');
       expect(heading).toHaveAttribute('title', claim);
 
-      const toggle = screen.getByRole('button', { name: 'Show more' });
-      expect(toggle).toHaveClass('hidden', 'md:inline-flex');
-      // What the phone column keys its taller budget on.
-      expect(toggle).toHaveAttribute('data-claim-expander');
-      expect(toggle).toHaveAttribute('aria-expanded', 'false');
-      fireEvent.click(toggle);
+      expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+      fireEvent.click(within(heading).getByRole('link', { name: claim }));
 
-      expect(heading).toHaveClass('md:line-clamp-none');
-      expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+      expect(store.get(entitySidePanelAtom)?.entityId).toBe('claim-entity-debate-1');
+      expect(heading).not.toHaveClass('md:line-clamp-none');
+      expect(screen.queryByRole('button', { name: 'Show less' })).not.toBeInTheDocument();
     } finally {
       restore();
     }

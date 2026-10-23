@@ -16,9 +16,12 @@ import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/d
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
 import { useComments } from '~/core/hooks/use-comments';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
+import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
+import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -65,17 +68,14 @@ const PRELOAD_AHEAD = 2;
  * `width ≤ (dvh − 44 − 24 − 169 − 2) / 1.2042 + 2`, i.e. `83dvh − 197px`. `dvh` is what keeps the
  * card inside the part of the screen a phone browser's toolbars leave. It does not reserve the
  * signed-out note: the item scrolls, so the note is reachable. Phone actions stay on one compact
- * row, so their budget does not subtract the desktop wrapped row. A claim's phone-only "Show more"
- * adds that 26px row, so a card holding one takes `--debate-feed-phone-column-width-more`
- * (`83dvh − 219px`) instead, through `:has()`; narrowing only ever makes the claim run longer, so
- * the two can't flip back and forth. Never wider than the screen less 16px a side, nor narrower than
+ * row, so their budget does not subtract the desktop wrapped row. Claims open in the entity panel
+ * instead of expanding the card. Never wider than the screen less 16px a side, nor narrower than
  * 240px, under which a face is too small to read.
  */
 const debateColumnStyle = (wrapsBelow: number) =>
   ({
     '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', wrapsBelow)}), 640px)`,
     '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 197px), calc(100cqw - 2rem))',
-    '--debate-feed-phone-column-width-more': 'clamp(240px, calc(83dvh - 219px), calc(100cqw - 2rem))',
   }) as React.CSSProperties;
 
 const DEBATE_COLUMN_STYLE = debateColumnStyle(DEBATE_CARD_WRAPS_BELOW);
@@ -660,7 +660,7 @@ function DebateFeedItem({
           animation props keep the card and the indicator in step. */}
       <div
         className={cx(
-          'relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[var(--debate-feed-phone-column-width)] md:has-[[data-claim-expander]]:w-[var(--debate-feed-phone-column-width-more)]',
+          'relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[var(--debate-feed-phone-column-width)]',
           scrollHint?.isVisible && scrollHintBounceProps.className
         )}
         style={{
@@ -778,8 +778,8 @@ function DebateMeta({
 /**
  * The claim being debated, as the card's title, set in the explore card's type since the two now
  * share the rest of their anatomy. Two lines, which is what the column's height budget reserves;
- * the whole claim is on hover when it runs longer. Phones have no height budget (the item is
- * `md:h-auto`) and no hover, so there it offers to expand instead.
+ * the whole claim is on hover when it runs longer. Opening the title shows the claim in the
+ * entity panel, which becomes a bottom sheet on phones, just like Explore.
  */
 function DebateClaimTitle({
   claim,
@@ -791,47 +791,34 @@ function DebateClaimTitle({
   spaceId: string;
 }) {
   const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
-  const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
+  const { openSidePanel } = useEntitySidePanel();
 
   const isClaimOverflowing = useLineClampOverflow(claimElement, {
     maxLines: CLAIM_CLAMP_LINES,
-    enabled: !isClaimExpanded,
     contentKey: claim,
   });
 
   return (
-    <>
-      <h2
-        ref={setClaimElement}
-        title={isClaimOverflowing ? claim : undefined}
-        className={cx(
-          EXPLORE_CARD_TITLE_CLASS_NAME,
-          'text-pretty',
-          isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
-        )}
+    <h2
+      ref={setClaimElement}
+      title={isClaimOverflowing ? claim : undefined}
+      className={cx(EXPLORE_CARD_TITLE_CLASS_NAME, 'line-clamp-2 text-pretty')}
+    >
+      <Link
+        href={NavUtils.toEntity(spaceId, claimEntityId)}
+        entityId={claimEntityId}
+        spaceId={spaceId}
+        className="hover:underline"
+        data-entity-side-panel-opener=""
+        {...observePanelNavigation(event => {
+          if (event.defaultPrevented || isModifiedClick(event)) return;
+          event.preventDefault();
+          openSidePanel(claimEntityId, spaceId, false);
+        })}
       >
-        <Link
-          href={NavUtils.toEntity(spaceId, claimEntityId)}
-          entityId={claimEntityId}
-          spaceId={spaceId}
-          className="hover:underline"
-        >
-          {claim}
-        </Link>
-      </h2>
-      {isClaimOverflowing && (
-        <button
-          type="button"
-          aria-expanded={isClaimExpanded}
-          // The phone column reserves this row's height when it is here; see `debateColumnStyle`.
-          data-claim-expander=""
-          onClick={() => setIsClaimExpanded(expanded => !expanded)}
-          className="hidden self-start text-metadata text-grey-04 underline-offset-2 hover:underline md:inline-flex"
-        >
-          {isClaimExpanded ? 'Show less' : 'Show more'}
-        </button>
-      )}
-    </>
+        {claim}
+      </Link>
+    </h2>
   );
 }
 
