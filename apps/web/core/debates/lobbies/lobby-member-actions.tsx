@@ -9,19 +9,23 @@ import { Text } from '~/design-system/text';
 import type { DebateLobbyMember, DebateLobbyMemberAction, DebateLobbyView } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
-import { MEMBER_ACTION_LABEL, memberActions, moderationErrorMessage, personName } from './lobby-format';
+import {
+  MEMBER_ACTION_LABEL,
+  type MemberActionTarget,
+  memberActions,
+  moderationErrorMessage,
+  personName,
+} from './lobby-format';
 import { useIsCallRoom } from './lobby-purpose';
 import { useModerateLobbyMember } from './moderation-hooks';
 
 /** Step down rather than "Remove as host" on yourself. */
 const STEP_DOWN_LABEL = 'Step down as host';
+/** A call's editor who stepped down, on themselves (GEO-3419). */
+const HOST_AGAIN_LABEL = 'Take hosting back';
 
 /** Whether a host could act on `member` at all; the menu trigger hides otherwise. */
-export function hasMemberActions(
-  lobby: Pick<DebateLobbyView, 'viewer'>,
-  member: Pick<DebateLobbyMember, 'role' | 'creator' | 'space_editor'>,
-  isSelf: boolean
-) {
+export function hasMemberActions(lobby: Pick<DebateLobbyView, 'viewer'>, member: MemberActionTarget, isSelf: boolean) {
   return memberActions(lobby.viewer, member, isSelf).length > 0;
 }
 
@@ -108,11 +112,13 @@ export function LobbyMemberActions({
           >
             {isSelf && action === 'remove-host'
               ? STEP_DOWN_LABEL
-              : call && action === 'remove'
-                ? 'Remove from call'
-                : call && action === 'ban'
-                  ? 'Ban from call'
-                  : MEMBER_ACTION_LABEL[action]}
+              : isSelf && action === 'promote'
+                ? HOST_AGAIN_LABEL
+                : call && action === 'remove'
+                  ? 'Remove from call'
+                  : call && action === 'ban'
+                    ? 'Ban from call'
+                    : MEMBER_ACTION_LABEL[action]}
           </button>
         ))
       )}

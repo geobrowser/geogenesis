@@ -7,7 +7,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateLobbyMember } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
-import { inDebateRequestLabel, movedToListenersLabel, personName } from './lobby-format';
+import { type MemberActionTarget, inDebateRequestLabel, movedToListenersLabel, personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { LobbyMemberActions, hasMemberActions } from './lobby-member-actions';
 import { LobbyPersonName } from './lobby-people';
@@ -23,7 +23,7 @@ import type { LobbyPageView } from './lobby-view';
  */
 export function personMenuAnalyticsAttributes(
   lobby: Pick<LobbyPageView, 'viewer'>,
-  member: Pick<DebateLobbyMember, 'role' | 'creator' | 'space_editor'>,
+  member: MemberActionTarget,
   isSelf: boolean,
   outsideLobby = false
 ) {

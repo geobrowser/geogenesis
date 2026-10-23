@@ -420,14 +420,21 @@ export const MEMBER_ACTION_LABEL: Record<DebateLobbyMemberAction, string> = {
 };
 
 /** Host actions the viewer may take on `member`, in menu order; geo-chat enforces the same rules. */
+/** Who a host action is on; the call fields are absent in a lobby and from older geo-chat. */
+export type MemberActionTarget = Pick<DebateLobbyMember, 'role' | 'creator'> &
+  Partial<Pick<DebateLobbyMember, 'space_editor' | 'hosting_from_space' | 'stepped_out'>>;
+
 export function memberActions(
   viewer: Pick<DebateLobbyView['viewer'], 'hosting' | 'role' | 'creator'>,
-  member: Pick<DebateLobbyMember, 'role' | 'creator' | 'space_editor'>,
+  member: MemberActionTarget,
   isSelf: boolean
 ): DebateLobbyMemberAction[] {
+  // A call's editor hosts because of the space (GEO-3419): they may step down for this call and
+  // take it back; nobody else can change it. Stepped down, they are moderated like anyone.
+  const fromSpace = member.hosting_from_space ?? member.space_editor ?? false;
+  if (fromSpace) return isSelf ? ['remove-host'] : [];
+  if (isSelf && member.space_editor && !member.stepped_out) return ['promote'];
   if (!viewer.hosting) return [];
-  // A space editor hosts a call because of the space: not theirs or anyone's to change here.
-  if (member.space_editor) return [];
   // The acting host is a speaker: hosting never changes their role, so who hosts is not theirs to change.
   const hostByRole = viewer.role === 'host';
   if (isSelf) return hostByRole ? ['remove-host'] : [];

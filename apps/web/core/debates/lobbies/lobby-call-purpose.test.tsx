@@ -207,10 +207,33 @@ describe('state cards in a space call', () => {
 
 describe('space editors', () => {
   const host = { hosting: true, role: 'host' as const, creator: true };
+  const editor = {
+    role: 'host' as const,
+    creator: false,
+    space_editor: true,
+    hosting_from_space: true,
+    stepped_out: false,
+  };
+  const steppedDown = { ...editor, role: 'speaker' as const, hosting_from_space: false };
 
-  it('cannot be acted on, nor step down, since they host because of the space', () => {
+  it('cannot be acted on by others while they host from the space', () => {
+    expect(memberActions(host, editor, false)).toEqual([]);
+  });
+
+  it('may step down themselves, and take hosting back', () => {
+    expect(memberActions({ hosting: true, role: 'host', creator: false }, editor, true)).toEqual(['remove-host']);
+    expect(memberActions({ hosting: false, role: 'speaker', creator: false }, steppedDown, true)).toEqual(['promote']);
+    expect(
+      memberActions({ hosting: false, role: 'speaker', creator: false }, { ...steppedDown, stepped_out: true }, true)
+    ).toEqual([]);
+  });
+
+  it('are moderated like anyone once stepped down', () => {
+    expect(memberActions(host, steppedDown, false)).toEqual(['promote', 'mute', 'move-to-listeners', 'remove', 'ban']);
+  });
+
+  it('read as hosting from the space on a geo-chat without the opt-out', () => {
     expect(memberActions(host, { role: 'host', creator: false, space_editor: true }, false)).toEqual([]);
-    expect(memberActions(host, { role: 'host', creator: false, space_editor: true }, true)).toEqual([]);
   });
 
   it('leaves other hosts as they were', () => {
@@ -244,5 +267,27 @@ describe('error copy in a space call', () => {
     expect(lobbyErrorMessage(banned, 'x', 'call')).toBe('You can’t join this call.');
     const absent = new GeoChatRequestError('absent', 'lobby_not_present', 409);
     expect(moderationErrorMessage(absent, undefined, 'call')).toBe('Join the call to moderate.');
+  });
+});
+
+describe('an editor’s own menu in a space call', () => {
+  it('says Take hosting back once they stepped down', () => {
+    const me = member('Ben', { role: 'speaker', space_editor: true, hosting_from_space: false });
+    const room = view([member('Adam', { role: 'host' }), me], {
+      viewer: {
+        kind: 'member',
+        role: 'speaker',
+        creator: false,
+        hosting: false,
+        reminded: false,
+        voice_away_at: null,
+        connected: true,
+        stepped_out: false,
+      },
+    });
+    render(
+      inCall(<LobbyPersonCard lobby={room} member={me} isSelf viewerId="Ben" disagreements={null} onDone={vi.fn()} />)
+    );
+    expect(screen.getByRole('button', { name: 'Take hosting back' })).toBeInTheDocument();
   });
 });
