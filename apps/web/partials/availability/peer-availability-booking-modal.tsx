@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { GeoChatRequestError } from '~/core/debates/api';
+import { GeoChatRequestError, type ScheduledDebateRequest } from '~/core/debates/api';
 import { useCreateScheduledDebate, useRescheduleScheduledDebate } from '~/core/debates/rooms/scheduling-hooks';
 import { useSetToast } from '~/core/hooks/use-toast';
 
@@ -16,9 +16,20 @@ type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'>
   /**
    * Picking a slot moves this request instead of proposing a new one. Set by a scheduling email's
    * "Choose different time" (see `core/availability/availability-deep-link`), and by the Requests
-   * tab's Reschedule on an accepted debate, which geo-chat sends back to pending for the new time.
+   * tab's Reschedule on an accepted debate, which geo-chat sends back to pending for the new time,
+   * and its "Choose different time" on an invite the viewer has yet to answer.
    */
   rescheduleRequestId?: string | null;
+  /**
+   * What someone wrote under Can't make it (GEO-3427). Kept on the room, where the other debater sees
+   * it; the email about the new time carries the approved copy only.
+   */
+  rescheduleNote?: string;
+  /**
+   * A new request the server accepted, before the requests list has been read again. The calendar
+   * (GEO-3152) draws it on its week straight away with this.
+   */
+  onRequested?: (request: ScheduledDebateRequest) => void;
 };
 
 /**
@@ -29,7 +40,9 @@ export function PeerAvailabilityBookingModal({
   userId,
   onClose,
   rescheduleRequestId = null,
+  rescheduleNote,
   entry = null,
+  onRequested,
   ...props
 }: Props) {
   const propose = useCreateScheduledDebate();
@@ -47,7 +60,8 @@ export function PeerAvailabilityBookingModal({
   // A sent request is the end of the job, so the week closes on it and the confirmation moves to a
   // toast. Per-call rather than on the hook: closing mid-flight resets the mutation, which detaches
   // these callbacks, so a late success cannot close a week opened since.
-  const onSent = (request: { scheduled_start_at: string }, viewerTimezone: string) => {
+  const onSent = (request: ScheduledDebateRequest, viewerTimezone: string) => {
+    if (mode === 'request') onRequested?.(request);
     setToast(
       <span>
         {requestSentMessage({
@@ -69,6 +83,7 @@ export function PeerAvailabilityBookingModal({
       onClose={close}
       booking={{
         mode,
+        requestId: rescheduleRequestId,
         onRequest: (startsAt, pick) => {
           const slot = {
             startsAt: new Date(startsAt),
@@ -76,10 +91,11 @@ export function PeerAvailabilityBookingModal({
             analytics: { entry, viewerIsFree: pick.viewerIsFree },
           };
           const callbacks = {
-            onSuccess: (request: { scheduled_start_at: string }) => onSent(request, pick.viewerTimezone),
+            onSuccess: (request: ScheduledDebateRequest) => onSent(request, pick.viewerTimezone),
           };
-          if (rescheduleRequestId) reschedule.mutate({ requestId: rescheduleRequestId, ...slot }, callbacks);
-          else propose.mutate({ opponentUserId: userId, ...slot }, callbacks);
+          if (rescheduleRequestId) {
+            reschedule.mutate({ requestId: rescheduleRequestId, note: rescheduleNote, ...slot }, callbacks);
+          } else propose.mutate({ opponentUserId: userId, ...slot }, callbacks);
         },
         pending: mutation.isPending,
         error: mutation.error
@@ -96,7 +112,7 @@ export function PeerAvailabilityBookingModal({
 export function rescheduleFailureMessage(error: unknown): string {
   if (error instanceof GeoChatRequestError) {
     if (error.code === 'debate_already_started') {
-      return 'Someone has already joined this debate, so its time can no longer be changed.';
+      return 'This debate has already started, so its time can no longer be changed.';
     }
     if (error.code === 'schedule_conflict') return 'You already have a debate at that time. Pick another.';
     if (error.code === 'reschedule_refused') {

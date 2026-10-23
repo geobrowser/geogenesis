@@ -9,7 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
-import { debatesHubExploreSpaceIdsAtom } from '~/atoms';
+import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from './hub-scroll';
+import {
+  debatesHubExploreSearchAtom,
+  debatesHubExploreSpaceIdsAtom,
+  debatesHubHideMyPositionsAtom,
+  lobbyExploreSearchAtom,
+} from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -93,6 +99,8 @@ const mocks = vi.hoisted(() => ({
   hasNextPage: false,
   fetchNextPage: vi.fn(),
   observed: [] as Element[],
+  /** The root each observed element was measured against, `null` for the viewport. */
+  roots: new Map<Element, Element | null>(),
   triggers: [] as (() => void)[],
   /** Scrolls everything observed into view. Null-safe so a test with nothing observed still reads. */
   trigger: () => mocks.triggers.forEach(fire => fire()),
@@ -652,6 +660,7 @@ beforeEach(() => {
   mocks.spacesLoading = false;
   mocks.fetchNextPage.mockReset();
   mocks.observed = [];
+  mocks.roots = new Map();
   // Cleared with them: a trigger left over from the previous test still closes over that test's
   // observer, so a case where nothing is observed could "scroll" a sentinel that isn't there.
   mocks.triggers = [];
@@ -664,9 +673,13 @@ beforeEach(() => {
   vi.stubGlobal(
     'IntersectionObserver',
     class {
-      constructor(private readonly callback: IntersectionObserverCallback) {}
+      constructor(
+        private readonly callback: IntersectionObserverCallback,
+        private readonly options?: IntersectionObserverInit
+      ) {}
       observe(element: Element) {
         mocks.observed.push(element);
+        mocks.roots.set(element, (this.options?.root as Element | null | undefined) ?? null);
         mocks.triggers.push(() =>
           this.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], this as never)
         );
@@ -728,6 +741,26 @@ describe('ClaimsTab', () => {
     act(() => mocks.trigger());
 
     expect(mocks.fetchNextPage).toHaveBeenCalled();
+  });
+
+  // The lobby's claims column scrolls only on a desktop, and stays mounted across the breakpoint.
+  // The sentinel pages against whatever box the provider names, and is rebuilt when that changes.
+  it('pages against the scroll box the provider names, and the viewport when it names none', async () => {
+    mocks.hasNextPage = true;
+    const inPanel = (selector: string | undefined) => (
+      <div data-debates-hub-scroll>
+        <HubScrollSelectorProvider value={selector}>
+          <ClaimsTab variant="positions" />
+        </HubScrollSelectorProvider>
+      </div>
+    );
+    const view = renderMine(inPanel(HUB_SCROLL_SELECTOR));
+    await showIndexedClaims();
+    const sentinelRoot = () => mocks.roots.get(screen.getByTestId('claims-scroll-sentinel'));
+    expect(sentinelRoot()).toBe(view.container.querySelector(HUB_SCROLL_SELECTOR));
+
+    view.rerender(inPanel(undefined));
+    await waitFor(() => expect(sentinelRoot()).toBeNull());
   });
 
   it('places no sentinel once the last page has arrived', async () => {
@@ -1145,6 +1178,19 @@ describe('All claims reads the Debate tag', () => {
     expect(screen.getByRole('button', { name: /Agree/ })).toBeDisabled();
   });
 
+  it('hands each claim to the host’s renderer with what its own card would get', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    mocks.authenticated = false;
+    mocks.accountKey = null;
+    const renderClaim = vi.fn((entry: { claim: { claim: string } }) => <p>Hosted: {entry.claim.claim}</p>);
+    render(<ClaimsTab renderClaim={renderClaim} />);
+    await showAllClaims();
+
+    expect(await screen.findByText('Hosted: A tagged claim')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Agree/ })).toBeNull();
+    expect(renderClaim).toHaveBeenLastCalledWith(expect.anything(), { answersReady: true, allowsSignedOutVotes: true });
+  });
+
   it('lets a signed-out viewer press, because having no side is a real answer', async () => {
     // The other half: signed out is settled, and the press is what opens the sign-in prompt. Read
     // as "not ready" the whole list would be inert for everyone not signed in.
@@ -1198,6 +1244,37 @@ describe('All claims reads the Debate tag', () => {
     expect(screen.queryByRole('button', { name: 'All claims' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Featured' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'My positions' })).toBeNull();
+  });
+
+  it('gives the workspace one claim per row, at any width', async () => {
+    mocks.taggedClaims['55c95b2626f8482cb9739ea99dfde438'] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Rail beats road for freight'),
+    ];
+    const { container } = render(<ClaimsTab layout="workspace" />);
+    await showAllClaims();
+
+    const first = screen.getByText('Nuclear power is the cheapest clean energy');
+    const second = screen.getByText('Rail beats road for freight');
+    let list: HTMLElement | null = first.parentElement;
+    while (list && !list.contains(second)) list = list.parentElement;
+
+    expect(list).not.toBeNull();
+    expect(list?.className).toContain('flex-col');
+    expect(list?.className).not.toContain('grid');
+
+    expect(container.innerHTML).not.toContain('/claims:grid-cols');
+  });
+
+  it('hides the workspace’s menus at the rail’s width without hiding the picker', async () => {
+    render(<ClaimsTab layout="workspace" scopePicker={<button type="button">Lobby</button>} />);
+    await showAllClaims();
+
+    const hidden = (node: HTMLElement | null) => node?.closest('[class*="@[72rem]/hub:hidden"]') ?? null;
+
+    expect(hidden(screen.getByRole('button', { name: /Any space/ }))).not.toBeNull();
+    expect(hidden(screen.getByRole('button', { name: 'Lobby' }))).toBeNull();
+    expect(hidden(screen.getByLabelText('Search claims'))).toBeNull();
   });
 
   it('asks the graph for the Debate tag rather than the index', async () => {
@@ -1824,6 +1901,20 @@ describe('All claims reads the Debate tag', () => {
 
     await screen.findByText('Nobody is ready to debate you on a claim right now.');
     expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  // With nobody ready to debate, the corpus is the one list with something on it, so an empty
+  // Lobby points there rather than leaving the viewer to find the tab.
+  it('offers Explore from an empty Lobby', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [];
+    mocks.claims = [];
+    const onTabChange = vi.fn();
+    render(<ClaimsTab variant="lobby" onTabChange={onTabChange} />);
+
+    await screen.findByText('Nobody is ready to debate you on a claim right now.');
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+
+    expect(onTabChange).toHaveBeenCalledWith('explore');
   });
 });
 
@@ -2593,6 +2684,60 @@ describe('claims the viewer has already answered', () => {
 
       expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Show my positions' })).toBeInTheDocument();
+    });
+  });
+
+  // The lobby's Explore offers requests only on claims the viewer has a side on.
+  describe('on the lobby’s Explore list', () => {
+    const answerInPlace = (view: ReturnType<typeof render>, ui: ReactElement) => {
+      mocks.debateClaimRows = [answeredRow(FEATURED_A), answeredRow(FEATURED_B)];
+      view.rerender(ui);
+    };
+    const pastTheHold = () => act(() => new Promise(resolve => setTimeout(resolve, 1500)));
+
+    beforeEach(() => {
+      mocks.graphAnsweredIds = new Set([FEATURED_A]);
+    });
+
+    it('hides them on the hub’s Explore, including one answered in place', async () => {
+      const view = render(<ClaimsTab />);
+      await showAllClaims();
+      expect(await screen.findByText('One you have not')).toBeInTheDocument();
+      expect(screen.queryByText('One you have answered')).toBeNull();
+
+      answerInPlace(view, <ClaimsTab />);
+      await waitFor(() => expect(screen.queryByText('One you have not')).toBeNull(), { timeout: 3000 });
+    });
+
+    it('lists them, keeps one answered in place, and leaves the switch alone', async () => {
+      const view = render(<ClaimsTab variant="lobbyExplore" />);
+      await showAllClaims();
+      expect(await screen.findByText('One you have answered')).toBeInTheDocument();
+      expect(screen.getByText('One you have not')).toBeInTheDocument();
+      expect(mocks.taggedFiltersAskedFor.at(-1).excludeAnsweredBy).toBeNull();
+      expect(mocks.spaceFacetFiltersAskedFor.at(-1).excludeAnsweredBy).toBeNull();
+      expect(screen.queryByRole('switch', { name: 'Hide my positions' })).toBeNull();
+      expect(view.store.get(debatesHubHideMyPositionsAtom)).toBe(true);
+
+      answerInPlace(view, <ClaimsTab variant="lobbyExplore" />);
+      await pastTheHold();
+      expect(screen.getByText('One you have not')).toBeInTheDocument();
+      expect(screen.getByText('One you have answered')).toBeInTheDocument();
+    });
+
+    it('keeps its own filters and reports as the lobby', async () => {
+      const view = render(<ClaimsTab variant="lobbyExplore" />);
+      await showAllClaims();
+      await screen.findByText('One you have not');
+
+      fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'friends' } });
+      expect(view.store.get(lobbyExploreSearchAtom)).toBe('friends');
+      expect(view.store.get(debatesHubExploreSearchAtom)).toBe('');
+      expect(
+        document.querySelector('[data-geo-analytics-intent="filter_debate_lobby"]'),
+        'a filter control reports the lobby surface'
+      ).not.toBeNull();
+      expect(document.querySelector('[data-geo-analytics-intent="filter_debates_hub"]')).toBeNull();
     });
   });
 

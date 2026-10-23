@@ -30,6 +30,7 @@ import { uuidToHex } from '~/core/id/normalize';
 import { useEntityResponseScores } from '~/core/responses/use-entity-response-scores';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
+import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Dropdown } from '~/design-system/dropdown';
@@ -306,7 +307,8 @@ export function CommentSection({
   const requireSignInToComment = React.useCallback(
     (replyToCommentId?: string) => {
       setPendingComposer({ entityId, replyToCommentId: replyToCommentId ?? null });
-      promptSignIn();
+      // A dismissed sign-in drops the intent, so a later, unrelated sign-in doesn't pop this open.
+      promptSignIn(undefined, { onCancel: () => setPendingComposer(null) });
     },
     [entityId, promptSignIn, setPendingComposer]
   );
@@ -1242,6 +1244,7 @@ function CommentItem({
         style={{ width: density.avatarPx, height: density.avatarPx }}
       >
         <ThreadAvatar
+          panelNavigation="observe"
           href={NavUtils.toSpace(comment.author.spaceId)}
           // The same name printed beside it: a linked face with an empty `alt` has no accessible name.
           label={comment.author.name ?? 'Anonymous'}
@@ -1257,7 +1260,7 @@ function CommentItem({
       <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
         <a
           href={NavUtils.toSpace(comment.author.spaceId)}
-          onClick={recordAuthorOpen}
+          {...observePanelNavigation(recordAuthorOpen)}
           className="min-w-0 truncate hover:underline"
         >
           <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
@@ -1440,7 +1443,7 @@ function CommentItem({
           >
             <a
               href={NavUtils.toSpace(comment.author.spaceId)}
-              onClick={recordAuthorOpen}
+              {...observePanelNavigation(recordAuthorOpen)}
               className="min-w-0 truncate hover:underline"
             >
               <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>

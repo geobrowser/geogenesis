@@ -22,6 +22,8 @@ import { runObservedAction } from '~/core/analytics-operations';
  * same person; a reschedule sends them "proposed a different time" and keeps one request.
  */
 import { DEEP_LINK_MODALS, toModal } from '~/core/deep-links/modal-deep-link';
+import { copyShareLink } from '~/core/sharing/share-handoff';
+import { createShareLink } from '~/core/sharing/share-link';
 import { NavUtils } from '~/core/utils/utils';
 
 export const AVAILABILITY_MODAL = DEEP_LINK_MODALS.availability;
@@ -38,15 +40,16 @@ export function toAvailability(
   });
 }
 
-// geo-chat request ids are UUIDs, written dashed.
-const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// geo-chat request ids are UUIDs, dashed in the links it writes and dashless in its JSON.
+const REQUEST_ID = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
 
 /**
- * The request a link asks to reschedule, or null for an ordinary booking link. Anything that is
- * not a request id is ignored rather than refused: the link still opens the week, and booking from
- * it proposes a new request, which is the best that a garbled link can mean.
+ * The scheduled request a link's `modalTarget` names, or null when it names none. Here that is the
+ * request to reschedule: anything else is ignored rather than refused, so the link still opens the
+ * week, and booking from it proposes a new request, the best a garbled link can mean. The Running
+ * late and Can't make it links (GEO-3427) read their request with this too.
  */
-export function rescheduleRequestIdFromTarget(target: string | null): string | null {
+export function requestIdFromTarget(target: string | null): string | null {
   return target && REQUEST_ID.test(target) ? target : null;
 }
 
@@ -87,5 +90,6 @@ export function availabilityLinkUrl(profileSpaceId: string, origin = window.loca
 
 /** What both copy controls do; each confirms in its own way. Rejects if the clipboard refuses. */
 export function copyAvailabilityLink(profileSpaceId: string, context: ActionContext): Promise<void> {
-  return runObservedAction('share', context, () => navigator.clipboard.writeText(availabilityLinkUrl(profileSpaceId)));
+  const link = createShareLink(availabilityLinkUrl(profileSpaceId), 'availability', profileSpaceId, 'copy_link');
+  return runObservedAction('share', context, () => copyShareLink(link, context));
 }

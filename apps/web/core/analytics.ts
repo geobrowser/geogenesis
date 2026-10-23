@@ -6,7 +6,9 @@ import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 import { notifyActionPageView, pageContext } from './action-context';
 import { analyticsRuntime, isAnalyticsEnabled } from './analytics-context';
 import type { AnalyticsEventName } from './analytics-events';
+import { privyUserEmail } from './auth/privy-email';
 import { withSignupVisitor } from './auth/signup-visitor';
+import { pushMarketingEvent } from './marketing-events';
 
 export type { AnalyticsEventName } from './analytics-events';
 
@@ -31,6 +33,7 @@ type AnalyticsIdentity = string | number | AnalyticsProperties;
 
 type GeoAnalyticsRuntime = {
   getContext?: () => AnalyticsProperties;
+  getIdentity?: () => AnalyticsProperties | null;
   measurementContextRevision?: () => number;
   reconcileAnonymousIdentity?: () => void;
   bindIdentity?: (accessToken: string) => Promise<boolean>;
@@ -133,13 +136,52 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-31a5b5b9901f.js';
+const analyticsScriptSrc = '/geo-analytics-425f0a605b82.js';
+
+/**
+ * Amplitude autocapture, as `true` would enable it, minus "[Amplitude] Viewport Content Updated".
+ *
+ * That tracker (`elementInteractions.viewportContentUpdated`, on by default) keeps every element it
+ * has seen enter the viewport in a map it only clears when Amplitude decides the page ended: a full
+ * navigation or unload. In this app most movement never ends a page (the side panel, its tabs,
+ * feeds), so each card that scrolls into view stays in that map forever with its whole subtree:
+ * ~2,400 DOM nodes per profile tab switch, until the tab runs out of memory.
+ *
+ * Every other feature is listed explicitly because an object turns off anything it leaves out
+ * that `true` would have turned on (network tracking, web vitals, frustration interactions).
+ */
+const amplitudeAutocapture = {
+  attribution: true,
+  fileDownloads: true,
+  formInteractions: true,
+  pageViews: true,
+  sessions: true,
+  pageUrlEnrichment: true,
+  webVitals: true,
+  frustrationInteractions: true,
+  networkTracking: true,
+  // `{ enabled: false }`, not `false`: the SDK only converts a bare `false` when it arrives through
+  // remote config. Locally it spreads it into `{ exposureDuration: 150 }`, which leaves it on.
+  elementInteractions: { viewportContentUpdated: { enabled: false } },
+};
 const collectorUrl = 'https://c.geobrowser.io';
 
 let internalAccount = false;
 let scriptRequested = false;
 let lastPageView: { key: string; timestamp: number } | null = null;
 const pendingCalls: PendingCall[] = [];
+// Calls wait here until the runtime script loads, which a blocker can prevent for the life of the
+// tab. Hard-bounded; identity calls displace events first, since later events rely on them.
+const MAX_PENDING_CALLS = 1000;
+const IDENTITY_METHODS = new Set<PendingCall['method']>([
+  'identifyUser',
+  'signedUp',
+  'loggedIn',
+  'sessionRestored',
+  'loggedOut',
+  'identityReset',
+  'reconcileAnonymousIdentity',
+]);
 
 // NEXT_PUBLIC_ prefix is required: this loader runs client-side, and Next only exposes
 // NEXT_PUBLIC_* env vars to the browser bundle. Set NEXT_PUBLIC_DISABLE_POSTHOG='1' to keep
@@ -164,6 +206,7 @@ export function initAnalytics() {
     environment: analyticsEnvironment(hostname),
     autoPageViews: false,
     autoRouteTracking: false,
+    amplitudeAutocapture,
   };
   window.GeoAnalyticsConfig = window.lyticsConfig;
 
@@ -178,6 +221,63 @@ export function initAnalytics() {
 
   scriptRequested = true;
 
+  // Off the critical path (the runtime is ~150KB that would otherwise compete with the app's own
+  // chunks and the first debate video). Everything fired meanwhile waits in `pendingCalls`, which
+  // `flushPendingCalls` drains in order once the runtime is up.
+  deferUntilIdle(loadAnalyticsScript);
+}
+
+/** The longest the runtime waits for an idle moment before loading anyway. */
+export const ANALYTICS_IDLE_TIMEOUT_MS = 4000;
+
+/**
+ * Runs `task` once, at the first of: the browser going idle after the window `load` event, the
+ * viewer's first interaction (so an early click or a short visit is captured by the real runtime
+ * rather than a queue), or the idle timeout. `requestIdleCallback` is missing in Safari, where a
+ * timer stands in.
+ */
+function deferUntilIdle(task: () => void) {
+  let done = false;
+  const cleanups: (() => void)[] = [];
+
+  const run = () => {
+    if (done) return;
+    done = true;
+    for (const cleanup of cleanups) cleanup();
+    task();
+  };
+
+  const schedule = () => {
+    if (done) return;
+    if (typeof window.requestIdleCallback === 'function') {
+      const handle = window.requestIdleCallback(run, { timeout: ANALYTICS_IDLE_TIMEOUT_MS });
+      cleanups.push(() => window.cancelIdleCallback?.(handle));
+    } else {
+      const handle = window.setTimeout(run, 1);
+      cleanups.push(() => window.clearTimeout(handle));
+    }
+  };
+
+  const backstop = window.setTimeout(run, ANALYTICS_IDLE_TIMEOUT_MS + 1000);
+  cleanups.push(() => window.clearTimeout(backstop));
+
+  for (const type of ['pointerdown', 'keydown', 'touchstart'] as const) {
+    window.addEventListener(type, run, { once: true, passive: true });
+    cleanups.push(() => window.removeEventListener(type, run));
+  }
+  // Leaving before idle is the one case a timer cannot cover; the script cannot send from a
+  // closing page, but starting it here at least lets a bfcache restore find it loaded.
+  window.addEventListener('pagehide', run, { once: true });
+  cleanups.push(() => window.removeEventListener('pagehide', run));
+
+  if (document.readyState === 'complete') schedule();
+  else {
+    window.addEventListener('load', schedule, { once: true });
+    cleanups.push(() => window.removeEventListener('load', schedule));
+  }
+}
+
+function loadAnalyticsScript() {
   const existingScript = document.querySelector<HTMLScriptElement>(`script[src="${analyticsScriptSrc}"]`);
 
   if (existingScript) {
@@ -187,7 +287,7 @@ export function initAnalytics() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-MaW1uZAf0w48xaESpow8z2xJUZSXo4LWF5+GIPRv9lE=';
+  script.integrity = 'sha256-Ql8KYFuCq0fUS8sLj3TFsVz5WcqRf/diGo5KjMURZ0w=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;
@@ -541,6 +641,7 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
     sessionRestored(identity, authProperties);
   } else if (params.isNewUser) {
     signedUp(identity, authProperties);
+    pushMarketingEvent('geo_account_created', { user_id: identity.user_id as string });
   } else {
     loggedIn(identity, authProperties);
   }
@@ -555,6 +656,13 @@ function callOrQueue(call: PendingCall) {
 
   if (invokeRuntime(call)) {
     return;
+  }
+
+  if (pendingCalls.length >= MAX_PENDING_CALLS) {
+    if (!IDENTITY_METHODS.has(call.method)) return;
+    // Room for an identity call comes from the oldest event, keeping the bound hard.
+    const evict = pendingCalls.findIndex(queued => !IDENTITY_METHODS.has(queued.method));
+    pendingCalls.splice(evict === -1 ? 0 : evict, 1);
   }
 
   pendingCalls.push(call);
@@ -749,7 +857,7 @@ function privyIdentityProperties(user: PrivyAnalyticsUser, properties: Analytics
     auth_provider: 'privy',
     ...trafficProperties(),
     privy_user_created_at: formatDate(user.createdAt),
-    has_privy_email: Boolean(user.email),
+    has_privy_email: Boolean(privyUserEmail(user)),
     has_privy_phone: Boolean(user.phone),
     has_privy_wallet: Boolean(user.wallet),
     has_privy_smart_wallet: Boolean(user.smartWallet),
@@ -767,63 +875,9 @@ function privyIdentityProperties(user: PrivyAnalyticsUser, properties: Analytics
 }
 
 function privySignupProperties(user: PrivyAnalyticsUser): AnalyticsProperties {
-  const email = privyEmail(user);
+  const email = privyUserEmail(user);
 
   return email ? { email } : {};
-}
-
-function privyEmail(user: PrivyAnalyticsUser) {
-  return emailFromUnknown(user.email) ?? linkedAccountEmail(user.linkedAccounts);
-}
-
-function linkedAccountEmail(accounts: unknown[] | null | undefined) {
-  if (!Array.isArray(accounts)) {
-    return undefined;
-  }
-
-  for (const account of accounts) {
-    const email = emailFromUnknown(account);
-
-    if (email) {
-      return email;
-    }
-  }
-
-  return undefined;
-}
-
-function emailFromUnknown(value: unknown) {
-  if (typeof value === 'string') {
-    return normalizeEmail(value);
-  }
-
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  for (const key of ['address', 'email', 'emailAddress']) {
-    const email = normalizeEmail(value[key]);
-
-    if (email) {
-      return email;
-    }
-  }
-
-  return undefined;
-}
-
-function normalizeEmail(value: unknown) {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  const email = value.trim().toLowerCase();
-
-  return email.includes('@') ? email : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function cleanProperties(properties: AnalyticsProperties) {

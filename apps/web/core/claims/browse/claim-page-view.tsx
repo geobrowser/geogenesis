@@ -18,7 +18,6 @@ import {
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useComments } from '~/core/hooks/use-comments';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
@@ -36,8 +35,9 @@ import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
 import { ThreadRetry } from '~/partials/comments/thread-overflow';
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { ENTITY_PAGE_CONTENT_ANCHOR, entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
 import {
   ENTITY_DESCRIPTION_MAX_LINES,
@@ -55,9 +55,11 @@ import { ClaimRecordTab } from './claim-record-tab';
 import { getClaimSources } from './claim-sources';
 import { ClaimSourcesTab } from './claim-sources-tab';
 import { ClaimTopicsTab } from './claim-topics-tab';
+import { EmailVoteNote } from './email-vote-note';
 import { useClaimActivityRows } from './use-claim-activity-rows';
 import { useClaimRecord } from './use-claim-record';
-import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
+import { type ClaimResponseState, claimTitleFrom, useClaimResponseState } from './use-claim-response-state';
+import { useEmailVoteLink } from './use-email-vote-link';
 
 type ClaimTab = 'overview' | 'debates' | 'claims' | 'topics' | 'sources' | 'custom';
 type ClaimSystemTab = Exclude<ClaimTab, 'custom'>;
@@ -144,7 +146,15 @@ export function ClaimPageView({
   // spaces geo-chat does not index, which have no row at all.
   const rowQuery = useDebateClaims(spaceId, [entityId], true);
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
-  const state = useClaimResponseState({ claimId: entityId, spaceId, row, entity: entity ?? null });
+  const state = useClaimResponseState({
+    claimId: entityId,
+    spaceId,
+    row,
+    entity: entity ?? null,
+    // Not drawn from this (the page has its own heading), but a vote kept on this device is saved
+    // under it: without it the save sheet had no reminder chip for a vote cast here (GEO-3374).
+    title: claimTitleFrom({ entity: entity ?? null, row }),
+  });
   const { responseKind, summary } = state;
   // Explore's rule for drawing the verdict column at all: counts that answered, and at least one.
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
@@ -304,7 +314,21 @@ export function ClaimPageView({
               <div
                 className={cx('col-start-1 mt-4 claim-card-narrow:mt-0', hasChipsRow ? 'row-start-3' : 'row-start-2')}
               >
-                <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
+                <ClaimPositionSection
+                  entityId={entityId}
+                  spaceId={spaceId}
+                  state={state}
+                  row={row}
+                  // History and the ⋯ menu (delete, move, copy to a space) sit in the header row on
+                  // every other entity page. A claim's hero has no such row, so in edit mode they
+                  // join the pills. No create, which has nothing to do with this claim, and no
+                  // generic votes: Agree/Disagree is a claim's only response.
+                  endSlot={
+                    isEditing ? (
+                      <EntityPageActions entityId={entityId} spaceId={spaceId} compact showCreate={false} />
+                    ) : undefined
+                  }
+                />
               </div>
 
               {/* From the title's row down, so the share lines up with the claim's first line rather
@@ -653,6 +677,7 @@ function ClaimPositionSection({
   spaceId,
   state,
   row,
+  endSlot,
 }: {
   entityId: string;
   spaceId: string;
@@ -665,21 +690,31 @@ function ClaimPositionSection({
   state: ClaimResponseState;
   /** geo-chat's row, or null — which for a claim nobody has answered is a settled answer. */
   row: DebateClaim | null;
+  /** Rendered after Disagree; see `positionRowEndSlot`. */
+  endSlot?: React.ReactNode;
 }) {
   const { claim, positions, readiness, isResponseKindResolved, isViewerResponseResolved, responseBlockedReason } =
     state;
 
-  // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the vote
-  // arrows on an entity page do — and through the same hook, which also keeps Privy's session
-  // restoration from being mistaken for a login somebody asked for.
-  const promptSignIn = usePrivySignIn();
   const control = useClaimPositionControl({
     claim,
     positions,
     readiness,
     answersReady: isResponseKindResolved && isViewerResponseResolved,
     responseBlockedReason,
-    onRequireSignIn: promptSignIn,
+    allowsSignedOutVotes: true,
+    // One claim on the page, so the save sheet asks after the first vote rather than the second.
+    savePromptSurface: 'single',
+  });
+  // A vote link from one of our emails, cast once on arrival through the same control (GEO-3374).
+  const emailVote = useEmailVoteLink({
+    claimId: entityId,
+    spaceId,
+    viewerPosition: control.viewerPosition,
+    answersReady: isResponseKindResolved && isViewerResponseResolved,
+    canRespond: control.canRespond,
+    isConnected: control.isConnected,
+    respond: control.respond,
   });
   const indexedPosition = trustedIndexedPosition(state.summary, control.isResponsePending);
   useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId, indexedPosition });
@@ -702,10 +737,21 @@ function ClaimPositionSection({
         onActivityPublish={adjustActivityTotal}
         promptForComment={control.isConnected}
         disabled={!control.canRespond}
-        pending={control.isResponsePending}
+        pending={control.isResponseSubmitting}
         titleFor={control.actionTitle}
+        noteFor={position => (
+          <EmailVoteNote
+            outcome={emailVote}
+            position={position}
+            viewerPosition={control.viewerPosition}
+            pending={control.isResponseSubmitting}
+            onUndo={() => control.respond(position)}
+          />
+        )}
+        localSide={control.localVoteSide}
         // Explore's pill row width, so the two read as one control.
         positionRowClassName="max-w-[360px]"
+        positionRowEndSlot={endSlot}
       />
       {control.responseError ? (
         <div role="alert" className="mt-2">

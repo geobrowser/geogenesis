@@ -5,7 +5,7 @@ import { keepPreviousData } from '@tanstack/react-query';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom, useStore } from 'jotai';
 
 import { capture } from '~/core/analytics';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
@@ -29,15 +29,18 @@ import { Text } from '~/design-system/text';
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 
 import { DebateClaimsPanel } from './debate-claims-panel';
+import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
 import { DebateFeedPlayer } from './debate-feed-player';
+import { type DebateFeedSurface, debateFeedHref } from './debate-feed-url';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateOverflowMenu } from './debate-overflow-menu';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
+import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from './feed-full-playback';
+import { DebateShareDialog } from './lazy-share-dialog';
 import { useLineClampOverflow } from './line-clamp-overflow';
-import { DebateShareDialog } from './share-dialog';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
-import { debateFullscreenActiveAtom } from '~/atoms';
+import { debateFeedPanelAtom, debateFullscreenActiveAtom, openDebateFeedPanelAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
 /** How many cards past the active one open their recordings. See the `preload` prop below. */
@@ -54,6 +57,7 @@ export function DebatesBrowseFeed({
   initialSeekSeconds = null,
   fallback,
   removedView,
+  surface = initialDebateId ? 'debate-page' : 'debates-tab',
 }: {
   spaceId: string;
   initialDebateId?: string;
@@ -74,9 +78,17 @@ export function DebatesBrowseFeed({
    * here, and the plain entity page is the one thing a removed debate must not fall back to.
    */
   removedView?: React.ReactNode;
+  /**
+   * Where the feed is mounted, so the URL can follow the debate on screen. See
+   * {@link DebateFeedSurface}. Defaults to the debate page when anchored, the tab when not — the
+   * tab passes it explicitly, since it anchors too when its URL names a debate.
+   */
+  surface?: DebateFeedSurface;
 }) {
   const debatesQuery = useSpaceDebates(spaceId, true);
-  const pageOutcome = useDebatePageOutcome(initialDebateId);
+  // The visit's outcome is about a debate's own page. The tab anchors too when reloaded on a
+  // `?debate=` URL, but that is still a visit to the tab.
+  const pageOutcome = useDebatePageOutcome(surface === 'debate-page' ? initialDebateId : undefined);
   const { space } = useSpace(spaceId);
 
   const listedDebates = React.useMemo(() => debatesQuery.data?.debates ?? [], [debatesQuery.data?.debates]);
@@ -120,7 +132,19 @@ export function DebatesBrowseFeed({
   // opened is what that sort would have put in front of you.
   const { rankByDebateId, isLoading: bestOrderLoading } = useDebatesBestOrder(spaceId, candidateIds.length > 0);
 
-  const debates = React.useMemo(() => {
+  // Every debate the viewer has reached, plus the ones already preloading after it, in the order they
+  // were shown. Nothing may be inserted above or among them.
+  //
+  // The feed is a mandatory snap container, and browsers keep it snapped to the *element* it was on
+  // when content changes around it. So a debate slotted in above the one on screen does not push the
+  // viewer's card down — it drags the scroll position down with it, and the viewer is carried past
+  // debates they never saw. The readiness lookups resolve one at a time and each can rank anywhere,
+  // so on a slow connection a feed opened at the top ended up a dozen cards down within seconds. A
+  // listing refetch that adds a debate does the same at any time. Below the pinned run the order is
+  // still free to settle: nothing there is on screen.
+  const [pinnedIds, setPinnedIds] = React.useState<readonly string[]>([]);
+
+  const rankedDebates = React.useMemo(() => {
     // Held back the way the media lookups hold it back — by having nothing to show yet rather than
     // by a flag, since the flag below only drives the empty and anchor states. Painting in recency
     // order first would move the next debate out from under someone already scrolling. A ranking
@@ -143,6 +167,19 @@ export function DebatesBrowseFeed({
     const [anchor] = sorted.splice(anchorIndex, 1);
     return [anchor, ...sorted];
   }, [candidates, processedIds, initialDebateId, rankByDebateId, bestOrderLoading]);
+
+  const { debates, pinnedCount } = React.useMemo(() => {
+    if (pinnedIds.length === 0) return { debates: rankedDebates, pinnedCount: 0 };
+    const byId = new Map(rankedDebates.map(debate => [debate.id, debate]));
+    // A pinned debate that has left the listing goes: there is nothing left to play. It stops
+    // counting as pinned too, or the run would stall short of the viewer — see the pin effect.
+    const pinned = pinnedIds.flatMap(id => byId.get(id) ?? []);
+    const pinnedSet = new Set(pinned.map(debate => debate.id));
+    return {
+      debates: [...pinned, ...rankedDebates.filter(debate => !pinnedSet.has(debate.id))],
+      pinnedCount: pinned.length,
+    };
+  }, [rankedDebates, pinnedIds]);
 
   // Topics live on the claim entity (not the debates API), so resolve them once
   // for the space and map claim entity id -> topic names.
@@ -195,15 +232,24 @@ export function DebatesBrowseFeed({
       /* Navigation must work without analytics. */
     }
   };
-  // Which panel is open, not which debate it was opened from: the claims and
-  // comments panels describe the debate you're watching, so they follow the feed
-  // as you scroll rather than staying pinned to the one whose button you pressed.
-  const [openPanel, setOpenPanel] = React.useState<'claims' | 'comments' | null>(null);
-  // Which debater the claims panel opens at: the end card's faces beside a debater set it, every
-  // other way in clears it. Held with the debate it was chosen on, because the open panel follows
-  // the active debate as the feed scrolls — and a debater who argues in the next one too would
-  // otherwise have the list jump to them unasked.
-  const [claimsFocus, setClaimsFocus] = React.useState<{ debateId: string; participantSpaceId: string } | null>(null);
+  /*
+   * Which panel is open — held in `debateFeedPanelAtom` rather than here, so it joins the app's one
+   * panel slot. Which panel, not which debate it was opened from: both describe the debate being
+   * watched, so they follow the feed as it scrolls rather than staying pinned to the one whose
+   * button was pressed.
+   */
+  const openPanel = useAtomValue(debateFeedPanelAtom);
+  const setFeedPanel = useSetAtom(openDebateFeedPanelAtom);
+
+  // Cleared on unmount, which `useState` did for free; otherwise the panel reopens with the next feed.
+  // Not on a pathname change: the URL follows the debate being watched as the feed scrolls.
+  const store = useStore();
+  React.useEffect(
+    () => () => {
+      if (store.get(debateFeedPanelAtom)) store.set(debateFeedPanelAtom, null);
+    },
+    [store]
+  );
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
@@ -281,11 +327,17 @@ export function DebatesBrowseFeed({
     return () => setDebateFullscreenActive(false);
   }, [rendersFeed, setDebateFullscreenActive]);
 
+  // An unanchored feed has nothing fixed at the top, so its first paint has to be its final order:
+  // painting whichever debates' readiness came back first, then ranking the rest in above them, is
+  // the drift described at `pinnedIds`. Only until something is pinned — after that the order on
+  // screen is held by the pin, and a later lookup (a refetch adding a debate) must not blank it.
+  const orderPending = initialDebateId == null && mediaLoading && pinnedIds.length === 0;
+
   // Memoised because both branches build a new array: the effect below is keyed on this, and an
   // unmemoised ternary re-ran it on every render.
   const visibleDebates = React.useMemo(
-    () => (anchorPending ? [] : debates.slice(0, visibleCount)),
-    [anchorPending, debates, visibleCount]
+    () => (anchorPending || orderPending ? [] : debates.slice(0, visibleCount)),
+    [anchorPending, orderPending, debates, visibleCount]
   );
 
   // Gated on what's actually on screen rather than on `debates`: that inherits the anchor
@@ -308,6 +360,30 @@ export function DebatesBrowseFeed({
   // Which debate the viewer is on, so the one after it can preload its recordings.
   // -1 when nothing is active yet, which preloads nothing rather than the first item.
   const activeIndex = visibleDebates.findIndex(debate => debate.id === activeId);
+
+  // Pin through the active card and the ones preloading after it. Only ever grows, and only as the
+  // viewer moves on — what follows the pinned run is still the live ranking. See `pinnedIds`.
+  // Capped at what is rendered, or a feed shorter than the window would re-pin forever.
+  const pinThrough = activeIndex < 0 ? 0 : Math.min(activeIndex + PRELOAD_AHEAD + 1, visibleDebates.length);
+  // Compared with the pins still in the listing, not every id ever pinned: debates that dropped out
+  // would otherwise count towards a run that no longer covers the cards they were holding. Rebuilt
+  // from what is on screen, so those ids are compacted away as it extends.
+  React.useEffect(() => {
+    if (pinThrough <= pinnedCount) return;
+    setPinnedIds(visibleDebates.slice(0, pinThrough).map(debate => debate.id));
+  }, [pinThrough, pinnedCount, visibleDebates]);
+
+  // The URL follows the debate on screen, the way a short-video feed's does: reloading, copying the
+  // address bar, or coming Back lands on what was being watched rather than on whichever debate the
+  // feed was opened at. `replaceState`, not a push, so Back leaves the feed instead of stepping back
+  // through every debate scrolled past. Next keeps its router in step with direct history calls
+  // without navigating, so nothing remounts.
+  React.useEffect(() => {
+    if (!activeId || !rendersFeed) return;
+    const href = debateFeedHref(window.location, { surface, spaceId, debateId: activeId });
+    if (href == null) return;
+    window.history.replaceState(null, '', href);
+  }, [activeId, rendersFeed, spaceId, surface]);
 
   // Where the linked debate has got to, for the visit's outcome, in the same order the render
   // below decides what to show.
@@ -367,7 +443,7 @@ export function DebatesBrowseFeed({
         if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', ' '].includes(event.key))
           lastScrollIntent.current = performance.now();
       }}
-      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
+      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
     >
       {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map((debate, index) => (
@@ -398,6 +474,16 @@ export function DebatesBrowseFeed({
           // buffers, and nothing further than two ahead is touched at all.
           preload={activeIndex >= 0 && index > activeIndex && index <= activeIndex + PRELOAD_AHEAD}
           buffer={activeIndex >= 0 && index === activeIndex + 1}
+          // The debate a link opened is the one the viewer asked for, so it plays as before; the
+          // rest of the feed holds its full recordings until the viewer starts one.
+          holdFullPlayback={
+            DEBATE_FEED_HOLDS_FULL_PLAYBACK &&
+            !(surface === 'debate-page' && initialDebateId != null && ID.equals(debate.id, initialDebateId))
+          }
+          // Cards stay mounted as the feed grows, so everything outside one behind to the preload
+          // window ahead releases its <video> elements (GEO-3067).
+          // With no active card (a refetch dropped it), everything stays released until one is chosen.
+          releaseMedia={activeIndex < 0 || index < activeIndex - 1 || index > activeIndex + PRELOAD_AHEAD}
           root={scrollEl}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
@@ -406,37 +492,35 @@ export function DebatesBrowseFeed({
           // waiting for the scroll observer: its bar is reachable from 0%
           // visibility but activation needs 60%, so mid-scroll the panel would
           // otherwise open on the debate being scrolled away from.
-          onOpenClaims={(participantSpaceId?: string) => {
+          onOpenClaims={() => {
             setActiveId(debate.id);
-            setClaimsFocus(participantSpaceId ? { debateId: debate.id, participantSpaceId } : null);
-            setOpenPanel('claims');
+            setFeedPanel('claims');
           }}
           onOpenComments={() => {
             setActiveId(debate.id);
-            setOpenPanel('comments');
+            setFeedPanel('comments');
           }}
           onPlaybackRequest={() => setActiveId(debate.id)}
         />
       ))}
-      {!anchorPending && visibleCount < debates.length && (
+      {!anchorPending && !orderPending && visibleCount < debates.length && (
         <LoadMoreSentinel root={scrollEl} onLoadMore={() => setVisibleCount(count => count + PAGE_SIZE)} />
       )}
     </div>
   );
 
   const activeDebate = visibleDebates.find(debate => debate.id === activeId) ?? null;
-  const closePanel = () => setOpenPanel(null);
+  const closePanel = () => setFeedPanel(null);
 
   const sidePanel =
     openPanel === 'claims' && activeDebate ? (
       <DebateClaimsPanel
         // Keyed, like the comments panel below, so scrolling to the next debate resets the panel —
-        // its scroll position and the debater it was opened at belong to the debate they were set
-        // on, and a reused panel carried the old offset onto the next one.
+        // its scroll position belongs to the debate it was set on, and a reused panel carried the
+        // old offset onto the next one.
         key={activeDebate.id}
         debate={activeDebate}
         onClose={closePanel}
-        focusParticipantSpaceId={claimsFocus?.debateId === activeDebate.id ? claimsFocus.participantSpaceId : null}
       />
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
@@ -454,7 +538,12 @@ export function DebatesBrowseFeed({
   // toggling the claims/comments panel doesn't remount the players and restart playback.
   return (
     <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh md:bg-white">
-      <div className="min-w-0 flex-1">{feed}</div>
+      <div className="min-w-0 flex-1">
+        {/* Phones only. The feed covers the app navbar there, so it brings its own (GEO-3415); the
+            scroller below is the viewport less this bar's 2.75rem on every size. */}
+        <DebateFeedMobileBar />
+        {feed}
+      </div>
       {sidePanel}
     </div>
   );
@@ -470,6 +559,8 @@ function DebateFeedItem({
   initialSeekSeconds,
   preload,
   buffer,
+  holdFullPlayback,
+  releaseMedia,
   root,
   scrollHint,
   onActivate,
@@ -488,11 +579,13 @@ function DebateFeedItem({
   preload: boolean;
   /** Buffer the recordings too — the card after the active one. See `DebateFeedPlayer`. */
   buffer: boolean;
+  /** Hold the full recordings until the viewer starts one. See `DebateFeedPlayer`. */
+  holdFullPlayback: boolean;
+  releaseMedia: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
-  /** With a debater's space id, the panel opens at that debater's claims. */
-  onOpenClaims: (participantSpaceId?: string) => void;
+  onOpenClaims: () => void;
   onOpenComments: () => void;
   /** Replay on a debate that is not the active one makes it the active one, like its other controls. */
   onPlaybackRequest: () => void;
@@ -554,7 +647,8 @@ function DebateFeedItem({
           className="relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
           style={DEBATE_COLUMN_STYLE}
         >
-          <div className="md:mt-4">
+          {/* 20px under the phone bar with the item's 12px: the gap the design leaves under the navbar. */}
+          <div className="md:mt-2">
             <DebateTitleHeader
               key={debate.claim.claim}
               claim={debate.claim.claim}
@@ -571,6 +665,8 @@ function DebateFeedItem({
               active={active}
               preload={preload}
               buffer={buffer}
+              holdFullPlayback={holdFullPlayback}
+              releaseMedia={releaseMedia}
               initialSeekSeconds={initialSeekSeconds}
               onOpenClaims={onOpenClaims}
               onPlaybackRequest={onPlaybackRequest}

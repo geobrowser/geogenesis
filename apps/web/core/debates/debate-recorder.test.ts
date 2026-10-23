@@ -22,7 +22,10 @@ function fakeRecorder(behaviour: FakeBehaviour = {}) {
     options: MediaRecorderOptions | undefined;
     state: RecordingState = 'inactive';
     startedWith: number | undefined;
-    constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
+    constructor(
+      readonly stream: MediaStream,
+      options?: MediaRecorderOptions
+    ) {
       super();
       if (behaviour.throwOnConstruct) throw behaviour.throwOnConstruct;
       this.mimeType = options?.mimeType ?? '';
@@ -50,11 +53,11 @@ describe('startDebateRecorder', () => {
     vi.unstubAllGlobals();
   });
 
-  it('wires the recorder before starting it and reports nothing on success', () => {
+  it('wires the recorder before starting it and reports nothing on success', async () => {
     const { Recorder, instances } = fakeRecorder();
     const wire = vi.fn((recorder: MediaRecorder) => expect(recorder.state).toBe('inactive'));
 
-    const started = startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1_000, wire, Recorder });
+    const started = await startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1_000, wire, Recorder });
 
     expect(started?.recorder).toBe(instances[0]);
     expect(started?.mimeType).toBe('video/webm;codecs=vp9,opus');
@@ -63,9 +66,9 @@ describe('startDebateRecorder', () => {
     expect(analytics.capture).not.toHaveBeenCalled();
   });
 
-  it('pins the video bitrate instead of taking the browser default', () => {
+  it('pins the video bitrate instead of taking the browser default', async () => {
     const { Recorder, instances } = fakeRecorder();
-    startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1_000, wire: vi.fn(), Recorder });
+    await startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1_000, wire: vi.fn(), Recorder });
     expect(instances[0].options).toEqual({
       mimeType: 'video/webm;codecs=vp9,opus',
       videoBitsPerSecond: RECORDING_VIDEO_BITS_PER_SECOND,
@@ -73,7 +76,7 @@ describe('startDebateRecorder', () => {
 
     // With no supported WebM candidate the browser still picks the container, but not the bitrate.
     const fallback = fakeRecorder({ supported: [] });
-    startDebateRecorder({
+    await startDebateRecorder({
       stream,
       debateId: 'debate-1',
       timesliceMs: 1_000,
@@ -83,11 +86,11 @@ describe('startDebateRecorder', () => {
     expect(fallback.instances[0].options).toEqual({ videoBitsPerSecond: RECORDING_VIDEO_BITS_PER_SECOND });
   });
 
-  it('reports a browser without MediaRecorder', () => {
+  it('reports a browser without MediaRecorder', async () => {
     vi.stubGlobal('MediaRecorder', undefined);
     const wire = vi.fn();
 
-    const started = startDebateRecorder({
+    const started = await startDebateRecorder({
       stream,
       debateId: 'debate-1',
       timesliceMs: 1_000,
@@ -106,12 +109,88 @@ describe('startDebateRecorder', () => {
     });
   });
 
-  it('reports a constructor throw instead of propagating it', () => {
+  it('waits for prepared media before constructing or announcing recording', async () => {
+    const { Recorder, instances } = fakeRecorder();
+    const wire = vi.fn();
+    let finish!: (stream: MediaStream) => void;
+    const pending = new Promise<MediaStream>(resolve => {
+      finish = resolve;
+    });
+    const starting = startDebateRecorder({
+      stream,
+      debateId: 'debate-1',
+      timesliceMs: 1000,
+      prepareStream: () => pending,
+      wire,
+      Recorder,
+    });
+    expect(instances).toHaveLength(0);
+    expect(wire).not.toHaveBeenCalled();
+    const prepared = {} as MediaStream;
+    finish(prepared);
+    await starting;
+    expect(instances[0].stream).toBe(prepared);
+    expect(wire).toHaveBeenCalledOnce();
+  });
+
+  it('skips capture preparation if recording is unsupported', async () => {
+    vi.stubGlobal('MediaRecorder', undefined);
+    const prepareStream = vi.fn();
+    await startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1000, prepareStream, wire: vi.fn() });
+    expect(prepareStream).not.toHaveBeenCalled();
+  });
+
+  it('reports preparation failures through the existing constructor failure path', async () => {
+    const { Recorder, instances } = fakeRecorder();
+    const report = vi.fn();
+    const error = new Error('Audio playback was blocked');
+    const started = await startDebateRecorder({
+      stream,
+      debateId: 'debate-1',
+      timesliceMs: 1000,
+      prepareStream: async () => {
+        throw error;
+      },
+      wire: vi.fn(),
+      report,
+      Recorder,
+    });
+    expect(started).toBeNull();
+    expect(instances).toHaveLength(0);
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ stage: 'construct', error }));
+  });
+
+  it('does not start or report a failure after a pending preparation is cancelled', async () => {
+    const { Recorder, instances } = fakeRecorder();
+    let current = true;
+    let finish!: (stream: MediaStream) => void;
+    const pending = new Promise<MediaStream>(resolve => {
+      finish = resolve;
+    });
+    const report = vi.fn();
+    const starting = startDebateRecorder({
+      stream,
+      debateId: 'debate-1',
+      timesliceMs: 1000,
+      prepareStream: () => pending,
+      isCurrent: () => current,
+      wire: vi.fn(),
+      report,
+      Recorder,
+    });
+    current = false;
+    finish(stream);
+    expect(await starting).toBeNull();
+    expect(instances).toHaveLength(0);
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('reports a constructor throw instead of propagating it', async () => {
     const error = new DOMException('Unsupported mimeType', 'NotSupportedError');
     const { Recorder } = fakeRecorder({ throwOnConstruct: error });
     const wire = vi.fn();
 
-    expect(startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1_000, wire, Recorder })).toBeNull();
+    expect(await startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1_000, wire, Recorder })).toBeNull();
     expect(wire).not.toHaveBeenCalled();
     expect(analytics.capture).toHaveBeenCalledWith('debate_recorder_failed', {
       debate_id: 'debate-1',
@@ -123,14 +202,14 @@ describe('startDebateRecorder', () => {
     expect(console.warn).toHaveBeenCalledWith('[DebateRecording] local recorder failed at construct:', error);
   });
 
-  it('reports a start() throw and returns no recorder', () => {
+  it('reports a start() throw and returns no recorder', async () => {
     const { Recorder } = fakeRecorder({
       supported: [],
       throwOnStart: new DOMException('No tracks', 'InvalidStateError'),
     });
 
     expect(
-      startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1_000, wire: vi.fn(), Recorder })
+      await startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1_000, wire: vi.fn(), Recorder })
     ).toBeNull();
     expect(analytics.capture).toHaveBeenCalledWith(
       'debate_recorder_failed',
@@ -138,9 +217,9 @@ describe('startDebateRecorder', () => {
     );
   });
 
-  it('reports an error the recorder fires after starting', () => {
+  it('reports an error the recorder fires after starting', async () => {
     const { Recorder, instances } = fakeRecorder();
-    startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1_000, wire: vi.fn(), Recorder });
+    await startDebateRecorder({ stream, debateId: 'debate-1', timesliceMs: 1_000, wire: vi.fn(), Recorder });
 
     const event = Object.assign(new Event('error'), { error: new DOMException('Track ended', 'UnknownError') });
     instances[0].dispatchEvent(event);
@@ -154,10 +233,10 @@ describe('startDebateRecorder', () => {
     });
   });
 
-  it('routes every stage through an injected reporter', () => {
+  it('routes every stage through an injected reporter', async () => {
     vi.stubGlobal('MediaRecorder', undefined);
     const report = vi.fn();
-    startDebateRecorder({
+    await startDebateRecorder({
       stream,
       debateId: 'debate-1',
       timesliceMs: 1_000,
@@ -172,7 +251,7 @@ describe('startDebateRecorder', () => {
 });
 
 describe('reportDebateRecorderFailure', () => {
-  it('never lets analytics throw into capture', () => {
+  it('never lets analytics throw into capture', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     analytics.capture.mockImplementationOnce(() => {
       throw new Error('posthog down');
@@ -184,7 +263,7 @@ describe('reportDebateRecorderFailure', () => {
 });
 
 describe('preferredRecordingMimeType', () => {
-  it('picks the first supported WebM candidate, or none', () => {
+  it('picks the first supported WebM candidate, or none', async () => {
     expect(preferredRecordingMimeType(fakeRecorder({ supported: ['video/webm'] }).Recorder)).toBe('video/webm');
     expect(preferredRecordingMimeType(fakeRecorder({ supported: [] }).Recorder)).toBe('');
     vi.stubGlobal('MediaRecorder', undefined);

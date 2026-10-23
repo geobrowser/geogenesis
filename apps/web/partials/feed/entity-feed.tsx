@@ -5,11 +5,21 @@ import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-qu
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtom } from 'jotai';
 
+import { getCachedIdentityToken } from '~/core/auth/identity-token';
+import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
+import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cache';
+import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
-import { keepSelectableTopics, orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
-import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
+import { type ExplorePageSort, PUBLIC_FEED_PARAM } from '~/core/explore/explore-feed-params';
+import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
+import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
+import { seenStore } from '~/core/explore/seen-demotion/seen-store';
+import { useFeedViewer } from '~/core/hooks/use-awaited-smart-account';
+import { exploreMoreFiltersOpenAtom } from '~/core/state/explore-more-filters';
 import { normId } from '~/core/utils/norm-id';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -20,6 +30,14 @@ import type { ClaimCardVariant } from '~/partials/explore/claim-explore-feed-car
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
+
+/**
+ * Cards drawn in full on the first render, whatever the viewport. The rest wait until they are near
+ * it (see `ExploreFeedCard`'s `deferUntilNearViewport`). Enough to fill a desktop screen without
+ * waiting on the observer, so the cards a reader sees first — and the lead card's poster, which is
+ * the page's largest paint — never pass through a placeholder.
+ */
+const EAGER_CARD_COUNT = 4;
 
 function LoadingSkeleton() {
   return (
@@ -33,11 +51,17 @@ function LoadingSkeleton() {
   );
 }
 
-const SORT_OPTIONS: { value: ExploreSort; label: string }[] = [
-  { value: 'best', label: 'Best' },
-  { value: 'new', label: 'New' },
-  { value: 'top', label: 'Top' },
-];
+const SORT_LABELS: Record<ExplorePageSort, string> = {
+  'for-you': 'For you',
+  best: 'Best',
+  new: 'New',
+  top: 'Top',
+};
+
+const DEFAULT_SORT_OPTIONS: readonly ExplorePageSort[] = ['best', 'new', 'top'];
+
+/** GEO-3144. Read by the server too: Explore pages are interleaved for experiment groups only when set. */
+const FEED_INTERLEAVING_ENABLED = process.env.NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED === 'true';
 
 /**
  * The sorts a time range applies to.
@@ -52,7 +76,7 @@ const SORT_OPTIONS: { value: ExploreSort; label: string }[] = [
  * Top is unaffected only because its own window happens not to hit that path. See
  * `explore-debate-tag-filter` for the numbers.
  */
-const SORTS_WITH_TIME_RANGE: readonly ExploreSort[] = ['top'];
+const SORTS_WITH_TIME_RANGE: readonly ExplorePageSort[] = ['top'];
 
 const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
   { value: 'today', label: 'Today' },
@@ -70,7 +94,16 @@ type EntityFeedProps = {
   /** Initial value for the time dropdown. Defaults to "week". */
   initialTime?: ExploreTime;
   /** Initial value for the sort dropdown. Defaults to "new". */
-  initialSort?: ExploreSort;
+  initialSort?: ExplorePageSort;
+  /** Sorts offered in the dropdown, in order. Defaults to Best, New, Top. */
+  sortOptions?: readonly ExplorePageSort[];
+  /**
+   * The viewer's followed topics, for the For you sort (GEO-3083), or null while they load. For
+   * you waits for them rather than serving Best first and then swapping the feed underneath.
+   */
+  followedTopicIds?: readonly string[] | null;
+  /** Use the topic stream until onboarding's account-owned follow submissions finish. For you only. */
+  pendingTopicFollows?: boolean;
   /** Whether to render the time-range dropdown. Defaults to true. */
   showTimeFilter?: boolean;
   /** Whether to render the sort dropdown (Best / New / Top). Defaults to false. */
@@ -79,6 +112,12 @@ type EntityFeedProps = {
   compactHeader?: boolean;
   /** Whether to render the type checklist. Defaults to false. */
   showTypeFilter?: boolean;
+  /**
+   * Offer a "More filters" entry at the foot of the sort menu that reveals the type and space
+   * menus. Explore keeps them out of the way of new readers this way (#2628) while advanced ones can
+   * still narrow the feed. `typeOptions` and `initialTypeIds` feed the revealed type menu.
+   */
+  showMoreFilters?: boolean;
   /** Initial type selection. */
   initialTypeIds?: readonly string[];
   /** Type checklist options. */
@@ -111,22 +150,44 @@ type EntityFeedProps = {
    * cross-space browsing surface the panel was asked for.
    */
   titleOpensSidePanel?: boolean;
+  /**
+   * Send the signed-in viewer's Privy identity token with each page request (GEO-3140), so the
+   * server can personalize For you for a person it has verified rather than one the client names.
+   * Explore only; harmless where the server does not personalize.
+   */
+  sendIdentityToken?: boolean;
+  /**
+   * The wallet cookie the page was rendered with, if any. It keys the first page from hydration on
+   * (see `useFeedViewer`), rather than the page being fetched anonymously and then again once the
+   * smart account resolves.
+   */
+  walletAddress?: string | null;
+  /**
+   * Fetch the signed-out first page of Best from the CDN-cached anonymous URL (Explore only). Used
+   * only when nobody is signed in and the request is the plain first Best page; anything else keeps
+   * the personal URL, because the CDN ignores cookies.
+   */
+  cdnFirstPage?: boolean;
 };
 
-async function fetchFeedPage(
-  apiEndpoint: string,
-  params: {
-    sort: ExploreSort;
-    /** Omitted when the feed's sort has no time range. */
-    time: ExploreTime | undefined;
-    /** Empty means no space narrowing at all. */
-    spaceIds: readonly string[];
-    typeIds: readonly string[] | undefined;
-    topicIds: readonly string[];
-    fixedParams: Record<string, string>;
-    cursor: string | undefined;
-  }
-): Promise<ExploreFeedResult> {
+/**
+ * The query string of a feed request. `anonymous` adds the cacheable-URL marker, and only to the
+ * plain first Best page: any cursor, filter or other sort stays on the uncached URL.
+ */
+type FeedQueryParams = {
+  sort: ExplorePageSort;
+  time: ExploreTime | undefined;
+  spaceIds: readonly string[];
+  typeIds: readonly string[] | undefined;
+  topicIds: readonly string[];
+  followedTopicIds: readonly string[];
+  pendingTopicFollows?: boolean;
+  fixedParams: Record<string, string>;
+  cursor: string | undefined;
+  anonymous?: boolean;
+};
+
+export function buildFeedQuery(params: FeedQueryParams): string {
   const sp = new URLSearchParams();
   sp.set('sort', params.sort);
   // Absent means "no time filter" — see the route's parseTime. Sending nothing is what keeps a
@@ -137,13 +198,40 @@ async function fetchFeedPage(
   if (params.spaceIds.length > 0) sp.set('spaceIds', params.spaceIds.join(','));
   if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
   if (params.topicIds.length > 0) sp.set('topicIds', params.topicIds.join(','));
+  if (params.followedTopicIds.length > 0) sp.set('followedTopicIds', params.followedTopicIds.join(','));
+  if (params.sort === 'for-you' && params.pendingTopicFollows) sp.set('pendingTopicFollows', '1');
   for (const [key, value] of Object.entries(params.fixedParams)) sp.set(key, value);
   if (params.cursor) sp.set('cursor', params.cursor);
-  const res = await fetch(`${apiEndpoint}?${sp.toString()}`, { credentials: 'include' });
+  if (params.anonymous && sp.toString() === 'sort=best') sp.set(PUBLIC_FEED_PARAM, '1');
+  return sp.toString();
+}
+
+async function fetchFeedPage(
+  apiEndpoint: string,
+  params: FeedQueryParams & {
+    identityToken?: string | null;
+  }
+): Promise<ExploreFeedResult> {
+  const res = await fetch(`${apiEndpoint}?${buildFeedQuery(params)}`, {
+    credentials: 'include',
+    ...(params.identityToken ? { headers: { authorization: `Bearer ${params.identityToken}` } } : {}),
+  });
   if (!res.ok) {
     throw new Error('Feed failed');
   }
   return res.json() as Promise<ExploreFeedResult>;
+}
+
+/** `items` with the card `leadId` names moved to the front, when it is there. */
+export function leadFirst<T extends { entityId: string }>(items: T[], leadId: string | null): T[] {
+  if (leadId === null) return items;
+  const index = items.findIndex(item => normId(item.entityId) === normId(leadId));
+  if (index <= 0) return items;
+  return [items[index]!, ...items.slice(0, index), ...items.slice(index + 1)];
+}
+
+function sameFeedOtherThanAccount(a: readonly unknown[], b: readonly unknown[]) {
+  return a.length === b.length && a.slice(0, -1).every((part, i) => part === b[i]);
 }
 
 type TopicFacetResult = { topics: Array<{ id: string; name: string | null; count: number }> };
@@ -181,10 +269,14 @@ export function EntityFeed({
   lockedSpaceId,
   initialTime = 'week',
   initialSort = 'new',
+  sortOptions = DEFAULT_SORT_OPTIONS,
+  followedTopicIds = [],
+  pendingTopicFollows = false,
   showTimeFilter = true,
   showSortFilter = false,
   compactHeader = false,
   showTypeFilter = false,
+  showMoreFilters = false,
   initialTypeIds = [],
   typeOptions = [],
   typeCounts,
@@ -199,17 +291,29 @@ export function EntityFeed({
   dividerBeforeFeed = false,
   titleOpensSidePanel = false,
   claimCardVariant = 'feed',
+  sendIdentityToken = false,
+  walletAddress = null,
+  cdnFirstPage = false,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
-  const [sort, setSort] = React.useState<ExploreSort>(initialSort);
+  const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
   const [sortMenuOpen, setSortMenuOpen] = React.useState(false);
   const [timeMenuOpen, setTimeMenuOpen] = React.useState(false);
   const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...initialTypeIds]);
   const [selectedTopicIds, setSelectedTopicIds] = React.useState<string[]>([]);
+  const [selectedSpaceIds, setSelectedSpaceIds] = React.useState<string[]>([]);
+  const [moreFiltersOpen, setMoreFiltersOpen] = useAtom(exploreMoreFiltersOpenAtom);
+  const moreFiltersRevealed = showMoreFilters && moreFiltersOpen;
+  const typeFilterVisible = showTypeFilter || moreFiltersRevealed;
+  const spaceFilterVisible = moreFiltersRevealed && lockedSpaceId == null;
   const typeSelectionTouchedRef = React.useRef(false);
   const contextualTypeDefaultAppliedRef = React.useRef(false);
-  // A locked space is the whole filter; otherwise every space the reader may see.
-  const requestedSpaceIds = React.useMemo(() => (lockedSpaceId ? [lockedSpaceId] : []), [lockedSpaceId]);
+  // A locked space is the whole filter; otherwise whatever the revealed space menu has ticked, and
+  // nothing ticked (or the menu put away) means every space the reader may see.
+  const requestedSpaceIds = React.useMemo(
+    () => (lockedSpaceId ? [lockedSpaceId] : spaceFilterVisible ? selectedSpaceIds : []),
+    [lockedSpaceId, selectedSpaceIds, spaceFilterVisible]
+  );
   const spaceIdsKey = requestedSpaceIds.join(',');
   const nonEmptyTypeIds = React.useMemo(() => {
     if (!typeCounts || typeCountsPending) return null;
@@ -234,7 +338,19 @@ export function EntityFeed({
       nonEmptyTypeIds.every(typeId => selectedTypeIdSet.has(normId(typeId)))
     );
   }, [nonEmptyTypeIds, selectTypesWithResultsByDefault, selectedTypeIdSet, selectedTypeIds.length, typeOptions.length]);
-  const typeIds = showTypeFilter && !selectsWholePopulation ? selectedTypeIds : undefined;
+  // Two different rules for when the selection goes on the wire, because the two kinds of caller
+  // read a missing parameter differently. A contextual feed's route reads it as "every type", so it
+  // is omitted when every type is ticked. Explore's route reads it as its *default* types (Debate +
+  // Claim), so omitting it for "every type" would hand the reader two types after they ticked all
+  // of them — there it is omitted only when the selection *is* the default, which keeps revealing
+  // the menus from refetching a feed that has not changed.
+  const typeIds = showTypeFilter
+    ? selectsWholePopulation
+      ? undefined
+      : selectedTypeIds
+    : moreFiltersRevealed && selectedTypeIds.join(',') !== initialTypeIds.join(',')
+      ? selectedTypeIds
+      : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
   const topicIdsKey = selectedTopicIds.join(',');
   const fixedParamsKey = Object.entries(fixedParams)
@@ -242,19 +358,13 @@ export function EntityFeed({
     .map(([key, value]) => `${key}:${value}`)
     .join('|');
   const topicFacets = useQuery({
-    queryKey: [
-      'entity-feed-topic-facets',
-      topicFacetEndpoint ?? null,
-      topicIdsKey,
-      showTypeFilter ? typeIdsKey : null,
-      fixedParamsKey,
-    ],
+    queryKey: ['entity-feed-topic-facets', topicFacetEndpoint ?? null, topicIdsKey, typeIdsKey, fixedParamsKey],
     enabled: Boolean(topicFacetEndpoint),
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       fetchTopicFacets(topicFacetEndpoint!, {
         selectedTopicIds,
-        typeIds: showTypeFilter ? typeIds : undefined,
+        typeIds,
         fixedParams,
         signal,
       }),
@@ -282,7 +392,50 @@ export function EntityFeed({
   const timeRangeApplies = showTimeFilter && SORTS_WITH_TIME_RANGE.includes(sort);
   const requestedTime = timeRangeApplies ? time : undefined;
   const topicFilterVisible = showTopicFilter || availableTopicOptions.length > 0;
-  const showFilterRow = showSortFilter || timeRangeApplies || showTypeFilter || topicFilterVisible;
+  const showFilterRow = showSortFilter || timeRangeApplies || typeFilterVisible || topicFilterVisible;
+
+  const toggleMoreFilters = React.useCallback(() => {
+    // Putting the menus away puts their filters away too, so the feed never stays narrowed by a
+    // menu the viewer can no longer see.
+    if (moreFiltersOpen) {
+      setSelectedTypeIds([...initialTypeIds]);
+      setSelectedSpaceIds([]);
+    }
+    setMoreFiltersOpen(!moreFiltersOpen);
+  }, [initialTypeIds, moreFiltersOpen, setMoreFiltersOpen]);
+
+  // Read off the browse sidebar's cache, which `BrowseSidebar` fills on every page, so the menu
+  // costs no request of its own.
+  const browseSidebar = useCachedBrowseSidebarData();
+  const spaceOptions = React.useMemo<HubFilterOption<string>[]>(
+    () =>
+      browseSidebar ? browseSidebarVisibleSpaces(browseSidebar).map(row => ({ value: row.id, label: row.name })) : [],
+    [browseSidebar]
+  );
+
+  const toggleSpace = React.useCallback((spaceId: string) => {
+    setSelectedSpaceIds(current => toggleId(current, spaceId));
+  }, []);
+
+  // The options follow the account: signing out or switching accounts swaps the sidebar payload,
+  // and a member space ticked under the old one is not on the new menu. Left selected, it would keep
+  // going out while the route drops it as a space this reader cannot see — the trigger saying
+  // "1 space" over an unfiltered feed. Only a settled payload prunes; a key still loading keeps the
+  // selection rather than throwing away one about to be valid.
+  //
+  // A payload whose Featured traversal failed is not settled either. It still arrives — with the
+  // featured rows empty and `featuredError` set — so reading it as an answer would untick every
+  // featured space on one transient failure, when the route's own lookup may well have succeeded.
+  const spaceOptionsSettled = browseSidebar !== null && !browseSidebar.featuredError;
+  React.useEffect(() => {
+    setSelectedSpaceIds(current =>
+      keepSelectableSpaces(
+        current,
+        spaceOptions.map(option => option.value),
+        spaceOptionsSettled
+      )
+    );
+  }, [spaceOptions, spaceOptionsSettled]);
 
   React.useEffect(() => {
     if (
@@ -331,48 +484,91 @@ export function EntityFeed({
     [maxTopicSelections]
   );
 
-  // Key the query on the smart-account address because that hook is what writes the
-  // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier
-  // (before the cookie is set), which caused refetches to return anonymous data on
-  // sign-in and leave "Join space" buttons stuck for a few seconds.
-  const { smartAccount } = useSmartAccount();
-  const smartAccountAddress = smartAccount?.account.address ?? null;
+  const isForYou = sort === 'for-you';
+  // Only where the server can use it, so no other page waits on Privy for a token: For you, and
+  // Best while interleaving is on (GEO-3144), which needs to know who is reading.
+  const usesIdentityToken = sendIdentityToken && (isForYou || (sort === 'best' && FEED_INTERLEAVING_ENABLED));
+  // Key the query on the wallet the server route will read from the cookie: the smart-account
+  // address once it resolves (that hook writes the cookie), and the cookie's own value until then.
+  // Privy's user.id updates earlier (before the cookie is set), which caused refetches to return
+  // anonymous data on sign-in and leave "Join space" buttons stuck for a few seconds.
+  const { viewerAddress, awaitingIdentityToken } = useFeedViewer(walletAddress, usesIdentityToken);
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
   // request, and caching them apart would refetch on a change the viewer never made.
+  const requestedFollowedTopicIds = isForYou ? (followedTopicIds ?? []) : [];
   const queryKey = [
     apiEndpoint,
     sort,
     requestedTime,
     spaceIdsKey,
-    showTypeFilter ? typeIdsKey : null,
+    typeIdsKey,
     topicIdsKey,
     fixedParamsKey,
-    smartAccountAddress,
+    // Only on For you, so every other sort's key, and so its cache, is unchanged.
+    ...(isForYou ? [requestedFollowedTopicIds.join(','), pendingTopicFollows] : []),
+    // Last, so `placeholderData` below can tell a change of account from a change of filter.
+    viewerAddress,
   ];
 
-  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
-    queryKey,
-    queryFn: ({ pageParam }) =>
-      fetchFeedPage(apiEndpoint, {
-        sort,
-        time: requestedTime,
-        spaceIds: requestedSpaceIds,
-        typeIds,
-        topicIds: selectedTopicIds,
-        fixedParams,
-        cursor: pageParam as string | undefined,
-      }),
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: last => last.nextCursor ?? undefined,
-    retry: 2,
-    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
+  const wantsIdentityToken = usesIdentityToken && viewerAddress !== null;
+  const feedParams = {
+    sort,
+    time: requestedTime,
+    spaceIds: requestedSpaceIds,
+    typeIds,
+    topicIds: selectedTopicIds,
+    followedTopicIds: requestedFollowedTopicIds,
+    pendingTopicFollows: isForYou && pendingTopicFollows,
+    fixedParams,
+  };
+
+  // A signed-in reader's plain first Best page is built for them, which takes most of a second
+  // after Privy hands over a token. The CDN-cached public page is the same feed bar a few
+  // member-space cards and flags, and the route preloads it for everyone, so it paints first and the
+  // reader's own page replaces it when it lands.
+  const paintsFromPublicPage =
+    cdnFirstPage &&
+    viewerAddress !== null &&
+    buildFeedQuery({ ...feedParams, cursor: undefined, anonymous: true }).includes(`${PUBLIC_FEED_PARAM}=1`);
+  const publicFirstPage = useQuery({
+    queryKey: [apiEndpoint, PUBLIC_FEED_PARAM],
+    queryFn: () => fetchFeedPage(apiEndpoint, { ...feedParams, cursor: undefined, anonymous: true }),
+    enabled: paintsFromPublicPage,
+    retry: false,
   });
+  const publicPlaceholder = paintsFromPublicPage ? publicFirstPage.data : undefined;
+
+  const { data, isLoading, isFetchingNextPage, isPlaceholderData, fetchNextPage, hasNextPage, error } =
+    useInfiniteQuery({
+      queryKey,
+      queryFn: async ({ pageParam }) =>
+        fetchFeedPage(apiEndpoint, {
+          ...feedParams,
+          identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
+          anonymous: cdnFirstPage && viewerAddress === null && !wantsIdentityToken,
+          cursor: pageParam as string | undefined,
+        }),
+      enabled: !awaitingIdentityToken && (!isForYou || followedTopicIds !== null),
+      // When only the account changed (signing in on the page, or an account that arrived after the
+      // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
+      // Otherwise a signed-in reader sees the public page meanwhile.
+      placeholderData: (previous, previousQuery) => {
+        if (previousQuery && sameFeedOtherThanAccount(previousQuery.queryKey, queryKey)) return previous;
+        return publicPlaceholder ? { pages: [publicPlaceholder], pageParams: [undefined] } : undefined;
+      },
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: last => last.nextCursor ?? undefined,
+      retry: 2,
+      retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
+    });
 
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     const el = sentinelRef.current;
-    if (!el || !hasNextPage) return;
+    // A placeholder's cursor belongs to another feed: its next page would be fetched against this
+    // one's key. Wait for the real first page.
+    if (!el || !hasNextPage || isPlaceholderData) return;
     const io = new IntersectionObserver(
       entries => {
         if (entries[0]?.isIntersecting && !isFetchingNextPage) {
@@ -383,22 +579,63 @@ export function EntityFeed({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData]);
+
+  // GEO-3234. Load what this browser has already shown, once, while the first page is in flight.
+  const isBest = sort === 'best';
+  React.useEffect(() => {
+    if (isBest) seenStore().prime();
+  }, [isBest]);
+  const [mountedAtSec] = React.useState(() => Math.floor(Date.now() / 1000));
+  // Keyed on the feed so a pin never follows the reader onto another sort or filter.
+  const feedKey = JSON.stringify(queryKey.slice(0, -1));
+  const [pin, setPin] = React.useState<{ feedKey: string; entityId: string } | null>(null);
+  const pinnedLeadId = pin?.feedKey === feedKey ? pin.entityId : null;
+  const setPinnedLeadId = React.useCallback((entityId: string) => setPin({ feedKey, entityId }), [feedKey]);
 
   const items = React.useMemo(() => {
-    const pages = data?.pages ?? [];
-    const flat: ExploreFeedItem[] = [];
-    for (const p of pages) flat.push(...p.items);
-    return flat;
-  }, [data?.pages]);
+    // GEO-3234. Best's pages composed together for this visitor: seen cards hidden, gaps filled from
+    // each page's reserve, nothing shown twice. Pages without the config pass through.
+    const flat = composeSeenPages(
+      (data?.pages ?? []).map(p => ({
+        items: p.items,
+        reserve: p.reserve,
+        config: readSeenDemotionPageConfig(p.seenDemotion),
+      })),
+      { snapshot: seenStore().snapshot(), nowSec: mountedAtSec }
+    );
+    if (!isForYou) return leadFirst(flat, pinnedLeadId);
+    // For you pages two streams that overlap, so an item served from one can come back later from
+    // the other. The first appearance stays.
+    const seen = new Set<string>();
+    return flat.filter(item => {
+      const id = normId(item.entityId);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }, [data?.pages, isForYou, mountedAtSec, pinnedLeadId]);
+
+  // The public page's lead is already playing when the reader's own page replaces it, so it stays on
+  // top if that page has it too, rather than the card sliding away under them.
+  const placeholderLeadId = isPlaceholderData && publicPlaceholder ? (items[0]?.entityId ?? null) : null;
+  React.useEffect(() => {
+    if (placeholderLeadId !== null) setPinnedLeadId(placeholderLeadId);
+  }, [placeholderLeadId, setPinnedLeadId]);
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
-  const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort;
+  const sortLabel = SORT_LABELS[sort];
   const filterTriggerClassName = cx(
     'flex items-center gap-1.5 text-metadata text-grey-04 transition-colors duration-150',
     compactHeader
       ? 'h-8 rounded-full px-2.5 hover:bg-grey-01 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text data-[state=open]:bg-grey-01'
       : 'h-6 rounded border border-grey-02 pr-2 pl-1.5 shadow-button focus-within:border-text'
+  );
+  const spaceLabel = pickerLabel(
+    selectedSpaceIds.length,
+    'Any space',
+    () => spaceOptions.find(option => option.value === selectedSpaceIds[0])?.label ?? '1 space',
+    count => `${count} spaces`
   );
   const topicLabel = pickerLabel(
     selectedTopicIds.length,
@@ -431,18 +668,29 @@ export function EntityFeed({
                 </button>
               }
             >
-              {SORT_OPTIONS.map(o => (
+              {sortOptions.map(option => (
                 <MenuItem
-                  key={o.value}
-                  active={o.value === sort}
+                  key={option}
+                  active={option === sort}
                   onClick={() => {
-                    setSort(o.value);
+                    setSort(option);
                     setSortMenuOpen(false);
                   }}
                 >
-                  {o.label}
+                  {SORT_LABELS[option]}
                 </MenuItem>
               ))}
+              {showMoreFilters ? (
+                <MenuItem
+                  className="border-t border-grey-02"
+                  onClick={() => {
+                    toggleMoreFilters();
+                    setSortMenuOpen(false);
+                  }}
+                >
+                  {moreFiltersOpen ? 'Hide filters' : 'More filters'}
+                </MenuItem>
+              ) : null}
             </Menu>
           ) : null}
           {timeRangeApplies ? (
@@ -475,9 +723,22 @@ export function EntityFeed({
               ))}
             </Menu>
           ) : null}
-          {showTypeFilter || topicFilterVisible ? (
+          {typeFilterVisible || spaceFilterVisible || topicFilterVisible ? (
             <div className="ml-auto flex items-center gap-3">
-              {showTypeFilter ? (
+              {spaceFilterVisible ? (
+                <HubMultiFilterMenu
+                  label={spaceLabel}
+                  options={spaceOptions}
+                  values={selectedSpaceIds}
+                  onToggle={toggleSpace}
+                  onClear={() => setSelectedSpaceIds([])}
+                  clearLabel="Any space"
+                  showImages={false}
+                  searchPlaceholder="Search spaces"
+                  searchEmptyLabel="No spaces found"
+                />
+              ) : null}
+              {typeFilterVisible ? (
                 <ExploreTypeFilterMenu
                   selectedTypeIds={visibleSelectedTypeIds}
                   typeOptions={visibleTypeOptions}
@@ -510,7 +771,7 @@ export function EntityFeed({
       <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
-        ) : isLoading ? (
+        ) : isLoading || awaitingIdentityToken || (isForYou && followedTopicIds === null) ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <LoadingSkeleton key={i} />
@@ -528,6 +789,7 @@ export function EntityFeed({
               hideJoinButton={lockedSpaceId != null}
               titleOpensSidePanel={titleOpensSidePanel}
               claimCardVariant={claimCardVariant}
+              deferUntilNearViewport={index >= EAGER_CARD_COUNT}
             />
           ))
         )}

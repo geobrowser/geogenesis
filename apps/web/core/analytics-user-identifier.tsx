@@ -1,10 +1,9 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { bindPrivyAnalytics, identifyPrivyUser, reconcileAnonymousAnalyticsIdentity } from './analytics';
 

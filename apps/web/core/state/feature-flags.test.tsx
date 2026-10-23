@@ -26,6 +26,11 @@ describe('feature flags', () => {
     // GEO-2914 hid the Explore side panel behind this rather than deleting it, so off is the
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
+    expect(defaultFeatureFlags.lobbyHosting).toBe(false);
+    expect(defaultFeatureFlags.debateDeviceSwitchRecording).toBe(false);
+    expect(defaultFeatureFlags.googleSignIn).toBe(false);
+    expect(defaultFeatureFlags.googleCalendar).toBe(false);
+    expect(defaultFeatureFlags.microsoftCalendar).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
@@ -33,22 +38,42 @@ describe('feature flags', () => {
       debateDebugging: false,
       debateFormatSelector: false,
       exploreSidePanel: false,
+      forYouFeed: false,
+      lobbyHosting: false,
+      debateDeviceSwitchRecording: false,
+      googleSignIn: false,
+      googleCalendar: false,
+      microsoftCalendar: false,
       bountiesTab: true,
     });
   });
 
-  // Claims, debates and scheduling shipped to everyone. Every browser that ever opened the flags
-  // dialog still has the retired ids in storage, and they must not survive normalization — a stray
-  // `questionsTab` reaching the dialog would render a checkbox for a flag nothing reads.
+  // Claims, debates, scheduling, lobby joining and debate video shipped to everyone. Every browser that ever
+  // opened the flags dialog still has the retired ids in storage, and they must not survive
+  // normalization — a stray `questionsTab` reaching the dialog would render a checkbox for a flag
+  // nothing reads.
   it('drops the retired flags that are still in storage', () => {
     expect(
-      normalizeFeatureFlags({ questionsTab: true, debatesTab: true, peerAvailability: true, debateDebugging: true })
+      normalizeFeatureFlags({
+        questionsTab: true,
+        debatesTab: true,
+        peerAvailability: true,
+        lobbyJoining: true,
+        debateVideo: true,
+        debateDebugging: true,
+      })
     ).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
       debateDebugging: true,
       debateFormatSelector: false,
       exploreSidePanel: false,
+      forYouFeed: false,
+      lobbyHosting: false,
+      debateDeviceSwitchRecording: false,
+      googleSignIn: false,
+      googleCalendar: false,
+      microsoftCalendar: false,
       bountiesTab: true,
     });
   });
@@ -74,6 +99,12 @@ describe('feature flags', () => {
       debateDebugging: true,
       debateFormatSelector: true,
       exploreSidePanel: false,
+      forYouFeed: false,
+      lobbyHosting: false,
+      debateDeviceSwitchRecording: false,
+      googleSignIn: false,
+      googleCalendar: false,
+      microsoftCalendar: false,
       bountiesTab: true,
     });
   });

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -7,9 +7,11 @@ import {
   BOTTOM_INSET_MAX_HEIGHT_CLASS,
   BOTTOM_INSET_OFFSET_CLASS,
   BOTTOM_INSET_OFFSET_EXPRESSION,
+  BOTTOM_STACK,
   readAppBottomInset,
   subscribeAppBottomInset,
   useAppBottomInset,
+  useAppBottomInsetBelow,
 } from './app-bottom-inset';
 
 afterEach(() => {
@@ -71,6 +73,38 @@ describe('useAppBottomInset', () => {
   });
 });
 
+// The upload banner on the bottom edge while a lobby's control bar is up: the bar sits on the
+// banner, and the launcher clears both.
+describe('stacked bars', () => {
+  it('adds docked bars up, and lets each read the height of the ones below it', () => {
+    const banner = renderHook(() => useAppBottomInset('debate-upload-banner', 40, true, BOTTOM_STACK.uploadBanner));
+    renderHook(() => useAppBottomInset('lobby-control-bar', 64, true, BOTTOM_STACK.lobbyControlBar));
+    const barBelow = renderHook(() => useAppBottomInsetBelow(BOTTOM_STACK.lobbyControlBar));
+    const bannerBelow = renderHook(() => useAppBottomInsetBelow(BOTTOM_STACK.uploadBanner));
+
+    expect(inset()).toBe('104px');
+    expect(barBelow.result.current).toBe(40);
+    expect(bannerBelow.result.current).toBe(0);
+
+    act(() => banner.unmount());
+    expect(inset()).toBe('64px');
+    expect(barBelow.result.current).toBe(0);
+  });
+
+  it('lets a taller floating bar win over the stack, without moving the stacked bars', () => {
+    renderHook(() => useAppBottomInset('debate-upload-banner', 40, true, BOTTOM_STACK.uploadBanner));
+    renderHook(() => useAppBottomInset('lobby-control-bar', 64, true, BOTTOM_STACK.lobbyControlBar));
+    const barBelow = renderHook(() => useAppBottomInsetBelow(BOTTOM_STACK.lobbyControlBar));
+    const flowBar = renderHook(() => useAppBottomInset('flow-bar', 120, true));
+
+    expect(inset()).toBe('120px');
+    expect(barBelow.result.current).toBe(40);
+
+    flowBar.unmount();
+    expect(inset()).toBe('104px');
+  });
+});
+
 describe('readAppBottomInset', () => {
   it('reads back nothing as zero', () => {
     expect(readAppBottomInset()).toBe(0);
@@ -126,6 +160,11 @@ describe('bottom inset classes', () => {
   // Tailwind finds classes by scanning source text, so the offset cannot be interpolated into
   // them and each class spells it out again. A panel whose ceiling subtracted a different figure
   // than its offset added hung off the top of the screen by the difference.
+  // Insets count from the bottom edge, so a bar that pads for the safe area is not padded twice.
+  it('sits 1rem above the chrome, or clear of the safe area when that is higher', () => {
+    expect(BOTTOM_INSET_OFFSET_EXPRESSION).toBe('max(1rem+var(--app-bottom-inset,0px),env(safe-area-inset-bottom))');
+  });
+
   it('size and offset against the same expression', () => {
     expect(BOTTOM_INSET_OFFSET_CLASS).toContain(BOTTOM_INSET_OFFSET_EXPRESSION);
     expect(BOTTOM_INSET_MAX_HEIGHT_CLASS).toContain(BOTTOM_INSET_OFFSET_EXPRESSION);

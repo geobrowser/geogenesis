@@ -1,3 +1,4 @@
+import './ensure-web-storage.js';
 import { createGeoWalletClient, defineGeoNetworkConfig, GeoTestnetConfig } from '@geoprotocol/geo-sdk';
 import { type Account, type Address, type Hex, createPublicClient, http } from 'viem';
 import {
@@ -11,7 +12,16 @@ import {
 // `.account.address`, `.sendTransaction({to,data,value})`, `.sendUserOperation({calls})`.
 export type GeoWalletClient = {
   account: { address: Address };
-  sendTransaction: (args: { to: Address; data: Hex; value?: bigint }) => Promise<Hex>;
+  /**
+   * Resolves once the op is *included*. `onSubmitted`, where the implementation supports it, fires
+   * earlier — the moment the bundler accepts the op — so a caller can stop blocking its UI on
+   * inclusion while still learning the outcome from the promise. An implementation that cannot
+   * tell the two apart may ignore it; callers must treat it as optional.
+   */
+  sendTransaction: (
+    args: { to: Address; data: Hex; value?: bigint },
+    options?: { onSubmitted?: (userOperationHash: Hex) => void }
+  ) => Promise<Hex>;
   sendUserOperation: (args: { calls: ReadonlyArray<{ to: Address; data: Hex; value?: bigint }> }) => Promise<Hex>;
   /** `timeout` bounds a single wait so the caller — not viem's ~120s default — owns the total budget. */
   waitForUserOperationReceipt: (args: { hash: Hex; timeout?: number }) => Promise<{ success: boolean }>;

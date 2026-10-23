@@ -4,7 +4,7 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { DebateRow, type DebateSide, relationTargets, useWinnerShares } from '~/core/claims/browse/claim-debates';
+import { DebateRow, type DebateSide, useWinnerShares } from '~/core/claims/browse/claim-debates';
 import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pages';
 import { useDebateKeyframes } from '~/core/claims/browse/use-debate-keyframes';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
@@ -15,6 +15,7 @@ import {
 } from '~/core/debates/ontology';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useQueryEntities } from '~/core/sync/use-store';
+import { Entities } from '~/core/utils/entity';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -57,11 +58,11 @@ export function TopicDebates({ topicId, spaceId }: { topicId: string; spaceId: s
     const map = new Map<string, DebateSide[]>();
     for (const debate of debates) {
       map.set(debate.id, [
-        ...relationTargets(debate.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID).map(id => ({
+        ...Entities.relationTargets(debate.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID).map(id => ({
           spaceId: id,
           position: true,
         })),
-        ...relationTargets(debate.relations, DEBATE_OPPOSED_BY_PROPERTY_ID).map(id => ({
+        ...Entities.relationTargets(debate.relations, DEBATE_OPPOSED_BY_PROPERTY_ID).map(id => ({
           spaceId: id,
           position: false,
         })),

@@ -12,7 +12,7 @@ import { Text } from '~/design-system/text';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { Comment, Share } from './icons';
-import { PILL_ACTION_CLASS } from './pill-action';
+import { CIRCLE_ACTION_CLASS, PILL_ACTION_CLASS } from './pill-action';
 
 type InteractionBarProps = {
   orientation: 'vertical' | 'horizontal';
@@ -59,6 +59,8 @@ type InteractionBarProps = {
    * at all — today only the full-screen feed's Remove debate (GEO-2785), for the few who may.
    */
   overflow?: React.ReactNode;
+  /** Passed to `EntityVoteButtons`: whether the bar is near enough to the viewport to load counts. */
+  nearViewport?: boolean;
   className?: string;
 };
 
@@ -92,6 +94,7 @@ export function DebateInteractionBar({
   shareOpen,
   responseKind = 'curation',
   overflow,
+  nearViewport,
   className,
 }: InteractionBarProps) {
   // Defined at all means comments open in the app's global panel rather than in one this bar's
@@ -116,6 +119,7 @@ export function DebateInteractionBar({
           spaceId={spaceId}
           responseKind={voteResponseKind}
           presentation="debate-vertical"
+          nearViewport={nearViewport}
         />
         <CircleAction
           label={String(commentCount)}
@@ -157,6 +161,7 @@ export function DebateInteractionBar({
         spaceId={spaceId}
         responseKind={voteResponseKind}
         presentation="debate-horizontal"
+        nearViewport={nearViewport}
       />
       <PillAction
         onClick={onComment}
@@ -235,7 +240,7 @@ function CircleAction({
         aria-expanded={expanded ?? open}
         data-entity-comments-opener={commentsPanelOpener ? '' : undefined}
         onClick={onClick}
-        className="grid size-9 place-items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text"
+        className={CIRCLE_ACTION_CLASS}
       >
         {icon}
       </button>
@@ -287,7 +292,7 @@ function PillAction({
       onClick={onClick}
       className={cx(
         PILL_ACTION_CLASS,
-        compact ? (hideLabel ? 'size-7 justify-center px-0' : 'gap-1 px-1.5') : 'gap-1.5 px-2.5',
+        compact && hideLabel ? 'size-7 justify-center px-0' : compact ? 'gap-1 px-1.5' : 'gap-1.5 px-2.5',
         className
       )}
     >

@@ -13,6 +13,7 @@ import {
   resetAuthAttempt,
   trackAuthOnboarding,
 } from './auth-attempt';
+import { usePrivySignIn } from './hooks/use-privy-sign-in';
 import { useTrackedLogin } from './hooks/use-tracked-login';
 import { beginPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './privy-auth-events';
 import { PrivyAuthTracker } from './privy-auth-tracker';
@@ -23,7 +24,7 @@ const mocks = vi.hoisted(() => ({
   listeners: new Set<Handlers>(),
   authenticated: false,
   isModalOpen: false,
-  user: null as null | { id: string; email?: { address: string } },
+  user: null as null | { id: string; email?: { address: string }; createdAt?: Date },
   logout: undefined as undefined | (() => void),
   login: vi.fn(),
   trackPrivyAuth: vi.fn(),
@@ -42,7 +43,7 @@ function useSubscription(handlers: Handlers) {
   }, [handlers]);
   return { login: mocks.login };
 }
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({
     ready: true,
     authenticated: mocks.authenticated,
@@ -62,6 +63,21 @@ vi.mock('./analytics', () => ({
   identifyPrivyUser: mocks.identifyPrivyUser,
   reconcileAnonymousAnalyticsIdentity: vi.fn(),
 }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/explore',
+  useSearchParams: () => new URLSearchParams(''),
+}));
+vi.mock('~/partials/onboarding/onboarding-atoms', async () => {
+  const { atom } = await import('jotai');
+  return {
+    nameAtom: atom(''),
+    topicIdAtom: atom(''),
+    avatarAtom: atom(''),
+    spaceIdAtom: atom(''),
+    stepAtom: atom('start'),
+    selectedTopicIdsAtom: atom<string[]>([]),
+  };
+});
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: null, isFetched: false }),
 }));
@@ -89,6 +105,156 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 afterEach(cleanup);
+
+const dismiss = () =>
+  act(() => {
+    for (const listener of mocks.listeners) listener.onError?.('exited_auth_flow');
+  });
+
+/**
+ * A press's `onCancel` withdraws what it queued — a vote, a join — if the sign-in is dismissed.
+ * Queued actions outlive the control that pressed them, so the withdrawal has to as well.
+ */
+/**
+ * GEO-3243: Privy creates the account when the email code is accepted. Exiting its dialog after that
+ * leaves the account behind, and Privy signs it back out, so the attempt is not a sign-in the visitor
+ * gave up on. It used to be recorded as `closed`, hiding the account from the funnel.
+ */
+describe('a sign-in exited after Privy signed someone in', () => {
+  const pressSignIn = () => {
+    const tracker = render(<PrivyAuthTracker />);
+    const control = renderHook(() => usePrivySignIn());
+    act(() => {
+      control.result.current({ component: 'navbar', auth_control: 'sign_in' });
+    });
+    return { attempt: currentAuthAttempt()!, rerender: () => tracker.rerender(<PrivyAuthTracker />) };
+  };
+  const completedOutcomes = () =>
+    mocks.capture.mock.calls
+      .filter(([event]) => event === 'auth_attempt_completed')
+      .map(([, properties]) => (properties as { outcome: string }).outcome);
+
+  it('is recorded as an account created and left, when the code created the account', () => {
+    const { attempt, rerender } = pressSignIn();
+    mocks.authenticated = true;
+    mocks.user = { id: 'did:privy:new', createdAt: new Date() };
+    rerender();
+    dismiss();
+
+    expect(readAuthAttempt(attempt.id)?.outcome).toBe('left_after_sign_up');
+    expect(completedOutcomes()).toEqual(['left_after_sign_up']);
+  });
+
+  it('is recorded as a sign-in left, for an account that already existed', () => {
+    const { attempt, rerender } = pressSignIn();
+    mocks.authenticated = true;
+    mocks.user = { id: 'did:privy:old', createdAt: new Date('2025-01-01T00:00:00Z') };
+    rerender();
+    dismiss();
+
+    expect(readAuthAttempt(attempt.id)?.outcome).toBe('left_after_sign_in');
+  });
+
+  // Copilot on #2791 (round 2): Privy's sign-out of the exited account can be seen before the exit.
+  it('is recorded the same way when the sign-out is seen before the exit', () => {
+    const { attempt, rerender } = pressSignIn();
+    mocks.authenticated = true;
+    mocks.user = { id: 'did:privy:new', createdAt: new Date() };
+    rerender();
+
+    mocks.authenticated = false;
+    mocks.user = null;
+    rerender();
+    dismiss();
+
+    expect(readAuthAttempt(attempt.id)?.outcome).toBe('left_after_sign_up');
+  });
+
+  it('is recorded the same way when Privy’s logout callback comes first', () => {
+    const { attempt, rerender } = pressSignIn();
+    mocks.authenticated = true;
+    mocks.user = { id: 'did:privy:new', createdAt: new Date() };
+    rerender();
+
+    act(() => mocks.logout?.());
+    dismiss();
+
+    expect(readAuthAttempt(attempt.id)?.outcome).toBe('left_after_sign_up');
+  });
+
+  it('forgets the account once its session ends, so a later sign-in closed unsigned stays closed', () => {
+    const { rerender } = pressSignIn();
+    mocks.authenticated = true;
+    mocks.user = { id: 'did:privy:old', createdAt: new Date('2025-01-01T00:00:00Z') };
+    rerender();
+    mocks.authenticated = false;
+    mocks.user = null;
+    rerender();
+
+    const control = renderHook(() => usePrivySignIn());
+    act(() => {
+      control.result.current({ component: 'navbar', auth_control: 'sign_in' });
+    });
+    const next = currentAuthAttempt()!;
+    dismiss();
+
+    expect(readAuthAttempt(next.id)?.outcome).toBe('closed');
+  });
+
+  it('is still closed when nobody had signed in', () => {
+    const { attempt } = pressSignIn();
+    dismiss();
+
+    expect(readAuthAttempt(attempt.id)?.outcome).toBe('closed');
+  });
+});
+
+describe('a press abandoned with the sign-in', () => {
+  it('is withdrawn even after the control that pressed it unmounts', () => {
+    const onCancel = vi.fn();
+    render(<PrivyAuthTracker />);
+    const control = renderHook(() => usePrivySignIn());
+
+    act(() => {
+      control.result.current(undefined, { onCancel });
+    });
+    control.unmount();
+    dismiss();
+
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('is not withdrawn once the sign-in completes', () => {
+    const onCancel = vi.fn();
+    render(<PrivyAuthTracker />);
+    const control = renderHook(() => usePrivySignIn());
+
+    act(() => {
+      control.result.current(undefined, { onCancel });
+    });
+    broadcast(completion('completes'));
+    dismiss();
+
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('belongs to its own attempt, not a later one', () => {
+    const first = vi.fn();
+    render(<PrivyAuthTracker />);
+    const control = renderHook(() => usePrivySignIn());
+
+    act(() => {
+      control.result.current(undefined, { onCancel: first });
+    });
+    dismiss();
+    act(() => {
+      control.result.current();
+    });
+    dismiss();
+
+    expect(first).toHaveBeenCalledOnce();
+  });
+});
 
 describe('PrivyAuthTracker', () => {
   describe.each(['modal-login', 'modal-signup', 'headless-signup'] as const)('%s with both observers', flow => {
@@ -482,5 +648,51 @@ describe('PrivyAuthTracker', () => {
       expect.anything(),
       expect.objectContaining({ auth_control: 'disagree' })
     );
+  });
+});
+
+// GEO-3245: Privy's `login()` does nothing for someone already signed in, so a press then only
+// opened an attempt that the next press superseded. One stuck user left 37 of them.
+describe('a sign-in pressed while already signed in', () => {
+  beforeEach(() => {
+    mocks.authenticated = true;
+    mocks.user = { id: 'did:privy:signed-in' };
+  });
+
+  it('neither calls login nor opens an attempt, from the tracked login', () => {
+    const control = renderHook(() => useTrackedLogin({}));
+    act(() => {
+      control.result.current.login({ component: 'navbar', auth_control: 'sign_in' });
+    });
+
+    expect(mocks.login).not.toHaveBeenCalled();
+    expect(currentAuthAttempt()).toBeUndefined();
+    expect(mocks.capture).not.toHaveBeenCalledWith('auth_attempt_started', expect.anything());
+  });
+
+  it('neither calls login nor opens an attempt, nor withdraws the press, from the sign-in control', () => {
+    const onCancel = vi.fn();
+    const control = renderHook(() => usePrivySignIn());
+    act(() => {
+      control.result.current({ component: 'navbar', auth_control: 'sign_in' }, { onCancel });
+    });
+
+    expect(mocks.login).not.toHaveBeenCalled();
+    expect(currentAuthAttempt()).toBeUndefined();
+    expect(mocks.capture).not.toHaveBeenCalledWith('auth_attempt_started', expect.anything());
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('works again once they are signed out', () => {
+    const control = renderHook(() => useTrackedLogin({}));
+    mocks.authenticated = false;
+    mocks.user = null;
+    control.rerender();
+    act(() => {
+      control.result.current.login({ component: 'navbar', auth_control: 'sign_in' });
+    });
+
+    expect(mocks.login).toHaveBeenCalledOnce();
+    expect(currentAuthAttempt()).toBeDefined();
   });
 });

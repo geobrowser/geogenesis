@@ -2,44 +2,47 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 
-import { useRouter } from 'next/navigation';
+import { useSetAtom } from 'jotai';
 
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
-import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
+
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 export type RankingComposeAccessStatus =
   'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'not-found' | 'ready';
 
+/**
+ * Whether this status sends the viewer through sign-in or onboarding — and so needs a return address
+ * to come back to compose.
+ *
+ * Not while a new account's space is being created: onboarding is done and the space is on its way,
+ * so there is nothing to send them through, and a return address left set then is one
+ * `PostAuthRedirect` follows once the space registers — pulling them back to compose from wherever
+ * they went since.
+ */
+export function rankingComposeNeedsAccountStep(status: RankingComposeAccessStatus, isAccountSetupPending: boolean) {
+  return status === 'needs-login' || (status === 'needs-onboarding' && !isAccountSetupPending);
+}
+
 export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, isFetched } = usePersonalSpaceId();
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
   const { canEdit, isLoading: isLoadingAccess } = useAccessControl(spaceId);
   const tx = useSmartAccountTransaction();
-  const postLoginRedirectRef = useRef<string | null>(null);
+  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
 
-  const { login } = useTrackedLogin({
-    onComplete: () => {
-      const postLoginRedirect = postLoginRedirectRef.current;
-      postLoginRedirectRef.current = null;
-      if (postLoginRedirect) {
-        // Logged-out compose entry goes straight to compose after auth. If the
-        // account is new, the compose screen records this URL for onboarding.
-        router.push(postLoginRedirect);
-      }
-    },
-  });
+  const promptSignIn = usePrivySignIn();
 
   const isLoading = isLoadingPersonalSpace || isLoadingSpace || isLoadingAccess;
 
@@ -53,24 +56,29 @@ export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
     return 'ready';
   })();
 
-  const prepareOnboarding = usePrepareOnboarding();
-
   const promptLogin = useCallback(
     (postLoginRedirect?: string) => {
-      postLoginRedirectRef.current = postLoginRedirect ?? null;
-      // `keepReturnTo` because this hook tracks its own destination in the ref above; writing the
-      // shared atom too would put two sources of truth in play.
-      prepareOnboarding({ keepReturnTo: true });
-      login({
-        component: 'ranking_composer',
-        target_type: rankingId ? 'ranking' : 'space',
-        target_id: rankingId ?? spaceId,
-        auth_control: 'add_ranking',
-        auth_intent: 'ranking',
-        auth_continuation: 'resume',
-      });
+      // Into the app-level return address rather than anything this hook holds: the ranking block
+      // that called it can unmount while the viewer signs up. `PostAuthRedirect` follows it for an
+      // existing account, and onboarding does for a new one, once their profile is made.
+      promptSignIn(
+        {
+          component: 'ranking_composer',
+          target_type: rankingId ? 'ranking' : 'space',
+          target_id: rankingId ?? spaceId,
+          auth_control: 'add_ranking',
+          auth_intent: 'ranking',
+          auth_continuation: 'resume',
+        },
+        {
+          redirectTo: postLoginRedirect,
+          // A dismissed sign-in drops the destination, so a later, unrelated sign-in doesn't land
+          // on the compose screen.
+          onCancel: () => setPostOnboardingRedirect(null),
+        }
+      );
     },
-    [prepareOnboarding, login, spaceId, rankingId]
+    [promptSignIn, setPostOnboardingRedirect, spaceId, rankingId]
   );
 
   const ensureAccess = useCallback(async (): Promise<boolean> => {

@@ -61,4 +61,13 @@ describe('Main', () => {
     // spread form would still pass if one chrome class crept back.
     for (const className of CHROME) expect(main).not.toHaveClass(className);
   });
+
+  it('drops only the vertical padding around a debate room, which fills the viewport itself', () => {
+    mocks.pathname = '/debate/0b5c9d41f2a74e0f9d3a8f6e1c2b7a90';
+    const main = renderMain();
+
+    expect(main).toHaveClass('mx-auto', 'max-w-[1200px]');
+    expect(main).not.toHaveClass('pt-8');
+    expect(main).not.toHaveClass('pb-16');
+  });
 });

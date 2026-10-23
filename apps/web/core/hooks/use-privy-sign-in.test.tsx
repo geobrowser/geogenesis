@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
+import { runSignInAbandoned } from '~/core/auth/sign-in-abandoned';
 
 import { usePrivySignIn } from './use-privy-sign-in';
 
@@ -16,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   setStep: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
   usePrivy: () => ({ authenticated: false }),
   useGeoLogin: ({
@@ -41,7 +42,7 @@ vi.mock('~/core/auth-attempt', () => ({ currentAuthAttempt: () => ({ id: undefin
 
 vi.mock('~/core/privy-auth-events', () => ({ beginPrivyAuth: mocks.beginPrivyAuth }));
 
-vi.mock('~/partials/onboarding/dialog', async () => {
+vi.mock('~/partials/onboarding/onboarding-atoms', async () => {
   const { atom } = await import('jotai');
   return {
     nameAtom: atom(''),
@@ -159,6 +160,20 @@ describe('usePrivySignIn', () => {
     act(() => mocks.privyOnComplete?.({}));
 
     expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  // A control that queued the viewer's choice at the press withdraws it if they walk away. The
+  // withdrawal is registered with the app-level attempt, so it outlives this hook — when it fires
+  // (dismissal) and when it is dropped (completion, a new attempt) is covered with the tracker.
+  it("registers a press's own cancel with the sign-in attempt", () => {
+    const onCancel = vi.fn();
+    const { result } = renderHook(() => usePrivySignIn());
+
+    act(() => result.current(undefined, { onCancel }));
+    expect(onCancel).not.toHaveBeenCalled();
+
+    act(() => runSignInAbandoned());
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 
   it('notifies the initiating surface when the modal is dismissed or fails', () => {

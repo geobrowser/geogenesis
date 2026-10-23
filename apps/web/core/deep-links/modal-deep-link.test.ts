@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEEP_LINK_MODALS, modalTarget, modalVia, requestsModal, toModal, urlWithoutModal } from './modal-deep-link';
+import {
+  DEEP_LINK_MODALS,
+  modalTarget,
+  modalVia,
+  requestsModal,
+  toModal,
+  urlWithoutModal,
+  urlWithoutParams,
+} from './modal-deep-link';
 
 const params = (search: string) => new URLSearchParams(search);
 
@@ -13,6 +21,10 @@ describe('DEEP_LINK_MODALS', () => {
       debates: 'debates',
       roomAccess: 'room-access',
       availability: 'availability',
+      schedule: 'schedule',
+      emailSettings: 'email-settings',
+      runningLate: 'running-late',
+      cantMakeIt: 'cant-make-it',
     });
   });
 
@@ -62,6 +74,15 @@ describe('modalVia', () => {
   // The whole reason attribution is not `source`: that key is the block link's trigger.
   it('does not read `source`, which belongs to the block link', () => {
     expect(modalVia(params('modal=signin&source=copy_link'))).toBeNull();
+  });
+});
+
+describe('urlWithoutParams', () => {
+  it('clears only the keys it is given, keeping other params and the fragment', () => {
+    expect(urlWithoutParams('/space/s/c', params('side=agree&ref_email=welcome&tab=x'), ['side'], '#comments')).toBe(
+      '/space/s/c?ref_email=welcome&tab=x#comments'
+    );
+    expect(urlWithoutParams('/space/s/c', params('side=agree'), ['side'])).toBe('/space/s/c');
   });
 });
 
@@ -118,6 +139,13 @@ describe('toModal', () => {
   it('adds the sub-target and attribution when given', () => {
     expect(toModal({ modal: 'debates', pathname: '/explore', target: 'people', via: 'email' })).toBe(
       '/explore?modal=debates&modalTarget=people&via=email'
+    );
+  });
+
+  // GEO-3152: the calendar's Back to Debates returns to a page that may carry its own state.
+  it("merges into a path's own query and keeps its fragment", () => {
+    expect(toModal({ modal: 'debates', pathname: '/space/abc?proposal=1#votes' })).toBe(
+      '/space/abc?proposal=1&modal=debates#votes'
     );
   });
 

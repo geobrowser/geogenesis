@@ -6,6 +6,7 @@ import {
   formatOffset,
   formatViewerInstant,
   peerScheduleDays,
+  slotStarts,
   toPeerSchedule,
   viewerInputInstant,
   viewerInputValue,
@@ -395,5 +396,37 @@ describe('viewerInputValue', () => {
   it('round-trips through viewerInputInstant', () => {
     const at = Date.parse('2026-10-25T00:30:00Z');
     expect(viewerInputInstant(viewerInputValue(at, 'Europe/Berlin'), 'Europe/Berlin')?.getTime()).toBe(at);
+  });
+});
+
+describe('slotStarts', () => {
+  const at = (iso: string) => Date.parse(iso);
+  const starts = (slot: { start: string; end: string }, after?: number) =>
+    slotStarts(slot, after === undefined ? undefined : { after }).map(instant => instant.toISOString());
+
+  it('steps a window into half hours, a trailing part-slot included', () => {
+    expect(starts({ start: '2026-10-06T10:00:00Z', end: '2026-10-06T11:10:00Z' })).toEqual([
+      '2026-10-06T10:00:00.000Z',
+      '2026-10-06T10:30:00.000Z',
+      '2026-10-06T11:00:00.000Z',
+    ]);
+  });
+
+  it("starts after `after` on the window's own grid, however long ago the window began", () => {
+    // Began three days back: counting from its start, the 48-entry ceiling ends long before now.
+    const window = { start: '2026-10-03T10:00:00Z', end: '2026-10-06T12:00:00Z' };
+    expect(starts(window, at('2026-10-06T10:40:00Z'))).toEqual([
+      '2026-10-06T11:00:00.000Z',
+      '2026-10-06T11:30:00.000Z',
+    ]);
+    // Strictly after: a start exactly at `after` has begun.
+    expect(starts(window, at('2026-10-06T11:00:00Z'))).toEqual(['2026-10-06T11:30:00.000Z']);
+  });
+
+  it('leaves a window that has not begun as it is', () => {
+    expect(starts({ start: '2026-10-06T10:00:00Z', end: '2026-10-06T11:00:00Z' }, at('2026-10-06T09:00:00Z'))).toEqual([
+      '2026-10-06T10:00:00.000Z',
+      '2026-10-06T10:30:00.000Z',
+    ]);
   });
 });

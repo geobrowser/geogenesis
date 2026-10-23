@@ -71,6 +71,21 @@ function rawEntity(relationsList: unknown[]) {
   };
 }
 
+describe('baseline completeness', () => {
+  it('marks capped value lists incomplete', () => {
+    const raw = rawEntity([]);
+    const decoded = EntityDecoder.decode({ ...raw, valuesList: Array.from({ length: 1000 }, () => raw.valuesList[0]) });
+    expect(decoded?.valuesComplete).toBe(false);
+  });
+
+  it('keeps the raw relation cap visible after dangling relations are dropped', () => {
+    const raw = rawEntity(Array.from({ length: 1000 }, () => rawRelation({ id: danglingRelationId, toEntity: null })));
+    const decoded = EntityDecoder.decode(raw);
+    expect(decoded?.relations).toEqual([]);
+    expect(decoded?.relationsComplete).toBe(false);
+  });
+});
+
 describe('EntityDecoder — dangling relations', () => {
   it('decodes the entity and drops relations whose target no longer resolves', () => {
     // A single relation with `toEntity: null` used to fail the whole entity

@@ -123,8 +123,7 @@ export function useScopedMatchmakingClaims(
   // key's rows through `placeholderData` when the key moves under a disabled query, and no request
   // will ever replace them — so reading that as "pending" would leave the counts waiting forever
   // on a request that was never going to happen. The callers in that state have client-derived
-  // counts that are already current: the hub's Featured source, and a rematch selection with no
-  // browsable space.
+  // counts that are already current: a rematch selection with no browsable space.
   const countsPending = !unusable && (claimsQuery.isPlaceholderData || claimsQuery.isLoading);
 
   return {

@@ -50,6 +50,8 @@ export type PeerAvailabilityBooking = {
    * different time"). Only the wording changes; the caller decides what `onRequest` does.
    */
   mode?: 'request' | 'reschedule';
+  /** The request being moved, in `reschedule` mode. For analytics only (GEO-3432). */
+  requestId?: string | null;
   /**
    * An instant, not a chip: a week with no slots is still requestable (GEO-2938). `viewerIsFree` is
    * the picked chip's, for analytics; `null` for a time typed in by hand. `viewerTimezone` is the
@@ -111,7 +113,9 @@ export function PeerAvailability({
 
   // Once per opening: the modal mounts this only while open, and a refetch is not a second look.
   useEffectOnceWhen(schedule !== undefined, () => {
-    if (schedule) debateAvailabilityViewed(schedule, { entry, bookable: Boolean(booking) });
+    if (schedule) {
+      debateAvailabilityViewed(schedule, { entry, bookable: Boolean(booking), requestId: booking?.requestId });
+    }
   });
 
   // Signed out there is no viewer to compare against, so the question cannot be asked rather than
@@ -626,7 +630,7 @@ function Legend({ peerName, showMutual }: { peerName: string; showMutual: boolea
   );
 }
 
-function LegendItem({ swatch, children }: { swatch: string; children: React.ReactNode }) {
+export function LegendItem({ swatch, children }: { swatch: string; children: React.ReactNode }) {
   return (
     <li className="flex items-center gap-1.5">
       <span aria-hidden className={cx('h-3 w-5 shrink-0 rounded-sm border', swatch)} />

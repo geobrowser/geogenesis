@@ -8,6 +8,7 @@ export const ACTION_COMPONENTS = [
   'sign_in_deep_link',
   'invite_link',
   'explore_email_capture',
+  'save_votes_prompt',
   'entity_vote_buttons',
   'claim_position_control',
   'winner_vote_button',
@@ -20,6 +21,7 @@ export const ACTION_COMPONENTS = [
   'join_space_button',
   'bounty_interest',
   'debate_matchmaking',
+  'scheduled_debate_notice',
   'search',
   'ai_assistant',
   'create_space',
@@ -28,10 +30,14 @@ export const ACTION_COMPONENTS = [
   'debate_claim_ticker',
   'debate_end_card',
   'debate_claims_panel',
+  'topic_follow_button',
+  'person_follow_button',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
   | 'vote'
+  | 'local_vote'
+  | 'local_vote_dropped'
   | 'ranking'
   | 'comment'
   | 'edit_comment'
@@ -39,9 +45,15 @@ export type ActionKind =
   | 'edit'
   | 'share'
   | 'join_space'
+  | 'follow_topic'
+  | 'unfollow_topic'
+  | 'follow_person'
+  | 'unfollow_person'
   | 'bounty_interest'
   | 'start_debate'
   | 'join_debate'
+  | 'running_late'
+  | 'cant_make_it'
   | 'search'
   | 'search_result'
   | 'assistant_message'
@@ -71,6 +83,31 @@ export type ActionContext = {
   playback_position_ms?: number;
   debate_id?: string;
   variant?: string;
+  /**
+   * GEO-3140 / GEO-3144. The feed version that put this card on the page (e.g. `best-1`,
+   * `for-you-1.0+web.1`), and on an interleaved page which arm picked it and in which experiment,
+   * so engagement can be credited per version. `feed_exploration` marks a For you exploration slot.
+   * `feed_slot: 'fresh'` marks a card Best's fresh slot placed (GEO-3221).
+   */
+  feed_version?: string;
+  feed_arm?: 'a' | 'b';
+  feed_experiment_id?: string;
+  feed_exploration?: boolean;
+  feed_slot?: 'fresh';
+  /** GEO-3234. How many cards this visitor had already seen were hidden from this card's page. */
+  feed_seen_hidden?: number;
+  /** GEO-3311. The live lobby the action was taken in, in geo-chat's dashless spelling. */
+  lobby_id?: string;
+  /**
+   * GEO-3311. The lobby's running room vote, only on an action whose target is that vote's claim, so
+   * a vote in answer to the room reads apart from one on any other claim in the lobby.
+   */
+  room_vote_id?: string;
+  /**
+   * GEO-3374. Which of our emails the action came from: the `ref_email` slug its link carried. Set on
+   * a vote an email's vote link cast, and on that vote again when a device vote is saved later.
+   */
+  ref_email?: string;
 };
 export const ACTION_CONTEXT_FIELDS = [
   'component',
@@ -93,12 +130,24 @@ export const ACTION_CONTEXT_FIELDS = [
   'playback_position_ms',
   'debate_id',
   'variant',
+  'feed_version',
+  'feed_arm',
+  'feed_experiment_id',
+  'feed_exploration',
+  'feed_slot',
+  'feed_seen_hidden',
+  'lobby_id',
+  'room_vote_id',
+  'ref_email',
   'auth_attempt_id',
   'action_session_id',
   'action_anonymous_id',
 ] as const satisfies readonly (keyof ActionContext)[];
 
-export type ActionScope = Partial<Omit<ActionContext, 'page_path' | 'page_view_id'>>;
+export type ActionScope = Partial<Omit<ActionContext, 'page_path' | 'page_view_id'>> & {
+  /** Scope only, never sent: the claim entity `room_vote_id` belongs to. Other targets drop the vote. */
+  room_vote_claim_id?: string;
+};
 
 /** Entity metadata only belongs to the entity that supplied it. */
 export function mergeActionScope(parent: ActionScope, value: ActionScope): ActionScope {
@@ -192,6 +241,9 @@ export function snapshotActionContext(
     ...scopes
   );
   const source = replayContext ?? liveContext;
+  // A replay was snapshotted against its own target already; a live scope's vote is only its claim's.
+  const roomVoteClaimId: string | undefined = replayContext ? undefined : liveContext.room_vote_claim_id;
+  const roomVoteApplies = replayContext !== undefined || (!!roomVoteClaimId && equals(roomVoteClaimId, targetId));
   const metadata = [...(replayContext ? [scope, overrides, replayContext] : scopes)]
     .reverse()
     .filter(candidate => !candidate.target_id || equals(candidate.target_id, targetId));
@@ -202,6 +254,7 @@ export function snapshotActionContext(
     target_type: targetType,
     target_type_ids: metadata.find(candidate => candidate.target_type_ids !== undefined)?.target_type_ids,
     origin_entity_ids: metadata.find(candidate => candidate.origin_entity_ids !== undefined)?.origin_entity_ids,
+    room_vote_id: roomVoteApplies ? source.room_vote_id : undefined,
   };
   // A runtime allowlist as well as a type: structural typing must not admit text or emails.
   return Object.fromEntries(

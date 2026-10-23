@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { buildExploreFeedFilter, fetchCompleteExplorePopulationIndex } from '~/core/explore/fetch-explore-feed';
+import { buildExploreFeedFilter } from '~/core/explore/fetch-explore-feed';
 import type { EntityFilter, RelationFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
 import { getEntityNames } from '~/core/io/queries';
@@ -10,7 +10,8 @@ import { normId } from '~/core/utils/norm-id';
 import { createPromiseTtlCache } from '~/core/utils/promise-ttl-cache';
 
 import { spaceTopicCountDocument } from './space-topic-count-document';
-import { topicFeedFilter, topicFeedPopulationScopes, topicsRelationFilter } from './topic-feed-filter';
+import { topicFeedFilter, topicsRelationFilter } from './topic-feed-filter';
+import { topicFeedTypeCountsDocument } from './topic-feed-type-counts-document';
 import { TOPIC_FEED_ENTITY_TYPE_IDS } from './topic-feed-types';
 
 export type TopicFeedFacet = { id: string; name: string | null; count: number };
@@ -61,10 +62,8 @@ function scopedFeedFilter(
 }
 
 async function fetchTopicNames(ids: string[], signal?: AbortSignal) {
-  const batches: string[][] = [];
-  for (let index = 0; index < ids.length; index += 50) batches.push(ids.slice(index, index + 50));
-  const rows = await Promise.all(batches.map(batch => Effect.runPromise(getEntityNames(batch, signal))));
-  return new Map(rows.flat().map(row => [normId(row.id), row.name]));
+  const rows = await Effect.runPromise(getEntityNames(ids, signal));
+  return new Map(rows.map(row => [normId(row.id), row.name]));
 }
 
 async function namedFacets(counts: Map<string, number>, excludedTopicId: string, signal?: AbortSignal) {
@@ -176,12 +175,11 @@ export function emptyTopicFeedCompositionCounts(): TopicFeedCompositionCounts {
 }
 
 /**
- * Counts the exact compact population the Topic feed orders.
+ * Per-type counts for a topic page's composition strip, over the population its feed pages through:
+ * entities tagged with the topic, in these spaces (GEO-3092). gaia counts them from its topic
+ * ranking table, so the strip no longer downloads the topic's whole population to count it.
  *
- * The old implementation issued one relation-heavy `totalCount` connection per displayed type.
- * This instead reuses the feed's complete-population promise/cache and counts its tiny `typeIds`
- * field locally. That makes the header, dropdown and cards agree by construction while avoiding a
- * second graph scan on the common Best-first page load.
+ * An entity carrying more than one feed type is counted once in each.
  */
 export async function fetchTopicFeedCompositionCounts({
   spaceIds,
@@ -192,24 +190,28 @@ export async function fetchTopicFeedCompositionCounts({
 }): Promise<TopicFeedCompositionCounts> {
   if (spaceIds.length === 0) return emptyTopicFeedCompositionCounts();
 
-  const rows = await fetchCompleteExplorePopulationIndex({
-    spaceIds,
-    sort: 'best',
-    time: 'all',
-    typeIds: TOPIC_FEED_ENTITY_TYPE_IDS,
-    requireName: true,
-    scopes: topicFeedPopulationScopes(topicId, [], TOPIC_FEED_ENTITY_TYPE_IDS),
-  });
+  const rows = await Effect.runPromise(
+    graphql({
+      query: topicFeedTypeCountsDocument,
+      decoder: data => data.topicFeedTypeCounts ?? [],
+      variables: {
+        topicIds: [topicId],
+        typeIds: [...TOPIC_FEED_ENTITY_TYPE_IDS],
+        spaceIds,
+        // The topic feed shows every claim, curated for debate or not.
+        debateTaggedClaims: false,
+      },
+    })
+  );
   const normalizedIdToCanonicalId = new Map(TOPIC_FEED_ENTITY_TYPE_IDS.map(id => [normId(id), id]));
+  // A type with nothing in it is absent from the list, so every type starts at zero.
   const counts = emptyTopicFeedCompositionCounts();
 
   for (const row of rows) {
-    // An entity can carry more than one selected type. Count it once in each matching bucket,
-    // mirroring the dropdown's OR semantics without double-counting duplicate ids on the row.
-    for (const normalizedTypeId of new Set((row.typeIds ?? []).flatMap(id => (id ? [normId(id)] : [])))) {
-      const typeId = normalizedIdToCanonicalId.get(normalizedTypeId);
-      if (typeId) counts.typeCounts[typeId] = (counts.typeCounts[typeId] ?? 0) + 1;
-    }
+    if (typeof row?.typeId !== 'string') continue;
+    const typeId = normalizedIdToCanonicalId.get(normId(row.typeId));
+    const count = Number(row.entityCount);
+    if (typeId && Number.isFinite(count)) counts.typeCounts[typeId] = count;
   }
 
   return counts;
@@ -218,10 +220,9 @@ export async function fetchTopicFeedCompositionCounts({
 /**
  * Per-type counts for a topic space's feed: every named entity of each feed type in the space.
  *
- * Counted per type with `totalCount` rather than from the complete population the Topic page
- * sorts locally. A topic's population is the entities *tagged* with it, which stays small; a
- * space's is everything in it, and the large topic spaces hold 20–30 thousand — far too many to
- * download for a header. One aliased request carries all eleven counts.
+ * Counted per type with `totalCount`, not from gaia's topic ranking table as a topic page's are:
+ * a space's feed is everything in the space, not the entities tagged with one topic. One aliased
+ * request carries all eleven counts.
  */
 export async function fetchSpaceTopicCompositionCounts({
   spaceId,
