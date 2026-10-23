@@ -6,9 +6,11 @@ import {
   geoChatRequest,
 } from '~/core/debates/api';
 
-/** One live call on a space's list (GEO-3419). Ids are dashless. */
+/** One call on a space's list (GEO-3419). Ids are dashless. */
 export type SpaceCallSummary = {
   call_id: string;
+  /** Absent from a geo-chat that lists live calls only; later tickets add scheduled rows. */
+  status?: 'live' | (string & {});
   name: string;
   started_at: string;
   started_by: DebateLobbyPerson | null;
@@ -28,9 +30,14 @@ export type SpaceCallsResponse = {
   supported: boolean;
   /** The viewer edits the space; `null` signed out. */
   viewer_can_start: boolean | null;
-  /** Live calls, newest first. */
+  /** Newest first; see `liveSpaceCall` for the one on now. */
   calls: SpaceCallSummary[];
 };
+
+/** The call on now, skipping any row that is not live. */
+export function liveSpaceCall(list: Pick<SpaceCallsResponse, 'calls'> | undefined): SpaceCallSummary | null {
+  return list?.calls.find(call => (call.status ?? 'live') === 'live') ?? null;
+}
 
 /** Signed in or out. Signed out it is rate limited per IP, like the lobby list. */
 export async function listSpaceCalls(

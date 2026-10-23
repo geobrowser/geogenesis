@@ -12,6 +12,7 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
+import { liveSpaceCall } from './api';
 import { useSpaceCalls, useStartSpaceCall } from './hooks';
 import { spaceCallPath } from './routes';
 
@@ -38,7 +39,7 @@ function SpaceCallEntryInner({ spaceId }: { spaceId: string }) {
   const callsQuery = useSpaceCalls(spaceId);
   const start = useStartSpaceCall(spaceId);
   const data = callsQuery.data;
-  const live = data?.calls[0] ?? null;
+  const live = liveSpaceCall(data);
 
   const onStart = () =>
     start.mutate(undefined, {

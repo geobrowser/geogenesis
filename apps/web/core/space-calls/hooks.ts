@@ -6,7 +6,7 @@ import { dashlessId } from '~/core/debates/api';
 import { useDebateGatewayScope } from '~/core/debates/debate-gateway';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '~/core/debates/hooks';
 
-import { listSpaceCalls, startSpaceCall } from './api';
+import { type SpaceCallsResponse, listSpaceCalls, startSpaceCall } from './api';
 
 /** Under `debates`, so a gateway reconcile refetches it; the event patches every viewer's copy. */
 export const spaceCallsQueryKey = (spaceId: string, accountKey: string | null) =>
@@ -14,6 +14,11 @@ export const spaceCallsQueryKey = (spaceId: string, accountKey: string | null) =
 
 /** Signed out there is no gateway; the contract asks for 30–60s. */
 export const SIGNED_OUT_SPACE_CALLS_POLL_MS = 45_000;
+
+/** Polls signed out, except for a space without calls, which cannot gain one. */
+export function signedOutSpaceCallsPoll(data: SpaceCallsResponse | undefined): number | false {
+  return data?.supported === false ? false : SIGNED_OUT_SPACE_CALLS_POLL_MS;
+}
 
 /**
  * A space's live calls and whether the viewer may start one (GEO-3419). Signed in, kept current by
@@ -29,7 +34,7 @@ export function useSpaceCalls(spaceId: string, enabled = true) {
     queryKey: spaceCallsQueryKey(spaceId, viewerKey),
     queryFn: ({ signal }) => listSpaceCalls(spaceId, getPrivyIdentityToken, viewerKey, signal),
     enabled: enabled && ready && Boolean(spaceId),
-    ...(authenticated ? {} : { refetchInterval: SIGNED_OUT_SPACE_CALLS_POLL_MS }),
+    refetchInterval: query => (authenticated ? false : signedOutSpaceCallsPoll(query.state.data)),
   });
 }
 

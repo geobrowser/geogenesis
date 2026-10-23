@@ -88,6 +88,31 @@ describe('SpaceCallEntry', () => {
     expect(mocks.push).toHaveBeenCalledWith('/space/space1/calls/0d9c12340000400080000000000000aa');
   });
 
+  it('links the live call, not a row before it that is not live', () => {
+    mocks.calls = {
+      space_id: 'space1',
+      supported: true,
+      viewer_can_start: null,
+      calls: [
+        { ...live, call_id: 'later', name: 'Later call', status: 'scheduled' },
+        { ...live, status: 'live' },
+      ],
+    };
+    render(<SpaceCallEntry spaceId="space1" />);
+    expect(screen.getByRole('link', { name: 'Join Weekly call' })).toHaveAttribute('href', '/space/space1/calls/call1');
+  });
+
+  it('shows no live call when no row is live', () => {
+    mocks.calls = {
+      space_id: 'space1',
+      supported: true,
+      viewer_can_start: false,
+      calls: [{ ...live, status: 'scheduled' }],
+    };
+    const { container } = render(<SpaceCallEntry spaceId="space1" />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('shows nothing to a non-editor with no call on, or in a space without calls', () => {
     mocks.calls = { space_id: 'space1', supported: true, viewer_can_start: false, calls: [] };
     const { container, rerender } = render(<SpaceCallEntry spaceId="space1" />);
