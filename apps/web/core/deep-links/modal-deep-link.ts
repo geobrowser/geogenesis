@@ -3,6 +3,7 @@
  *
  *     /explore?modal=signin&via=marketing              GEO-2727
  *     /explore?modal=debates&modalTarget=people        GEO-2746
+ *     /explore?modal=debates&modalTarget=requests:<req>  one scheduled request   GEO-3431
  *     /space/<id>?modal=availability                   a person's bookable week
  *     <any page>?modal=schedule                        the viewer's own schedule editor
  *     <any page>?modal=email-settings                  the viewer's email settings (every email's footer)

@@ -13,6 +13,7 @@ import { withActionContext } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
 import { personProfileOpened } from '~/core/analytics';
 import { FollowTopicButton } from '~/core/follows/follow-button';
+import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -188,6 +189,7 @@ function EntityResponseButtons({
   const { ready: authReady, authenticated } = usePrivy();
   // Known to be signed out — not still restoring a session, when `authenticated` reads false too.
   const signedOut = authReady && !authenticated;
+  const authResolving = useAuthResolving();
   const queryClient = useQueryClient();
   // Signed in without a usable space, a vote is held only when one is on its way: being created for
   // a new account, or still loading for a returning one. With neither, nothing would ever publish it,
@@ -266,13 +268,17 @@ function EntityResponseButtons({
 
   // A queued (pre-personal-space) vote overrides the mutation's own optimistic state until it is
   // replayed and cleared from the queue, at which point the mutation's state takes over.
-  const effectiveOptimistic = queuedResponse !== undefined ? queuedResponse : optimisticResponse;
+  // While sign-in resolves, a queued press may yet become a device vote.
+  const heldResponse = authResolving ? queuedResponse : undefined;
+  const countedQueuedResponse = authResolving ? undefined : queuedResponse;
+  const effectiveOptimistic = countedQueuedResponse !== undefined ? countedQueuedResponse : optimisticResponse;
   const activeResponse = effectiveOptimistic === undefined ? serverResponseDirection : effectiveOptimistic;
   // A vote cast signed out and kept on this device until a save publishes it (GEO-3214). Drawn as the
   // viewer's — the arrow fills — but left out of the score and the split: it doesn't count until it
   // is saved, and the counts say so by not moving. `activeResponse` stays the counted side.
   const localDirection = useLocalVote(entityId, spaceId, responseKind);
-  const drawnResponse = effectiveOptimistic === undefined && localDirection !== null ? localDirection : activeResponse;
+  const drawnResponse =
+    heldResponse ?? (effectiveOptimistic === undefined && localDirection !== null ? localDirection : activeResponse);
 
   const positiveResponses = BigInt(responseCounts?.positive ?? 0);
   const negativeResponses = BigInt(responseCounts?.negative ?? 0);
@@ -299,10 +305,31 @@ function EntityResponseButtons({
   function queueResponse(direction: ActiveResponseDirection) {
     if (!smartAccount) {
       // Signed out: vote on this device, with no sign-in in the way. The save sheet asks for an
-      // account once there are a few. Signed in with the account still loading, the old prompt stays.
-      // Still restoring a session, the press is dropped: kept as a visitor's, a returning account's
-      // vote would be cleared as somebody else's the moment the session came back.
-      if (!authReady) return;
+      // account once there are a few.
+      //
+      // Still resolving, the side is queued with what to do if it resolves signed out: a device vote,
+      // or the prompt when there is no response kind to keep one under (`PendingActionsRunner`).
+      // `!smartAccount` reads as signed out for that moment, and acting on it showed a signed-in
+      // viewer the sign-in prompt — or, before that, dropped the press, which loses a fast tap on a
+      // page that has only just loaded.
+      if (authResolving) {
+        const attribution = getContext();
+        const title = entity?.name ?? '';
+        queuedVote.queue(direction, {
+          onSignedOut:
+            responseKind === null
+              ? {
+                  prompt: {
+                    ...attribution,
+                    auth_control: `${responseKind}_${direction}`,
+                    auth_intent: 'vote',
+                    auth_continuation: 'queued',
+                  },
+                }
+              : () => castLocalVote({ entityId, spaceId, responseKind, direction, title, attribution }),
+        });
+        return;
+      }
       if (signedOut && responseKind !== null) {
         castLocalVote({
           entityId,

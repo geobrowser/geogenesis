@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
   open: vi.fn(),
   signIn: vi.fn(),
   signInComplete: undefined as (() => void) | undefined,
-  signInOptions: undefined as { redirectTo?: string; onError?: () => void } | undefined,
+  signInOptions: undefined as
+    { redirectTo?: string; onError?: () => void; analytics?: Record<string, unknown> } | undefined,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
@@ -90,6 +91,54 @@ describe('a link to a tab that needs sign-in', () => {
 
     expect(mocks.signIn).not.toHaveBeenCalled();
     expect(mocks.open).not.toHaveBeenCalled();
+  });
+});
+
+// GEO-3431: "Withdraw the invite" in the requester heads-up email.
+describe('a link to one scheduled request', () => {
+  const REQUEST = '5f0c2a9e-1b7d-4c3e-9a8f-2d6b1e4c7a90';
+
+  it('opens Requests on it for someone signed in', () => {
+    mocks.authenticated = true;
+    mocks.search = `modal=debates&modalTarget=requests:${REQUEST}`;
+    renderHook(() => useDebatesPanelDeepLink());
+
+    expect(mocks.open).toHaveBeenCalledWith('requests', REQUEST);
+  });
+
+  // The link is cleared on arrival, and the hook renders again before Privy calls back.
+  it('keeps the request when sign-in settles after the link was cleared', () => {
+    mocks.search = `modal=debates&modalTarget=requests:${REQUEST}`;
+    const { rerender } = renderHook(() => useDebatesPanelDeepLink());
+    mocks.search = '';
+    rerender();
+
+    mocks.signInComplete?.();
+    expect(mocks.open).toHaveBeenCalledWith('requests', REQUEST);
+  });
+
+  it('keeps it when sign-in is dismissed after the link was cleared, too', () => {
+    mocks.search = `modal=debates&modalTarget=requests:${REQUEST}`;
+    const { rerender } = renderHook(() => useDebatesPanelDeepLink());
+    mocks.search = '';
+    rerender();
+
+    mocks.signInOptions?.onError?.();
+    expect(mocks.open).toHaveBeenCalledWith('requests', REQUEST);
+  });
+
+  it('keeps the request through sign-in, and in the link a new account comes back to', () => {
+    mocks.search = `modal=debates&modalTarget=requests:${REQUEST}&via=email`;
+    renderHook(() => useDebatesPanelDeepLink());
+
+    expect(mocks.signIn).toHaveBeenCalledTimes(1);
+    expect(mocks.signInOptions?.redirectTo).toBe(`/explore?modal=debates&modalTarget=requests%3A${REQUEST}&via=email`);
+    expect(mocks.signInOptions?.analytics).toMatchObject({
+      target_id: REQUEST,
+      target_type: 'scheduled_debate_request',
+    });
+    mocks.signInComplete?.();
+    expect(mocks.open).toHaveBeenCalledWith('requests', REQUEST);
   });
 });
 

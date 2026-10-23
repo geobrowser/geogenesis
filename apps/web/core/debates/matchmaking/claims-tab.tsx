@@ -1301,6 +1301,7 @@ export function HubStickyControls({
         'sticky z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3',
         topClassName ?? (workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0')
       )}
+      data-hub-sticky-controls
     >
       {children}
     </div>

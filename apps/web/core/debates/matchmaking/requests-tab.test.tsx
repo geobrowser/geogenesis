@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
     requestsError: null,
     roomsError: null,
     lobbiesError: null,
+    loading: false,
   } as ScheduledContent,
 }));
 
@@ -447,6 +448,7 @@ const EMPTY_SCHEDULED: ScheduledContent = {
   requestsError: null,
   roomsError: null,
   lobbiesError: null,
+  loading: false,
 };
 
 describe('dense (workspace rail) visibility', () => {
