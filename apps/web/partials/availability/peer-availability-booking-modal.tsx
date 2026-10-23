@@ -22,6 +22,12 @@ import { peerDisplayName, requestSentMessage } from './peer-availability';
 import { PeerAvailabilityModal } from './peer-availability-modal';
 import { RescheduleCloseWarning } from './reschedule-close-warning';
 
+/**
+ * How long a Close waits for the requests list to arrive (GEO-3429), so an agreed debate opened from
+ * an email in a fresh tab still gets its warning. Bounded: the read has no timeout of its own.
+ */
+export const CLOSE_WAIT_MS = 2500;
+
 /** A slot is 30 minutes, so a booking is one slot. */
 const SCHEDULED_DEBATE_MINUTES = 30;
 
@@ -95,8 +101,13 @@ export function PeerAvailabilityBookingModal({
   // One request at a time: a move and "none of these work" racing would leave the other debater
   // with both emails and the move undone.
   const busy = mutation.isPending || noneWork.isPending;
+  // The list's first read, not "pending": a query that is off (signed out) stays pending for good.
+  const listLoading = Boolean(rescheduleRequestId) && requests.isLoading;
+  // A Close pressed before the list says whether the debate was agreed.
+  const [closeWaiting, setCloseWaiting] = React.useState(false);
 
   const close = () => {
+    setCloseWaiting(false);
     setStep('week');
     onClose();
     // Otherwise the next person's week opens already showing the last one's outcome.
@@ -106,10 +117,32 @@ export function PeerAvailabilityBookingModal({
   // While a move or "none of these work" is in flight, "still on" may be about to be untrue, so it
   // closes without the warning. Never held open: a request with no timeout can hang (a Privy token
   // stall), and the week must always let go.
+  // A Close before the list has loaded waits for it (at most `CLOSE_WAIT_MS`), so the warning isn't
+  // skipped just because the answer wasn't in yet.
   const requestClose = () => {
-    if (warnsOnClose && !busy) setStep('warn');
+    if (busy) close();
+    else if (listLoading) setCloseWaiting(true);
+    else if (warnsOnClose) setStep('warn');
     else close();
   };
+
+  // The list landed (or failed) while a Close waited: decide now. A failed read has no agreed
+  // debate to warn about, so it just closes.
+  const settleWaitingClose = React.useEffectEvent(() => {
+    setCloseWaiting(false);
+    if (warnsOnClose && !busy) setStep('warn');
+    else close();
+  });
+  React.useEffect(() => {
+    if (closeWaiting && !listLoading) settleWaitingClose();
+  }, [closeWaiting, listLoading]);
+  // Never held open: if the list doesn't come, the Close goes through without it.
+  const giveUpWaiting = React.useEffectEvent(() => close());
+  React.useEffect(() => {
+    if (!closeWaiting) return;
+    const timer = window.setTimeout(() => giveUpWaiting(), CLOSE_WAIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [closeWaiting]);
 
   // A sent request is the end of the job, so the week closes on it and the confirmation moves to a
   // toast. Per-call rather than on the hook: closing mid-flight resets the mutation, which detaches

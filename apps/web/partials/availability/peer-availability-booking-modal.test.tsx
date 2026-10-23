@@ -27,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   noneWorkError: null as Error | null,
   /** The zone the week is drawn in, as the cached peer-schedule query has it. */
   viewerZone: undefined as string | undefined,
+  /** The requests list's first read still in flight (a fresh tab from an email link). */
+  listLoading: false,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -47,7 +49,10 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
     isPending: mocks.pending,
     error: mocks.error,
   }),
-  useScheduledDebates: () => ({ data: { requests: mocks.requests } }),
+  useScheduledDebates: () => ({
+    data: mocks.listLoading ? undefined : { requests: mocks.requests },
+    isLoading: mocks.listLoading,
+  }),
   useNoTimeWorks: () => ({
     mutate: mocks.noneWork,
     reset: mocks.noneWorkReset,
@@ -108,7 +113,7 @@ vi.mock('./peer-availability', async importOriginal => ({
   ),
 }));
 
-const { PeerAvailabilityBookingModal } = await import('./peer-availability-booking-modal');
+const { CLOSE_WAIT_MS, PeerAvailabilityBookingModal } = await import('./peer-availability-booking-modal');
 const { Toast } = await import('~/core/hooks/use-toast');
 
 /** The toast lives in a jotai atom, so each render gets its own store or one test's toast leaks into the next. */
@@ -134,6 +139,8 @@ afterEach(() => {
   mocks.noneWorkPending = false;
   mocks.noneWorkError = null;
   mocks.viewerZone = undefined;
+  mocks.listLoading = false;
+  vi.useRealTimers();
 });
 
 const setup = (userId = 'user-them', onClose = vi.fn()) => ({
@@ -631,5 +638,76 @@ describe('moving a debate', () => {
 
     expect(screen.getByRole('dialog', { name: 'Your debate is still on for Thu, Oct 22, 1pm' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Keep 1pm' })).toBeInTheDocument();
+  });
+
+  // Copilot on #2979: from an email in a fresh tab the list may not be in yet. A Close then waits
+  // for it rather than skipping the warning, and never for long.
+  describe('a Close before the requests list has loaded', () => {
+    const agreedRequest = [
+      { request_id: REQUEST_ID.replace(/-/g, ''), status: 'accepted', scheduled_start_at: START, room_id: 'room-1' },
+    ];
+    const renderLoading = (onClose = vi.fn()) => {
+      mocks.listLoading = true;
+      const element = () =>
+        withToast(
+          <PeerAvailabilityBookingModal
+            open
+            userId="user-them"
+            peerName="Ada Lovelace"
+            rescheduleRequestId={REQUEST_ID}
+            onClose={onClose}
+          />
+        );
+      const view = render(element());
+      return { onClose, land: () => view.rerender(element()) };
+    };
+
+    it('warns once the list shows the debate was agreed', () => {
+      const { onClose, land } = renderLoading();
+
+      act(() => screen.getByLabelText('Close').click());
+      expect(onClose).not.toHaveBeenCalled();
+
+      mocks.listLoading = false;
+      mocks.requests = agreedRequest;
+      land();
+
+      expect(screen.getByRole('dialog', { name: /^Your debate is still on/ })).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('just closes once the list shows nothing agreed', () => {
+      const { onClose, land } = renderLoading();
+
+      act(() => screen.getByLabelText('Close').click());
+      mocks.listLoading = false;
+      mocks.requests = [];
+      land();
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
+    });
+
+    it(`closes anyway after ${CLOSE_WAIT_MS} ms if the list never comes`, () => {
+      vi.useFakeTimers();
+      const { onClose } = renderLoading();
+
+      act(() => screen.getByLabelText('Close').click());
+      act(() => vi.advanceTimersByTime(CLOSE_WAIT_MS - 1));
+      expect(onClose).not.toHaveBeenCalled();
+      act(() => vi.advanceTimersByTime(1));
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('waits for nothing outside reschedule mode', () => {
+      mocks.listLoading = true;
+      const onClose = vi.fn();
+      render(<PeerAvailabilityBookingModal open userId="user-them" peerName="Ada" onClose={onClose} />);
+
+      act(() => screen.getByLabelText('Close').click());
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 });
