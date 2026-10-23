@@ -31,6 +31,7 @@ import {
   noticeNote,
   noticeRequestState,
 } from '~/core/debates/rooms/scheduled-notice';
+import { useHoldScheduledNotice } from '~/core/debates/rooms/scheduled-notice-open';
 import { useCantMakeIt, useReportRunningLate } from '~/core/debates/rooms/scheduling-hooks';
 import { noticeFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
@@ -70,6 +71,11 @@ type Props = {
    * swaps this dialog for the calendar the link would otherwise have opened.
    */
   onReschedule?: () => void;
+  /**
+   * The first press that moves past the opening screen. The nudge popup (GEO-3428) holds itself open
+   * from then on, so a confirmation is not cut off when the answer clears the nudge.
+   */
+  onAnswering?: () => void;
   /** Drawn in place of the step, for a viewer who has to sign in first. */
   children?: React.ReactNode;
 };
@@ -85,14 +91,25 @@ type Props = {
  * In the frame the other scheduling dialogs share. Nothing is sent until a confirm press: a link only
  * opens this, because mail scanners open links.
  */
-export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onClose, onReschedule, children }: Props) {
+export function ScheduledDebateNoticeDialog({
+  open,
+  requestId,
+  initialStep,
+  onClose,
+  onReschedule,
+  onAnswering,
+  children,
+}: Props) {
   const [step, setStep] = React.useState<ScheduledNoticeStep>(initialStep);
   // Once a press has swapped the screen, each new one's heading takes focus: the button is gone.
   const [moved, setMoved] = React.useState(false);
   const go = (next: ScheduledNoticeStep) => {
+    if (!moved) onAnswering?.();
     setMoved(true);
     setStep(next);
   };
+  // The nudge popup steps aside for any other notice dialog (GEO-3428); it is not one itself.
+  useHoldScheduledNotice(open && initialStep !== 'nudge');
   const [outcome, setOutcome] = React.useState<Outcome | null>(null);
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);

@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 
 import type { UpcomingDebateRoom } from '../api';
 import { requestForRoom } from './room-opponent';
+import { useScheduledNoticeOpen } from './scheduled-notice-open';
 import { useScheduledDebates } from './scheduling-hooks';
 
 /** Loaded when a nudge arrives: the coordinator is on every page, and few of them ever get one. */
@@ -20,15 +21,32 @@ function nudgeKey(room: UpcomingDebateRoom) {
 }
 
 /**
+ * A nudge still asks something: the viewer has not joined or said they are late since (geo-chat
+ * clears `nudged_at` then), and the one who nudged is still in the room, as the popup says they are.
+ */
+function standingNudge(room: UpcomingDebateRoom) {
+  return room.kind !== 'lobby' && Boolean(room.nudged_at) && room.others_present;
+}
+
+type Held = { key: string; roomId: string; requestId: string; answering: boolean };
+
+/**
  * The popup a nudge puts on the screen of the debater someone is waiting for (GEO-3428, board 6c), on
  * whatever Geo page they have open: Join now, Running late and Can't make it, the last two answered
  * in place.
  *
  * geo-chat sends a popup only to someone at their screen; anyone else gets the email. The room's
- * `nudged_at` stands until they join or say they are running late, and arrives on the
- * `debate.requests_changed` the nudge emits. Once open the popup is held here, not read off that
- * row: answering it clears the row, and the confirmation it shows must not vanish with it. Closing it
- * hides that nudge on this page; a second nudge opens it again.
+ * `nudged_at` arrives on the `debate.requests_changed` the nudge emits.
+ *
+ * The popup is held here rather than read off the row, with two rules:
+ * - **Until they answer, it follows the nudge.** It goes, without counting as seen, the moment the
+ *   nudge stops standing (answered in another tab, the waiter left) or the popup is not allowed
+ *   (`enabled` off, another scheduling dialog up), and comes back only if the nudge still stands.
+ * - **Once they are answering, it stays** until they close it: the answer clears the nudge, and the
+ *   confirmation must not vanish with it.
+ *
+ * Closing hides every nudge the room has had so far on this page; a later nudge opens it again. The
+ * coordinator keys this by account, so none of it carries over a sign-out or a switch.
  */
 export function RoomNudgePopup({
   rooms,
@@ -37,40 +55,53 @@ export function RoomNudgePopup({
 }: {
   /** The viewer's joinable rooms, as the join prompt reads them. */
   rooms: UpcomingDebateRoom[];
-  /** Off in a room or a debate already: nobody is interrupted mid-debate. */
+  /** Off in a room, a debate, or under another prompt: nobody is interrupted twice. */
   enabled: boolean;
   /** So the coordinator can hold the join banner back while this is up. */
   onOpenChange: (open: boolean) => void;
 }) {
+  const otherNoticeOpen = useScheduledNoticeOpen();
+  const allowed = enabled && !otherNoticeOpen;
   const [handled, setHandled] = React.useState<readonly string[]>([]);
-  const [open, setOpen] = React.useState<{ key: string; requestId: string } | null>(null);
+  const [held, setHeld] = React.useState<Held | null>(null);
 
-  const nudged = enabled
-    ? (rooms.find(room => room.kind !== 'lobby' && room.nudged_at && !handled.includes(nudgeKey(room))) ?? null)
+  const nudged = allowed
+    ? (rooms.find(room => standingNudge(room) && !handled.includes(nudgeKey(room))) ?? null)
     : null;
   // The dialog speaks in requests; only read the list once there is a nudge to answer.
   const requests = useScheduledDebates(nudged !== null);
   const request = nudged ? requestForRoom(requests.data?.requests, nudged.room_id) : undefined;
 
-  React.useEffect(() => {
-    if (open || !nudged || !request) return;
-    setOpen({ key: nudgeKey(nudged), requestId: request.request_id });
-  }, [nudged, open, request]);
+  // The held nudge's row, if it still stands as the same nudge.
+  const heldStands = held !== null && rooms.some(room => standingNudge(room) && nudgeKey(room) === held.key);
+  const show = held !== null && (held.answering || (allowed && heldStands));
 
   React.useEffect(() => {
-    onOpenChange(open !== null);
-  }, [onOpenChange, open]);
+    if (held && !show) setHeld(null);
+  }, [held, show]);
 
-  if (!open || !enabled) return null;
+  React.useEffect(() => {
+    if (held || !nudged || !request) return;
+    setHeld({ key: nudgeKey(nudged), roomId: nudged.room_id, requestId: request.request_id, answering: false });
+  }, [held, nudged, request]);
+
+  React.useEffect(() => {
+    onOpenChange(show);
+  }, [onOpenChange, show]);
+
+  if (!held || !show) return null;
   return (
     <ScheduledDebateNoticeDialog
-      key={open.key}
+      key={held.key}
       open
-      requestId={open.requestId}
+      requestId={held.requestId}
       initialStep="nudge"
+      onAnswering={() => setHeld(current => (current ? { ...current, answering: true } : current))}
       onClose={() => {
-        setHandled(current => [...current, open.key]);
-        setOpen(null);
+        // This nudge, and any later one to the same room that landed while the popup was up.
+        const current = rooms.find(room => room.room_id === held.roomId);
+        setHandled(seen => [...seen, held.key, ...(current?.nudged_at ? [nudgeKey(current)] : [])]);
+        setHeld(null);
       }}
     />
   );

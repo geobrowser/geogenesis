@@ -285,7 +285,7 @@ export function DebateCoordinator() {
   // cannot offer a room that would refuse the join.
   const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
-  // GEO-3428: a nudge's popup is up, so the join banner for the same room waits behind it.
+  // GEO-3428: while a nudge's popup is up, the join banner waits behind it: one prompt at a time.
   const [nudgeOpen, setNudgeOpen] = React.useState(false);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
   const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
@@ -517,7 +517,14 @@ export function DebateCoordinator() {
           {pausedBannerText(gateway.pauseReason)}
         </div>
       )}
-      <RoomNudgePopup rooms={joinableRooms} enabled={!atRoom && !activeFlow} onOpenChange={setNudgeOpen} />
+      <RoomNudgePopup
+        // Per account: nothing held or seen carries over a sign-out or a switch.
+        key={geoChatAuth.accountKey ?? 'signed-out'}
+        rooms={joinableRooms}
+        // Not over an incoming request or the share prompt, which want an answer of their own.
+        enabled={!atRoom && !activeFlow && !promptedRequest && !visibleSharePrompt}
+        onOpenChange={setNudgeOpen}
+      />
       {promptedRoom && !nudgeOpen && (
         <DebateRoomJoinPrompt
           key={promptedRoom.room_id}

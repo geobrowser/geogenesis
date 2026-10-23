@@ -113,7 +113,19 @@ vi.mock('./rooms/room-opponent', async importOriginal => ({
 }));
 
 // GEO-3428's nudge popup has its own tests, and reads the request list this suite does not mock.
-vi.mock('./rooms/room-nudge-popup', () => ({ RoomNudgePopup: () => null }));
+// Stood in for by what the coordinator relies on: when it is allowed, and its `onOpenChange`.
+const nudgePopup = vi.hoisted(() => ({ opens: false, enabled: [] as boolean[] }));
+vi.mock('./rooms/room-nudge-popup', async () => {
+  const React = await import('react');
+  return {
+    RoomNudgePopup: ({ enabled, onOpenChange }: { enabled: boolean; onOpenChange: (open: boolean) => void }) => {
+      nudgePopup.enabled.push(enabled);
+      const open = nudgePopup.opens && enabled;
+      React.useEffect(() => onOpenChange(open), [onOpenChange, open]);
+      return null;
+    },
+  };
+});
 vi.mock('./debate-attention', () => ({
   useDebatePresence: () => mocks.visiblePresence,
   useDebateAttention: () => mocks.hasAttention,
@@ -907,6 +919,28 @@ describe('DebateCoordinator', () => {
 
     expect(await screen.findByText('Your opponent is waiting')).toBeInTheDocument();
     expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  // GEO-3428: one prompt at a time. A nudge's popup holds the join banner back.
+  it('holds the join banner back while a nudge popup is up', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom({ others_present: true })];
+    nudgePopup.opens = true;
+    try {
+      render(<DebateCoordinator />);
+      await waitFor(() => expect(nudgePopup.enabled).toContain(true));
+      expect(screen.queryByText('Your opponent is waiting')).not.toBeInTheDocument();
+    } finally {
+      nudgePopup.opens = false;
+    }
+  });
+
+  it('keeps the nudge popup off in a debate room', () => {
+    mocks.pathname = '/debate/room-1';
+    nudgePopup.enabled = [];
+    render(<DebateCoordinator />);
+    expect(nudgePopup.enabled.length).toBeGreaterThan(0);
+    expect(nudgePopup.enabled).not.toContain(true);
   });
 
   // Urgency comes from the server's own `due` and `others_present`, so this and the Requests tab

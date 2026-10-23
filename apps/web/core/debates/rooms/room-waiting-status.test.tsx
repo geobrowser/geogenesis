@@ -170,12 +170,30 @@ describe('RoomWaitingStatus', () => {
     state.room = { ...baseRoom(), viewer_next_nudge_at: new Date(Date.now() + 2 * 60_000).toISOString() };
     state.presence = waiting;
     show();
-    expect(screen.getByRole('button', { name: 'Nudged' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Nudge' })).toBeDisabled();
     cleanup();
 
     clock.serverAhead = 3 * 60_000;
     show();
     expect(screen.getByRole('button', { name: 'Nudge' })).toBeEnabled();
+  });
+
+  // Running late leaves nothing for the footer: the late notice has Reschedule.
+  it('draws no footer row after Running late', () => {
+    state.room = baseRoom();
+    state.presence = { ...waiting, opponentLate: { minutes: 10, expectedAt: minutesAgo(-8), note: null } };
+    show();
+    expect(screen.getByTestId('room-waiting-status').querySelectorAll('button')).toHaveLength(0);
+    expect(screen.getByTestId('room-waiting-status').lastElementChild?.tagName).toBe('OL');
+  });
+
+  // Before the first nudge, the start: the room poll can show the card a few seconds early.
+  it('says Nudge, not Nudged, before the viewer has sent one', () => {
+    state.room = { ...baseRoom(), viewer_next_nudge_at: new Date(Date.now() + 5_000).toISOString() };
+    state.presence = waiting;
+    show();
+    expect(screen.getByRole('button', { name: 'Nudge' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Nudged' })).not.toBeInTheDocument();
   });
 
   it('is not shown before the start or once they are here', () => {

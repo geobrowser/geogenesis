@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import { Text } from '~/design-system/text';
 
-import { GeoChatRequestError } from '../api';
+import { type DebateRoomView, GeoChatRequestError } from '../api';
 import { debateAnalyticsLabel } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { formatTime } from '../matchmaking/scheduled-debate-format';
@@ -16,7 +16,6 @@ import { useDebateRoomContext } from './room-context';
 import { ROOM_WAITING_STATUS as COPY } from './room-copy';
 import { RoomRescheduleButton } from './room-presence-indicator';
 import {
-  type NudgeButtonState,
   type RoomWaitingEntry,
   minutesSince,
   nudgeButtonState,
@@ -115,20 +114,19 @@ export function RoomWaitingStatus({
           ))}
         </ol>
       )}
-      <div className="flex flex-wrap items-center gap-2 border-t border-grey-02 pt-3">
-        {!late && (
-          <NudgeButton roomId={room.room_id} state={nudgeButtonState(room, late, now)} opponentName={opponentName} />
-        )}
-        <span className="flex-1" />
-        {!late && (
+      {/* Running late leaves nothing to do here: the late notice has Reschedule. */}
+      {!late && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-grey-02 pt-3">
+          <NudgeButton room={room} viewerId={viewerId} now={now} opponentName={opponentName} />
+          <span className="flex-1" />
           <RoomRescheduleButton
             opponentName={opponentName}
             opponentUserId={opponentUserId}
             analyticsAction="Waiting status reschedule"
             entry="room_waiting_status"
           />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -148,18 +146,23 @@ function entryText(entry: RoomWaitingEntry, name: string, viewerName: string | n
 
 /**
  * Nudge, then "Nudged" until geo-chat's next time (15 minutes, or never after the second), read on
- * the card's server clock. No copy under it, Preston's call. A refusal that means the room moved on says so in a line beside it.
+ * the card's server clock. No copy under it, Preston's call. A refusal that means the room moved on
+ * says so in a line beside it.
  */
 function NudgeButton({
-  roomId,
-  state,
+  room,
+  viewerId,
+  now,
   opponentName,
 }: {
-  roomId: string;
-  state: NudgeButtonState;
+  room: DebateRoomView;
+  viewerId: string;
+  now: number;
   opponentName: string;
 }) {
-  const nudge = useNudgeDebateRoom(roomId);
+  const nudge = useNudgeDebateRoom(room.room_id);
+  // Shown only while nobody is late (the card hides the row otherwise).
+  const state = nudgeButtonState(room, viewerId, false, now, nudge.data);
 
   if (state === 'hidden') return null;
   const refusal = refusalText(nudge.error, opponentName);
@@ -174,7 +177,7 @@ function NudgeButton({
         analyticsIntent="nudge_scheduled_debate"
         onClick={() => nudge.mutate()}
       >
-        {state === 'ready' ? COPY.nudge : COPY.nudgedDone}
+        {state === 'nudged' ? COPY.nudgedDone : COPY.nudge}
       </HubPillButton>
       {refusal && (
         <span role="status">

@@ -100,17 +100,33 @@ describe('showsWaitingStatus', () => {
 
 describe('nudgeButtonState', () => {
   it('waits out the 15 minutes as Nudged, then is ready again', () => {
-    expect(nudgeButtonState(room, false, at('2026-10-21T17:10:00.000Z'))).toBe('nudged');
-    expect(nudgeButtonState(room, false, at('2026-10-21T17:19:00.000Z'))).toBe('ready');
+    expect(nudgeButtonState(room, 'maya', false, at('2026-10-21T17:10:00.000Z'))).toBe('nudged');
+    expect(nudgeButtonState(room, 'maya', false, at('2026-10-21T17:19:00.000Z'))).toBe('ready');
   });
 
   it('stays Nudged for good once both are used', () => {
-    expect(nudgeButtonState({ ...room, viewer_next_nudge_at: null }, false, Date.now())).toBe('nudged');
+    expect(nudgeButtonState({ ...room, viewer_next_nudge_at: null }, 'maya', false, Date.now())).toBe('nudged');
+  });
+
+  // Before the first nudge the next time is the start, which the room poll can reach first.
+  it('is not Nudged before the viewer has sent one, only not yet pressable', () => {
+    const fresh = { ...room, nudges: [], viewer_next_nudge_at: '2026-10-21T17:00:00.000Z' };
+    expect(nudgeButtonState(fresh, 'maya', false, at('2026-10-21T16:59:55.000Z'))).toBe('not_yet');
+    expect(nudgeButtonState(fresh, 'maya', false, at('2026-10-21T17:00:00.000Z'))).toBe('ready');
+  });
+
+  // Between a nudge and the room's refetch, the endpoint's answer holds the button.
+  it('takes the nudge endpoint’s next time as a floor until the room catches up', () => {
+    const before = { ...room, nudges: [], viewer_next_nudge_at: '2026-10-21T17:00:00.000Z' };
+    const now = at('2026-10-21T17:04:00.000Z');
+    expect(nudgeButtonState(before, 'maya', false, now)).toBe('ready');
+    expect(nudgeButtonState(before, 'maya', false, now, { next_nudge_at: '2026-10-21T17:19:00.000Z' })).toBe('nudged');
+    expect(nudgeButtonState(before, 'maya', false, now, { next_nudge_at: null })).toBe('nudged');
   });
 
   it('has nobody to nudge once they said they are on their way, or from an older geo-chat', () => {
-    expect(nudgeButtonState(room, true, Date.now())).toBe('hidden');
+    expect(nudgeButtonState(room, 'maya', true, Date.now())).toBe('hidden');
     const { viewer_next_nudge_at: _next, ...older } = room;
-    expect(nudgeButtonState(older, false, Date.now())).toBe('hidden');
+    expect(nudgeButtonState(older, 'maya', false, Date.now())).toBe('hidden');
   });
 });
