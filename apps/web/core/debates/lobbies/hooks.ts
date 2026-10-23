@@ -326,6 +326,12 @@ export function useEndDebateLobby(lobbyId: string) {
   });
 }
 
+/** The lobby, or the call (GEO-3419), a `moved` heartbeat went to. */
+function otherRoomId(heartbeat: DebateLobbyHeartbeat) {
+  const id = heartbeat.current_lobby_id ?? heartbeat.current_call_id;
+  return id ? dashlessId(id) : null;
+}
+
 export type LobbyPresenceState =
   | { status: 'idle' }
   | { status: 'joining' }
@@ -598,7 +604,7 @@ export function useLobbyPresence(
           lobbyLeft(lobbyId, 'unknown');
           stopWithout({
             status: 'moved',
-            otherLobbyId: heartbeat.current_lobby_id ? dashlessId(heartbeat.current_lobby_id) : null,
+            otherLobbyId: otherRoomId(heartbeat),
           });
           return;
         case 'stepped_out':

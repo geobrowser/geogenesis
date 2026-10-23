@@ -288,9 +288,9 @@ export function isRemovedFromLobby(error: unknown): error is GeoChatRequestError
   return error instanceof GeoChatRequestError && error.status === 409 && error.code === 'lobby_removed';
 }
 
-/** The other lobby's id, from the 409's `details.current_lobby_id`. */
+/** The other lobby's id, from the 409's `details.current_lobby_id`, or the call's (GEO-3419). */
 export function otherLobbyIdFrom(error: GeoChatRequestError) {
-  const id = error.details?.current_lobby_id;
+  const id = error.details?.current_lobby_id ?? error.details?.current_call_id;
   return typeof id === 'string' && id ? dashlessId(id) : null;
 }
 

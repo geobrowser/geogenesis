@@ -2775,6 +2775,10 @@ export type DebateLobbyModerationAction =
 export type DebateLobbyView = {
   lobby_id: string;
   name: string;
+  /** A space's call runs on a lobby row (GEO-3419). Absent from older geo-chat, which has lobbies only. */
+  purpose?: 'lobby' | 'call';
+  /** The owning space, for a call; `null` for a lobby. */
+  call?: DebateLobbyCallDetails | null;
   access: DebateLobbyAccess;
   starts_at: string;
   opens_at: string;
@@ -2829,6 +2833,12 @@ export type DebateLobbyPerson = {
   profile_space_id: string;
   display_name: string | null;
   avatar_cid: string | null;
+};
+
+export type DebateLobbyCallDetails = {
+  space_id: string;
+  space_name: string | null;
+  started_by: DebateLobbyPerson | null;
 };
 
 export type DebateLobbySummary = {
@@ -3176,7 +3186,12 @@ export async function setDebateLobbyRoomVoteHint(
  * The lobby the viewer is on the roster of. `current_lobby_id` survives a step-out and is null once
  * they leave, are removed, or the lobby ends; `stepped_out` is false whenever it is null.
  */
-export type DebateMyLobby = { current_lobby_id: string | null; stepped_out: boolean };
+export type DebateMyLobby = {
+  current_lobby_id: string | null;
+  /** The space call they are in instead (GEO-3419); at most one of the two is set. */
+  current_call_id?: string | null;
+  stepped_out: boolean;
+};
 
 export async function getMyDebateLobby(
   getPrivyIdentityToken: GetPrivyIdentityToken,
@@ -3251,6 +3266,8 @@ export type DebateLobbyHeartbeat = {
   reason: DebateLobbyGoneReason | null;
   /** Dashless; the lobby they are in now, with `moved`. */
   current_lobby_id: string | null;
+  /** The space call they moved to instead (GEO-3419). */
+  current_call_id?: string | null;
 };
 
 /** Renews this connection's 120s lease. Rate limited to 30 a minute per person. */
@@ -3311,6 +3328,8 @@ export type DebateLobbyVoiceToken = {
   /** Join with the mic off; set once the room is crowded. Always false for a listener. */
   start_muted: boolean;
   expires_at: string;
+  /** A publisher in a space call (GEO-3419); lobbies never share a screen. */
+  can_share_screen?: boolean;
 };
 
 /**
