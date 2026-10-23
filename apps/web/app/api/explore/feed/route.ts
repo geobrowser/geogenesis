@@ -133,6 +133,8 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
   const spaceIdsParam = searchParams.get('spaceIds') ?? searchParams.get('spaceId');
   const cursor = searchParams.get('cursor');
   const typeIds = parseExploreTypeIdsParam(searchParams.get('typeIds'));
+  const topicIdsParam = searchParams.get('topicIds');
+  const topicIds = topicIdsParam ? topicIdsParam.split(',').map(normId).filter(Boolean) : [];
 
   if (typeIds.length === 0) {
     return NextResponse.json({ items: [], nextCursor: null });
@@ -197,6 +199,8 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
     typeIds,
     ...EXPLORE_FEED_POLICY,
     forYouTopicIds,
+    topicIds: topicIds.length > 0 ? topicIds : undefined,
+    rankedTopicIds: topicIds.length > 0 ? topicIds : undefined,
     reorderWindow: personalized
       ? createPersonalizedWindowReorder({
           userId: viewerId,
