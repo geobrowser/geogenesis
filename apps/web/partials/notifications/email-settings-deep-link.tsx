@@ -2,16 +2,13 @@
 
 import * as React from 'react';
 
-import { DEEP_LINK_MODALS, toModal } from '~/core/deep-links/modal-deep-link';
 import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep-link';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { geoNotificationsApiUrl } from '~/core/notifications/api';
+import { EMAIL_SETTINGS_MODAL, toEmailSettings } from '~/core/notifications/email-settings-link';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { EmailSettingsDialog } from './email-settings-dialog';
-
-/** `?modal=email-settings` on any page opens the viewer's email settings: every email's footer links here. */
-export const EMAIL_SETTINGS_MODAL = DEEP_LINK_MODALS.emailSettings;
 
 /**
  * Opens email settings for someone who arrived on `?modal=email-settings` (GEO-3392), signing them in
@@ -29,7 +26,7 @@ export function EmailSettingsDeepLink() {
   const [via, setVia] = React.useState<string | null>(null);
 
   const openSignIn = usePrivySignIn(undefined, {
-    redirectTo: toModal({ modal: EMAIL_SETTINGS_MODAL, pathname: link.cleanUrl, via: link.via ?? undefined }),
+    redirectTo: toEmailSettings(link.cleanUrl, link.via ?? undefined),
     analytics: {
       component: 'sign_in_deep_link',
       auth_trigger: 'deep_link',

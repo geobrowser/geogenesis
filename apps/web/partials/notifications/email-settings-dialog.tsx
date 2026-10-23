@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { createPortal } from 'react-dom';
 
+import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
 import {
   EMAIL_GROUPS,
@@ -12,6 +13,7 @@ import {
   type EmailGroup,
   type EmailGroupSettings,
   INVITES_OFF_WARNING,
+  SAVE_FAILED,
 } from '~/core/notifications/email-groups';
 import { type EmailSettingsEntry, emailSettingsOpened } from '~/core/notifications/email-settings-analytics';
 import { type EmailSwitch, useNotificationPreferences, useSaveEmailSwitch } from '~/core/notifications/hooks';
@@ -44,7 +46,8 @@ export function EmailSettingsDialog({
 }) {
   const titleId = React.useId();
   const descriptionId = React.useId();
-  const cardRef = React.useRef<HTMLElement>(null);
+  // Focus in on open, Tab kept inside: `aria-modal` says the page behind is unavailable.
+  const cardRef = useFocusTrap(true);
   const { registration, preferences } = useNotificationPreferences();
   const save = useSaveEmailSwitch();
   const [status, setStatus] = React.useState<'idle' | 'saved' | 'failed'>('idle');
@@ -56,9 +59,10 @@ export function EmailSettingsDialog({
     emailSettingsOpened(openedRef.current.entry, openedRef.current.via);
   }, []);
 
+  // After the trap, so its cleanup runs last: the trap restores focus to what had it on open, the menu
+  // item that opened this, which has unmounted with its menu.
   React.useEffect(() => {
     const opener = openerRef?.current ?? null;
-    cardRef.current?.focus();
     return () => opener?.focus();
   }, [openerRef]);
 
@@ -90,7 +94,7 @@ export function EmailSettingsDialog({
     : noEmail
       ? null
       : status === 'failed'
-        ? "Couldn't save. Try again."
+        ? SAVE_FAILED
         : status === 'saved'
           ? 'Saved.'
           : 'Changes save as you go.';

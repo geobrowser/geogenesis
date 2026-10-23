@@ -10,10 +10,6 @@ export type EmailGroup = (typeof EMAIL_GROUPS)[number];
 
 export type EmailGroupSettings = Record<EmailGroup, boolean>;
 
-export function isEmailGroup(value: unknown): value is EmailGroup {
-  return typeof value === 'string' && (EMAIL_GROUPS as readonly string[]).includes(value);
-}
-
 export const EMAIL_GROUP_COPY: Record<EmailGroup, { name: string; description: string; shortDescription: string }> = {
   invites: {
     name: 'Debate invites and reminders',
@@ -41,6 +37,9 @@ export const EMAIL_GROUP_COPY: Record<EmailGroup, { name: string; description: s
     shortDescription: 'A few emails while you are new.',
   },
 };
+
+/** A switch or an unsubscribe press that didn't save, in the settings dialog and on the unsubscribe page. */
+export const SAVE_FAILED = "Couldn't save. Try again.";
 
 /** Shown under "Debate invites and reminders" while it is off: it is the one group people rely on. */
 export const INVITES_OFF_WARNING =

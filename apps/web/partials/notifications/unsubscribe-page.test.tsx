@@ -21,8 +21,6 @@ vi.mock('~/core/notifications/api', () => ({
   getUnsubscribeState: (...args: unknown[]) => mocks.get(...args),
   changeSubscription: (...args: unknown[]) => mocks.change(...args),
 }));
-// Pulls in Privy and the dialog; the page only needs the modal's name.
-vi.mock('./email-settings-deep-link', () => ({ EMAIL_SETTINGS_MODAL: 'email-settings' }));
 
 const { UnsubscribePage } = await import('./unsubscribe-page');
 

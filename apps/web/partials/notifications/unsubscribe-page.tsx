@@ -8,7 +8,6 @@ import cx from 'classnames';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
-import { toModal } from '~/core/deep-links/modal-deep-link';
 import {
   type UnsubscribeLinkParams,
   type UnsubscribeState,
@@ -18,18 +17,18 @@ import {
 } from '~/core/notifications/api';
 import {
   INVALID_UNSUBSCRIBE_LINK,
+  SAVE_FAILED,
   UNDO_EXPIRED_BODY,
   UNSUBSCRIBE_COPY,
   withAddress,
 } from '~/core/notifications/email-groups';
 import { emailPreferenceChanged } from '~/core/notifications/email-settings-analytics';
+import { toEmailSettings } from '~/core/notifications/email-settings-link';
 
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
-import { EMAIL_SETTINGS_MODAL } from './email-settings-deep-link';
-
-const EMAIL_SETTINGS_HREF = toModal({ modal: EMAIL_SETTINGS_MODAL, pathname: '/explore' });
+const EMAIL_SETTINGS_HREF = toEmailSettings();
 
 /**
  * Where an email's Unsubscribe link lands once geo-notifications points `UNSUBSCRIBE_PAGE_URL` here
@@ -95,7 +94,7 @@ export function UnsubscribePage() {
   const fill = (text: string) => withAddress(text, current.email);
   const failed = change.isError ? (
     <p className="text-footnote text-red-01" role="status">
-      Couldn&apos;t save. Try again.
+      {SAVE_FAILED}
     </p>
   ) : null;
 

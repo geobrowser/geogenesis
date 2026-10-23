@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-import { DEEP_LINK_MODALS, toModal } from '~/core/deep-links/modal-deep-link';
+import { toEmailSettings } from '~/core/notifications/email-settings-link';
 
 /**
  * The proposal emails' footer still links here (geo-notifications `buildUnsubscribeUrls`), a page
@@ -8,5 +8,5 @@ import { DEEP_LINK_MODALS, toModal } from '~/core/deep-links/modal-deep-link';
  * A `space` param is dropped: proposal emails are set in each space's settings.
  */
 export default function Page() {
-  redirect(toModal({ modal: DEEP_LINK_MODALS.emailSettings, pathname: '/explore' }));
+  redirect(toEmailSettings());
 }

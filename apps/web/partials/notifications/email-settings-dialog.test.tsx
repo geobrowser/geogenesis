@@ -133,6 +133,28 @@ describe('EmailSettingsDialog', () => {
     expect(toggle('All Geo emails')).toBeDisabled();
   });
 
+  it('keeps Tab inside the dialog, and gives focus back to the opener on close', async () => {
+    const user = userEvent.setup();
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    const { unmount } = render(
+      <EmailSettingsDialog entry="account_menu" onClose={() => {}} openerRef={{ current: opener }} />
+    );
+
+    // jsdom has no layout, so the trap finds nothing it counts as visible and holds focus on the card;
+    // what matters here is that focus starts inside the dialog and Tab can't leave it.
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    screen.getByRole('button', { name: 'Done' }).focus();
+    await user.tab();
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    expect(opener).not.toHaveFocus();
+
+    unmount();
+    expect(opener).toHaveFocus();
+    opener.remove();
+  });
+
   it('closes on Done and on Escape', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
