@@ -10,6 +10,7 @@ import { GeoChatRequestError } from '../api';
 import { debateSurfaceAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { lobbyErrorMessage } from './lobby-format';
+import { useIsCallRoom } from './lobby-purpose';
 import type { MemberLobbyPageView } from './lobby-view';
 import { useLobbyHand } from './moderation-hooks';
 
@@ -19,6 +20,7 @@ const HUB_PILL_INTENT = debateSurfaceAnalyticsAttributes('hub', 'action')['data-
 export const LOBBY_CONTROL_COPY = {
   hint: 'Request someone on a claim, or tap a person to request them directly.',
   listener: 'You can still vote and request debates.',
+  callListener: 'Raise your hand to speak.',
   handRaised: 'Hosts can see your hand.',
   leave: 'Leave lobby',
 } as const;
@@ -104,6 +106,7 @@ function useElementHeight(element: HTMLElement | null) {
 /** Raise hand / "Hand raised · Lower", for a listener who is in the lobby, with its hint. */
 export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, 'lobby_id' | 'viewer'> }) {
   const hand = useLobbyHand(lobby.lobby_id);
+  const call = useIsCallRoom();
   const raised = Boolean(lobby.viewer.hand_raised_at);
 
   return (
@@ -142,21 +145,23 @@ export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, '
         className={hand.isError ? 'min-w-0 flex-1' : 'min-w-0 flex-1 md:hidden'}
       >
         {hand.isError
-          ? handErrorMessage(hand.error)
+          ? handErrorMessage(hand.error, call ? 'call' : 'lobby')
           : raised
             ? LOBBY_CONTROL_COPY.handRaised
-            : LOBBY_CONTROL_COPY.listener}
+            : call
+              ? LOBBY_CONTROL_COPY.callListener
+              : LOBBY_CONTROL_COPY.listener}
       </Text>
     </div>
   );
 }
 
-function handErrorMessage(error: unknown) {
+function handErrorMessage(error: unknown, room: 'lobby' | 'call') {
   if (error instanceof GeoChatRequestError) {
-    if (error.code === 'lobby_not_present') return 'Join the lobby to raise your hand.';
+    if (error.code === 'lobby_not_present') return `Join the ${room} to raise your hand.`;
     if (error.code === 'lobby_stepped_out') return 'You’re in a debate. Raise your hand once you’re back in the room.';
   }
-  return lobbyErrorMessage(error, 'Could not change your hand. Try again.');
+  return lobbyErrorMessage(error, 'Could not change your hand. Try again.', room);
 }
 
 function HandIcon() {

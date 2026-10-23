@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
+import { isSpaceCallPath } from '~/core/space-calls/routes';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { validateSpaceId } from '~/core/utils/utils';
 
@@ -527,8 +528,10 @@ export function DebateCoordinator() {
         key={geoChatAuth.accountKey ?? 'signed-out'}
         rooms={joinableRooms}
         // Not over an incoming request or the share prompt, which want an answer of their own.
-        // Off on any room page, a lobby's too (where `atRoom` is false): a live room is not the place.
-        enabled={roomIdAtPath === null && !activeFlow && !promptedRequest && !visibleSharePrompt}
+        // Off on any room page, a lobby's or a space call's too: a live room is not the place.
+        enabled={
+          roomIdAtPath === null && !isSpaceCallPath(pathname) && !activeFlow && !promptedRequest && !visibleSharePrompt
+        }
         onOpenChange={setNudgeOpen}
       />
       {promptedRoom && !nudgeOpen && (
