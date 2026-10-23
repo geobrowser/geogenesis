@@ -4,15 +4,13 @@ import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
-import { getDefaultStore } from 'jotai';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbySummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { UpcomingRoomRow } from './scheduled-debates-section';
 import type { UpcomingLobbyRow } from './upcoming-lobby-rows';
-import { debatesHubAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   respond: vi.fn().mockResolvedValue({ outcome: 'recorded' }),
@@ -140,7 +138,7 @@ const room = (overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom =
   ...overrides,
 });
 
-const setup = (content: {
+type SetupContent = {
   answerable?: ScheduledDebateRequest[];
   upcoming?: UpcomingRoomRow[];
   lobbies?: UpcomingLobbyRow[];
@@ -148,21 +146,29 @@ const setup = (content: {
   requestsError?: Error | null;
   roomsError?: Error | null;
   lobbiesError?: Error | null;
-}) => ({
+  loading?: boolean;
+  focusedRequestId?: string | null;
+};
+
+const sectionFor = (content: SetupContent) => (
+  <ScheduledDebatesSection
+    focusedRequestId={content.focusedRequestId ?? null}
+    content={{
+      answerable: content.answerable ?? [],
+      upcoming: content.upcoming ?? [],
+      lobbies: content.lobbies ?? [],
+      people: content.people ?? [],
+      requestsError: content.requestsError ?? null,
+      roomsError: content.roomsError ?? null,
+      lobbiesError: content.lobbiesError ?? null,
+      loading: content.loading ?? false,
+    }}
+  />
+);
+
+const setup = (content: SetupContent) => ({
   user: userEvent.setup(),
-  ...render(
-    <ScheduledDebatesSection
-      content={{
-        answerable: content.answerable ?? [],
-        upcoming: content.upcoming ?? [],
-        lobbies: content.lobbies ?? [],
-        people: content.people ?? [],
-        requestsError: content.requestsError ?? null,
-        roomsError: content.roomsError ?? null,
-        lobbiesError: content.lobbiesError ?? null,
-      }}
-    />
-  ),
+  ...render(sectionFor(content)),
 });
 
 const upcomingRow = (
@@ -499,49 +505,59 @@ describe('moving a scheduled debate', () => {
   });
 });
 
-// The scheduling email's third answer to an invite (GEO-3232), in its words: the same move, on the
-// same week, so the other side is asked to accept the new time.
 // GEO-3431: the requester heads-up email's "Withdraw the invite" opens the Requests tab on that
 // invite (`modalTarget=requests:<id>`), so of several, the one the email was about is the one shown.
 describe('a link to one request', () => {
-  afterEach(() => getDefaultStore().set(debatesHubAtom, null));
+  const mine = (overrides: Partial<ScheduledDebateRequest> = {}) =>
+    request({ viewer_must_answer: false, proposed_by_user_id: 'user-me', ...overrides });
+  const second = mine({
+    request_id: 'request-2',
+    scheduled_start_at: '2099-09-25T13:00:00Z',
+    scheduled_end_at: '2099-09-25T13:30:00Z',
+  });
+  const focusedCards = () => screen.getAllByRole('article').filter(card => card.hasAttribute('data-focused'));
+  // No hub box around the section here, so the scroll is the page's.
+  let scrollTo: MockInstance<typeof window.scrollTo>;
+  beforeEach(() => {
+    scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  });
+  afterEach(() => scrollTo.mockRestore());
 
-  it('outlines that request and scrolls it into view, and no other', () => {
-    const scrolled: Element[] = [];
-    const scrollIntoView = vi.fn(function (this: Element) {
-      scrolled.push(this);
-    });
-    Element.prototype.scrollIntoView = scrollIntoView;
-    getDefaultStore().set(debatesHubAtom, { tab: 'requests', requestId: 'request-2' });
-    setup({
-      answerable: [
-        request({ viewer_must_answer: false, proposed_by_user_id: 'user-me' }),
-        request({
-          request_id: 'request-2',
-          viewer_must_answer: false,
-          proposed_by_user_id: 'user-me',
-          scheduled_start_at: '2099-09-25T13:00:00Z',
-          scheduled_end_at: '2099-09-25T13:30:00Z',
-        }),
-      ],
-    });
+  it('outlines that request and scrolls to it, and no other', () => {
+    setup({ answerable: [mine(), second], focusedRequestId: 'request-2' });
 
-    const cards = screen.getAllByRole('article');
-    const focused = cards.filter(card => card.hasAttribute('data-focused'));
-    expect(focused).toHaveLength(1);
-    expect(focused[0]).toHaveClass('border-text');
-    expect(focused[0]).toHaveTextContent('Cancel request');
-    expect(scrolled).toEqual(focused);
+    expect(focusedCards()).toHaveLength(1);
+    expect(focusedCards()[0]).toHaveClass('border-text');
+    expect(focusedCards()[0]).toHaveTextContent('Sep 25');
+    expect(scrollTo).toHaveBeenCalledTimes(1);
   });
 
-  it('outlines nothing when the hub was opened without one', () => {
-    getDefaultStore().set(debatesHubAtom, { tab: 'requests' });
-    setup({ answerable: [request({ viewer_must_answer: false, proposed_by_user_id: 'user-me' })] });
+  it('waits for every read to land before outlining or scrolling', () => {
+    const { rerender } = setup({ answerable: [mine()], focusedRequestId: 'request-1', loading: true });
+    expect(screen.getByRole('article')).not.toHaveAttribute('data-focused');
+    expect(scrollTo).not.toHaveBeenCalled();
+
+    rerender(sectionFor({ answerable: [mine()], focusedRequestId: 'request-1' }));
+    expect(screen.getByRole('article')).toHaveAttribute('data-focused');
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
+  it('outlines the upcoming debate when the invite was accepted since the email', () => {
+    setup({ upcoming: [upcomingRow({}, 'user-them', 'request-1')], focusedRequestId: 'request-1' });
+
+    expect(focusedCards()).toHaveLength(1);
+  });
+
+  it('outlines and scrolls nothing without one', () => {
+    setup({ answerable: [mine()] });
 
     expect(screen.getByRole('article')).not.toHaveAttribute('data-focused');
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 });
 
+// The scheduling email's third answer to an invite (GEO-3232), in its words: the same move, on the
+// same week, so the other side is asked to accept the new time.
 describe('choosing a different time for an invite', () => {
   it("opens the other debater's week to move the invite, beside Decline and Accept", async () => {
     mocks.people = [ADA];

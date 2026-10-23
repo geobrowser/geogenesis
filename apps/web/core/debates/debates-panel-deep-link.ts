@@ -12,6 +12,7 @@
  * Any page: the hub is mounted app-wide in `app/entry.tsx`, so it has no host route to be
  * contextual to. `/explore` is only the default this builder fills in.
  */
+import { requestIdFromTarget } from '~/core/availability/availability-deep-link';
 import { DEEP_LINK_MODALS, toModal } from '~/core/deep-links/modal-deep-link';
 
 import type { DebatesHubTab } from '~/atoms';
@@ -64,8 +65,8 @@ export function debatesPanelTab(target: string | null): DebatesHubTab | null {
   return Object.hasOwn(RENAMED_TABS, target) ? (RENAMED_TABS[target] ?? null) : null;
 }
 
-/** `requests:` followed by a scheduled request's id, hyphenated or not. */
-const REQUEST_TARGET = /^requests:([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})$/i;
+/** What comes before a scheduled request's id in the hub's `modalTarget`. */
+const REQUEST_TARGET_PREFIX = 'requests:';
 
 /**
  * GEO-3431: the scheduled request a link names, `modalTarget=requests:<requestId>`, or null. The
@@ -76,7 +77,9 @@ const REQUEST_TARGET = /^requests:([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-
  * default, which still works.
  */
 export function debatesPanelRequestId(target: string | null): string | null {
-  return target?.match(REQUEST_TARGET)?.[1] ?? null;
+  return target?.startsWith(REQUEST_TARGET_PREFIX)
+    ? requestIdFromTarget(target.slice(REQUEST_TARGET_PREFIX.length))
+    : null;
 }
 
 /**
@@ -96,7 +99,7 @@ export function toDebatesPanel(options?: {
   return toModal({
     modal: DEBATES_MODAL,
     pathname: options?.pathname ?? DEBATES_PATHNAME,
-    target: options?.requestId ? `requests:${options.requestId}` : options?.tab,
+    target: options?.requestId ? `${REQUEST_TARGET_PREFIX}${options.requestId}` : options?.tab,
     via: options?.via,
   });
 }

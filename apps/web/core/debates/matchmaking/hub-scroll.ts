@@ -23,3 +23,19 @@ export const HubScrollSelectorProvider = HubScrollSelectorContext.Provider;
 export function useHubScrollSelector() {
   return React.useContext(HubScrollSelectorContext);
 }
+
+/**
+ * Brings `node` to the top of `scroller`, or of the page when the list has no box of its own
+ * (phones), clear of whatever is pinned there: the offset is the section's own `scroll-margin-top`.
+ */
+export function scrollToSection(node: HTMLElement, scroller: HTMLElement | null) {
+  const margin = Number.parseFloat(getComputedStyle(node).scrollMarginTop) || 0;
+  const nodeTop = node.getBoundingClientRect().top;
+  if (scroller) {
+    const top = nodeTop - scroller.getBoundingClientRect().top + scroller.scrollTop - margin;
+    if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ top, behavior: 'smooth' });
+    else scroller.scrollTop = top;
+    return;
+  }
+  window.scrollTo({ top: nodeTop + window.scrollY - margin, behavior: 'smooth' });
+}
