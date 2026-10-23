@@ -1,11 +1,15 @@
 'use client';
 
+import { type QueryKey, useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
+import { CLAIM_RESPONSE_OBJECT_TYPE } from '~/core/claims/browse/claim-response-summary';
 import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { TimedClaim } from '~/core/debates/claim-timing';
 import { useDrawableDebateClaims } from '~/core/debates/use-drawable-debate-claims';
+import { entityResponseCountsQueryKey, userEntityResponseQueryKey } from '~/core/responses/entity-response';
 import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
@@ -127,8 +131,17 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
   const batchPending =
     transcript.isLoading || (claimsReady && targets.length > 0 && batch.data === undefined && !batch.isError);
 
+  const queryClient = useQueryClient();
   const refreshIfStale = React.useEffectEvent(() => {
     if (batch.data !== undefined && batch.isStale && !batch.isFetching) void batch.refetch();
+    // The claim being debated is not in the batch any more — the card's footer reads it — so its
+    // two reads are refreshed here instead: its counts, and the viewer's side, which is the baseline
+    // those counts are read against, so the two go together. Only the stale ones, as the batch.
+    void queryClient.refetchQueries({
+      type: 'active',
+      stale: true,
+      predicate: query => isDebatedClaimRead(query.queryKey, claimId, spaceId, responseKind),
+    });
   });
   React.useEffect(() => {
     if (shown) refreshIfStale();
@@ -169,4 +182,26 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
     /** Where the card points the viewer next: a debate they haven't watched. Null for none. */
     nextDebate,
   };
+}
+
+/** One of the debated claim's two response reads: its counts, or a viewer's side on it. */
+function isDebatedClaimRead(
+  queryKey: QueryKey,
+  claimId: string,
+  spaceId: string,
+  responseKind: ReturnType<typeof resolveClaimResponseKind>
+): boolean {
+  const counts = entityResponseCountsQueryKey(claimId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind);
+  // The viewer's key leads with whose side it is; any viewer's will do, as only one is mounted.
+  const [viewerRead, , ...viewerRest] = userEntityResponseQueryKey(
+    null,
+    claimId,
+    spaceId,
+    CLAIM_RESPONSE_OBJECT_TYPE,
+    responseKind
+  );
+  const sameAs = (expected: readonly unknown[], actual: readonly unknown[]) =>
+    expected.length === actual.length && expected.every((part, index) => part === actual[index]);
+
+  return sameAs(counts, queryKey) || (queryKey[0] === viewerRead && sameAs(viewerRest, queryKey.slice(2)));
 }

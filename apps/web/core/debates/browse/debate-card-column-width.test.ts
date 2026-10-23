@@ -50,4 +50,19 @@ describe('debateCardColumnWidth', () => {
     expect(widthAt(explore, height)).toBeCloseTo(0.83 * height - 228);
     expect(widthAt(wide, height)).toBeCloseTo(0.83 * height - 228 - 30);
   });
+
+  // Copilot on #2982: a continuous min/max can't jump, so just under the edge it passes through
+  // widths that wrap without the wrapped row's room. At a 741px viewport the three-action feed card
+  // sat 0.1px under its edge and got 385px instead of the wrapped 366px. The band where that happens
+  // is now far narrower than any viewport height can land in.
+  it.each([0.1, 0.01, 0.001])('takes the whole wrapped budget %fpx under the edge', distance => {
+    const feed = debateCardColumnWidth('82.9dvh - 13.65rem', DEBATE_CARD_WIDE_WRAPS_BELOW);
+    const height = (DEBATE_CARD_WIDE_WRAPS_BELOW - distance + 13.65 * 16) / 0.829;
+    expect(widthAt(feed, height)).toBeCloseTo(DEBATE_CARD_WIDE_WRAPS_BELOW - distance - 30, 2);
+  });
+
+  it('gets the 741px viewport the review found right', () => {
+    const feed = debateCardColumnWidth('82.9dvh - 13.65rem', DEBATE_CARD_WIDE_WRAPS_BELOW);
+    expect(widthAt(feed, 741)).toBeLessThanOrEqual(DEBATE_CARD_WIDE_WRAPS_BELOW - 30);
+  });
 });

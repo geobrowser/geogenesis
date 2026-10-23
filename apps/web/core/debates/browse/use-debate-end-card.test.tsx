@@ -1,13 +1,16 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CLAIM_RESPONSE_OBJECT_TYPE } from '~/core/claims/browse/claim-response-summary';
+import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate } from '~/core/debates/api';
 import type { ClaimTiming } from '~/core/debates/claim-timing';
 import type { DebateTranscriptClaims } from '~/core/debates/transcript-claims';
+import { entityResponseCountsQueryKey, userEntityResponseQueryKey } from '~/core/responses/entity-response';
 
 import { useDebateEndCard } from './use-debate-end-card';
 
@@ -322,6 +325,54 @@ describe('useDebateEndCard', () => {
     render(() => useDebateEndCard(debate, true));
 
     expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
+  });
+
+  // Copilot on #2982: the debated claim left the batch, and with it the batch's refresh, so its split
+  // could show the numbers it was read at before playback. Its two reads are refreshed here instead.
+  it("refreshes the debated claim's counts and the viewer's side when the card comes on screen", async () => {
+    const kind = resolveClaimResponseKind();
+    const countsKey = entityResponseCountsQueryKey(CLAIM_HEX, DEBATE_SPACE_HEX, CLAIM_RESPONSE_OBJECT_TYPE, kind);
+    const viewerKey = userEntityResponseQueryKey(
+      'viewer',
+      CLAIM_HEX,
+      DEBATE_SPACE_HEX,
+      CLAIM_RESPONSE_OBJECT_TYPE,
+      kind
+    );
+    const otherKey = entityResponseCountsQueryKey('other-claim', DEBATE_SPACE_HEX, CLAIM_RESPONSE_OBJECT_TYPE, kind);
+    const fetched: string[] = [];
+    const minutesAgo = Date.now() - 5 * 60_000;
+    for (const key of [countsKey, viewerKey, otherKey]) queryClient.setQueryData(key, {}, { updatedAt: minutesAgo });
+
+    // Stand in for the footer's reads: mounted, so the queries are active, and stale.
+    const { rerender } = render(
+      ({ shown }: { shown: boolean }) => {
+        for (const key of [countsKey, viewerKey, otherKey]) {
+          // eslint-disable-next-line react-hooks/rules-of-hooks -- a fixed list, the same every render
+          useQuery({
+            queryKey: key,
+            queryFn: () => {
+              fetched.push(String(key[0]) + ':' + String(key.includes('other-claim') ? 'other' : 'claim'));
+              return {};
+            },
+            staleTime: 30_000,
+            // Read before playback and mounted since; nothing has asked again on its own.
+            refetchOnMount: false,
+          });
+        }
+        return useDebateEndCard(debate, true, shown);
+      },
+      { shown: false }
+    );
+    expect(fetched).toEqual([]);
+
+    rerender({ shown: true });
+    await act(async () => {});
+
+    expect(fetched).toContain('entity-response-counts:claim');
+    expect(fetched).toContain('user-entity-response:claim');
+    // Only the debated claim's: another claim's reads are the carousel's batch's business.
+    expect(fetched).not.toContain('entity-response-counts:other');
   });
 
   it('refreshes numbers read minutes ago when the card comes on screen', () => {

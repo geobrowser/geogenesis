@@ -9,18 +9,26 @@
  * card takes the wrapped budget instead: 30px narrower, the 36px row at the media's 1.2042
  * height-to-width.
  *
- * CSS has no conditional, so the switch is a min/max over both answers. `fits + (fits - edge) * 100`
+ * CSS has no conditional, so the switch is a min/max over both answers. `edge + (fits - edge) * K`
  * passes `fits` through at or above the edge and plunges just under it, which hands the `max` to the
  * wrapped answer; the wrapped one is capped 30px under the edge, so above it the unwrapped answer
  * always wins.
+ *
+ * A min/max can't jump, so somewhere just under the edge the answer still passes through widths
+ * that wrap without the wrapped row's room. `K` decides how wide that band is: 30px / K of `fits`.
+ * At K = 100 it was 0.3px, which a 741px viewport landed in (Copilot, #2982); at a million it is
+ * 0.00003px, far finer than any viewport height or zoom level puts `fits` at.
  *
  * `fits` is the unwrapped budget as a `calc()` body, e.g. `83dvh - 228px`.
  */
 export function debateCardColumnWidth(fits: string, wrapsBelow: number): string {
   const wrapped = `min(calc(${fits} - ${WRAPPED_ROW_WIDTH}px), ${wrapsBelow - WRAPPED_ROW_WIDTH}px)`;
-  const unwrapped = `min(calc(${fits}), calc(${wrapsBelow}px + (${fits} - ${wrapsBelow}px) * 100))`;
+  const unwrapped = `min(calc(${fits}), calc(${wrapsBelow}px + (${fits} - ${wrapsBelow}px) * ${EDGE_STEEPNESS}))`;
   return `max(${wrapped}, ${unwrapped})`;
 }
+
+/** `K` above: how sharply the unwrapped answer falls away just under the edge. */
+const EDGE_STEEPNESS = 1_000_000;
 
 /** The wrapped 36px row, in column width: 36 / 1.2042, rounded. */
 const WRAPPED_ROW_WIDTH = 30;
