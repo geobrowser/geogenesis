@@ -311,7 +311,9 @@ export function App({ children }: { children: React.ReactNode }) {
 
   return (
     <DebateMediaSessionProvider>
-      <div className="flex min-h-[100dvh] items-stretch">
+      {/* Keep mobile content bleed inside the viewport. `clip` preserves document scrolling
+          and sticky positioning while nested carousels and tables retain their own scrollers. */}
+      <div className="flex min-h-[100dvh] items-stretch md:overflow-x-clip">
         <React.Suspense fallback={null}>
           <PageViewTracker />
           <LastPageOutsideDebatesTracker />
