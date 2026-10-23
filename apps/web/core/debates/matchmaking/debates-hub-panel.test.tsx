@@ -47,6 +47,17 @@ const mocks = vi.hoisted(() => ({
   scheduledRequests: undefined as unknown[] | undefined,
 }));
 
+// Booking reads room completion only when moving a scheduled request.
+vi.mock('../rooms/request-room', () => ({
+  useRequestRoom: () => ({
+    requests: { isLoading: false },
+    rooms: { isLoading: false },
+    request: undefined,
+    room: null,
+    finished: false,
+  }),
+}));
+
 vi.mock('../rooms/scheduling-hooks', () => ({
   useScheduledDebates: () => ({ data: mocks.scheduledRequests ? { requests: mocks.scheduledRequests } : undefined }),
   // The People tab's booking modal; booking has its own coverage.

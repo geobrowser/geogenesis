@@ -768,17 +768,29 @@ describe('moving a debate', () => {
 
   it('offers None of these work under the week, and under an empty one', async () => {
     const onPress = vi.fn();
-    const { user } = setupBooking(moving({ noTimeWorks: { onPress, pending: false, error: null } }));
+    const { user } = setupBooking(moving({ noTimeWorks: { action: 'cancel', onPress, pending: false, error: null } }));
 
-    await user.click(screen.getByRole('button', { name: 'Ask Ada to pick a time' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel and ask Ada to pick a time' }));
     expect(onPress).toHaveBeenCalledTimes(1);
 
     cleanup();
-    setupBooking(moving({ noTimeWorks: { onPress, pending: false, error: null } }), { slots: [] });
-    expect(screen.getByRole('button', { name: 'Ask Ada to pick a time' })).toBeInTheDocument();
+    setupBooking(moving({ noTimeWorks: { action: 'cancel', onPress, pending: false, error: null } }), { slots: [] });
+    expect(screen.getByRole('button', { name: 'Cancel and ask Ada to pick a time' })).toBeInTheDocument();
   });
 
   // Review of #2979: the time being moved never hides behind "+N more".
+  it('names the decline before asking an unanswered invite to pick a time', async () => {
+    const onPress = vi.fn();
+    const { user } = setupBooking(
+      moving({
+        moving: { startsAt: '2026-09-22T17:00:00Z', agreed: false },
+        noTimeWorks: { action: 'decline', onPress, pending: false, error: null },
+      })
+    );
+    await user.click(screen.getByRole('button', { name: 'Decline and ask Ada to pick a time' }));
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps the current time among the chips before the expander', () => {
     setupBooking(moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } }), {
       slots: [9, 10, 11, 12, 13].map(hour => slot(hour, true, 22)),
@@ -871,17 +883,21 @@ describe('moving a debate', () => {
     const { user } = setupBooking(
       moving({
         disabled: true,
-        noTimeWorks: { onPress: vi.fn(), pending: false, disabled: true, error: null },
+        noTimeWorks: { action: 'cancel', onPress: vi.fn(), pending: false, disabled: true, error: null },
       }),
       { slots: [slot(16, true, 22)] }
     );
     await user.click(screen.getByRole('button', { name: /at 4pm/ }));
     expect(screen.getByRole('button', { name: 'Propose new time' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Ask Ada to pick a time' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel and ask Ada to pick a time' })).toBeDisabled();
   });
 
   it('shows it sending, and why it failed', () => {
-    setupBooking(moving({ noTimeWorks: { onPress: vi.fn(), pending: true, error: 'This debate is no longer on.' } }));
+    setupBooking(
+      moving({
+        noTimeWorks: { action: 'cancel', onPress: vi.fn(), pending: true, error: 'This debate is no longer on.' },
+      })
+    );
     expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled();
     expect(screen.getByText('This debate is no longer on.')).toBeInTheDocument();
   });

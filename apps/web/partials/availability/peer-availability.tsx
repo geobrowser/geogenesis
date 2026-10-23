@@ -63,7 +63,13 @@ export type PeerAvailabilityBooking = {
    * "None of these work" (GEO-3429): call the debate off and send the other person the viewer's own
    * free times. Offered under the week, and under an empty one, which is where it matters most.
    */
-  noTimeWorks?: { onPress: () => void; pending: boolean; disabled?: boolean; error: string | null } | null;
+  noTimeWorks?: {
+    action: 'cancel' | 'decline';
+    onPress: () => void;
+    pending: boolean;
+    disabled?: boolean;
+    error: string | null;
+  } | null;
   /**
    * An instant, not a chip: a week with no slots is still requestable (GEO-2938). `viewerIsFree` is
    * the picked chip's, for analytics; `null` for a time typed in by hand. `viewerTimezone` is the
@@ -373,12 +379,14 @@ function MovingCard({
  */
 function NoTimeWorks({
   peerFirstName,
+  action,
   onPress,
   pending,
   disabled = false,
   error,
 }: {
   peerFirstName: string;
+  action: 'cancel' | 'decline';
   onPress: () => void;
   pending: boolean;
   disabled?: boolean;
@@ -395,7 +403,9 @@ function NoTimeWorks({
           onClick={onPress}
           className="text-chatMedium text-text underline decoration-grey-03 underline-offset-4 transition-colors hover:decoration-text disabled:opacity-40"
         >
-          {pending ? 'Sending…' : `Ask ${peerFirstName} to pick a time`}
+          {pending
+            ? 'Sending…'
+            : `${action === 'cancel' ? 'Cancel' : 'Decline'} and ask ${peerFirstName} to pick a time`}
         </button>
       </div>
       {error && (

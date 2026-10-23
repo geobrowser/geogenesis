@@ -4,16 +4,17 @@ import * as React from 'react';
 
 import { GeoChatRequestError, type ScheduledDebateRequest } from '~/core/debates/api';
 import { usePeerSchedule } from '~/core/debates/hooks';
-import { requestById } from '~/core/debates/rooms/room-opponent';
+import { useRequestRoom } from '~/core/debates/rooms/request-room';
+import { sameId } from '~/core/debates/rooms/room-presence';
 import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
 import { useHoldScheduledNotice } from '~/core/debates/rooms/scheduled-notice-open';
 import {
   useCreateScheduledDebate,
   useNoTimeWorks,
   useRescheduleScheduledDebate,
-  useScheduledDebates,
 } from '~/core/debates/rooms/scheduling-hooks';
 import { noticeFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
+import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useSetToast } from '~/core/hooks/use-toast';
 
 import { firstName } from '~/partials/profile/claim-response-tag';
@@ -82,12 +83,30 @@ export function PeerAvailabilityBookingModal({
 
   // The debate being moved (GEO-3429): its time and whether it was agreed, from the requests list
   // every reschedule surface already reads. Until it lands the week shows as it always has.
-  const requests = useScheduledDebates(Boolean(rescheduleRequestId) && props.open);
-  const request = requestById(requests.data?.requests, rescheduleRequestId);
+  const { requests, rooms, request, finished } = useRequestRoom(
+    rescheduleRequestId,
+    Boolean(rescheduleRequestId) && props.open
+  );
+  const viewerId = useCurrentGeoChatUserId();
+  // A converted room can remain listed as accepted until its sweep. Don't act on it while its
+  // room/session read is unresolved, or once that session says the debate already happened.
+  const roomLoading = Boolean(request?.room_id) && (rooms.isLoading || finished === null);
   // Agreed ('active'), or pending again for an answer ('moved'); anything resolved has nothing to move.
-  const state = noticeRequestState(request);
-  const active = state === 'active' || state === 'moved' ? request : undefined;
-  const agreed = state === 'active';
+  const state = finished ? 'over' : noticeRequestState(request);
+  const active = !roomLoading && finished === false && (state === 'active' || state === 'moved') ? request : undefined;
+  const agreed = Boolean(active) && state === 'active';
+  // The server may silently withdraw an original inviter's own pending proposal. This includes
+  // self-moved invites; the request doesn't expose whether the other side ever took it on.
+  // Keep ordinary rescheduling available, but don't promise a free-times email on that path.
+  const ownPendingInvite =
+    request?.status === 'pending' &&
+    !request.viewer_must_answer &&
+    viewerId !== null &&
+    request.invited_by_user_id != null &&
+    sameId(request.invited_by_user_id, viewerId) &&
+    request.proposed_by_user_id != null &&
+    sameId(request.proposed_by_user_id, viewerId);
+  const canAskForTime = viewerId !== null && !ownPendingInvite;
   // From the room's late notice or waiting status the viewer is the one waiting: "they will expect
   // you" is the wrong way round, and "none of these work" would say the waiter can't make it.
   const fromWaitingRoom = entry === 'room_late_notice' || entry === 'room_waiting_status';
@@ -103,7 +122,7 @@ export function PeerAvailabilityBookingModal({
   // with both emails and the move undone.
   const busy = mutation.isPending || noneWork.isPending;
   // The list's first read, not "pending": a query that is off (signed out) stays pending for good.
-  const listLoading = Boolean(rescheduleRequestId) && requests.isLoading;
+  const listLoading = Boolean(rescheduleRequestId) && (requests.isLoading || roomLoading);
   // A Close pressed before the list says whether the debate was agreed.
   const [closeWaiting, setCloseWaiting] = React.useState(false);
   // An open week is a dialog the nudge popup never stacks on (GEO-3428), whatever it is booking or
@@ -191,8 +210,9 @@ export function PeerAvailabilityBookingModal({
           // Kept while its refusal shows: the refetch it triggers can resolve the request, and the
           // error is the only thing saying why the screen changed.
           noTimeWorks:
-            (active || noneWork.error) && rescheduleRequestId && !fromWaitingRoom
+            ((active && canAskForTime) || noneWork.error) && rescheduleRequestId && !fromWaitingRoom
               ? {
+                  action: request?.viewer_must_answer ? 'decline' : 'cancel',
                   onPress: () =>
                     noneWork.mutate(
                       { requestId: rescheduleRequestId },
@@ -209,11 +229,12 @@ export function PeerAvailabilityBookingModal({
                     ),
                   pending: noneWork.isPending,
                   // Nothing left to call off once the request has resolved; its refusal still shows.
-                  disabled: busy || !active,
+                  disabled: busy || !active || !canAskForTime,
                   error: noneWork.error ? noticeFailureMessage(noneWork.error, 'cant') : null,
                 }
               : null,
           onRequest: (startsAt, pick) => {
+            if (rescheduleRequestId && !active) return;
             const slot = {
               startsAt: new Date(startsAt),
               minutes: SCHEDULED_DEBATE_MINUTES,
@@ -227,7 +248,7 @@ export function PeerAvailabilityBookingModal({
             } else propose.mutate({ opponentUserId: userId, ...slot }, callbacks);
           },
           pending: mutation.isPending,
-          disabled: busy,
+          disabled: busy || (Boolean(rescheduleRequestId) && !active),
           error: mutation.error
             ? rescheduleRequestId
               ? rescheduleFailureMessage(mutation.error)

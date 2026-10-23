@@ -162,6 +162,17 @@ vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
 });
 
 // Reaches for a query client this suite does not stand up, and booking has its own coverage.
+// Booking reads room completion only when moving a scheduled request.
+vi.mock('../rooms/request-room', () => ({
+  useRequestRoom: () => ({
+    requests: { isLoading: false },
+    rooms: { isLoading: false },
+    request: undefined,
+    room: null,
+    finished: false,
+  }),
+}));
+
 vi.mock('../rooms/scheduling-hooks', () => ({
   useCreateScheduledDebate: () => mocks.propose,
   useRescheduleScheduledDebate: () => mocks.propose,
