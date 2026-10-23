@@ -38,6 +38,10 @@ const calibre = localFont({
     },
   ],
   variable: '--font-calibre',
+  // Not preloaded: on slow mobile the four weights (~135KB) share bandwidth with the
+  // render-blocking main stylesheet and delay first paint. The fallback is metric-adjusted, so the
+  // swap barely shifts layout.
+  preload: false,
 });
 
 const geistMedium = localFont({
@@ -45,6 +49,15 @@ const geistMedium = localFont({
   weight: '500',
   style: 'normal',
   variable: '--font-geist-medium',
+  preload: false,
+});
+
+// The playback stamps' face (GEO-3277). The same file the OG images already read.
+const geistBold = localFont({
+  src: '../public/fonts/Geist-Bold.ttf',
+  weight: '700',
+  style: 'normal',
+  variable: '--font-geist-bold',
   preload: false,
 });
 
@@ -90,6 +103,10 @@ export const metadata: Metadata = {
   robots: 'follow, index',
 };
 
+// The marketing tags (GTM forwarding to Meta) load on the production deployment only, so preview
+// builds and local runs never send test sessions as conversions.
+const loadTagManager = process.env.VERCEL_ENV === 'production';
+
 export default function RootLayout({
   // Layouts must accept a children prop.
   // This will be populated with nested layouts or pages
@@ -98,8 +115,33 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cx(calibre.variable, geistMedium.variable)} suppressHydrationWarning>
+    <html lang="en" className={cx(calibre.variable, geistMedium.variable, geistBold.variable)} suppressHydrationWarning>
+      <head>
+        {/*
+          Both scripts are async so neither waits on the head stylesheets: a parser-inserted inline
+          script does, which delayed gtm.js until after first CSS. React hoists them to the top of
+          the head so the preload scanner fetches gtm.js immediately. Order between them is free:
+          gtm.js processes whatever is already queued in dataLayer.
+        */}
+        {loadTagManager ? (
+          <>
+            <script async src="/gtm-init.js" />
+            <script id="google-tag-manager" async src="https://www.googletagmanager.com/gtm.js?id=GTM-KJQ3T7W9" />
+          </>
+        ) : null}
+      </head>
       <body>
+        {loadTagManager ? (
+          <noscript>
+            <iframe
+              src="https://www.googletagmanager.com/ns.html?id=GTM-KJQ3T7W9"
+              height="0"
+              width="0"
+              style={{ display: 'none', visibility: 'hidden' }}
+              title="Google Tag Manager"
+            />
+          </noscript>
+        ) : null}
         <div className="relative">
           <Providers>
             <App>{children}</App>

@@ -24,16 +24,17 @@ export type AcceptorLockStore = {
   release: (token: string) => Promise<void>;
 };
 
-function upstashStore(): AcceptorLockStore | null {
+/** An Upstash-backed store for one key, or null when Upstash is not configured. */
+export function upstashStore(key: string = LOCK_KEY): AcceptorLockStore | null {
   // Either name pair: the app has had Upstash configured under both (see app/api/newsletter).
   const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
   if (!url || !token) return null;
   const redis = new Redis({ url, token, retry: { retries: 1 } });
   return {
-    acquire: async (value, ttlMs) => (await redis.set(LOCK_KEY, value, { nx: true, px: ttlMs })) === 'OK',
+    acquire: async (value, ttlMs) => (await redis.set(key, value, { nx: true, px: ttlMs })) === 'OK',
     release: async value => {
-      await redis.eval(RELEASE_SCRIPT, [LOCK_KEY], [value]);
+      await redis.eval(RELEASE_SCRIPT, [key], [value]);
     },
   };
 }

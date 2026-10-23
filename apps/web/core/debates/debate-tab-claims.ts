@@ -247,3 +247,61 @@ export function useHoldDebateTabClaim(key: DebateTabClaimKey | null, active: boo
     };
   }, [active, key]);
 }
+
+const OPEN_TAB_LOCK_PREFIX = 'geo:debate-tab-open:';
+
+function lockManager(): LockManager | null {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  return typeof locks?.request === 'function' && typeof locks.query === 'function' ? locks : null;
+}
+
+function openTabLockName(key: DebateTabClaimKey, tabId: string) {
+  return `${OPEN_TAB_LOCK_PREFIX}${key}:${tabId}`;
+}
+
+/**
+ * Marks this tab as having the flow open, until the returned release is called or the tab goes away.
+ *
+ * Unlike a claim, which names one tab, every tab with the flow open holds one of these at once. It
+ * is a Web Lock named for this tab, so the browser drops it the moment the tab closes or crashes:
+ * no expiry to wait out and no cleanup that has to run. Without Web Locks it records nothing, and
+ * `hasOtherOpenDebateTab` then answers false, which is the single-tab behaviour.
+ */
+export function holdOpenDebateTab(key: DebateTabClaimKey, tabId = debateTabId()): () => void {
+  const locks = lockManager();
+  if (!locks) return () => undefined;
+  let release: () => void = () => undefined;
+  const held = new Promise<void>(resolve => {
+    release = resolve;
+  });
+  // Shared, so a remount of the same page in this tab can hold it alongside the instance leaving.
+  void locks.request(openTabLockName(key, tabId), { mode: 'shared' }, () => held).catch(() => undefined);
+  return release;
+}
+
+/**
+ * Whether a tab other than this one still has the flow open, or `null` when it cannot tell: without
+ * Web Locks, or if the query fails. Its own holds are ignored by name, so a release this tab made a
+ * moment ago never reads as someone else. For a caller that must not act on a guess (GEO-3338).
+ */
+export async function findOtherOpenDebateTab(key: DebateTabClaimKey, tabId = debateTabId()): Promise<boolean | null> {
+  const locks = lockManager();
+  if (!locks) return null;
+  try {
+    const { held = [], pending = [] } = await locks.query();
+    const prefix = `${OPEN_TAB_LOCK_PREFIX}${key}:`;
+    const own = openTabLockName(key, tabId);
+    // Pending counts: a tab whose request has not been granted yet is a tab arriving.
+    return [...held, ...pending].some(lock => lock.name?.startsWith(prefix) && lock.name !== own);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * {@link findOtherOpenDebateTab}, false whenever it cannot tell: the single-tab behaviour, for a
+ * caller whose own exit already says the viewer is leaving.
+ */
+export async function hasOtherOpenDebateTab(key: DebateTabClaimKey, tabId = debateTabId()): Promise<boolean> {
+  return (await findOtherOpenDebateTab(key, tabId)) ?? false;
+}

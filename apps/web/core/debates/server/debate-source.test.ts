@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
-import { topicFeedFilter, topicFeedPopulationScopes } from '~/core/topics/browse/topic-feed-filter';
+import { topicFeedFilter } from '~/core/topics/browse/topic-feed-filter';
 
+import type { Debate } from '../api';
 import { buildDebatePublishDraft } from '../debate-publish-draft';
 import { applyClaimReusePolicy } from './claim-reuse';
 import { applyClaimStancePolicy } from './claim-stance';
 import {
   DebateNotPublishableError,
+  isDebateMediaTerminal,
   listEarlyClaimCandidateDebateIds,
   listSweepCandidateDebateIds,
   loadDebateOgPreview,
@@ -228,6 +229,10 @@ describe('loadDebatePublishSource media gating', () => {
         topics: [],
         isContestable: false,
         timing: { startMs: 0, endMs: 9_000 },
+        highlightScore: null,
+        relevanceScore: null,
+        qualityScore: null,
+        controversyScore: null,
         stance: 'supports',
       },
       {
@@ -239,6 +244,10 @@ describe('loadDebatePublishSource media gating', () => {
         topics: [],
         isContestable: false,
         timing: null,
+        highlightScore: null,
+        relevanceScore: null,
+        qualityScore: null,
+        controversyScore: null,
         stance: null,
       },
     ]);
@@ -306,14 +315,11 @@ describe('loadDebatePublishSource media gating', () => {
       .filter(relation => relation.fromEntity.id === draft.debateEntityId && relation.spaceId === input.spaceId)
       .map(relation => ({ typeId: { is: relation.type.id }, toEntityId: { is: relation.toEntity.id } }));
 
-    // New/Top and topic facets use the entity predicate; Best/composition also use the relation
-    // entry point. Both must be satisfied by edges on the Debate itself, not its extracted claims.
+    // Top and topic facets use the entity predicate. It must be satisfied by edges on the Debate
+    // itself, not its extracted claims.
     const filter = topicFeedFilter(topicId, [selectedTopicId]);
     expect(filter.and).toHaveLength(2);
     expect(publishedPredicates).toEqual(expect.arrayContaining(filter.and!.map(clause => clause.relations!.some)));
-    const scopes = topicFeedPopulationScopes(topicId, [selectedTopicId], [DEBATE_TYPE_ID]);
-    expect(scopes).toHaveLength(1);
-    expect(publishedPredicates).toContainEqual(scopes[0].relationFilter);
   });
 
   it('falls back to the raw transcript with no claims when geo-chat reports none', async () => {
@@ -411,6 +417,56 @@ describe('listSweepCandidateDebateIds', () => {
     );
 
     await expect(listSweepCandidateDebateIds('space-1')).resolves.toEqual(['eligible']);
+  });
+
+  // GEO-2985: a terminal media job used to be re-read and re-logged on every five-minute tick.
+  it('skips debates whose media the listing reports as terminal', async () => {
+    const media = (job_status: string | null, has_final_video: boolean, terminal: boolean) => ({
+      media: { job_status, has_final_video, terminal },
+    });
+    const debates = [
+      debateBody({ id: 'no-job', ...media(null, false, false) }),
+      debateBody({ id: 'queued', ...media('queued', false, false) }),
+      debateBody({ id: 'running', ...media('running', false, false) }),
+      debateBody({ id: 'succeeded', ...media('succeeded', true, false) }),
+      debateBody({ id: 'failed', ...media('failed', false, true) }),
+      debateBody({ id: 'succeeded-no-video', ...media('succeeded', false, true) }),
+      // The flag alone is enough, and the parts alone are enough.
+      debateBody({ id: 'flag-only', media: { terminal: true } }),
+      debateBody({ id: 'parts-only', media: { job_status: 'failed', has_final_video: false } }),
+    ];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ debates, matches: [] }), { status: 200 }))
+    );
+
+    await expect(listSweepCandidateDebateIds('space-1')).resolves.toEqual(['no-job', 'queued', 'running', 'succeeded']);
+  });
+
+  it('keeps every debate a candidate when geo-chat does not send media state', async () => {
+    const older = debateBody({ id: 'older-geo-chat' });
+    const nulled = debateBody({ id: 'null-media', media: null });
+    expect(older).not.toHaveProperty('media');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ debates: [older, nulled] }), { status: 200 }))
+    );
+
+    await expect(listSweepCandidateDebateIds('space-1')).resolves.toEqual(['older-geo-chat', 'null-media']);
+  });
+});
+
+describe('isDebateMediaTerminal', () => {
+  it('is false without media state, and only true for a dead or videoless job', () => {
+    const base = debateBody() as unknown as Debate;
+    expect(isDebateMediaTerminal(base)).toBe(false);
+    expect(isDebateMediaTerminal({ ...base, media: null })).toBe(false);
+    expect(
+      isDebateMediaTerminal({ ...base, media: { job_status: 'queued', has_final_video: false, terminal: false } })
+    ).toBe(false);
+    expect(
+      isDebateMediaTerminal({ ...base, media: { job_status: 'failed', has_final_video: false, terminal: true } })
+    ).toBe(true);
   });
 });
 

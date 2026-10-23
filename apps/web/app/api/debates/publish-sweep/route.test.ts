@@ -25,11 +25,11 @@ vi.mock('~/core/debates/server/editor-spaces', () => ({
   listEditorSpaceIds: async () => mocks.editorSpaceIds,
 }));
 
-// `DebateNotPublishableError` stays real: the route branches on `instanceof`, so a stubbed class
-// would send every outcome down the generic-failure path and the test would prove nothing.
-vi.mock('~/core/debates/server/debate-source', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/debates/server/debate-source')>()),
-  listSweepCandidateDebateIds: async (spaceId: string) => mocks.candidates[spaceId] ?? [],
+// Candidate discovery is stubbed; its paging and fallback are covered in `publish-candidates.test.ts`.
+// `debate-source` is left unmocked so `DebateNotPublishableError` stays real: the route branches on
+// `instanceof`, so a stubbed class would send every outcome down the generic-failure path.
+vi.mock('~/core/debates/server/publish-candidates', () => ({
+  listPublishCandidateDebateIds: async (spaceId: string) => mocks.candidates[spaceId] ?? [],
 }));
 
 vi.mock('~/core/debates/server/publish-debate', () => ({
@@ -126,6 +126,18 @@ describe('publish sweep', () => {
     mocks.candidates = { 'space-1': [] };
 
     await expect(sweep()).resolves.toMatchObject({ mediaFailed: [], pending: 0 });
+  });
+
+  // Indexer lag (2026-10-05): a debate submitted on an earlier tick is not in the graph yet. It is
+  // counted, not published again, and does not take a slot from the debates behind it.
+  it('counts a debate whose publish is waiting on the graph without spending the attempt budget', async () => {
+    const waiting = Array.from({ length: 8 }, (_, i) => `waiting-${i}`);
+    mocks.candidates = { 'space-1': [...waiting, 'publishable'] };
+    mocks.publish.mockImplementation(async (debateId: string) =>
+      debateId === 'publishable' ? publishedResult : { status: 'submission_pending', debateEntityId: 'e' }
+    );
+
+    await expect(sweep()).resolves.toMatchObject({ submissionPending: 8, published: ['publishable'] });
   });
 
   it('does not spend the attempt budget on debates the acceptor cannot edit', async () => {

@@ -13,6 +13,7 @@ import { type DebateClaimInput, type DebatePublishTurn, buildDebateClaimsDraft }
 import { type DebateAcceptorConfig, getDebateAcceptorConfig, readEnv } from './acceptor-config';
 import { type ExistingClaimLookup, applyClaimReusePolicy, lookupExistingClaimsInGraph } from './claim-reuse';
 import { loadDebateClaims, loadSettledDebate } from './debate-source';
+import { isDedupSettled } from './extracted-claims';
 import { loadAcceptorEditableSpace, submitEditAsAcceptor } from './publish-debate';
 
 /**
@@ -34,6 +35,12 @@ export type PublishDebateClaimsResult =
   | { status: 'up_to_date'; spaceId: string }
   /** No claims yet, or none that would be minted (all matched to existing entities, or pre-D1). */
   | { status: 'no_claims' }
+  /**
+   * geo-chat is still merging paraphrases across turns (`dedup_pending_until`): any of these claims
+   * may yet be merged away, and one already on the graph would stay there with nothing pointing at
+   * it. Bounded — the marker lapses about two and a half minutes after the claims land.
+   */
+  | { status: 'dedup_pending' }
   /** The Debate entity exists: the full publish has run and wrote the claims itself. */
   | { status: 'debate_published' }
   | { status: 'not_editor'; spaceId: string }
@@ -52,13 +59,16 @@ export type PublishDebateClaimsDeps = {
   debateEntityExists: (debateEntityId: string) => Promise<boolean>;
   loadDebate: (debateId: string) => Promise<Debate>;
   loadEditableSpace: (spaceId: string, config: DebateAcceptorConfig, debateId: string) => Promise<AcceptorSpace | null>;
-  loadClaims: (
-    debateId: string
-  ) => Promise<{ transcriptTurns: DebatePublishTurn[]; claims: DebateClaimInput[] } | null>;
+  loadClaims: (debateId: string) => Promise<{
+    transcriptTurns: DebatePublishTurn[];
+    claims: DebateClaimInput[];
+    dedupPendingUntil?: number | null;
+  } | null>;
   applyReusePolicy: typeof applyClaimReusePolicy;
   lookupClaims: ExistingClaimLookup;
   prepareOps: (draft: ReturnType<typeof buildDebateClaimsDraft>, spaceId: string) => Promise<Op[]>;
   submit: typeof submitEditAsAcceptor;
+  now: () => number;
 };
 
 const defaultDeps: PublishDebateClaimsDeps = {
@@ -75,6 +85,7 @@ const defaultDeps: PublishDebateClaimsDeps = {
   prepareOps: (draft, spaceId) =>
     Effect.runPromise(Publish.prepareLocalDataForPublishing(draft.values, draft.relations, spaceId)),
   submit: submitEditAsAcceptor,
+  now: Date.now,
 };
 
 /**
@@ -99,6 +110,8 @@ export async function publishDebateClaimsEarly(
 
   const extracted = await d.loadClaims(debateId);
   if (!extracted || extracted.claims.length === 0) return { status: 'no_claims' };
+  // Only claims whose dedup has settled: a claim published early cannot follow a later merge.
+  if (!isDedupSettled(extracted.dedupPendingUntil, d.now())) return { status: 'dedup_pending' };
 
   // The same reuse decision the full publish will make, so a claim it would write as a reference to
   // an existing entity is not minted here. A reference that a later publish drops is minted then,

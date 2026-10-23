@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -54,10 +54,22 @@ vi.mock('../rooms/scheduling-hooks', () => ({
   useRescheduleScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
+// The card has its own suite; here it only matters which tabs show it.
+vi.mock('../lobbies/lobbies-card', () => ({ UpcomingLobbiesCard: () => <div data-testid="live-lobbies-card" /> }));
+
 // The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
 vi.mock('./scheduled-debates-section', () => ({
   ScheduledDebatesSection: () => null,
-  useScheduledContent: () => ({ answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null }),
+  hasScheduledContent: () => false,
+  useScheduledContent: () => ({
+    answerable: [],
+    upcoming: [],
+    lobbies: [],
+    people: [],
+    requestsError: null,
+    roomsError: null,
+    lobbiesError: null,
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -88,6 +100,17 @@ vi.mock('../claim-picker-page', async importOriginal => ({
   ...(await importOriginal<typeof import('../claim-picker-page')>()),
   useClaimEntitiesByIds: () => ({ entities: [], isLoading: false, error: null }),
 }));
+
+// GEO-3268's lineup reads the lobby list and holds the matchmaking scope; nothing is live here.
+const lineup = vi.hoisted(() => ({ live: [] as { lobby_id: string }[], soon: null, later: [] }));
+vi.mock('../lobbies/live-lobbies', () => ({ useLobbyLineup: () => lineup }));
+// The banner's own suite covers what it draws; here, only whether the panel keeps it mounted.
+vi.mock('./set-schedule-banner', () => ({
+  SetScheduleBanner: ({ hidden }: { hidden?: boolean }) => (
+    <div data-testid="schedule-banner" data-hidden={String(Boolean(hidden))} />
+  ),
+}));
+vi.mock('../lobbies/lobby-spotlight', () => ({ LobbySpotlight: () => <div data-testid="lobby-spotlight" /> }));
 
 vi.mock('../hooks', () => ({
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
@@ -204,6 +227,7 @@ function renderOpen(tab: DebatesHubTab = 'requests') {
 }
 
 beforeEach(() => {
+  lineup.live = [];
   mocks.ready = true;
   mocks.authenticated = true;
   mocks.accountKey = 'user-a';
@@ -262,11 +286,11 @@ describe('DebatesHubPanel', () => {
   // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
   // GEO-2861. Four tabs, and "My positions" is not one of them: it is a source inside Explore's
   // menu, one more answer to "which claims?" rather than a surface of its own.
-  it('offers Lobby, People, Explore, My positions and Requests, in that order', () => {
+  it('offers Live, People, Explore, My positions and Requests, in that order', () => {
     renderOpen('explore');
 
-    const order = ['Lobby', 'People', 'Explore', 'My positions', 'Requests'];
-    const row = screen.getByRole('button', { name: /^Lobby/ }).closest('.overflow-x-auto');
+    const order = ['Live', 'People', 'Explore', 'My positions', 'Requests'];
+    const row = screen.getByRole('button', { name: /^Live/ }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
 
     expect(labels).toEqual(order);
@@ -432,18 +456,18 @@ describe('DebatesHubPanel', () => {
   it('renders every tab and switches between them', async () => {
     renderOpen();
 
-    for (const label of ['Requests', 'Lobby', 'Explore', 'People']) {
+    for (const label of ['Requests', 'Live', 'Explore', 'People']) {
       expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
 
     // jsdom has no layout, so reachability at a narrow width can't be asserted directly. The
     // scroll container is the thing that guarantees it, so pin that instead — without it the
     // last tab is clipped by the panel's `overflow-hidden` with no way to get to it.
-    const row = screen.getByRole('button', { name: /^Lobby/ }).closest('.overflow-x-auto');
+    const row = screen.getByRole('button', { name: /^Live/ }).closest('.overflow-x-auto');
     expect(row).not.toBeNull();
 
     // Order, not just presence: the labels alone stayed green through a reorder.
-    const order = ['Lobby', 'People', 'Explore', 'My positions', 'Requests'];
+    const order = ['Live', 'People', 'Explore', 'My positions', 'Requests'];
     const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
     for (const [index, tab] of rendered.slice(0, -1).entries()) {
       const next = rendered[index + 1];
@@ -457,12 +481,40 @@ describe('DebatesHubPanel', () => {
     expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
   });
 
-  it('toggles availability from the panel header', () => {
+  it('leaves the lobbies card off Requests, which lists the lobbies itself', async () => {
+    renderOpen('people');
+    expect(screen.getByTestId('live-lobbies-card')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Requests/ }));
+
+    expect(screen.queryByTestId('live-lobbies-card')).not.toBeInTheDocument();
+  });
+
+  it('toggles availability from the panel header', async () => {
     renderOpen();
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Available to debate' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Your availability/ }));
+    fireEvent.click(await screen.findByRole('switch', { name: 'Available now' }));
 
     expect(mocks.updateAvailability).toHaveBeenCalledWith(true);
+  });
+
+  it("sends Calendar's way back to this page with its own query, but not the panel's", () => {
+    mocks.pathname = '/space/abc';
+    mocks.searchParams = new URLSearchParams('proposal=1&modal=debates&modalTarget=people');
+    renderOpen();
+
+    const href = screen.getByRole('link', { name: /^Calendar/ }).getAttribute('href') ?? '';
+    expect(new URL(href, 'https://geo.local').searchParams.get('from')).toBe('/space/abc?proposal=1');
+  });
+
+  it('heads the panel with one availability pill and one Calendar, in that order', () => {
+    renderOpen();
+
+    const pill = screen.getByRole('button', { name: /^Your availability/ });
+    const calendar = screen.getByRole('link', { name: /^Calendar/ });
+    expect(Boolean(pill.compareDocumentPosition(calendar) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.queryByRole('switch', { name: 'Available to debate' })).not.toBeInTheDocument();
   });
 
   it('explains that matchmaking is not deployed yet when the endpoint 404s', () => {
@@ -565,6 +617,22 @@ describe('DebatesHubPanel', () => {
 
     expect(store.get(debatesHubAtom)).not.toBeNull();
     opener.remove();
+  });
+
+  it('keeps mobile status-filter options inside the modal focus boundary', async () => {
+    mocks.isMobile = true;
+    window.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    renderOpen();
+    const dialog = screen.getByRole('dialog', { name: 'Debates' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Any status' }));
+    const option = await screen.findByRole('button', { name: 'Received' });
+    expect(dialog).toContainElement(option);
+    fireEvent.click(option);
+    expect(within(dialog).getByRole('button', { name: 'Received' })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('gives the mobile sheet a close button that assistive tech can reach', () => {
@@ -932,5 +1000,22 @@ describe('Requests badge', () => {
     ];
 
     expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
+  });
+});
+
+// GEO-3268. A live lobby takes the schedule banner's place. The banner holds the schedule dialog,
+// so it stays mounted, hidden, rather than being swapped out under someone mid-edit.
+describe('DebatesHubPanel lobby spotlight', () => {
+  it('shows the schedule banner while nothing is live', () => {
+    renderOpen('explore');
+    expect(screen.getByTestId('schedule-banner')).toHaveAttribute('data-hidden', 'false');
+    expect(screen.queryByTestId('lobby-spotlight')).not.toBeInTheDocument();
+  });
+
+  it('puts the spotlight in its place while a lobby is live, keeping the banner mounted and hidden', () => {
+    lineup.live = [{ lobby_id: 'nyc' }];
+    renderOpen('explore');
+    expect(screen.getByTestId('lobby-spotlight')).toBeInTheDocument();
+    expect(screen.getByTestId('schedule-banner')).toHaveAttribute('data-hidden', 'true');
   });
 });

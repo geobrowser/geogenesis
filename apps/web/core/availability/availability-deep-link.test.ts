@@ -6,7 +6,7 @@ import {
   AVAILABILITY_MODAL,
   availabilityLinkUrl,
   profileSpaceIdFromPath,
-  rescheduleRequestIdFromTarget,
+  requestIdFromTarget,
   toAvailability,
 } from './availability-deep-link';
 
@@ -44,11 +44,11 @@ describe('availability deep link', () => {
   });
 
   it('only reads a request id as something to reschedule', () => {
-    expect(rescheduleRequestIdFromTarget('6676b145-0970-4c1c-bfbc-7497d9721b39')).toBe(
-      '6676b145-0970-4c1c-bfbc-7497d9721b39'
-    );
-    expect(rescheduleRequestIdFromTarget(null)).toBeNull();
-    expect(rescheduleRequestIdFromTarget('people')).toBeNull();
-    expect(rescheduleRequestIdFromTarget('6676b1450970')).toBeNull();
+    expect(requestIdFromTarget('6676b145-0970-4c1c-bfbc-7497d9721b39')).toBe('6676b145-0970-4c1c-bfbc-7497d9721b39');
+    expect(requestIdFromTarget(null)).toBeNull();
+    expect(requestIdFromTarget('people')).toBeNull();
+    expect(requestIdFromTarget('6676b1450970')).toBeNull();
+    // geo-chat's JSON spells the same id without dashes.
+    expect(requestIdFromTarget('6676b14509704c1cbfbc7497d9721b39')).toBe('6676b14509704c1cbfbc7497d9721b39');
   });
 });

@@ -857,12 +857,23 @@ export const entityRespondersQuery = graphql(/* GraphQL */ `
 `);
 
 export const claimResponseSummariesQuery = graphql(/* GraphQL */ `
-  query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {
-    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]) {
-      userId
-      objectId
-      voteType
-      voteKind
+  query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $after: Cursor) {
+    userVotesConnection(
+      filter: $filter
+      first: $first
+      after: $after
+      orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        userId
+        objectId
+        voteType
+        voteKind
+      }
     }
   }
 `);

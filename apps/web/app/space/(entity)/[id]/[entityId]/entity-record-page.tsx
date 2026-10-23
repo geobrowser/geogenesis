@@ -4,9 +4,13 @@ import { notFound } from 'next/navigation';
 
 import { ID } from '~/core/id';
 import { isHiddenEntity } from '~/core/moderation/hidden';
+import { QuerySeed, type QuerySeedEntry } from '~/core/query-seed';
+import type { Entity } from '~/core/types';
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';
 import DefaultEntityPage from './default-entity-page';
+
+export type EntityRecordSeed = (entity: Entity, spaceId: string) => Promise<QuerySeedEntry[]>;
 
 export type EntityRecordPageProps = {
   params: Promise<{ id: string; entityId: string }>;
@@ -18,7 +22,15 @@ export async function EntityRecordPage({
   params: paramsPromise,
   searchParams: searchParamsPromise,
   requiredTypeId,
-}: EntityRecordPageProps & { requiredTypeId: string }) {
+  seed,
+}: EntityRecordPageProps & {
+  requiredTypeId: string;
+  /**
+   * What this tab would otherwise fetch on the client, fetched here instead so the list is in the
+   * server HTML. A failed seed is dropped: the tab fetches for itself, exactly as it did before.
+   */
+  seed?: EntityRecordSeed;
+}) {
   const params = await paramsPromise;
   const searchParams = await searchParamsPromise;
 
@@ -29,5 +41,8 @@ export async function EntityRecordPage({
     notFound();
   }
 
-  return <DefaultEntityPage params={params} searchParams={searchParams} />;
+  const entries = await seed?.(result.entity, params.id).catch(() => []);
+  const page = <DefaultEntityPage params={params} searchParams={searchParams} />;
+
+  return entries && entries.length > 0 ? <QuerySeed entries={entries}>{page}</QuerySeed> : page;
 }

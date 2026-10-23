@@ -39,6 +39,8 @@ import {
   decodeActiveResponseDirection,
   entityResponseQueryVariables,
 } from '~/core/responses/entity-response';
+import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
+import { INTERESTED_VOTE_KIND } from '~/core/topics/interested';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -121,7 +123,10 @@ export function batchEntityIds(ids: readonly string[], size = ENTITY_ID_BATCH_SI
 function getBatchEntitiesPage(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   return graphql({
     query: entitiesBatchQuery,
-    decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
+    decoder: data =>
+      data.entities
+        ?.map(entity => EntityDecoder.decodeInSpace(entity, spaceId))
+        .filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } }, spaceId },
     signal,
   });
@@ -242,10 +247,10 @@ type EntitiesConnectionShape = {
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
 } | null;
 
-function decodeEntitiesConnectionPage(connection: EntitiesConnectionShape): EntitiesPage {
+function decodeEntitiesConnectionPage(connection: EntitiesConnectionShape, spaceId?: string): EntitiesPage {
   const entities =
     connection?.nodes
-      ?.map((n: unknown) => EntityDecoder.decode(n))
+      ?.map((n: unknown) => EntityDecoder.decodeInSpace(n, spaceId))
       .filter((e: Entity | null): e is Entity => e !== null) ?? [];
   return {
     entities,
@@ -293,7 +298,7 @@ export function getAllEntities(
       graphql({
         query: allEntitiesConnectionDocument,
         decoder: (data: { entitiesConnection?: EntitiesConnectionShape }) =>
-          decodeEntitiesConnectionPage(data.entitiesConnection ?? null),
+          decodeEntitiesConnectionPage(data.entitiesConnection ?? null, topLevelSpaceId),
         variables: { ...variablesBase, limit: pageLimit, after: pageAfter, offset: pageOffset },
         signal,
       });
@@ -418,7 +423,7 @@ export function getEntitiesOrderedByPropertyConnection(
   return graphql({
     query: entitiesOrderedByPropertyConnectionDocument,
     decoder: (data: { entitiesOrderedByPropertyConnection?: EntitiesConnectionShape }) =>
-      decodeEntitiesConnectionPage(data.entitiesOrderedByPropertyConnection ?? null),
+      decodeEntitiesConnectionPage(data.entitiesOrderedByPropertyConnection ?? null, topLevelSpaceId),
     variables: {
       propertyId,
       sortDirection,
@@ -474,7 +479,12 @@ export function getEntity(entityId: string, spaceId?: string, signal?: AbortCont
       pageInfo = nextPage.pageInfo;
     }
 
-    return EntityDecoder.decode({ ...entity, relationsList: relationNodes });
+    const decoded = EntityDecoder.decodeInSpace({ ...entity, relationsList: relationNodes }, spaceId);
+    if (decoded) {
+      // A drained connection is complete even when it contains at least one full list page.
+      decoded.relationsComplete = !pageInfo.hasNextPage && decoded.relations.length === relationNodes.length;
+    }
+    return decoded;
   });
 }
 
@@ -482,7 +492,7 @@ export function getRelation(entityId: string, spaceId?: string, signal?: AbortCo
   return graphql({
     query: relationEntityQuery,
     decoder: data => {
-      return data.relation?.entity ? EntityDecoder.decode(data.relation.entity) : null;
+      return data.relation?.entity ? EntityDecoder.decodeInSpace(data.relation.entity, spaceId) : null;
     },
     variables: { id: entityId, spaceId },
     signal,
@@ -593,7 +603,7 @@ export function getEntityPage(entityId: string, spaceId?: string, signal?: Abort
     decoder: data =>
       data.entity
         ? {
-            entity: EntityDecoder.decode(data.entity),
+            entity: EntityDecoder.decodeInSpace(data.entity, spaceId),
             relations: data.relations?.map(r => RelationDecoder.decode(r)).filter(r => r !== null) ?? [],
           }
         : null,
@@ -638,32 +648,6 @@ function getBatchEntitiesForDebateVotes(entityIds: string[], signal?: AbortContr
       data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } } },
     signal,
-  });
-}
-
-/**
- * Walks a paginated `backlinksList` query and collects the distinct source entity ids.
- * `id` is typed loosely because codegen maps the UUID scalar to `any`.
- */
-function collectBacklinkSourceIds<E>(
-  fetchPage: (offset: number) => Effect.Effect<ReadonlyArray<{ fromEntity?: { id: unknown } | null } | null>, E>
-) {
-  return Effect.gen(function* () {
-    const seen = new Set<string>();
-    const ids: string[] = [];
-
-    for (let offset = 0; ; offset += BACKLINKS_PAGE_SIZE) {
-      const page = yield* fetchPage(offset);
-
-      for (const row of page) {
-        const id = row?.fromEntity?.id;
-        if (typeof id !== 'string' || seen.has(id)) continue;
-        seen.add(id);
-        ids.push(id);
-      }
-
-      if (page.length < BACKLINKS_PAGE_SIZE) return ids;
-    }
   });
 }
 
@@ -743,23 +727,42 @@ export function getCommentEntitiesViaReplyRelations(targetEntityId: string, sign
  */
 export function getDebateVoteEntities(debateEntityId: string, signal?: AbortController['signal']) {
   return Effect.gen(function* () {
-    const ids = yield* collectBacklinkSourceIds(offset =>
-      graphql({
-        query: debateVoteBacklinksPageDocument,
-        decoder: (data: DebateVoteBacklinksPageQuery) => data.entity?.backlinksList ?? [],
-        variables: {
-          id: debateEntityId,
-          votesDebatePropertyId: VOTE_DEBATES_PROPERTY_ID,
-          voteTypeId: VOTE_TYPE_ID,
-          first: BACKLINKS_PAGE_SIZE,
-          offset,
-        },
-        signal,
-      })
-    );
+    // Cursors, not offsets: the graph rejects an offset past 1000.
+    const rows = yield* Effect.tryPromise({
+      try: () =>
+        collectCursorPages(after =>
+          Effect.runPromise(
+            graphql({
+              query: debateVoteBacklinksPageDocument,
+              decoder: (data: DebateVoteBacklinksPageQuery) => ({
+                items: data.entity?.backlinks?.nodes ?? [],
+                endCursor: data.entity?.backlinks?.pageInfo.endCursor ?? null,
+                hasNextPage: data.entity?.backlinks?.pageInfo.hasNextPage ?? false,
+              }),
+              variables: {
+                id: debateEntityId,
+                votesDebatePropertyId: VOTE_DEBATES_PROPERTY_ID,
+                voteTypeId: VOTE_TYPE_ID,
+                first: BACKLINKS_PAGE_SIZE,
+                after,
+              },
+              signal,
+            })
+          )
+        ),
+      catch: error => (error instanceof Error ? error : new Error(String(error))),
+    });
 
+    // A vote can link from more than one space, so the same source can appear twice.
+    const ids = [...new Set(rows.flatMap(row => (typeof row?.fromEntity?.id === 'string' ? [row.fromEntity.id] : [])))];
     if (ids.length === 0) return [] as Entity[];
-    return yield* getBatchEntitiesForDebateVotes(ids, signal);
+
+    // `entities` without `first` returns at most 100 rows, so hydrate in id batches.
+    const pages = yield* Effect.all(
+      batchEntityIds(ids).map(batch => getBatchEntitiesForDebateVotes(batch, signal)),
+      { concurrency: ENTITY_ID_BATCH_CONCURRENCY }
+    );
+    return pages.flat();
   });
 }
 
@@ -1560,19 +1563,22 @@ export type ClaimResponseSummaryRow = {
 export function getClaimResponseSummaryPage(
   filter: UserVoteFilter,
   first: number,
-  offset: number,
+  after: string | undefined,
   signal?: AbortController['signal']
 ) {
   return graphql({
     query: claimResponseSummariesQuery,
-    decoder: data =>
-      (data.userVotes ?? []).map((vote): ClaimResponseSummaryRow => ({
+    decoder: (data): CursorPage<ClaimResponseSummaryRow> => ({
+      items: (data.userVotesConnection?.nodes ?? []).map(vote => ({
         userId: String(vote.userId),
         objectId: String(vote.objectId),
         voteType: vote.voteType,
         voteKind: vote.voteKind,
       })),
-    variables: { filter, first, offset },
+      endCursor: data.userVotesConnection?.pageInfo.endCursor ?? null,
+      hasNextPage: data.userVotesConnection?.pageInfo.hasNextPage ?? false,
+    }),
+    variables: { filter, first, after },
     signal,
   });
 }
@@ -1643,6 +1649,9 @@ export function indexVoteRowsByObject(nodes: readonly UserEntityVoteRow[]): {
 
   for (const node of nodes) {
     if (node.voteKind === RETIRED_VERACITY_VOTE_KIND) continue;
+    // Interested (GEO-3158) is a follow, not an up or down vote or a position, and always vote type
+    // 0. Newer than an upvote on the same topic, it would shadow it exactly as a retired row does.
+    if (node.voteKind === INTERESTED_VOTE_KIND) continue;
     const id = uuidToHex(node.objectId);
     if (id in voteKindByObjectId) continue;
     voteKindByObjectId[id] = node.voteKind;

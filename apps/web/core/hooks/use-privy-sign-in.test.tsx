@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   setStep: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
   usePrivy: () => ({ authenticated: false }),
   useGeoLogin: ({
@@ -42,7 +42,7 @@ vi.mock('~/core/auth-attempt', () => ({ currentAuthAttempt: () => ({ id: undefin
 
 vi.mock('~/core/privy-auth-events', () => ({ beginPrivyAuth: mocks.beginPrivyAuth }));
 
-vi.mock('~/partials/onboarding/dialog', async () => {
+vi.mock('~/partials/onboarding/onboarding-atoms', async () => {
   const { atom } = await import('jotai');
   return {
     nameAtom: atom(''),

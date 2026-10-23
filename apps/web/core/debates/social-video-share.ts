@@ -5,6 +5,7 @@ import * as React from 'react';
 import { type AnalyticsEventName, capture } from '~/core/analytics';
 import { errorName } from '~/core/utils/error-name';
 
+import type { DebateMediaArtifactKind } from './api';
 import { useDebateMediaArtifactUrl } from './hooks';
 
 type PreparationStatus = 'preparing' | 'ready' | 'error';
@@ -12,6 +13,18 @@ type PreparationStatus = 'preparing' | 'ready' | 'error';
 export type SocialVideoHandoffMethod = 'native_share' | 'download';
 
 export type SocialVideoHandoffOutcome = SocialVideoHandoffMethod | 'unshareable';
+
+/** Whether the share video has its spoken-word captions burned in (GEO-3442). */
+export type SocialVideoCaptions = 'captioned' | 'uncaptioned';
+
+/** Everything that differs between the two share videos: the artifact, the file and the analytics flag. */
+export const SOCIAL_VIDEO_VARIANTS = {
+  captioned: { kind: 'social_video', fileSuffix: 'social', captions: true },
+  uncaptioned: { kind: 'social_video_uncaptioned', fileSuffix: 'social-no-captions', captions: false },
+} as const satisfies Record<
+  SocialVideoCaptions,
+  { kind: DebateMediaArtifactKind; fileSuffix: string; captions: boolean }
+>;
 
 export type PreparedSocialVideo = {
   status: PreparationStatus;
@@ -45,7 +58,11 @@ const EMPTY_PREPARED_SOCIAL_VIDEO: Omit<PreparedSocialVideo, 'retry'> = {
 
 export function usePreparedSocialVideo(
   debateId: string,
-  { enabled, includePreview }: { enabled: boolean; includePreview: boolean }
+  {
+    enabled,
+    includePreview,
+    captions = 'captioned',
+  }: { enabled: boolean; includePreview: boolean; captions?: SocialVideoCaptions }
 ): PreparedSocialVideo {
   const previewArtifact = useDebateMediaArtifactUrl();
   const videoArtifact = useDebateMediaArtifactUrl();
@@ -70,6 +87,7 @@ export function usePreparedSocialVideo(
       return;
     }
 
+    const variant = SOCIAL_VIDEO_VARIANTS[captions];
     let active = true;
     let downloadUrl: string | null = null;
     const controller = new AbortController();
@@ -98,6 +116,7 @@ export function usePreparedSocialVideo(
             captureSocialVideoEvent('debate_social_video_preparation_failed', {
               debate_id: debateId,
               stage: 'preview_url',
+              captions: variant.captions,
             });
             setState(current => ({ ...current, previewFailed: true }));
           },
@@ -106,7 +125,7 @@ export function usePreparedSocialVideo(
     }
 
     videoMutateRef.current(
-      { debateId, request: { kind: 'social_video' } },
+      { debateId, request: { kind: variant.kind } },
       {
         onSuccess: response => {
           if (!active) return;
@@ -122,7 +141,7 @@ export function usePreparedSocialVideo(
           })
             .then(blob => {
               if (!active) return;
-              const file = new File([blob], `debate-${debateId}-social.mp4`, {
+              const file = new File([blob], `debate-${debateId}-${variant.fileSuffix}.mp4`, {
                 type: 'video/mp4',
                 lastModified: Date.now(),
               });
@@ -142,6 +161,7 @@ export function usePreparedSocialVideo(
                 debate_id: debateId,
                 stage: 'video_download',
                 error_name: errorName(error),
+                captions: variant.captions,
               });
               setState(current => ({
                 ...current,
@@ -156,6 +176,7 @@ export function usePreparedSocialVideo(
             debate_id: debateId,
             stage: 'video_url',
             error_name: errorName(error),
+            captions: variant.captions,
           });
           setState(current => ({
             ...current,
@@ -171,7 +192,7 @@ export function usePreparedSocialVideo(
       controller.abort();
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     };
-  }, [debateId, enabled, includePreview, retryCount]);
+  }, [captions, debateId, enabled, includePreview, retryCount]);
 
   return {
     ...state,
@@ -185,6 +206,7 @@ export async function handoffPreparedSocialVideo({
   text,
   file,
   downloadUrl,
+  captions = 'captioned',
   onUnshareable,
 }: {
   debateId: string;
@@ -192,8 +214,10 @@ export async function handoffPreparedSocialVideo({
   text?: string;
   file: File;
   downloadUrl: string;
+  captions?: SocialVideoCaptions;
   onUnshareable?: (info: { userActivationSpent: boolean }) => void;
 }): Promise<SocialVideoHandoffOutcome> {
+  const { captions: captioned } = SOCIAL_VIDEO_VARIANTS[captions];
   const payload = socialVideoShareData({ title, text, file });
   const method = getPreparedSocialVideoHandoffMethod(payload);
 
@@ -231,12 +255,17 @@ export async function handoffPreparedSocialVideo({
           // So the rate of this is visible rather than inferred from an absence of share events.
           fell_back_from: 'native_share',
           error_name: errorName(error),
+          captions: captioned,
         });
         return outcome;
       }
     } else if (onUnshareable) {
       onUnshareable({ userActivationSpent: false });
-      captureSocialVideoEvent('debate_social_video_handoff_resolved', { debate_id: debateId, method: 'unshareable' });
+      captureSocialVideoEvent('debate_social_video_handoff_resolved', {
+        debate_id: debateId,
+        method: 'unshareable',
+        captions: captioned,
+      });
       return 'unshareable';
     } else {
       downloadPreparedVideo(downloadUrl, file.name);
@@ -245,6 +274,7 @@ export async function handoffPreparedSocialVideo({
     captureSocialVideoEvent('debate_social_video_handoff_resolved', {
       debate_id: debateId,
       method,
+      captions: captioned,
     });
     return method;
   } catch (error) {
@@ -253,6 +283,7 @@ export async function handoffPreparedSocialVideo({
         debate_id: debateId,
         method,
         error_name: errorName(error),
+        captions: captioned,
       });
     }
     throw error;

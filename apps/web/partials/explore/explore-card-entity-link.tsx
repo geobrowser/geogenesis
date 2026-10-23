@@ -7,6 +7,7 @@ import { capture } from '~/core/analytics';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { type OpenSidePanelOptions, useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -58,7 +59,8 @@ export function ExploreCardEntityLink({ item, opensSidePanel = false, section, c
   // normally headed by the claim it argued (`exploreCardHeading`), and that heading points at the
   // Claim, which the panel serves well. The exception is for the debate itself, which a heading
   // only names when the Claims relation is missing.
-  const opensPanel = opensSidePanel && !isDebateEntity(item.types);
+  const requiresFullPage = isDebateEntity(item.types);
+  const opensPanel = opensSidePanel && !requiresFullPage;
 
   // GEO-3144: an open is engagement, credited like a vote or comment to the feed version behind the
   // card, which the card's action scope carries. Recorded on every click that opens it, panel or page.
@@ -74,7 +76,7 @@ export function ExploreCardEntityLink({ item, opensSidePanel = false, section, c
   const onClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
       recordOpen();
-      if (!opensPanel) return;
+      if (event.defaultPrevented || !opensPanel) return;
       if (isModifiedClick(event)) return;
       event.preventDefault();
       event.stopPropagation();
@@ -93,8 +95,9 @@ export function ExploreCardEntityLink({ item, opensSidePanel = false, section, c
       href={section ? `${pageHref}#${section.hash}` : pageHref}
       entityId={item.entityId}
       spaceId={item.spaceId}
-      onClick={onClick}
+      {...observePanelNavigation(onClick)}
       onAuxClick={recordOpen}
+      data-entity-side-panel-full-page={requiresFullPage || undefined}
       // Exempts this link from the panel's capture-phase outside-pointerdown close
       // (`entity-side-panel.tsx`). Without it, clicking a second card while the panel is open
       // tears the panel down on `pointerdown` and the `onClick` below builds it again — a

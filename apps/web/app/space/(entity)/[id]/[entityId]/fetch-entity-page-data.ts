@@ -27,6 +27,12 @@ export type EntityPageData = {
   blockRelations: Relation[];
   blocks: Entity[];
   initialCollectionItems: Record<string, Entity[]>;
+  /**
+   * The page entity and everything fetched alongside it, for `EntityStoreProvider` to seed the store
+   * with during render. Without it the server HTML has no body: every surface below reads the
+   * store, which the browser otherwise fills only after fetching all of this a second time.
+   */
+  initialEntities: Entity[];
 };
 
 /**
@@ -128,5 +134,12 @@ export async function fetchEntityPageData(spaceId: string, entityId: string): Pr
     // pass — a gallery needs the dimensions on them to size its cards on the first paint.
     blocks: [...blocks, ...shownPropertyEntities],
     initialCollectionItems,
+    initialEntities: [
+      ...(entity ? [entity] : []),
+      ...allBlocks,
+      ...shownPropertyEntities,
+      ...tabEntities,
+      ...Object.values(initialCollectionItems).flat(),
+    ],
   };
 }

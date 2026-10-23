@@ -1,7 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import { usePathname } from 'next/navigation';
@@ -11,6 +9,7 @@ import { tabNeedsSignIn } from '~/core/debates/matchmaking/signed-out-tabs';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep-link';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import type { DebatesHubTab } from '~/atoms';
 

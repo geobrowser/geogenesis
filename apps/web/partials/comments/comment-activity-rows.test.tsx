@@ -15,12 +15,15 @@ import {
 import type { ClaimActivityCount } from '~/core/claims/browse/claim-activity-fields';
 import { uuidToHex } from '~/core/id/normalize';
 
+import { EntitySidePanelNavigation } from '~/partials/entity-page/entity-side-panel-navigation';
+
 import { CommentSection } from './comments-section';
 import type { CommentActivityRow, CommentWithReplies } from './types';
 
 const mocks = vi.hoisted(() => ({
   comments: [] as CommentWithReplies[],
   smartAccount: null as unknown,
+  personProfileOpened: vi.fn(),
   /**
    * What the publish resolves to. `useCreateComment` answers falsy only when the transaction was
    * rejected and it has taken the optimistic row back out, which is the rollback signal.
@@ -39,6 +42,12 @@ const mocks = vi.hoisted(() => ({
     if (!mocks.publishResult) input.onFailed?.();
     return Promise.resolve(mocks.publishResult);
   }),
+}));
+
+vi.mock('~/core/debates/rematch-panel-context', () => ({ useRematchPanelContext: () => ({}) }));
+vi.mock('~/core/analytics', async importOriginal => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  personProfileOpened: mocks.personProfileOpened,
 }));
 
 vi.mock('~/core/hooks/use-comments', () => ({
@@ -123,10 +132,31 @@ async function publishAComment(text = 'A new comment') {
 describe('CommentSection activity rows', () => {
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     mocks.comments = [];
     mocks.smartAccount = null;
     mocks.publishResult = { id: 'new-comment' };
     mocks.publishComment.mockClear();
+  });
+
+  it.each([0, 1, 2])('records the comment author open from link %s without replacing the room', index => {
+    mocks.comments = [comment('Ada', '2026-09-20T10:00:00Z')];
+    mocks.personProfileOpened.mockClear();
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(
+      withClient(
+        <EntitySidePanelNavigation entityId="entity-1" spaceId="space-1">
+          <CommentSection entityId="entity-1" spaceId="space-1" />
+        </EntitySidePanelNavigation>
+      )
+    );
+    if (index === 2) fireEvent.click(screen.getByRole('button', { name: 'Collapse comment' }));
+    fireEvent.click(screen.getAllByRole('link', { name: 'Ada' })[index === 2 ? 0 : index]!);
+    expect(mocks.personProfileOpened).toHaveBeenCalledExactlyOnceWith('author-Ada', null, {
+      interaction_surface: 'comment_author',
+    });
+    expect(open).toHaveBeenCalledTimes(1);
+    open.mockRestore();
   });
 
   it('orders non-comment rows in among the comments rather than stacking them above', () => {
@@ -317,6 +347,7 @@ describe('a comment the reader just published', () => {
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     mocks.comments = [];
     mocks.smartAccount = null;
     mocks.publishResult = { id: 'new-comment' };
@@ -388,6 +419,7 @@ describe('a comment the reader just published', () => {
 describe('a comment just written, in the merged list', () => {
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     mocks.comments = [];
     mocks.smartAccount = null;
     mocks.publishResult = { id: 'new-comment' };

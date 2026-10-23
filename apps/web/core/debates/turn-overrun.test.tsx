@@ -1,0 +1,221 @@
+import { act, cleanup, renderHook } from '@testing-library/react';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { REMOTE_OVERRUN_WINDOW_MS, opponentTurnState, useTurnOverrun } from './turn-overrun';
+
+const speech = vi.hoisted(() => ({
+  ref: { current: false },
+  onChange: undefined as ((speaking: boolean) => void) | undefined,
+}));
+
+vi.mock('./use-speech-activity', () => ({
+  useSpeechActivity: (_track: unknown, _enabled: boolean, onChange?: (speaking: boolean) => void) => {
+    speech.onChange = onChange;
+    return speech.ref;
+  },
+}));
+
+const track = {} as MediaStreamTrack;
+
+function setSpeaking(speaking: boolean) {
+  act(() => {
+    speech.ref.current = speaking;
+    speech.onChange?.(speaking);
+  });
+}
+
+type Props = {
+  turnActive: boolean;
+  overrunPossible?: boolean;
+  yielded?: boolean;
+  startsLate?: boolean;
+  listening?: boolean;
+  windowMs?: number;
+};
+
+function renderOverrun(initial: Props) {
+  return renderHook(
+    ({
+      turnActive,
+      overrunPossible = true,
+      yielded = false,
+      startsLate = false,
+      listening = true,
+      windowMs = REMOTE_OVERRUN_WINDOW_MS,
+    }: Props) =>
+      useTurnOverrun({
+        track,
+        listening,
+        turnActive,
+        overrunPossible,
+        yielded,
+        startsLate,
+        windowMs,
+      }),
+    { initialProps: initial }
+  );
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(Date.parse('2026-10-20T12:00:00.000Z'));
+  speech.ref.current = false;
+  speech.onChange = undefined;
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
+describe('useTurnOverrun', () => {
+  it('runs from the buzzer until they fall silent, then never again that turn', () => {
+    const view = renderOverrun({ turnActive: true });
+    setSpeaking(true);
+
+    view.rerender({ turnActive: false });
+    expect(view.result.current).toBe(Date.parse('2026-10-20T12:00:00.000Z'));
+
+    setSpeaking(false);
+    expect(view.result.current).toBeNull();
+
+    // A cough after they finished: their mic is closed, and so is the tile.
+    setSpeaking(true);
+    expect(view.result.current).toBeNull();
+  });
+
+  it('keeps the clean cut when they had already stopped at the buzzer', () => {
+    const view = renderOverrun({ turnActive: true });
+    view.rerender({ turnActive: false });
+    expect(view.result.current).toBeNull();
+  });
+
+  it('ends at its window however long they keep talking', () => {
+    const view = renderOverrun({ turnActive: true });
+    setSpeaking(true);
+    view.rerender({ turnActive: false });
+
+    act(() => vi.advanceTimersByTime(REMOTE_OVERRUN_WINDOW_MS - 1));
+    expect(view.result.current).not.toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    expect(view.result.current).toBeNull();
+  });
+
+  it('does not show an overrun where none can happen, or past the start of their next turn', () => {
+    const view = renderOverrun({ turnActive: true });
+    setSpeaking(true);
+    view.rerender({ turnActive: false, overrunPossible: false });
+    expect(view.result.current).toBeNull();
+
+    view.rerender({ turnActive: true });
+    view.rerender({ turnActive: false });
+    expect(view.result.current).not.toBeNull();
+    view.rerender({ turnActive: false, overrunPossible: false });
+    expect(view.result.current).toBeNull();
+
+    view.rerender({ turnActive: true });
+    view.rerender({ turnActive: false });
+    expect(view.result.current).not.toBeNull();
+    view.rerender({ turnActive: true });
+    expect(view.result.current).toBeNull();
+  });
+
+  it('gives a speaker who ended their own turn the clean cut', () => {
+    const view = renderOverrun({ turnActive: true });
+    setSpeaking(true);
+    view.rerender({ turnActive: true, yielded: true });
+    view.rerender({ turnActive: false, yielded: true });
+    expect(view.result.current).toBeNull();
+  });
+
+  describe('the opponent, heard over the network (startsLate)', () => {
+    it('shows them finishing when their speech reaches us after our buzzer', () => {
+      const view = renderOverrun({ turnActive: true, startsLate: true });
+      view.rerender({ turnActive: false, startsLate: true });
+      expect(view.result.current).toBeNull();
+
+      act(() => vi.advanceTimersByTime(400));
+      setSpeaking(true);
+      // Drains from our buzzer, not from when the audio arrived.
+      expect(view.result.current).toBe(Date.parse('2026-10-20T12:00:00.000Z'));
+
+      setSpeaking(false);
+      expect(view.result.current).toBeNull();
+      setSpeaking(true);
+      expect(view.result.current).toBeNull();
+    });
+
+    it('waits no longer than the window for late speech', () => {
+      const view = renderOverrun({ turnActive: true, startsLate: true });
+      view.rerender({ turnActive: false, startsLate: true });
+      act(() => vi.advanceTimersByTime(REMOTE_OVERRUN_WINDOW_MS));
+      setSpeaking(true);
+      expect(view.result.current).toBeNull();
+    });
+
+    it('never waits on a speaker who ended their own turn', () => {
+      const view = renderOverrun({ turnActive: true, startsLate: true });
+      view.rerender({ turnActive: true, yielded: true, startsLate: true });
+      view.rerender({ turnActive: false, yielded: true, startsLate: true });
+      setSpeaking(true);
+      expect(view.result.current).toBeNull();
+    });
+  });
+
+  it('keeps its cap through a re-render that changes its inputs mid-overrun', () => {
+    const view = renderOverrun({ turnActive: true });
+    setSpeaking(true);
+    view.rerender({ turnActive: false });
+    expect(view.result.current).not.toBeNull();
+
+    // Any input change re-runs the turn effect while they are still talking. The cap must survive
+    // it, or a noisy room holds the microphone open, and recorded, past the window.
+    act(() => vi.advanceTimersByTime(1_000));
+    view.rerender({ turnActive: false, windowMs: REMOTE_OVERRUN_WINDOW_MS + 10_000 });
+    view.rerender({ turnActive: false, startsLate: true });
+    act(() => vi.advanceTimersByTime(REMOTE_OVERRUN_WINDOW_MS - 1_000));
+    expect(view.result.current).toBeNull();
+  });
+
+  it('ends a running overrun when listening stops, which the speech reading no longer reports', () => {
+    const view = renderOverrun({ turnActive: true });
+    setSpeaking(true);
+    view.rerender({ turnActive: false });
+    expect(view.result.current).not.toBeNull();
+
+    view.rerender({ turnActive: false, listening: false });
+    expect(view.result.current).toBeNull();
+  });
+
+  it('keeps our own microphone to the clean cut when we were silent at the buzzer', () => {
+    const view = renderOverrun({ turnActive: true });
+    view.rerender({ turnActive: false });
+    setSpeaking(true);
+    expect(view.result.current).toBeNull();
+  });
+});
+
+describe('opponentTurnState', () => {
+  const state = (overrides: Partial<Parameters<typeof opponentTurnState>[0]>) =>
+    opponentTurnState({
+      effectiveStatus: 'in_progress',
+      activeSlot: 2,
+      yieldingSlot: null,
+      localSlot: 1,
+      ...overrides,
+    });
+
+  it('follows the opponent holding the turn', () => {
+    expect(state({})).toEqual({ turnActive: true, yielded: false });
+    expect(state({ activeSlot: 1 })).toEqual({ turnActive: false, yielded: false });
+    expect(state({ activeSlot: null })).toEqual({ turnActive: false, yielded: false });
+    expect(state({ effectiveStatus: 'thanking' })).toEqual({ turnActive: false, yielded: false });
+  });
+
+  it('marks a turn the opponent ended themselves, so the tail of their last word is not an overrun', () => {
+    expect(state({ activeSlot: null, yieldingSlot: 2 })).toEqual({ turnActive: false, yielded: true });
+    // Our own End turn is not theirs.
+    expect(state({ activeSlot: null, yieldingSlot: 1 })).toEqual({ turnActive: false, yielded: false });
+  });
+});

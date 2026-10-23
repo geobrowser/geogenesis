@@ -101,3 +101,34 @@ it('uses query navigation for view identity without putting query text into attr
   window.history.replaceState({}, '', '/explore?tab=debates&q=private-search#anchor');
   expect(pageContext().page_view_id).toBe(second.page_view_id);
 });
+
+describe('lobby attribution (GEO-3311)', () => {
+  const lobby = '44444444444444444444444444444444';
+  const otherClaim = '55555555555555555555555555555555';
+  const scope = { lobby_id: lobby, room_vote_id: 'vote-1', room_vote_claim_id: claim };
+
+  it('names the room vote only on an action on its claim, and never sends the claim it scoped by', () => {
+    const onVotedClaim = snapshotActionContext('entity_vote_buttons', 'claim', claim, scope);
+    const onOtherClaim = snapshotActionContext('entity_vote_buttons', 'claim', otherClaim, scope);
+
+    expect(onVotedClaim).toMatchObject({ lobby_id: lobby, room_vote_id: 'vote-1' });
+    expect(onOtherClaim).toMatchObject({ lobby_id: lobby });
+    expect(onOtherClaim).not.toHaveProperty('room_vote_id');
+    expect(onVotedClaim).not.toHaveProperty('room_vote_claim_id');
+  });
+
+  it('matches the voted claim across UUID spellings', () => {
+    const dashed = '4c81561d-1f95-4131-9cdd-dd20ab831ba2';
+    const context = snapshotActionContext('entity_vote_buttons', 'claim', dashed.replaceAll('-', ''), {
+      ...scope,
+      room_vote_claim_id: dashed,
+    });
+    expect(context.room_vote_id).toBe('vote-1');
+  });
+
+  it('keeps a replayed action’s room vote, which was decided against its own target', () => {
+    const original = snapshotActionContext('entity_vote_buttons', 'claim', claim, scope);
+    const replayed = withActionContext(original, () => snapshotActionContext('entity_vote_buttons', 'claim', claim));
+    expect(replayed).toMatchObject({ lobby_id: lobby, room_vote_id: 'vote-1' });
+  });
+});

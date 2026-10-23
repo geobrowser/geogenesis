@@ -12,5 +12,10 @@ export const config: VercelConfig = {
       path: '/api/debates/publish-claims-sweep',
       schedule: '* * * * *',
     },
+    {
+      // GEO-3308: rebuild the shared Explore Fresh list so no visitor waits on the gaia query.
+      path: '/api/explore/warm-fresh-list',
+      schedule: '* * * * *',
+    },
   ],
 };

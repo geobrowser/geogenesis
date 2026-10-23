@@ -13,6 +13,13 @@ type FetchServerTime = () => Promise<{ server_time_ms: number }>;
 
 const defaultRequestTimeoutMs = 2_000;
 
+/**
+ * When the debate room tries again after a clock sync fails, after each failure in turn (GEO-3407).
+ * Until one succeeds the room runs on the computer's own clock, which can be whole seconds off the
+ * other debater's — enough that one sees a turn end while the other is still hearing it.
+ */
+export const SERVER_CLOCK_RETRY_DELAYS_MS: readonly number[] = [2_000, 5_000, 15_000, 30_000];
+
 export function createLocalServerClock(): ServerClock {
   return {
     now: () => Date.now(),
@@ -60,6 +67,53 @@ export async function synchronizeServerClock(
   const samples = results.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []));
 
   return selectBestServerTimeSample(samples, monotonicNow);
+}
+
+/**
+ * Synchronizes the debate clock, and keeps trying in the background if that fails (GEO-3407).
+ *
+ * The caller settles after the first attempt either way, on the server's clock or the computer's
+ * own, so the room never waits on a retry. Until a later attempt succeeds the room runs on the
+ * computer's clock, which can be seconds off the other debater's, so a sync that never succeeds is
+ * reported rather than left silent.
+ */
+export function keepServerClockSynchronized(
+  fetchServerTime: FetchServerTime,
+  {
+    isCurrent,
+    onSynchronized,
+    onFirstAttemptSettled,
+    retryDelaysMs = SERVER_CLOCK_RETRY_DELAYS_MS,
+  }: {
+    /** False once the room has moved on (reconnected, left), which ends the retries. */
+    isCurrent: () => boolean;
+    onSynchronized: (clock: ServerClock) => void;
+    onFirstAttemptSettled: () => void;
+    retryDelaysMs?: readonly number[];
+  }
+) {
+  const attempt = (index: number) => {
+    void synchronizeServerClock(fetchServerTime)
+      .then(clock => {
+        if (isCurrent()) onSynchronized(clock);
+      })
+      .catch(error => {
+        if (!isCurrent()) return;
+        const retryInMs = retryDelaysMs[index];
+        if (retryInMs === undefined) {
+          console.warn("[DebateRoom] Could not sync the debate clock; using this computer's clock.", error);
+          return;
+        }
+        // A bare timer, as in `withTimeout`: it may fire after a test's jsdom is torn down.
+        setTimeout(() => {
+          if (isCurrent()) attempt(index + 1);
+        }, retryInMs);
+      })
+      .finally(() => {
+        if (index === 0 && isCurrent()) onFirstAttemptSettled();
+      });
+  };
+  attempt(0);
 }
 
 function roundTripMs(sample: ServerTimeSample) {

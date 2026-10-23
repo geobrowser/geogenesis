@@ -10,10 +10,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
-import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
+import {
+  clearDebateReturnDestination,
+  rememberDebateReturnDestination,
+  rememberLobbyReturnDestination,
+} from '~/core/debates/debate-return-navigation';
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
+import type { DebateRoomPresence, DebateRoomPresenceState } from '~/core/debates/rooms/room-presence';
 
 import { DebateRematchPageClient, resolveLandingTab } from './rematch-page-client';
 
@@ -33,6 +38,10 @@ const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, N
 }));
 
 const mocks = vi.hoisted(() => ({
+  /** Bumped to remount the stubbed header's subtree, the way the real one does as voice connects. */
+  headerEpoch: 0,
+  /** GEO-3223. Whether the viewport is a phone's. */
+  isPhone: true,
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
   sourceDebateLoading: false,
   /** GEO-2870. geo-chat's extracted-claims payload for the source debate, and whether it is final. */
@@ -64,11 +73,12 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   mutate: vi.fn(),
   leaveMutate: vi.fn(),
+  forgetEndedRematch: vi.fn(),
   acceptMutate: vi.fn(),
   rejectMutate: vi.fn(),
   /** The last rematch request error and its variables. */
   requestError: null as Error | null,
-  requestVariables: undefined as { claim_id: string } | undefined,
+  requestVariables: undefined as { claim_id: string; source_space_id: string } | undefined,
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
   /** Overrides the snapshot status, so the window where it is `indexed` is reachable. */
@@ -152,7 +162,7 @@ const mocks = vi.hoisted(() => ({
   entityQueryPages: null as MatchmakingClaim[][] | null,
   // What `keepPreviousData` would still be holding once the query goes disabled.
   lastEnabledData: undefined as { pages: unknown[] } | undefined,
-  spacesHeldOver: false,
+  spacesPending: false,
   scopeHeldOver: false,
   entityQueryFetchingNextPage: false,
   /** Both participants' graph positions. */
@@ -204,6 +214,10 @@ const mocks = vi.hoisted(() => ({
 // The picker opens on the opponent's positions now (GEO-2861), so participant avatars resolve on
 // mount rather than only after a tab switch — and that lookup is a real request. Stubbed the same
 // way `matchmaking-claim-card` stubs it; this file asserts on claims, not on faces.
+vi.mock('~/core/hooks/use-media-query', () => ({
+  useMediaQuery: () => mocks.isPhone,
+}));
+
 vi.mock('~/core/analytics', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/analytics')>()),
   capture: mocks.capture,
@@ -226,6 +240,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
+  usePathname: () => '/debate/room-1',
   useRouter: () => ({ replace: mocks.replace, back: mocks.back, push: mocks.push }),
 }));
 
@@ -238,7 +253,7 @@ vi.mock('./rematch-voice', () => ({
   // `exiting` is surfaced because that flag is where the header's layout stability is decided, and
   // the bug it exists for was in the wiring here rather than inside the header.
   RematchVoiceHeader: ({ leaveAction, exiting }: { leaveAction?: ReactNode; exiting?: boolean }) => (
-    <div data-testid="rematch-pair-header" data-exiting={exiting ? 'true' : undefined}>
+    <div key={mocks.headerEpoch} data-testid="rematch-pair-header" data-exiting={exiting ? 'true' : undefined}>
       {leaveAction}
     </div>
   ),
@@ -271,6 +286,27 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
     viewerSpaceId: null,
   }),
 }));
+
+// The publishing card has its own tests; here it only has to be mounted where the page puts it.
+vi.mock('./rematch-publish-card', () => ({
+  RematchPublishCard: ({ debate }: { debate: { claim: { claim_entity_id: string } } }) => (
+    <div data-testid="rematch-publish-card-stub">{debate.claim.claim_entity_id}</div>
+  ),
+}));
+
+// The server-first return lives in lobby-return's own tests; here this tab's record decides.
+vi.mock('~/core/debates/lobbies/lobby-return', async () => {
+  const { consumeDebateReturnDestination, peekDebateReturnDestination } =
+    await import('~/core/debates/debate-return-navigation');
+  return {
+    // No lobby mic carried into these sessions (GEO-3336 has its own tests).
+    useCarriedLobbyChoice: () => null,
+    useDebateReturnNavigation: () => ({
+      consume: consumeDebateReturnDestination,
+      returnsToLobby: Boolean(peekDebateReturnDestination()?.startsWith('/debate/')),
+    }),
+  };
+});
 
 vi.mock('~/core/debates/hooks', () => ({
   useDebateRematch: () => ({ data: mocks.session, isLoading: mocks.sessionLoading, error: null }),
@@ -328,6 +364,7 @@ vi.mock('~/core/debates/hooks', () => ({
     error: mocks.requestError,
     variables: mocks.requestVariables,
   }),
+  useForgetEndedRematch: () => mocks.forgetEndedRematch,
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
   useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
@@ -446,7 +483,11 @@ function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any
     // Word at a time, ANDed, which is what the server does — a phrase match here would let a test
     // pass on a narrowing the real query never performs.
     const words = filters.search.trim().split(/\s+/).filter(Boolean).slice(0, 8);
-    if (!words.every((word: string) => name.toLowerCase().includes(word.toLowerCase()))) return false;
+    // A claim carrying a topic the search named answers it too (GEO-3223).
+    const viaTopic = (filters.searchTopicIds ?? []).some((topicId: string) =>
+      (row.entity.relations ?? []).some((relation: any) => relation.toEntity.id === topicId)
+    );
+    if (!viaTopic && !words.every((word: string) => name.toLowerCase().includes(word.toLowerCase()))) return false;
     if (
       !filters.topicIds.every((topicId: string) =>
         (row.entity.relations ?? []).some((relation: any) => relation.toEntity.id === topicId)
@@ -471,6 +512,8 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     const claims = enabled && !mocks.featuredCatalogError ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
     return {
       claims,
+      // Distinct claims, as the server's `totalCount` is: one per claim however many spaces tag it.
+      totalCount: enabled && !filters.search ? claims.length : null,
       isLoading: enabled && mocks.featuredCatalogLoading,
       error: enabled ? mocks.featuredCatalogError : null,
       hasNextPage: enabled && mocks.taggedHasNextPage,
@@ -894,11 +937,9 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
         [SPACE_2, 'Governance space'] as const,
       ].map(([id, name]) => [id, { type: mocks.spaceTypes[id] ?? 'DAO', entity: { name, image: null } }])
     ),
-    isLoading: false,
-    // The real hook holds the previous id set's map rather than blanking it, and flags that it is
-    // doing so. A held map answers nothing about ids it was never asked for, which is the whole
-    // reason the picker has to wait it out.
-    isPlaceholderData: mocks.spacesHeldOver,
+    // Loading while any requested id is unresolved; the map holds only the ids already answered,
+    // which is why the picker has to wait it out.
+    isLoading: mocks.spacesPending,
   }),
 }));
 
@@ -907,6 +948,7 @@ function mutation(mutate = mocks.mutate) {
 }
 
 beforeEach(() => {
+  mocks.isPhone = true;
   mocks.capture.mockClear();
   mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
   mocks.sourceDebateLoading = false;
@@ -927,13 +969,14 @@ beforeEach(() => {
   mocks.entityHydrations.length = 0;
   mocks.singleHydrationErrorFor = null;
   localStorage.clear();
-  // Both standing preferences off, so every list below is the whole of what its fixture put in it.
+  // The standing preferences off, so every list below is the whole of what its fixture put in it.
   //
   // They ship *on* (GEO-2863), and the cases that are about the defaults set them back. Every other
   // case here is about something else — search, topics, sections, allowed spaces — and one that has
   // to reason about which of its own rows a default removed is a case about two things.
   localStorage.setItem('rematchMatchesOnly', 'false');
   localStorage.setItem('rematchHideMyPositions', 'false');
+  localStorage.setItem('rematchHideAgreed', 'false');
 
   clearDebateReturnDestination();
   mocks.replace.mockReset();
@@ -941,6 +984,7 @@ beforeEach(() => {
   mocks.push.mockReset();
   mocks.mutate.mockReset();
   mocks.leaveMutate.mockReset();
+  mocks.forgetEndedRematch.mockReset();
   mocks.acceptMutate.mockReset();
   mocks.rejectMutate.mockReset();
   mocks.requestError = null;
@@ -978,7 +1022,7 @@ beforeEach(() => {
   mocks.taggedClaimsAskedFor = [];
   mocks.entityQueryHasNextPage = false;
   mocks.lastEnabledData = undefined;
-  mocks.spacesHeldOver = false;
+  mocks.spacesPending = false;
   mocks.scopeHeldOver = false;
   mocks.entityQueryLoading = false;
   mocks.entityHydrationLoading = false;
@@ -1066,6 +1110,23 @@ afterEach(() => {
 });
 
 describe('DebateRematchPageClient', () => {
+  it('keeps the videos outside the sticky filters and scrolls without switching header layouts', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    const participants = screen.getByRole('region', { name: 'Participants' });
+    const filters = screen.getByRole('group', { name: 'Claim picker filters' });
+    const scroller = document.querySelector('[data-rematch-scroll]')!;
+    const participantContent = participants.innerHTML;
+    expect(filters).toHaveClass('sticky');
+    expect(filters).not.toContainElement(participants);
+    expect(filters).toContainElement(screen.getByRole('textbox', { name: 'Search claims and topics' }));
+    scroller.scrollTop = 160;
+    fireEvent.scroll(scroller);
+    expect(participants.innerHTML).toBe(participantContent);
+    expect(scroller.scrollTop).toBe(160);
+    expect(screen.queryByRole('button', { name: 'Show full participant videos' })).toBeNull();
+  });
+
   it('does not leave a browsing rematch during the Strict Mode effect rehearsal', async () => {
     render(
       <StrictMode>
@@ -1091,9 +1152,22 @@ describe('DebateRematchPageClient', () => {
   it('ends a browsing rematch only through the explicit leave action', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
     expect(mocks.leaveMutate).toHaveBeenCalledOnce();
+  });
+
+  it('carries the finished debate’s publishing card under the pair', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByTestId('rematch-publish-card-stub').textContent).toBe(CLAIM_SOURCE);
+  });
+
+  it('draws no publishing card for a profile challenge, which has no debate behind it', () => {
+    mocks.session = session({ source_debate_id: null });
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByTestId('rematch-publish-card-stub')).toBeNull();
   });
 
   it('returns a profile challenge to the page before the debate flow after leaving', async () => {
@@ -1107,10 +1181,24 @@ describe('DebateRematchPageClient', () => {
     );
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
     expect(mocks.back).toHaveBeenCalledOnce();
     expect(mocks.replace).not.toHaveBeenCalledWith(`/space/${SPACE_1}/debates`);
+  });
+
+  // GEO-3342. The other person left: the session arrives ended with no click from this viewer. It is
+  // dropped from activity before the way out, or the coordinator routes the viewer straight back in.
+  it('forgets the session before going out when the other person leaves', async () => {
+    vi.spyOn(window.history, 'length', 'get').mockReturnValue(2);
+    const ended = session({ source_debate_id: null, status: 'ended' });
+    mocks.session = ended;
+    mocks.back.mockImplementation(() => expect(mocks.forgetEndedRematch).toHaveBeenCalledWith(ended));
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    expect(mocks.forgetEndedRematch).toHaveBeenCalledTimes(1);
   });
 
   it('preserves the debates-page exit for rematches started from a prior debate', async () => {
@@ -1122,14 +1210,18 @@ describe('DebateRematchPageClient', () => {
     );
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
     expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`);
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('returns a debate-again session to the page that opened the flow', async () => {
-    rememberDebateReturnDestination('/space/my-space?tab=activity#latest');
+  it.each([
+    ['Leave', '/space/my-space?tab=activity#latest'],
+    ['Back to lobby', '/debate/lobby-1'],
+  ])('labels the picker exit %s and returns to %s', async (label, destination) => {
+    if (label === 'Back to lobby') rememberLobbyReturnDestination('lobby-1');
+    else rememberDebateReturnDestination(destination);
     const endedSession = session({ status: 'ended' });
     mocks.leaveMutate.mockImplementation(
       (_input: undefined, options: { onSuccess?: (ended: DebateRematchSession) => void }) => {
@@ -1138,9 +1230,9 @@ describe('DebateRematchPageClient', () => {
     );
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+    fireEvent.click(screen.getByRole('button', { name: label }));
 
-    expect(mocks.replace).toHaveBeenCalledWith('/space/my-space?tab=activity#latest');
+    expect(mocks.replace).toHaveBeenCalledWith(destination);
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
@@ -1254,10 +1346,12 @@ describe('DebateRematchPageClient', () => {
 
     // Pinned with the filters and the search box, where the hub's claims tab keeps it — so a
     // request stays on screen while the viewer keeps browsing rather than scrolling away.
-    const pinned = screen.getByRole('textbox', { name: 'Search claims' }).closest('.sticky');
+    const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
     expect(card.closest('.sticky')).toBe(pinned);
-    // Above both of them, not wedged between.
-    const filters = screen.getByRole('button', { name: /Any space/ });
+    // Above both of them, not wedged between. The opponent's tab lists one claim, which leaves the
+    // row nothing to narrow by, so it is compared on Explore, where the row is drawn.
+    await showAllClaims();
+    const filters = screen.getByRole('group', { name: 'Filter claims' });
     expect(card.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // And the viewer is the requester, so no dialog asking them to answer their own request.
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -1554,50 +1648,6 @@ describe('DebateRematchPageClient', () => {
       expect(screen.queryByText(/Nothing recommended/)).toBeNull();
     });
 
-    // The topic menu used to be pushed to the far end here, on the grounds that a full page has
-    // width to spare. Once "Matches only" arrived at that end the two sat together there, reading
-    // as one control — so the menus go back to being a run on the left, and the end of the row
-    // belongs to the switch.
-    it('groups the source, space and topic menus on the left, in that order', async () => {
-      curatedPage();
-      render(<DebateRematchPageClient sessionId="rematch-1" />);
-      await showExplore();
-
-      const sourceMenu = screen.getByRole('button', { name: 'All claims' });
-      const spaceMenu = screen.getByRole('button', { name: /Any space/ });
-      const topicMenu = screen.getByRole('button', { name: /Any topic/ });
-      const row = sourceMenu.parentElement;
-
-      // All three share the row directly, in order, with nothing spreading or pushing them.
-      expect(row).toBe(spaceMenu.parentElement);
-      expect(row).toBe(topicMenu.parentElement);
-      expect(row?.className).not.toContain('justify-between');
-      expect(sourceMenu.compareDocumentPosition(spaceMenu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(spaceMenu.compareDocumentPosition(topicMenu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(topicMenu.className).not.toContain('ml-auto');
-    });
-
-    // And the same row with only a switch at its end, which is Explore without a curator's page: the
-    // two menus stay together on the left, and only the switch is pushed out.
-    it('keeps the topic menu beside the space menu when the switch has the far end', async () => {
-      render(<DebateRematchPageClient sessionId="rematch-1" />);
-      await showExplore();
-
-      const spaceMenu = screen.getByRole('button', { name: /Any space/ });
-      const topicMenu = screen.getByRole('button', { name: /Any topic/ });
-      const toggle = screen.getByRole('switch', { name: 'Hide my positions' });
-
-      expect(topicMenu.parentElement).toBe(spaceMenu.parentElement);
-      expect(topicMenu.className).not.toContain('ml-auto');
-      expect(topicMenu.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
-      // Behind a growable gap rather than `ml-auto`, which is what decides where it goes when it
-      // does *not* fit: the spacer absorbs the slack on the menus' line, so the switch ends the row
-      // where there is room and starts its own line at the left where there is not. `ml-auto` would
-      // pin it to the right margin of that line instead, with nothing beside it.
-      expect(toggle.previousElementSibling?.className).toContain('flex-1');
-    });
-
     it('attributes shared filters and switches to rematch rather than the debate hub', async () => {
       // A curated page, so the source menu has two entries and therefore exists at all. Positions
       // left it for a tab of its own (GEO-2992) and Featured went with the menu it lived in, so a
@@ -1611,14 +1661,11 @@ describe('DebateRematchPageClient', () => {
         'data-geo-analytics-label',
         'Debate rematch Claims source filter'
       );
-      expect(screen.getByRole('button', { name: /Any space/ })).toHaveAttribute(
-        'data-geo-analytics-label',
-        'Debate rematch Space filter'
-      );
-      expect(screen.getByRole('button', { name: /Any topic/ })).toHaveAttribute(
-        'data-geo-analytics-label',
-        'Debate rematch Topic filter'
-      );
+      await waitFor(() => expect(queryFilterRow()).toBeInTheDocument());
+      expect(getFilterPill('Crypto')).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Space pill');
+      expect(getFilterPill('Crypto')).toHaveAttribute('data-geo-analytics-intent', 'filter_debate_rematch');
+      expect(getFilterPill('Governance')).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Topic pill');
+      expect(getFilterPill('Governance')).toHaveAttribute('data-geo-analytics-intent', 'filter_debate_rematch');
       const toggle = screen.getByRole('switch', { name: 'Hide my positions' });
       expect(toggle).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Hide my positions');
       expect(toggle).toHaveAttribute('data-geo-analytics-intent', 'filter_debate_rematch');
@@ -1871,7 +1918,7 @@ describe('DebateRematchPageClient', () => {
      */
     it('keeps counting the rows it draws while the space types are unresolved', async () => {
       viewerOnlyClaim();
-      mocks.spacesHeldOver = true;
+      mocks.spacesPending = true;
       render(<DebateRematchPageClient sessionId="rematch-1" />);
 
       await waitFor(() => expect(mocks.rematchClaimIds.flat()).toContain(VIEWER_ONLY));
@@ -1954,23 +2001,21 @@ describe('DebateRematchPageClient', () => {
     });
 
     // The filter bar is one bar across Explore's sources, so a space picked while browsing still
-    // narrows this list — the same as it does between All claims and Featured. Pinned because the
-    // membership default puts a space in it without anyone clicking, and a viewer landing on their
-    // own positions behind a filter they never set would read as claims having gone missing.
+    // narrows this list — the same as it does between All claims and Featured.
     it('narrows with the space filter the browsing source was left on', async () => {
       viewerOnlyClaim();
       mocks.spaceAllowlist = new Set([SPACE_1, SPACE_2].map(id => id.replace(/-/g, '')));
-      mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showExplore();
+      toggleFilter('Crypto');
       await showMyPositions();
 
-      // Seeded to the space the viewer belongs to, so their position in the other one is filtered
+      // Narrowed to the space picked on Explore, so their position in the other one is filtered
       // out — and clearing the filter brings it back.
       expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
       expect(screen.queryByText('Only mine')).toBeNull();
 
-      selectFilter('Crypto', 'Any space');
+      toggleFilter('Crypto');
 
       expect(await screen.findByText('Only mine')).toBeInTheDocument();
     });
@@ -2120,7 +2165,10 @@ describe('DebateRematchPageClient', () => {
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
 
-      expect(spacesOffered()).toBe(1);
+      // The one match is in Crypto, which narrows nothing, so no space is offered — least of all the
+      // Governance space, whose only claim is not a match.
+      expect(queryFilterPill('Governance space')).toBeNull();
+      expect(spacesOffered()).toBe(0);
 
       await showOpponentClaims();
       expect(await screen.findByText('A claim only Salina answered')).toBeInTheDocument();
@@ -2138,6 +2186,189 @@ describe('DebateRematchPageClient', () => {
 
       expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveAttribute('aria-pressed', 'true');
       expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+    });
+
+    /**
+     * "Hide agreed": on their tab, the claims you hold the same side on are a dead end — there is
+     * nothing to debate — so they are out of the way by default. The matches and the claims only
+     * they have answered stay, because those are what the tab is for.
+     */
+    describe('Hide agreed', () => {
+      const SWITCH = { name: 'Hide agreed' } as const;
+
+      beforeEach(() => {
+        localStorage.setItem('rematchHideAgreed', 'true');
+      });
+
+      it('is on by default and leaves out the claims you agree on', async () => {
+        // Taken away rather than restored, so this is the atom's default and not the value above.
+        localStorage.removeItem('rematchHideAgreed');
+        threeClaims();
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'true');
+        expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+        expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText('A claim you both agree on')).toBeNull());
+        // The badge counts what the tab shows.
+        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('2')).toBeInTheDocument();
+      });
+
+      it('brings them back when it is turned off', async () => {
+        threeClaims();
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        fireEvent.click(screen.getByRole('switch', SWITCH));
+
+        expect(await screen.findByText('A claim you both agree on')).toBeInTheDocument();
+        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('3')).toBeInTheDocument();
+      });
+
+      it('is only on their tab', async () => {
+        threeClaims();
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+
+        expect(screen.queryByRole('switch', SWITCH)).toBeNull();
+      });
+
+      it('says so, with a way out, when you agree on everything of theirs', async () => {
+        mocks.savedClaims = [];
+        mocks.claims = [];
+        mocks.entities = [{ ...sharedEntity(), id: AGREED, name: 'A claim you both agree on' }];
+        mocks.positions = [
+          position('profile-local', AGREED, SPACE_1, true),
+          position('profile-remote', AGREED, SPACE_1, true),
+        ];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        expect(await screen.findByText(/You and Salina agree on every claim here/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Show agreed claims' }));
+
+        expect(await screen.findByText('A claim you both agree on')).toBeInTheDocument();
+        expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'false');
+      });
+
+      // Taking their side on the tab must not pull the card out from under the press — and the
+      // side just taken may be one the viewer is about to flip.
+      it('keeps a claim you agree with while it is on screen', async () => {
+        mocks.savedClaims = [];
+        mocks.claims = [];
+        mocks.entities = [{ ...sharedEntity(), id: OPPONENT_ONLY, name: 'A claim only Salina answered' }];
+        mocks.positions = [position('profile-remote', OPPONENT_ONLY, SPACE_1, true)];
+        const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        expect(await screen.findByText('A claim only Salina answered')).toBeInTheDocument();
+
+        mocks.positions = [...mocks.positions, position('profile-local', OPPONENT_ONLY, SPACE_1, true)];
+        rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleExit();
+
+        expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+      });
+
+      // Their already-debated claims carry the same position control, so they get the same hold.
+      it('keeps an already-debated claim you agree with while it is on screen', async () => {
+        // geo-chat as well as the graph: agreement needs both, so both move together here.
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true, viewer_position: null }];
+        mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+        const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+        fireEvent.click(screen.getByRole('button', { name: /Already debated with Salina/ }));
+        expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true, viewer_position: false }];
+        mocks.positions = [...mocks.positions, position('profile-local', CLAIM_SHARED, SPACE_1, false)];
+        rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleExit();
+
+        expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+      });
+
+      it('says so when it hides every debated claim and there are no new ones', async () => {
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true, viewer_position: false }];
+        mocks.positions = [
+          position('profile-local', CLAIM_SHARED, SPACE_1, false),
+          position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+        ];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        expect(await screen.findByText(/You and Salina agree on every claim here\./)).toBeInTheDocument();
+        expect(screen.queryByText(/hasn’t responded yet/)).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Show agreed claims' }));
+
+        expect(await screen.findByText('You and Salina have already debated every claim here.')).toBeInTheDocument();
+      });
+
+      // The new claims are all agreed, but a debated one is still listed below: "every claim here"
+      // would be contradicted by the section under it.
+      it('says it hid only the new ones when a debated claim is still listed', async () => {
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+        mocks.entities = [sharedEntity(), { ...sharedEntity(), id: AGREED, name: 'A claim you both agree on' }];
+        mocks.positions = [
+          position('profile-local', CLAIM_SHARED, SPACE_1, true),
+          position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+          position('profile-local', AGREED, SPACE_1, true),
+          position('profile-remote', AGREED, SPACE_1, true),
+        ];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        expect(
+          await screen.findByText(
+            'You and Salina agree on every claim here you haven’t debated. Turn off “Hide agreed” to see them.'
+          )
+        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Already debated with Salina/ })).toBeInTheDocument();
+      });
+
+      /**
+       * A side switched somewhere else reaches geo-chat before the graph catches up. The card gates
+       * Request debate on geo-chat's copy, so a claim the graph still reads as agreed is one the
+       * viewer can request on — hiding it on the graph alone took a live button off the tab.
+       */
+      it('keeps a claim the graph still reads as agreed once geo-chat has the other side', async () => {
+        mocks.savedClaims = [];
+        // geo-chat: the viewer holds Agree (`sharedClaim`'s own participants). The graph: both Disagree.
+        mocks.claims = [sharedClaim()];
+        mocks.entities = [sharedEntity()];
+        mocks.positions = [
+          position('profile-local', CLAIM_SHARED, SPACE_1, false),
+          position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+        ];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('1')).toBeInTheDocument();
+      });
+
+      // A space whose only claims are hidden would be offered with a count and empty the list.
+      it('leaves the spaces of hidden claims out of the menu', async () => {
+        threeClaims();
+        mocks.entities = [sharedEntity(), publishedEntity(AGREED, 'A claim you both agree on')];
+        mocks.positions = [
+          position('profile-local', CLAIM_SHARED, SPACE_1, true),
+          position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+          position('profile-local', AGREED, SPACE_2, true),
+          position('profile-remote', AGREED, SPACE_2, true),
+        ];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+        expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+
+        // The one claim left is in Crypto, which narrows nothing; the hidden claim's space is not
+        // offered either.
+        expect(queryFilterPill('Governance space')).toBeNull();
+        expect(spacesOffered()).toBe(0);
+
+        fireEvent.click(screen.getByRole('switch', SWITCH));
+        expect(await screen.findByText('A claim you both agree on')).toBeInTheDocument();
+        expect(spacesOffered()).toBe(2);
+      });
     });
 
     // A pair with no match land on their positions, but Matches is still in the strip — and when
@@ -2183,7 +2414,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showRecommended();
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'newly' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims and topics' }), { target: { value: 'newly' } });
 
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Geopolitics & chips' })).toBeNull());
     expect(screen.getByRole('heading', { name: 'Open weight AI' })).toBeInTheDocument();
@@ -2762,7 +2993,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    selectFilter('Any topic', 'Governance');
+    toggleFilter('Governance');
 
     // Only the Governance-tagged published claim survives; the untagged shared claim drops out.
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
@@ -2778,7 +3009,7 @@ describe('DebateRematchPageClient', () => {
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    selectFilter('Any topic', 'Governance');
+    toggleFilter('Governance');
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
 
     // The catalog stays answered and only the menu goes away, which is the divergence. With no
@@ -2786,14 +3017,14 @@ describe('DebateRematchPageClient', () => {
     // also why this went unnoticed: on screen it looks like the filter row simply thinned out.
     mocks.topicFacetSettled = false;
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-    await waitFor(() => expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull());
+    await waitFor(() => expect(queryFilterPill('Governance')).toBeNull());
 
     // What the guard is actually for: the *selection* outlived the gap, so the menu coming back
     // restores the chip rather than the viewer finding their filter quietly cleared.
     mocks.topicFacetSettled = true;
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument());
+    await waitFor(() => expect(queryFilterPill('Governance')).toHaveAttribute('aria-pressed', 'true'));
     expect(screen.queryByText('A claim both participants chose')).toBeNull();
   });
 
@@ -2802,7 +3033,7 @@ describe('DebateRematchPageClient', () => {
     await showAllClaims();
 
     // The published claim is tagged Governance and Ethics; filtering on the second still matches.
-    selectFilter('Any topic', 'Ethics');
+    toggleFilter('Ethics');
 
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
   });
@@ -2817,13 +3048,12 @@ describe('DebateRematchPageClient', () => {
     await showAllClaims();
 
     // Governance and Ethics belong to the published claim, which lives in the Governance space.
-    selectFilter('Any space', 'Crypto');
+    toggleFilter('Crypto');
     await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
 
-    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-
-    expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Ethics/ })).toBeNull();
+    expect(getFilterPill('Crypto')).toHaveAttribute('aria-pressed', 'true');
+    expect(queryFilterPill('Governance')).toBeNull();
+    expect(queryFilterPill('Ethics')).toBeNull();
   });
 
   // GEO-2798 review. `sessionRowsByClaimId` is keyed on the claim alone, because geo-chat answers
@@ -2831,9 +3061,14 @@ describe('DebateRematchPageClient', () => {
   // whichever space it was recorded in. Taking that row whole drew an A-space card under a B-space
   // filter, and a debate requested from it would have published into A.
   it('draws the picked space’s card, not the one geo-chat happened to record', async () => {
-    // Tagged in both spaces; geo-chat's session row names Crypto.
-    mocks.debateTagClaims = [debateTag(CLAIM_MORE, 'A newly published claim', SPACE_1), debateTag()];
-    mocks.entities = [{ ...publishedEntity(), spaces: [SPACE_1, SPACE_2] }];
+    // Tagged in both spaces; geo-chat's session row names Crypto. The shared claim is listed beside
+    // it so the Governance space narrows the list, which is what puts it in the row.
+    mocks.debateTagClaims = [
+      debateTag(CLAIM_MORE, 'A newly published claim', SPACE_1),
+      debateTag(),
+      debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_1, 2),
+    ];
+    mocks.entities = [sharedEntity(), { ...publishedEntity(), spaces: [SPACE_1, SPACE_2] }];
     mocks.claims = [
       { ...sharedClaim(), claim: { ...sharedClaim().claim, claim_entity_id: CLAIM_MORE, space_id: SPACE_1 } },
     ];
@@ -2841,8 +3076,9 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    selectFilter('Any space', 'Governance space');
+    toggleFilter('Governance space');
 
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
     await waitFor(() => expect(screen.getByText('A newly published claim')).toBeInTheDocument());
     // The filter chip says "Governance space" too, so the discriminator is the space the card is
     // *not* drawn in: with the row taken whole, this card wore Crypto under a Governance filter.
@@ -2858,13 +3094,12 @@ describe('DebateRematchPageClient', () => {
   // halves are covered now: a topic on a listed claim, and a topic the aggregate knows only from a
   // claim on a later page, which is the one that fails if the menu is ever rebuilt from the rows.
   it('offers a topic the facet knows about before its claim has been paged in', async () => {
-    mocks.facetOnlyTopics = [{ id: 'topic-unpaged', name: 'Not yet paged', count: 3 }];
+    // Under the list's total, so it narrows and the row offers it.
+    mocks.facetOnlyTopics = [{ id: 'topic-unpaged', name: 'Not yet paged', count: 1 }];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-
-    expect(await screen.findByRole('button', { name: /Not yet paged/ })).toBeInTheDocument();
+    await waitFor(() => expect(queryFilterPill('Not yet paged')).toBeInTheDocument());
   });
 
   it('offers a topic carried by any claim on the list', async () => {
@@ -2884,9 +3119,7 @@ describe('DebateRematchPageClient', () => {
     await showAllClaims();
     await waitFor(() => expect(screen.getByText('A newly published claim')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-
-    expect(screen.getByRole('button', { name: /Later/ })).toBeInTheDocument();
+    expect(getFilterPill('Later')).toBeInTheDocument();
   });
 
   // The same scope the rows are gated by has to reach the query, and it isn't known until the
@@ -2901,14 +3134,14 @@ describe('DebateRematchPageClient', () => {
         topics: [{ id: 'topic-later', name: 'Later' }],
       },
     ];
+    // The tagged facet's half of the same hazard: a topic it would name, were it asked yet.
+    mocks.facetOnlyTopics = [{ id: 'topic-later', name: 'Later', count: 1 }];
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-
-    expect(screen.queryByRole('button', { name: /Later/ })).toBeNull();
+    expect(queryFilterPill('Later')).toBeNull();
   });
 
   // The held order is released for a new search or space because those change what the server
@@ -2924,9 +3157,11 @@ describe('DebateRematchPageClient', () => {
         { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
       ],
     });
+    // The shared claim carries no topics, so Governance narrows the list and the row offers it.
     mocks.debateTagClaims = [
       debateTag(FIRST, 'Ranked first when unfiltered'),
       debateTag(SECOND, 'Ranked first once filtered'),
+      debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_1, 2),
     ];
     mocks.entities = [
       sharedEntity(),
@@ -2940,16 +3175,16 @@ describe('DebateRematchPageClient', () => {
     // A re-ranked catalog, which is what a refetch can hand back. The hold on list order has to
     // release when the topic changes, or the new arrangement is drawn in the old one's order.
     mocks.debateTagClaims = [...mocks.debateTagClaims].reverse();
-    selectFilter('Any topic', 'Governance');
+    toggleFilter('Governance');
 
     await waitFor(() => expect(appearsBefore('Ranked first once filtered', 'Ranked first when unfiltered')).toBe(true));
   });
 
-  // `useSpacesByIds` keeps the previous id set's map instead of blanking every space image on
-  // screen, and says so through `isPlaceholderData`. The picker reads it for ids that may not be
-  // in it — one just added to the allowlist — and a missing type reads as publishable, so the
-  // personal space this gate exists to exclude is exactly what the held map lets through.
-  it('waits out a held-over space map rather than trusting what it does not contain', async () => {
+  // `useSpacesByIds` keeps the ids it already resolved on screen while a new one loads. The picker
+  // reads the map for ids that may not be in it yet — one just added to the allowlist — and a
+  // missing type reads as publishable, so the personal space this gate exists to exclude is
+  // exactly what an unresolved id lets through.
+  it('waits out an unresolved space lookup rather than trusting what it does not contain', async () => {
     mocks.matchmakingClaims = [
       { ...matchmakingClaim(), topics: [] },
       {
@@ -2957,13 +3192,11 @@ describe('DebateRematchPageClient', () => {
         topics: [{ id: 'topic-later', name: 'Later' }],
       },
     ];
-    mocks.spacesHeldOver = true;
+    mocks.spacesPending = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-
-    expect(screen.queryByRole('button', { name: /Later/ })).toBeNull();
+    expect(queryFilterPill('Later')).toBeNull();
   });
 
   // The browsed query runs on every tab, so its answer must not vouch for rows another tab drew
@@ -2984,128 +3217,28 @@ describe('DebateRematchPageClient', () => {
     mocks.scopeHeldOver = true;
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    selectFilter('Any topic', 'Governance');
+    toggleFilter('Governance');
 
     // The shared claim carries no topics at all, so nothing about it survives the filter.
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
   });
 
-  // Reported after the facet landed: pick a space, pick a topic it lists, get nothing. The space
-  // menu was filtered by the viewer's allowlist but not by whether this pairing can publish a
-  // debate there — and `browsedRows` drops every claim in a space it cannot. The server's topic
-  // facet knows nothing about that, so it offered all of the space's topics over an empty list.
-  // GEO-2789, the debate-again half. Seeded from the menu rather than the eligible set, because
-  // the effect above polices the selection against exactly what the menu offers.
-  it('opens on the spaces the viewer belongs to', async () => {
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    // The trigger takes the name of the one selected space rather than reading "Any space".
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
-
-    // Ticked in the menu, and listed once: a seed in any shape but the menu's own would be added
-    // back as a second row rather than ticking the one already there.
-    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
-    const rows = screen.getAllByRole('button', { name: /Crypto/ }).filter(el => el.hasAttribute('aria-pressed'));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  /**
-   * GEO-2789's seed is spent on whatever menu it sees, and a curator's page is not a menu that can
-   * answer it — its spaces say nothing about who is looking.
-   *
-   * That used to be the ordinary path rather than an edge: the tab opened on Recommended whenever
-   * there was anything to recommend, so any viewer with a curated page had their one seed spent
-   * against it and reached All claims with the default already gone. Opening on All claims means
-   * the seed meets a menu about the corpus first, whatever a curator has done.
-   */
-  it('spends the seed on All claims even when a curated page exists', async () => {
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-    // A curated page in a space that is nobody's membership, so its menu could not answer the seed.
-    mocks.recommendedSections = [{ id: 'section-1', name: 'Curated', claimIds: [CLAIM_FRESH] }];
-    mocks.recommendedEntities = [publishedEntity(CLAIM_FRESH, 'A curated claim')];
-
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    await showExplore();
-
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
-  });
-
   // The rows are one page; the facet counts the whole tag. So a space whose only tagged claim is on
   // a later page reaches the *menu* without ever reaching the space-type lookup — which is keyed on
   // the loaded entities — and an unresolved type reads as publishable. That is how a personal space,
-  // the one thing that gate exists to exclude, could be offered and take the one-shot default with
-  // it before its page arrived and pruned it away.
+  // the one thing that gate exists to exclude, could be offered before its page arrived.
   it('knows the type of a space the facet offers but no loaded claim names', async () => {
     const PERSONAL_SPACE = '019fedae-72b6-7ab2-927a-df044d57c5aa';
-    mocks.memberSpaceIds = new Set([PERSONAL_SPACE.replace(/-/g, ''), SPACE_1.replace(/-/g, '')]);
-    // Theirs, and a personal space — so it is both seedable and unpublishable.
     mocks.spaceTypes = { [PERSONAL_SPACE]: 'PERSONAL' };
     mocks.facetOnlySpaces = [{ id: PERSONAL_SPACE, count: 4 }];
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    // The default lands on the space that survives the gate, not the one whose type was unknown.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
-
-    // And the personal space is not on the menu at all.
-    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
-    expect(screen.queryByRole('button', { name: /Space 019fedae/ })).toBeNull();
-  });
-
-  // The seed is spent on whatever the menu is offering, so every gate that decides what it offers
-  // has to have answered. `useDebatePublishableSpaces` answers `null` for *unknown*, which
-  // `isSpaceDebatePublishable` reads as "don't filter" — so mid-load the menu offers spaces the
-  // page will go on to reject. Seeded from one of those, the default is spent and the pruning
-  // effect then takes it straight back off, leaving the viewer with no default at all.
-  it('waits for the publishable lookup before taking its one default', async () => {
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, ''), SPACE_2.replace(/-/g, '')]);
-    // Still in flight: every space passes the gate for now, Governance among them.
-    mocks.publishableSpaceIds = null;
-    mocks.publishableSpacesLoading = true;
-    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    // Nothing seeded yet, because nothing is known yet.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
-
-    // It lands, and Governance turns out not to be publishable after all.
-    mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-    mocks.publishableSpacesLoading = false;
-    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    // The default is still there to spend, and spends it on the space that survived.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
-  });
-
-  // GEO-2834. Same rule as the publishable gate above, applied to the *viewer's* side of the match:
-  // sign-up sends one membership proposal per picked space and they land seconds apart, so the
-  // first non-empty answer is a fraction of what the reader chose — and the seed fires once.
-  it('waits for the rest of their memberships before taking its one default', async () => {
-    // Only the first proposal has been indexed so far.
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-    mocks.isSettlingMemberships = true;
-    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    // Unspent, rather than spent on the one space that happens to have landed.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
-
-    // The rest of what they picked lands.
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, ''), SPACE_2.replace(/-/g, '')]);
-    mocks.isSettlingMemberships = false;
-    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    // Seeded with both of theirs, which a seed taken against the partial answer would have missed.
-    await waitFor(() => expect(screen.getByRole('button', { name: /2 spaces/ })).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+    await waitFor(() => expect(queryFilterPill('Crypto')).toBeInTheDocument());
+    // An unlabelled space draws under the fallback name "Space".
+    expect(queryFilterPill('Space')).toBeNull();
+    expect(spacesOffered()).toBe(2);
   });
 
   // This menu's options accumulate from rows as they arrive, so they are pickable before the seed
@@ -3117,18 +3250,17 @@ describe('DebateRematchPageClient', () => {
     await showAllClaims();
 
     // Governance is SPACE_2 — not one of theirs, which is the point.
-    fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
-    fireEvent.click(await screen.findByRole('button', { name: /Governance/ }));
-    fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument());
+    await waitFor(() => expect(queryFilterPill('Governance space')).toBeInTheDocument());
+    toggleFilter('Governance space');
+    await waitFor(() => expect(getFilterPill('Governance space')).toHaveAttribute('aria-pressed', 'true'));
 
     // Now they land, and the seed becomes possible.
     mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
     // Still their pick, not the default.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /Crypto/ })).toBeNull();
+    await waitFor(() => expect(getFilterPill('Governance space')).toHaveAttribute('aria-pressed', 'true'));
+    expect(queryFilterPill('Crypto')?.getAttribute('aria-pressed') ?? 'false').toBe('false');
   });
 
   it('opens on everything when the viewer belongs to none of the spaces on offer', async () => {
@@ -3136,7 +3268,8 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
+    await waitFor(() => expect(queryFilterRow()).toBeInTheDocument());
+    expect(within(queryFilterRow()!).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('does not offer a space no debate can be published into', async () => {
@@ -3144,12 +3277,10 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
-
     // SPACE_2 holds the published claim and is on the server's space facet; it is not somewhere
     // this pairing can debate, so picking it could only ever empty the list.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull();
+    await waitFor(() => expect(queryFilterPill('Crypto')).toBeInTheDocument());
+    expect(queryFilterPill('Governance space')).toBeNull();
   });
 
   // The publishability lookup answers `true` while it is still resolving, so the first render
@@ -3160,15 +3291,12 @@ describe('DebateRematchPageClient', () => {
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument());
-    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(queryFilterPill('Governance space')).toBeInTheDocument());
 
     mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
-    await waitFor(() => expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull());
+    await waitFor(() => expect(queryFilterPill('Governance space')).toBeNull());
   });
 
   // The opponent and curated tabs are deliberately not narrowed by the viewer's allowlist, so a
@@ -3176,15 +3304,16 @@ describe('DebateRematchPageClient', () => {
   // in the menu with it, or the row is visible and unfilterable.
   it('keeps a graph-tab space in the menu even when the allowlist excludes it', async () => {
     mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
+    // A second claim of theirs in the Governance space, so Crypto narrows their list and the row
+    // has a reason to offer it.
+    mocks.positions = [...mocks.positions, position('profile-remote', CLAIM_MORE, SPACE_2, false)];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
     // The shared claim sits in Crypto, which the allowlist above leaves out.
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
-
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+    await waitFor(() => expect(queryFilterPill('Crypto')).toBeInTheDocument());
   });
 
   // A claim can carry the Debate tag in more than one space, and the catalog returns a row for each.
@@ -3211,12 +3340,14 @@ describe('DebateRematchPageClient', () => {
         description: null,
         rankingScore: 2,
       },
+      // Listed beside it in Crypto only, so the Governance space narrows the list and is offered.
+      debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_1, 2),
     ];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
     await waitFor(() => expect(screen.getByText('A newly published claim')).toBeInTheDocument());
 
-    selectFilter('Any space', 'Governance space');
+    toggleFilter('Governance space');
 
     // The SPACE_1 row going is what says the filter landed — without it this would assert nothing.
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
@@ -3230,27 +3361,15 @@ describe('DebateRematchPageClient', () => {
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    selectFilter('Any space', 'Governance');
+    toggleFilter('Governance space');
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
 
     mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
-  });
-
-  it('keeps every space on offer after narrowing to one', async () => {
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    selectFilter('Any space', 'Crypto');
-    await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
-
-    // The way back. Narrowing the space menu to the loaded corpus would leave only Crypto on it.
-    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
-
-    expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() =>
+      expect(within(queryFilterRow()!).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
+    );
   });
 
   // GEO-2696: topics intersect now, and the menu answers "what appears alongside what I picked".
@@ -3278,30 +3397,39 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-    expect(screen.getByRole('button', { name: /Pinned only/ })).toBeInTheDocument();
+    await waitFor(() => expect(queryFilterPill('Pinned only')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: /Ethics/ }));
+    toggleFilter('Ethics');
 
     // No claim carries both, so adding it could only ever empty the list.
-    await waitFor(() => expect(screen.queryByRole('button', { name: /Pinned only/ })).toBeNull());
-    // Governance does co-occur with Ethics on the published claim, so it stays addable.
-    expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument();
+    await waitFor(() => expect(queryFilterPill('Pinned only')).toBeNull());
+    expect(getFilterPill('Ethics')).toHaveAttribute('aria-pressed', 'true');
   });
 
   // Not reachable by picking a topic and then a space it has nothing in: each menu is narrowed by
   // the other, so such a space is never on offer. It is reachable by the corpus moving under a
   // selection that was valid when it was made.
   it('lets go of a selected topic once the space no longer has claims for it', async () => {
+    // A second claim in the Governance space, carrying no topics, so that once the space is picked
+    // Ethics still narrows the list and the row still offers it.
+    const untagged = { ...publishedEntity(CLAIM_FRESH, 'Another published claim'), relations: [] };
+    mocks.entities = [sharedEntity(), publishedEntity(), untagged];
+    mocks.debateTagClaims = [
+      debateTag(),
+      debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_1, 2),
+      debateTag(CLAIM_FRESH, 'Another published claim', SPACE_2, 3),
+    ];
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    selectFilter('Any space', 'Governance space');
-    selectFilter('Any topic', 'Ethics');
-    await waitFor(() => expect(screen.getByRole('button', { name: /Ethics/ })).toBeInTheDocument());
+    toggleFilter('Governance space');
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    toggleFilter('Ethics');
+    await waitFor(() => expect(getFilterPill('Ethics')).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(screen.queryByText('Another published claim')).toBeNull());
 
     // The one Ethics claim in that space is answered, published elsewhere, or otherwise leaves the
-    // candidate set, so the menu stops naming the topic. Its topics come off the entity now.
+    // candidate set, so the row stops naming the topic. Its topics come off the entity now.
     mocks.entities = [
       sharedEntity(),
       {
@@ -3310,11 +3438,15 @@ describe('DebateRematchPageClient', () => {
           { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
         ],
       },
+      untagged,
     ];
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    // Held, it would filter the list by a chip that is no longer in the menu to unpick.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Any topic/ })).toBeInTheDocument());
+    // Held, it would filter the list by a chip that is no longer in the row to unpick — and empty
+    // it, since no claim carries Ethics any more.
+    await waitFor(() => expect(queryFilterPill('Ethics')).toBeNull());
+    expect(await screen.findByText('Another published claim')).toBeInTheDocument();
+    expect(getFilterPill('Governance space')).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('narrows the list to the selected space', async () => {
@@ -3322,9 +3454,10 @@ describe('DebateRematchPageClient', () => {
     await showAllClaims();
 
     // The shared claim sits in Crypto; the published one is in Governance space.
-    selectFilter('Any space', 'Crypto');
+    toggleFilter('Crypto');
 
-    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    // The filter may restart the gallery transition; wait for the retained claim to render.
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
   });
 
@@ -3577,7 +3710,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims and topics' }), {
       target: { value: 'newly published' },
     });
 
@@ -3605,7 +3738,7 @@ describe('DebateRematchPageClient', () => {
 
     fireEvent.click(claim);
 
-    expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_SHARED, SPACE_1, false);
+    expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_SHARED, SPACE_1, false, { forceRequestedSpace: true });
   });
 
   // geo-chat now carries readiness on the rematch claims themselves — the rows the picker already
@@ -3692,13 +3825,13 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    const pinned = screen.getByRole('textbox', { name: 'Search claims' }).closest('.sticky');
+    const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
     expect(pinned).not.toBeNull();
     expect(pinned?.className).toContain('top-0');
 
     // The tab strip rides in the same block rather than scrolling out from under the controls.
     expect(screen.getByRole('button', { name: 'Explore' }).closest('.sticky')).toBe(pinned);
-    expect(screen.getByRole('button', { name: /Any space/ }).closest('.sticky')).toBe(pinned);
+    expect(screen.getByRole('group', { name: 'Filter claims' }).closest('.sticky')).toBe(pinned);
 
     // And the list is outside it, or it would be pinned too and never scroll. Anchored on a claim
     // row: the scroll sentinel used to stand for the list here, and nothing pages any more.
@@ -3743,19 +3876,20 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.queryByTestId('rematch-pair-header')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument();
   });
 
   // GEO-2992. The unmute control used to live in a 200px dock fixed to the bottom-right of the
-  // viewport — outside the 720px column, and a scroll away from everything the viewer was reading.
-  // Its replacement has to be in the column, above the tabs, and pinned with them.
-  it('pins the pair header at the top of the content column', async () => {
+  // viewport — outside the content column, and a scroll away from everything the viewer was reading.
+  // Keep it above the tabs in the reading order; the full cards now scroll naturally.
+  it('places the full pair header above the sticky claim filters', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
     const header = screen.getByTestId('rematch-pair-header');
-    const pinned = screen.getByRole('textbox', { name: 'Search claims' }).closest('.sticky');
-    expect(header.closest('.sticky')).toBe(pinned);
+    const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
+    expect(header.closest('.sticky')).toBeNull();
+    expect(pinned).not.toBeNull();
 
     // Inside the column, not floating over the viewport: the dock's `fixed` shell is gone.
     expect(header.closest('main')).not.toBeNull();
@@ -4128,7 +4262,7 @@ describe('DebateRematchPageClient', () => {
   it('reports a refused request on the card it was sent from', async () => {
     // Through the press, so the claim the error is keyed to is the one the mutation was actually
     // sent for — `variables` is react-query's record of that call, not a value this test picks.
-    mocks.mutate.mockImplementation((variables: { claim_id: string }) => {
+    mocks.mutate.mockImplementation((variables: { claim_id: string; source_space_id: string }) => {
       mocks.requestVariables = variables;
     });
     mocks.requestError = new Error('respond to this claim before requesting a rematch');
@@ -4150,13 +4284,158 @@ describe('DebateRematchPageClient', () => {
   // than letting the message go down with it.
   it('keeps a refusal on the page when its card is not on screen', async () => {
     mocks.requestError = new Error('respond to this claim before requesting a rematch');
-    mocks.requestVariables = { claim_id: 'a-claim-this-tab-does-not-show' };
+    mocks.requestVariables = { claim_id: 'a-claim-this-tab-does-not-show', source_space_id: SPACE_1 };
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
     const card = screen.getByText('A claim both participants chose').closest('article');
     expect(within(card!).queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('respond to this claim before requesting a rematch');
+  });
+
+  describe('a refusal for a claim in a collapsed section', () => {
+    const REFUSAL = 'respond to this claim before requesting a rematch';
+
+    function recordRequests() {
+      mocks.mutate.mockImplementation((variables: { claim_id: string; source_space_id: string }) => {
+        mocks.requestVariables = variables;
+      });
+    }
+
+    function requestFrom(claimName: string) {
+      const card = screen.getByText(claimName).closest('article');
+      fireEvent.click(within(card!).getByRole('button', { name: 'Request debate' }));
+    }
+
+    function expectOneRefusalOnItsCard(claimName: string) {
+      const card = screen.getByText(claimName).closest('article');
+      expect(within(card!).getByRole('alert')).toHaveTextContent(REFUSAL);
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
+    }
+
+    function expectOneRefusalOnThePage() {
+      const alerts = screen.getAllByRole('alert');
+      expect(alerts).toHaveLength(1);
+      expect(alerts[0]).toHaveTextContent(REFUSAL);
+      expect(alerts[0].closest('article')).toBeNull();
+    }
+
+    beforeEach(() => {
+      mocks.recommendedSections = [
+        { id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] },
+        { id: 'block-2', name: 'Open weight AI', claimIds: [CLAIM_MORE] },
+      ];
+      mocks.recommendedEntities = [sharedEntity(), publishedEntity()];
+    });
+
+    it('shows it on the page when its Recommended section was collapsed first', async () => {
+      recordRequests();
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showRecommended();
+
+      requestFrom('A claim both participants chose');
+      fireEvent.click(screen.getByRole('button', { name: /Geopolitics & chips/ }));
+      mocks.requestError = new Error(REFUSAL);
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(mocks.requestVariables?.claim_id).toBe(CLAIM_SHARED);
+      expect(screen.queryByText('A claim both participants chose')).toBeNull();
+      expectOneRefusalOnThePage();
+    });
+
+    it('moves it back onto the card, once, when the section is reopened', async () => {
+      recordRequests();
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showRecommended();
+
+      requestFrom('A claim both participants chose');
+      const toggle = screen.getByRole('button', { name: /Geopolitics & chips/ });
+      fireEvent.click(toggle);
+      mocks.requestError = new Error(REFUSAL);
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      fireEvent.click(toggle);
+
+      expectOneRefusalOnItsCard('A claim both participants chose');
+    });
+
+    it('keeps it on the card, once, while the section stays open', async () => {
+      recordRequests();
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showRecommended();
+
+      requestFrom('A claim both participants chose');
+      mocks.requestError = new Error(REFUSAL);
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expectOneRefusalOnItsCard('A claim both participants chose');
+    });
+
+    it('is not moved to the page by collapsing a different section', async () => {
+      recordRequests();
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showRecommended();
+
+      requestFrom('A claim both participants chose');
+      fireEvent.click(screen.getByRole('button', { name: /Open weight AI/ }));
+      mocks.requestError = new Error(REFUSAL);
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expectOneRefusalOnItsCard('A claim both participants chose');
+    });
+
+    describe('in the already-debated section', () => {
+      beforeEach(() => {
+        mocks.recommendedSections = [];
+        mocks.recommendedEntities = [];
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+      });
+
+      const toggle = () => screen.getByRole('button', { name: /Already debated with Salina/ });
+
+      it('shows it on the page when the section was closed again first', async () => {
+        recordRequests();
+        const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        fireEvent.click(toggle());
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled());
+        requestFrom('A claim both participants chose');
+        fireEvent.click(toggle());
+        mocks.requestError = new Error(REFUSAL);
+        view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+        expect(mocks.requestVariables?.claim_id).toBe(CLAIM_SHARED);
+        expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+        expectOneRefusalOnThePage();
+
+        fireEvent.click(toggle());
+        expectOneRefusalOnItsCard('A claim both participants chose');
+      });
+
+      it('keeps it on the card, once, while the section is open', async () => {
+        recordRequests();
+        const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        fireEvent.click(toggle());
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled());
+        requestFrom('A claim both participants chose');
+        mocks.requestError = new Error(REFUSAL);
+        view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+        expectOneRefusalOnItsCard('A claim both participants chose');
+      });
+    });
+  });
+
+  it('keeps a refusal for the same claim in another space off this card', async () => {
+    mocks.requestError = new Error('Other space request failed');
+    mocks.requestVariables = { claim_id: CLAIM_SHARED, source_space_id: 'another-space' };
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+    const card = screen.getByText('A claim both participants chose').closest('article');
+    expect(within(card!).queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Other space request failed');
   });
 
   // GEO-2652. The wait is real — a publish, an index and a notification — so it is named rather
@@ -4508,6 +4787,20 @@ async function settleTabSwap() {
   });
 }
 
+/**
+ * Waits out a collapsing card before asserting that a row is still on screen.
+ *
+ * A row leaving stays in the DOM while it fades, so `findByText` resolves on the ghost of one on
+ * its way out — and a case asserting "this must not leave" passes on the very thing it exists to
+ * catch. Only the "still here" assertions need it; "gone" ones are `waitFor`'d instead, which
+ * waits for the removal rather than racing it.
+ */
+async function settleExit() {
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, HUB_CARD_EXIT_TRANSITION.duration * 1000 + 150));
+  });
+}
+
 /** Opens the source menu on whichever option it is currently showing. */
 function openSourceMenu() {
   // The picker opens on the opponent's positions now (GEO-2861), where there is no source menu —
@@ -4579,30 +4872,48 @@ function appearsBefore(first: string, second: string) {
 }
 
 /**
- * How many spaces the menu offers. Counted inside the popover: the position pills on every card
- * carry `aria-pressed` too, so a document-wide count is mostly cards.
+ * GEO-3223. The space and topic filters: one row of pills, a toggle `button` per space and per topic.
+ * Absent when nothing on offer could narrow the list.
  */
-function spacesOffered() {
-  fireEvent.click(screen.getByRole('button', { name: /Any space|space[s]?$/ }));
-  const menu = screen.getByRole('dialog');
-  const offered = within(menu)
-    .getAllByRole('button')
-    .filter(button => button.hasAttribute('aria-pressed')).length;
-  fireEvent.keyDown(document, { key: 'Escape' });
-
-  return offered;
+function queryFilterRow() {
+  return screen.queryByRole('group', { name: 'Filter claims' });
 }
 
 /**
- * Opens one of the hub filter menus and picks an option. Names are matched loosely: a space
- * option's accessible name picks up its avatar initial ("CCrypto").
+ * A space or topic pill's accessible name, which runs straight on into its count. Anchored on that
+ * count so the Governance topic does not also answer for the Governance space.
  */
-function selectFilter(trigger: string, option: string) {
-  fireEvent.click(screen.getByRole('button', { name: new RegExp(trigger) }));
-  fireEvent.click(screen.getByRole('button', { name: new RegExp(option) }));
-  // Multi-select menus stay open across a tick, so the trigger and the row would both answer to
-  // the same name until this closes it.
-  fireEvent.keyDown(document, { key: 'Escape' });
+function filterPillName(name: string) {
+  return new RegExp(`^${name}\\s?\\d`);
+}
+
+/** The pill offering `name`, or `null` when the row does not offer it (or is not drawn at all). */
+function queryFilterPill(name: string) {
+  const row = queryFilterRow();
+  return row ? within(row).queryByRole('button', { name: filterPillName(name) }) : null;
+}
+
+function getFilterPill(name: string) {
+  return within(screen.getByRole('group', { name: 'Filter claims' })).getByRole('button', {
+    name: filterPillName(name),
+  });
+}
+
+/**
+ * How many spaces the row offers. Counted inside the row and by the pill's analytics label: the
+ * position pills on every card carry `aria-pressed` too, and a topic pill is a button like a space's.
+ */
+function spacesOffered() {
+  const row = queryFilterRow();
+  if (!row) return 0;
+  return within(row)
+    .queryAllByRole('button')
+    .filter(button => button.getAttribute('data-geo-analytics-label') === 'Debate rematch Space pill').length;
+}
+
+/** Picks a space or topic from the row, or unpicks it when it is already picked. */
+function toggleFilter(name: string) {
+  fireEvent.click(getFilterPill(name));
 }
 
 function session(overrides: Partial<DebateRematchSession> = {}): DebateRematchSession {
@@ -4737,20 +5048,6 @@ function claimSummary(id: string, claim: string) {
  */
 describe('Hide my positions', () => {
   const SWITCH = { name: 'Hide my positions' } as const;
-
-  /**
-   * Waits out a collapsing card before asserting that a row is still on screen.
-   *
-   * A row leaving stays in the DOM while it fades, so `findByText` resolves on the ghost of one on
-   * its way out — and a case asserting "this must not leave" passes on the very thing it exists to
-   * catch. Only the "still here" assertions need it; "gone" ones are `waitFor`'d instead, which
-   * waits for the removal rather than racing it.
-   */
-  async function settleExit() {
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, HUB_CARD_EXIT_TRANSITION.duration * 1000 + 150));
-    });
-  }
 
   /** The row the browse list carries for a claim, with the viewer's side on it or without. */
   function browsedClaim(viewerPosition: boolean | null) {
@@ -5034,6 +5331,12 @@ describe('where the pair land', () => {
 
   it('lands on the debate’s own claims ahead of their positions when there is no match', async () => {
     nothingToRematch();
+    // Published, so the tab has a card with controls to land on (GEO-3312).
+    mocks.entities.push({
+      ...sharedEntity(),
+      id: 'd4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4',
+      name: 'Coffee dates save everyone’s time',
+    });
     mocks.extractedClaims = {
       turns: [],
       claims: [
@@ -5525,29 +5828,6 @@ describe('the Related tab', () => {
   });
 
   /**
-   * The member-space default is spent on whatever menu it sees, and it is a default about browsing.
-   * Its gate said "not the opponent's tab", which was the same sentence as "only on Explore" while
-   * there were two tabs to choose between — and stopped being one the moment this tab landed the
-   * pair somewhere else. Spent here, it would be spent against a menu of one space, the debated
-   * claim's, which Explore would then inherit as a deliberate-looking choice nobody made.
-   */
-  it('does not spend the member-space default on the Related tab', async () => {
-    debateWithRelated();
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await screen.findByRole('button', { name: 'Related' });
-    await settleTabSwap();
-
-    // Unspent: the trigger still offers every space rather than naming one.
-    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
-
-    // And spent as soon as the tab it is about is open.
-    await showAllClaims();
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
-  });
-
-  /**
    * The space filter is a selection made against whatever spelling the menu offered, and a row
    * carries whatever spelling its source used. Compared raw, switching to Related hid a row under a
    * filter naming that very space — the filter and the row agreeing about the space and disagreeing
@@ -5565,12 +5845,11 @@ describe('the Related tab', () => {
 
     // The selection is made over on Explore, against a menu built from rows geo-chat named with
     // hyphens, and it outlives the tab (GEO-2850) — which is how the two spellings meet.
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await screen.findByRole('button', { name: 'Related' });
     await showAllClaims();
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+    toggleFilter('Crypto');
+    await waitFor(() => expect(getFilterPill('Crypto')).toHaveAttribute('aria-pressed', 'true'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Related' }));
 
@@ -5613,7 +5892,7 @@ describe('the Related tab', () => {
   it('holds no slot on another tab’s space lookup when discovery found nothing', async () => {
     mocks.entities = [sharedEntity(), sourceClaimEntity()];
     mocks.relatedEntities = [sourceClaimEntity()];
-    mocks.spacesHeldOver = true;
+    mocks.spacesPending = true;
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await settleTabSwap();
@@ -5666,7 +5945,7 @@ describe('the Related tab', () => {
    */
   it('holds the slot rather than drawing rows whose spaces are still unresolved', async () => {
     debateWithRelated();
-    mocks.spacesHeldOver = true;
+    mocks.spacesPending = true;
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await settleTabSwap();
@@ -5848,6 +6127,175 @@ describe('inside a debate room', () => {
     </DebateRoomProvider>
   );
 
+  it('keeps Leave when the room exits to Explore despite a stored lobby', () => {
+    rememberLobbyReturnDestination('lobby-1');
+    render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    expect(screen.queryByRole('button', { name: 'Back to lobby' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/explore');
+    expect(mocks.leaveMutate).not.toHaveBeenCalled();
+  });
+
+  // GEO-3433. On 21 Oct a debater pressed Leave twice before their scheduled start, and came straight
+  // back both times.
+  describe('Leave while the other person is coming or here', () => {
+    const presenceOf = (state: DebateRoomPresenceState): DebateRoomPresence => ({
+      state,
+      opponentUserId: 'user-remote',
+      opponentPresent: state === 'present',
+    });
+    const inRoomWith = (presence: DebateRoomPresence | null, children: React.ReactElement) => (
+      <DebateRoomProvider roomId="room-1" presence={presence}>
+        {children}
+      </DebateRoomProvider>
+    );
+    const withPresence = (state: DebateRoomPresenceState, children: React.ReactElement) =>
+      inRoomWith(presenceOf(state), children);
+    const page = <DebateRematchPageClient sessionId="rematch-1" />;
+
+    const openLeaveDialog = async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+      return screen.findByRole('dialog', { name: 'Leave the room?' });
+    };
+
+    it.each([['arrived_early'], ['waiting'], ['waiting_elsewhere'], ['present']] as const)(
+      'asks before leaving when %s, and Stay keeps you in the room',
+      async state => {
+        render(withPresence(state, <DebateRematchPageClient sessionId="rematch-1" />));
+
+        const leaveButton = screen.getByRole('button', { name: 'Leave' });
+        fireEvent.click(leaveButton);
+
+        const dialog = await screen.findByRole('dialog', { name: 'Leave the room?' });
+        expect(mocks.push).not.toHaveBeenCalled();
+        expect(dialog).toHaveTextContent(state === 'present' ? /is here/ : /isn’t here yet/);
+
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Stay' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        expect(mocks.push).not.toHaveBeenCalled();
+        expect(leaveButton).toHaveFocus();
+      }
+    );
+
+    it('leaves for Explore once confirmed', async () => {
+      render(withPresence('waiting', <DebateRematchPageClient sessionId="rematch-1" />));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Leave the room?' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Leave room' }));
+
+      expect(mocks.push).toHaveBeenCalledWith('/explore');
+      expect(mocks.leaveMutate).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('treats Escape as Stay, and hands focus back to Leave', async () => {
+      render(withPresence('waiting', page));
+      const dialog = await openLeaveDialog();
+
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(mocks.push).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Leave' })).toHaveFocus();
+    });
+
+    // jsdom does no hit-testing, so the structure is pinned as well: the card is the dialog and its
+    // parent is the full-screen layer, which is what makes a press beside the card a press outside.
+    it('treats a press beside the card as Stay', async () => {
+      render(withPresence('waiting', page));
+      const dialog = await openLeaveDialog();
+      const overlay = dialog.parentElement as HTMLElement;
+      expect(overlay).toHaveClass('fixed', 'inset-0');
+
+      // Radix starts listening for outside presses a tick after opening.
+      await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+      fireEvent.pointerDown(overlay, { button: 0 });
+      fireEvent.click(overlay);
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(mocks.push).not.toHaveBeenCalled();
+    });
+
+    // The real header swaps its subtree as voice connects, and remounts it on every reconnect.
+    it('keeps an open dialog mounted when the header remounts', async () => {
+      const { rerender } = render(withPresence('arrived_early', page));
+      const dialog = await openLeaveDialog();
+
+      mocks.headerEpoch += 1;
+      try {
+        rerender(withPresence('arrived_early', page));
+        expect(screen.getByRole('dialog', { name: 'Leave the room?' })).toBe(dialog);
+      } finally {
+        mocks.headerEpoch = 0;
+      }
+    });
+
+    it('closes when the other person leaves while it is open, rather than saying they never came', async () => {
+      const { rerender } = render(withPresence('present', page));
+      await openLeaveDialog();
+
+      rerender(withPresence('left', page));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      expect(screen.queryByText(/isn’t here yet/)).toBeNull();
+      expect(mocks.push).not.toHaveBeenCalled();
+    });
+
+    it('does not reopen by itself when presence drops and comes back', async () => {
+      const { rerender } = render(withPresence('waiting', page));
+      await openLeaveDialog();
+
+      rerender(inRoomWith(null, page));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+      rerender(withPresence('waiting', page));
+
+      await act(() => new Promise(resolve => setTimeout(resolve, 0)));
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    // Leaving is what's left to do once they've gone or never came, so it isn't asked.
+    it.each([['left'], ['no_show']] as const)('leaves straight away when %s', state => {
+      render(withPresence(state, <DebateRematchPageClient sessionId="rematch-1" />));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(mocks.push).toHaveBeenCalledWith('/explore');
+    });
+
+    it('labels Leave and both answers for analytics', async () => {
+      render(withPresence('waiting', <DebateRematchPageClient sessionId="rematch-1" />));
+
+      const leaveButton = screen.getByRole('button', { name: 'Leave' });
+      expect(leaveButton).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Leave');
+
+      fireEvent.click(leaveButton);
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByRole('button', { name: 'Stay' })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Debate rematch Leave dialog stay'
+      );
+      expect(within(dialog).getByRole('button', { name: 'Leave room' })).toHaveAttribute(
+        'data-geo-analytics-label',
+        'Debate rematch Leave dialog leave room'
+      );
+    });
+  });
+
+  it('labels Back to lobby on the plain picker', () => {
+    rememberLobbyReturnDestination('lobby-1');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Back to lobby' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate rematch Back to lobby'
+    );
+  });
+
   // geo-chat expires a `browsing` session after 90s of either party being offline, which is what
   // waiting for someone looks like. Acting on it threw the waiting person out of the room.
   it.each([['ended'], ['expired']] as const)('does not navigate away on a %s session', async status => {
@@ -5855,7 +6303,7 @@ describe('inside a debate room', () => {
 
     render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument());
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.back).not.toHaveBeenCalled();
   });
@@ -6175,7 +6623,9 @@ describe('claims the pair have already debated', () => {
     await showOpponentClaims();
     expect(alreadyDebatedToggle()).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'nothing like it' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims and topics' }), {
+      target: { value: 'nothing like it' },
+    });
 
     await waitFor(() => expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull());
   });
@@ -6197,17 +6647,32 @@ describe('From this debate', () => {
   const extracted = (
     text: string,
     turn_index: number,
-    ids: { existing?: string | null; minted?: string | null } = {}
+    ids: { existing?: string | null; minted?: string | null } = {},
+    start_ms: number | null = null
   ) => ({
     text,
     is_factual: false,
     turn_index,
+    start_ms,
     existing_entity_id: ids.existing ?? null,
     entity_id: ids.minted ?? null,
     is_contestable: true,
   });
   /** The shared claim as the graph spells it, matched by geo-chat to a claim from the debate. */
   const matchedEntity = () => ({ ...sharedEntity(), id: hex(CLAIM_SHARED) });
+  /** The source debate as the room ran it: `count` turns of the standard format. */
+  const roomTurns = (count: number) => {
+    mocks.sourceDebate = {
+      claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 },
+      turn_format_id: 'standard',
+      turn_durations_ms: Array.from({ length: count }, () => 60_000),
+    };
+  };
+  /** The transcript's turns, alternating between the two speakers of `turns`. */
+  const transcriptTurns = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({ ...turns[index % 2], turn_index: index }));
+  /** A minted claim from the debate, once the early publish has put it on the graph. */
+  const publishedEntity = (id: string, name: string) => ({ ...sharedEntity(), id, name });
 
   async function openTab() {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -6216,6 +6681,7 @@ describe('From this debate', () => {
   }
 
   beforeEach(() => {
+    roomTurns(turns.length);
     mocks.entities = [matchedEntity()];
     mocks.claims = [sharedClaim()];
     // The graph's own spelling throughout, as production has it: positions and entities are both
@@ -6265,17 +6731,39 @@ describe('From this debate', () => {
     );
   });
 
-  it('draws a claim the graph does not have yet without controls, and keeps it out of geo-chat’s row lookup', async () => {
+  it('leaves a claim the graph does not have yet out of the list, says it is coming, and keeps it out of geo-chat’s row lookup', async () => {
+    // GEO-3312: drawn without controls it was a card nobody could act on, which then changed shape.
     await openTab();
 
-    const card = screen.getByTestId('from-this-debate-unpublished');
-    expect(within(card).getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
-    // No speaker name on the turn: the participant's own name stands in.
-    expect(within(card).getByText('Said by Salina')).toBeInTheDocument();
-    expect(within(card).getByText(/in a minute or two/)).toBeInTheDocument();
-    expect(within(card).queryByRole('button')).toBeNull();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByText('Coffee dates save everyone’s time')).toBeNull();
+    expect(screen.getByTestId('from-this-debate-publishing')).toHaveTextContent(
+      '1 more claim from this debate is publishing to Geo.'
+    );
+    expect(within(screen.getByRole('button', { name: /^From this debate/ })).getByText('1')).toBeInTheDocument();
     expect(mocks.entityIdLookups.flat()).toContain(MINTED);
     expect(mocks.rematchClaimIds.flat()).not.toContain(MINTED);
+  });
+
+  it('says the claims are publishing while none of them is on the graph yet', async () => {
+    mocks.extractedClaims = { turns, claims: [extracted('Coffee dates save everyone’s time', 1, { minted: MINTED })] };
+    await openTab();
+
+    expect(screen.queryByText('Coffee dates save everyone’s time')).toBeNull();
+    expect(
+      screen.getByText('1 claim from this debate is publishing to Geo. It appears here in a minute or two.')
+    ).toBeInTheDocument();
+  });
+
+  it('draws a claim with its controls and who said it once the graph has it, in the card’s meta row', async () => {
+    mocks.entities = [matchedEntity(), publishedEntity(MINTED, 'Coffee dates save everyone’s time')];
+    await openTab();
+
+    expect(screen.getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+    // No speaker name on the turn: the participant's own name stands in.
+    expect(screen.getByText('Said by Salina')).toBeInTheDocument();
+    expect(screen.queryByTestId('from-this-debate-publishing')).toBeNull();
+    expect(screen.getAllByRole('button', { name: /^Agree/ })).toHaveLength(2);
   });
 
   it('keeps asking the graph for the debate’s claims, so an unpublished one gains its controls once published', async () => {
@@ -6293,16 +6781,30 @@ describe('From this debate', () => {
       turns,
       claims: [
         extracted('Written before ids were minted', 0),
-        extracted('Coffee dates save everyone’s time', 1, { minted: MINTED }),
+        extracted('A claim both participants chose', 1, { existing: hex(CLAIM_SHARED) }),
       ],
     };
     await openTab();
 
-    expect(screen.getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     expect(screen.queryByText('Written before ids were minted')).toBeNull();
+    expect(screen.queryByTestId('from-this-debate-publishing')).toBeNull();
   });
 
-  it('appends new claims at the bottom without reordering the ones already listed', async () => {
+  it('groups the claims by round, in the order they were said, as new ones arrive', async () => {
+    roomTurns(4);
+    mocks.entities = [
+      matchedEntity(),
+      publishedEntity(MINTED, 'Coffee dates save everyone’s time'),
+      publishedEntity(MINTED_LATER, 'Dinner is a better first date'),
+    ];
+    mocks.extractedClaims = {
+      turns: transcriptTurns(4),
+      claims: [
+        extracted('A claim both participants chose', 0, { existing: hex(CLAIM_SHARED) }, 20_000),
+        extracted('Coffee dates save everyone’s time', 1, { minted: MINTED }, 70_000),
+      ],
+    };
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
     fireEvent.click(await screen.findByRole('button', { name: /^From this debate/ }));
     await settleTabSwap();
@@ -6312,25 +6814,53 @@ describe('From this debate', () => {
           /^(A claim both participants chose|Coffee dates save everyone’s time|Dinner is a better first date)$/
         )
         .map(node => node.textContent);
+    const headings = () =>
+      within(screen.getByTestId('from-this-debate-rounds'))
+        .getAllByRole('heading')
+        .map(heading => heading.textContent);
+    const coffeeCard = () => screen.getByText('Coffee dates save everyone’s time').closest('article');
     expect(order()).toEqual(['A claim both participants chose', 'Coffee dates save everyone’s time']);
+    expect(headings()).toEqual(['Round 1 · Opening']);
+    const cardBefore = coffeeCard();
 
-    // The next poll lists the claims the other way round and adds one between them.
+    // The final pass finds one said before everything listed, and moves one to the next round.
     mocks.extractedClaims = {
-      turns,
+      turns: transcriptTurns(4),
       claims: [
-        extracted('Coffee dates save everyone’s time', 0, { minted: MINTED }),
-        extracted('Dinner is a better first date', 0, { minted: MINTED_LATER }),
-        extracted('A claim both participants chose', 1, { existing: hex(CLAIM_SHARED) }),
+        extracted('A claim both participants chose', 0, { existing: hex(CLAIM_SHARED) }, 20_000),
+        extracted('Coffee dates save everyone’s time', 2, { minted: MINTED }, 130_000),
+        extracted('Dinner is a better first date', 0, { minted: MINTED_LATER }, 5_000),
       ],
     };
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
     await settleTabSwap();
 
-    expect(order()).toEqual([
-      'A claim both participants chose',
-      'Coffee dates save everyone’s time',
-      'Dinner is a better first date',
-    ]);
+    await waitFor(() =>
+      expect(order()).toEqual([
+        'Dinner is a better first date',
+        'A claim both participants chose',
+        'Coffee dates save everyone’s time',
+      ])
+    );
+    // Named the way the room named them, from the source debate's turn count.
+    expect(headings()).toEqual(['Round 1 · Opening', 'Round 2 · Rebuttal']);
+    // The same card, moved rather than remounted, so its own state — a failed response's error, a
+    // response in flight — goes with it (Copilot, PR #2861).
+    expect(coffeeCard()).toBe(cardBefore);
+    // Turns 0 and 2 are both the viewer's.
+    expect(screen.getAllByText('Said by You')).toHaveLength(3);
+  });
+
+  it('draws no round headings when the transcript’s turns do not line up with the room’s', async () => {
+    // A silent turn: the transcript ran two turns where the room ran four, so its turn 1 is the
+    // room's turn 3, a rebuttal, and calling it the opening would be wrong (Copilot, PR #2861).
+    roomTurns(4);
+    mocks.entities = [matchedEntity(), publishedEntity(MINTED, 'Coffee dates save everyone’s time')];
+    await openTab();
+
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+    expect(within(screen.getByTestId('from-this-debate-rounds')).queryAllByRole('heading')).toHaveLength(0);
   });
 
   it('says extraction is still running while the payload is empty, and stops saying so once it is final', async () => {
@@ -6347,6 +6877,38 @@ describe('From this debate', () => {
     expect(screen.getByText('No claims from this debate are left to debate.')).toBeInTheDocument();
   });
 
+  it('keeps a refused request on its card, in a round that cannot be collapsed out from under it', async () => {
+    // A collapsed round unmounted its cards while the page still counted the target as on screen,
+    // so a refusal landing after the collapse was shown nowhere (Copilot, PR #2861).
+    mocks.requestError = new Error('respond to this claim before requesting a rematch');
+    mocks.requestVariables = { claim_id: CLAIM_SHARED, source_space_id: SPACE_1 };
+    await openTab();
+
+    const rounds = screen.getByTestId('from-this-debate-rounds');
+    expect(within(rounds).getByRole('heading', { name: 'Round 1 · Opening' })).toBeInTheDocument();
+    expect(within(rounds).queryAllByRole('button', { expanded: true })).toHaveLength(0);
+    const card = screen.getByText('A claim both participants chose').closest('article');
+    expect(within(card!).getByRole('alert')).toHaveTextContent('respond to this claim before requesting a rematch');
+  });
+
+  it('says more are publishing when every published claim is already debated, rather than that none are left', async () => {
+    // Shared is published and debated; the minted one is still on its way to the graph.
+    mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+    await openTab();
+
+    expect(
+      screen.getByText('1 claim from this debate is publishing to Geo. It appears here in a minute or two.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/already debated every claim here/)).toBeNull();
+    // "None yet", not "none": the count holds its skeleton until a claim to debate arrives.
+    expect(
+      within(screen.getByRole('button', { name: /^From this debate/ })).getByLabelText(
+        'Counting claims from this debate'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Already debated with Salina/ })).toBeInTheDocument();
+  });
+
   it('folds a claim the pair already debated away, and leaves out one the viewer is not interested in', async () => {
     mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
     mocks.notInterestedIds = [MINTED];
@@ -6357,5 +6919,298 @@ describe('From this debate', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Already debated with Salina/ }));
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+});
+
+/**
+ * GEO-3223. The space and topic menus are one row of pills, and the search box answers topics as
+ * well as claims. A phone draws the same row; these cases run at a desktop's width.
+ */
+describe('desktop filter row', () => {
+  beforeEach(() => {
+    mocks.isPhone = false;
+  });
+
+  const pillRow = () => screen.queryByRole('group', { name: 'Filter claims' });
+  const pill = (name: RegExp) => within(pillRow()!).queryByRole('button', { name });
+  const searchBox = () => screen.getByRole('textbox', { name: 'Search claims and topics' });
+
+  it('draws spaces and topics as one row of pills instead of menus', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(pillRow()).toBeInTheDocument());
+    expect(pill(/^Governance\s?\d/)).toBeInTheDocument();
+    // Both of the list's spaces sit in the same row as the topics.
+    expect(pill(/^Crypto/)).toBeInTheDocument();
+    expect(pill(/^Governance space/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+  });
+
+  it('uses the same filter pills on a phone', async () => {
+    mocks.isPhone = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(pillRow()).toBeInTheDocument());
+    expect(pill(/^Governance\s?\d/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Hide my positions' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pick a claim to debate' })).toBeInTheDocument();
+  });
+
+  it('lists every space before any topic, whatever the counts', async () => {
+    // Two claims in the Governance space carry Governance and Ethics, so those topics (2) outnumber
+    // the Crypto space (1) — and still come after it.
+    mocks.entities = [sharedEntity(), publishedEntity(), publishedEntity(CLAIM_FRESH, 'Another published claim')];
+    mocks.debateTagClaims = [
+      debateTag(),
+      debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_1, 2),
+      debateTag(CLAIM_FRESH, 'Another published claim', SPACE_2, 3),
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(pill(/^Governance\s?\d/)).toBeInTheDocument());
+
+    const order = within(pillRow()!)
+      .getAllByRole('button')
+      .map(button => button.textContent ?? '');
+    const lastSpace = Math.max(
+      order.findIndex(text => text.startsWith('Crypto')),
+      order.findIndex(text => text.startsWith('Governance space'))
+    );
+    const firstTopic = Math.min(
+      order.findIndex(text => /^Governance\d/.test(text)),
+      order.findIndex(text => text.startsWith('Ethics'))
+    );
+    expect(lastSpace).toBeLessThan(firstTopic);
+  });
+
+  it('puts the list switch under the search box', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const toggle = await screen.findByText('Hide my positions');
+    expect(searchBox().compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('narrows the list from a topic pill, as the menu did', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(pill(/^Governance\s?\d/)!);
+
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+    expect(pill(/^Governance\s?\d/)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('treats spaces as AND: picking one leaves only what co-occurs with it', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(pill(/^Governance\s?\d/)).toBeInTheDocument());
+
+    // The untagged claim's space: picking it drops the other space and both topics, which only the
+    // other claim carries.
+    fireEvent.click(pill(/^Crypto/)!);
+
+    await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+    expect(pill(/^Crypto/)).toHaveAttribute('aria-pressed', 'true');
+    expect(pill(/^Governance space/)).toBeNull();
+    expect(pill(/^Governance\s?\d/)).toBeNull();
+
+    // The picked pill stays in the row, so un-picking it is the way back, not only "All".
+    fireEvent.click(pill(/^Crypto/)!);
+    await waitFor(() => expect(pill(/^Governance space/)).toBeInTheDocument());
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  it('leaves out a topic every listed claim carries, since it cannot narrow anything', async () => {
+    mocks.entities = [
+      {
+        ...sharedEntity(),
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+        ],
+      },
+      publishedEntity(),
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(pill(/Ethics/)).toBeInTheDocument());
+    expect(pill(/^Governance\s?\d/)).toBeNull();
+  });
+
+  // A claim tagged in two spaces is counted under both space buckets, so adding those up overstates
+  // the list — and a space every claim is in would still read as narrowing.
+  it('counts a claim tagged in two spaces once when deciding what narrows', async () => {
+    mocks.debateTagClaims = [
+      debateTag(),
+      debateTag(CLAIM_MORE, 'A newly published claim', SPACE_1, 1),
+      debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_1, 2),
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(pill(/^Governance space/)).toBeInTheDocument());
+
+    // Both claims are tagged in Crypto, so picking it would change nothing.
+    expect(pill(/^Crypto/)).toBeNull();
+  });
+
+  it('leaves out the space when every listed claim is in it', async () => {
+    mocks.debateTagClaims = [debateTag(), debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_2, 2)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(pill(/^Governance\s?\d/)).toBeInTheDocument());
+    expect(pill(/^Governance space/)).toBeNull();
+  });
+
+  it('opens unfiltered rather than ticking the spaces the viewer belongs to', async () => {
+    mocks.memberSpaceIds = new Set([SPACE_1, SPACE_2]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(pillRow()).toBeInTheDocument());
+    expect(within(pillRow()!).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  it('suggests matching topics under the search box, and picks one in a press', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.change(searchBox(), { target: { value: 'gov' } });
+    const suggestion = await screen.findByRole('button', { name: 'Filter by Governance' });
+    expect(screen.getByRole('group', { name: 'Matching topics' })).toBeInTheDocument();
+
+    fireEvent.click(suggestion);
+
+    expect(searchBox()).toHaveValue('');
+    expect(screen.queryByRole('group', { name: 'Matching topics' })).toBeNull();
+    await waitFor(() => expect(pill(/^Governance\s?\d/)).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+  });
+
+  it('finds a claim through a topic name, and says which topic it matched', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    // The claim's own text never says "ethics"; its Ethics topic does.
+    fireEvent.change(searchBox(), { target: { value: 'ethics' } });
+
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.getByText('Ethics', { selector: 'p span' })).toBeInTheDocument();
+    // Explore asks the server for it: the matched topic rides along with the search.
+    expect(mocks.taggedFiltersAskedFor.at(-1)).toMatchObject({ search: 'ethics', searchTopicIds: ['topic-eth'] });
+  });
+
+  it('keeps every pill up while the search box has text', async () => {
+    mocks.debateTagClaims = [debateTag(), debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_2, 2)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(pill(/^Governance\s?\d/)).toBeInTheDocument());
+    const before = within(pillRow()!).getAllByRole('button').length;
+
+    // Every listed claim is in one space, which leaves that space out; typing holds it still instead.
+    fireEvent.change(searchBox(), { target: { value: 'newly' } });
+
+    expect(within(pillRow()!).getAllByRole('button').length).toBeGreaterThan(before);
+  });
+});
+
+/**
+ * GEO-3433. Click analytics only see a control's `data-geo-analytics-label` (and its aria-label);
+ * visible text is stripped before the warehouse. A room control without one is a click nobody can
+ * name, so every control the room draws, on every tab and in its dialogs, has to carry a label.
+ * The pair header is stubbed here; its controls are covered in rematch-voice.test.tsx.
+ */
+describe('click analytics labels in a debate room', () => {
+  const CONTROLS = 'button, a[href], [role="button"], [role="tab"], [role="menuitem"], [role="radio"]';
+
+  const inLiveRoom = (children: ReactElement) => (
+    <DebateRoomProvider
+      roomId="room-1"
+      presence={{ state: 'present', opponentUserId: 'user-remote', opponentPresent: true }}
+      rejoin={vi.fn().mockResolvedValue(true)}
+    >
+      {children}
+    </DebateRoomProvider>
+  );
+
+  /**
+   * Every control on the page without a label and an intent, described by what it shows. Both, since
+   * a label that travels without its intent drops out of every query that filters on the intent.
+   */
+  function unlabeledControls() {
+    return [...document.body.querySelectorAll(CONTROLS)]
+      .filter(
+        control =>
+          !control.getAttribute('data-geo-analytics-label')?.trim() ||
+          !control.getAttribute('data-geo-analytics-intent')?.trim()
+      )
+      .map(control => `<${control.tagName.toLowerCase()}> ${control.textContent?.trim().slice(0, 60)}`);
+  }
+
+  function request(requesterUserId: string, recipientUserId: string) {
+    return {
+      id: 'request-1',
+      status: 'pending' as const,
+      claim: claimSummary(CLAIM_SHARED, 'A claim both participants chose'),
+      requester_user_id: requesterUserId,
+      recipient_user_id: recipientUserId,
+      requester_position: true,
+      requester_position_label: 'Agree',
+      recipient_position: false,
+      recipient_position_label: 'Disagree',
+      response_kind: 'stance' as const,
+      turn_format_id: 'standard',
+      created_at: '2026-07-10T10:00:00.000Z',
+      expires_at: new Date(Date.now() + 5 * 60_000).toISOString(),
+    };
+  }
+
+  it('labels every control on every tab, the already-debated fold included', async () => {
+    mocks.isPhone = false;
+    mocks.session = session();
+    mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+    mocks.positions = [
+      position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+    ];
+
+    render(inLiveRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+    await settleTabSwap();
+
+    for (const tab of [/^Their positions/, /^My positions/, /^Matches/, /^Explore/]) {
+      fireEvent.click(screen.getByRole('button', { name: tab }));
+      await settleTabSwap();
+      const fold = screen.queryByRole('button', { name: /Already debated with Salina/ });
+      if (fold?.getAttribute('aria-expanded') === 'false') fireEvent.click(fold);
+      expect(unlabeledControls(), String(tab)).toEqual([]);
+    }
+    // Something was actually checked: a claim card's pills and its offer.
+    expect(screen.getAllByRole('button', { name: 'Request debate' }).length).toBeGreaterThan(0);
+  });
+
+  it('labels the incoming request dialog', async () => {
+    mocks.session = session({ status: 'request_pending', request: request('user-remote', 'user-local') });
+
+    render(inLiveRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(unlabeledControls()).toEqual([]);
+  });
+
+  it('labels the outbound request card', async () => {
+    mocks.session = session({ status: 'request_pending', request: request('user-local', 'user-remote') });
+
+    render(inLiveRoom(<DebateRematchPageClient sessionId="rematch-1" />));
+
+    expect(await screen.findByTestId('rematch-outbound-request')).toBeInTheDocument();
+    expect(unlabeledControls()).toEqual([]);
   });
 });

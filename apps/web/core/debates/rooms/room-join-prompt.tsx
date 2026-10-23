@@ -11,13 +11,14 @@ import { Text } from '~/design-system/text';
 import { ThreadAvatar } from '~/partials/comments/thread-avatar';
 
 import type { UpcomingDebateRoom } from '../api';
+import { routeIntoDebate } from '../lobbies/step-out';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { useServerClock } from '../matchmaking/use-request-countdown';
-import { ROOM_JOIN_PROMPT } from './room-copy';
+import { LOBBY_JOIN_PROMPT, ROOM_JOIN_PROMPT } from './room-copy';
 import { opponentName, useUpcomingRoomOpponent } from './room-opponent';
 import { debateRoomPath } from './room-routes';
+import { startOffset } from './room-time';
 
-const MINUTE_MS = 60_000;
 /** Minute-grained copy, so a quarter-minute tick is never more than 15s stale. */
 const TICK_MS = 15_000;
 
@@ -35,6 +36,7 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
 
   const name = opponentName(opponent);
   const schedule = scheduleLabel(new Date(room.starts_at).getTime() - now);
+  const isLobby = room.kind === 'lobby';
 
   return (
     <div className="pointer-events-none fixed top-[calc(2.75rem+0.75rem)] left-1/2 z-1100 flex w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 justify-center">
@@ -58,24 +60,30 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
                 minute, and inside the live region it would be read out every minute. */}
             <div role="status" aria-live="polite">
               <Text as="p" variant="metadataMedium" className="truncate">
-                {ROOM_JOIN_PROMPT.title}
+                {isLobby ? LOBBY_JOIN_PROMPT.title(room.name) : ROOM_JOIN_PROMPT.title}
               </Text>
-              <p className="mt-0.5 flex min-w-0 items-center gap-1.5">
-                <span
-                  aria-hidden
-                  className={cx('size-2 shrink-0 rounded-full', room.others_present ? 'bg-green' : 'bg-grey-03')}
-                />
-                <Text
-                  as="span"
-                  variant="footnoteMedium"
-                  color={room.others_present ? 'text' : 'grey-04'}
-                  className="truncate"
-                >
-                  {room.others_present
-                    ? ROOM_JOIN_PROMPT.opponentJoined(name)
-                    : ROOM_JOIN_PROMPT.opponentNotJoined(name)}
+              {isLobby ? (
+                <Text as="p" variant="footnote" color="grey-04" className="mt-0.5 truncate">
+                  {LOBBY_JOIN_PROMPT.subtitle}
                 </Text>
-              </p>
+              ) : (
+                <p className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                  <span
+                    aria-hidden
+                    className={cx('size-2 shrink-0 rounded-full', room.others_present ? 'bg-green' : 'bg-grey-03')}
+                  />
+                  <Text
+                    as="span"
+                    variant="footnoteMedium"
+                    color={room.others_present ? 'text' : 'grey-04'}
+                    className="truncate"
+                  >
+                    {room.others_present
+                      ? ROOM_JOIN_PROMPT.opponentJoined(name)
+                      : ROOM_JOIN_PROMPT.opponentNotJoined(name)}
+                  </Text>
+                </p>
+              )}
             </div>
             {schedule && (
               <Text as="p" variant="footnote" color="grey-04" className="mt-0.5 truncate">
@@ -98,11 +106,14 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
               {...debateActionAnalyticsAttributes('room-join-prompt', 'Join', 'join_scheduled_debate')}
               onClick={() => {
                 setJoining(true);
-                startJoining(() => router.push(debateRoomPath(room.room_id)));
+                const go = () => startJoining(() => router.push(debateRoomPath(room.room_id)));
+                // Moving to another lobby is a normal leave, not a step-out.
+                if (isLobby) go();
+                else routeIntoDebate(go);
               }}
               className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white transition-opacity hover:opacity-90 disabled:opacity-70"
             >
-              {joining ? 'Joining…' : ROOM_JOIN_PROMPT.join}
+              {joining ? 'Joining…' : isLobby ? LOBBY_JOIN_PROMPT.join : ROOM_JOIN_PROMPT.join}
             </button>
           </div>
         </motion.div>
@@ -111,16 +122,12 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
   );
 }
 
-/**
- * Minutes to the start, or since it. Ahead of the start it rounds up, so the last minute reads
- * "in 1 min" rather than "in 0 mins"; the first minute after it reads as starting now rather than
- * "0 mins ago". `null` for an unparseable start, which has nothing honest to say.
- */
+/** Minutes to the start, or since it, as the prompt says them. See `startOffset` for the rounding. */
 export function scheduleLabel(untilStartMs: number): string | null {
-  if (!Number.isFinite(untilStartMs)) return null;
-  if (untilStartMs > 0) return ROOM_JOIN_PROMPT.scheduledIn(Math.ceil(untilStartMs / MINUTE_MS));
-  const elapsedMinutes = Math.floor(-untilStartMs / MINUTE_MS);
-  return elapsedMinutes < 1 ? ROOM_JOIN_PROMPT.startingNow : ROOM_JOIN_PROMPT.scheduledAgo(elapsedMinutes);
+  const offset = startOffset(untilStartMs);
+  if (offset === null) return null;
+  if (offset === 'now') return ROOM_JOIN_PROMPT.startingNow;
+  return 'in' in offset ? ROOM_JOIN_PROMPT.scheduledIn(offset.in) : ROOM_JOIN_PROMPT.scheduledAgo(offset.ago);
 }
 
 /** The server's clock where it has synced, so a skewed laptop does not misreport the start. */

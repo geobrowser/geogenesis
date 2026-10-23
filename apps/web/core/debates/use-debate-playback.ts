@@ -9,6 +9,8 @@ import { reportEvent } from '~/core/telemetry/logger';
 import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
 import { type RecordingPlaybackVariant, recordingPlaybackVariant } from './mobile-rendition';
+import { debateTurnRoleForDebate, isOpenRoundsDebate } from './open-rounds';
+import { breaksEndMs, playbackBreaksFrom } from './playback-breaks';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
   type PlayBothOutcome,
@@ -27,6 +29,10 @@ import {
   turnStateFromSegments,
   usableTurnDurationsMs,
 } from './playback-utils';
+import { transcriptOnRecordings, turnOnRecordings } from './recording-clock';
+import type { TurnCount } from './round-cues';
+import { speakerStillUrl } from './speaker-still';
+import { type FullPlaybackVariant, recordingStreamVariant } from './stream-playback';
 
 type PlaybackUrls = {
   slot1: string | null;
@@ -139,11 +145,11 @@ const RECORDING_URL_REUSE_MS = 5 * 60_000;
 const MAX_RESIGN_RETRIES = 2;
 const RESIGN_RETRY_DELAY_MS = 2_000;
 
-type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingPlaybackVariant };
+type RecordingUrlRequest = { debateId: string; filename: string; variant?: FullPlaybackVariant };
 
 /**
  * Signs one recording, carrying `variant` only when one is wanted so the default request is
- * unchanged. A mobile rendition that cannot be signed (GEO-3118) falls back to the recording
+ * unchanged. A feed rendition that cannot be signed (GEO-3118) falls back to the recording
  * itself: the rendition is an optimisation, and failing to get one is no reason to show the
  * viewer a load error for a debate that plays.
  */
@@ -151,11 +157,34 @@ function signRecording(
   sign: (request: RecordingUrlRequest) => Promise<{ url: string }>,
   debateId: string,
   filename: string,
-  variant: RecordingPlaybackVariant | undefined
-) {
+  variant: FullPlaybackVariant | undefined,
+  renditionUrls: Set<string>,
+  stream?: StreamSigning
+): Promise<{ url: string }> {
   if (!variant) return sign({ debateId, filename });
-  return sign({ debateId, filename, variant }).catch(() => sign({ debateId, filename }));
+  // A Stream copy (behind `NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK`) falls back the same way, to
+  // whatever the slot would have played without it: on `stream_not_configured`, a copy that is not
+  // ready after all, or any other failure. See `isStreamUnavailableError` for the expected ones.
+  if (variant === 'stream') {
+    return sign({ debateId, filename, variant }).then(
+      result => {
+        stream?.streamUrls.add(result.url);
+        return result;
+      },
+      () => signRecording(sign, debateId, filename, stream?.fallback, renditionUrls)
+    );
+  }
+  return sign({ debateId, filename, variant }).then(
+    result => {
+      renditionUrls.add(result.url);
+      return result;
+    },
+    () => sign({ debateId, filename })
+  );
 }
+
+/** What a `stream` request needs beyond the rendition case: where to record a Stream URL, and what to ask for instead. */
+type StreamSigning = { streamUrls: Set<string>; fallback: RecordingPlaybackVariant | undefined };
 
 export function useDebatePlayback(
   debate: Debate,
@@ -165,6 +194,17 @@ export function useDebatePlayback(
   const recordingUrls = useRecordingPlaybackUrl();
   const [urls, setUrls] = React.useState<PlaybackUrls>({ slot1: null, slot2: null });
   const urlsCommittedAtRef = React.useRef<number | null>(null);
+  /**
+   * The signed URLs that are a feed rendition rather than the recording itself (GEO-3118).
+   *
+   * A slot asked for the rendition may still be holding the recording, since a rendition that
+   * cannot be signed falls back to it. The player has to know which it got, because the two load
+   * differently: the raw WebM has no cues and needs `preload="auto"` to load at all, the
+   * faststart MP4 does not and should not pull its whole file for a card nobody is watching.
+   */
+  const renditionUrlsRef = React.useRef(new Set<string>());
+  /** The signed URLs that are a Cloudflare Stream HLS manifest, which the player attaches differently. */
+  const streamUrlsRef = React.useRef(new Set<string>());
   // Held URLs aged past the reuse window while released; the player renders no <video> until they
   // are re-signed, so a lapsed URL never reaches an element.
   const [urlsLapsed, setUrlsLapsed] = React.useState(false);
@@ -200,6 +240,8 @@ export function useDebatePlayback(
   const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const slot2VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
+  // An automatic cut holds physical playback without changing the viewer's play/pause intent.
+  const transitionHoldRef = React.useRef<{ resume: boolean } | null>(null);
   /**
    * The pair still needs moving to where playback will start (GEO-2965).
    *
@@ -341,13 +383,30 @@ export function useDebatePlayback(
 
   // GEO-2949. `turn_durations_ms` is the format's allowance, not what the render cut. Debaters
   // end turns early, so switching the audible panel on the allowance runs late on every turn.
-  // The media query is the same one the feed card already issues, so this is a cache read rather
-  // than a second request; `turn_segments` is absent on older API replicas and on a debate whose
-  // media job has not finished, and the allowance remains the fallback for both.
+  // Shares the feed card's media cache entry, since `debateQueryKeys.media` is dashless whichever
+  // spelling the caller holds. `turn_segments` is absent on older API replicas and on a debate
+  // whose media job has not finished, and the allowance remains the fallback for both.
   const mediaQuery = useDebateMedia(debate.id, enabled);
-  const turnSegments = React.useMemo(
-    () => sortTurnSegments(mediaQuery.data?.turn_segments ?? []),
+  /**
+   * This player plays the raw recordings, so it reads every time on their clock: the source times
+   * the API serves beside the rendered video's, which an Open rounds render edits (GEO-3293).
+   */
+  const recordingTurns = React.useMemo(
+    () => (mediaQuery.data?.turn_segments ?? []).map(turnOnRecordings),
     [mediaQuery.data?.turn_segments]
+  );
+  const turnSegments = React.useMemo(() => sortTurnSegments(recordingTurns), [recordingTurns]);
+  /**
+   * The breaks between Open rounds and the early ends, at their real length on this clock, and the
+   * picks the breaks reveal. Empty on a fixed format.
+   *
+   * Built from every turn, not `turnSegments`, which leaves out a turn with no length. A debater
+   * who yields at once still ends their round there, and the pick window and the early end's two
+   * debaters are found from that turn.
+   */
+  const playbackBreaks = React.useMemo(
+    () => playbackBreaksFrom(debate, mediaQuery.data, recordingTurns),
+    [debate, mediaQuery.data, recordingTurns]
   );
   /**
    * Every turn's place on the timeline, for anything that has to name a turn rather than time it.
@@ -374,6 +433,11 @@ export function useDebatePlayback(
    * segments instead: that is still what was recorded, where the catalog would be a guess.
    */
   const turnCount = turnDurations?.length ?? turnSegments.length;
+  /** What the round cues call each turn: by count for a fixed format, as named for Open rounds. */
+  const roundTurns = React.useMemo<TurnCount>(
+    () => (isOpenRoundsDebate(debate) ? turnIndex => debateTurnRoleForDebate(debate, turnIndex) : turnCount),
+    [debate, turnCount]
+  );
   const turnStateAt = React.useCallback(
     (seconds: number): TurnState =>
       turnSegments.length > 0
@@ -390,11 +454,12 @@ export function useDebatePlayback(
   const timelineSeconds = React.useMemo(
     () =>
       turnSegments.length > 0
-        ? timelineSecondsForSegments(turnSegments)
+        ? // A final End's reveal plays after the last turn (GEO-3276).
+          Math.max(timelineSecondsForSegments(turnSegments), breaksEndMs(playbackBreaks.breaks) / 1_000)
         : turnDurations
           ? timelineSecondsFor(turnDurations)
           : 0,
-    [turnDurations, turnSegments]
+    [playbackBreaks.breaks, turnDurations, turnSegments]
   );
 
   /**
@@ -423,18 +488,36 @@ export function useDebatePlayback(
   const slot2Recording = debate.recordings.find(recording => recording.participant_slot === 2) ?? null;
   const slot1RecordingFilename = slot1Recording?.filename ?? null;
   const slot2RecordingFilename = slot2Recording?.filename ?? null;
-  // Which file of each recording to sign: the 720p H.264 rendition on a phone, when the flag is on
-  // and geo-chat has written one (GEO-3118); otherwise the recording itself, as before. Decided
-  // per slot, since a rendition can exist for one recording before the other.
+  // Which file of each recording to sign: the 480p H.264 feed rendition, on any device that can
+  // play it, when the flag is on and geo-chat has written one (GEO-3118); otherwise the recording
+  // itself, as before. Decided per slot, since a rendition can exist for one recording before the
+  // other.
   const slot1MobileContentType = slot1Recording?.mobile_content_type ?? null;
   const slot2MobileContentType = slot2Recording?.mobile_content_type ?? null;
-  const slot1Variant = React.useMemo(
+  const slot1Rendition = React.useMemo(
     () => recordingPlaybackVariant({ mobile_content_type: slot1MobileContentType }),
     [slot1MobileContentType]
   );
-  const slot2Variant = React.useMemo(
+  const slot2Rendition = React.useMemo(
     () => recordingPlaybackVariant({ mobile_content_type: slot2MobileContentType }),
     [slot2MobileContentType]
+  );
+  // Ahead of both, the recording's Cloudflare Stream copy, when `NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK`
+  // is on and geo-chat says it is ready; falling back to the choice above if it cannot be signed.
+  // With the flag off this is always `undefined` and the variants are exactly the ones above.
+  const slot1StreamReady = slot1Recording?.stream_ready === true;
+  const slot2StreamReady = slot2Recording?.stream_ready === true;
+  const slot1Variant: FullPlaybackVariant | undefined =
+    recordingStreamVariant({ stream_ready: slot1StreamReady }) ?? slot1Rendition;
+  const slot2Variant: FullPlaybackVariant | undefined =
+    recordingStreamVariant({ stream_ready: slot2StreamReady }) ?? slot2Rendition;
+  const slot1Stream = React.useMemo<StreamSigning>(
+    () => ({ streamUrls: streamUrlsRef.current, fallback: slot1Rendition }),
+    [slot1Rendition]
+  );
+  const slot2Stream = React.useMemo<StreamSigning>(
+    () => ({ streamUrls: streamUrlsRef.current, fallback: slot2Rendition }),
+    [slot2Rendition]
   );
 
   // How far each recording's own timeline sits from the debate-timeline origin, so the two
@@ -457,7 +540,10 @@ export function useDebatePlayback(
   const activeSlot = React.useMemo(() => turnStateAt(playheadSeconds)?.slot ?? null, [playheadSeconds, turnStateAt]);
 
   const transcriptQuery = useDebateTranscript(debate.id, 'json', enabled);
-  const transcriptSegments = transcriptQuery.data?.segments ?? NO_TRANSCRIPT_SEGMENTS;
+  const transcriptSegments = React.useMemo(
+    () => transcriptOnRecordings(transcriptQuery.data?.segments ?? NO_TRANSCRIPT_SEGMENTS),
+    [transcriptQuery.data?.segments]
+  );
   const subtitle = React.useMemo(() => {
     if (!activeSlot) return null;
     const playheadMs = playheadSeconds * 1_000;
@@ -541,6 +627,7 @@ export function useDebatePlayback(
      * different `src`, and `debateGenerationRef` for the refusal write, which deliberately runs
      * above that check and would re-latch the tap control on a debate nothing has asked about yet.
      */
+    transitionHoldRef.current = null;
     resumeGenerationRef.current++;
     debateGenerationRef.current++;
     // And so does any rebuild still waiting on an element that is about to hold a different
@@ -549,8 +636,22 @@ export function useDebatePlayback(
     refreshedSlotsRef.current.clear();
 
     Promise.all([
-      signRecording(recordingUrlsRef.current.lookup, debate.id, slot1RecordingFilename, slot1Variant),
-      signRecording(recordingUrlsRef.current.lookup, debate.id, slot2RecordingFilename, slot2Variant),
+      signRecording(
+        recordingUrlsRef.current.lookup,
+        debate.id,
+        slot1RecordingFilename,
+        slot1Variant,
+        renditionUrlsRef.current,
+        slot1Stream
+      ),
+      signRecording(
+        recordingUrlsRef.current.lookup,
+        debate.id,
+        slot2RecordingFilename,
+        slot2Variant,
+        renditionUrlsRef.current,
+        slot2Stream
+      ),
     ])
       .then(([slot1Result, slot2Result]) => {
         // Cancelled mid-flight: commit nothing and leave the key unclaimed so the next run
@@ -594,11 +695,19 @@ export function useDebatePlayback(
     slot2RecordingFilename,
     slot1Variant,
     slot2Variant,
+    slot1Stream,
+    slot2Stream,
   ]);
 
   // Nothing may outlive the card: a pending rejoin holds listeners on an element that is going
   // away, and a count that nothing would ever decrement.
-  React.useEffect(() => cancelRecoveries, [cancelRecoveries]);
+  React.useEffect(
+    () => () => {
+      transitionHoldRef.current = null;
+      cancelRecoveries();
+    },
+    [cancelRecoveries]
+  );
 
   /**
    * Which slots have already been handed a freshly signed URL (GEO-2985).
@@ -625,9 +734,14 @@ export function useDebatePlayback(
    * take the healthy tile down to "Loading…" and release a video the viewer is watching. Nothing
    * about a dead recording is a reason to interrupt the live one.
    */
+  /*
+   * `abandonStream`: the slot's Cloudflare Stream source died in hls.js, so sign what it would have
+   * played without Stream instead of the same manifest again.
+   */
   const refreshSlotUrl = React.useCallback(
-    async (slot: 1 | 2) => {
-      if (refreshedSlotsRef.current.has(slot)) return;
+    async (slot: 1 | 2, { abandonStream = false }: { abandonStream?: boolean } = {}) => {
+      // Abandoning Stream may follow an ordinary re-sign; it cannot repeat, as what it signs is not a stream.
+      if (refreshedSlotsRef.current.has(slot) && !abandonStream) return;
       const filename = slot === 1 ? slot1RecordingFilename : slot2RecordingFilename;
       if (!filename) return;
       refreshedSlotsRef.current.add(slot);
@@ -638,7 +752,9 @@ export function useDebatePlayback(
           recordingUrlsRef.current.refresh,
           debate.id,
           filename,
-          slot === 1 ? slot1Variant : slot2Variant
+          abandonStream ? (slot === 1 ? slot1Rendition : slot2Rendition) : slot === 1 ? slot1Variant : slot2Variant,
+          renditionUrlsRef.current,
+          slot === 1 ? slot1Stream : slot2Stream
         );
         // Merged rather than replaced: the other slot's URL is in use and is not ours to touch.
         setUrls(current =>
@@ -650,7 +766,17 @@ export function useDebatePlayback(
         /* The tile has already shown what it shows when a recording cannot be revived. */
       }
     },
-    [debate.id, slot1RecordingFilename, slot2RecordingFilename, slot1Variant, slot2Variant]
+    [
+      debate.id,
+      slot1RecordingFilename,
+      slot2RecordingFilename,
+      slot1Variant,
+      slot2Variant,
+      slot1Rendition,
+      slot2Rendition,
+      slot1Stream,
+      slot2Stream,
+    ]
   );
 
   // While released, mark the held URLs lapsed once they reach the reuse window. Rechecked when the
@@ -679,8 +805,22 @@ export function useDebatePlayback(
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     Promise.all([
-      signRecording(recordingUrlsRef.current.refresh, debate.id, slot1RecordingFilename, slot1Variant),
-      signRecording(recordingUrlsRef.current.refresh, debate.id, slot2RecordingFilename, slot2Variant),
+      signRecording(
+        recordingUrlsRef.current.refresh,
+        debate.id,
+        slot1RecordingFilename,
+        slot1Variant,
+        renditionUrlsRef.current,
+        slot1Stream
+      ),
+      signRecording(
+        recordingUrlsRef.current.refresh,
+        debate.id,
+        slot2RecordingFilename,
+        slot2Variant,
+        renditionUrlsRef.current,
+        slot2Stream
+      ),
     ])
       .then(([slot1Result, slot2Result]) => {
         if (cancelled) return;
@@ -714,6 +854,8 @@ export function useDebatePlayback(
     slot2RecordingFilename,
     slot1Variant,
     slot2Variant,
+    slot1Stream,
+    slot2Stream,
   ]);
 
   // Reaching the card (active or preloading) gives a re-sign that ran out of retries another go.
@@ -779,6 +921,10 @@ export function useDebatePlayback(
       // A deliberate position is where playback will start from, so it is the preposition too.
       needsPrepositionRef.current = false;
     }
+
+    // The incoming cut position is already published by seekBoth. Do not correct, advance or
+    // interpret this deliberately paused pair until both decoders can present it.
+    if (transitionHoldRef.current) return;
 
     // See `needsPrepositionRef`. Only for a pair nothing has started or moved yet, and only once
     // both know their shape: before `HAVE_METADATA` a seek has nothing to land on.
@@ -1028,6 +1174,7 @@ export function useDebatePlayback(
   }, [offsets, seekVideosTo, timelineSeconds, turnStateAt]);
 
   const pauseBoth = React.useCallback(() => {
+    if (transitionHoldRef.current) transitionHoldRef.current.resume = false;
     // Supersede any resume still confirming, so it cannot un-pause the viewer.
     resumeGenerationRef.current++;
     for (const video of videos()) video.pause();
@@ -1038,6 +1185,12 @@ export function useDebatePlayback(
 
   const resumeBoth = React.useCallback(
     async (fromSeconds?: number) => {
+      if (transitionHoldRef.current) {
+        transitionHoldRef.current.resume = true;
+        setPlaying(true);
+        setUserPaused(false);
+        return;
+      }
       const primaryVideo = slot1VideoRef.current;
       const secondaryVideo = slot2VideoRef.current;
       if (!primaryVideo || !secondaryVideo) return;
@@ -1185,7 +1338,40 @@ export function useDebatePlayback(
     [offsets, seekVideosTo, setMutedByUser, timelineSeconds]
   );
 
+  const holdForTransition = React.useCallback(() => {
+    const hold = {
+      resume:
+        transitionHoldRef.current?.resume ??
+        (playing || resumesInFlightRef.current > 0 || videos().some(video => !video.paused)),
+    };
+    transitionHoldRef.current = hold;
+    // Retire a resume still confirming before pausing, just as suspend and scrub do.
+    resumeGenerationRef.current++;
+    for (const video of videos()) video.pause();
+    return {
+      release: () => {
+        if (transitionHoldRef.current !== hold) return;
+        transitionHoldRef.current = null;
+        const position = pairPlayhead(
+          slot1VideoRef.current,
+          slot2VideoRef.current,
+          offsets,
+          lastRunningPlayheadRef.current
+        ).seconds;
+        if (hold.resume && position < timelineSeconds - PLAYBACK_END_EPSILON_SECONDS) void resumeBoth();
+        else setPlaying(false);
+      },
+      cancel: () => {
+        if (transitionHoldRef.current !== hold) return;
+        transitionHoldRef.current = null;
+        // Source changes, errors and leaving the card return ownership to normal autoplay.
+        setPlaying(false);
+      },
+    };
+  }, [offsets, playing, resumeBoth, timelineSeconds, videos]);
+
   const playFromStart = React.useCallback(async () => {
+    transitionHoldRef.current = null;
     const primaryVideo = slot1VideoRef.current;
     const secondaryVideo = slot2VideoRef.current;
     if (!primaryVideo || !secondaryVideo) return;
@@ -1305,16 +1491,25 @@ export function useDebatePlayback(
   );
 
   const seekBoth = React.useCallback(
-    (seconds: number) => {
+    (seconds: number, { preserveTransitionHold = false }: { preserveTransitionHold?: boolean } = {}) => {
       const nextTime = clampSeconds(seconds, timelineSeconds);
+      // Automatic cuts seek under their captured frames. A manual seek owns the playhead instead:
+      // retire that hold before the player's seek generation disposes it, preserving pause intent.
+      const interruptedHold = preserveTransitionHold ? null : transitionHoldRef.current;
+      if (interruptedHold) transitionHoldRef.current = null;
       needsPrepositionRef.current = false;
       pendingSeekSecondsRef.current = nextTime;
       if (seekVideosTo(nextTime)) pendingSeekSecondsRef.current = null;
       setPlayheadSeconds(nextTime);
       setTurnState(turnStateAt(nextTime));
       window.requestAnimationFrame(updateTurnState);
+      if (interruptedHold) {
+        if (interruptedHold.resume && nextTime < timelineSeconds - PLAYBACK_END_EPSILON_SECONDS) {
+          void resumeBoth(nextTime);
+        } else setPlaying(false);
+      }
     },
-    [seekVideosTo, timelineSeconds, turnStateAt, updateTurnState]
+    [resumeBoth, seekVideosTo, timelineSeconds, turnStateAt, updateTurnState]
   );
 
   const ready = Boolean(urls.slot1 && urls.slot2);
@@ -1456,6 +1651,7 @@ export function useDebatePlayback(
   // Autoplay control for the feed: when a debate scrolls out of view we pause it
   // silently (without flipping userPaused, so it can auto-resume when back in view).
   const suspend = React.useCallback(() => {
+    transitionHoldRef.current = null;
     // The card left the viewport; a resume still confirming is stale by definition.
     resumeGenerationRef.current++;
     for (const video of videos()) video.pause();
@@ -1473,6 +1669,7 @@ export function useDebatePlayback(
     // overwrite it with the now-paused `playing` value.
     if (isScrubbingRef.current) return;
     isScrubbingRef.current = true;
+    transitionHoldRef.current = null;
     // The drag owns the playhead now; don't let a pending resume fight it.
     resumeGenerationRef.current++;
     wasPlayingBeforeScrubRef.current = playing;
@@ -1490,6 +1687,16 @@ export function useDebatePlayback(
     if (wasPlayingBeforeScrubRef.current && !playbackEnded) void resumeBoth();
   }, [playbackEnded, resumeBoth]);
 
+  /**
+   * Where the recordings really are right now, on the debate's clock, in ms: slot 1's element, the
+   * pair's clock, with its offset added, as `pairPlayhead` reads it. Unlike the playhead it stops
+   * when a stall does, so a decision that must not run ahead of the media (a break's cut) can wait.
+   */
+  const livePositionMs = React.useCallback(() => {
+    const primary = slot1VideoRef.current;
+    return primary ? pairPlayhead(primary, slot2VideoRef.current, offsets).seconds * 1_000 : null;
+  }, [offsets]);
+
   return {
     /** Held URLs lapsed while released and are being re-signed; render no <video> meanwhile. */
     urlsLapsed,
@@ -1497,7 +1704,21 @@ export function useDebatePlayback(
     slot2VideoRef,
     slot1Participant,
     slot2Participant,
+    // Per-tile stills from the media artifacts already in hand, for the card to paint before video
+    // data arrives (GEO-3280). Null where geo-chat cut none.
+    slot1Poster: speakerStillUrl(debate.id, 1, mediaQuery.data?.artifacts),
+    slot2Poster: speakerStillUrl(debate.id, 2, mediaQuery.data?.artifacts),
     urls,
+    /** Per slot: whether the URL in `urls` is the feed rendition rather than the raw recording. */
+    renditions: {
+      slot1: urls.slot1 != null && renditionUrlsRef.current.has(urls.slot1),
+      slot2: urls.slot2 != null && renditionUrlsRef.current.has(urls.slot2),
+    },
+    /** Per slot: whether the URL in `urls` is a Cloudflare Stream HLS manifest (see `stream-playback.ts`). */
+    streams: {
+      slot1: urls.slot1 != null && streamUrlsRef.current.has(urls.slot1),
+      slot2: urls.slot2 != null && streamUrlsRef.current.has(urls.slot2),
+    },
     // A debate that cannot be timed is never ready, so nothing autoplays it on a zero-length
     // timeline; `error` carries the reason to the card.
     ready: ready && !timingUnavailable,
@@ -1511,10 +1732,14 @@ export function useDebatePlayback(
     mutedByUser,
     setMutedByUser,
     playheadSeconds,
+    livePositionMs,
     timelineSeconds,
     turnState,
     turnSpans,
+    turnSegments,
     turnCount,
+    roundTurns,
+    playbackBreaks,
     activeSlot,
     subtitle,
     onPlaybackTick: updateTurnState,
@@ -1523,6 +1748,7 @@ export function useDebatePlayback(
     togglePlayback,
     playFromStart,
     resumeBoth,
+    holdForTransition,
     suspend,
     seekBoth,
     beginScrub,

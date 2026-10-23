@@ -4,32 +4,36 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, motion } from 'framer-motion';
-import { useAtomValue } from 'jotai';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { DEBATES_MODAL } from '~/core/debates/debates-panel-deep-link';
-import { requestsModal } from '~/core/deep-links/modal-deep-link';
+import { requestsModal, urlWithoutModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 
+import { Calendar } from '~/design-system/icons/calendar';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { ExpandSmall } from '~/design-system/icons/expand-small';
-import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
+import { MobileSheetSurface } from '~/design-system/mobile-sheet-surface';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
+import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
-import { toClaimsFilterSearch } from './claims-filter-params';
+import { useLobbyLineup } from '../lobbies/live-lobbies';
+import { UpcomingLobbiesCard } from '../lobbies/lobbies-card';
+import { LobbySpotlight } from '../lobbies/lobby-spotlight';
 import { ClaimsTab } from './claims-tab';
+import { calendarHref } from './debate-calendar-route';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { hubAnalyticsAttributes } from './hub-analytics';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
-import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
+import { HUB_ICON_BUTTON_CLASS_NAME, hubPillClassName } from './hub-pill-button';
 import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
@@ -40,18 +44,8 @@ import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useHubFilterOwner } from './use-hub-filter-owner';
 import { useRequestsTabCount } from './use-requests-tab-count';
-import {
-  type DebatesHubTab,
-  debatesHubExploreSearchAtom,
-  debatesHubExploreSpaceIdsAtom,
-  debatesHubExploreTopicIdsAtom,
-  debatesHubLobbySearchAtom,
-  debatesHubLobbySpaceIdsAtom,
-  debatesHubLobbyTopicIdsAtom,
-  debatesHubPositionsSearchAtom,
-  debatesHubPositionsSpaceIdsAtom,
-  debatesHubPositionsTopicIdsAtom,
-} from '~/atoms';
+import { isWorkspaceList, useWorkspaceQuery, workspaceHref } from './use-workspace-query';
+import { type DebatesHubTab } from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -62,7 +56,7 @@ const MOBILE_SHEET_TOP_OFFSET_PX = 120;
 // separately, by `DEFAULT_TAB` in use-debates-hub — it happens to agree with this order, but
 // reordering here does not move it.
 const TABS: { id: DebatesHubTab; label: string }[] = [
-  { id: 'lobby', label: 'Lobby' },
+  { id: 'lobby', label: 'Live' },
   { id: 'people', label: 'People' },
   { id: 'explore', label: 'Explore' },
   // "My", because the debate-again picker beside it lists two people's positions and says whose
@@ -90,10 +84,12 @@ function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHu
 
 export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
+  const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
-  const { dragControls, handleDragEnd, handlePointerDown, setOverlayElement } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
     enabled: isMobile && isOpen,
     onDismiss: close,
+    peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
   });
   // Held here rather than per tab, so switching tabs doesn't drop and re-take the gateway scope.
   useMatchmakingScope(isOpen);
@@ -199,35 +195,26 @@ export function DebatesHubPanel() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.15 }}
-          onPointerDown={handlePointerDown}
         >
           {/* Not a button: `aria-modal` hides it from assistive tech anyway, so labelling it
               "Close" only promised a control nobody could hear about — the header's button is the
               announced one. Tapping outside still closes, which is what this is for. */}
           <div aria-hidden className="absolute inset-0 bg-grey-04/50" onClick={close} />
-          <motion.div
+          <MobileSheetSurface
             ref={sheetRef as React.RefObject<HTMLDivElement>}
             tabIndex={-1}
             data-debates-hub
-            data-mobile-sheet-surface
             role="dialog"
             aria-modal="true"
             aria-label="Debates"
-            drag="y"
-            dragControls={dragControls}
-            dragListener={false}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.12}
-            onDragEnd={handleDragEnd}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-            className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
-            style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
+            sheetStyle={sheetStyle}
+            sheet={sheet}
           >
-            <MobileSheetGrabHandle />
-            {body}
-          </motion.div>
+            <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
+              {body}
+            </ElevatedPopoverPortalContext.Provider>
+            <div ref={setPopoverContainer} />
+          </MobileSheetSurface>
         </motion.div>
       </MotionConfig>,
       document.body
@@ -264,6 +251,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
   const { data: requests } = useDebateRequests(authenticated);
 
   const requestCount = useRequestsTabCount({ authenticated, activity, requests });
+  const lobbyLineup = useLobbyLineup();
+  // A live lobby, or one opening within 15 minutes, takes the banner's place above the tabs
+  // (GEO-3268). The schedule banner comes back once neither is true.
+  const lobbySpotlight = lobbyLineup.live.length > 0 || lobbyLineup.soon !== null;
   const scrollRef = React.useRef<HTMLDivElement>(null);
   // Shared so the banner can hand focus up to the header's calendar when it leaves.
   const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -285,6 +276,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           Debates
         </Text>
         <HubHeaderControls scheduleButtonRef={scheduleButtonRef}>
+          <CalendarButton />
           {onClose ? (
             <button
               type="button"
@@ -300,7 +292,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         </HubHeaderControls>
       </div>
 
-      <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} />
+      {lobbySpotlight ? <LobbySpotlight lineup={lobbyLineup} /> : null}
+      {/* Kept mounted under the spotlight: it holds the schedule dialog, which a lobby going live
+          would otherwise close mid-edit. */}
+      <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} hidden={lobbySpotlight} />
 
       {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
           restoration, so a row drawn before then is the signed-out one — a returning viewer would
@@ -360,6 +355,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             corrects both. One render, but it is the wrong viewer's data. */}
         {!ready || !filtersReconciled ? null : (
           <>
+            {/* Requests lists the lobbies the viewer is going to or hosts itself (GEO-3292). */}
+            {activeTab === 'requests' ? null : <UpcomingLobbiesCard />}
             <HubSwap activeKey={activeTab}>
               {activeTab === 'requests' ? (
                 <RequestsTab />
@@ -395,44 +392,43 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 }
 
 /**
- * The way out to the full-screen hub at `/matchmaking`.
+ * Calendar (GEO-3152): everyone's free time as a full-screen week. The panel closes on the way, so
+ * it does not sit over the week it opened; "Back to Debates" there brings it back on this page.
  *
- * Values match the workspace picker (`lobby` / `explore` / `positions`). Lobby is omitted from the
- * URL as the workspace default.
+ * The header's only calendar icon, so it always means everyone's week; your own times are under
+ * the availability pill beside it. Icon-only on a phone, where the sheet also carries Close.
  */
-function workspaceListFor(tab: DebatesHubTab): string | null {
-  if (tab === 'explore' || tab === 'positions' || tab === 'lobby') return tab;
-  return null;
+function CalendarButton() {
+  const { close } = useDebatesHub();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Without the panel's own trigger, which Back to Debates puts back itself. The fragment is read
+  // from the location: neither hook carries it.
+  const from = urlWithoutModal(pathname, searchParams, typeof window === 'undefined' ? '' : window.location.hash);
+  return (
+    <Link
+      href={calendarHref(from)}
+      onClick={close}
+      aria-label="Calendar"
+      data-geo-analytics-label="Debate hub Calendar"
+      data-geo-analytics-intent="open_debate_calendar"
+      className={hubPillClassName('secondary', 'gap-1.5 md:w-7 md:px-0 [&_svg]:shrink-0')}
+    >
+      <Calendar />
+      <span className="md:sr-only">Calendar</span>
+    </Link>
+  );
 }
 
+/** The way out to the full-screen hub, carrying the list on this tab and what narrows it. */
 function ExpandToWorkspaceLink({ activeTab }: { activeTab: DebatesHubTab }) {
   const { close } = useDebatesHub();
-
-  const exploreSearch = useAtomValue(debatesHubExploreSearchAtom);
-  const exploreSpaceIds = useAtomValue(debatesHubExploreSpaceIdsAtom);
-  const exploreTopicIds = useAtomValue(debatesHubExploreTopicIdsAtom);
-  const lobbySearch = useAtomValue(debatesHubLobbySearchAtom);
-  const lobbySpaceIds = useAtomValue(debatesHubLobbySpaceIdsAtom);
-  const lobbyTopicIds = useAtomValue(debatesHubLobbyTopicIdsAtom);
-  const positionsSearch = useAtomValue(debatesHubPositionsSearchAtom);
-  const positionsSpaceIds = useAtomValue(debatesHubPositionsSpaceIdsAtom);
-  const positionsTopicIds = useAtomValue(debatesHubPositionsTopicIdsAtom);
-
-  const filters =
-    activeTab === 'lobby'
-      ? { search: lobbySearch, spaceIds: lobbySpaceIds, topicIds: lobbyTopicIds }
-      : activeTab === 'positions'
-        ? { search: positionsSearch, spaceIds: positionsSpaceIds, topicIds: positionsTopicIds }
-        : activeTab === 'explore'
-          ? { search: exploreSearch, spaceIds: exploreSpaceIds, topicIds: exploreTopicIds }
-          : { search: '', spaceIds: [] as string[], topicIds: [] as string[] };
-
-  const query = toClaimsFilterSearch({ list: workspaceListFor(activeTab), ...filters }, 'lobby');
+  const query = useWorkspaceQuery(isWorkspaceList(activeTab) ? activeTab : null);
 
   return (
     <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">
       <Link
-        href={query ? `/matchmaking?${query}` : '/matchmaking'}
+        href={workspaceHref(query)}
         onClick={close}
         className="flex items-center justify-center gap-1.5 text-metadata text-grey-04 transition-colors hover:text-text"
       >

@@ -1,5 +1,4 @@
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import type { ExploreCompletePopulationScope } from '~/core/explore/fetch-explore-feed';
 import type { EntityFilter } from '~/core/gql/graphql';
 import { normId } from '~/core/utils/norm-id';
 
@@ -31,21 +30,4 @@ export function topicsRelationFilter(topicIds: readonly string[]): EntityFilter 
       },
     })),
   };
-}
-
-/** One population query shared by feed ranking and composition counts. */
-export function topicFeedPopulationScopes(
-  topicId: string,
-  selectedTopicIds: readonly string[],
-  typeIds: readonly string[]
-): ExploreCompletePopulationScope[] {
-  return typeIds.length > 0
-    ? [
-        {
-          typeIds: [...typeIds],
-          entityFilter: topicFeedFilter(topicId, selectedTopicIds),
-          relationFilter: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: topicId } },
-        },
-      ]
-    : [];
 }
