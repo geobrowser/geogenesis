@@ -63,6 +63,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'spaceCalls',
+    label: 'Space calls',
+    description:
+      'Start a call from a space you edit, and join a space’s live call from its page (GEO-3419). Needs geo-chat with space calls.',
+    enabledByDefault: false,
+  },
+  {
     id: 'googleSignIn',
     label: 'Google sign-in',
     description:

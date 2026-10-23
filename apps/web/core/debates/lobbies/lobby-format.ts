@@ -13,6 +13,7 @@ import {
   LOBBY_CLAIM_LISTS_MAX,
   dashlessId,
 } from '../api';
+import type { LobbyRoomNoun } from './lobby-purpose';
 
 /** geo-chat's limit, in characters (code points, not UTF-16 units). */
 export const NAME_MAX_CHARS = 120;
@@ -288,17 +289,20 @@ export function isRemovedFromLobby(error: unknown): error is GeoChatRequestError
   return error instanceof GeoChatRequestError && error.status === 409 && error.code === 'lobby_removed';
 }
 
-/** The other lobby's id, from the 409's `details.current_lobby_id`. */
+/** The other lobby's id, from the 409's `details.current_lobby_id`, or the call's (GEO-3419). */
 export function otherLobbyIdFrom(error: GeoChatRequestError) {
-  const id = error.details?.current_lobby_id;
+  const id = error.details?.current_lobby_id ?? error.details?.current_call_id;
   return typeof id === 'string' && id ? dashlessId(id) : null;
 }
 
-/** What to tell someone geo-chat refused, by its error code; `fallback` for anything else. */
-export function lobbyErrorMessage(error: unknown, fallback: string): string {
+/**
+ * What to tell someone geo-chat refused, by its error code; `fallback` for anything else. `room`
+ * names the room in a space call (GEO-3419), whose errors arrive with the lobby codes.
+ */
+export function lobbyErrorMessage(error: unknown, fallback: string, room: LobbyRoomNoun = 'lobby'): string {
   if (!(error instanceof GeoChatRequestError)) return fallback;
   if (error.status === 429 && error.details?.scope === 'lobby') {
-    return 'Lots of people are joining this lobby right now. Try again in a moment.';
+    return `Lots of people are joining this ${room} right now. Try again in a moment.`;
   }
   if (error.status === 429) return 'That was a lot of tries at once. Wait a moment and try again.';
   switch (error.code) {
@@ -327,22 +331,22 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
     case 'lobby_start_too_far':
       return `Pick a time within ${MAX_SCHEDULE_AHEAD_DAYS} days.`;
     case 'lobby_already_open':
-      return 'This lobby is open now. Join it instead.';
+      return `This ${room} is open now. Join it instead.`;
     case 'lobby_closed':
-      return 'This lobby has closed.';
+      return `This ${room} has closed.`;
     case 'lobby_banned':
-      return 'You can’t join this lobby.';
+      return `You can’t join this ${room}.`;
     case 'lobby_not_found':
-      return 'This lobby no longer exists.';
+      return `This ${room} no longer exists.`;
     case 'lobby_stepped_out':
       return 'You’re in a debate. Voice is back when you return to the room.';
     case 'lobby_not_present':
-      return 'You’re not in the lobby right now. Join it to use voice.';
+      return `You’re not in the ${room} right now. Join it to use voice.`;
     case 'lobby_voice_full': {
       const limit = error.details?.limit;
       return typeof limit === 'number'
-        ? `Voice is full in this lobby (${limit} people). You can still follow along here.`
-        : 'Voice is full in this lobby. You can still follow along here.';
+        ? `Voice is full in this ${room} (${limit} people). You can still follow along here.`
+        : `Voice is full in this ${room}. You can still follow along here.`;
     }
     case 'voice_capacity_reached':
       return 'Voice is busy right now. Try again in a minute.';
@@ -350,29 +354,39 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
     case 'livekit_not_configured':
       return 'Voice is unavailable right now. Try again in a moment.';
     case 'lobby_member_not_found':
-      return 'They aren’t in this lobby anymore.';
+      return `They aren’t in this ${room} anymore.`;
     case 'lobby_target_is_self':
       return 'You can’t do that to yourself.';
     case 'lobby_target_is_host':
       return 'Remove them as host first.';
+    case 'lobby_target_is_space_editor':
+      return 'They host because they edit this space.';
+    case 'call_editor_required':
+      return 'Only editors of this space can start a call.';
+    case 'call_space_unsupported':
+      return 'Calls aren’t available in this space.';
+    case 'call_not_found':
+      return 'This call no longer exists.';
     case 'lobby_creator_host':
-      return 'Only the lobby’s creator can remove their host status.';
+      return room === 'call'
+        ? 'Only the person who started the call can remove their host status.'
+        : 'Only the lobby’s creator can remove their host status.';
     case 'lobby_last_host':
-      return 'Make someone else a host first. The lobby needs one.';
+      return `Make someone else a host first. The ${room} needs one.`;
     case 'lobby_target_banned':
-      return 'They’re banned from this lobby. Unban them first.';
+      return `They’re banned from this ${room}. Unban them first.`;
     case 'lobby_target_not_in_voice':
       return 'Their mic isn’t on.';
     case 'lobby_not_listener':
       return 'Only listeners raise a hand.';
     case 'lobby_removed':
     case 'lobby_guest_removed':
-      return 'A host removed you from this lobby.';
+      return `A host removed you from this ${room}.`;
     case 'guest_cap_reached':
       // A cap of 0 is listening without an account turned off, not full.
       return isGuestListeningOff(error)
-        ? 'Listening without an account isn’t available in this lobby. Create an account to join.'
-        : 'This lobby has as many listeners without an account as it can take. Create an account to join, or try again in a minute.';
+        ? `Listening without an account isn’t available in this ${room}. Create an account to join.`
+        : `This ${room} has as many listeners without an account as it can take. Create an account to join, or try again in a minute.`;
     default:
       return fallback;
   }
@@ -384,9 +398,14 @@ export function isGuestListeningOff(error: unknown) {
 }
 
 /** A refused moderation action. Hosts moderate from inside the lobby only. */
-export function moderationErrorMessage(error: unknown, fallback = 'That didn’t work. Try again.') {
-  if (error instanceof GeoChatRequestError && error.code === 'lobby_not_present') return 'Join the lobby to moderate.';
-  return lobbyErrorMessage(error, fallback);
+export function moderationErrorMessage(
+  error: unknown,
+  fallback = 'That didn’t work. Try again.',
+  room: LobbyRoomNoun = 'lobby'
+) {
+  if (error instanceof GeoChatRequestError && error.code === 'lobby_not_present')
+    return `Join the ${room} to moderate.`;
+  return lobbyErrorMessage(error, fallback, room);
 }
 
 export const MEMBER_ACTION_LABEL: Record<DebateLobbyMemberAction, string> = {
@@ -401,11 +420,20 @@ export const MEMBER_ACTION_LABEL: Record<DebateLobbyMemberAction, string> = {
 };
 
 /** Host actions the viewer may take on `member`, in menu order; geo-chat enforces the same rules. */
+/** Who a host action is on; the call fields are absent in a lobby and from older geo-chat. */
+export type MemberActionTarget = Pick<DebateLobbyMember, 'role' | 'creator'> &
+  Partial<Pick<DebateLobbyMember, 'space_editor' | 'hosting_from_space' | 'stepped_out'>>;
+
 export function memberActions(
   viewer: Pick<DebateLobbyView['viewer'], 'hosting' | 'role' | 'creator'>,
-  member: Pick<DebateLobbyMember, 'role' | 'creator'>,
+  member: MemberActionTarget,
   isSelf: boolean
 ): DebateLobbyMemberAction[] {
+  // A call's editor hosts because of the space (GEO-3419): they may step down for this call and
+  // take it back; nobody else can change it. Stepped down, they are moderated like anyone.
+  const fromSpace = member.hosting_from_space ?? member.space_editor ?? false;
+  if (fromSpace) return isSelf ? ['remove-host'] : [];
+  if (isSelf && member.space_editor && !member.stepped_out) return ['promote'];
   if (!viewer.hosting) return [];
   // The acting host is a speaker: hosting never changes their role, so who hosts is not theirs to change.
   const hostByRole = viewer.role === 'host';

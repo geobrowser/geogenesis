@@ -6,6 +6,7 @@ import { Text } from '~/design-system/text';
 
 import { useGeoChatAuth } from '../hooks';
 import { useLobbyGuestSignIn } from './lobby-guest-sign-in';
+import { useIsCallRoom } from './lobby-purpose';
 import { LOBBY_QUEUED_REQUEST_COPY, useLobbyQueuedRequest } from './lobby-queued-request';
 
 export const LOBBY_GUEST_COPY = {
@@ -20,6 +21,14 @@ export const LOBBY_GUEST_COPY = {
   voteNeedsAccount: 'Voting asks you to create an account.',
   settingUp: 'Setting up your account…',
   settingUpDetail: 'You’ll stay in this lobby and can speak once it’s ready.',
+} as const;
+
+/** A space call's lines where the lobby's mention voting and debating (GEO-3419). */
+export const CALL_GUEST_COPY = {
+  notListening: 'Create an account to speak.',
+  stay: 'You’ll stay in this call.',
+  invite: 'Create an account to speak. You’ll stay in this call.',
+  settingUpDetail: 'You’ll stay in this call and can speak once it’s ready.',
 } as const;
 
 /** Visitors without an account, as the lobby header counts them. */
@@ -68,6 +77,7 @@ export function LobbyGuestBanner({
   const { pending } = useLobbyQueuedRequest();
   // Signed in, waiting for the member view (a new account takes a minute or two): no more asking.
   const { authenticated } = useGeoChatAuth();
+  const copy = useIsCallRoom() ? { ...LOBBY_GUEST_COPY, ...CALL_GUEST_COPY } : LOBBY_GUEST_COPY;
   if (authenticated) {
     return (
       <div role="status" className="rounded-xl bg-grey-01 px-4 py-3" data-testid="lobby-guest-banner">
@@ -75,14 +85,14 @@ export function LobbyGuestBanner({
           {LOBBY_GUEST_COPY.settingUp}
         </Text>
         <Text as="p" variant="footnote" color="grey-04">
-          {LOBBY_GUEST_COPY.settingUpDetail}
+          {copy.settingUpDetail}
         </Text>
       </div>
     );
   }
   const fallback = listening
-    ? { title: LOBBY_GUEST_COPY.listening, detail: LOBBY_GUEST_COPY.invite }
-    : { title: LOBBY_GUEST_COPY.notListening, detail: LOBBY_GUEST_COPY.stay };
+    ? { title: copy.listening, detail: copy.invite }
+    : { title: copy.notListening, detail: copy.stay };
   const title = message?.title ?? (pending ? LOBBY_QUEUED_REQUEST_COPY.prompt(pending.name) : fallback.title);
 
   return (
@@ -98,7 +108,7 @@ export function LobbyGuestBanner({
         </Text>
         {/* On a phone it sits in the bottom bar, where the title says enough. */}
         <Text as="p" variant="footnote" color="grey-02" className="md:hidden">
-          {message?.detail ?? (pending ? LOBBY_GUEST_COPY.invite : fallback.detail)}
+          {message?.detail ?? (pending ? copy.invite : fallback.detail)}
         </Text>
       </div>
       <button

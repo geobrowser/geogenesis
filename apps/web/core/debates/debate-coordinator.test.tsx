@@ -972,6 +972,14 @@ describe('DebateCoordinator', () => {
     expect(nudgePopup.enabled.at(-1)).toBe(false);
   });
 
+  it('keeps the nudge popup off in a space call', async () => {
+    mocks.pathname = '/space/space-1/calls/call-1';
+    nudgePopup.enabled = [];
+    render(<DebateCoordinator />);
+    await waitFor(() => expect(nudgePopup.enabled.length).toBeGreaterThan(0));
+    expect(nudgePopup.enabled).not.toContain(true);
+  });
+
   it('holds an incoming request back while a nudge popup is being answered', async () => {
     mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
     mocks.requests = { outbound: null, incoming: [incomingRequest()] };

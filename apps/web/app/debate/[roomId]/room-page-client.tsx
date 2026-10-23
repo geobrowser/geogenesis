@@ -37,6 +37,7 @@ import { opponentName } from '~/core/debates/rooms/room-opponent';
 import { noticeFrom, sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
+import { useSpaceCallRedirect } from '~/core/space-calls/space-call-page';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Spinner } from '~/design-system/spinner';
@@ -89,6 +90,8 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const signedOut = ready && !authenticated;
   const guestView = useDebateLobbyGuestView(roomId, { enabled: signedOut });
   const knownLobby = isLobby || guestView.data !== undefined;
+  // A space call (GEO-3419) answers as a lobby; it has its own page under its space.
+  const toCall = useSpaceCallRedirect(roomId, knownLobby);
 
   // A room whose debate is over would otherwise mount the picker, flash its claims and redirect
   // into the finished debate. Decided on the debate's own status: a session converts on acceptance,
@@ -113,6 +116,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
 
   // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest, signed out too.
   // A lobby link opens for everyone, including a brand-new account (GEO-3270).
+  if (toCall) return null;
   if (knownLobby) return <DebateLobbyPage key={roomId} lobbyId={roomId} />;
 
   // A room link is pasted into a calendar invite, so the person opening it is often signed out.

@@ -27,6 +27,16 @@ const mocks = vi.hoisted(() => ({
   guestViewEnabled: [] as boolean[],
   notices: [] as unknown[],
   viewerId: 'jordan' as string | null,
+  /** The room is a space call, which `useSpaceCallRedirect` sends to its own page. */
+  toCall: false,
+  toCallEnabled: [] as boolean[],
+}));
+
+vi.mock('~/core/space-calls/space-call-page', () => ({
+  useSpaceCallRedirect: (_roomId: string, enabled: boolean) => {
+    mocks.toCallEnabled.push(enabled);
+    return enabled && mocks.toCall;
+  },
 }));
 
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.viewerId }));
@@ -98,6 +108,8 @@ const converted = { data: { status: 'converted', converted_debate_id: 'debate-1'
 
 afterEach(() => {
   cleanup();
+  mocks.toCall = false;
+  mocks.toCallEnabled = [];
   mocks.session = { data: undefined, isLoading: true };
   mocks.debateStatus = { data: undefined, isLoading: false };
   mocks.replace.mockReset();
@@ -182,6 +194,22 @@ describe('DebateRoomPageClient', () => {
 
     expect(screen.getByText('lobby room-1')).toBeInTheDocument();
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  // GEO-3419: a call answers as a lobby, and is left for its page under its space rather than drawn here.
+  it('draws nothing for a space call while it goes to its own page', () => {
+    mocks.kind = 'lobby';
+    mocks.access = { status: 'not_a_participant' };
+    mocks.toCall = true;
+    const { container } = render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.queryByText('lobby room-1')).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('asks about a call only once the room is known to be a lobby', () => {
+    render(<DebateRoomPageClient roomId="room-1" />);
+    expect(mocks.toCallEnabled.at(-1)).toBe(false);
   });
 
   // Someone early has nothing to do here yet, so the notice says when and sends them somewhere useful.
