@@ -5,7 +5,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import { GeoChatRequestError } from '~/core/debates/api';
+import { GeoChatRequestError, dashlessId } from '~/core/debates/api';
 import { lobbyErrorMessage } from '~/core/debates/lobbies/lobby-format';
 import { HubPillButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { useFeatureFlag } from '~/core/state/feature-flags';
@@ -89,9 +89,9 @@ function SpaceCallEntryInner({ spaceId }: { spaceId: string }) {
   );
 }
 
-/** `409 call_already_live` names the call to join instead. */
+/** `409 call_already_live` names the call to join instead; dashless, as the other call ids here. */
 export function alreadyLiveCallId(error: unknown): string | null {
   if (!(error instanceof GeoChatRequestError) || error.code !== 'call_already_live') return null;
   const id = error.details?.call_id;
-  return typeof id === 'string' && id ? id : null;
+  return typeof id === 'string' && id ? dashlessId(id) : null;
 }

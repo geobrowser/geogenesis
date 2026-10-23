@@ -80,8 +80,12 @@ describe('SpaceCallEntry', () => {
     render(<SpaceCallEntry spaceId="space1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Start call' }));
     const [, options] = mocks.mutate.mock.calls[0]!;
-    options.onError(new GeoChatRequestError('live', 'call_already_live', 409, null, { call_id: 'theirs' }));
-    expect(mocks.push).toHaveBeenCalledWith('/space/space1/calls/theirs');
+    options.onError(
+      new GeoChatRequestError('live', 'call_already_live', 409, null, {
+        call_id: '0D9C1234-0000-4000-8000-0000000000AA',
+      })
+    );
+    expect(mocks.push).toHaveBeenCalledWith('/space/space1/calls/0d9c12340000400080000000000000aa');
   });
 
   it('shows nothing to a non-editor with no call on, or in a space without calls', () => {
