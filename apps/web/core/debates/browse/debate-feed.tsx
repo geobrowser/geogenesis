@@ -34,7 +34,7 @@ import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { type DebateFeedSurface, debateFeedHref } from './debate-feed-url';
 import { DebateInteractionBar } from './debate-interaction-bar';
-import { DebateOverflowMenu } from './debate-overflow-menu';
+import { DebateOverflowMenu, useCanRemoveDebate } from './debate-overflow-menu';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from './feed-full-playback';
 import { DebateShareDialog } from './lazy-share-dialog';
@@ -602,6 +602,8 @@ function DebateFeedItem({
   // Same arguments as the Comments panel's own useComments, so the two share a
   // cache entry and posting there updates this count without a refetch.
   const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId });
+  // Only the debate's editors and debaters get the "…", and the row makes room for it only then.
+  const canRemove = useCanRemoveDebate(debate);
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -672,9 +674,10 @@ function DebateFeedItem({
                 onComment={onOpenComments}
                 onShare={share.onOpen}
                 shareOpen={share.open}
-                overflow={<DebateOverflowMenu debate={debate} />}
+                overflow={canRemove ? <DebateOverflowMenu debate={debate} /> : null}
               />
             }
+            wideActions={canRemove}
           />
         </div>
         {/* `top-full` hangs it just below the debate without taking part in the column's

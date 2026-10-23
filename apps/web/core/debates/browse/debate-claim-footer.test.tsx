@@ -225,4 +225,13 @@ describe('DebateClaimFooter', () => {
       'claim-row-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
     );
   });
+
+  // A third action needs a wider row to stay beside the pills, so it wraps sooner.
+  it('wraps a row carrying a third action at the wider breakpoint', () => {
+    renderFooter({ wideActions: true });
+
+    const slot = screen.getByRole('button', { name: 'Comments (2)' }).parentElement!;
+    expect(slot).toHaveClass('col-span-2', 'claim-row-wide-end-inline:col-span-1');
+    expect(slot).not.toHaveClass('claim-row-end-inline:col-span-1');
+  });
 });

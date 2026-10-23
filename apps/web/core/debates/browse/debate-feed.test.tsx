@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   /** Debate entity ids in "Best" order. Empty = the ranking covers nothing, so recency stands. */
   bestOrderIds: [] as string[],
   bestOrderLoading: false,
+  /** Whether the viewer may remove the debate: its space's editors and its debaters. */
+  canRemove: false,
   /** The anchor fetched by id when it is not in the space listing (GEO-2764). */
   anchorDebate: null as ReturnType<typeof completedDebate> | null,
   anchorLoading: false,
@@ -134,14 +136,21 @@ vi.mock('./debate-claim-footer', () => ({
     meta,
     title,
     actions,
+    wideActions,
   }: {
     claim: Debate['claim'] | null;
     enabled: boolean;
     meta: React.ReactNode;
     title: React.ReactNode;
     actions: React.ReactNode;
+    wideActions?: boolean;
   }) => (
-    <div data-testid="claim-footer" data-claim={claim?.claim_entity_id} data-enabled={String(enabled)}>
+    <div
+      data-testid="claim-footer"
+      data-claim={claim?.claim_entity_id}
+      data-enabled={String(enabled)}
+      data-wide-actions={String(wideActions ?? false)}
+    >
       {meta}
       {title}
       {actions}
@@ -166,6 +175,7 @@ vi.mock('./share-dialog', () => ({
 // land among the card's actions.
 vi.mock('./debate-overflow-menu', () => ({
   DebateOverflowMenu: ({ debate }: { debate: Debate }) => <div data-testid={`overflow-${debate.id}`} />,
+  useCanRemoveDebate: () => mocks.canRemove,
 }));
 vi.mock('~/partials/comments/entity-comments-panel', () => ({
   EntityCommentsPanel: ({ entityId }: { entityId: string }) => <div>Comments panel for {entityId}</div>,
@@ -186,6 +196,7 @@ beforeEach(() => {
   mocks.anchorError = null;
   mocks.bestOrderIds = [];
   mocks.bestOrderLoading = false;
+  mocks.canRemove = false;
   mocks.mediaLoading = false;
   mocks.mediaError = false;
   mocks.playerState = { ready: false, playing: false, autoplayBlocked: false, error: false };
@@ -536,12 +547,24 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     expect(screen.queryByText('Removed view')).not.toBeInTheDocument();
   });
 
-  it('puts the overflow menu at the end of the card actions', () => {
+  it('puts the overflow menu at the end of the card actions, for those who may remove the debate', () => {
+    mocks.canRemove = true;
     render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    // The row makes room for the third action, so it wraps under the pills sooner.
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-wide-actions', 'true');
 
     // Once: the desktop rail beside the video, which drew a second one, is gone.
     expect(within(screen.getByTestId('claim-footer')).getAllByTestId('overflow-debate-1')).toHaveLength(1);
     expect(screen.getAllByTestId('overflow-debate-1')).toHaveLength(1);
+  });
+
+  // Everyone else gets no "…", and keeps the row at the width comments and share alone need.
+  it('draws no overflow menu, and no room for one, for everyone else', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.queryByTestId('overflow-debate-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-wide-actions', 'false');
   });
 
   // The contrast that makes the case above load-bearing: a transient failure is *unknown*, so it

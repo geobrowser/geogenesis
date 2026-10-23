@@ -30,6 +30,7 @@ export function DebateClaimFooter({
   meta,
   title,
   actions,
+  wideActions = false,
 }: {
   /** The claim being debated, or null while the host has not resolved its debate. */
   claim: Debate['claim'] | null;
@@ -42,6 +43,8 @@ export function DebateClaimFooter({
   title: React.ReactNode;
   /** The debate's own controls, drawn at the end of the Agree/Disagree row. */
   actions: React.ReactNode;
+  /** `actions` carries a third control beside comments and share; see `PositionRow`'s `endSlotWraps`. */
+  wideActions?: boolean;
 }) {
   return (
     <div>
@@ -55,6 +58,7 @@ export function DebateClaimFooter({
           claim={claim}
           enabled={enabled}
           actions={actions}
+          wideActions={wideActions}
         />
       ) : (
         // Held at its finished size while the debate resolves, so the card does not grow under the
@@ -69,7 +73,7 @@ export function DebateClaimFooter({
             disabled
             showParticipants={false}
             endSlot={actions}
-            endSlotWraps
+            endSlotWraps={wideActions ? 'wide' : 'compact'}
           />
         </div>
       )}
@@ -83,10 +87,12 @@ function ClaimPositions({
   claim,
   enabled,
   actions,
+  wideActions,
 }: {
   claim: Debate['claim'];
   enabled: boolean;
   actions: React.ReactNode;
+  wideActions: boolean;
 }) {
   const [live, setLive] = React.useState(enabled);
   if (enabled && !live) setLive(true);
@@ -113,6 +119,7 @@ function ClaimPositions({
       // people a second time.
       showParticipants={false}
       endSlot={actions}
+      wideEndSlot={wideActions}
       analyticsSurface="debate-card"
       className="p-3"
       summaryLayout="inline"

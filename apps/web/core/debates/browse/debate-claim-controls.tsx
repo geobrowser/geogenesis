@@ -25,6 +25,7 @@ export function DebateClaimControls({
   response: { responseKind, summary, control },
   showParticipants,
   endSlot,
+  wideEndSlot = false,
   analyticsSurface,
   className,
   summaryLayout,
@@ -37,6 +38,8 @@ export function DebateClaimControls({
   showParticipants?: boolean;
   /** Actions drawn at the end of the row, dropping under the pills when the row is narrow. */
   endSlot?: React.ReactNode;
+  /** The end slot carries a third action, so it needs a wider row to stay beside the pills. */
+  wideEndSlot?: boolean;
   analyticsSurface?: DebateActionAnalyticsSurface;
   /** On the wrapper of the pills and the error, not on the split. */
   className?: string;
@@ -58,7 +61,7 @@ export function DebateClaimControls({
           localSide={control.localVoteSide}
           showParticipants={showParticipants}
           endSlot={endSlot}
-          endSlotWraps={endSlot != null}
+          endSlotWraps={endSlot == null ? undefined : wideEndSlot ? 'wide' : 'compact'}
           analyticsSurface={analyticsSurface}
         />
         {control.responseError ? (

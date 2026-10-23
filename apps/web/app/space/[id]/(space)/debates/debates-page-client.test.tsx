@@ -54,6 +54,7 @@ vi.mock('~/core/debates/browse/debate-claims-panel', async () => {
 // debate-overflow-menu.test.tsx.
 vi.mock('~/core/debates/browse/debate-overflow-menu', () => ({
   DebateOverflowMenu: () => null,
+  useCanRemoveDebate: () => false,
 }));
 
 vi.mock('~/core/debates/use-debate-votes', () => ({
