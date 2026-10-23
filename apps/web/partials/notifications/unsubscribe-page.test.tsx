@@ -106,6 +106,52 @@ describe('UnsubscribePage', () => {
     });
   });
 
+  // geo-notifications answers `already_on` to an Undo that changed nothing: the group was switched
+  // back on elsewhere (settings in another tab) or Undo was pressed twice.
+  it('reads as back on when Undo finds the group already on, without counting a change', async () => {
+    const user = userEvent.setup();
+    mocks.change = vi.fn(async (_b: string, _l: unknown, action: string) =>
+      answer(action === 'undo' ? 'already_on' : 'done')
+    );
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Unsubscribe' }));
+    await user.click(await screen.findByRole('button', { name: 'Undo' }));
+
+    expect(await screen.findByRole('heading', { name: 'The weekly digest is back on' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Email settings' })).toBeInTheDocument();
+    // Only the unsubscribe was a change.
+    expect(mocks.capture).toHaveBeenCalledTimes(1);
+    expect(mocks.capture).toHaveBeenLastCalledWith('email_preference_changed', {
+      group: 'digest',
+      enabled: false,
+      surface: 'unsubscribe_page',
+    });
+  });
+
+  it("never goes blank on a state it doesn't know yet", async () => {
+    mocks.get = vi.fn(async () => answer('some_new_state'));
+    renderPage();
+
+    expect(await screen.findByRole('link', { name: 'Email settings' })).toBeInTheDocument();
+  });
+
+  it("says Undo can't be done from here once it has expired", async () => {
+    const user = userEvent.setup();
+    mocks.change = vi.fn(async (_b: string, _l: unknown, action: string) =>
+      answer(action === 'undo' ? 'undo_expired' : 'done')
+    );
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'Unsubscribe' }));
+    await user.click(await screen.findByRole('button', { name: 'Undo' }));
+
+    expect(
+      await screen.findByText("This can't be undone from here anymore. You can turn it back on in your email settings.")
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+  });
+
   it('says a failed press failed, and stays on the question', async () => {
     const user = userEvent.setup();
     mocks.change = vi.fn(async () => {

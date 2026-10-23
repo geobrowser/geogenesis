@@ -115,7 +115,8 @@ export const UNSUBSCRIBE_COPY: Record<
   },
 };
 
-export const UNDO_EXPIRED_BODY = 'Undo is only here for a day. You can turn it back on in your email settings.';
+export const UNDO_EXPIRED_BODY =
+  "This can't be undone from here anymore. You can turn it back on in your email settings.";
 
 export const INVALID_UNSUBSCRIBE_LINK = {
   title: "This unsubscribe link doesn't work",

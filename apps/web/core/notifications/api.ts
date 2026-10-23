@@ -131,7 +131,11 @@ export function sendSeenPing(baseUrl: string, accessToken: string, timeZone: str
 export type UnsubscribeLinkParams = { token: string; kind: string | null; send: string | null };
 
 export type UnsubscribeState = {
-  state: 'ask' | 'done' | 'already_off' | 'undone' | 'undo_expired';
+  /**
+   * `already_on`: Undo changed nothing because the group was on anyway (pressed twice, or switched back
+   * on in settings). `undo_expired`: Undo after a day, or after the preferences changed since.
+   */
+  state: 'ask' | 'done' | 'already_off' | 'undone' | 'already_on' | 'undo_expired';
   group: EmailGroup;
   group_name: string;
   /** Masked, as on the settings dialog; null for someone with no address on file. */

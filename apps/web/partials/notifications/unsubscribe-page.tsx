@@ -177,7 +177,9 @@ export function UnsubscribePage() {
           </Link>
         </Card>
       );
+    // `already_on`: Undo found the group on anyway. It reads the same, because the group is on.
     case 'undone':
+    case 'already_on':
       return (
         <Card>
           <Heading title={copy.undoneTitle} body={copy.undoneBody} />
@@ -186,6 +188,19 @@ export function UnsubscribePage() {
           </Link>
         </Card>
       );
+    default: {
+      // A state this page doesn't know yet (geo-notifications added one): never a blank card, and no
+      // claim about what happened. Fails the type check here first, when the union learns about it.
+      const unknown: never = current.state;
+      void unknown;
+      return (
+        <Card>
+          <Link href={EMAIL_SETTINGS_HREF} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+            Email settings
+          </Link>
+        </Card>
+      );
+    }
   }
 }
 
