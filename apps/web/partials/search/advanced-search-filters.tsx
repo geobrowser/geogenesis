@@ -22,6 +22,31 @@ import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 
 export type SearchFilterTag = { id: string; name: string | null };
 
+export type FacetScope =
+  | { mode: 'global'; includeNonCanonical: boolean }
+  | { mode: 'space'; spaceId: string }
+  | { mode: 'spaces'; spaceIds: string[] };
+
+function facetSearchScope(scope: FacetScope): {
+  includeNonCanonical?: boolean;
+  filterBySpace?: string;
+  alsoSearchSpaceIds?: string[];
+  replaceScopeWithAlsoSearchSpaceIds?: boolean;
+} {
+  switch (scope.mode) {
+    case 'global':
+      return { includeNonCanonical: scope.includeNonCanonical };
+    case 'space':
+      return { filterBySpace: scope.spaceId, includeNonCanonical: true };
+    case 'spaces':
+      return {
+        includeNonCanonical: false,
+        alsoSearchSpaceIds: scope.spaceIds,
+        replaceScopeWithAlsoSearchSpaceIds: true,
+      };
+  }
+}
+
 type Props = {
   canonicalOnly: boolean;
   onToggleCanonicalOnly: () => void;
@@ -33,8 +58,7 @@ type Props = {
   tags: SearchFilterTag[];
   onAddTag: (tag: SearchFilterTag) => void;
   onRemoveTag: (id: string) => void;
-  scopeIncludeNonCanonical: boolean;
-  scopeSpaceIds: string[] | undefined;
+  facetScope: FacetScope;
   portalContainer: HTMLElement | null;
   onFilterMenuOpenChange?: (open: boolean) => void;
 };
@@ -57,9 +81,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
  * The space/type/tag filters shown under global search Advanced. Space (which folds in the
  * canonical-only scope) and type are select-style popovers that float over the results (see
  * `portalContainer` — must be outside the dialog's overflow clipping); tags are a free entity
- * search. Type and tag feed `useSearch` (`filterByTypes` / `filterByTags`), the canonical-only
- * scope feeds `includeNonCanonical`, and the chosen spaces are included (added to eligibility) via
- * `useSearch`'s `alsoSearchSpaceIds` → REST `additional_space_ids`.
+ * search. Type and tag feed `useSearch` (`filterByTypes` / `filterByTags`); their option lists are
+ * scoped to mirror the results through `facetScope` (see `facetSearchScope`). Picking spaces
+ * restricts the results — one via SPACE_SINGLE, several via a fan-out — rather than widening them.
  */
 export function AdvancedSearchFilters({
   canonicalOnly,
@@ -72,8 +96,7 @@ export function AdvancedSearchFilters({
   tags,
   onAddTag,
   onRemoveTag,
-  scopeIncludeNonCanonical,
-  scopeSpaceIds,
+  facetScope,
   portalContainer,
   onFilterMenuOpenChange,
 }: Props) {
@@ -102,19 +125,12 @@ export function AdvancedSearchFilters({
           typeIds={typeIds}
           onToggleType={onToggleType}
           onClearTypes={onClearTypes}
-          includeNonCanonical={scopeIncludeNonCanonical}
-          alsoSearchSpaceIds={scopeSpaceIds}
+          facetScope={facetScope}
           container={portalContainer}
           onOpenChange={open => notifyMenuOpen('type', open)}
         />
       </div>
-      <TagFilter
-        tags={tags}
-        onAddTag={onAddTag}
-        onRemoveTag={onRemoveTag}
-        includeNonCanonical={scopeIncludeNonCanonical}
-        alsoSearchSpaceIds={scopeSpaceIds}
-      />
+      <TagFilter tags={tags} onAddTag={onAddTag} onRemoveTag={onRemoveTag} facetScope={facetScope} />
     </div>
   );
 }
@@ -256,28 +272,24 @@ function TypeFilter({
   typeIds,
   onToggleType,
   onClearTypes,
-  includeNonCanonical,
-  alsoSearchSpaceIds,
+  facetScope,
   container,
   onOpenChange,
 }: {
   typeIds: string[];
   onToggleType: (id: string) => void;
   onClearTypes: () => void;
-  includeNonCanonical: boolean;
-  alsoSearchSpaceIds: string[] | undefined;
+  facetScope: FacetScope;
   container: HTMLElement | null;
   onOpenChange?: (open: boolean) => void;
 }) {
   // All types in the graph = entities whose own type is SCHEMA_TYPE. Empty query lists the top
-  // types; typing fuzzy-searches by name.
+  // types; typing fuzzy-searches by name. The scope mirrors the results (see `facetSearchScope`).
   const { query, onQueryChange, results, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearch({
     filterByTypes: [SystemIds.SCHEMA_TYPE],
     restrictToFilterTypes: true,
     enabled: true,
-    includeNonCanonical,
-    alsoSearchSpaceIds,
-    replaceScopeWithAlsoSearchSpaceIds: true,
+    ...facetSearchScope(facetScope),
   });
 
   const selected = React.useMemo(() => new Set(typeIds), [typeIds]);
@@ -327,12 +339,7 @@ function TypeFilter({
             const isSelected = selected.has(type.id);
             const atLimit = !isSelected && typeIds.length >= MAX_SEARCH_FILTER_IDS;
             return (
-              <OptionRow
-                key={type.id}
-                selected={isSelected}
-                disabled={atLimit}
-                onClick={() => onToggleType(type.id)}
-              >
+              <OptionRow key={type.id} selected={isSelected} disabled={atLimit} onClick={() => onToggleType(type.id)}>
                 <CheckboxVisual checked={isSelected} />
                 <span className="min-w-0 flex-1 truncate text-text">{type.name ?? type.id}</span>
               </OptionRow>
@@ -449,21 +456,17 @@ function TagFilter({
   tags,
   onAddTag,
   onRemoveTag,
-  includeNonCanonical,
-  alsoSearchSpaceIds,
+  facetScope,
 }: {
   tags: SearchFilterTag[];
   onAddTag: (tag: SearchFilterTag) => void;
   onRemoveTag: (id: string) => void;
-  includeNonCanonical: boolean;
-  alsoSearchSpaceIds: string[] | undefined;
+  facetScope: FacetScope;
 }) {
   const { query, onQueryChange, results, isLoading, isEmpty, hasNextPage, fetchNextPage, isFetchingNextPage } =
     useSearch({
       filterByTypes: [ContentIds.TAG_TYPE],
-      includeNonCanonical,
-      alsoSearchSpaceIds,
-      replaceScopeWithAlsoSearchSpaceIds: true,
+      ...facetSearchScope(facetScope),
     });
   const selectedIds = React.useMemo(() => new Set(tags.map(tag => tag.id)), [tags]);
   const resultsRef = React.useRef<HTMLUListElement | null>(null);

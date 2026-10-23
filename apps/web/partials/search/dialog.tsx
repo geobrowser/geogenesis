@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 
 import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
+import { useMultiSpaceSearch } from '~/core/hooks/use-multi-space-search';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSearchResultAction } from '~/core/hooks/use-search-result-action';
@@ -30,7 +31,7 @@ import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
-import { AdvancedSearchFilters, type SearchFilterTag } from './advanced-search-filters';
+import { AdvancedSearchFilters, type FacetScope, type SearchFilterTag } from './advanced-search-filters';
 
 type Props = {
   open: boolean;
@@ -55,6 +56,18 @@ const readCanonicalOnly = (): boolean => {
   }
 };
 
+const persistCanonicalOnly = (canonicalOnly: boolean) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SEARCH_CANONICAL_ONLY_KEY, String(canonicalOnly));
+  } catch {}
+};
+
+type SearchScope = { kind: 'canonical' } | { kind: 'all' } | { kind: 'spaces'; ids: string[] };
+
+// Stable empty list so a non-space scope doesn't mint a new array identity each render.
+const EMPTY_SPACE_IDS: string[] = [];
+
 export const SearchDialog = ({ open, onDone }: Props) => {
   if (!open) return null;
 
@@ -64,41 +77,75 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 const SearchDialogComponent = ({ open, onDone }: Props) => {
   const trackSelection = useSearchResultAction({ overlay: 'modal' });
   const router = useRouter();
-  const [canonicalOnly, setCanonicalOnly] = useState<boolean>(readCanonicalOnly);
+  const [scope, setScope] = useState<SearchScope>(() =>
+    readCanonicalOnly() ? { kind: 'canonical' } : { kind: 'all' }
+  );
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
 
   const [filterTypeIds, setFilterTypeIds] = useState<string[]>([]);
-
-  const [selectedSpaceIds, setSelectedSpaceIds] = useState<string[]>([]);
   const [filterTags, setFilterTags] = useState<SearchFilterTag[]>([]);
 
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
 
   const filterPopoverHost = useElevatedPopoverPortal();
 
-  const hasSelectedSpaces = selectedSpaceIds.length > 0;
+  const selectedSpaceIds = scope.kind === 'spaces' ? scope.ids : EMPTY_SPACE_IDS;
+  const canonicalOnly = scope.kind === 'canonical';
 
-  const includeNonCanonical = canonicalOnly || hasSelectedSpaces ? false : true;
-  const alsoSearchSpaceIds = hasSelectedSpaces ? selectedSpaceIds : undefined;
-  const search = useSearch({
-    enabled: open,
+  const singleSpaceId = selectedSpaceIds.length === 1 ? selectedSpaceIds[0] : undefined;
+  const multiSpaceMode = selectedSpaceIds.length > 1;
+  const includeNonCanonical = scope.kind !== 'canonical';
+
+  const filterByTypes = filterTypeIds.length > 0 ? filterTypeIds : undefined;
+  const filterByTagIds = useMemo(
+    () => (filterTags.length > 0 ? filterTags.map(tag => tag.id) : undefined),
+    [filterTags]
+  );
+
+  const singleSearch = useSearch({
+    enabled: open && !multiSpaceMode,
     includeNonCanonical,
-    alsoSearchSpaceIds,
-    replaceScopeWithAlsoSearchSpaceIds: true,
+    filterBySpace: singleSpaceId,
     analyticsSurface: 'global',
-    filterByTypes: filterTypeIds.length > 0 ? filterTypeIds : undefined,
-    filterByTags: filterTags.length > 0 ? filterTags.map(tag => tag.id) : undefined,
+    filterByTypes,
+    filterByTags: filterByTagIds,
   });
+  const multiSearch = useMultiSpaceSearch({
+    enabled: open && multiSpaceMode,
+    spaceIds: selectedSpaceIds,
+    includeNonCanonical,
+    filterByTypes,
+    filterByTags: filterByTagIds,
+  });
+  const search = multiSpaceMode ? multiSearch : singleSearch;
+
+  const onQueryChange = useCallback(
+    (value: string) => {
+      singleSearch.onQueryChange(value);
+      multiSearch.onQueryChange(value);
+    },
+    [singleSearch.onQueryChange, multiSearch.onQueryChange]
+  );
 
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = search;
+
+  const facetScope: FacetScope = singleSpaceId
+    ? { mode: 'space', spaceId: singleSpaceId }
+    : multiSpaceMode
+      ? { mode: 'spaces', spaceIds: selectedSpaceIds }
+      : { mode: 'global', includeNonCanonical };
 
   const toggleFilterType = useCallback((id: string) => {
     setFilterTypeIds(prev => (prev.includes(id) ? prev.filter(typeId => typeId !== id) : [...prev, id]));
   }, []);
   const clearFilterTypes = useCallback(() => setFilterTypeIds([]), []);
   const toggleSpaceSelected = useCallback((id: string) => {
-    setCanonicalOnly(false);
-    setSelectedSpaceIds(prev => (prev.includes(id) ? prev.filter(spaceId => spaceId !== id) : [...prev, id]));
+    setScope(prev => {
+      if (prev.kind !== 'spaces') return { kind: 'spaces', ids: [id] };
+      const ids = prev.ids.includes(id) ? prev.ids.filter(spaceId => spaceId !== id) : [...prev.ids, id];
+      // Clearing the last space returns to Canonical only, not an unscoped "All spaces".
+      return ids.length === 0 ? { kind: 'canonical' } : { kind: 'spaces', ids };
+    });
   }, []);
   const addFilterTag = useCallback((tag: SearchFilterTag) => {
     setFilterTags(prev => (prev.some(existing => existing.id === tag.id) ? prev : [...prev, tag]));
@@ -108,22 +155,12 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   }, []);
 
   const toggleCanonicalOnly = useCallback(() => {
-    setCanonicalOnly(prev => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.setItem(SEARCH_CANONICAL_ONLY_KEY, String(next));
-        } catch {
-          // Quota or blocked site data — the toggle still works, it just won't persist.
-        }
-      }
+    setScope(prev => {
+      const next: SearchScope = prev.kind === 'canonical' ? { kind: 'all' } : { kind: 'canonical' };
+      persistCanonicalOnly(next.kind === 'canonical');
       return next;
     });
   }, []);
-
-  useEffect(() => {
-    if (canonicalOnly) setSelectedSpaceIds([]);
-  }, [canonicalOnly]);
 
   const { hydrate } = useSyncEngine();
 
@@ -133,14 +170,13 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   const selectedEntity = openSpacesIndex !== null ? search.results[openSpacesIndex] : null;
 
   const handleOpenChange = useCallback(() => {
-    search.onQueryChange('');
+    onQueryChange('');
     setOpenSpacesIndex(null);
     setIsCreatingNewEntity(false);
     setFilterTypeIds([]);
-    setSelectedSpaceIds([]);
     setFilterTags([]);
     onDone();
-  }, [search, onDone]);
+  }, [onQueryChange, onDone]);
 
   const isValidEntityId = validateEntityId(search.query);
 
@@ -174,7 +210,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     if (result) {
       trackSelection(result, selectedIndex, 'search_results');
       router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
-      search.onQueryChange('');
+      onQueryChange('');
       setOpenSpacesIndex(null);
       onDone();
     }
@@ -196,7 +232,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
 
   useEffect(() => {
     setSelectedIndex(0);
-  }, [search.query, filterTypeIds, selectedSpaceIds, filterTags, canonicalOnly]);
+  }, [search.query, filterTypeIds, filterTags, scope]);
 
   useEffect(() => {
     setSelectedIndex(prev => (prev >= search.results.length ? 0 : prev));
@@ -226,7 +262,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                 entityId={search.query as EntityId}
                 setIsCreatingNewEntity={setIsCreatingNewEntity}
                 onDone={() => {
-                  search.onQueryChange('');
+                  onQueryChange('');
                   setIsCreatingNewEntity(false);
                   onDone();
                 }}
@@ -264,7 +300,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                   </AnimatePresence>
                   <Input
                     withExternalSearchIcon
-                    onChange={e => search.onQueryChange(e.currentTarget.value)}
+                    onChange={e => onQueryChange(e.currentTarget.value)}
                     value={search.query}
                   />
                 </div>
@@ -295,8 +331,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         tags={filterTags}
                         onAddTag={addFilterTag}
                         onRemoveTag={removeFilterTag}
-                        scopeIncludeNonCanonical={includeNonCanonical}
-                        scopeSpaceIds={alsoSearchSpaceIds}
+                        facetScope={facetScope}
                         portalContainer={filterPopoverHost}
                         onFilterMenuOpenChange={setFilterMenuOpen}
                       />
@@ -331,7 +366,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                             onSelect={() => {
                               trackSelection(result, i, 'search_results');
                               router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
-                              search.onQueryChange('');
+                              onQueryChange('');
                               setOpenSpacesIndex(null);
                               onDone();
                             }}
@@ -392,7 +427,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                             onSelect={() => {
                               trackSelection(selectedEntity, i, 'search_spaces');
                               router.push(NavUtils.toEntity(space.spaceId, selectedEntity.id));
-                              search.onQueryChange('');
+                              onQueryChange('');
                               setOpenSpacesIndex(null);
                               onDone();
                             }}
