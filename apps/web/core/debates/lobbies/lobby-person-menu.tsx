@@ -13,6 +13,7 @@ import { LobbyMemberActions, hasMemberActions } from './lobby-member-actions';
 import { LobbyPersonName } from './lobby-people';
 import { LobbyPopup } from './lobby-popup';
 import { LobbyRequestDebate, canRequestLobbyMember } from './lobby-request-debate';
+import { LobbyScheduleSection } from './lobby-schedule';
 import type { LobbyPageView } from './lobby-view';
 
 /**
@@ -22,9 +23,10 @@ import type { LobbyPageView } from './lobby-view';
 export function personMenuAnalyticsAttributes(
   lobby: Pick<LobbyPageView, 'viewer'>,
   member: Pick<DebateLobbyMember, 'role' | 'creator'>,
-  isSelf: boolean
+  isSelf: boolean,
+  outsideLobby = false
 ) {
-  return hasMemberActions(lobby, member, isSelf)
+  return !outsideLobby && hasMemberActions(lobby, member, isSelf)
     ? debateActionAnalyticsAttributes('hub', 'Lobby host controls', 'open_lobby_host_controls')
     : debateActionAnalyticsAttributes('hub', 'Lobby person menu');
 }
@@ -45,7 +47,9 @@ export function LobbyPersonMenu({
   micOn,
   disagreements,
   children,
+  outsideLobby = false,
 }: {
+  outsideLobby?: boolean;
   lobby: LobbyPageView;
   member: DebateLobbyMember;
   isSelf: boolean;
@@ -65,6 +69,7 @@ export function LobbyPersonMenu({
         member={member}
         isSelf={isSelf}
         viewerId={viewerId}
+        outsideLobby={outsideLobby}
         micOn={micOn}
         disagreements={disagreements}
         onDone={() => setOpen(false)}
@@ -81,7 +86,9 @@ export function LobbyPersonCard({
   micOn,
   disagreements,
   onDone,
+  outsideLobby = false,
 }: {
+  outsideLobby?: boolean;
   lobby: LobbyPageView;
   member: DebateLobbyMember;
   isSelf: boolean;
@@ -94,7 +101,7 @@ export function LobbyPersonCard({
   // A guest's tap is queued behind sign-up, so a guest has no id to check against.
   const guest = useIsLobbyGuest();
   const requestable = guest ? !member.in_debate && !member.stepped_out : canRequestLobbyMember(member, viewerId);
-  const hostControls = hasMemberActions(lobby, member, isSelf);
+  const hostControls = !outsideLobby && hasMemberActions(lobby, member, isSelf);
 
   return (
     <div role="group" aria-label={name} className="flex flex-col gap-1" data-testid="lobby-person-card">
@@ -129,6 +136,9 @@ export function LobbyPersonCard({
         <Text as="p" variant="footnote" color="grey-04" className="px-1.5 pb-1.5">
           {inDebateRequestLabel(member)}
         </Text>
+      ) : null}
+      {!isSelf && (guest || viewerId !== null) ? (
+        <LobbyScheduleSection member={member} disagreements={disagreements} />
       ) : null}
       {hostControls ? (
         <>

@@ -234,12 +234,20 @@ describe('debate recording streaming', () => {
       const timers = manualTimers();
       const wire = transport();
       wire.putPart.mockRejectedValueOnce(new Error('network down'));
-      const streamer = new stream.RecordingPartStreamer({ ...wire, ...timers, shouldPause: () => false });
+      const streamer = new stream.RecordingPartStreamer({
+        ...wire,
+        ...timers,
+        shouldPause: () => false,
+        telemetry: { debate_id: 'd', recording_started_at_ms: 123, upload_phase: 'live' },
+      });
 
       streamer.append(new Blob(['01234567']));
       await timers.drain();
 
       expect(wire.putPart).toHaveBeenCalledTimes(2);
+      const attempts = analytics.capture.mock.calls.filter(([name]) => name === 'debate_recording_part_upload');
+      expect(attempts.map(([, properties]) => properties.phase)).toEqual(['started', 'failed', 'started', 'completed']);
+      expect(attempts.every(([, properties]) => properties.part_number === 1 && properties.bytes === 8)).toBe(true);
       expect((await streamer.finish())?.uploadedPartNumbers).toEqual([1]);
     });
 
@@ -438,7 +446,7 @@ describe('debate recording streaming', () => {
     await stream.uploadRemainingParts(
       new Blob(['0123456789abcdefXYZ']),
       { filename: 'rec/1.local.webm', uploadId: 'upload-1', partSize: PART, uploadedPartNumbers: [1] },
-      wire,
+      { ...wire, telemetry: { debate_id: 'd', recording_started_at_ms: 123, upload_phase: 'queued' } },
       (_partNumber, uploadedBytes) => {
         progress.push(uploadedBytes);
       }
@@ -449,6 +457,13 @@ describe('debate recording streaming', () => {
       { partNumber: 3, body: 'XYZ' },
     ]);
     expect(progress).toEqual([16, 19]);
+    const completed = analytics.capture.mock.calls
+      .filter(([name, properties]) => name === 'debate_recording_part_upload' && properties.phase === 'completed')
+      .map(([, properties]) => properties);
+    expect(completed).toEqual([
+      expect.objectContaining({ part_number: 2, bytes: 8, upload_phase: 'queued' }),
+      expect.objectContaining({ part_number: 3, bytes: 3, upload_phase: 'queued' }),
+    ]);
   });
 
   it('keeps timeslices in recording order in IndexedDB, and clears them with the stream', async () => {

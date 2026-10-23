@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 
 import { Avatar } from '~/design-system/avatar';
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
@@ -49,8 +49,6 @@ export function DebateChallengeDialog({
   const other = challenge.requester;
 
   useScrollLock();
-  // Leads into the claim picker, which is audio-only without the flag.
-  const videoEnabled = useFeatureFlag('debateVideo');
 
   const shownJoinState = React.useRef<DebateJoinState>({ micOn: false, cameraOn: false });
   const rememberShownJoinState = React.useCallback((state: DebateJoinState) => {
@@ -92,7 +90,6 @@ export function DebateChallengeDialog({
             avatarValue={you.profile_space_id}
             fallback={<ChallengeParticipant participant={you} label="You" />}
             onJoinStateChange={rememberShownJoinState}
-            camera={videoEnabled}
           />
           <div className="relative grid w-7 place-items-center">
             <span
@@ -118,14 +115,16 @@ export function DebateChallengeDialog({
               type="button"
               onClick={onNotNow}
               disabled={busy}
+              {...debateActionAnalyticsAttributes('challenge-dialog', 'Not now')}
               className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
             >
               Not now
             </button>
             <button
               type="button"
-              onClick={() => onAccept(videoEnabled ? shownJoinState.current : { micOn: shownJoinState.current.micOn })}
+              onClick={() => onAccept(shownJoinState.current)}
               disabled={busy}
+              {...debateActionAnalyticsAttributes('challenge-dialog', 'Explore claims')}
               className={DIALOG_ACTION_BUTTON_CLASS_NAME}
             >
               Explore claims
@@ -135,6 +134,7 @@ export function DebateChallengeDialog({
             type="button"
             onClick={onReject}
             disabled={busy}
+            {...debateActionAnalyticsAttributes('challenge-dialog', 'Reject')}
             className="mx-auto -mt-3 px-4 py-1 text-metadata text-grey-04 underline hover:text-text disabled:opacity-50"
           >
             Reject request

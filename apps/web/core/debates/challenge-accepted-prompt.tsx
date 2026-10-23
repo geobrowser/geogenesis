@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -45,15 +45,10 @@ export function ChallengeAcceptedPrompt({
   const other = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
 
   useScrollLock();
-  // Leads into the claim picker, which is audio-only without the flag: no camera choice to carry.
-  const videoEnabled = useFeatureFlag('debateVideo');
   const rememberChoice = React.useCallback(
     (state: { micOn: boolean; cameraOn: boolean }) =>
-      rememberRematchJoinIntent(
-        session.id,
-        videoEnabled ? { ...state, source: 'card' } : { micOn: state.micOn, source: 'card' }
-      ),
-    [session.id, videoEnabled]
+      rememberRematchJoinIntent(session.id, { ...state, source: 'card' }),
+    [session.id]
   );
 
   if (!you || !other) return null;
@@ -85,9 +80,8 @@ export function ChallengeAcceptedPrompt({
             avatarValue={you.profile_space_id}
             initialJoinState={initialJoinState}
             onJoinStateChange={rememberChoice}
-            camera={videoEnabled}
             appearance="tile"
-            formatSummary={state => describeAcceptedJoin(state, participantName(other), videoEnabled)}
+            formatSummary={state => describeAcceptedJoin(state, participantName(other))}
             fallback={
               <RequestParticipantTile label="You" local avatarCid={you.avatar_cid} avatarValue={you.profile_space_id} />
             }
@@ -125,6 +119,7 @@ export function ChallengeAcceptedPrompt({
               type="button"
               onClick={onDecline}
               disabled={busy}
+              {...debateActionAnalyticsAttributes('challenge-accepted-prompt', 'Decline')}
               className={`${DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME} h-11!`}
             >
               Decline
@@ -133,6 +128,7 @@ export function ChallengeAcceptedPrompt({
               type="button"
               onClick={onExplore}
               disabled={busy}
+              {...debateActionAnalyticsAttributes('challenge-accepted-prompt', 'Join room')}
               className={`${DIALOG_ACTION_BUTTON_CLASS_NAME} h-11!`}
             >
               Join room
@@ -144,9 +140,8 @@ export function ChallengeAcceptedPrompt({
   );
 }
 
-function describeAcceptedJoin({ micOn, cameraOn }: DebateJoinState, otherName: string, videoEnabled: boolean) {
+function describeAcceptedJoin({ micOn, cameraOn }: DebateJoinState, otherName: string) {
   const mic = micOn ? 'with your mic on' : 'muted';
-  if (!videoEnabled) return `You’ll join ${mic}.`;
   if (cameraOn) return `You’ll join ${mic}. ${otherName} will see your camera.`;
   return micOn ? 'You’ll join with your mic on and your camera off.' : 'You’ll join muted, with your camera off.';
 }

@@ -6,6 +6,7 @@ import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 import { notifyActionPageView, pageContext } from './action-context';
 import { analyticsRuntime, isAnalyticsEnabled } from './analytics-context';
 import type { AnalyticsEventName } from './analytics-events';
+import { privyUserEmail } from './auth/privy-email';
 import { withSignupVisitor } from './auth/signup-visitor';
 import { pushMarketingEvent } from './marketing-events';
 
@@ -135,7 +136,7 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-c02f3ad6907c.js';
+const analyticsScriptSrc = '/geo-analytics-465e14e5a64c.js';
 
 /**
  * Amplitude autocapture, as `true` would enable it, minus "[Amplitude] Viewport Content Updated".
@@ -286,7 +287,7 @@ function loadAnalyticsScript() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-wC861pB8F/h7HsFnzoUiPMCUt02vF6DfhHzfNBPzGhY=';
+  script.integrity = 'sha256-Rl4U5aZMrKXt70EUiKI4tsqs8O1l8OeXqfr/vcwKGp0=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;
@@ -856,7 +857,7 @@ function privyIdentityProperties(user: PrivyAnalyticsUser, properties: Analytics
     auth_provider: 'privy',
     ...trafficProperties(),
     privy_user_created_at: formatDate(user.createdAt),
-    has_privy_email: Boolean(user.email),
+    has_privy_email: Boolean(privyUserEmail(user)),
     has_privy_phone: Boolean(user.phone),
     has_privy_wallet: Boolean(user.wallet),
     has_privy_smart_wallet: Boolean(user.smartWallet),
@@ -874,63 +875,9 @@ function privyIdentityProperties(user: PrivyAnalyticsUser, properties: Analytics
 }
 
 function privySignupProperties(user: PrivyAnalyticsUser): AnalyticsProperties {
-  const email = privyEmail(user);
+  const email = privyUserEmail(user);
 
   return email ? { email } : {};
-}
-
-function privyEmail(user: PrivyAnalyticsUser) {
-  return emailFromUnknown(user.email) ?? linkedAccountEmail(user.linkedAccounts);
-}
-
-function linkedAccountEmail(accounts: unknown[] | null | undefined) {
-  if (!Array.isArray(accounts)) {
-    return undefined;
-  }
-
-  for (const account of accounts) {
-    const email = emailFromUnknown(account);
-
-    if (email) {
-      return email;
-    }
-  }
-
-  return undefined;
-}
-
-function emailFromUnknown(value: unknown) {
-  if (typeof value === 'string') {
-    return normalizeEmail(value);
-  }
-
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  for (const key of ['address', 'email', 'emailAddress']) {
-    const email = normalizeEmail(value[key]);
-
-    if (email) {
-      return email;
-    }
-  }
-
-  return undefined;
-}
-
-function normalizeEmail(value: unknown) {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  const email = value.trim().toLowerCase();
-
-  return email.includes('@') ? email : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function cleanProperties(properties: AnalyticsProperties) {

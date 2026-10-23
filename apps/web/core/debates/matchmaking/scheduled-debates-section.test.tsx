@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbySummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { NavUtils } from '~/core/utils/utils';
@@ -13,7 +13,7 @@ import type { UpcomingRoomRow } from './scheduled-debates-section';
 import type { UpcomingLobbyRow } from './upcoming-lobby-rows';
 
 const mocks = vi.hoisted(() => ({
-  respond: vi.fn(),
+  respond: vi.fn().mockResolvedValue({ outcome: 'recorded' }),
   cancel: vi.fn(),
   cancelPending: false,
   cancelSuccess: false,
@@ -34,6 +34,9 @@ const mocks = vi.hoisted(() => ({
   graphLookupIds: [] as string[],
   lobbies: [] as DebateLobbySummary[],
   lobbiesError: null as Error | null,
+  requestsLoading: false,
+  roomsLoading: false,
+  lobbiesLoading: false,
 }));
 
 const ADA = {
@@ -46,17 +49,25 @@ const ADA = {
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
-  useRespondToScheduledDebate: () => ({ mutate: mocks.respond, isPending: mocks.pending }),
+  useRespondToScheduledDebate: () => ({ mutateAsync: mocks.respond, isPending: mocks.pending }),
   useCancelScheduledDebate: () => ({
     mutate: mocks.cancel,
     isPending: mocks.cancelPending,
     isSuccess: mocks.cancelSuccess,
   }),
-  useScheduledDebates: () => ({ data: { requests: mocks.requests }, error: mocks.requestsError }),
+  useScheduledDebates: () => ({
+    data: { requests: mocks.requests },
+    error: mocks.requestsError,
+    isLoading: mocks.requestsLoading,
+  }),
 }));
 
 vi.mock('~/core/debates/rooms/hooks', () => ({
-  useUpcomingDebateRooms: () => ({ data: { rooms: mocks.rooms }, error: mocks.roomsError }),
+  useUpcomingDebateRooms: () => ({
+    data: { rooms: mocks.rooms },
+    error: mocks.roomsError,
+    isLoading: mocks.roomsLoading,
+  }),
   useFinishedRoomIds: () => mocks.finishedRoomIds,
 }));
 
@@ -65,6 +76,7 @@ vi.mock('~/core/debates/lobbies/hooks', () => ({
     data: enabled ? { lobbies: mocks.lobbies } : undefined,
     // Not gated: a disabled query keeps the error of its last failed read.
     error: mocks.lobbiesError,
+    isLoading: mocks.lobbiesLoading,
   }),
 }));
 
@@ -138,7 +150,7 @@ const room = (overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom =
   ...overrides,
 });
 
-const setup = (content: {
+type SetupContent = {
   answerable?: ScheduledDebateRequest[];
   upcoming?: UpcomingRoomRow[];
   lobbies?: UpcomingLobbyRow[];
@@ -146,21 +158,29 @@ const setup = (content: {
   requestsError?: Error | null;
   roomsError?: Error | null;
   lobbiesError?: Error | null;
-}) => ({
+  loading?: boolean;
+  focusedRequestId?: string | null;
+};
+
+const sectionFor = (content: SetupContent) => (
+  <ScheduledDebatesSection
+    focusedRequestId={content.focusedRequestId ?? null}
+    content={{
+      answerable: content.answerable ?? [],
+      upcoming: content.upcoming ?? [],
+      lobbies: content.lobbies ?? [],
+      people: content.people ?? [],
+      requestsError: content.requestsError ?? null,
+      roomsError: content.roomsError ?? null,
+      lobbiesError: content.lobbiesError ?? null,
+      loading: content.loading ?? false,
+    }}
+  />
+);
+
+const setup = (content: SetupContent) => ({
   user: userEvent.setup(),
-  ...render(
-    <ScheduledDebatesSection
-      content={{
-        answerable: content.answerable ?? [],
-        upcoming: content.upcoming ?? [],
-        lobbies: content.lobbies ?? [],
-        people: content.people ?? [],
-        requestsError: content.requestsError ?? null,
-        roomsError: content.roomsError ?? null,
-        lobbiesError: content.lobbiesError ?? null,
-      }}
-    />
-  ),
+  ...render(sectionFor(content)),
 });
 
 const upcomingRow = (
@@ -176,7 +196,7 @@ const upcomingRow = (
 
 afterEach(() => {
   cleanup();
-  mocks.respond = vi.fn();
+  mocks.respond = vi.fn().mockResolvedValue({ outcome: 'recorded' });
   mocks.pending = false;
   mocks.cancel = vi.fn();
   mocks.cancelPending = false;
@@ -192,6 +212,9 @@ afterEach(() => {
   mocks.graphLookupIds = [];
   mocks.lobbies = [];
   mocks.lobbiesError = null;
+  mocks.requestsLoading = false;
+  mocks.roomsLoading = false;
+  mocks.lobbiesLoading = false;
 });
 
 describe('answering in the tab', () => {
@@ -247,9 +270,7 @@ describe('answering in the tab', () => {
   });
 
   it('reports a clash, which is a refusal rather than a failure', async () => {
-    mocks.respond = vi.fn((_vars, options) =>
-      options.onSuccess({ outcome: 'conflict', conflicting_start_at: '2026-09-24T13:00:00Z' })
-    );
+    mocks.respond = vi.fn().mockResolvedValue({ outcome: 'conflict', conflicting_start_at: '2026-09-24T13:00:00Z' });
     const { user } = setup({ answerable: [request()] });
 
     await user.click(screen.getByRole('button', { name: 'Accept' }));
@@ -258,7 +279,7 @@ describe('answering in the tab', () => {
   });
 
   it('reports a rejected answer rather than looking inert', async () => {
-    mocks.respond = vi.fn((_vars, options) => options.onError(new Error('Already answered.')));
+    mocks.respond = vi.fn().mockRejectedValue(new Error('Already answered.'));
     const { user } = setup({ answerable: [request()] });
 
     await user.click(screen.getByRole('button', { name: 'Decline' }));
@@ -343,9 +364,7 @@ describe('calling a scheduled debate off', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
     await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
 
-    expect(
-      screen.getByText('Someone has already joined this debate, so it can no longer be cancelled.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('This debate has already started, so it can no longer be cancelled.')).toBeInTheDocument();
   });
 
   it('says it is cancelled rather than offering it again before the list refreshes', () => {
@@ -498,6 +517,143 @@ describe('moving a scheduled debate', () => {
     expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Choose different time' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Choose different time' })).toBeInTheDocument();
+  });
+});
+
+// GEO-3431: a linked request is outlined and scrolled to only once every read has landed.
+describe('useScheduledContent loading', () => {
+  it('is loading while any of the three reads is on its first load, and not after', () => {
+    for (const read of ['requestsLoading', 'roomsLoading', 'lobbiesLoading'] as const) {
+      mocks[read] = true;
+      expect([read, renderHook(() => useScheduledContent()).result.current.loading]).toEqual([read, true]);
+      mocks[read] = false;
+    }
+    expect(renderHook(() => useScheduledContent()).result.current.loading).toBe(false);
+  });
+});
+
+// GEO-3431: the requester heads-up email's "Withdraw the invite" opens the Requests tab on that
+// invite (`modalTarget=requests:<id>`), so of several, the one the email was about is the one shown.
+describe('a link to one request', () => {
+  const mine = (overrides: Partial<ScheduledDebateRequest> = {}) =>
+    request({ viewer_must_answer: false, proposed_by_user_id: 'user-me', ...overrides });
+  const second = mine({
+    request_id: 'request-2',
+    scheduled_start_at: '2099-09-25T13:00:00Z',
+    scheduled_end_at: '2099-09-25T13:30:00Z',
+  });
+  const focusedCards = () => screen.getAllByRole('article').filter(card => card.hasAttribute('data-focused'));
+  // No hub box around the section here, so the scroll is the page's.
+  let scrollTo: MockInstance<typeof window.scrollTo>;
+  beforeEach(() => {
+    scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  });
+  afterEach(() => scrollTo.mockRestore());
+
+  it('outlines that request and scrolls to it, and no other', () => {
+    setup({ answerable: [mine(), second], focusedRequestId: 'request-2' });
+
+    expect(focusedCards()).toHaveLength(1);
+    expect(focusedCards()[0]).toHaveClass('border-text');
+    expect(focusedCards()[0]).toHaveTextContent('Sep 25');
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits for every read to land before outlining or scrolling', () => {
+    const { rerender } = setup({ answerable: [mine()], focusedRequestId: 'request-1', loading: true });
+    expect(screen.getByRole('article')).not.toHaveAttribute('data-focused');
+    expect(scrollTo).not.toHaveBeenCalled();
+
+    rerender(sectionFor({ answerable: [mine()], focusedRequestId: 'request-1' }));
+    expect(screen.getByRole('article')).toHaveAttribute('data-focused');
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+  });
+
+  it('outlines the upcoming debate when the invite was accepted since the email', () => {
+    setup({ upcoming: [upcomingRow({}, 'user-them', 'request-1')], focusedRequestId: 'request-1' });
+
+    expect(focusedCards()).toHaveLength(1);
+  });
+
+  it('scrolls the hub box, clear of its sticky filter bar, and leaves the page alone', () => {
+    const boxScrollTo = vi.fn();
+    const originalScrollTo = Element.prototype.scrollTo;
+    Element.prototype.scrollTo = boxScrollTo;
+    const rect = (top: number, height = 0) => ({ top, height }) as DOMRect;
+    const rects = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.hasAttribute('data-focused')) return rect(500);
+      if (this.hasAttribute('data-debates-hub-scroll')) return rect(100);
+      if (this.hasAttribute('data-hub-sticky-controls')) return rect(100, 57);
+      return rect(0);
+    });
+    try {
+      render(
+        <div data-debates-hub-scroll="">
+          <div data-hub-sticky-controls="" />
+          {sectionFor({ answerable: [mine()], focusedRequestId: 'request-1' })}
+        </div>
+      );
+
+      // The card's top in the box (500 - 100), less the bar it has to clear (57).
+      expect(boxScrollTo).toHaveBeenCalledWith({ top: 343, behavior: 'smooth' });
+      expect(scrollTo).not.toHaveBeenCalled();
+    } finally {
+      rects.mockRestore();
+      Element.prototype.scrollTo = originalScrollTo;
+    }
+  });
+
+  it('marks the card current and moves focus to it, for a keyboard or screen reader', () => {
+    setup({ answerable: [mine(), second], focusedRequestId: 'request-2' });
+
+    const [card] = focusedCards();
+    expect(card).toHaveAttribute('aria-current', 'true');
+    expect(card).toHaveFocus();
+    expect(card).toHaveClass('outline-none');
+  });
+
+  it('says a request that is no longer open is no longer on, in the Running late dialog’s words', () => {
+    mocks.requests = [mine({ status: 'declined' })];
+    setup({ answerable: [], focusedRequestId: 'request-1' });
+
+    expect(screen.getByRole('status')).toHaveTextContent('This debate is no longer on.');
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('says it could not find a request that is not this account’s', () => {
+    setup({ answerable: [mine()], focusedRequestId: 'request-9' });
+
+    expect(screen.getByRole('status')).toHaveTextContent('We couldn’t find this debate.');
+    expect(focusedCards()).toHaveLength(0);
+  });
+
+  it('says nothing about the link while loading, or when a read its card could be in failed', () => {
+    const { rerender } = setup({ answerable: [], focusedRequestId: 'request-1', loading: true });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    rerender(sectionFor({ focusedRequestId: 'request-1', requestsError: new Error('down') }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    // Accepted, so its card would be under Upcoming debates, which could not be read.
+    mocks.requests = [mine({ status: 'accepted', room_id: 'room-1' })];
+    rerender(sectionFor({ focusedRequestId: 'request-1', roomsError: new Error('down') }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  // Accepted between two polls: the requests read has it, the rooms read (its own timer, no refetch
+  // on focus) has not caught up. The debate is on, so nothing says otherwise.
+  it('says nothing for a request accepted before its room has been read', () => {
+    mocks.requests = [mine({ status: 'accepted', room_id: 'room-1' })];
+    setup({ upcoming: [], focusedRequestId: 'request-1' });
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('outlines and scrolls nothing without one', () => {
+    setup({ answerable: [mine()] });
+
+    expect(screen.getByRole('article')).not.toHaveAttribute('data-focused');
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 });
 

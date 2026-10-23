@@ -24,13 +24,6 @@ export function describeJoinState({ micOn, cameraOn }: DebateJoinState): DebateJ
   return { summary: 'Joining listening only', announcement: 'You will join listening only.' };
 }
 
-/** The same copy for a card that offers no camera. */
-export function describeMicOnlyJoinState(micOn: boolean): DebateJoinStateCopy {
-  return micOn
-    ? { summary: 'Joining with mic on', announcement: 'You will join with your mic on.' }
-    : { summary: 'Joining muted', announcement: 'You will join muted.' };
-}
-
 export type DebateMediaPermission = 'granted' | 'denied' | 'prompt' | 'unsupported';
 
 export function mayAutoStartPreview(permission: DebateMediaPermission): boolean {

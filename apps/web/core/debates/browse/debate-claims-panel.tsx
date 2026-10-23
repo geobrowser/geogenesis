@@ -387,7 +387,8 @@ function PanelClaimControls({
   row: DebateClaim | null;
   entity: Entity | null;
 }) {
-  // The claim's row title is drawn by `ClaimRow` above, so nothing is passed for it here.
+  // The claim's row title is drawn by `ClaimRow` above. The hook still names the claim for a vote kept
+  // on this device, from the same entity and row.
   const { responseKind, summary, control } = useDebateClaimResponse({
     claimId,
     spaceId,

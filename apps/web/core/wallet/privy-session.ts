@@ -31,6 +31,15 @@ function storedString(key: string): string | null {
   }
 }
 
+/**
+ * The access token Privy last stored in this browser, possibly expired, read without loading Privy.
+ * Only for calls that accept a recently expired token, like geo-notifications' seen ping.
+ */
+export function storedPrivyAccessToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return storedString(PRIVY_ACCESS_TOKEN_KEY);
+}
+
 function hasSessionCookie(): boolean {
   try {
     return document.cookie.split(';').some(part => {
@@ -43,7 +52,7 @@ function hasSessionCookie(): boolean {
 }
 
 /** A return from an OAuth redirect has to be completed by Privy on this very load. */
-function isReturningFromPrivyRedirect(): boolean {
+export function isReturningFromPrivyRedirect(): boolean {
   try {
     const params = new URLSearchParams(window.location.search);
     return ['privy_oauth_code', 'privy_oauth_state', 'privy_oauth_provider'].some(key => params.has(key));

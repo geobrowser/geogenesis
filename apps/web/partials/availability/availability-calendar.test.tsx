@@ -91,4 +91,29 @@ describe('AvailabilityCalendar', () => {
     render(<AvailabilityCalendar />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Clear all' })).toBeDisabled());
   });
+
+  it('shades calendar busy time under the blocks, with a legend', async () => {
+    const monday = thisMonday();
+    const tuesdayAt = (hour: number) =>
+      new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 1, hour).toISOString();
+    const { container } = render(
+      <AvailabilityCalendar initialBlocks={blocks} busyIntervals={[{ start: tuesdayAt(13), end: tuesdayAt(15) }]} />
+    );
+
+    await waitFor(() => expect(container.querySelectorAll('[data-busy]')).toHaveLength(1));
+    const busy = container.querySelector<HTMLElement>('[data-busy]')!;
+    expect(busy.closest('[data-weekday]')).toHaveAttribute('data-weekday', '1');
+    // 24px per 30-minute slot from midnight.
+    expect(busy.style.top).toBe(`${13 * 2 * 24}px`);
+    expect(busy.style.height).toBe(`${4 * 24}px`);
+    expect(busy).toHaveClass('pointer-events-none');
+    expect(screen.getByText('Busy on your calendar')).toBeInTheDocument();
+  });
+
+  it('draws no busy shading or legend without busy intervals', async () => {
+    const { container } = render(<AvailabilityCalendar initialBlocks={blocks} />);
+    await waitFor(() => expect(deleteButtons()).toHaveLength(2));
+    expect(container.querySelector('[data-busy]')).toBeNull();
+    expect(screen.queryByText('Busy on your calendar')).not.toBeInTheDocument();
+  });
 });

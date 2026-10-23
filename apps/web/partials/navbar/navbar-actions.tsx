@@ -9,6 +9,7 @@ import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
+import { privyUserEmail } from '~/core/auth/privy-email';
 import { useDebateSchedule } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
@@ -19,6 +20,7 @@ import { useSpaceId } from '~/core/hooks/use-space-id';
 import { geoNotificationsApiUrl } from '~/core/notifications/api';
 import { useEditable } from '~/core/state/editable-store';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import type { SaveVotesPressReason } from '~/core/state/save-votes-prompt';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 import { useLogout, usePrivy } from '~/core/wallet/auth-hooks';
@@ -37,11 +39,12 @@ import { Toggle } from '~/design-system/toggle';
 
 import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
+import { EmailSettingsDialog } from '~/partials/notifications/email-settings-dialog';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
 import { useCreateEntityActions } from '../create-entity/use-create-entity-actions';
 import { avatarAtom } from '../onboarding/onboarding-atoms';
-import { EmailNotificationsMenuItem } from './email-notifications-menu-item';
+import { EmailSettingsMenuItem } from './email-settings-menu-item';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount, error } = useSmartAccount();
@@ -81,7 +84,17 @@ const PROFILE_MENU_ACTION_CLASS =
   'flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none mobile:min-h-11';
 const PROFILE_MENU_DIVIDED_ACTION_CLASS = cx(PROFILE_MENU_ACTION_CLASS, 'border-t border-grey-02');
 
-export function NavbarActions() {
+type NavbarActionsProps = {
+  /**
+   * The debate feed's phone bar (GEO-3415): the same account states and profile menu, with the smaller
+   * Log in pill and a 44px avatar target at every phone width rather than only below 640px.
+   */
+  compact?: boolean;
+  /** Where a sign-in from here was started, for its analytics; the navbar's own when left out. */
+  signInComponent?: SaveVotesPressReason;
+};
+
+export function NavbarActions({ compact = false, signInComponent }: NavbarActionsProps = {}) {
   const [open, onOpenChange] = React.useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = React.useState(false);
   // Mounted from the first open onward rather than always: the dialog's hooks read
@@ -92,6 +105,7 @@ export function NavbarActions() {
   // Deferred like the dialog above: the week grid is only built once somebody asks for it.
   const [hasOpenedSchedule, setHasOpenedSchedule] = React.useState(false);
   const avatarTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const [isEmailSettingsOpen, setIsEmailSettingsOpen] = React.useState(false);
 
   const {
     isLoading: isUserLoading,
@@ -105,7 +119,9 @@ export function NavbarActions() {
   const { user, authenticated } = usePrivy();
   // Signed in with no smart account is not signed out (GEO-3245): Log in does nothing for it.
   const walletStall = useWalletStall({ authenticated, address: resolvedAddress, error: smartAccountError });
-  const isMobileNavbar = useIsMobileNavbar();
+  // The compact bar only exists on phones, so it always takes the phone layout: the edit mode toggle
+  // in the menu, not beside the avatar, even between 640px and the bar's 767px edge.
+  const isMobileNavbar = useIsMobileNavbar() || compact;
   const spaceId = useSpaceId();
   const { canCreateInSpace, createEntity, createProperty, createSpace } = useCreateEntityActions(spaceId);
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
@@ -176,7 +192,7 @@ export function NavbarActions() {
     }
 
     if (state === 'signed_out' || !address) {
-      return <GeoConnectButton key="navbar-content" />;
+      return <GeoConnectButton key="navbar-content" compact={compact} component={signInComponent} />;
     }
 
     // Optimistic identity: while the personal space is being created in the
@@ -189,12 +205,19 @@ export function NavbarActions() {
         ? `/space/pending/${topicId}`
         : null;
     const displayName = profile?.name?.trim() || shortAddress(address);
-    const email = userEmail(user);
+    const email = privyUserEmail(user);
     const identityDetail = email ?? address;
 
     return (
       <div key="navbar-content" className="flex items-center gap-4">
-        <ModeToggle isMobile={isMobileNavbar} isProfileMenuOpen={open} spaceId={spaceId}>
+        <ModeToggle
+          isMobile={isMobileNavbar}
+          isProfileMenuOpen={open}
+          spaceId={spaceId}
+          // The app navbar stays mounted under the compact bar and already owns ⌘E; a second
+          // listener would toggle once but report it twice.
+          registerShortcut={!compact}
+        >
           {({ navbar, menu }) => (
             <>
               {navbar}
@@ -206,7 +229,13 @@ export function NavbarActions() {
                   // only way to a profile, personal space or sign out on mobile, which it had no way to
                   // reach at all until this change. Not applied to the rest of the row: those controls
                   // were already on phones and belong to GEO-2970's sweep.
-                  <button type="button" className="flex items-center justify-center p-0 mobile:h-11 mobile:w-11">
+                  <button
+                    type="button"
+                    className={cx(
+                      'flex items-center justify-center p-0',
+                      compact ? 'h-11 w-11' : 'mobile:h-11 mobile:w-11'
+                    )}
+                  >
                     {/* The trigger is an image and nothing else: `FallbackImage` has an empty alt and
                         `Avatar` carries no label, so Radix's button announced as nothing at all. It is
                         the only way to a profile, personal space or sign out on a phone. Named the way
@@ -305,9 +334,15 @@ export function NavbarActions() {
                 >
                   Set my schedule
                 </button>
-                {/* GEO-3029. Needs a personal space to register against, and the service configured. */}
+                {/* GEO-3392. Needs a personal space to register against, and the service configured. */}
                 {personalSpaceId && geoNotificationsApiUrl() ? (
-                  <EmailNotificationsMenuItem className={PROFILE_MENU_DIVIDED_ACTION_CLASS} />
+                  <EmailSettingsMenuItem
+                    className={PROFILE_MENU_DIVIDED_ACTION_CLASS}
+                    onOpen={() => {
+                      onOpenChange(false);
+                      setIsEmailSettingsOpen(true);
+                    }}
+                  />
                 ) : null}
                 {/* Sign out keeps its own group below the divider — the destructive action
                   stays alone at the bottom where people expect it. */}
@@ -332,6 +367,13 @@ export function NavbarActions() {
       ) : null}
       {/* `openerRef` is the avatar, not the item that was clicked: that item unmounts with the
           popover on the same click, leaving no live node for the dialog to return focus to. */}
+      {isEmailSettingsOpen ? (
+        <EmailSettingsDialog
+          entry="account_menu"
+          onClose={() => setIsEmailSettingsOpen(false)}
+          openerRef={avatarTriggerRef}
+        />
+      ) : null}
       {hasOpenedSchedule ? (
         <OwnScheduleModal
           key="availability-modal"
@@ -399,42 +441,6 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-function userEmail(user: unknown) {
-  if (!isRecord(user)) return undefined;
-  const primary = emailFromUnknown(user.email);
-  if (primary) return primary;
-  if (!Array.isArray(user.linkedAccounts)) return undefined;
-
-  for (const account of user.linkedAccounts) {
-    const email = emailFromUnknown(account);
-    if (email) return email;
-  }
-
-  return undefined;
-}
-
-function emailFromUnknown(value: unknown) {
-  if (typeof value === 'string') return normalizeEmail(value);
-  if (!isRecord(value)) return undefined;
-
-  for (const key of ['address', 'email', 'emailAddress']) {
-    const email = normalizeEmail(value[key]);
-    if (email) return email;
-  }
-
-  return undefined;
-}
-
-function normalizeEmail(value: unknown) {
-  if (typeof value !== 'string') return undefined;
-  const email = value.trim().toLowerCase();
-  return email.includes('@') ? email : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];
 
 const variants = {
@@ -458,11 +464,13 @@ function ModeToggle({
   isMobile,
   isProfileMenuOpen,
   spaceId,
+  registerShortcut = true,
   children,
 }: {
   isMobile: boolean;
   isProfileMenuOpen: boolean;
   spaceId: string | null | undefined;
+  registerShortcut?: boolean;
   children: (slots: ModeToggleSlots) => React.ReactNode;
 }) {
   const controls = useAnimation();
@@ -556,14 +564,17 @@ function ModeToggle({
   ]);
 
   const memoizedShortcuts = React.useMemo(
-    () => [
-      // Toggle edit mode when ⌘ + e is pressed
-      {
-        key: 'e',
-        callback: onToggle,
-      },
-    ],
-    [onToggle]
+    () =>
+      registerShortcut
+        ? [
+            // Toggle edit mode when ⌘ + e is pressed
+            {
+              key: 'e',
+              callback: onToggle,
+            },
+          ]
+        : [],
+    [onToggle, registerShortcut]
   );
 
   useKeyboardShortcuts(memoizedShortcuts);

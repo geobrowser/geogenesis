@@ -10,18 +10,18 @@ import type { RelationFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
 import { getEntityNames } from '~/core/io/queries';
 import {
-  decodeRelationFacet,
-  relationFacetByFilterDocument,
   type RelationFacetCount,
   type RelationFacetGroupBy,
+  decodeRelationFacet,
+  relationFacetByFilterDocument,
 } from '~/core/io/relation-facet';
 import { normId } from '~/core/utils/norm-id';
 
 import {
+  type ClaimRecordDirectDebates,
   claimRecordDirectDebatesKey,
   claimRecordFilters,
   fetchClaimRecordCandidates,
-  type ClaimRecordDirectDebates,
 } from './claim-record-query';
 import { useClaimRecordDirectDebates } from './use-claim-record';
 

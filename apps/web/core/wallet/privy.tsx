@@ -12,10 +12,10 @@ export const privyConfig: PrivyClientConfig = {
   // (firewall/VPN/DNS). Not configurable here—fix network or use Privy dashboard allowed origins.
   defaultChain: GEOGENESIS,
   supportedChains: [GEOGENESIS],
-  // Every method here has to complete in the same document. Actions a visitor takes before signing
-  // up are queued in memory (`core/state/pending-actions.ts`) and replayed once their account exists;
-  // a method that redirects away — any OAuth provider — reloads the page and silently drops them.
-  // Adding one means persisting that queue across the redirect first. `privy.test.ts` holds this.
+  // Every method here completes in the same document. Actions a visitor takes before signing up are
+  // queued in memory (`core/state/pending-actions.ts`), and a method that redirects away — any OAuth
+  // provider — reloads the page and drops them. Google is added per call behind the `googleSignIn`
+  // flag (`core/auth/google-sign-in.ts`), which accepts that loss. `privy.test.ts` holds this.
   loginMethods: ['email'],
   embeddedWallets: {
     ethereum: {

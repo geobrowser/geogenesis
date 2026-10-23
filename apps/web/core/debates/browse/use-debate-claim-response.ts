@@ -1,6 +1,10 @@
 'use client';
 
-import { type ClaimResponseState, useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
+import {
+  type ClaimResponseState,
+  claimTitleFrom,
+  useClaimResponseState,
+} from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { SavePromptSurface } from '~/core/state/save-votes-prompt';
@@ -47,7 +51,9 @@ export function useDebateClaimResponse({
   /** The claim on the graph, which carries the factual flag geo-chat's row would otherwise report. */
   entity: Entity | null;
 }): ClaimResponseState & { control: ReturnType<typeof useClaimPositionControl> } {
-  const state = useClaimResponseState({ claimId, spaceId, row, entity });
+  // Every debate surface draws the claim itself, but a vote kept on this device is saved under this
+  // text, and the save sheet's reminder chip needs it (GEO-3437).
+  const state = useClaimResponseState({ claimId, spaceId, row, entity, title: claimTitleFrom({ entity, row }) });
 
   const control = useClaimPositionControl({
     claim: state.claim,
