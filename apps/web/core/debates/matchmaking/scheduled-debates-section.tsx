@@ -38,7 +38,7 @@ import { useDebatePeople } from './hooks';
 import { type DebateAnalyticsSurface, debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
-import { scrollToSection, useHubScrollSelector } from './hub-scroll';
+import { HUB_STICKY_CONTROLS_SELECTOR, scrollToSection, useHubScrollSelector } from './hub-scroll';
 import { RequestParties } from './request-parties';
 import { RequestSection } from './request-section';
 import { formatDebateSlot, formatDebateTime, formatTime } from './scheduled-debate-format';
@@ -72,8 +72,12 @@ export function ScheduledDebatesSection({
   React.useEffect(() => {
     if (!focusedId) return;
     // Only the hub's box, the way the lobby's sections jump: `scrollIntoView` scrolls every ancestor.
+    // Clear of the Requests tab's filter bar, pinned to the top of that box.
     const node = document.querySelector<HTMLElement>(FOCUSED_CARD);
-    if (node) scrollToSection(node, hubScrollSelector ? node.closest<HTMLElement>(hubScrollSelector) : null);
+    if (!node) return;
+    const scroller = hubScrollSelector ? node.closest<HTMLElement>(hubScrollSelector) : null;
+    const stickyBar = scroller?.querySelector<HTMLElement>(HUB_STICKY_CONTROLS_SELECTOR);
+    scrollToSection(node, scroller, stickyBar?.getBoundingClientRect().height ?? 0);
   }, [focusedId, hubScrollSelector]);
   const { answer, busy, error: conflict } = useScheduledDebateAnswer();
   const viewerId = useCurrentGeoChatUserId();

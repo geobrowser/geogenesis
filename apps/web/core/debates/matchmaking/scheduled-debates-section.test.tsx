@@ -34,6 +34,9 @@ const mocks = vi.hoisted(() => ({
   graphLookupIds: [] as string[],
   lobbies: [] as DebateLobbySummary[],
   lobbiesError: null as Error | null,
+  requestsLoading: false,
+  roomsLoading: false,
+  lobbiesLoading: false,
 }));
 
 const ADA = {
@@ -52,11 +55,19 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
     isPending: mocks.cancelPending,
     isSuccess: mocks.cancelSuccess,
   }),
-  useScheduledDebates: () => ({ data: { requests: mocks.requests }, error: mocks.requestsError }),
+  useScheduledDebates: () => ({
+    data: { requests: mocks.requests },
+    error: mocks.requestsError,
+    isLoading: mocks.requestsLoading,
+  }),
 }));
 
 vi.mock('~/core/debates/rooms/hooks', () => ({
-  useUpcomingDebateRooms: () => ({ data: { rooms: mocks.rooms }, error: mocks.roomsError }),
+  useUpcomingDebateRooms: () => ({
+    data: { rooms: mocks.rooms },
+    error: mocks.roomsError,
+    isLoading: mocks.roomsLoading,
+  }),
   useFinishedRoomIds: () => mocks.finishedRoomIds,
 }));
 
@@ -65,6 +76,7 @@ vi.mock('~/core/debates/lobbies/hooks', () => ({
     data: enabled ? { lobbies: mocks.lobbies } : undefined,
     // Not gated: a disabled query keeps the error of its last failed read.
     error: mocks.lobbiesError,
+    isLoading: mocks.lobbiesLoading,
   }),
 }));
 
@@ -200,6 +212,9 @@ afterEach(() => {
   mocks.graphLookupIds = [];
   mocks.lobbies = [];
   mocks.lobbiesError = null;
+  mocks.requestsLoading = false;
+  mocks.roomsLoading = false;
+  mocks.lobbiesLoading = false;
 });
 
 describe('answering in the tab', () => {
@@ -505,6 +520,18 @@ describe('moving a scheduled debate', () => {
   });
 });
 
+// GEO-3431: a linked request is outlined and scrolled to only once every read has landed.
+describe('useScheduledContent loading', () => {
+  it('is loading while any of the three reads is on its first load, and not after', () => {
+    for (const read of ['requestsLoading', 'roomsLoading', 'lobbiesLoading'] as const) {
+      mocks[read] = true;
+      expect([read, renderHook(() => useScheduledContent()).result.current.loading]).toEqual([read, true]);
+      mocks[read] = false;
+    }
+    expect(renderHook(() => useScheduledContent()).result.current.loading).toBe(false);
+  });
+});
+
 // GEO-3431: the requester heads-up email's "Withdraw the invite" opens the Requests tab on that
 // invite (`modalTarget=requests:<id>`), so of several, the one the email was about is the one shown.
 describe('a link to one request', () => {
@@ -546,6 +573,34 @@ describe('a link to one request', () => {
     setup({ upcoming: [upcomingRow({}, 'user-them', 'request-1')], focusedRequestId: 'request-1' });
 
     expect(focusedCards()).toHaveLength(1);
+  });
+
+  it('scrolls the hub box, clear of its sticky filter bar, and leaves the page alone', () => {
+    const boxScrollTo = vi.fn();
+    const originalScrollTo = Element.prototype.scrollTo;
+    Element.prototype.scrollTo = boxScrollTo;
+    const rect = (top: number, height = 0) => ({ top, height }) as DOMRect;
+    const rects = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      if (this.hasAttribute('data-focused')) return rect(500);
+      if (this.hasAttribute('data-debates-hub-scroll')) return rect(100);
+      if (this.hasAttribute('data-hub-sticky-controls')) return rect(100, 57);
+      return rect(0);
+    });
+    try {
+      render(
+        <div data-debates-hub-scroll="">
+          <div data-hub-sticky-controls="" />
+          {sectionFor({ answerable: [mine()], focusedRequestId: 'request-1' })}
+        </div>
+      );
+
+      // The card's top in the box (500 - 100), less the bar it has to clear (57).
+      expect(boxScrollTo).toHaveBeenCalledWith({ top: 343, behavior: 'smooth' });
+      expect(scrollTo).not.toHaveBeenCalled();
+    } finally {
+      rects.mockRestore();
+      Element.prototype.scrollTo = originalScrollTo;
+    }
   });
 
   it('outlines and scrolls nothing without one', () => {
