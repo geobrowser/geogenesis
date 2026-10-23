@@ -26,10 +26,12 @@ function clearClickFromUrl() {
  * looked at. Works signed out: the send names the recipient.
  *
  * Once the service has answered (or said it doesn't know the send), `ref_send` and `ref_link` leave
- * the address bar, so a reload doesn't report again and a copy of the address doesn't carry them; a
- * report that failed leaves them, so a reload tries again. Analytics never sees them either way: its
- * runtime keeps only campaign parameters in URLs. The service counts only the first click on each
- * link. Mounted once, app-wide.
+ * the address bar if the visitor is still on the page they landed on, so a reload there doesn't report
+ * again; a report that failed leaves them, so a reload tries again. This is tidying, not the guard:
+ * the landing's history entry, or a deep link clearing its own trigger at the same moment, can still
+ * show them, and the service counts only the first click on each link, so a copy of the address adds
+ * nothing once the recipient has clicked. Analytics never sees them: its runtime keeps only campaign
+ * parameters in URLs. Mounted once, app-wide.
  */
 export function EmailClickReporter() {
   // Read once per mount, before the URL is cleared, so a second run of the effect still has it.
