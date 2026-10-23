@@ -139,8 +139,6 @@ const nextConfig: NextConfig = {
     : undefined,
   experimental: {
     turbopackRustReactCompiler: true,
-    // EXPERIMENT ONLY (GEO-3453): used by the --webpack variant.
-    webpackMemoryOptimizations: true,
     ...turbopackOptimizations,
     optimizePackageImports,
   },
