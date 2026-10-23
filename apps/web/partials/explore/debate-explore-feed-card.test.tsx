@@ -493,6 +493,92 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
   });
 
+  describe('cards taller than the viewport', () => {
+    function renderLandscapeCard() {
+      vi.stubGlobal('innerHeight', 375);
+      let height = 1000;
+      const originalRect = HTMLElement.prototype.getBoundingClientRect;
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        const rect = originalRect.call(this);
+        return this.tagName === 'ARTICLE' ? { ...rect, height } : rect;
+      });
+      const resizeCallbacks = new Set<() => void>();
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(private callback: () => void) {
+            resizeCallbacks.add(callback);
+          }
+          observe() {}
+          disconnect() {
+            resizeCallbacks.delete(this.callback);
+          }
+        }
+      );
+      mocks.isMobileLayout = true;
+      mocks.debateQuery = { data: watchableDebate(), isError: false };
+      mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+      renderCard();
+      intersectAll(0.1);
+      return {
+        player: () => screen.getByTestId('player'),
+        thresholds: () =>
+          observers.find(record => !record.options?.rootMargin && record.elements.size > 0)?.options?.threshold,
+        resizeCard: (nextHeight: number) => {
+          height = nextHeight;
+          act(() => resizeCallbacks.forEach(callback => callback()));
+        },
+      };
+    }
+
+    it('activates within the visible viewport and preserves hysteresis and horizontal clipping', () => {
+      const { player, thresholds } = renderLandscapeCard();
+      // The card can expose at most 375/1000 of itself, so the old 0.6 threshold was unreachable.
+      expect(thresholds()).toEqual([0.4 * 0.375, 0.6 * 0.375]);
+      // A horizontally clipped card still needs enough visible area to earn playback.
+      expect(player()).toHaveAttribute('data-active', 'false');
+      intersectOnScreen(0.23);
+      expect(player()).toHaveAttribute('data-active', 'true');
+      intersectOnScreen(0.19);
+      expect(player()).toHaveAttribute('data-active', 'true');
+      intersectOnScreen(0.4 * 0.375);
+      expect(player()).toHaveAttribute('data-active', 'false');
+      intersectOnScreen(0.19);
+      expect(player()).toHaveAttribute('data-active', 'false');
+      intersectOnScreen(0.6 * 0.375);
+      expect(player()).toHaveAttribute('data-active', 'true');
+      intersectOnScreen(0);
+      expect(player()).toHaveAttribute('data-active', 'false');
+    });
+
+    it('updates the actual observer thresholds when the card or viewport resizes', () => {
+      const { player, thresholds, resizeCard } = renderLandscapeCard();
+      resizeCard(500);
+      expect(thresholds()).toEqual([0.4 * 0.75, 0.6 * 0.75]);
+      intersectOnScreen(0.46);
+      expect(player()).toHaveAttribute('data-active', 'true');
+
+      vi.stubGlobal('innerHeight', 600);
+      fireEvent(window, new Event('resize'));
+      expect(thresholds()).toEqual([0.4, 0.6]);
+      intersectOnScreen(0.4);
+      expect(player()).toHaveAttribute('data-active', 'false');
+      intersectOnScreen(0.6);
+      expect(player()).toHaveAttribute('data-active', 'true');
+    });
+
+    it('lets an explicit play interaction activate a visible card before its autoplay threshold', () => {
+      const { player } = renderLandscapeCard();
+      expect(player()).toHaveAttribute('data-active', 'false');
+      fireEvent.click(player());
+      expect(player()).toHaveAttribute('data-active', 'true');
+      expect(mocks.playerToggle).toHaveBeenCalledOnce();
+      // An explicit play does not pin media after it has left the screen.
+      intersectOnScreen(0);
+      expect(player()).toHaveAttribute('data-active', 'false');
+    });
+  });
+
   // The lead card used to stream both full recordings on arrival: 76.5 MB of an idle visit's 84 MB.
   it('holds the full recordings until the viewer starts one', () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };

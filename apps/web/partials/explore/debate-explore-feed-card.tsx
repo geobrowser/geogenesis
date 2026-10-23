@@ -33,8 +33,8 @@ import { DebateExploreMetaRow } from './debate-explore-meta-row';
 import { ExploreCardTitle } from './explore-card-title';
 import { openExploreDebateClaimsPanelAtom } from '~/atoms';
 
-/** Visible fraction at which a card takes over playback, and the one it must fall back to
- * before it gives it up. Strictly between them the card keeps whatever state it had. */
+/** Visibility thresholds, relative to the viewport height when the card is taller than it.
+ * Strictly between them the card keeps whatever state it had. */
 const ACTIVATE_RATIO = 0.6;
 const DEACTIVATE_RATIO = 0.4;
 
@@ -176,36 +176,61 @@ export function DebateExploreFeedCard({
   // Hysteresis, not a single ratio: this used to activate on `intersectionRatio >= 0.6` and
   // deactivate on anything less, so a card resting near that boundary toggled on every small
   // scroll delta. Unlike the full-screen feed — a snap container where exactly one full-height
-  // card can clear 0.6, and activation only ever moves — these cards are short, several are on
-  // screen at once, and nothing else holds a card active. Each toggle starts or interrupts a
+  // card can clear 0.6, and activation only ever moves — these cards scroll freely, several can be
+  // on screen at once, and nothing else holds a card active. Each toggle starts or interrupts a
   // playback attempt, which is what made scrolling feel glitchy (GEO-2895).
   //
-  // Now: reach 0.6 to activate, fall back to 0.4 to give it up, and hold whatever the card
-  // already was strictly between them. The lower edge is inclusive so that the observer's
-  // report at the 0.4 threshold deactivates rather than landing ambiguously inside the band —
-  // a ratio reported exactly at a threshold is the normal case, not an edge case.
+  // Reach 0.6 to activate, fall back to 0.4 to give it up, and hold between them. For a card taller
+  // than the viewport, measure against the viewport's height instead: a full-width landscape card
+  // cannot expose 60% of itself. Scale the observer's thresholds too, so it actually reports those
+  // crossings. Resize only the observation when the card or viewport changes, never the card.
   const [active, setActive] = React.useState(false);
   // Any part of the card on screen. The observer reports crossing in and out of view as well as
   // its two thresholds, so this needs no threshold of its own.
   const [onScreen, setOnScreen] = React.useState(false);
   React.useEffect(() => {
     if (!container) return;
-    const observer = new IntersectionObserver(
-      entries => {
-        for (const entry of entries) {
-          setOnScreen(entry.isIntersecting);
-          setActive(current => {
-            if (!entry.isIntersecting) return false;
-            if (entry.intersectionRatio >= ACTIVATE_RATIO) return true;
-            if (entry.intersectionRatio <= DEACTIVATE_RATIO) return false;
-            return current;
-          });
-        }
-      },
-      { threshold: [DEACTIVATE_RATIO, ACTIVATE_RATIO] }
-    );
-    observer.observe(container);
-    return () => observer.disconnect();
+    let observer: IntersectionObserver | undefined;
+    let observedHeight = -1;
+    let observedViewportHeight = -1;
+    const observeVisibility = () => {
+      const height = container.getBoundingClientRect().height;
+      const viewportHeight = window.innerHeight;
+      if (height === observedHeight && viewportHeight === observedViewportHeight) return;
+      observedHeight = height;
+      observedViewportHeight = viewportHeight;
+      observer?.disconnect();
+
+      // Keep the horizontal intersection in the ratio: a gallery card clipped at the rail's edge
+      // must still earn its visible width. Only the unattainable vertical fraction is removed.
+      const scale = height > 0 && viewportHeight > 0 ? Math.min(1, viewportHeight / height) : 1;
+      const activateAt = ACTIVATE_RATIO * scale;
+      const deactivateAt = DEACTIVATE_RATIO * scale;
+      observer = new IntersectionObserver(
+        entries => {
+          for (const entry of entries) {
+            setOnScreen(entry.isIntersecting);
+            setActive(current => {
+              if (!entry.isIntersecting) return false;
+              if (entry.intersectionRatio >= activateAt) return true;
+              if (entry.intersectionRatio <= deactivateAt) return false;
+              return current;
+            });
+          }
+        },
+        { threshold: [deactivateAt, activateAt] }
+      );
+      observer.observe(container);
+    };
+    observeVisibility();
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(observeVisibility);
+    resizeObserver?.observe(container);
+    window.addEventListener('resize', observeVisibility);
+    return () => {
+      observer?.disconnect();
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', observeVisibility);
+    };
   }, [container]);
 
   /*
@@ -296,7 +321,6 @@ export function DebateExploreFeedCard({
   }, [active, debateId, mediaMounted, onPlaybackRequest]);
 
   const requestPlayback = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!onPlaybackRequest) return;
     // Clicks that are not asks to play pass straight through. A finished debate's end card is drawn
     // inside this wrapper, and its vote, its voter list and its way into the claims panel are not
     // media controls — capturing them swallowed the vote and handed playback to a debate that had
@@ -307,6 +331,13 @@ export function DebateExploreFeedCard({
     const onEndCard = target instanceof Element && target.closest('[data-debate-end-card]') !== null;
     const isReplay = target instanceof Element && target.closest('[data-end-card-replay]') !== null;
     if (onEndCard && !isReplay) return;
+    if (!onPlaybackRequest) {
+      // An explicit media interaction can start a visible feed card before it reaches the autoplay
+      // threshold. Promote it before the player's handler runs, so an inactive player cannot
+      // immediately suspend the playback the viewer just requested.
+      if (onScreen) setActive(true);
+      return;
+    }
     if (active && playbackAllowed) {
       pendingPlaybackRequestRef.current = false;
       onPlaybackRequest(debateId);
@@ -410,7 +441,7 @@ export function DebateExploreFeedCard({
         {/* The videos first, then the claim they argue and the reader's side on it, in one frame —
             the same card the full-screen feed draws (GEO-3454). The frame is the card's, so the
             player and its stand-ins draw no corners of their own. */}
-        <div onClickCapture={mediaMounted && onPlaybackRequest ? requestPlayback : undefined}>
+        <div onClickCapture={mediaMounted ? requestPlayback : undefined}>
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
