@@ -2,7 +2,7 @@
 # EXPERIMENT ONLY (GEO-3453), not for master: runs `next build` while sampling
 # the build container's cgroup memory, then prints the peak.
 # OOM_EXPERIMENT_RUN: bump to force a new preview build of the same variant.
-OOM_EXPERIMENT_RUN=1
+OOM_EXPERIMENT_RUN=2
 
 log=/tmp/oom-mem.tsv
 cg=""
