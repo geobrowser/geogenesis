@@ -20,6 +20,7 @@ import {
   SAVE_FAILED,
   UNDO_EXPIRED_BODY,
   UNSUBSCRIBE_COPY,
+  UNSUBSCRIBE_UNAVAILABLE,
   withAddress,
 } from '~/core/notifications/email-groups';
 import { emailPreferenceChanged } from '~/core/notifications/email-settings-analytics';
@@ -75,6 +76,28 @@ export function UnsubscribePage() {
       }
     },
   });
+
+  // The service down or the connection dropped: the link is likely fine, so don't call it broken.
+  if (read.isError && !isClientError(read.error)) {
+    return (
+      <Card>
+        <Heading title={UNSUBSCRIBE_UNAVAILABLE.title} body={UNSUBSCRIBE_UNAVAILABLE.body} />
+        <div className="grid grid-cols-2 gap-2">
+          <Link href={EMAIL_SETTINGS_HREF} className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}>
+            Email settings
+          </Link>
+          <button
+            type="button"
+            disabled={read.isFetching}
+            onClick={() => void read.refetch()}
+            className={DIALOG_ACTION_BUTTON_CLASS_NAME}
+          >
+            Try again
+          </button>
+        </div>
+      </Card>
+    );
+  }
 
   if (baseUrl === null || link === null || read.isError) {
     return (

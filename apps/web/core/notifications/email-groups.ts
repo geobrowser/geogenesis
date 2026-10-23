@@ -122,6 +122,12 @@ export const INVALID_UNSUBSCRIBE_LINK = {
   body: 'It may have been cut short when it was copied. You can choose which emails you get in your email settings.',
 };
 
+/** The unsubscribe page when geo-notifications can't be reached: the link itself is probably fine. */
+export const UNSUBSCRIBE_UNAVAILABLE = {
+  title: "We couldn't open this link",
+  body: 'Something went wrong on our side, not with your link. Try again in a moment.',
+};
+
 /** Fills `{email}`; geo-notifications' page says "Your address" when there is none on file. */
 export function withAddress(text: string, email: string | null): string {
   return text.replaceAll('{email}', email ?? 'Your address');

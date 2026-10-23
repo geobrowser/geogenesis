@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import * as React from 'react';
+
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
@@ -97,21 +99,40 @@ function switchValue(preferences: NotificationPreferences, group: EmailSwitch['g
 
 const SAVE_EMAIL_SWITCH_KEY = ['notifications', 'save-email-switch'] as const;
 
+/** What the settings dialog says about saving: nothing yet, the last change saved, or one didn't. */
+export type EmailSaveStatus = 'idle' | 'saved' | 'failed';
+
 /**
- * Saves one email switch (GEO-3392). Optimistic, so the switch moves at once, and put back if the save
+ * Saves email switches (GEO-3392). Optimistic, so a switch moves at once, and put back if its save
  * fails: a switch that silently did not save is worse than one that is slow.
  *
- * Switches save independently and can be in flight together, so a failure puts back only its own
- * switch, and the server's answer is written over the cache only by the last save to finish: an
- * earlier answer would not yet hold the later switch and would flick it back for a moment.
+ * Switches save independently and can be in flight together, so:
+ * - a failure puts back only its own switch;
+ * - the server's answer is written over the cache only by the last save to finish (an earlier answer
+ *   would not yet hold the later switch and would flick it back for a moment), and when that last
+ *   one failed the preferences are read again, because put-back values from overlapping presses of
+ *   one switch can't say what the server holds;
+ * - `status` is kept here, where every save's outcome arrives. React Query runs a `mutate(…, { onError })`
+ *   callback only for the latest call, so a caller's status would miss a failure that settled while
+ *   another switch was saving. A failure stays reported until a switch pressed after it saves.
  */
 export function useSaveEmailSwitch() {
   const queryClient = useQueryClient();
   const { user, getAccessToken } = usePrivy();
   const baseUrl = geoNotificationsApiUrl();
   const key = notificationQueryKeys.preferences(user?.id ?? null);
+  const [status, setStatus] = React.useState<EmailSaveStatus>('idle');
+  const presses = React.useRef(0);
+  const pressesAtLastFailure = React.useRef(0);
 
-  return useMutation<NotificationPreferences, Error, EmailSwitch, { previous: boolean | undefined }>({
+  const isLastInFlight = () => queryClient.isMutating({ mutationKey: SAVE_EMAIL_SWITCH_KEY }) <= 1;
+
+  const mutation = useMutation<
+    NotificationPreferences,
+    Error,
+    EmailSwitch & { press: number },
+    { previous: boolean | undefined }
+  >({
     mutationKey: SAVE_EMAIL_SWITCH_KEY,
     mutationFn: async change =>
       updateNotificationPreferences(baseUrl!, await accessToken(getAccessToken), patchFor(change)),
@@ -122,19 +143,33 @@ export function useSaveEmailSwitch() {
       return { previous: current ? switchValue(current, change.group) : undefined };
     },
     onError: (_error, change, context) => {
-      if (context?.previous === undefined) return;
+      pressesAtLastFailure.current = presses.current;
+      setStatus('failed');
       const current = queryClient.getQueryData<NotificationPreferences>(key);
-      if (current) {
+      if (current && context?.previous !== undefined) {
         queryClient.setQueryData<NotificationPreferences>(
           key,
           applySwitch(current, { group: change.group, enabled: context.previous })
         );
       }
+      // This save still counts as mutating here; any more than one means another is in flight.
+      if (isLastInFlight()) void queryClient.invalidateQueries({ queryKey: key });
     },
     onSuccess: (saved, change) => {
       emailPreferenceChanged({ group: change.group, enabled: change.enabled, surface: 'settings' });
-      // This save still counts as mutating here; any more than one means another is in flight.
-      if (queryClient.isMutating({ mutationKey: SAVE_EMAIL_SWITCH_KEY }) <= 1) queryClient.setQueryData(key, saved);
+      if (change.press > pressesAtLastFailure.current) setStatus('saved');
+      if (isLastInFlight()) queryClient.setQueryData(key, saved);
     },
   });
+
+  const { mutate } = mutation;
+  const save = React.useCallback(
+    (change: EmailSwitch) => {
+      presses.current += 1;
+      mutate({ ...change, press: presses.current });
+    },
+    [mutate]
+  );
+
+  return { save, status };
 }

@@ -101,16 +101,28 @@ describe('registration', () => {
 });
 
 describe('saving an email switch', () => {
-  const render = () => renderHook(() => ({ ...useNotificationPreferences(), save: useSaveEmailSwitch() }), { wrapper });
+  const render = () =>
+    renderHook(() => ({ ...useNotificationPreferences(), switches: useSaveEmailSwitch() }), { wrapper });
+
+  type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void; patch: Patch };
+  const holdSaves = () => {
+    const pending: Pending[] = [];
+    mocks.update = vi.fn(
+      (_b: string, _t: string, patch: Patch) =>
+        new Promise((resolve, reject) => pending.push({ resolve, reject, patch }))
+    );
+    return pending;
+  };
 
   it('moves the all-email switch at once and keeps what the server saved', async () => {
     const { result } = render();
     await waitFor(() => expect(result.current.preferences.data?.email_enabled).toBe(true));
+    expect(result.current.switches.status).toBe('idle');
 
-    act(() => result.current.save.mutate({ group: 'all', enabled: false }));
+    act(() => result.current.switches.save({ group: 'all', enabled: false }));
 
     await waitFor(() => expect(result.current.preferences.data?.email_enabled).toBe(false));
-    await waitFor(() => expect(result.current.save.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.switches.status).toBe('saved'));
     expect(mocks.update).toHaveBeenCalledWith('https://n.example', 'tok', { email_enabled: false });
     expect(mocks.capture).toHaveBeenCalledWith('email_preference_changed', {
       group: 'all',
@@ -123,9 +135,9 @@ describe('saving an email switch', () => {
     const { result } = render();
     await waitFor(() => expect(result.current.preferences.data?.email_groups?.digest).toBe(true));
 
-    act(() => result.current.save.mutate({ group: 'digest', enabled: false }));
+    act(() => result.current.switches.save({ group: 'digest', enabled: false }));
 
-    await waitFor(() => expect(result.current.save.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.switches.status).toBe('saved'));
     expect(mocks.update).toHaveBeenCalledWith('https://n.example', 'tok', { email_groups: { digest: false } });
     expect(result.current.preferences.data?.email_groups).toEqual({ ...allOn, digest: false });
     expect(result.current.preferences.data?.email_enabled).toBe(true);
@@ -137,16 +149,12 @@ describe('saving an email switch', () => {
   });
 
   it('puts back only its own switch when a save fails', async () => {
-    const pending: Array<{ resolve: (value: unknown) => void; reject: (error: Error) => void; patch: Patch }> = [];
-    mocks.update = vi.fn(
-      (_b: string, _t: string, patch: Patch) =>
-        new Promise((resolve, reject) => pending.push({ resolve, reject, patch }))
-    );
+    const pending = holdSaves();
     const { result } = render();
     await waitFor(() => expect(result.current.preferences.data?.email_groups?.digest).toBe(true));
 
-    act(() => result.current.save.mutate({ group: 'digest', enabled: false }));
-    act(() => result.current.save.mutate({ group: 'replies', enabled: false }));
+    act(() => result.current.switches.save({ group: 'digest', enabled: false }));
+    act(() => result.current.switches.save({ group: 'replies', enabled: false }));
     await waitFor(() => expect(pending).toHaveLength(2));
     expect(result.current.preferences.data?.email_groups).toMatchObject({ digest: false, replies: false });
 
@@ -158,15 +166,12 @@ describe('saving an email switch', () => {
   });
 
   it('does not let an earlier answer flick back a later switch that is still saving', async () => {
-    const pending: Array<{ resolve: (value: unknown) => void; patch: Patch }> = [];
-    mocks.update = vi.fn(
-      (_b: string, _t: string, patch: Patch) => new Promise(resolve => pending.push({ resolve, patch }))
-    );
+    const pending = holdSaves();
     const { result } = render();
     await waitFor(() => expect(result.current.preferences.data?.email_groups?.digest).toBe(true));
 
-    act(() => result.current.save.mutate({ group: 'digest', enabled: false }));
-    act(() => result.current.save.mutate({ group: 'replies', enabled: false }));
+    act(() => result.current.switches.save({ group: 'digest', enabled: false }));
+    act(() => result.current.switches.save({ group: 'replies', enabled: false }));
     await waitFor(() => expect(pending).toHaveLength(2));
 
     // The first answer knows only about the digest.
@@ -185,5 +190,58 @@ describe('saving an email switch', () => {
     );
     await waitFor(() => expect(mocks.capture).toHaveBeenCalledTimes(2));
     expect(result.current.preferences.data?.email_groups).toEqual({ ...allOn, digest: false, replies: false });
+  });
+
+  // React Query runs a `mutate(…, { onError })` callback only for the latest call, so a status kept
+  // by the caller never heard about a failure that settled while another switch was saving.
+  it('says a save failed even when another save was pressed while it was in flight', async () => {
+    const pending = holdSaves();
+    const { result } = render();
+    await waitFor(() => expect(result.current.preferences.data?.email_groups?.digest).toBe(true));
+
+    act(() => result.current.switches.save({ group: 'digest', enabled: false }));
+    act(() => result.current.switches.save({ group: 'replies', enabled: false }));
+    await waitFor(() => expect(pending).toHaveLength(2));
+
+    act(() => pending[0].reject(new Error('500')));
+    await waitFor(() => expect(result.current.switches.status).toBe('failed'));
+
+    // Pressed before the failure: its success doesn't cover the switch that went back.
+    act(() =>
+      pending[1].resolve({ in_app_enabled: true, email_enabled: true, email_groups: { ...allOn, replies: false } })
+    );
+    await waitFor(() => expect(mocks.capture).toHaveBeenCalledTimes(1));
+    expect(result.current.switches.status).toBe('failed');
+
+    // Pressed after it: the person has seen the failure and moved on.
+    act(() => result.current.switches.save({ group: 'digest', enabled: false }));
+    await waitFor(() => expect(pending).toHaveLength(3));
+    act(() =>
+      pending[2].resolve({
+        in_app_enabled: true,
+        email_enabled: true,
+        email_groups: { ...allOn, digest: false, replies: false },
+      })
+    );
+    await waitFor(() => expect(result.current.switches.status).toBe('saved'));
+  });
+
+  it('ends on what the server holds when the last save to finish fails', async () => {
+    const pending = holdSaves();
+    const { result } = render();
+    await waitFor(() => expect(result.current.preferences.data?.email_groups?.digest).toBe(true));
+
+    // Off, then straight back on, and neither reaches the server.
+    act(() => result.current.switches.save({ group: 'digest', enabled: false }));
+    act(() => result.current.switches.save({ group: 'digest', enabled: true }));
+    await waitFor(() => expect(pending).toHaveLength(2));
+
+    act(() => pending[0].reject(new Error('500')));
+    await waitFor(() => expect(result.current.switches.status).toBe('failed'));
+    act(() => pending[1].reject(new Error('500')));
+
+    // Putting back the second save's "previous" would show off; the server still has it on.
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.preferences.data?.email_groups?.digest).toBe(true));
   });
 });

@@ -128,6 +128,36 @@ describe('UnsubscribePage', () => {
     expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
   });
 
+  it("doesn't call a good link broken when the service is down, and offers to try again", async () => {
+    const user = userEvent.setup();
+    let down = true;
+    mocks.get = vi.fn(async () => {
+      if (down) throw Object.assign(new Error('geo-notifications 503'), { status: 503 });
+      return answer('ask');
+    });
+    renderPage();
+
+    expect(
+      await screen.findByRole('heading', { name: "We couldn't open this link" }, { timeout: 3000 })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: "This unsubscribe link doesn't work" })).toBeNull();
+
+    down = false;
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { name: 'Unsubscribe from the weekly digest?' })).toBeInTheDocument();
+  });
+
+  it('treats a dropped connection like an outage, not a bad link', async () => {
+    mocks.get = vi.fn(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    renderPage();
+
+    expect(
+      await screen.findByRole('heading', { name: "We couldn't open this link" }, { timeout: 3000 })
+    ).toBeInTheDocument();
+  });
+
   it('explains a link without a token, or one the service refuses', async () => {
     mocks.search = '';
     renderPage();

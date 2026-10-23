@@ -8,8 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { EmailGroupSettings } from '~/core/notifications/email-groups';
 
-type Callbacks = { onSuccess?: () => void; onError?: () => void };
-
 const mocks = vi.hoisted(() => ({
   state: null as unknown as {
     registration: { isError: boolean; isSuccess: boolean; data?: { email: string | null } };
@@ -18,13 +16,14 @@ const mocks = vi.hoisted(() => ({
       data?: { email_enabled: boolean; email_groups?: EmailGroupSettings; email?: string | null };
     };
   },
-  mutate: vi.fn(),
+  save: vi.fn(),
+  status: 'idle' as 'idle' | 'saved' | 'failed',
   capture: vi.fn(),
 }));
 
 vi.mock('~/core/notifications/hooks', () => ({
   useNotificationPreferences: () => mocks.state,
-  useSaveEmailSwitch: () => ({ mutate: mocks.mutate }),
+  useSaveEmailSwitch: () => ({ save: mocks.save, status: mocks.status }),
 }));
 vi.mock('~/core/analytics', () => ({ capture: (...args: unknown[]) => mocks.capture(...args) }));
 
@@ -50,7 +49,8 @@ function ready(emailEnabled = true, groups: EmailGroupSettings | null = allOn) {
 
 beforeEach(() => {
   ready();
-  mocks.mutate = vi.fn();
+  mocks.save = vi.fn();
+  mocks.status = 'idle';
   mocks.capture = vi.fn();
 });
 afterEach(() => cleanup());
@@ -77,22 +77,20 @@ describe('EmailSettingsDialog', () => {
     expect(mocks.capture).toHaveBeenCalledWith('email_settings_opened', { entry: 'account_menu' });
   });
 
-  it('saves a group as it changes and says so, or says a save failed', async () => {
-    const user = userEvent.setup();
-    let callbacks: Callbacks = {};
-    mocks.mutate = vi.fn((_change, options: Callbacks) => (callbacks = options));
-    render(<EmailSettingsDialog entry="link" via="email" onClose={() => {}} />);
+  it('saves a group as it changes, and says how saving went', async () => {
+    const { rerender } = render(<EmailSettingsDialog entry="link" via="email" onClose={() => {}} />);
     expect(mocks.capture).toHaveBeenCalledWith('email_settings_opened', { entry: 'link', via: 'email' });
-
-    await user.click(toggle('Weekly digest'));
-    expect(mocks.mutate).toHaveBeenCalledWith({ group: 'digest', enabled: false }, expect.anything());
     expect(screen.getByText(/Changes save as you go\./)).toBeInTheDocument();
 
-    React.act(() => callbacks.onSuccess?.());
+    await userEvent.setup().click(toggle('Weekly digest'));
+    expect(mocks.save).toHaveBeenCalledWith({ group: 'digest', enabled: false });
+
+    mocks.status = 'saved';
+    rerender(<EmailSettingsDialog entry="link" via="email" onClose={() => {}} />);
     expect(screen.getByText(/^Saved\./)).toBeInTheDocument();
 
-    await user.click(toggle('Replies'));
-    React.act(() => callbacks.onError?.());
+    mocks.status = 'failed';
+    rerender(<EmailSettingsDialog entry="link" via="email" onClose={() => {}} />);
     expect(screen.getByText(/Couldn't save\. Try again\./)).toBeInTheDocument();
   });
 
@@ -105,7 +103,7 @@ describe('EmailSettingsDialog', () => {
     expect(toggle('Replies')).toHaveAttribute('aria-checked', 'false');
 
     await userEvent.setup().click(toggle('All Geo emails'));
-    expect(mocks.mutate).toHaveBeenCalledWith({ group: 'all', enabled: true }, expect.anything());
+    expect(mocks.save).toHaveBeenCalledWith({ group: 'all', enabled: true });
   });
 
   it('warns while debate invites are off', () => {

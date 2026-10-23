@@ -16,7 +16,7 @@ import {
   SAVE_FAILED,
 } from '~/core/notifications/email-groups';
 import { type EmailSettingsEntry, emailSettingsOpened } from '~/core/notifications/email-settings-analytics';
-import { type EmailSwitch, useNotificationPreferences, useSaveEmailSwitch } from '~/core/notifications/hooks';
+import { useNotificationPreferences, useSaveEmailSwitch } from '~/core/notifications/hooks';
 
 import { DIALOG_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -49,8 +49,7 @@ export function EmailSettingsDialog({
   // Focus in on open, Tab kept inside: `aria-modal` says the page behind is unavailable.
   const cardRef = useFocusTrap(true);
   const { registration, preferences } = useNotificationPreferences();
-  const save = useSaveEmailSwitch();
-  const [status, setStatus] = React.useState<'idle' | 'saved' | 'failed'>('idle');
+  const { save, status } = useSaveEmailSwitch();
 
   useScrollLock();
 
@@ -81,13 +80,6 @@ export function EmailSettingsDialog({
   const allOn = data?.email_enabled ?? false;
   const groups: EmailGroupSettings | null = data?.email_groups ?? null;
   const address = data?.email ?? null;
-
-  const change = (next: EmailSwitch) => {
-    save.mutate(next, {
-      onSuccess: () => setStatus('saved'),
-      onError: () => setStatus('failed'),
-    });
-  };
 
   const statusText = unavailable
     ? 'Unavailable right now.'
@@ -143,7 +135,7 @@ export function EmailSettingsDialog({
           shortDescription="Off stops every email."
           checked={usable && allOn}
           disabled={!usable}
-          onChange={enabled => change({ group: 'all', enabled })}
+          onChange={enabled => save({ group: 'all', enabled })}
         />
 
         {groups ? (
@@ -161,7 +153,7 @@ export function EmailSettingsDialog({
                 checked={usable && allOn && groups[group]}
                 disabled={!usable || !allOn}
                 warn={usable && allOn && group === 'invites' && !groups.invites}
-                onChange={enabled => change({ group, enabled })}
+                onChange={enabled => save({ group, enabled })}
               />
             ))}
           </div>
