@@ -211,36 +211,27 @@ describe('ScheduledDebateNoticeDialog: the nudge popup', () => {
     expect(screen.getByTestId('probe')).toHaveTextContent('false');
   });
 
-  it('says it is being answered once, on Running late or Can’t make it, not on Join or Back', async () => {
-    const onAnswering = vi.fn();
+  it('says where the answer stands: open, answering, back to open, and sent', async () => {
+    succeedWith(state.late, { expected_at: new Date(Date.now() + 10 * 60_000).toISOString(), note: null });
+    const onAnswerChange = vi.fn();
     render(
       <ScheduledDebateNoticeDialog
         open
         requestId={REQUEST}
         initialStep="nudge"
         onClose={() => {}}
-        onAnswering={onAnswering}
+        onAnswerChange={onAnswerChange}
       />
     );
+    expect(onAnswerChange).toHaveBeenLastCalledWith('open');
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'Running late' }));
+    expect(onAnswerChange).toHaveBeenLastCalledWith('answering');
     await user.click(screen.getByRole('button', { name: 'Back' }));
-    await user.click(screen.getByRole('button', { name: 'Can’t make it' }));
-    expect(onAnswering).toHaveBeenCalledTimes(1);
-
-    cleanup();
-    onAnswering.mockClear();
-    render(
-      <ScheduledDebateNoticeDialog
-        open
-        requestId={REQUEST}
-        initialStep="nudge"
-        onClose={() => {}}
-        onAnswering={onAnswering}
-      />
-    );
-    await user.click(screen.getByRole('link', { name: 'Join now' }));
-    expect(onAnswering).not.toHaveBeenCalled();
+    expect(onAnswerChange).toHaveBeenLastCalledWith('open');
+    await user.click(screen.getByRole('button', { name: 'Running late' }));
+    await user.click(screen.getByRole('button', { name: /^Tell / }));
+    expect(onAnswerChange).toHaveBeenLastCalledWith('sent');
   });
 
   it('answers in place, with a way back to the popup', async () => {

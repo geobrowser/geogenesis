@@ -162,6 +162,10 @@ function NudgeButton({
 }) {
   const nudge = useNudgeDebateRoom(room.room_id);
   const state = nudgeButtonState(room, viewerId, now, nudge.data);
+  // Refused for good: nothing was recorded, so the room still says ready, but a retry cannot help.
+  const unreachable =
+    nudge.error instanceof GeoChatRequestError &&
+    (nudge.error.code === 'cant_reach' || nudge.error.code === 'nudge_forbidden');
 
   if (state === 'hidden') return null;
   const refusal = refusalText(nudge.error, opponentName);
@@ -169,7 +173,7 @@ function NudgeButton({
     <>
       <HubPillButton
         variant={state === 'ready' ? 'primary' : 'secondary'}
-        disabled={state !== 'ready' || nudge.isPending}
+        disabled={state !== 'ready' || nudge.isPending || unreachable}
         pending={nudge.isPending}
         pendingLabel={COPY.nudging}
         analyticsLabel={debateAnalyticsLabel('room', 'Waiting status nudge')}

@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 
 import type { UpcomingDebateRoom } from '../api';
 import { requestForRoom } from './room-opponent';
+import type { ScheduledNoticeAnswer } from './scheduled-notice';
 import { useScheduledNoticeOpen } from './scheduled-notice-open';
 import { useScheduledDebates } from './scheduling-hooks';
 
@@ -28,7 +29,7 @@ function standingNudge(room: UpcomingDebateRoom) {
   return room.kind !== 'lobby' && Boolean(room.nudged_at) && room.others_present;
 }
 
-type Held = { key: string; roomId: string; requestId: string; answering: boolean };
+type Held = { key: string; roomId: string; requestId: string; answer: ScheduledNoticeAnswer };
 
 /**
  * The popup a nudge puts on the screen of the debater someone is waiting for (GEO-3428, board 6c), on
@@ -42,8 +43,11 @@ type Held = { key: string; roomId: string; requestId: string; answering: boolean
  * - **Until they answer, it follows the nudge.** It goes, without counting as seen, the moment the
  *   nudge stops standing (answered in another tab, the waiter left) or the popup is not allowed
  *   (`enabled` off, another scheduling dialog up), and comes back only if the nudge still stands.
- * - **Once they are answering, it stays** until they close it: the answer clears the nudge, and the
- *   confirmation must not vanish with it.
+ * - **While they are answering, it stays**, whatever else wants the screen: a half-written note is
+ *   not lost to it. Back to the opening screen is not answering.
+ * - **Once the answer is sent**, its confirmation stays until closed, unless something else needs
+ *   the screen (an incoming request, another dialog), which it gives way to: the answer cleared the
+ *   nudge, so it does not come back.
  *
  * Closing hides every nudge the room has had so far on this page; a later nudge opens it again. The
  * coordinator keys this by account, so none of it carries over a sign-out or a switch.
@@ -75,7 +79,10 @@ export function RoomNudgePopup({
   // The held room's row while its nudge stands. A newer nudge to the same room keeps the popup up,
   // rather than closing and reopening it: it is the same question, asked again.
   const heldRow = held ? rooms.find(room => room.room_id === held.roomId && standingNudge(room)) : undefined;
-  const show = held !== null && (held.answering || (allowed && heldRow !== undefined));
+  // Mid-answer it stays whatever else wants the screen; once sent, its confirmation gives way to an
+  // incoming request or another dialog; before either, it follows the nudge.
+  const show =
+    held !== null && (held.answer === 'answering' || (allowed && (held.answer === 'sent' || heldRow !== undefined)));
   const latestKey = heldRow ? nudgeKey(heldRow) : null;
 
   React.useEffect(() => {
@@ -84,13 +91,13 @@ export function RoomNudgePopup({
 
   // Unanswered, the held nudge moves on to the newest, so closing counts every one it showed.
   React.useEffect(() => {
-    if (!held || held.answering || !latestKey || latestKey === held.key) return;
+    if (!held || held.answer !== 'open' || !latestKey || latestKey === held.key) return;
     setHeld({ ...held, key: latestKey });
   }, [held, latestKey]);
 
   React.useEffect(() => {
     if (held || !nudged || !request) return;
-    setHeld({ key: nudgeKey(nudged), roomId: nudged.room_id, requestId: request.request_id, answering: false });
+    setHeld({ key: nudgeKey(nudged), roomId: nudged.room_id, requestId: request.request_id, answer: 'open' });
   }, [held, nudged, request]);
 
   React.useEffect(() => {
@@ -105,7 +112,9 @@ export function RoomNudgePopup({
       open
       requestId={held.requestId}
       initialStep="nudge"
-      onAnswering={() => setHeld(current => (current ? { ...current, answering: true } : current))}
+      onAnswerChange={answer =>
+        setHeld(current => (current && current.answer !== answer ? { ...current, answer } : current))
+      }
       onClose={() => {
         // This nudge, and any later one to the same room that landed while the popup was up.
         const current = rooms.find(room => room.room_id === held.roomId);

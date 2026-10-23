@@ -27,6 +27,7 @@ import { startOffset } from '~/core/debates/rooms/room-time';
 import {
   DEFAULT_LATE_MINUTES,
   NOTICE_NOTE_MAX,
+  type ScheduledNoticeAnswer,
   type ScheduledNoticeStep,
   noticeNote,
   noticeRequestState,
@@ -72,10 +73,11 @@ type Props = {
    */
   onReschedule?: () => void;
   /**
-   * The first press that moves past the opening screen. The nudge popup (GEO-3428) holds itself open
-   * from then on, so a confirmation is not cut off when the answer clears the nudge.
+   * Where the answer stands, as it changes: `open` on the opening screen (again after Back),
+   * `answering` once a choice is being made, `sent` once it went. The nudge popup (GEO-3428) holds
+   * itself up only while `answering`, so neither a half-written note nor an incoming request is lost.
    */
-  onAnswering?: () => void;
+  onAnswerChange?: (answer: ScheduledNoticeAnswer) => void;
   /** Drawn in place of the step, for a viewer who has to sign in first. */
   children?: React.ReactNode;
 };
@@ -97,14 +99,13 @@ export function ScheduledDebateNoticeDialog({
   initialStep,
   onClose,
   onReschedule,
-  onAnswering,
+  onAnswerChange,
   children,
 }: Props) {
   const [step, setStep] = React.useState<ScheduledNoticeStep>(initialStep);
   // Once a press has swapped the screen, each new one's heading takes focus: the button is gone.
   const [moved, setMoved] = React.useState(false);
   const go = (next: ScheduledNoticeStep) => {
-    if (!moved) onAnswering?.();
     setMoved(true);
     setStep(next);
   };
@@ -113,6 +114,10 @@ export function ScheduledDebateNoticeDialog({
   const [outcome, setOutcome] = React.useState<Outcome | null>(null);
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
+  const answer: ScheduledNoticeAnswer = outcome ? 'sent' : step === initialStep && !suggesting ? 'open' : 'answering';
+  React.useEffect(() => {
+    onAnswerChange?.(answer);
+  }, [answer, onAnswerChange]);
   // Board 3 and its Back belong to arriving through board 2, or the nudge popup (board 6c) that
   // offers the same choices; an email's button lands on board 1b.
   const fromDecide = initialStep === 'decide' || initialStep === 'nudge';

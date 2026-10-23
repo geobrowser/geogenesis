@@ -3,9 +3,9 @@
 import * as React from 'react';
 
 /**
- * Whether a Running late / Can't make it dialog is up anywhere on the page (GEO-3428), so the nudge
- * popup never stacks on one: an email's Running late link, or the availability link's board 2, can
- * be open for the same debate the popup is about.
+ * Whether a scheduling dialog is up anywhere on the page (GEO-3428), so the nudge popup never stacks
+ * on one: a Running late / Can't make it dialog (an email's link, the availability link's board 2),
+ * or a week being booked or moved.
  *
  * A registry rather than a flag, like `app-bottom-inset`: two dialogs can be up at once, and one
  * closing must not clear the other.

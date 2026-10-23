@@ -13,7 +13,7 @@ import { useHoldScheduledNotice } from './scheduled-notice-open';
 
 const state = vi.hoisted(() => ({
   onClose: null as null | (() => void),
-  onAnswering: null as null | (() => void),
+  onAnswerChange: null as null | ((answer: 'open' | 'answering' | 'sent') => void),
   mounts: 0,
 }));
 vi.mock('next/dynamic', () => ({
@@ -22,15 +22,15 @@ vi.mock('next/dynamic', () => ({
       requestId,
       initialStep,
       onClose,
-      onAnswering,
+      onAnswerChange,
     }: {
       requestId: string;
       initialStep: string;
       onClose: () => void;
-      onAnswering: () => void;
+      onAnswerChange: (answer: 'open' | 'answering' | 'sent') => void;
     }) {
       state.onClose = onClose;
-      state.onAnswering = onAnswering;
+      state.onAnswerChange = onAnswerChange;
       React.useEffect(() => {
         state.mounts += 1;
       }, []);
@@ -83,7 +83,7 @@ describe('RoomNudgePopup', () => {
 
   it('stays up once they are answering, even as the answer clears the nudge', () => {
     const { rerender } = render(popup([room(FIRST)]));
-    act(() => state.onAnswering?.());
+    act(() => state.onAnswerChange?.('answering'));
     rerender(popup([room()]));
     expect(shown()).toBeInTheDocument();
   });
@@ -123,7 +123,7 @@ describe('RoomNudgePopup', () => {
   // Mid-answer, a second nudge does not replace the popup; closing must cover it too.
   it('stays closed once closed, including for a nudge that landed while it was up', () => {
     const { rerender } = render(popup([room(FIRST)]));
-    act(() => state.onAnswering?.());
+    act(() => state.onAnswerChange?.('answering'));
     rerender(popup([room(SECOND)]));
     act(() => state.onClose?.());
     rerender(popup([room(SECOND)]));
@@ -148,6 +148,33 @@ describe('RoomNudgePopup', () => {
     // And closing it then counts the newer one too.
     act(() => state.onClose?.());
     rerender(popup([room(SECOND)], true, onOpenChange));
+    expect(shown()).not.toBeInTheDocument();
+  });
+
+  // Sent, it gives way: a 2-minute incoming request must not lapse behind a confirmation.
+  it('once the answer is sent, gives way to anything else that needs the screen', () => {
+    const { rerender } = render(popup([room(FIRST)]));
+    act(() => state.onAnswerChange?.('answering'));
+    rerender(popup([room()], false));
+    expect(shown()).toBeInTheDocument();
+    act(() => state.onAnswerChange?.('sent'));
+    rerender(popup([room()], false));
+    expect(shown()).not.toBeInTheDocument();
+  });
+
+  it('keeps the confirmation up once sent, while nothing else needs the screen', () => {
+    const { rerender } = render(popup([room(FIRST)]));
+    act(() => state.onAnswerChange?.('sent'));
+    rerender(popup([room()]));
+    expect(shown()).toBeInTheDocument();
+  });
+
+  // Back to the choices is not answering: it follows the nudge again.
+  it('follows the nudge again after Back to the opening screen', () => {
+    const { rerender } = render(popup([room(FIRST)]));
+    act(() => state.onAnswerChange?.('answering'));
+    act(() => state.onAnswerChange?.('open'));
+    rerender(popup([room(FIRST, { others_present: false })]));
     expect(shown()).not.toBeInTheDocument();
   });
 

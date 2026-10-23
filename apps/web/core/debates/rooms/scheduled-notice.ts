@@ -28,6 +28,9 @@ export const CANT_MAKE_IT_MODAL = DEEP_LINK_MODALS.cantMakeIt;
  */
 export type ScheduledNoticeStep = 'decide' | 'nudge' | 'late' | 'cant';
 
+/** Where the dialog's answer stands: on its opening screen, being made, or sent (GEO-3428). */
+export type ScheduledNoticeAnswer = 'open' | 'answering' | 'sent';
+
 export function toRunningLate(requestId: string, pathname = NavUtils.toExplore()): string {
   return toModal({ modal: RUNNING_LATE_MODAL, pathname, target: requestId });
 }

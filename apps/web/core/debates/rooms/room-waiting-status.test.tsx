@@ -204,6 +204,8 @@ describe('RoomWaitingStatus', () => {
     expect(
       screen.getByText('Jordan isn’t on Geo and has no email we can use, so we can’t nudge them.')
     ).toBeInTheDocument();
+    // A retry cannot help, so it is not offered.
+    expect(screen.getByRole('button', { name: 'Nudge' })).toBeDisabled();
   });
 
   // Between a nudge and the room's refetch, the endpoint's answer holds the button.

@@ -51,9 +51,9 @@ export function PeerAvailabilityBookingModal({
   const mutation = rescheduleRequestId ? reschedule : propose;
   const mode = rescheduleRequestId ? 'reschedule' : 'request';
   const setToast = useSetToast();
-  // Moving a debate is answering for it, as Running late and Can't make it are: no nudge popup over
-  // the week (GEO-3428), whether it was opened from board 2, Can't make it or the room.
-  useHoldScheduledNotice(props.open && rescheduleRequestId !== null);
+  // An open week is a dialog the nudge popup never stacks on (GEO-3428), whatever it is booking or
+  // moving. The popup comes back when the week closes, if its nudge still stands.
+  useHoldScheduledNotice(props.open);
 
   const close = () => {
     onClose();

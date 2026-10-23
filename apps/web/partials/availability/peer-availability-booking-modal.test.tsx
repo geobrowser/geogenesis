@@ -369,7 +369,7 @@ describe('a refused move', () => {
 
 // GEO-3428: moving a debate is answering for it, so no nudge popup opens over the week.
 describe('the nudge popup', () => {
-  it('is held back while a debate is being moved, and not while one is being booked', async () => {
+  it('is held back while a week is open, booking or moving', async () => {
     const { useScheduledNoticeOpen } = await import('~/core/debates/rooms/scheduled-notice-open');
     function Probe() {
       return <output aria-label="notice open">{String(useScheduledNoticeOpen())}</output>;
@@ -380,7 +380,7 @@ describe('the nudge popup', () => {
         <PeerAvailabilityBookingModal open userId="user-them" peerName="Ada" onClose={vi.fn()} />
       </>
     );
-    expect(screen.getByLabelText('notice open')).toHaveTextContent('false');
+    expect(screen.getByLabelText('notice open')).toHaveTextContent('true');
     rerender(
       <>
         <Probe />
@@ -394,5 +394,12 @@ describe('the nudge popup', () => {
       </>
     );
     expect(screen.getByLabelText('notice open')).toHaveTextContent('true');
+    rerender(
+      <>
+        <Probe />
+        <PeerAvailabilityBookingModal open={false} userId="user-them" peerName="Ada" onClose={vi.fn()} />
+      </>
+    );
+    expect(screen.getByLabelText('notice open')).toHaveTextContent('false');
   });
 });
