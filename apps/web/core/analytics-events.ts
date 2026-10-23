@@ -74,6 +74,8 @@ export type AnalyticsEventName =
   | 'editor_content_edited'
   | 'element_changed'
   | 'element_clicked'
+  | 'email_preference_changed'
+  | 'email_settings_opened'
   | 'feature_exposed'
   | 'file_downloaded'
   | 'form_started'
