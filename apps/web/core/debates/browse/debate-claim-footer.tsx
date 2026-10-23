@@ -2,15 +2,13 @@
 
 import * as React from 'react';
 
-import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import type { Debate } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 import { normId } from '~/core/utils/norm-id';
 
-import { Text } from '~/design-system/text';
-
+import { DebateClaimControls } from './debate-claim-controls';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 
 /**
@@ -32,7 +30,6 @@ export function DebateClaimFooter({
   meta,
   title,
   actions,
-  className,
 }: {
   /** The claim being debated, or null while the host has not resolved its debate. */
   claim: Debate['claim'] | null;
@@ -45,10 +42,9 @@ export function DebateClaimFooter({
   title: React.ReactNode;
   /** The debate's own controls, drawn at the end of the Agree/Disagree row. */
   actions: React.ReactNode;
-  className?: string;
 }) {
   return (
-    <div className={className}>
+    <div>
       <div className="flex flex-col gap-1.5 px-3 pt-3">
         {meta}
         {title}
@@ -62,20 +58,26 @@ export function DebateClaimFooter({
         />
       ) : (
         // Held at its finished size while the debate resolves, so the card does not grow under the
-        // reader when it lands. Without `onRespond` the pills draw as inert shapes.
-        <div className="px-3 pt-3 pb-3">
+        // reader when it lands, and drawn in the disabled state the live pills open in until their
+        // reads answer — so the row doesn't look pressable, then dim, then come back.
+        <div className="p-3">
           <PositionRow
             positions={[]}
             responseKind={CLAIM_RESPONSE_KIND}
             viewerPosition={null}
+            onRespond={IGNORE_RESPONSE}
+            disabled
             showParticipants={false}
             endSlot={actions}
+            endSlotWraps
           />
         </div>
       )}
     </div>
   );
 }
+
+const IGNORE_RESPONSE = () => {};
 
 function ClaimPositions({
   claim,
@@ -94,7 +96,7 @@ function ClaimPositions({
   const spaceId = normId(claim.space_id);
   const claimId = normId(claim.claim_entity_id);
   const { entities } = useQueryEntities({ where: { id: { in: [claimId] } }, first: 1, enabled: live });
-  const { responseKind, summary, control } = useDebateClaimResponse({
+  const response = useDebateClaimResponse({
     claimId,
     spaceId,
     row: null,
@@ -103,41 +105,18 @@ function ClaimPositions({
   });
 
   return (
-    <>
-      <div className="px-3 pt-3 pb-3">
-        <PositionRow
-          positions={control.optimisticPositions}
-          responseKind={responseKind}
-          viewerPosition={control.viewerPosition}
-          onRespond={control.respond}
-          disabled={!control.canRespond}
-          pending={control.isResponseSubmitting}
-          titleFor={control.actionTitle}
-          localSide={control.localVoteSide}
-          // The split band below already shows who voted; faces in the pills would read as the
-          // same people a second time.
-          showParticipants={false}
-          endSlot={actions}
-          analyticsSurface="debate-card"
-        />
-        {control.responseError ? (
-          <div role="alert" className="mt-1.5">
-            <Text as="p" variant="footnote" color="red-01">
-              {control.responseError}
-            </Text>
-          </div>
-        ) : null}
-      </div>
-      {summary.isLoading ? null : (
-        <ClaimSummary
-          entityId={claimId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          summary={summary}
-          layout="inline"
-          className="claim-card-summary-band"
-        />
-      )}
-    </>
+    <DebateClaimControls
+      claimId={claimId}
+      spaceId={spaceId}
+      response={response}
+      // The split band below already shows who voted; faces in the pills would read as the same
+      // people a second time.
+      showParticipants={false}
+      endSlot={actions}
+      analyticsSurface="debate-card"
+      className="p-3"
+      summaryLayout="inline"
+      summaryClassName="claim-card-summary-band"
+    />
   );
 }

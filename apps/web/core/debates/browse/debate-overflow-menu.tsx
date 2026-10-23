@@ -19,7 +19,7 @@ import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
-import { CIRCLE_ACTION_CLASS, PILL_ACTION_CLASS } from './pill-action';
+import { PILL_ACTION_CLASS } from './pill-action';
 
 /**
  * Whether the viewer may remove this debate, by geo-chat's rule: a participant, or an editor of the
@@ -42,7 +42,7 @@ export function useCanRemoveDebate(debate: Debate): boolean {
  * The "…" beside a debate's actions. Holds only what a few viewers can do — removing the debate
  * (GEO-2785) — so it is not drawn at all for everyone else, and the bar reads as it always has.
  */
-export function DebateOverflowMenu({ debate, variant }: { debate: Debate; variant: 'circle' | 'pill' }) {
+export function DebateOverflowMenu({ debate }: { debate: Debate }) {
   const canRemove = useCanRemoveDebate(debate);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -57,7 +57,7 @@ export function DebateOverflowMenu({ debate, variant }: { debate: Debate; varian
       aria-label="More debate options"
       data-geo-analytics-label="Debate options"
       data-geo-analytics-intent="debate_action"
-      className={variant === 'circle' ? CIRCLE_ACTION_CLASS : cx(PILL_ACTION_CLASS, 'w-7 justify-center px-0')}
+      className={cx(PILL_ACTION_CLASS, 'w-7 justify-center px-0')}
     >
       <Ellipsis />
     </button>

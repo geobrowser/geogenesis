@@ -3,7 +3,6 @@
 import * as React from 'react';
 
 import { ActionContextProvider, ActionSurface } from '~/core/action-context-provider';
-import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import type { Debate, DebateClaim } from '~/core/debates/api';
 import {
   type ClaimTiming,
@@ -13,7 +12,6 @@ import {
 } from '~/core/debates/claim-timing';
 import { compareByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
-import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type TranscriptClaim, claimsForParticipant, unmatchedClaims } from '~/core/debates/transcript-claims';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
@@ -28,6 +26,7 @@ import { Close } from '~/design-system/icons/close';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
+import { DebateClaimControls } from './debate-claim-controls';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 import { WinnerVoteButton } from './winner-vote-button';
 
@@ -65,7 +64,7 @@ function DebateClaimsPanelBody({ debate, onClose }: { debate: Debate; onClose: (
   const participants = orderedParticipants(debate);
   // Same query key as the player's hook, so voting in either place updates both.
   const votes = useDebateVotes(debate);
-  // Same query key as the feed's count badge, so opening the panel doesn't refetch.
+  // Same query key as the player's claim ticker, so opening the panel doesn't refetch.
   const { claims, isLoading, error } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
   // When each claim was said. Published timecodes where they exist, matched against the transcript
   // otherwise. This drives the order as well as the timecode, so the panel waits on it — see
@@ -389,41 +388,17 @@ function PanelClaimControls({
 }) {
   // The claim's row title is drawn by `ClaimRow` above. The hook still names the claim for a vote kept
   // on this device, from the same entity and row.
-  const { responseKind, summary, control } = useDebateClaimResponse({
-    claimId,
-    spaceId,
-    row,
-    entity,
-  });
+  const response = useDebateClaimResponse({ claimId, spaceId, row, entity });
 
   return (
     <div className="mt-2">
-      <PositionRow
-        positions={control.optimisticPositions}
-        responseKind={responseKind}
-        viewerPosition={control.viewerPosition}
-        onRespond={control.respond}
-        disabled={!control.canRespond}
-        pending={control.isResponseSubmitting}
-        titleFor={control.actionTitle}
-        localSide={control.localVoteSide}
+      <DebateClaimControls
+        claimId={claimId}
+        spaceId={spaceId}
+        response={response}
+        summaryLayout="stacked"
+        summaryClassName="mt-2"
       />
-      {control.responseError ? (
-        <div role="alert" className="mt-1.5">
-          <Text as="p" variant="footnote" color="red-01">
-            {control.responseError}
-          </Text>
-        </div>
-      ) : null}
-      {summary.isLoading ? null : (
-        <ClaimSummary
-          entityId={claimId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          summary={summary}
-          className="mt-2"
-        />
-      )}
     </div>
   );
 }

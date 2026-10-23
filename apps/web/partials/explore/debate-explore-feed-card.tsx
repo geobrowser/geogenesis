@@ -43,29 +43,32 @@ const DEACTIVATE_RATIO = 0.4;
  *
  * Width is what sets height here, so this is really a height budget. The two tiles are
  * `aspect-480/289` with no gap, inside the card's 1px frame, so the media is `1.2042 × (width − 2)`.
- * Everything else is a reserve, and `calc(83dvh - 214px)` is `width ≤ (dvh − 44 − 32 − 180) / 1.2042`:
- * the 44px app header, the article's 32px of padding, and 180px for the card's chrome under the
+ * Everything else is a reserve, and `calc(83dvh - 228px)` is `width ≤ (dvh − 44 − 32 − 197) / 1.2042`:
+ * the 44px app header, the article's 32px of padding, and 197px for the card's chrome under the
  * media.
  *
  * Measured in Chrome (GEO-3454), that chrome is 154px with a one-line claim and 177px with the two
- * lines the clamp allows, borders included — so the worst case the claim can reach still leaves a
- * few pixels spare. The meta row carries the Join chip, which is what makes it taller here than on
- * the full-screen card.
+ * lines the clamp allows, borders included, plus 17px under a signed-out vote's "Not counted yet"
+ * note — so the worst case the card can reach still leaves a few pixels spare. The meta row carries
+ * the Join chip, which is what makes it taller here than on the full-screen card. In a card narrower
+ * than about 356px (`claim-row-end-inline`) the comments and share drop under the pills and add a
+ * 36px row; that is a phone narrower than about 390px or the 320px floor, where the width rather
+ * than the height binds and there is room for it.
  *
- * So the column tracks the viewport rather than sitting at a fixed width — 533px at a 900px
- * viewport, 450px at 800px — up to the 560px cap, which the budget clears from about a 930px
+ * So the column tracks the viewport rather than sitting at a fixed width — 519px at a 900px
+ * viewport, 436px at 800px — up to the 560px cap, which the budget clears from about a 950px
  * viewport and which is there so a tall display gets a wider card and not a different design.
- * The 320px floor gives the promise up below roughly a 640px viewport, where honouring it would
+ * The 320px floor gives the promise up below roughly a 660px viewport, where honouring it would
  * mean a video too small to read a face in.
  *
  * The same trick, and the same reason, as `--debate-feed-column-width` on the full-screen feed:
  * `dvh` there too, because the media has to fit the viewport it is being watched in.
  *
  * Keep the arithmetic and the layout together — a change to `py-4`, the claim clamp, the pill row
- * or the split band moves the 214px, and nothing else will notice.
+ * or the split band moves the 228px, and nothing else will notice.
  */
 const DEBATE_CARD_COLUMN_STYLE = {
-  '--debate-card-column-width': 'clamp(320px, calc(83dvh - 214px), 560px)',
+  '--debate-card-column-width': 'clamp(320px, calc(83dvh - 228px), 560px)',
 } as React.CSSProperties;
 
 /**
@@ -74,14 +77,14 @@ const DEBATE_CARD_COLUMN_STYLE = {
  * `fullWidth` means "this column is already the reading width, don't cap it at the card's 560px" —
  * it does not mean "stop fitting the viewport". Dropping the budget outright made a debate on the
  * claim page's 840px column about 1140px tall (two `aspect-480/289` tiles at ~800px), so on a
- * 900px viewport the second debater and the interaction bar could not be seen together — which is
+ * 900px viewport the second debater and the claim under it could not be seen together — which is
  * the single thing the budget above exists to guarantee.
  *
  * `min` with `100%` rather than a larger constant: the ceiling is whatever column the card was
  * given, so this is right at 840px and at any other width a host passes.
  */
 const DEBATE_CARD_FULL_WIDTH_STYLE = {
-  '--debate-card-column-width': 'max(320px, min(calc(83dvh - 214px), 100%))',
+  '--debate-card-column-width': 'max(320px, min(calc(83dvh - 228px), 100%))',
 } as React.CSSProperties;
 
 type DebateExploreFeedCardProps = {
@@ -123,14 +126,14 @@ type DebateExploreFeedCardProps = {
 
 /**
  * The explore-feed rendition of a published Debate: the same two synchronized debater videos as
- * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting) over the
- * same interaction bar, framed in the explore card chrome — meta row, claim title, media sized to
- * the viewport, and a control that opens this debate at full size.
+ * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting), in the same
+ * card — the claim and the reader's side on it under the media, which is sized to the viewport —
+ * with a control that opens this debate at full size.
  *
- * Both renditions render `DebateFeedPlayer` and `DebateInteractionBar`, so everything inside the
- * debate itself — the videos, the debater identities and position chips, the winner share, the
- * vote pill and the counts — is one component in both places rather than two that look alike
- * (GEO-2912).
+ * Both renditions render `DebateFeedPlayer` and `DebateClaimFooter`, so everything about the debate
+ * itself — the videos, the debater identities and position chips, the winner share, the claim's
+ * pills and split, and the counts — is one component in both places rather than two that look
+ * alike (GEO-2912, GEO-3454).
  */
 export function DebateExploreFeedCard({
   item,
@@ -253,11 +256,10 @@ export function DebateExploreFeedCard({
   /**
    * Whether this card is carrying a debate's resources at all.
    *
-   * The same window that governs the player (GEO-2963), because the controls needing a debate are
-   * part of what that window releases: leaving it drops the two video elements, and it drops the
-   * transcript-claims subscription behind the Claims count with them. A row deep in the feed keeps
-   * its votes and its comment count — neither asks geo-chat anything — and gets the rest back on
-   * the way past.
+   * The same window that governs the player (GEO-2963): leaving it drops the two video elements,
+   * and Share stands down with them. The claim footer stays drawn — its pills and split are part of
+   * the card's height, and dropping them would move everything below as a card left the window —
+   * and keeps the reads it has started, which are cheap and cached.
    */
   const mediaMounted = readyDebate != null && nearViewport && !notWatchable;
 
@@ -412,7 +414,9 @@ export function DebateExploreFeedCard({
         </div>
 
         <DebateClaimFooter
-          claim={mediaMounted ? readyDebate.claim : null}
+          // On `readyDebate`, so the footer outlives the media window (see `mediaMounted`); its reads
+          // start the first time the card is in it.
+          claim={readyDebate?.claim ?? null}
           enabled={mediaMounted}
           // The way out of the card and into the debate at full size sits at the end of the meta
           // row. The shared metadata keeps fallback cards' space and offer identical; the type tag
@@ -458,9 +462,7 @@ export function DebateExploreFeedCard({
           is being looked at. Both of these are fixed overlays over a feed that still scrolls, so
           gating them on the window meant scrolling past the card they came from tore the panel
           away mid-read — and, because the open flags live on the card now rather than in a subtree
-          that unmounted with them, left them set, so scrolling back reopened it unasked. The
-          claims panel loads its own claims, so it does not go empty when the card's count stands
-          down beside it. */}
+          that unmounted with them, left them set, so scrolling back reopened it unasked. */}
       {readyDebate ? (
         <DebateShareDialog
           open={share.open}

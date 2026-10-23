@@ -125,8 +125,6 @@ vi.mock('./debate-feed-player', async () => {
   };
 });
 
-// Stubbed so these tests assert only where the nudge is placed; its bounce/dismiss
-// lifecycle is covered by debate-scroll-hint.test.tsx.
 // The footer's own reads and pills are covered by debate-claim-footer.test.tsx. Here it only has
 // to place what the feed hands it, and say which claim it was handed.
 vi.mock('./debate-claim-footer', () => ({
@@ -150,6 +148,8 @@ vi.mock('./debate-claim-footer', () => ({
     </div>
   ),
 }));
+// Stubbed so these tests assert only where the nudge is placed; its bounce/dismiss
+// lifecycle is covered by debate-scroll-hint.test.tsx.
 vi.mock('./debate-scroll-hint', () => ({
   useDebateScrollHint: (enabled: boolean) => ({ isVisible: enabled, isLeaving: false }),
   scrollHintBounceProps: { className: 'bounce-stub', style: { animationIterationCount: 6 } },
@@ -163,11 +163,9 @@ vi.mock('./share-dialog', () => ({
   DebateShareDialog: () => null,
 }));
 // Its eligibility rules and dialog are covered by debate-overflow-menu.test.tsx; here it only has to
-// land in both of the bar's orientations.
+// land among the card's actions.
 vi.mock('./debate-overflow-menu', () => ({
-  DebateOverflowMenu: ({ debate, variant }: { debate: Debate; variant: string }) => (
-    <div data-testid={`overflow-${variant}-${debate.id}`} />
-  ),
+  DebateOverflowMenu: ({ debate }: { debate: Debate }) => <div data-testid={`overflow-${debate.id}`} />,
 }));
 vi.mock('~/partials/comments/entity-comments-panel', () => ({
   EntityCommentsPanel: ({ entityId }: { entityId: string }) => <div>Comments panel for {entityId}</div>,
@@ -282,7 +280,7 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     assert(mediaColumn, 'Expected the card to be rendered inside the media column');
     expect(mediaColumn).toHaveClass('min-w-0', 'w-[var(--debate-feed-column-width)]', 'md:w-[calc(100vw-1rem)]');
     expect(mediaColumn).toHaveStyle({
-      '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 2rem), calc(82.9dvh - 12.75rem)), 640px)',
+      '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 2rem), calc(82.9dvh - 13.65rem)), 640px)',
     });
   });
 
@@ -382,9 +380,9 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     }
   });
 
-  // Two lines is what the column's height budget reserves for the claim, so a longer one stays
-  // clamped and offers the whole text on hover rather than growing the card.
-  it('clamps long claims to two lines and names the whole claim on hover', () => {
+  // Two lines is what the column's height budget reserves for the claim. A longer one stays
+  // clamped, names the whole claim on hover, and lets phones — no hover, no height budget — expand.
+  it('clamps long claims and lets mobile users expand them', () => {
     const restore = stubHeadingMetrics({ contentHeight: 74, clampedHeight: 48 });
 
     try {
@@ -395,7 +393,14 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
       const heading = screen.getByRole('heading', { name: claim });
       expect(heading).toHaveClass('line-clamp-2');
       expect(heading).toHaveAttribute('title', claim);
-      expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+
+      const toggle = screen.getByRole('button', { name: 'Show more' });
+      expect(toggle).toHaveClass('hidden', 'md:inline-flex');
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(toggle);
+
+      expect(heading).toHaveClass('md:line-clamp-none');
+      expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
     } finally {
       restore();
     }
@@ -534,9 +539,9 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
   it('puts the overflow menu at the end of the card actions', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    expect(within(screen.getByTestId('claim-footer')).getByTestId('overflow-pill-debate-1')).toBeInTheDocument();
-    // The desktop rail beside the video is gone, and its circle variant with it.
-    expect(screen.queryByTestId('overflow-circle-debate-1')).not.toBeInTheDocument();
+    // Once: the desktop rail beside the video, which drew a second one, is gone.
+    expect(within(screen.getByTestId('claim-footer')).getAllByTestId('overflow-debate-1')).toHaveLength(1);
+    expect(screen.getAllByTestId('overflow-debate-1')).toHaveLength(1);
   });
 
   // The contrast that makes the case above load-bearing: a transient failure is *unknown*, so it

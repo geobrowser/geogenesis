@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   queryEnabled: [] as boolean[],
   positions: [] as DebateClaimPositionSummary[],
   viewerPosition: null as boolean | null,
+  localVoteSide: null as boolean | null,
   summaryLoading: false,
 }));
 
@@ -36,7 +37,7 @@ vi.mock('./use-debate-claim-response', () => ({
         canRespond: true,
         isResponseSubmitting: false,
         actionTitle: () => '',
-        localVoteSide: null,
+        localVoteSide: mocks.localVoteSide,
         responseError: null,
       },
     };
@@ -76,6 +77,7 @@ beforeEach(() => {
   mocks.queryEnabled.length = 0;
   mocks.positions = [];
   mocks.viewerPosition = null;
+  mocks.localVoteSide = null;
   mocks.summaryLoading = false;
 });
 
@@ -171,14 +173,56 @@ describe('DebateClaimFooter', () => {
     expect(mocks.queryEnabled.at(-1)).toBe(true);
   });
 
+  // geo-chat hands out hyphenated UUIDs and the graph dashless hex. The end card reads this claim in
+  // the dashless spelling; a footer reading the other would get its own cache entries, and a side
+  // taken in one would not show in the other.
+  it('reads the claim in the spelling the end card does, whatever geo-chat sends', () => {
+    renderFooter({
+      claim: {
+        ...claim,
+        claim_entity_id: '0199A4B2-7C3D-7E8F-9A0B-1C2D3E4F5A6B',
+        space_id: '41E85161-0E13-A194-41C4-D980F2F2CE6B',
+      } as Debate['claim'],
+    });
+
+    expect(mocks.hookArgs.at(-1)).toMatchObject({
+      claimId: '0199a4b27c3d7e8f9a0b1c2d3e4f5a6b',
+      spaceId: '41e851610e13a19441c4d980f2f2ce6b',
+    });
+  });
+
+  // Signed out, a vote is kept on this device until the viewer saves it, and the card says so.
+  it('notes a side held only on this device under its pill', () => {
+    mocks.viewerPosition = true;
+    mocks.localVoteSide = true;
+    renderFooter();
+
+    expect(screen.getByText(/^Not counted yet/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
   // The explore card draws the footer before its debate resolves. The row is there at its finished
-  // size, so the card doesn't grow when the claim lands, but nothing in it can publish yet.
-  it('holds an inert row while the debate is unresolved', () => {
+  // size, so the card doesn't grow when the claim lands, and it starts in the disabled state the live
+  // pills open in, so it doesn't look pressable and then dim.
+  it('holds a disabled row while the debate is unresolved, keeping the debate actions live', () => {
     renderFooter({ claim: null });
 
-    expect(screen.queryByRole('button', { name: 'Agree' })).toBeNull();
-    expect(screen.getByText('Agree')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Comments (2)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Disagree' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Comments (2)' })).toBeEnabled();
     expect(mocks.hookArgs).toHaveLength(0);
+  });
+
+  // Too narrow for both labels and the actions, the actions drop under the pills rather than
+  // squeezing "Disagree" to "Dis...".
+  it('lets the debate actions wrap under the pills in a narrow card', () => {
+    renderFooter();
+
+    const slot = screen.getByRole('button', { name: 'Comments (2)' }).parentElement!;
+    expect(slot).toHaveClass('col-span-2', 'claim-row-end-inline:col-span-1');
+    expect(slot.parentElement).toHaveClass(
+      'grid-cols-2',
+      'claim-row-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+    );
   });
 });

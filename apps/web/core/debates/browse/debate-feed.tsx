@@ -26,6 +26,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
+import { EXPLORE_CARD_TITLE_CLASS_NAME } from '~/partials/explore/explore-card-title';
 
 import { DebateClaimFooter } from './debate-claim-footer';
 import { DebateClaimsPanel } from './debate-claims-panel';
@@ -48,9 +49,10 @@ const PRELOAD_AHEAD = 2;
 const DEBATE_COLUMN_STYLE = {
   // Grow or shrink the media with the viewport while reserving the navbar, the 20px above the
   // card, and the card's chrome under the media: frame, meta row, a two-line claim, the pill row
-  // and the split band. Measured in Chrome (GEO-3454), that chrome is 169px with two claim lines,
-  // so a 900px viewport ends the card about 15px above the fold.
-  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 2rem), calc(82.9dvh - 12.75rem)), 640px)',
+  // and the split band. Measured in Chrome (GEO-3454), that chrome is 169px with two claim lines and
+  // 17px more under a signed-out vote's "Not counted yet" note, so even then a 900px viewport ends
+  // the card about 15px above the fold.
+  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 2rem), calc(82.9dvh - 13.65rem)), 640px)',
 } as React.CSSProperties;
 
 export function DebatesBrowseFeed({
@@ -670,7 +672,7 @@ function DebateFeedItem({
                 onComment={onOpenComments}
                 onShare={share.onOpen}
                 shareOpen={share.open}
-                overflow={<DebateOverflowMenu debate={debate} variant="pill" />}
+                overflow={<DebateOverflowMenu debate={debate} />}
               />
             }
           />
@@ -741,9 +743,10 @@ function DebateMeta({
 }
 
 /**
- * The claim being debated, as the card's title — set as the explore claim card sets one, since the
- * two now share the rest of their anatomy. Two lines, which is what the column's height budget
- * reserves; the whole claim is on hover when it runs longer, and on the claim page it links to.
+ * The claim being debated, as the card's title, set in the explore card's type since the two now
+ * share the rest of their anatomy. Two lines, which is what the column's height budget reserves;
+ * the whole claim is on hover when it runs longer. Phones have no height budget (the item is
+ * `md:h-auto`) and no hover, so there it offers to expand instead.
  */
 function DebateClaimTitle({
   claim,
@@ -755,23 +758,45 @@ function DebateClaimTitle({
   spaceId: string;
 }) {
   const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
-  const isClaimOverflowing = useLineClampOverflow(claimElement, { maxLines: CLAIM_CLAMP_LINES, contentKey: claim });
+  const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
+
+  const isClaimOverflowing = useLineClampOverflow(claimElement, {
+    maxLines: CLAIM_CLAMP_LINES,
+    enabled: !isClaimExpanded,
+    contentKey: claim,
+  });
 
   return (
-    <h2
-      ref={setClaimElement}
-      title={isClaimOverflowing ? claim : undefined}
-      className="line-clamp-2 text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-pretty text-text"
-    >
-      <Link
-        href={NavUtils.toEntity(spaceId, claimEntityId)}
-        entityId={claimEntityId}
-        spaceId={spaceId}
-        className="hover:underline"
+    <>
+      <h2
+        ref={setClaimElement}
+        title={isClaimOverflowing ? claim : undefined}
+        className={cx(
+          EXPLORE_CARD_TITLE_CLASS_NAME,
+          'text-pretty',
+          isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
+        )}
       >
-        {claim}
-      </Link>
-    </h2>
+        <Link
+          href={NavUtils.toEntity(spaceId, claimEntityId)}
+          entityId={claimEntityId}
+          spaceId={spaceId}
+          className="hover:underline"
+        >
+          {claim}
+        </Link>
+      </h2>
+      {isClaimOverflowing && (
+        <button
+          type="button"
+          aria-expanded={isClaimExpanded}
+          onClick={() => setIsClaimExpanded(expanded => !expanded)}
+          className="hidden self-start text-metadata text-grey-04 underline-offset-2 hover:underline md:inline-flex"
+        >
+          {isClaimExpanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </>
   );
 }
 

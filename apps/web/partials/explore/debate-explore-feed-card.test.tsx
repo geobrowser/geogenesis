@@ -790,6 +790,25 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
   });
 
+  // GEO-3454. The claim footer is part of the card's height. Dropping it with the media as the card
+  // left the window shifted everything below it, and started its reads over on the way back.
+  it('keeps the claim footer, and its reads, while the media is evicted', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+    const claimId = watchableDebate().claim.claim_entity_id;
+
+    intersectAll(0.7);
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-claim', claimId);
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-enabled', 'true');
+
+    intersectAll(0);
+    expect(screen.queryByTestId('player')).toBeNull();
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-claim', claimId);
+    // Off: the footer's own latch keeps what it has already read.
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-enabled', 'false');
+  });
+
   // One shared claims panel for the feed — opening Claims on a second card must replace the first,
   // not stack a second identical overlay behind it.
   it('replaces the open claims panel when a second card opens one', () => {
@@ -1036,7 +1055,7 @@ describe('DebateExploreFeedCard', () => {
 
       expect(column(container).className).toContain('max-w-[var(--debate-card-column-width)]');
       expect(column(container).style.getPropertyValue('--debate-card-column-width')).toBe(
-        'clamp(320px, calc(83dvh - 214px), 560px)'
+        'clamp(320px, calc(83dvh - 228px), 560px)'
       );
     });
 
@@ -1049,7 +1068,7 @@ describe('DebateExploreFeedCard', () => {
 
       expect(column(container).className).toContain('max-w-[var(--debate-card-column-width)]');
       expect(column(container).style.getPropertyValue('--debate-card-column-width')).toBe(
-        'max(320px, min(calc(83dvh - 214px), 100%))'
+        'max(320px, min(calc(83dvh - 228px), 100%))'
       );
     });
   });
@@ -1076,12 +1095,6 @@ describe('DebateExploreFeedCard', () => {
     });
   });
 
-  /**
-   * GEO-2660. Naming the response kind skips `EntityVoteButtons`' entity lookup, and with it the
-   * space resolution that finds an entity's own votes when a surface is listing it from elsewhere
-   * — which an explore card does whenever a data block row carries a debate from another space.
-   * The full-screen feed names it, because it only ever shows a space its own debates.
-   */
   /**
    * The app's comments panel is an in-flow panel with no dialog role and no focus trap, so the
    * control that opens it says how it stands without sending a reader looking for a dialog.

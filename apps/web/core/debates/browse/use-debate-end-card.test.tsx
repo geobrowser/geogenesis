@@ -209,13 +209,27 @@ describe('useDebateEndCard', () => {
     expect(mocks.batchCalls.at(-1)?.enabled).toBe(false);
   });
 
-  it("asks for the claim and every extracted claim in the debate's space in one batch", () => {
-    // s3's votes live in its own space, and j2 has none; each card asks for itself there.
+  it("asks for every extracted claim in the debate's space in one batch, but not the debated claim", () => {
+    // s3's votes live in its own space, and j2 has none; each card asks for itself there. The claim
+    // being debated is read by the debate card's footer on the same keys (GEO-3454), so batching it
+    // too would fetch it twice.
     render(() => useDebateEndCard(debate, true));
     const call = mocks.batchCalls.at(-1)!;
 
     expect(call.spaceId).toBe(DEBATE_SPACE_HEX);
-    expect(call.targets.map(target => target.entityId)).toEqual([CLAIM_HEX, 's1', 's2', 'j1']);
+    expect(call.targets.map(target => target.entityId)).toEqual(['s1', 's2', 'j1']);
+    expect(call.targets.map(target => target.entityId)).not.toContain(CLAIM_HEX);
+  });
+
+  // With nothing in the debate's own space there is nothing to batch, and the batch never runs.
+  // Waiting on it would hold a claim quoted from elsewhere back for good.
+  it("releases the carousel's entities when no claim is in the debate's space", () => {
+    mocks.claims = transcript({ [STEVE]: [claim('s3', ELSEWHERE, STEVE)] });
+    mocks.batchResult = batch({ data: undefined });
+    const { result } = render(() => useDebateEndCard(debate, true));
+
+    expect(mocks.batchCalls.at(-1)?.targets).toEqual([]);
+    expect(result.current.carousel.entitiesByClaimId.get('s3')).toEqual({ id: 's3' });
   });
 
   it("holds the cards' entities back until the batch has seeded their counts", () => {
@@ -293,44 +307,21 @@ describe('useDebateEndCard', () => {
     expect(mocks.batchCalls.at(-1)?.enabled).toBe(false);
   });
 
-  it("holds the claim's own response reads until the batch has seeded them", () => {
-    // Handed its entity early, the claim's response state fires its two reads — counts and the
-    // viewer's side — and races the batch to the same answers on every debate that becomes active.
-    mocks.batchResult = batch({ data: undefined });
-    const { rerender } = render(() => useDebateEndCard(debate, true));
-    expect(mocks.claimEntity.at(-1)).toBeNull();
-
-    mocks.batchResult = batch({ data: new Map() });
-    rerender(undefined as never);
-    expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
-  });
-
-  it('lets the claim ask for itself if the batch fails', () => {
-    mocks.batchResult = batch({ data: undefined, isError: true });
-    render(() => useDebateEndCard(debate, true));
-
-    expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
-  });
-
-  it('lets the claim ask for itself if the transcript fails, since the batch then never starts', () => {
-    // The batch waits on the transcript to know which claims the debate extracted. The claim's own row
-    // needs none of that, and waiting on a batch that will never run left its vote disabled.
-    mocks.transcriptError = new Error('transcript unavailable');
-    mocks.claims = transcript({});
+  // The batch no longer carries this claim, so there is nothing to wait for: the footer and this
+  // control share the claim's reads, whichever asks first.
+  it("hands the claim's own control its entity without waiting on the batch", () => {
     mocks.batchResult = batch({ data: undefined });
     render(() => useDebateEndCard(debate, true));
-
-    expect(mocks.batchCalls.at(-1)?.enabled).toBe(false);
     expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
   });
 
-  it('still holds the claim back while the transcript is loading, since the batch follows it', () => {
+  it('hands it over while the transcript is still loading, too', () => {
     mocks.transcriptLoading = true;
     mocks.claims = transcript({});
     mocks.batchResult = batch({ data: undefined });
     render(() => useDebateEndCard(debate, true));
 
-    expect(mocks.claimEntity.at(-1)).toBeNull();
+    expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
   });
 
   it('refreshes numbers read minutes ago when the card comes on screen', () => {

@@ -55,9 +55,10 @@ export type EndCardClaims = {
 /**
  * Everything the end card draws, in one place.
  *
- * One batched read covers the claim being debated and every claim the debate extracted, and it
- * seeds the per-claim caches as it lands — so the claim's own vote control and every card in the
- * carousel read what this fetched instead of each asking again.
+ * One batched read covers every claim the debate extracted, and it seeds the per-claim caches as it
+ * lands — so every card in the carousel reads what this fetched instead of each asking again. The
+ * claim being debated is not in it: the debate card's footer (`DebateClaimFooter`) reads that one on
+ * the same keys from the moment the debate is near, which is long before the card shows.
  *
  * `enabled` is the caller's: the player turns it on while the debate is the active one, so the card
  * has its numbers by the time the video ends rather than drawing empty bars and filling them in.
@@ -112,20 +113,19 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
   // against it. A claim quoted from elsewhere asks its own space for itself.
   const targets = React.useMemo(
     () =>
-      [
-        claimId,
-        ...claims.all
-          .filter(claim => claim.spaceId !== null && normId(claim.spaceId) === spaceId)
-          .map(claim => normId(claim.id)),
-      ].map(entityId => ({ entityId, responseKind })),
-    [claimId, claims.all, responseKind, spaceId]
+      claims.all
+        .filter(claim => claim.spaceId !== null && normId(claim.spaceId) === spaceId)
+        .map(claim => ({ entityId: normId(claim.id), responseKind })),
+    [claims.all, responseKind, spaceId]
   );
   // Fetches and seeds; all that is read off the batch itself is whether it has finished.
   const batch = useClaimResponseSummaryBatch({ spaceId, targets, enabled: live && claimsReady });
-  // Whether the batch is still on its way to seeding the claim's caches. A transcript still loading
+  // Whether the batch is still on its way to seeding the carousel's caches. A transcript still loading
   // counts, since the batch starts when it lands; a transcript that failed does not, since then the
-  // batch never starts at all.
-  const batchPending = transcript.isLoading || (claimsReady && batch.data === undefined && !batch.isError);
+  // batch never starts at all. Nor does a debate with no claims in its own space: there is nothing to
+  // batch, and waiting on a batch that never runs would hold the rest of the carousel back for good.
+  const batchPending =
+    transcript.isLoading || (claimsReady && targets.length > 0 && batch.data === undefined && !batch.isError);
 
   const refreshIfStale = React.useEffectEvent(() => {
     if (batch.data !== undefined && batch.isStale && !batch.isFetching) void batch.refetch();
@@ -135,18 +135,14 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
   }, [shown]);
 
   // The claim's own control resolves its vocabulary off the graph entity, and holds its reads back
-  // until it has one — the same lookup the claims panel does for its rows.
+  // until it has one — the same lookup, on the same key, the debate card's footer makes for this
+  // claim, so by the time the card shows the footer has usually answered both of its reads.
   const { entities } = useQueryEntities({ where: { id: { in: [claimId] } }, first: 1, enabled: live });
   const claimResponse = useDebateClaimResponse({
     claimId,
     spaceId,
     row: null,
-    // Held back until the batch has seeded this claim's caches. Its two reads — the counts and the
-    // viewer's own side — then find them fresh (their 30s `staleTime` outlasts the wait) instead of
-    // racing the batch to the same two answers on every debate that becomes active. If the batch
-    // fails, or never starts because the transcript failed, the entity is handed over anyway and
-    // the claim asks for itself: its own row needs nothing from the transcript.
-    entity: batchPending ? null : (entities[0] ?? null),
+    entity: entities[0] ?? null,
     // The debate is over and this is its only claim: ask to save after the first vote.
     savePromptSurface: 'single',
   });

@@ -70,7 +70,7 @@ const debate = {
 } as unknown as Debate;
 
 function openDialog() {
-  render(<DebateOverflowMenu debate={debate} variant="pill" />);
+  render(<DebateOverflowMenu debate={debate} />);
   fireEvent.click(screen.getByRole('button', { name: 'More debate options' }));
   fireEvent.click(screen.getByRole('button', { name: 'Remove debate' }));
 }
@@ -78,7 +78,7 @@ function openDialog() {
 describe('DebateOverflowMenu (GEO-2785)', () => {
   it('is not drawn for a viewer who is neither a debater nor an editor', () => {
     mocks.viewerUserId = 'user-z';
-    render(<DebateOverflowMenu debate={debate} variant="pill" />);
+    render(<DebateOverflowMenu debate={debate} />);
     expect(screen.queryByRole('button', { name: 'More debate options' })).not.toBeInTheDocument();
   });
 

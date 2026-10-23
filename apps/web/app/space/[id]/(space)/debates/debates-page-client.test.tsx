@@ -161,7 +161,7 @@ vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 0, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
-// The feed's Claims badge reads the debate's transcript claims through react-query, and this
+// The player's claim ticker reads the debate's transcript claims through react-query, and this
 // suite renders the feed without a QueryClientProvider. Stub it the way the other debate suites do;
 // the grouping and ordering have their own unit tests.
 vi.mock('~/core/debates/use-debate-transcript-claims', async () => {
