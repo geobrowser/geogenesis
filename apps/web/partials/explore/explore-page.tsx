@@ -35,6 +35,7 @@ const EXPLORE_FEED_PROPS = {
   dividerBeforeFeed: true,
   titleOpensSidePanel: true,
   claimCardVariant: 'debate-panel-mobile',
+  topicFollow: true,
   feedTopSpacingClassName: '',
   sendIdentityToken: true,
   cdnFirstPage: true,
