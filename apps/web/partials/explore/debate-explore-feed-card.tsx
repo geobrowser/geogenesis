@@ -108,7 +108,7 @@ type DebateExploreFeedCardProps = {
   hideJoinButton?: boolean;
   /** Whether the claim title opens the side panel rather than navigating (same semantics as ExploreFeedCard). */
   titleOpensSidePanel?: boolean;
-  /** Compact title and metadata treatment used by the narrow profile Activity rail. */
+  /** Compact gallery chrome; comments and sharing are reached through the full-screen link. */
   compactChrome?: boolean;
   /**
    * Raise the column's ceiling from the card's 560px to the container's own width. For a surface
@@ -381,7 +381,7 @@ export function DebateExploreFeedCard({
    *    no debate, share does — so the row is present from the first paint and doesn't shift the
    *    card under the reader when the geo-chat lookups land.
    */
-  const actions = (
+  const actions = compactChrome ? null : (
     <DebateInteractionBar
       commentCount={commentCount}
       commentsPanelOpen={commentsTarget?.entityId === item.entityId}
@@ -480,7 +480,7 @@ export function DebateExploreFeedCard({
           gating them on the window meant scrolling past the card they came from tore the panel
           away mid-read — and, because the open flags live on the card now rather than in a subtree
           that unmounted with them, left them set, so scrolling back reopened it unasked. */}
-      {readyDebate ? (
+      {readyDebate && !compactChrome ? (
         <DebateShareDialog
           open={share.open}
           onOpenChange={share.onOpenChange}

@@ -456,11 +456,13 @@ describe('DebateExploreFeedCard', () => {
     const frame = screen.getByTestId('claim-footer').parentElement;
     expect(frame).toHaveClass('border', 'rounded-lg', 'max-w-full');
     expect(frame?.style.getPropertyValue('--debate-card-column-width')).toBe('');
-    // The rail is narrow, so Share drops to its icon there; it reads the row's own width rather
-    // than the viewport's.
-    const share = screen.getByRole('button', { name: 'Share debate' });
-    expect(share).toHaveClass('@max-[400px]:size-7', '@max-[400px]:px-0');
-    expect(share.querySelector('.\\@max-\\[400px\\]\\:hidden')).toHaveTextContent('Share');
+    // Gallery cards leave comments and sharing to the full-screen debate.
+    expect(screen.queryByRole('button', { name: /^Comments/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Share debate' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Watch this debate full screen' })).toHaveAttribute(
+      'href',
+      '/space/space-1/fd51f9352063461780397b672b23364c'
+    );
   });
 
   it('renders the fallback when the debate is not watchable', () => {

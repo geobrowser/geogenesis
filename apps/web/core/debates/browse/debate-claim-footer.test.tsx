@@ -94,6 +94,16 @@ describe('DebateClaimFooter', () => {
     expect(screen.getByRole('button', { name: 'Comments (2)' })).toBeInTheDocument();
   });
 
+  it.each([claim, null])('keeps the response pills without an empty actions row in galleries (%s)', claim => {
+    renderFooter({ claim, actions: null });
+
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+    const grid = screen.getByRole('button', { name: 'Disagree' }).parentElement!.parentElement!;
+    expect(grid.children).toHaveLength(2);
+    expect(grid).toHaveClass('grid-cols-1', 'claim-pills-wide:grid-cols-2');
+  });
+
   // The position is the claim's, so it lands wherever else that claim is answered.
   it("publishes a side on the debate's claim", () => {
     renderFooter();
