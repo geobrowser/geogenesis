@@ -196,6 +196,29 @@ describe('RoomWaitingStatus', () => {
     expect(screen.queryByRole('button', { name: 'Nudged' })).not.toBeInTheDocument();
   });
 
+  it('says so when they cannot be reached at all', () => {
+    state.room = baseRoom();
+    state.presence = waiting;
+    state.nudge.error = new GeoChatRequestError('no way', 'cant_reach', 409);
+    show();
+    expect(
+      screen.getByText('Jordan isn’t on Geo and has no email we can use, so we can’t nudge them.')
+    ).toBeInTheDocument();
+  });
+
+  // Between a nudge and the room's refetch, the endpoint's answer holds the button.
+  it('reads Nudged from the nudge’s own answer before the room catches up', () => {
+    state.room = baseRoom();
+    state.presence = waiting;
+    (state.nudge as { data?: unknown }).data = {
+      channel: 'email',
+      at: minutesAgo(0),
+      next_nudge_at: new Date(Date.now() + 15 * 60_000).toISOString(),
+    };
+    show();
+    expect(screen.getByRole('button', { name: 'Nudged' })).toBeDisabled();
+  });
+
   it('is not shown before the start or once they are here', () => {
     state.room = baseRoom();
     for (const s of ['arrived_early', 'present'] as const) {

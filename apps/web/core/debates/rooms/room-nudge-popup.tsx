@@ -72,13 +72,21 @@ export function RoomNudgePopup({
   const requests = useScheduledDebates(nudged !== null);
   const request = nudged ? requestForRoom(requests.data?.requests, nudged.room_id) : undefined;
 
-  // The held nudge's row, if it still stands as the same nudge.
-  const heldStands = held !== null && rooms.some(room => standingNudge(room) && nudgeKey(room) === held.key);
-  const show = held !== null && (held.answering || (allowed && heldStands));
+  // The held room's row while its nudge stands. A newer nudge to the same room keeps the popup up,
+  // rather than closing and reopening it: it is the same question, asked again.
+  const heldRow = held ? rooms.find(room => room.room_id === held.roomId && standingNudge(room)) : undefined;
+  const show = held !== null && (held.answering || (allowed && heldRow !== undefined));
+  const latestKey = heldRow ? nudgeKey(heldRow) : null;
 
   React.useEffect(() => {
     if (held && !show) setHeld(null);
   }, [held, show]);
+
+  // Unanswered, the held nudge moves on to the newest, so closing counts every one it showed.
+  React.useEffect(() => {
+    if (!held || held.answering || !latestKey || latestKey === held.key) return;
+    setHeld({ ...held, key: latestKey });
+  }, [held, latestKey]);
 
   React.useEffect(() => {
     if (held || !nudged || !request) return;
@@ -92,7 +100,8 @@ export function RoomNudgePopup({
   if (!held || !show) return null;
   return (
     <ScheduledDebateNoticeDialog
-      key={held.key}
+      // By room: a newer nudge to the same room keeps the dialog it is in.
+      key={held.roomId}
       open
       requestId={held.requestId}
       initialStep="nudge"

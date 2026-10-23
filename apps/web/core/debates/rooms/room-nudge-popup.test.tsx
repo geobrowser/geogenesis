@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { UpcomingDebateRoom } from '../api';
@@ -12,6 +14,7 @@ import { useHoldScheduledNotice } from './scheduled-notice-open';
 const state = vi.hoisted(() => ({
   onClose: null as null | (() => void),
   onAnswering: null as null | (() => void),
+  mounts: 0,
 }));
 vi.mock('next/dynamic', () => ({
   default: () =>
@@ -28,6 +31,9 @@ vi.mock('next/dynamic', () => ({
     }) {
       state.onClose = onClose;
       state.onAnswering = onAnswering;
+      React.useEffect(() => {
+        state.mounts += 1;
+      }, []);
       return <div data-testid="popup" data-request={requestId} data-step={initialStep} />;
     },
 }));
@@ -125,6 +131,24 @@ describe('RoomNudgePopup', () => {
 
     rerender(popup([room('2026-10-21T17:34:00.000Z')]));
     expect(shown()).toBeInTheDocument();
+  });
+
+  // The same question asked again: no close-and-reopen, and the banner never gets a frame.
+  it('keeps the same popup up when a newer nudge lands before it is answered', () => {
+    state.mounts = 0;
+    const onOpenChange = vi.fn();
+    const { rerender } = render(popup([room(FIRST)], true, onOpenChange));
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+    onOpenChange.mockClear();
+    rerender(popup([room(SECOND)], true, onOpenChange));
+    expect(shown()).toBeInTheDocument();
+    expect(state.mounts).toBe(1);
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    // And closing it then counts the newer one too.
+    act(() => state.onClose?.());
+    rerender(popup([room(SECOND)], true, onOpenChange));
+    expect(shown()).not.toBeInTheDocument();
   });
 
   it('never interrupts a room, a debate or a reminded lobby', () => {

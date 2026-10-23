@@ -2657,6 +2657,8 @@ export type NudgeDebateRoomResponse = {
  *
  * Refusals, all `409` unless noted: `403 not_a_participant`, `404 room_not_found`,
  * `request_not_active` (not an agreed debate, or its room has closed), `debate_already_started`,
+ * `cant_reach` (not on Geo and no email address, so nothing could reach them), `403 nudge_forbidden`
+ * (a block between the two),
  * `too_early` (before the start), `not_in_room` (the viewer is not in the room now), `already_here`
  * (the other debater is), `running_late` (they said they are on their way), `nudge_too_soon` (15
  * minutes since the last) and `nudge_limit` (both used).

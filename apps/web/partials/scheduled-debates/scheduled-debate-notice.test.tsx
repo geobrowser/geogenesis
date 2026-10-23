@@ -7,6 +7,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '~/core/debates/api';
+import { useScheduledNoticeOpen } from '~/core/debates/rooms/scheduled-notice-open';
 
 import { ScheduledDebateNoticeDialog } from './scheduled-debate-notice';
 
@@ -178,6 +179,68 @@ describe('ScheduledDebateNoticeDialog: the nudge popup', () => {
     );
     expect(screen.queryByText(/After Can’t make it you can suggest another time/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reschedule instead' })).not.toBeInTheDocument();
+  });
+
+  // The popup steps aside for any other notice dialog; it must not count as one itself.
+  it('counts every step but the nudge as an open notice, until it closes', () => {
+    function Probe() {
+      return <span data-testid="probe">{String(useScheduledNoticeOpen())}</span>;
+    }
+    const { rerender } = render(
+      <>
+        <Probe />
+        <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />
+      </>
+    );
+    expect(screen.getByTestId('probe')).toHaveTextContent('false');
+    for (const step of ['decide', 'late', 'cant'] as const) {
+      rerender(
+        <>
+          <Probe />
+          <ScheduledDebateNoticeDialog key={step} open requestId={REQUEST} initialStep={step} onClose={() => {}} />
+        </>
+      );
+      expect(screen.getByTestId('probe')).toHaveTextContent('true');
+    }
+    rerender(
+      <>
+        <Probe />
+        <ScheduledDebateNoticeDialog open={false} requestId={REQUEST} initialStep="late" onClose={() => {}} />
+      </>
+    );
+    expect(screen.getByTestId('probe')).toHaveTextContent('false');
+  });
+
+  it('says it is being answered once, on Running late or Can’t make it, not on Join or Back', async () => {
+    const onAnswering = vi.fn();
+    render(
+      <ScheduledDebateNoticeDialog
+        open
+        requestId={REQUEST}
+        initialStep="nudge"
+        onClose={() => {}}
+        onAnswering={onAnswering}
+      />
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Running late' }));
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await user.click(screen.getByRole('button', { name: 'Can’t make it' }));
+    expect(onAnswering).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    onAnswering.mockClear();
+    render(
+      <ScheduledDebateNoticeDialog
+        open
+        requestId={REQUEST}
+        initialStep="nudge"
+        onClose={() => {}}
+        onAnswering={onAnswering}
+      />
+    );
+    await user.click(screen.getByRole('link', { name: 'Join now' }));
+    expect(onAnswering).not.toHaveBeenCalled();
   });
 
   it('answers in place, with a way back to the popup', async () => {

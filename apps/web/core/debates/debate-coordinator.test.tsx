@@ -114,13 +114,14 @@ vi.mock('./rooms/room-opponent', async importOriginal => ({
 
 // GEO-3428's nudge popup has its own tests, and reads the request list this suite does not mock.
 // Stood in for by what the coordinator relies on: when it is allowed, and its `onOpenChange`.
-const nudgePopup = vi.hoisted(() => ({ opens: false, enabled: [] as boolean[] }));
+const nudgePopup = vi.hoisted(() => ({ opens: false, answering: false, enabled: [] as boolean[] }));
 vi.mock('./rooms/room-nudge-popup', async () => {
   const React = await import('react');
   return {
     RoomNudgePopup: ({ enabled, onOpenChange }: { enabled: boolean; onOpenChange: (open: boolean) => void }) => {
       nudgePopup.enabled.push(enabled);
-      const open = nudgePopup.opens && enabled;
+      // Mid-answer, the real popup stays up whatever `enabled` says.
+      const open = nudgePopup.opens && (enabled || nudgePopup.answering);
       React.useEffect(() => onOpenChange(open), [onOpenChange, open]);
       return null;
     },
@@ -932,6 +933,30 @@ describe('DebateCoordinator', () => {
       expect(screen.queryByText('Your opponent is waiting')).not.toBeInTheDocument();
     } finally {
       nudgePopup.opens = false;
+    }
+  });
+
+  it('keeps the nudge popup off under an incoming request', async () => {
+    mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+    nudgePopup.enabled = [];
+    render(<DebateCoordinator />);
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(nudgePopup.enabled.at(-1)).toBe(false);
+  });
+
+  it('holds an incoming request back while a nudge popup is being answered', async () => {
+    mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+    nudgePopup.opens = true;
+    nudgePopup.answering = true;
+    try {
+      render(<DebateCoordinator />);
+      await waitFor(() => expect(nudgePopup.enabled.length).toBeGreaterThan(0));
+      expect(screen.queryByText('Debate request')).not.toBeInTheDocument();
+    } finally {
+      nudgePopup.opens = false;
+      nudgePopup.answering = false;
     }
   });
 

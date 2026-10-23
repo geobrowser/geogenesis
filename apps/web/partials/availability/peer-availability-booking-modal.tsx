@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { GeoChatRequestError, type ScheduledDebateRequest } from '~/core/debates/api';
+import { useHoldScheduledNotice } from '~/core/debates/rooms/scheduled-notice-open';
 import { useCreateScheduledDebate, useRescheduleScheduledDebate } from '~/core/debates/rooms/scheduling-hooks';
 import { useSetToast } from '~/core/hooks/use-toast';
 
@@ -50,6 +51,9 @@ export function PeerAvailabilityBookingModal({
   const mutation = rescheduleRequestId ? reschedule : propose;
   const mode = rescheduleRequestId ? 'reschedule' : 'request';
   const setToast = useSetToast();
+  // Moving a debate is answering for it, as Running late and Can't make it are: no nudge popup over
+  // the week (GEO-3428), whether it was opened from board 2, Can't make it or the room.
+  useHoldScheduledNotice(props.open && rescheduleRequestId !== null);
 
   const close = () => {
     onClose();

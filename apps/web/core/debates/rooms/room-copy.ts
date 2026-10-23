@@ -89,6 +89,9 @@ export const ROOM_WAITING_STATUS = {
   nudgeRefused: {
     already_here: (name: string) => `${name} just came in.`,
     running_late: (name: string) => `${name} just said they’re running late.`,
+    /** Off Geo with no email address: a retry cannot help. */
+    cant_reach: (name: string) => `${name} isn’t on Geo and has no email we can use, so we can’t nudge them.`,
+    forbidden: 'You can’t nudge this person.',
     other: (name: string) => `Couldn’t nudge ${name}. Try again in a moment.`,
   },
 } as const;

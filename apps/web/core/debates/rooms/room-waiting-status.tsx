@@ -161,8 +161,7 @@ function NudgeButton({
   opponentName: string;
 }) {
   const nudge = useNudgeDebateRoom(room.room_id);
-  // Shown only while nobody is late (the card hides the row otherwise).
-  const state = nudgeButtonState(room, viewerId, false, now, nudge.data);
+  const state = nudgeButtonState(room, viewerId, now, nudge.data);
 
   if (state === 'hidden') return null;
   const refusal = refusalText(nudge.error, opponentName);
@@ -197,6 +196,8 @@ function refusalText(error: unknown, name: string): string | null {
     if (error.code === 'nudge_too_soon' || error.code === 'nudge_limit') return null;
     if (error.code === 'already_here') return COPY.nudgeRefused.already_here(name);
     if (error.code === 'running_late') return COPY.nudgeRefused.running_late(name);
+    if (error.code === 'cant_reach') return COPY.nudgeRefused.cant_reach(name);
+    if (error.code === 'nudge_forbidden') return COPY.nudgeRefused.forbidden;
   }
   return COPY.nudgeRefused.other(name);
 }

@@ -583,7 +583,8 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedChallengeId(promptedChallenge.id)}
         />
       )}
-      {promptedRequest && currentUserId && (
+      {/* Behind a nudge popup that is being answered (one that is not steps aside for this). */}
+      {promptedRequest && currentUserId && !nudgeOpen && (
         <IncomingRequestPopup
           key={promptedRequest.id}
           request={promptedRequest}
@@ -591,7 +592,7 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedRequestIds(current => [...current, promptedRequest.id])}
         />
       )}
-      {!activeFlow && !promptedRequest && visibleSharePrompt && (
+      {!activeFlow && !promptedRequest && !nudgeOpen && visibleSharePrompt && (
         <DebateSharePromptDialog
           key={visibleSharePrompt.id}
           prompt={visibleSharePrompt}

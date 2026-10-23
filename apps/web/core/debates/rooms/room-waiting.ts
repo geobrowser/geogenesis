@@ -58,8 +58,8 @@ export function showsWaitingStatus(state: DebateRoomPresenceState | null | undef
 /**
  * What the Nudge button does now: `ready` to press; `nudged` while it waits out the 15 minutes after
  * one of the viewer's, or for good once both are used; `not_yet` before the first is allowed (the
- * start, which the room's poll can reach a few seconds before the clock does); and `hidden` when
- * there is nobody to nudge (they said they are on their way, or a geo-chat that predates nudges).
+ * start, which the room's poll can reach a few seconds before the clock does); and `hidden` from a
+ * geo-chat that predates nudges. The card never draws it while the other debater is running late.
  *
  * `now` is the server's clock, as `viewer_next_nudge_at` is. `answered` is the nudge endpoint's own
  * `next_nudge_at` from a press this visit, which is ahead of the room until the room refetches.
@@ -69,11 +69,10 @@ export type NudgeButtonState = 'ready' | 'nudged' | 'not_yet' | 'hidden';
 export function nudgeButtonState(
   room: DebateRoomView,
   viewerId: string,
-  opponentLate: boolean,
   now: number,
   answered?: { next_nudge_at: string | null }
 ): NudgeButtonState {
-  if (opponentLate || room.viewer_next_nudge_at === undefined) return 'hidden';
+  if (room.viewer_next_nudge_at === undefined) return 'hidden';
   const sent = answered !== undefined || (room.nudges ?? []).some(nudge => sameId(nudge.from_user_id, viewerId));
   const nexts = [room.viewer_next_nudge_at, ...(answered ? [answered.next_nudge_at] : [])];
   // `null` from either is both used; otherwise the later of the two is the one that holds.
