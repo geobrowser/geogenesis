@@ -167,7 +167,7 @@ export type EmailClick = {
   send_id: string;
   /** Which link in the email (`ref_link`): `main`, `profile`, `claim`, … Null when the link didn't say. */
   link: string | null;
-  /** Whether this browser had a Geo session when the page loaded. */
+  /** Whether this browser held a Privy session to restore when the page loaded (`hasPersistedPrivySession`). */
   signed_in: boolean;
 };
 
