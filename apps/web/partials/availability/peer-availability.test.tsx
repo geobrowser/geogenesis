@@ -781,6 +781,30 @@ describe('moving a debate', () => {
     expect(screen.getByRole('button', { name: 'Ask Ada to pick a time' })).toBeInTheDocument();
   });
 
+  // Review of #2979: the time being moved never hides behind "+N more".
+  it('keeps the current time among the chips before the expander', () => {
+    setupBooking(moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } }), {
+      slots: [9, 10, 11, 12, 13].map(hour => slot(hour, true, 22)),
+    });
+
+    const tuesday = within(day('2026-09-22'));
+    expect(tuesday.getByLabelText(/at 5pm, the current time$/)).toBeInTheDocument();
+    expect(tuesday.getByRole('button', { name: /^\+2 more times/ })).toBeInTheDocument();
+  });
+
+  it('holds both actions while the other is in flight', async () => {
+    const { user } = setupBooking(
+      moving({
+        disabled: true,
+        noTimeWorks: { onPress: vi.fn(), pending: false, disabled: true, error: null },
+      }),
+      { slots: [slot(16, true, 22)] }
+    );
+    await user.click(screen.getByRole('button', { name: /at 4pm/ }));
+    expect(screen.getByRole('button', { name: 'Propose new time' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Ask Ada to pick a time' })).toBeDisabled();
+  });
+
   it('shows it sending, and why it failed', () => {
     setupBooking(moving({ noTimeWorks: { onPress: vi.fn(), pending: true, error: 'This debate is no longer on.' } }));
     expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled();

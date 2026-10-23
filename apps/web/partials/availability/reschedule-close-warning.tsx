@@ -4,9 +4,9 @@ import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/re
 
 import cx from 'classnames';
 
+import { viewerDayAndTime } from '~/core/availability/peer-schedule';
 import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
 import { HubPillButton, HubQuietButton } from '~/core/debates/matchmaking/hub-pill-button';
-import { formatDebateTime, formatTime } from '~/core/debates/matchmaking/scheduled-debate-format';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Text } from '~/design-system/text';
@@ -27,6 +27,7 @@ export function RescheduleCloseWarning({
   open,
   peerFirstName,
   startsAt,
+  viewerTimezone,
   onCantMakeIt,
   onKeep,
   onBack,
@@ -35,11 +36,13 @@ export function RescheduleCloseWarning({
   peerFirstName: string;
   /** The booked time, as geo-chat lists it. */
   startsAt: string;
+  /** The zone the week behind it is drawn in, so the time reads as it does there. */
+  viewerTimezone: string | undefined;
   onCantMakeIt: () => void;
   onKeep: () => void;
   onBack: () => void;
 }) {
-  const time = formatTime(startsAt);
+  const at = viewerDayAndTime(startsAt, viewerTimezone);
   return (
     <Root open={open} onOpenChange={next => !next && onBack()}>
       <Portal>
@@ -52,7 +55,7 @@ export function RescheduleCloseWarning({
         >
           <Title asChild>
             <Text as="h2" variant="smallTitle">
-              Your debate is still on for {formatDebateTime(startsAt)}
+              Your debate is still on{at ? ` for ${at.day}, ${at.time}` : ''}
             </Text>
           </Title>
           <Description asChild>
@@ -67,7 +70,7 @@ export function RescheduleCloseWarning({
               variant="primary"
               className="w-full"
               onClick={onCantMakeIt}
-              {...pill('I can’t make it', 'cant_make_it_from_reschedule')}
+              {...pill('I cant make it', 'cant_make_it_from_reschedule')}
             >
               I can&rsquo;t make it
             </HubPillButton>
@@ -77,7 +80,7 @@ export function RescheduleCloseWarning({
               onClick={onKeep}
               {...pill('Keep the time', 'keep_scheduled_time')}
             >
-              Keep {time}
+              Keep {at?.time ?? 'the time'}
             </HubPillButton>
             <HubQuietButton
               onClick={onBack}

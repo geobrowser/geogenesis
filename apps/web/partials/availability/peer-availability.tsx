@@ -63,7 +63,7 @@ export type PeerAvailabilityBooking = {
    * "None of these work" (GEO-3429): call the debate off and send the other person the viewer's own
    * free times. Offered under the week, and under an empty one, which is where it matters most.
    */
-  noTimeWorks?: { onPress: () => void; pending: boolean; error: string | null } | null;
+  noTimeWorks?: { onPress: () => void; pending: boolean; disabled?: boolean; error: string | null } | null;
   /**
    * An instant, not a chip: a week with no slots is still requestable (GEO-2938). `viewerIsFree` is
    * the picked chip's, for analytics; `null` for a time typed in by hand. `viewerTimezone` is the
@@ -71,6 +71,8 @@ export type PeerAvailabilityBooking = {
    */
   onRequest: (startsAt: string, pick: { viewerIsFree: boolean | null; viewerTimezone: string }) => void;
   pending: boolean;
+  /** Another request is in flight (GEO-3429's "None of these work"), so this one waits. */
+  disabled?: boolean;
   error: string | null;
 };
 
@@ -370,12 +372,14 @@ function NoTimeWorks({
   time,
   onPress,
   pending,
+  disabled = false,
   error,
 }: {
   peerFirstName: string;
   time: string | null;
   onPress: () => void;
   pending: boolean;
+  disabled?: boolean;
   error: string | null;
 }) {
   return (
@@ -386,7 +390,7 @@ function NoTimeWorks({
         </Text>
         <button
           type="button"
-          disabled={pending}
+          disabled={pending || disabled}
           {...debateActionAnalyticsAttributes('peer-availability', 'None of these work', 'no_time_works')}
           onClick={onPress}
           className="py-1 text-metadataMedium text-text underline underline-offset-2 disabled:opacity-40"
@@ -476,7 +480,7 @@ function SendRequest({
     <div className="flex shrink-0 flex-col items-end gap-1">
       <button
         type="button"
-        disabled={!startsAt || booking.pending}
+        disabled={!startsAt || booking.pending || booking.disabled}
         {...(booking.mode === 'reschedule'
           ? debateActionAnalyticsAttributes('peer-availability', 'Propose new time', 'reschedule_scheduled_debate')
           : debateActionAnalyticsAttributes('peer-availability', 'Send request', 'request_scheduled_debate'))}
@@ -599,7 +603,7 @@ function DayColumn({
     () => day.slots.findIndex(slot => slot.start === selectedStart) >= SLOTS_PER_DAY
   );
   const empty = day.slots.length === 0;
-  const shown = expanded ? day.slots : day.slots.slice(0, SLOTS_PER_DAY);
+  const shown = expanded ? day.slots : foldedSlots(day.slots);
   const hidden = day.slots.length - shown.length;
   const dayLabel = `${day.isToday ? 'Today' : day.weekdayLabel} ${day.dayLabel}`;
 
@@ -732,6 +736,16 @@ function SlotChip({
 }
 
 /**
+ * A day's chips before its expander: the first `SLOTS_PER_DAY`, except that the time being moved
+ * (GEO-3429) is always among them, in its place, so it can't hide behind "+N more".
+ */
+export function foldedSlots(slots: PeerDaySlot[]): PeerDaySlot[] {
+  const current = slots.findIndex(slot => slot.current);
+  if (current < SLOTS_PER_DAY) return slots.slice(0, SLOTS_PER_DAY);
+  return [...slots.slice(0, SLOTS_PER_DAY - 1), slots[current]];
+}
+
+/**
  * The time the debate being moved is booked for (GEO-3429): struck through and not a button, since
  * proposing it again would move nothing.
  */
@@ -781,12 +795,18 @@ function Hint({ children }: { children: React.ReactNode }) {
 
 /** `action` sits outside the paragraph, so it may contain anything a `<p>` may not. */
 function Empty({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+  // Scrolls within itself rather than growing past the dialog: on a short phone the moving card and
+  // "None of these work" (GEO-3429) share the column, and the row under it must stay on screen.
+  // Centred with `m-auto` on an inner block, which, unlike `justify-center`, never pushes the top of
+  // overflowing content out of reach.
   return (
-    <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-grey-02 p-6">
-      <Text as="p" variant="metadata" color="grey-04">
-        {children}
-      </Text>
-      {action}
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-dashed border-grey-02 p-6">
+      <div className="m-auto flex flex-col items-center">
+        <Text as="p" variant="metadata" color="grey-04">
+          {children}
+        </Text>
+        {action}
+      </div>
     </div>
   );
 }

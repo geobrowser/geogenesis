@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { GeoChatRequestError, type ScheduledDebateRequest } from '~/core/debates/api';
+import { usePeerSchedule } from '~/core/debates/hooks';
 import { requestById } from '~/core/debates/rooms/room-opponent';
 import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
 import {
@@ -38,6 +39,11 @@ type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'>
    */
   rescheduleNote?: string;
   /**
+   * Can't make it, from the close warning (GEO-3429). A caller that is itself the Can't make it
+   * screen (GEO-3427's Suggest another time) goes back to it; otherwise the week swaps to that screen.
+   */
+  onCantMakeIt?: () => void;
+  /**
    * A new request the server accepted, before the requests list has been read again. The calendar
    * (GEO-3152) draws it on its week straight away with this.
    */
@@ -55,6 +61,7 @@ export function PeerAvailabilityBookingModal({
   rescheduleNote,
   entry = null,
   onRequested,
+  onCantMakeIt,
   ...props
 }: Props) {
   const propose = useCreateScheduledDebate();
@@ -74,9 +81,17 @@ export function PeerAvailabilityBookingModal({
   const state = noticeRequestState(request);
   const active = state === 'active' || state === 'moved' ? request : undefined;
   const agreed = state === 'active';
+  // The zone the week is drawn in, from the query the week itself reads (no second request), so the
+  // warning names the time as the card and the chips do.
+  const viewerTimezone = usePeerSchedule(rescheduleRequestId && agreed ? userId : null).schedule?.viewerTimezone;
   // Closing without a new time leaves an agreed debate on, which is easy to miss when you meant to
-  // move it; so it asks first (board 4b). "Can't make it" from there swaps to that screen.
+  // move it; so it asks first (board 4b). Not from the room's late notice: there the viewer is the
+  // one waiting, and "they will expect you" is the wrong way round.
+  const warnsOnClose = agreed && entry !== 'room_late_notice';
   const [step, setStep] = React.useState<'week' | 'warn' | 'cant'>('week');
+  // One request at a time: a move and "none of these work" racing would leave the other debater
+  // with both emails and the move undone.
+  const busy = mutation.isPending || noneWork.isPending;
 
   const close = () => {
     setStep('week');
@@ -85,7 +100,14 @@ export function PeerAvailabilityBookingModal({
     mutation.reset();
     noneWork.reset();
   };
-  const requestClose = () => (agreed ? setStep('warn') : close());
+  // Not while a move or "none of these work" is in flight: "still on" may be about to be untrue, and
+  // closing would drop the confirmation of what lands. A new request (the People tab) still closes
+  // mid-flight, detaching its late success, as it always has.
+  const requestClose = () => {
+    if (rescheduleRequestId && busy) return;
+    if (warnsOnClose) setStep('warn');
+    else close();
+  };
 
   // A sent request is the end of the job, so the week closes on it and the confirmation moves to a
   // toast. Per-call rather than on the hook: closing mid-flight resets the mutation, which detaches
@@ -127,20 +149,23 @@ export function PeerAvailabilityBookingModal({
           mode,
           requestId: rescheduleRequestId,
           moving: active ? { startsAt: active.scheduled_start_at, agreed } : null,
+          // Kept while its refusal shows: the refetch it triggers can resolve the request, and the
+          // error is the only thing saying why the screen changed.
           noTimeWorks:
-            active && rescheduleRequestId
+            (active || noneWork.error) && rescheduleRequestId
               ? {
                   onPress: () =>
                     noneWork.mutate(
                       { requestId: rescheduleRequestId },
                       {
                         onSuccess: () => {
-                          setToast(<span>{noTimeWorksSentMessage(peerFirst)}</span>);
+                          setToast(<span>{noTimeWorksSentMessage(peerFirst, agreed)}</span>);
                           close();
                         },
                       }
                     ),
                   pending: noneWork.isPending,
+                  disabled: busy,
                   error: noneWork.error ? noticeFailureMessage(noneWork.error, 'cant') : null,
                 }
               : null,
@@ -158,6 +183,7 @@ export function PeerAvailabilityBookingModal({
             } else propose.mutate({ opponentUserId: userId, ...slot }, callbacks);
           },
           pending: mutation.isPending,
+          disabled: busy,
           error: mutation.error
             ? rescheduleRequestId
               ? rescheduleFailureMessage(mutation.error)
@@ -170,7 +196,12 @@ export function PeerAvailabilityBookingModal({
           open
           peerFirstName={peerFirst}
           startsAt={active.scheduled_start_at}
-          onCantMakeIt={() => setStep('cant')}
+          viewerTimezone={viewerTimezone}
+          onCantMakeIt={() => {
+            if (!onCantMakeIt) return setStep('cant');
+            setStep('week');
+            onCantMakeIt();
+          }}
           onKeep={close}
           onBack={() => setStep('week')}
         />
@@ -179,9 +210,9 @@ export function PeerAvailabilityBookingModal({
   );
 }
 
-/** Said once "None of these work" has gone through (GEO-3429). */
-function noTimeWorksSentMessage(peerFirstName: string) {
-  return `Debate cancelled. We’ve sent ${peerFirstName} your free times to pick from.`;
+/** Said once "None of these work" has gone through (GEO-3429). An unanswered invite was declined, not cancelled. */
+function noTimeWorksSentMessage(peerFirstName: string, agreed: boolean) {
+  return `${agreed ? 'Debate cancelled. ' : ''}We’ve sent ${peerFirstName} your free times to pick from.`;
 }
 
 /** geo-chat's refusals of a move, said plainly; anything else keeps its own message. */

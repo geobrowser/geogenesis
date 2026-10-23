@@ -119,6 +119,8 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
         rescheduleRequestId={request.request_id}
         rescheduleNote={suggesting.note}
         entry="cant_make_it"
+        // Its close warning's Can't make it comes back here rather than opening a second one.
+        onCantMakeIt={() => setSuggesting(null)}
         onClose={onClose}
       />
     );

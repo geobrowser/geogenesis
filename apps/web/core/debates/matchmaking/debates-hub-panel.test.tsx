@@ -118,6 +118,8 @@ vi.mock('../hooks', () => ({
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
+  // The People tab's week reads it when moving a request (GEO-3429); nothing here moves one.
+  usePeerSchedule: () => ({ schedule: undefined }),
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   useDebateActivity: () => ({
     data: {

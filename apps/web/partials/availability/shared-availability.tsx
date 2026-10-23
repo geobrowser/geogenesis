@@ -61,7 +61,7 @@ export function AvailabilityDeepLink() {
   return (
     <SharedAvailabilityModal
       // A new link starts its own decision rather than inheriting the last one's.
-      key={rescheduleRequestId ?? pickedStart ?? profileSpaceId}
+      key={`${profileSpaceId}:${rescheduleRequestId ?? pickedStart ?? ''}`}
       open
       profileSpaceId={profileSpaceId}
       rescheduleRequestId={rescheduleRequestId}

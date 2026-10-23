@@ -23,6 +23,14 @@ const mocks = vi.hoisted(() => ({
   requests: [] as { request_id: string; status: string; scheduled_start_at: string; room_id: string | null }[],
   noneWork: vi.fn(),
   noneWorkReset: vi.fn(),
+  noneWorkPending: false,
+  noneWorkError: null as Error | null,
+  /** The zone the week is drawn in, as the cached peer-schedule query has it. */
+  viewerZone: undefined as string | undefined,
+}));
+
+vi.mock('~/core/debates/hooks', () => ({
+  usePeerSchedule: () => ({ schedule: mocks.viewerZone ? { viewerTimezone: mocks.viewerZone } : undefined }),
 }));
 
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
@@ -40,7 +48,12 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
     error: mocks.error,
   }),
   useScheduledDebates: () => ({ data: { requests: mocks.requests } }),
-  useNoTimeWorks: () => ({ mutate: mocks.noneWork, reset: mocks.noneWorkReset, isPending: false, error: null }),
+  useNoTimeWorks: () => ({
+    mutate: mocks.noneWork,
+    reset: mocks.noneWorkReset,
+    isPending: mocks.noneWorkPending,
+    error: mocks.noneWorkError,
+  }),
 }));
 
 // Can't make it is GEO-3427's own screen, tested there; here it only has to be the one that opens.
@@ -61,7 +74,8 @@ vi.mock('./peer-availability', async importOriginal => ({
       mode?: string;
       requestId?: string | null;
       moving?: { startsAt: string; agreed: boolean } | null;
-      noTimeWorks?: { onPress: () => void } | null;
+      disabled?: boolean;
+      noTimeWorks?: { onPress: () => void; disabled?: boolean; error: string | null } | null;
       onRequest: (startsAt: string, pick: { viewerIsFree: boolean | null; viewerTimezone: string }) => void;
       error: string | null;
     };
@@ -81,10 +95,14 @@ vi.mock('./peer-availability', async importOriginal => ({
       <output aria-label="current">
         {booking?.moving ? `${booking.moving.startsAt} ${booking.moving.agreed ? 'agreed' : 'pending'}` : ''}
       </output>
+      <output aria-label="propose disabled">{booking?.disabled ? 'yes' : 'no'}</output>
       {booking?.noTimeWorks && (
-        <button type="button" onClick={booking.noTimeWorks.onPress}>
-          none work
-        </button>
+        <>
+          <button type="button" disabled={booking.noTimeWorks.disabled} onClick={booking.noTimeWorks.onPress}>
+            none work
+          </button>
+          <output aria-label="none work error">{booking.noTimeWorks.error ?? ''}</output>
+        </>
       )}
     </>
   ),
@@ -113,6 +131,9 @@ afterEach(() => {
   mocks.requests = [];
   mocks.noneWork = vi.fn();
   mocks.noneWorkReset = vi.fn();
+  mocks.noneWorkPending = false;
+  mocks.noneWorkError = null;
+  mocks.viewerZone = undefined;
 });
 
 const setup = (userId = 'user-them', onClose = vi.fn()) => ({
@@ -398,7 +419,11 @@ describe('a refused move', () => {
 describe('moving a debate', () => {
   const REQUEST_ID = '6676b145-0970-4c1c-bfbc-7497d9721b39';
   const START = '2026-10-22T17:00:00Z';
-  const moving = (status: 'accepted' | 'pending', onClose = vi.fn()) => {
+  const moving = (
+    status: 'accepted' | 'pending',
+    onClose = vi.fn(),
+    extra: Partial<React.ComponentProps<typeof PeerAvailabilityBookingModal>> = {}
+  ) => {
     // An agreed debate has its room; a pending one has none yet.
     mocks.requests = [
       {
@@ -416,6 +441,7 @@ describe('moving a debate', () => {
           peerName="Ada Lovelace"
           rescheduleRequestId={REQUEST_ID}
           onClose={onClose}
+          {...extra}
         />
       )
     );
@@ -496,5 +522,78 @@ describe('moving a debate', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
+  });
+
+  // Review of #2979: one request at a time, and no "still on" while one is in flight.
+  it('holds Propose while None of these work is in flight, and ignores Close', async () => {
+    mocks.noneWorkPending = true;
+    const { user, onClose } = moving('accepted');
+
+    expect(screen.getByLabelText('propose disabled')).toHaveTextContent('yes');
+    expect(screen.getByRole('button', { name: 'none work' })).toBeDisabled();
+    await user.click(screen.getByLabelText('Close'));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
+  });
+
+  it('holds None of these work while a move is in flight', () => {
+    mocks.pending = true;
+    moving('accepted');
+    expect(screen.getByRole('button', { name: 'none work' })).toBeDisabled();
+  });
+
+  it('keeps a refusal on screen after the refetch resolves the request', () => {
+    mocks.noneWorkError = new Error('gone');
+    mocks.requests = [];
+    render(
+      <PeerAvailabilityBookingModal
+        open
+        userId="user-them"
+        peerName="Ada"
+        rescheduleRequestId={REQUEST_ID}
+        onClose={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText('none work error')).toHaveTextContent('gone');
+  });
+
+  it('says an unanswered invite was not cancelled', async () => {
+    const { user } = moving('pending');
+    mocks.noneWork.mockImplementation((_vars, options) => options?.onSuccess?.());
+
+    await user.click(screen.getByRole('button', { name: 'none work' }));
+
+    expect(await screen.findByText('We’ve sent Ada your free times to pick from.')).toBeInTheDocument();
+    expect(screen.queryByText(/Debate cancelled/)).not.toBeInTheDocument();
+  });
+
+  it('closes from the room without the warning: the viewer is the one waiting', async () => {
+    const { user, onClose } = moving('accepted', vi.fn(), { entry: 'room_late_notice' });
+
+    await user.click(screen.getByLabelText('Close'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
+  });
+
+  it("hands Can't make it back to a caller that is that screen, rather than opening a second", async () => {
+    const onCantMakeIt = vi.fn();
+    const { user } = moving('accepted', vi.fn(), { onCantMakeIt });
+
+    await user.click(screen.getByLabelText('Close'));
+    await user.click(screen.getByRole('button', { name: 'I can’t make it' }));
+
+    expect(onCantMakeIt).toHaveBeenCalledTimes(1);
+    expect(screen.queryByLabelText('notice')).not.toBeInTheDocument();
+  });
+
+  it("names the time in the week's zone, as the card and chips do", async () => {
+    mocks.viewerZone = 'America/New_York';
+    const { user } = moving('accepted');
+
+    await user.click(screen.getByLabelText('Close'));
+
+    expect(screen.getByRole('dialog', { name: 'Your debate is still on for Thu, Oct 22, 1pm' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Keep 1pm' })).toBeInTheDocument();
   });
 });

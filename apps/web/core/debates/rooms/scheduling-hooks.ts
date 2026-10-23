@@ -291,7 +291,8 @@ export function useCantMakeIt() {
  * measurement (GEO-3432) can count it; geo-chat also tags its cancelled or declined event.
  */
 export function useNoTimeWorks() {
-  const getContext = useActionContext('scheduled_debate_notice', 'entity', '');
+  // The week's component, as moving a request from it is: this is pressed there, not on the notice.
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const mutation = useMutation<ScheduledDebateRequest, Error, { requestId: string }>({
