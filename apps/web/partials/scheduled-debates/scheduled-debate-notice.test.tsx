@@ -96,10 +96,15 @@ function agreed(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** The agreed debate's room: open, due, with Maya inside by the bare join rule. */
+function openRoom(overrides: Record<string, unknown> = {}) {
+  return { room_id: 'room-1', joinable: true, due: true, others_present: true, ...overrides };
+}
+
 beforeEach(() => {
   state.requests = { data: { requests: [agreed()] }, isPending: false, isError: false };
   state.rooms = {
-    data: { rooms: [{ room_id: 'room-1', joinable: true, due: true, others_present: true }] },
+    data: { rooms: [openRoom()] },
   };
   state.late = idle();
   state.cant = idle();
@@ -162,6 +167,15 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(screen.getByRole('link', { name: 'Join now' })).toHaveAttribute('href', '/debate/room-1');
       expect(screen.getByRole('button', { name: 'I’m running late' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'I can’t make it' })).toBeInTheDocument();
+    });
+
+    // A tab that crashed without sending its leave still counts in `others_present` (GEO-3450).
+    it('does not say Maya is waiting when she is not in the room now', () => {
+      state.rooms = { data: { rooms: [openRoom({ others_live: false })] } };
+      open('decide', vi.fn());
+
+      expect(screen.queryByText('Maya is in the room, waiting for you')).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Join now' })).toBeInTheDocument();
     });
 
     it('keeps the calendar reachable', async () => {
@@ -339,6 +353,33 @@ describe('ScheduledDebateNoticeDialog', () => {
       rerender(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={vi.fn()} />);
       expect(heading()).toHaveTextContent('Your debate is cancelled. We’ve let Maya know.');
       expect(screen.queryByText('This debate is no longer on.')).not.toBeInTheDocument();
+    });
+  });
+
+  // GEO-3430. The join banner stays up until the other debater has been told something.
+  describe('onSent', () => {
+    it.each([
+      ['late', 'Send to Maya', () => succeedWith(state.late, { expected_at: '2026-10-21T17:13:00.000Z', note: null })],
+      ['cant', 'Cancel the debate', () => succeedWith(state.cant, {})],
+    ] as const)('hears a %s that went through, once', async (step, send, succeed) => {
+      succeed();
+      const onSent = vi.fn();
+      render(
+        <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep={step} onClose={vi.fn()} onSent={onSent} />
+      );
+      expect(onSent).not.toHaveBeenCalled();
+
+      await userEvent.setup().click(screen.getByRole('button', { name: send }));
+      expect(onSent).toHaveBeenCalledTimes(1);
+    });
+
+    it('hears nothing while the send has not gone through', async () => {
+      const onSent = vi.fn();
+      render(
+        <ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="cant" onClose={vi.fn()} onSent={onSent} />
+      );
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Cancel the debate' }));
+      expect(onSent).not.toHaveBeenCalled();
     });
   });
 

@@ -12,6 +12,8 @@ import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
+import { ScheduledDebateNoticeDialog } from '~/partials/scheduled-debates/scheduled-debate-notice';
+
 import { activeDebate } from './activity-state';
 import { type DebateSharePrompt, GeoChatRequestError } from './api';
 import { ChallengeAcceptedPrompt } from './challenge-accepted-prompt';
@@ -43,7 +45,7 @@ import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
-import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
+import { DebateRoomJoinPrompt, type RoomJoinPromptNotice } from './rooms/room-join-prompt';
 import { sameId } from './rooms/room-presence';
 import { debateRoomIdFromPath } from './rooms/room-routes';
 import { SocialVideoCaptionChoiceRows, useSocialVideoCaptionChoice } from './social-video-caption-choice';
@@ -284,6 +286,9 @@ export function DebateCoordinator() {
   // cannot offer a room that would refuse the join.
   const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
+  const snoozeRoom = (roomId: string) => setSnoozedRoomIds(current => [...current, roomId]);
+  // The join banner's Running late or Can't make it, open over the page (GEO-3430).
+  const [roomNotice, setRoomNotice] = React.useState<(RoomJoinPromptNotice & { roomId: string }) | null>(null);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
   const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
   // A room whose debate already happened is never offered again. Reminded lobbies ride the same
@@ -518,7 +523,21 @@ export function DebateCoordinator() {
         <DebateRoomJoinPrompt
           key={promptedRoom.room_id}
           room={promptedRoom}
-          onNotNow={() => setSnoozedRoomIds(current => [...current, promptedRoom.room_id])}
+          onDismiss={() => snoozeRoom(promptedRoom.room_id)}
+          onNotice={notice => setRoomNotice({ ...notice, roomId: promptedRoom.room_id })}
+        />
+      )}
+      {/* Here rather than in the banner: Can't make it drops the room from the list, and the banner
+          with it, before the dialog has said it worked. */}
+      {roomNotice && (
+        <ScheduledDebateNoticeDialog
+          key={`${roomNotice.step}:${roomNotice.requestId}`}
+          open
+          requestId={roomNotice.requestId}
+          initialStep={roomNotice.step}
+          // Told, the other debater knows something; until then the banner stays (GEO-3430).
+          onSent={() => snoozeRoom(roomNotice.roomId)}
+          onClose={() => setRoomNotice(null)}
         />
       )}
       {promptedDebate && currentUserId && !activity?.rematch && (
