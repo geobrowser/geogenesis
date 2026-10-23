@@ -58,12 +58,24 @@ const PRELOAD_AHEAD = 2;
  * the split band. Measured in Chrome (GEO-3454), that chrome is 169px with two claim lines and 17px
  * more under a signed-out vote's "Not counted yet" note, so even then a 900px viewport ends the card
  * about 15px above the fold. Where the card is narrow enough for its actions to wrap, the wrapped
- * row is budgeted too; see `debateCardColumnWidth`. Phones are unaffected: their column is the
- * screen width (`md:w-[...]`), not this.
+ * row is budgeted too; see `debateCardColumnWidth`.
+ *
+ * Phones get a budget of their own (`--debate-feed-phone-column-width`), since their chrome differs:
+ * the feed's own 44px bar, 12px above and below the card, and the same 169px under the media, so
+ * `width ≤ (dvh − 44 − 24 − 169 − 2) / 1.2042 + 2`, i.e. `83dvh − 197px`. `dvh` is what keeps the
+ * card inside the part of the screen a phone browser's toolbars leave. It does not reserve the
+ * signed-out note: on a phone that 17px would push most cards into the narrower wrapped layout, and
+ * the item scrolls, so the note is reachable. A claim long enough for its phone-only "Show more"
+ * adds that 26px row, so a card holding one takes `--debate-feed-phone-column-width-more`
+ * (`83dvh − 219px`) instead, through `:has()`; narrowing only ever makes the claim run longer, so
+ * the two can't flip back and forth. Never wider than the screen less 16px a side, nor narrower than
+ * 240px, under which a face is too small to read.
  */
 const debateColumnStyle = (wrapsBelow: number) =>
   ({
     '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', wrapsBelow)}), 640px)`,
+    '--debate-feed-phone-column-width': `clamp(240px, ${debateCardColumnWidth('83dvh - 197px', wrapsBelow)}, calc(100cqw - 2rem))`,
+    '--debate-feed-phone-column-width-more': `clamp(240px, ${debateCardColumnWidth('83dvh - 219px', wrapsBelow)}, calc(100cqw - 2rem))`,
   }) as React.CSSProperties;
 
 const DEBATE_COLUMN_STYLE = debateColumnStyle(DEBATE_CARD_WRAPS_BELOW);
@@ -641,14 +653,14 @@ function DebateFeedItem({
       // 20px below the navbar, per the design — the media sizing has slack to absorb it, so
       // the card doesn't need to sit flush against the chrome. `md:py-3` still wins on
       // mobile: Tailwind emits variant utilities after unprefixed ones, so no `md:pt-3` needed.
-      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:px-2 md:py-3"
+      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:py-3"
     >
       {/* The whole debate lifts with the nudge — media, claim and controls together — so the
           gesture reads as the feed scrolling rather than as one element twitching. Shared
           animation props keep the card and the indicator in step. */}
       <div
         className={cx(
-          'relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]',
+          'relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[var(--debate-feed-phone-column-width)] md:has-[[data-claim-expander]]:w-[var(--debate-feed-phone-column-width-more)]',
           scrollHint?.isVisible && scrollHintBounceProps.className
         )}
         style={{
@@ -811,6 +823,8 @@ function DebateClaimTitle({
         <button
           type="button"
           aria-expanded={isClaimExpanded}
+          // The phone column reserves this row's height when it is here; see `debateColumnStyle`.
+          data-claim-expander=""
           onClick={() => setIsClaimExpanded(expanded => !expanded)}
           className="hidden self-start text-metadata text-grey-04 underline-offset-2 hover:underline md:inline-flex"
         >

@@ -294,7 +294,20 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     expect(within(card).getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
     const mediaColumn = card.parentElement;
     assert(mediaColumn, 'Expected the card to be rendered inside the media column');
-    expect(mediaColumn).toHaveClass('min-w-0', 'w-[var(--debate-feed-column-width)]', 'md:w-[calc(100vw-1rem)]');
+    expect(mediaColumn).toHaveClass(
+      'min-w-0',
+      'w-[var(--debate-feed-column-width)]',
+      // Phones size to the height left under the browser's toolbars too, not just the screen width,
+      // and reserve the "Show more" row when the claim has one.
+      'md:w-[var(--debate-feed-phone-column-width)]',
+      'md:has-[[data-claim-expander]]:w-[var(--debate-feed-phone-column-width-more)]'
+    );
+    expect(mediaColumn).toHaveStyle({
+      '--debate-feed-phone-column-width': `clamp(240px, ${debateCardColumnWidth('83dvh - 197px', DEBATE_CARD_WRAPS_BELOW)}, calc(100cqw - 2rem))`,
+      '--debate-feed-phone-column-width-more': `clamp(240px, ${debateCardColumnWidth('83dvh - 219px', DEBATE_CARD_WRAPS_BELOW)}, calc(100cqw - 2rem))`,
+    });
+    // 16px either side on a phone, not 8.
+    expect(feedItem).not.toHaveClass('md:px-2');
     expect(mediaColumn).toHaveStyle({
       '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', DEBATE_CARD_WRAPS_BELOW)}), 640px)`,
     });
@@ -412,6 +425,8 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
 
       const toggle = screen.getByRole('button', { name: 'Show more' });
       expect(toggle).toHaveClass('hidden', 'md:inline-flex');
+      // What the phone column keys its taller budget on.
+      expect(toggle).toHaveAttribute('data-claim-expander');
       expect(toggle).toHaveAttribute('aria-expanded', 'false');
       fireEvent.click(toggle);
 
