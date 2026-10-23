@@ -5,6 +5,8 @@ import * as React from 'react';
 import Link from 'next/link';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
+import { CallRoom } from '~/core/space-calls/call-room';
+import { spaceCallPath } from '~/core/space-calls/routes';
 import { useBrowseSidebarPageDefault } from '~/core/state/browse-sidebar-state';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -12,6 +14,7 @@ import { Avatar } from '~/design-system/avatar';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
+import type { DebateLobbyView } from '../api';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
 import { HubHeaderControls } from '../matchmaking/hub-header-controls';
@@ -53,6 +56,7 @@ import { useLobbyHighlights } from './lobby-highlights-hooks';
 import { usePreOpenHosts } from './lobby-host-lobbies';
 import { EndPickerLeftBehind } from './lobby-left-picker';
 import { LobbyHostLists, LobbyRemovedNotice } from './lobby-moderation';
+import { useIsCallRoom, useLobbyRoomPurpose } from './lobby-purpose';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
 import { LobbyAnalyticsScope } from './lobby-room-analytics';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
@@ -61,6 +65,7 @@ import { LobbyPeople } from './lobby-roster';
 import { LobbyScheduleProvider } from './lobby-schedule';
 import { LobbyScheduledRequests } from './lobby-scheduled-requests';
 import {
+  CALL_STATE_COPY,
   FindDebateLink,
   LOBBY_STATE_COPY,
   LobbyBannedCard,
@@ -73,6 +78,7 @@ import { useMinuteNow } from './use-minute-now';
 export const LOBBY_COPY = {
   leaveOther: (name: string | null) => (name ? `Leave ${name}?` : 'Leave your other lobby?'),
   oneLobby: (name: string) => `You can be in one lobby at a time. Joining ${name} will leave it.`,
+  oneRoom: (name: string) => `You can be in one call or lobby at a time. Joining ${name} will leave it.`,
   scheduled: 'Debate lobby · scheduled',
   guestBeforeOpen: 'No account? You can still join and listen when it opens.',
   movedToOther: (name: string | null) => `You joined ${name ?? 'another lobby'} in another tab.`,
@@ -207,13 +213,20 @@ function LobbyAccess({
   exitHref: string;
 }) {
   const guest = useIsLobbyGuest();
+  const purpose = useLobbyRoomPurpose();
   if (!lobby) {
+    const call = purpose.purpose === 'call';
     return failed ? (
-      <LobbyNotice action={findDebateAction} onRetry={onRetry}>
-        Could not open this lobby.
+      <LobbyNotice
+        action={
+          call ? { href: NavUtils.toSpace(purpose.spaceId), label: CALL_STATE_COPY.backToSpace } : findDebateAction
+        }
+        onRetry={onRetry}
+      >
+        {call ? 'Could not open this call.' : 'Could not open this lobby.'}
       </LobbyNotice>
     ) : (
-      <LobbyNotice busy>Opening the lobby…</LobbyNotice>
+      <LobbyNotice busy>{call ? 'Opening the call…' : 'Opening the lobby…'}</LobbyNotice>
     );
   }
 
@@ -367,6 +380,7 @@ function AdmittedLobby({
   exitHref: string;
 }) {
   const { state, join, leave, leaveSteppedOut, connectionId, setVoiceConnected, voiceAwayAt } = presence;
+  const purpose = useLobbyRoomPurpose();
 
   // Removed before this visit, or unbanned since. Dropped while in the lobby, and Leave, take the
   // page back to where it was opened from (`useExitLobbyWhenOut`) before this renders.
@@ -392,19 +406,23 @@ function AdmittedLobby({
   if (state.status === 'moved')
     return <MovedToOtherLobby lobby={lobby} otherLobbyId={state.otherLobbyId} onJoin={join} />;
 
+  const room = {
+    lobby,
+    state,
+    onRetry: () => void join(false),
+    onLeave: () => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave()),
+    voice: { connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at },
+    guestSession,
+    exitHref,
+  };
+  // A space call (GEO-3419): no lobby analytics, schedule or queued debate requests.
+  if (purpose.purpose === 'call') return <CallRoom {...room} />;
+
   return (
     <LobbyAnalyticsScope lobby={lobby}>
       <LobbyScheduleProvider lobby={lobby}>
         <LobbyQueuedRequestProvider lobby={lobby} joined={state.status === 'joined'}>
-          <LobbyRoom
-            lobby={lobby}
-            state={state}
-            onRetry={() => void join(false)}
-            onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
-            voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
-            guestSession={guestSession}
-            exitHref={exitHref}
-          />
+          <LobbyRoom {...room} />
         </LobbyQueuedRequestProvider>
       </LobbyScheduleProvider>
     </LobbyAnalyticsScope>
@@ -422,6 +440,7 @@ function ConfirmLeaveOtherLobby({
   onJoin: () => void;
 }) {
   const other = useDebateLobby(otherLobbyId ?? '', otherLobbyId !== null).data;
+  const calls = useIsCallRoom() || other?.purpose === 'call';
 
   return (
     <LobbyShell>
@@ -429,12 +448,12 @@ function ConfirmLeaveOtherLobby({
         {LOBBY_COPY.leaveOther(other?.name ?? null)}
       </Text>
       <Text as="p" variant="metadata" color="grey-04">
-        {LOBBY_COPY.oneLobby(lobby.name)}
+        {calls ? LOBBY_COPY.oneRoom(lobby.name) : LOBBY_COPY.oneLobby(lobby.name)}
       </Text>
       <div className="flex flex-wrap gap-2">
         {/* Stay goes back to the other lobby when there is one to go to. */}
         <Link
-          href={otherLobbyId ? debateRoomPath(otherLobbyId) : NavUtils.toExplore()}
+          href={otherLobbyId ? roomPath(otherLobbyId, other) : NavUtils.toExplore()}
           onClick={() => otherLobbyId && markLobbyEntry(otherLobbyId, 'other_lobby')}
           className={hubPillClassName('secondary')}
         >
@@ -446,6 +465,11 @@ function ConfirmLeaveOtherLobby({
       </div>
     </LobbyShell>
   );
+}
+
+/** The other room's page: a space call's own, else the lobby's. */
+function roomPath(id: string, view: Pick<DebateLobbyView, 'purpose' | 'call'> | undefined) {
+  return view?.purpose === 'call' && view.call ? spaceCallPath(view.call.space_id, id) : debateRoomPath(id);
 }
 
 /** Another tab joined a different lobby, which took this tab out of this one. */
@@ -469,7 +493,7 @@ function MovedToOtherLobby({
       <div className="flex flex-wrap gap-2">
         {otherLobbyId ? (
           <Link
-            href={debateRoomPath(otherLobbyId)}
+            href={roomPath(otherLobbyId, other)}
             onClick={() => markLobbyEntry(otherLobbyId, 'other_lobby')}
             className={hubPillClassName('primary')}
           >
