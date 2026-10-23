@@ -3903,7 +3903,7 @@ export async function getDebateTranscript(
   );
 }
 
-async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+export async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
