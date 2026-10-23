@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation';
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import {
   type DebateParticipantSummary,
-  GeoChatRequestError,
   type ScheduledDebateRequest,
   type UpcomingDebateRoom,
 } from '~/core/debates/api';
@@ -25,6 +24,7 @@ import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useOpenScheduledRequests } from '~/core/debates/rooms/scheduled-awaiting';
 import { useCancelScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
+import { cancelFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { normId } from '~/core/utils/norm-id';
 
@@ -627,17 +627,6 @@ export function CancelScheduled({
       </div>
     </div>
   );
-}
-
-/** geo-chat's two refusals, said plainly; anything else keeps its own message. */
-export function cancelFailureMessage(error: unknown) {
-  if (error instanceof GeoChatRequestError) {
-    if (error.code === 'debate_already_started') {
-      return 'Someone has already joined this debate, so it can no longer be cancelled.';
-    }
-    if (error.code === 'request_not_cancellable') return 'This has already been answered, cancelled or expired.';
-  }
-  return error instanceof Error ? error.message : 'Could not cancel. Try again.';
 }
 
 /**

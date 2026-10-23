@@ -272,9 +272,7 @@ describe('scheduling from a lobby person menu', () => {
     fireEvent.click(screen.getByText('Open Priya'));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
-    expect(
-      screen.getByText('Someone has already joined this debate, so it can no longer be cancelled.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('This debate has already started, so it can no longer be cancelled.')).toBeInTheDocument();
   });
 
   it('queues the booking across signup, then opens confirmation instead of sending', async () => {

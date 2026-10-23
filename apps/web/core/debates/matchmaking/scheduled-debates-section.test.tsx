@@ -341,9 +341,7 @@ describe('calling a scheduled debate off', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
     await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
 
-    expect(
-      screen.getByText('Someone has already joined this debate, so it can no longer be cancelled.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('This debate has already started, so it can no longer be cancelled.')).toBeInTheDocument();
   });
 
   it('says it is cancelled rather than offering it again before the list refreshes', () => {
