@@ -822,6 +822,54 @@ describe('moving a debate', () => {
     expect(within(day('2026-09-22')).getByRole('button', { name: /at 12pm/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // Review of #2979, round 4.
+  it('will not propose a pick that turned out to be the time being moved', async () => {
+    const slots = [16, 18].map(hour => slot(hour, true, 22));
+    const view = (book: PeerAvailabilityBooking) => (
+      <PeerAvailabilityView schedule={schedule({ slots })} peerName="Ada" now={NOW} booking={book} />
+    );
+    const user = userEvent.setup();
+    const { rerender } = render(view(moving({ moving: null })));
+    await user.click(within(day('2026-09-22')).getByRole('button', { name: /at 4pm/ }));
+    expect(screen.getByRole('button', { name: 'Propose new time' })).toBeEnabled();
+
+    rerender(view(moving({ moving: { startsAt: '2026-09-22T16:00:00Z', agreed: true } })));
+
+    expect(screen.getByRole('button', { name: 'Propose new time' })).toBeDisabled();
+  });
+
+  it('still opens the day for a new pick hidden after the viewer folded it', async () => {
+    const slots = [9, 10, 11, 12, 13].map(hour => slot(hour, true, 22));
+    const view = (book: PeerAvailabilityBooking) => (
+      <PeerAvailabilityView schedule={schedule({ slots })} peerName="Ada" now={NOW} booking={book} />
+    );
+    const user = userEvent.setup();
+    const { rerender } = render(view(moving({ moving: null })));
+    const tuesday = () => within(day('2026-09-22'));
+    await user.click(tuesday().getByRole('button', { name: /^\+1 more times/ }));
+    await user.click(tuesday().getByRole('button', { name: /^Show less/ }));
+    await user.click(tuesday().getByRole('button', { name: /at 12pm/ }));
+
+    rerender(view(moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } })));
+
+    expect(tuesday().getByRole('button', { name: /at 12pm/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps a day folded for the pick the viewer folded it with', async () => {
+    render(
+      <PeerAvailabilityView
+        schedule={schedule({ slots: [9, 10, 11, 12, 13].map(hour => slot(hour, true, 22)) })}
+        peerName="Ada"
+        now={NOW}
+        booking={moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } })}
+        initialSelectedStart="2026-09-22T12:00:00Z"
+      />
+    );
+    const tuesday = within(day('2026-09-22'));
+    await userEvent.setup().click(tuesday.getByRole('button', { name: /^Show less/ }));
+    expect(tuesday.queryByRole('button', { name: /at 12pm/ })).not.toBeInTheDocument();
+  });
+
   it('holds both actions while the other is in flight', async () => {
     const { user } = setupBooking(
       moving({

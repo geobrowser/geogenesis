@@ -308,7 +308,9 @@ export function PeerAvailabilityView({
             <BookingFooter
               booking={booking}
               clock={clock}
-              startsAt={selectedStart}
+              // The slot, not the raw pick: a pick that became the time being moved (GEO-3429), or a
+              // slot a refetch dropped, is no longer one, and must not be sent.
+              startsAt={selectedSlot?.start ?? null}
               viewerIsFree={selectedSlot?.viewerIsFree ?? null}
               viewerTimezone={schedule.viewerTimezone}
               zoneNote={zoneNote}
@@ -599,14 +601,15 @@ function DayColumn({
   onSelect: (start: string | null) => void;
 }) {
   // A pick past the fold has to be visible: opened on one, or pushed there when the time being moved
-  // (GEO-3429) lands after the week has drawn. Derived rather than set at mount for that reason;
-  // pressing the expander is the viewer's own choice and wins from then on.
-  const [toggled, setToggled] = React.useState<boolean | null>(null);
+  // (GEO-3429) lands after the week has drawn. Derived rather than set at mount for that reason.
+  // Pressing the expander is the viewer's own choice and wins for the pick it was pressed with; a
+  // new pick that would hide still opens the day.
+  const [toggle, setToggle] = React.useState<{ pick: string | null; open: boolean } | null>(null);
   const pickHidden =
     selectedStart !== null &&
     day.slots.some(slot => slot.start === selectedStart) &&
     !foldedSlots(day.slots).some(slot => slot.start === selectedStart);
-  const expanded = toggled ?? pickHidden;
+  const expanded = toggle && toggle.pick === selectedStart ? toggle.open : pickHidden || (toggle?.open ?? false);
   const empty = day.slots.length === 0;
   const shown = expanded ? day.slots : foldedSlots(day.slots);
   const hidden = day.slots.length - shown.length;
@@ -673,7 +676,7 @@ function DayColumn({
                     'Show more times',
                     'expand_peer_availability_day'
                   ))}
-              onClick={() => setToggled(!expanded)}
+              onClick={() => setToggle({ pick: selectedStart, open: !expanded })}
               className="rounded-md px-2 py-1 text-left text-footnote text-grey-04 transition-colors hover:text-text"
             >
               {expanded ? 'Show less' : `+${hidden} more`}

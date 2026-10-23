@@ -346,6 +346,20 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(screen.getByLabelText('Add a note for Maya (optional)')).toHaveValue('Flight delayed');
     });
 
+    it('hands the week the latest note on a second Suggest', async () => {
+      const user = userEvent.setup();
+      open('cant');
+      await user.type(screen.getByLabelText('Add a note for Maya (optional)'), 'A');
+      await user.click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+      await user.click(screen.getByRole('button', { name: 'warning: I cant make it' }));
+      const field = screen.getByLabelText('Add a note for Maya (optional)');
+      await user.clear(field);
+      await user.type(field, 'B');
+      await user.click(screen.getByRole('button', { name: 'Suggest another time instead' }));
+
+      expect(screen.getByTestId('week')).toHaveAttribute('data-note', 'B');
+    });
+
     // The note lives with the dialog, so a newer one survives a hop to Running late and back.
     it('keeps the latest note across Running late and back', async () => {
       const user = userEvent.setup();
