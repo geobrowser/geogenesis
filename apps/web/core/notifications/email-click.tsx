@@ -2,13 +2,21 @@
 
 import * as React from 'react';
 
-import { readEmailClick } from '~/core/deep-links/ref-email';
-import { readSession, writeSession } from '~/core/utils/session-storage';
+import { urlWithoutParams } from '~/core/deep-links/modal-deep-link';
+import { REF_LINK_PARAM, REF_SEND_PARAM, readEmailClick } from '~/core/deep-links/ref-email';
 import { hasPersistedPrivySession } from '~/core/wallet/privy-session';
 
 import { NotificationsRequestError, geoNotificationsApiUrl, reportEmailClick } from './api';
 
-const REPORTED_KEY = 'geo:email-click:';
+/**
+ * Takes `ref_send` and `ref_link` off the address bar, keeping everything else (`ref_email` included,
+ * which the save sheet reads). Only the query changes, as when a deep link's trigger is cleared.
+ */
+function clearClickFromUrl() {
+  const { pathname, search, hash } = window.location;
+  const next = urlWithoutParams(pathname, new URLSearchParams(search), [REF_SEND_PARAM, REF_LINK_PARAM], hash);
+  if (next !== `${pathname}${search}${hash}`) window.history.replaceState(null, '', next);
+}
 
 /**
  * Counts a click on a link in one of our emails (GEO-3370): when the page an email link opened has
@@ -17,42 +25,41 @@ const REPORTED_KEY = 'geo:email-click:';
  * automation (`navigator.webdriver`) doesn't either, nor a tab opened in the background until it is
  * looked at. Works signed out: the send names the recipient.
  *
- * Once per send and link per tab, once the service has answered, so a reload doesn't count again
- * but a report that failed is tried again on the next load. Two tabs opened from the same link are
- * collapsed by the service, which drops a repeat within half an hour. The URL keeps its parameters:
- * the analytics landing URL joins the session to the send. Mounted once, app-wide.
+ * Once the service has answered (or said it doesn't know the send), `ref_send` and `ref_link` leave
+ * the address bar, so a reload doesn't report again and a copy of the address doesn't carry them; a
+ * report that failed leaves them, so a reload tries again. Analytics never sees them either way: its
+ * runtime keeps only campaign parameters in URLs. The service counts only the first click on each
+ * link. Mounted once, app-wide.
  */
 export function EmailClickReporter() {
+  // Read once per mount, before the URL is cleared, so a second run of the effect still has it.
+  const [click] = React.useState(() =>
+    typeof window === 'undefined' ? null : readEmailClick(new URLSearchParams(window.location.search))
+  );
+  const sent = React.useRef(false);
+
   React.useEffect(() => {
     const baseUrl = geoNotificationsApiUrl();
-    const click = readEmailClick(new URLSearchParams(window.location.search));
     if (!baseUrl || !click || navigator.webdriver) return;
-    const key = `${REPORTED_KEY}${click.sendId}:${click.link ?? ''}`;
-    if (readSession(key)) return;
 
-    // This page load reports at most once, even with storage blocked.
-    let sent = false;
     const report = () => {
-      if (sent || document.visibilityState !== 'visible') return;
-      sent = true;
+      if (sent.current || document.visibilityState !== 'visible') return;
+      sent.current = true;
       document.removeEventListener('visibilitychange', report);
       reportEmailClick(baseUrl, {
         send_id: click.sendId,
         link: click.link,
         signed_in: hasPersistedPrivySession(),
-      }).then(
-        () => writeSession(key, '1'),
-        (error: unknown) => {
-          // An unknown send won't become known; anything else (offline, the service down) is tried
-          // again on the next load of this link.
-          if (error instanceof NotificationsRequestError && error.status === 404) writeSession(key, '1');
-        }
-      );
+      }).then(clearClickFromUrl, (error: unknown) => {
+        // An unknown send won't become known; anything else (offline, the service down) is tried
+        // again when this URL is loaded again.
+        if (error instanceof NotificationsRequestError && error.status === 404) clearClickFromUrl();
+      });
     };
     report();
     document.addEventListener('visibilitychange', report);
     return () => document.removeEventListener('visibilitychange', report);
-  }, []);
+  }, [click]);
 
   return null;
 }

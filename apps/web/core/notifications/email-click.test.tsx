@@ -39,7 +39,6 @@ function becomeVisible() {
 beforeEach(() => {
   visibility = 'visible';
   vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
-  window.sessionStorage.clear();
   mocks.session = false;
   mocks.report = vi.fn(async () => ({ outcome: 'counted' }));
 });
@@ -74,24 +73,27 @@ describe('EmailClickReporter', () => {
     expect(mocks.report).toHaveBeenCalledTimes(1);
   });
 
-  it('counts a link once per tab once the service answered: a reload does not count again, another link does', async () => {
-    land(`?ref_send=${SEND}&ref_link=main`);
+  it('takes the click off the address bar once the service answered, so a reload does not report again', async () => {
+    land(`?ref_email=digest&ref_send=${SEND}&ref_link=main&utm_source=x#top`);
     render(<EmailClickReporter />);
+    // Until the answer comes, the URL is as it landed.
+    expect(window.location.search).toContain('ref_send=');
     await act(async () => {});
+    expect(window.location.search).toBe('?ref_email=digest&utm_source=x');
+    expect(window.location.hash).toBe('#top');
     cleanup();
     render(<EmailClickReporter />);
     expect(mocks.report).toHaveBeenCalledTimes(1);
-
-    cleanup();
-    land(`?ref_send=${SEND}&ref_link=profile`);
-    render(<EmailClickReporter />);
-    expect(mocks.report).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps the parameters in the URL for the analytics landing page', () => {
-    land(`?ref_email=digest&ref_send=${SEND}&ref_link=main`);
-    render(<EmailClickReporter />);
-    expect(window.location.search).toBe(`?ref_email=digest&ref_send=${SEND}&ref_link=main`);
+  it('reports once per mount even when its effect runs twice', () => {
+    land(`?ref_send=${SEND}`);
+    render(
+      <React.StrictMode>
+        <EmailClickReporter />
+      </React.StrictMode>
+    );
+    expect(mocks.report).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing for a browser driven by automation, or a page not from an email', () => {
@@ -106,38 +108,34 @@ describe('EmailClickReporter', () => {
     expect(mocks.report).not.toHaveBeenCalled();
   });
 
-  it('tries a failed report again on the next load', async () => {
+  it('leaves a failed report in the URL, so the next load tries again', async () => {
     mocks.report = vi.fn(async () => {
       throw new Error('offline');
     });
     land(`?ref_send=${SEND}`);
     render(<EmailClickReporter />);
     await act(async () => {});
+    expect(window.location.search).toBe(`?ref_send=${SEND}`);
     cleanup();
     render(<EmailClickReporter />);
     await act(async () => {});
     expect(mocks.report).toHaveBeenCalledTimes(2);
   });
 
-  it('does not retry a send the service does not know', async () => {
+  it('takes a send the service does not know off the URL, and does not retry it', async () => {
     mocks.report = vi.fn(async () => {
       throw new NotificationsRequestError('unknown send', 404);
     });
     land(`?ref_send=${SEND}`);
     render(<EmailClickReporter />);
     await act(async () => {});
+    expect(window.location.search).toBe('');
     cleanup();
     render(<EmailClickReporter />);
     expect(mocks.report).toHaveBeenCalledTimes(1);
   });
 
-  it('reports once per load with session storage blocked, however often the tab is shown', () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('blocked');
-    });
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('blocked');
-    });
+  it('reports once however often the tab is shown', () => {
     visibility = 'hidden';
     land(`?ref_send=${SEND}`);
     render(<EmailClickReporter />);
