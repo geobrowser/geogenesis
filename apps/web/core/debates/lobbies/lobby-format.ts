@@ -355,6 +355,14 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
       return 'You can’t do that to yourself.';
     case 'lobby_target_is_host':
       return 'Remove them as host first.';
+    case 'lobby_target_is_space_editor':
+      return 'They host because they edit this space.';
+    case 'call_editor_required':
+      return 'Only editors of this space can start a call.';
+    case 'call_space_unsupported':
+      return 'Calls aren’t available in this space.';
+    case 'call_not_found':
+      return 'This call no longer exists.';
     case 'lobby_creator_host':
       return 'Only the lobby’s creator can remove their host status.';
     case 'lobby_last_host':
@@ -403,10 +411,12 @@ export const MEMBER_ACTION_LABEL: Record<DebateLobbyMemberAction, string> = {
 /** Host actions the viewer may take on `member`, in menu order; geo-chat enforces the same rules. */
 export function memberActions(
   viewer: Pick<DebateLobbyView['viewer'], 'hosting' | 'role' | 'creator'>,
-  member: Pick<DebateLobbyMember, 'role' | 'creator'>,
+  member: Pick<DebateLobbyMember, 'role' | 'creator' | 'space_editor'>,
   isSelf: boolean
 ): DebateLobbyMemberAction[] {
   if (!viewer.hosting) return [];
+  // A space editor hosts a call because of the space: not theirs or anyone's to change here.
+  if (member.space_editor) return [];
   // The acting host is a speaker: hosting never changes their role, so who hosts is not theirs to change.
   const hostByRole = viewer.role === 'host';
   if (isSelf) return hostByRole ? ['remove-host'] : [];

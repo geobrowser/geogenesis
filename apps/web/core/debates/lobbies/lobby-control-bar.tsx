@@ -10,6 +10,7 @@ import { GeoChatRequestError } from '../api';
 import { debateSurfaceAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { lobbyErrorMessage } from './lobby-format';
+import { useIsCallRoom } from './lobby-purpose';
 import type { MemberLobbyPageView } from './lobby-view';
 import { useLobbyHand } from './moderation-hooks';
 
@@ -19,6 +20,7 @@ const HUB_PILL_INTENT = debateSurfaceAnalyticsAttributes('hub', 'action')['data-
 export const LOBBY_CONTROL_COPY = {
   hint: 'Request someone on a claim, or tap a person to request them directly.',
   listener: 'You can still vote and request debates.',
+  callListener: 'Raise your hand to speak.',
   handRaised: 'Hosts can see your hand.',
   leave: 'Leave lobby',
 } as const;
@@ -104,6 +106,7 @@ function useElementHeight(element: HTMLElement | null) {
 /** Raise hand / "Hand raised · Lower", for a listener who is in the lobby, with its hint. */
 export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, 'lobby_id' | 'viewer'> }) {
   const hand = useLobbyHand(lobby.lobby_id);
+  const call = useIsCallRoom();
   const raised = Boolean(lobby.viewer.hand_raised_at);
 
   return (
@@ -145,7 +148,9 @@ export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, '
           ? handErrorMessage(hand.error)
           : raised
             ? LOBBY_CONTROL_COPY.handRaised
-            : LOBBY_CONTROL_COPY.listener}
+            : call
+              ? LOBBY_CONTROL_COPY.callListener
+              : LOBBY_CONTROL_COPY.listener}
       </Text>
     </div>
   );

@@ -321,7 +321,7 @@ export function useEndDebateLobby(lobbyId: string) {
     mutationFn: () => endDebateLobby(lobbyId, getPrivyIdentityToken, accountKey),
     onSuccess: view => {
       store(view);
-      lobbyEnded(view.lobby_id, { scheduled: view.scheduled, opensAt: view.opens_at });
+      if (view.purpose !== 'call') lobbyEnded(view.lobby_id, { scheduled: view.scheduled, opensAt: view.opens_at });
     },
   });
 }
@@ -439,8 +439,9 @@ export function useLobbyPresence(
         store(view);
         // A lobby that would not admit answers with its view; the page renders its access.
         joinedRef.current = view.viewer.connected;
-        // A reconnect in the same visit is not a new session; `lobbyJoined` tells them apart.
-        if (view.viewer.connected) {
+        // A reconnect in the same visit is not a new session; `lobbyJoined` tells them apart. A
+        // space call has no lobby session: the warehouse's lobby events are lobbies only.
+        if (view.viewer.connected && view.purpose !== 'call') {
           lobbyJoined(lobbyId, {
             isNewcomer: view.viewer.newcomer ?? null,
             role: view.viewer.role,

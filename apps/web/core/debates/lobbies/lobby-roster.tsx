@@ -29,6 +29,7 @@ import {
 } from './lobby-format';
 import { LobbyGuestCount } from './lobby-guest';
 import { LobbyPersonMenu, personMenuAnalyticsAttributes } from './lobby-person-menu';
+import { useIsCallRoom } from './lobby-purpose';
 import { LobbyShowPeopleContext, LobbySlot } from './lobby-slots';
 import {
   EMPTY_VIDEO_GRID,
@@ -70,7 +71,9 @@ export function LobbyPeople({
   ownAvailable: boolean | undefined;
   disagreements: DebateLobbyClaims['disagreements'];
 }) {
-  const pairs = lobby.debate_pairs ?? [];
+  // A space call has no debates: no pairs, and no availability status on anyone.
+  const call = useIsCallRoom();
+  const pairs = call ? [] : (lobby.debate_pairs ?? []);
   const inPairs = new Set(pairs.flatMap(pair => pair.people.map(person => dashlessId(person.user_id))));
   const roster = rosterOrder(lobby.members).filter(member => !inPairs.has(dashlessId(member.user_id)));
   const speakers = roster.filter(publishes);
@@ -92,14 +95,14 @@ export function LobbyPeople({
       member,
       isSelf,
       viewerId,
-      status: memberStatus(member, isSelf ? ownAvailable : undefined),
+      status: call ? null : memberStatus(member, isSelf ? ownAvailable : undefined),
       disagreements: isSelf ? null : disagreementCount(disagreements, member.user_id),
     };
   };
 
   return (
     <>
-      <LobbyDebatePairs pairs={pairs} members={lobby.members} lobby={lobby} viewerId={viewerId} />
+      {call ? null : <LobbyDebatePairs pairs={pairs} members={lobby.members} lobby={lobby} viewerId={viewerId} />}
       {speakers.length > 0 ? <SpeakerVideoGrid speakers={speakers} personProps={personProps} /> : null}
       {listeners.length + guests > 0 ? (
         <section className="flex flex-col gap-2.5 md:gap-2" aria-label="Listening">

@@ -10,6 +10,7 @@ import type { DebateLobbyMember, DebateLobbyMemberAction, DebateLobbyView } from
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { MEMBER_ACTION_LABEL, memberActions, moderationErrorMessage, personName } from './lobby-format';
+import { useIsCallRoom } from './lobby-purpose';
 import { useModerateLobbyMember } from './moderation-hooks';
 
 /** Step down rather than "Remove as host" on yourself. */
@@ -18,7 +19,7 @@ const STEP_DOWN_LABEL = 'Step down as host';
 /** Whether a host could act on `member` at all; the menu trigger hides otherwise. */
 export function hasMemberActions(
   lobby: Pick<DebateLobbyView, 'viewer'>,
-  member: Pick<DebateLobbyMember, 'role' | 'creator'>,
+  member: Pick<DebateLobbyMember, 'role' | 'creator' | 'space_editor'>,
   isSelf: boolean
 ) {
   return memberActions(lobby.viewer, member, isSelf).length > 0;
@@ -44,6 +45,7 @@ export function LobbyMemberActions({
   onDone?: () => void;
 }) {
   const moderate = useModerateLobbyMember(lobby.lobby_id);
+  const call = useIsCallRoom();
   const [confirmingBan, setConfirmingBan] = React.useState(false);
   const actions = memberActions(lobby.viewer, member, isSelf).filter(action => action !== 'mute' || micOn !== false);
   if (actions.length === 0) return null;
@@ -68,7 +70,7 @@ export function LobbyMemberActions({
       {confirmingBan ? (
         <div className="flex flex-col gap-2 px-3 py-2">
           <Text as="p" variant="metadata">
-            Ban {name}? They can’t rejoin this lobby until a host unbans them.
+            Ban {name}? They can’t rejoin this {call ? 'call' : 'lobby'} until a host unbans them.
           </Text>
           <div className="flex flex-wrap gap-2">
             <HubPillButton
@@ -104,7 +106,11 @@ export function LobbyMemberActions({
               action === 'ban' || action === 'remove' ? 'text-red-01' : 'text-text'
             )}
           >
-            {isSelf && action === 'remove-host' ? STEP_DOWN_LABEL : MEMBER_ACTION_LABEL[action]}
+            {isSelf && action === 'remove-host'
+              ? STEP_DOWN_LABEL
+              : call && action === 'remove'
+                ? 'Remove from call'
+                : MEMBER_ACTION_LABEL[action]}
           </button>
         ))
       )}

@@ -2740,6 +2740,8 @@ export type DebateLobbyMember = {
   available_to_debate?: boolean;
   /** Who moved this listener there. Only for a hosting viewer; absent from older geo-chat. */
   moved_to_listeners?: { by: DebateLobbyPerson | null; at: string } | null;
+  /** An editor of a call's space, who hosts because of it (GEO-3419); nobody can act on them. */
+  space_editor?: boolean;
 };
 
 /** Someone in a debate pair; the partner may be off this lobby's roster. */
