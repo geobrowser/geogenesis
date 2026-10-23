@@ -68,10 +68,6 @@ const optimizePackageImports = ['effect', 'viem', 'wagmi', 'date-fns'];
  */
 const sentryRelease = process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.SENTRY_RELEASE;
 
-// Preview builds skip source maps to lower peak build memory, which sits near the 8 GB build
-// machine limit (GEO-3453). Production and non-Vercel builds keep them.
-const isVercelPreview = process.env.VERCEL_ENV === 'preview';
-
 /**
  * Response headers. Production currently sends none of these — only Vercel's own HSTS
  * (`strict-transport-security: max-age=63072000`), confirmed against www.geobrowser.io.
@@ -143,8 +139,6 @@ const nextConfig: NextConfig = {
     : undefined,
   experimental: {
     turbopackRustReactCompiler: true,
-    // Also drops Turbopack's server and client source maps on previews (GEO-3453).
-    ...(isVercelPreview ? { turbopackSourceMaps: false } : {}),
     ...turbopackOptimizations,
     optimizePackageImports,
   },
@@ -320,6 +314,4 @@ export default process.env.DISABLE_SENTRY === '1'
 
       // Only log source map upload output in CI
       silent: !process.env.CI,
-
-      sourcemaps: { disable: isVercelPreview },
     });

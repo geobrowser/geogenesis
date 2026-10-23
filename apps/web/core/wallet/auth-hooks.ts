@@ -1,6 +1,7 @@
 'use client';
 
-import type * as Auth from '@geogenesis/auth';
+// EXPERIMENT ONLY (GEO-3453): static import, undoing #2930's on-demand chunk.
+import * as Auth from '@geogenesis/auth';
 
 import * as React from 'react';
 
@@ -253,18 +254,18 @@ export async function getIdentityToken(): Promise<string | null> {
       return null;
     }
   }
-  const auth = await import('@geogenesis/auth');
+  const auth = Auth;
   return auth.getIdentityToken();
 }
 
 /** Only reachable with an embedded wallet, so Privy is already loaded. */
 export async function toViemAccount(...args: Parameters<typeof Auth.toViemAccount>) {
-  const auth = await import('@geogenesis/auth');
+  const auth = Auth;
   return auth.toViemAccount(...args);
 }
 
 export function retryEmbeddedWalletSetup() {
-  void import('@geogenesis/auth').then(auth => auth.retryEmbeddedWalletSetup());
+  Auth.retryEmbeddedWalletSetup();
 }
 
 export { restartAuthHost } from './auth-store';
