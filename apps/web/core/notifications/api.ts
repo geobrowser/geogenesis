@@ -161,3 +161,25 @@ export function changeSubscription(baseUrl: string, link: UnsubscribeLinkParams,
     body: { action },
   });
 }
+
+export type EmailClick = {
+  /** The send's id from the email's link (`ref_send`). */
+  send_id: string;
+  /** Which link in the email (`ref_link`): `main`, `profile`, `claim`, … Null when the link didn't say. */
+  link: string | null;
+  /** Whether this browser had a Geo session when the page loaded. */
+  signed_in: boolean;
+};
+
+/**
+ * A counted click on a link in one of our emails (GEO-3370): the page it opened loaded here and is on
+ * screen. No token: people often arrive signed out, and the send id is all the service needs.
+ * `keepalive` so it survives the visitor leaving straight away.
+ */
+export function reportEmailClick(baseUrl: string, click: EmailClick) {
+  return notificationsRequest<{ outcome: string }>(baseUrl, '/email-clicks', null, {
+    method: 'POST',
+    body: click,
+    keepalive: true,
+  });
+}
