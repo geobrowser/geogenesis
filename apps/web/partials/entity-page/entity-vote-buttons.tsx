@@ -53,7 +53,6 @@ import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { Avatar } from '~/design-system/avatar';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
-import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
@@ -69,7 +68,6 @@ type EntityVoteButtonsProps = {
   spaceId: string;
   responseKind?: ResponseKind | null;
   claimResponderAvatarsPosition?: 'leading' | 'trailing';
-  presentation?: 'inline' | 'debate-vertical' | 'debate-horizontal';
   /**
    * A surface with no room for prose: the sticky entity header's 48px row.
    *
@@ -129,7 +127,6 @@ function EntityResponseButtons({
   spaceId: requestedSpaceId,
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
-  presentation = 'inline',
   compact = false,
   nearViewport = true,
 }: EntityVoteButtonsProps) {
@@ -505,22 +502,6 @@ function EntityResponseButtons({
     );
   }
 
-  if (presentation !== 'inline') {
-    return (
-      <DebateVotePill
-        orientation={presentation === 'debate-vertical' ? 'vertical' : 'horizontal'}
-        score={scoreLabel}
-        positiveActive={positiveActive}
-        negativeActive={negativeActive}
-        disabled={responseDisabled}
-        positiveTitle={positiveTitle}
-        negativeTitle={negativeTitle}
-        onPositive={handlePositiveResponse}
-        onNegative={handleNegativeResponse}
-      />
-    );
-  }
-
   /*
    * Everything the two thumbs share, so the two cannot drift — and so this control matches the claim
    * pills while a response confirms, which is how they came apart in the first place: #2587 and #2598
@@ -536,10 +517,6 @@ function EntityResponseButtons({
    * - drop the hover step, since nothing under the pointer is going to happen;
    * - put `RESPONSE_CONFIRMING_COPY` in the tooltip, as the pills' `actionTitle` does;
    * - stay at full strength: `aria-disabled` rather than `disabled`, so the side still reads as taken.
-   *
-   * Inline only. `DebateVotePill` draws this control in the debate overlay and shares its handlers,
-   * so the guard sits on these buttons rather than in `handlePositiveResponse` — widening it to the
-   * overlay belongs with unifying the pills and the thumbs into one control.
    */
   const voteButtonProps = (onPress: () => void, title: string) => ({
     onClick: () => {
@@ -661,68 +638,6 @@ function RespondersPopover({
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
-  );
-}
-
-function DebateVotePill({
-  orientation,
-  score,
-  positiveActive,
-  negativeActive,
-  disabled,
-  positiveTitle,
-  negativeTitle,
-  onPositive,
-  onNegative,
-}: {
-  orientation: 'vertical' | 'horizontal';
-  score: string;
-  positiveActive: boolean;
-  negativeActive: boolean;
-  disabled: boolean;
-  positiveTitle: string;
-  negativeTitle: string;
-  onPositive: () => void;
-  onNegative: () => void;
-}) {
-  return (
-    <div
-      data-entity-vote-presentation={`debate-${orientation}`}
-      className={cx(
-        'flex items-center justify-center gap-1.5 rounded-full border border-grey-02 bg-white text-text shadow-light',
-        orientation === 'vertical' ? 'w-9 flex-col py-2' : 'h-7 px-2.5'
-      )}
-    >
-      <button
-        type="button"
-        aria-label={positiveTitle}
-        aria-pressed={positiveActive}
-        disabled={disabled}
-        title={positiveTitle}
-        onClick={onPositive}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
-      >
-        <VoteArrow direction="up" filled={positiveActive} />
-      </button>
-      <span className="text-metadataMedium text-text tabular-nums">{score}</span>
-      <button
-        type="button"
-        aria-label={negativeTitle}
-        aria-pressed={negativeActive}
-        disabled={disabled}
-        title={negativeTitle}
-        onClick={onNegative}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
-      >
-        <VoteArrow direction="down" filled={negativeActive} />
-      </button>
-    </div>
   );
 }
 

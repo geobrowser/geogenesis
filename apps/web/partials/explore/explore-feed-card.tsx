@@ -234,7 +234,11 @@ function BaseExploreFeedCard({
   const cardActions = <ExploreCardActions item={item} />;
 
   return (
-    <ActionSurfaceArticle className={EXPLORE_CARD_CLASS}>
+    <ActionSurfaceArticle
+      className={
+        compactDebateChrome ? 'flex flex-col gap-2 rounded-lg border border-grey-02 bg-white p-3' : EXPLORE_CARD_CLASS
+      }
+    >
       {compactDebateChrome ? (
         <DebateExploreMetaRow
           item={item}

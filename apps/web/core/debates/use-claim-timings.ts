@@ -35,8 +35,8 @@ const EMPTY_TIMINGS = new Map<string, ClaimTiming>();
  * distinguish their statements. The counter, backlog and scrubber all read the same timings.
  *
  * Deliberately a hook over `DebateTranscriptClaims` rather than a wrapper around
- * `useDebateTranscriptClaims`: the panel, the feed badge and the player each already hold the
- * claims, and re-fetching them per surface is what the shared query key exists to avoid.
+ * `useDebateTranscriptClaims`: the panel and the player each already hold the claims, and
+ * re-fetching them per surface is what the shared query key exists to avoid.
  *
  * Shared-offset refinement can also request the transcript for fully published claims. Consumers
  * are the live ticker/counter/scrubber and end-card carousel (via useDrawableDebateClaims), the

@@ -18,7 +18,9 @@ export type DebateActionAnalyticsSurface =
   | 'rejoin-bar'
   | 'challenge-accepted-prompt'
   | 'challenge-dialog'
-  | 'open-elsewhere';
+  | 'open-elsewhere'
+  /** The full-screen feed's and explore's debate card, whose claim pills replaced its up/down vote. */
+  | 'debate-card';
 
 const ACTION_SURFACE_ANALYTICS = {
   hub: {
@@ -93,6 +95,11 @@ const ACTION_SURFACE_ANALYTICS = {
   'open-elsewhere': {
     labelPrefix: 'Debate open elsewhere',
     actionIntent: 'debate_open_elsewhere_action',
+  },
+  // The intent the card's comments and share already carry, so all of its actions read as one.
+  'debate-card': {
+    labelPrefix: 'Debate',
+    actionIntent: 'debate_action',
   },
 } as const satisfies Record<DebateActionAnalyticsSurface, { labelPrefix: string; actionIntent: string }>;
 
