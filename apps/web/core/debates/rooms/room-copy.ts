@@ -229,7 +229,6 @@ export const SCHEDULED_NOTICE_COPY = {
     suggest: 'Suggest another time instead',
     suggestHint: (name: string) => `${name} is asked to accept the new time. The old one is cancelled straight away.`,
     lateInstead: 'I’m only running late',
-    sent: (name: string) => `Your debate is cancelled. We’ve let ${name} know.`,
   },
   done: 'Done',
   signIn: {

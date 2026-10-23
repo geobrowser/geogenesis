@@ -68,7 +68,7 @@ type Props = {
   requestId: string;
   initialStep: ScheduledNoticeStep;
   onClose: () => void;
-  /** Told when a late notice or a cancel has gone through, before its confirmation shows. */
+  /** Told when a late notice or a cancellation has gone through. */
   onSent?: () => void;
   /**
    * Board 2's "Reschedule instead". Only the reschedule link offers it, and it owns the week: there it
@@ -299,7 +299,10 @@ export function ScheduledDebateNoticeDialog({
           onNoteChange={setCantNote}
           onLate={() => go('late')}
           onSuggest={note => setSuggesting({ note })}
-          onSent={() => sent({ message: COPY.cant.sent(name), joinRoomId: null })}
+          onSent={() => {
+            onSent?.();
+            onClose();
+          }}
         />,
         { ownHeading: true, back }
       );
