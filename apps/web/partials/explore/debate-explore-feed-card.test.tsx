@@ -434,7 +434,7 @@ describe('DebateExploreFeedCard', () => {
   it('keeps compact Activity chrome to one metadata row and two title lines', async () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
-    renderCard({ compactChrome: true });
+    const { container } = renderCard({ compactChrome: true });
     intersectAll(0.1);
 
     expect(screen.queryByText('Debate')).toBeNull();
@@ -450,6 +450,12 @@ describe('DebateExploreFeedCard', () => {
 
     expect(screen.getByText('Fashion').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
     expect(screen.getByTestId('player')).toHaveAttribute('data-reduced-overlays', 'true');
+    // Gallery cards own one frame, flush with the row, and follow the gallery's width.
+    expect(container.querySelector('article')).not.toHaveClass('py-4');
+    expect(container.querySelector('article')).not.toHaveClass('border-b');
+    const frame = screen.getByTestId('claim-footer').parentElement;
+    expect(frame).toHaveClass('border', 'rounded-lg', 'max-w-full');
+    expect(frame?.style.getPropertyValue('--debate-card-column-width')).toBe('');
     // The rail is narrow, so Share drops to its icon there; it reads the row's own width rather
     // than the viewport's.
     const share = screen.getByRole('button', { name: 'Share debate' });
@@ -1058,6 +1064,14 @@ describe('DebateExploreFeedCard', () => {
       expect(column(container).style.getPropertyValue('--debate-card-column-width')).toBe(
         `clamp(320px, ${debateCardColumnWidth('83dvh - 228px', DEBATE_CARD_WRAPS_BELOW)}, 560px)`
       );
+    });
+
+    // A phone's `dvh` moves with the browser's toolbars as the page scrolls, so a card capped by it
+    // changed width under the reader. Phones take the feed's width instead.
+    it('drops the viewport budget on phones, so scrolling cannot resize the card', () => {
+      const { container } = renderCard();
+
+      expect(column(container)).toHaveClass('md:max-w-full');
     });
 
     it('raises the ceiling to the container under fullWidth without dropping the viewport budget', () => {

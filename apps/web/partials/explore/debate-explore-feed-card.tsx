@@ -66,6 +66,14 @@ const DEACTIVATE_RATIO = 0.4;
  * The same trick, and the same reason, as `--debate-feed-column-width` on the full-screen feed:
  * `dvh` there too, because the media has to fit the viewport it is being watched in.
  *
+ * Not on phones (`md:max-w-full`), where the card takes the feed's width. `dvh` there follows the
+ * browser's toolbars, which collapse and return as the page scrolls, so a card sized by it changed
+ * width under the reader on every scroll — 320px with Safari's toolbars up, full width with them
+ * down (GEO-3454). The phone feed scrolls freely, so there is no screen to fit a card into anyway.
+ *
+ * Compact gallery cards also use their container's width: the gallery already sets a narrow
+ * reading width, so another height budget would only squeeze the controls inside it.
+ *
  * Keep the arithmetic and the layout together — a change to `py-4`, the claim clamp, the pill row
  * or the split band moves the 228px, a change to the row's wrap point moves the 356px, and nothing
  * else will notice.
@@ -384,16 +392,20 @@ export function DebateExploreFeedCard({
   );
 
   return (
-    <ActionSurfaceArticle ref={setContainer} className="flex flex-col border-b border-divider py-4 last:border-b-0">
+    <ActionSurfaceArticle
+      ref={setContainer}
+      className={cx('flex flex-col', !compactChrome && 'border-b border-divider py-4 last:border-b-0')}
+    >
       {/* The card is one column, capped so the whole card fits the viewport it is watched in — see
           {@link DEBATE_CARD_COLUMN_STYLE}. A cap rather than the full column width because feed
           columns, especially data blocks, can be much wider and a full-bleed video dwarfs the card. */}
       <div
         className={cx(
-          'flex w-full max-w-[var(--debate-card-column-width)] min-w-0 flex-col overflow-hidden border border-grey-02 bg-white',
+          'flex w-full min-w-0 flex-col overflow-hidden border border-grey-02 bg-white',
+          compactChrome ? 'max-w-full' : 'max-w-[var(--debate-card-column-width)] md:max-w-full',
           compactChrome ? 'rounded-lg' : 'rounded-xl'
         )}
-        style={fullWidth ? DEBATE_CARD_FULL_WIDTH_STYLE : DEBATE_CARD_COLUMN_STYLE}
+        style={compactChrome ? undefined : fullWidth ? DEBATE_CARD_FULL_WIDTH_STYLE : DEBATE_CARD_COLUMN_STYLE}
       >
         {/* The videos first, then the claim they argue and the reader's side on it, in one frame —
             the same card the full-screen feed draws (GEO-3454). The frame is the card's, so the
