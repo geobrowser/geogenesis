@@ -71,7 +71,7 @@ export function LobbyPeople({
   ownAvailable: boolean | undefined;
   disagreements: DebateLobbyClaims['disagreements'];
 }) {
-  // A space call has no debates: no pairs, and no availability status on anyone.
+  // A space call has no debates: no pairs, availability or disagreements on anyone.
   const call = useIsCallRoom();
   const pairs = call ? [] : (lobby.debate_pairs ?? []);
   const inPairs = new Set(pairs.flatMap(pair => pair.people.map(person => dashlessId(person.user_id))));
@@ -96,7 +96,7 @@ export function LobbyPeople({
       isSelf,
       viewerId,
       status: call ? null : memberStatus(member, isSelf ? ownAvailable : undefined),
-      disagreements: isSelf ? null : disagreementCount(disagreements, member.user_id),
+      disagreements: isSelf || call ? null : disagreementCount(disagreements, member.user_id),
     };
   };
 
