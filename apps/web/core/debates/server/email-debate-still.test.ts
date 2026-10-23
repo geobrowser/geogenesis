@@ -1,79 +1,30 @@
 // @vitest-environment node
 import sharp from 'sharp';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  STILL_HEIGHT,
-  STILL_WIDTH,
-  findDebateStillUrl,
-  isAllowedStillUrl,
-  normalizeDebateId,
-  renderEmailStill,
-} from './email-debate-still';
+import { STILL_HEIGHT, STILL_WIDTH, emailStillSource, renderEmailStill } from './email-debate-still';
 
 const DEBATE = '01a15b610e7075709ac5b5acd61c36d5';
-const IMAGE_URL = '8a743832c0944a62b6650c3cc2f9c7bc';
-const WEB_URL = '412ff593e9154012a43d4c27ec5c68b6';
 
-/** A graph answer with one key frame carrying these values. */
-function graphWith(values: { propertyId: string; text: string | null }[]) {
-  return vi.fn(async () =>
-    Response.json({
-      data: { entity: { relationsList: [{ toEntity: { relationsList: [{ toEntity: { valuesList: values } }] } }] } },
-    })
-  ) as unknown as typeof fetch;
-}
-
-describe('normalizeDebateId', () => {
-  it('accepts 32 hex, dashed or not, and nothing else', () => {
-    expect(normalizeDebateId(DEBATE)).toBe(DEBATE);
-    expect(normalizeDebateId('01a15b61-0e70-7570-9ac5-b5acd61c36d5')).toBe(DEBATE);
-    expect(normalizeDebateId('01A15B610E7075709AC5B5ACD61C36D5')).toBe(DEBATE);
-    expect(normalizeDebateId('") { x }')).toBeNull();
-    expect(normalizeDebateId(DEBATE.slice(1))).toBeNull();
+describe('emailStillSource', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', 'https://chat-api-testnet.geobrowser.io');
+    vi.stubEnv('GEO_CHAT_API_BASE_URL', 'http://geo-chat.internal:8080');
   });
-});
+  afterEach(() => vi.unstubAllEnvs());
 
-describe('isAllowedStillUrl', () => {
-  it('allows only the IPFS gateway and geobrowser.io over https', () => {
-    expect(isAllowedStillUrl('https://mature-tomato-basilisk.myfilebase.com/ipfs/QmAbc')).toBe(true);
-    expect(isAllowedStillUrl(`https://chat-api-testnet.geobrowser.io/debates/${DEBATE}/media`)).toBe(true);
-    expect(isAllowedStillUrl('http://chat-api-testnet.geobrowser.io/x')).toBe(false);
-    expect(isAllowedStillUrl('https://evil.example/x.jpg')).toBe(false);
-    expect(isAllowedStillUrl('https://geobrowser.io.evil.example/x.jpg')).toBe(false);
-    expect(isAllowedStillUrl('https://mature-tomato-basilisk.myfilebase.com/other/QmAbc')).toBe(false);
-    expect(isAllowedStillUrl('not a url')).toBe(false);
-  });
-});
-
-describe('findDebateStillUrl', () => {
-  it('prefers the IPFS URL, through the gateway', async () => {
-    const fetcher = graphWith([
-      { propertyId: WEB_URL, text: `https://chat-api-testnet.geobrowser.io/debates/${DEBATE}/media` },
-      { propertyId: IMAGE_URL, text: 'ipfs://QmStill' },
-    ]);
-    expect(await findDebateStillUrl(DEBATE, 'https://graph.test/graphql', fetcher)).toBe(
-      'https://mature-tomato-basilisk.myfilebase.com/ipfs/QmStill'
-    );
-  });
-
-  it("falls back to geo-chat's web URL", async () => {
+  it('resolves IPFS through the gateway and keeps geo-chat URLs', () => {
+    expect(emailStillSource('ipfs://QmStill')).toBe('https://mature-tomato-basilisk.myfilebase.com/ipfs/QmStill');
     const web = `https://chat-api-testnet.geobrowser.io/debates/${DEBATE}/media/artifacts/preview_image/content`;
-    expect(
-      await findDebateStillUrl(DEBATE, 'https://graph.test/graphql', graphWith([{ propertyId: WEB_URL, text: web }]))
-    ).toBe(web);
+    expect(emailStillSource(web)).toBe(web);
+    expect(emailStillSource('http://geo-chat.internal:8080/x')).toBe('http://geo-chat.internal:8080/x');
   });
 
-  it('refuses a still hosted anywhere else', async () => {
-    const fetcher = graphWith([{ propertyId: WEB_URL, text: 'https://evil.example/still.jpg' }]);
-    expect(await findDebateStillUrl(DEBATE, 'https://graph.test/graphql', fetcher)).toBeNull();
-  });
-
-  it('is null for a debate with no video, or when the graph fails', async () => {
-    const empty = vi.fn(async () => Response.json({ data: { entity: { relationsList: [] } } }));
-    expect(await findDebateStillUrl(DEBATE, 'https://graph.test/graphql', empty as unknown as typeof fetch)).toBeNull();
-    const down = vi.fn(async () => new Response('no', { status: 502 }));
-    expect(await findDebateStillUrl(DEBATE, 'https://graph.test/graphql', down as unknown as typeof fetch)).toBeNull();
+  it('refuses any other host, and nothing', () => {
+    expect(emailStillSource('https://evil.example/still.jpg')).toBeNull();
+    expect(emailStillSource('https://chat-api-testnet.geobrowser.io.evil.example/x')).toBeNull();
+    expect(emailStillSource('not a url')).toBeNull();
+    expect(emailStillSource(null)).toBeNull();
   });
 });
 

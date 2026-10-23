@@ -1,12 +1,10 @@
 import sharp from 'sharp';
 
 import { FILEBASE_GATEWAY_READ_PATH } from '~/core/constants';
-import {
-  DEBATE_VIDEOS_PROPERTY_ID,
-  IMAGE_URL_PROPERTY_ID,
-  KEY_FRAME_IMAGE_PROPERTY_ID,
-  WEB_URL_PROPERTY_ID,
-} from '~/core/debates/ontology';
+import { getGeoChatApiBaseUrl } from '~/core/debates/geo-chat-public-base-url';
+import { toSatoriImageSrc } from '~/core/og-share-image';
+
+import { geoChatBaseUrl } from './geo-chat-base-url';
 
 /**
  * A debate's video still for the retention emails' debate rows (GEO-3377): portrait, with the play
@@ -22,64 +20,29 @@ export const STILL_HEIGHT = 216;
 /** The emails' placeholder grey (geo-notifications `T.placeholder`). */
 const PLACEHOLDER = '#e4e4e4';
 
-/**
- * Where a still may be fetched from: the IPFS gateway the app reads, and geo-chat on geobrowser.io,
- * which redirects to its object storage. A key frame's URL is published data, so anything else is
- * refused rather than fetched from the server.
- */
-export function isAllowedStillUrl(value: string): boolean {
+const hostOf = (url: string) => {
   try {
-    const url = new URL(value);
-    if (url.protocol !== 'https:') return false;
-    return value.startsWith(FILEBASE_GATEWAY_READ_PATH) || url.hostname.endsWith('.geobrowser.io');
+    return new URL(url).host;
   } catch {
-    return false;
+    return null;
   }
-}
-
-/** A debate id from the path, as the graph stores it (32 hex), or null. */
-export function normalizeDebateId(raw: string): string | null {
-  const id = raw.replaceAll('-', '').toLowerCase();
-  return /^[0-9a-f]{32}$/.test(id) ? id : null;
-}
-
-type KeyframeQuery = {
-  entity: {
-    relationsList: {
-      toEntity: {
-        relationsList: { toEntity: { valuesList: { propertyId: string; text: string | null }[] } | null }[];
-      } | null;
-    }[];
-  } | null;
 };
 
 /**
- * The still's URL: Debate → Videos → Key frame → its `IPFS URL`, else its `Web URL` (geo-chat), as
- * the app's `useDebateKeyframes` reads it. Null when the debate has none we may fetch.
+ * Where a still may be fetched from: the IPFS gateway the app reads, and geo-chat (which redirects to
+ * its object storage). A keyframe's URL is published data, so anything else is refused rather than
+ * fetched from the server.
  */
-export async function findDebateStillUrl(
-  debateId: string,
-  graphqlUrl: string,
-  fetcher: typeof fetch = fetch
-): Promise<string | null> {
-  const query = `{ entity(id: "${debateId}") { relationsList(filter: { typeId: { is: "${DEBATE_VIDEOS_PROPERTY_ID}" } }) { toEntity { relationsList(filter: { typeId: { is: "${KEY_FRAME_IMAGE_PROPERTY_ID}" } }) { toEntity { valuesList(filter: { propertyId: { in: ["${IMAGE_URL_PROPERTY_ID}", "${WEB_URL_PROPERTY_ID}"] } }) { propertyId text } } } } } } }`;
-  const res = await fetcher(graphqlUrl, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ query }),
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) return null;
-  const body = (await res.json()) as { data?: KeyframeQuery };
-  const frames = (body.data?.entity?.relationsList ?? []).flatMap(v => v.toEntity?.relationsList ?? []);
-  for (const frame of frames) {
-    const values = frame.toEntity?.valuesList ?? [];
-    const ipfs = values.find(v => v.propertyId === IMAGE_URL_PROPERTY_ID && v.text?.startsWith('ipfs://'))?.text;
-    const web = values.find(v => v.propertyId === WEB_URL_PROPERTY_ID && v.text)?.text;
-    const url = ipfs ? FILEBASE_GATEWAY_READ_PATH + ipfs.slice('ipfs://'.length) : web;
-    if (url && isAllowedStillUrl(url)) return url;
-  }
-  return null;
+const stillHosts = () =>
+  new Set(
+    [FILEBASE_GATEWAY_READ_PATH, getGeoChatApiBaseUrl(), geoChatBaseUrl()]
+      .map(hostOf)
+      .filter((host): host is string => !!host)
+  );
+
+/** The URL to fetch a stored keyframe value from (`ipfs://` through the gateway), or null if refused. */
+export function emailStillSource(keyframe: string | null): string | null {
+  return toSatoriImageSrc(keyframe, stillHosts());
 }
 
 /** A white disc with a dark triangle, centered, at 3×: the app's play button on a still. */
