@@ -96,10 +96,15 @@ function agreed(overrides: Record<string, unknown> = {}) {
   };
 }
 
+/** The agreed debate's room: open, due, with Maya inside by the bare join rule. */
+function openRoom(overrides: Record<string, unknown> = {}) {
+  return { room_id: 'room-1', joinable: true, due: true, others_present: true, ...overrides };
+}
+
 beforeEach(() => {
   state.requests = { data: { requests: [agreed()] }, isPending: false, isError: false };
   state.rooms = {
-    data: { rooms: [{ room_id: 'room-1', joinable: true, due: true, others_present: true }] },
+    data: { rooms: [openRoom()] },
   };
   state.late = idle();
   state.cant = idle();
@@ -162,6 +167,15 @@ describe('ScheduledDebateNoticeDialog', () => {
       expect(screen.getByRole('link', { name: 'Join now' })).toHaveAttribute('href', '/debate/room-1');
       expect(screen.getByRole('button', { name: 'I’m running late' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'I can’t make it' })).toBeInTheDocument();
+    });
+
+    // A tab that crashed without sending its leave still counts in `others_present` (GEO-3450).
+    it('does not say Maya is waiting when she is not in the room now', () => {
+      state.rooms = { data: { rooms: [openRoom({ others_live: false })] } };
+      open('decide', vi.fn());
+
+      expect(screen.queryByText('Maya is in the room, waiting for you')).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Join now' })).toBeInTheDocument();
     });
 
     it('keeps the calendar reachable', async () => {

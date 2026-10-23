@@ -30,6 +30,7 @@ import {
   type ScheduledNoticeStep,
   noticeNote,
   noticeRequestState,
+  otherDebaterWaiting,
 } from '~/core/debates/rooms/scheduled-notice';
 import { useCantMakeIt, useReportRunningLate } from '~/core/debates/rooms/scheduling-hooks';
 import { noticeFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
@@ -309,7 +310,7 @@ function DecideStep({
         <Heading focus={focusHeading}>
           {COPY.decide.heading(name, startOffset(new Date(startsAt).getTime() - now))}
         </Heading>
-        {room?.others_present && (
+        {otherDebaterWaiting(room) && (
           <span className="inline-flex items-center gap-2 rounded-full border border-grey-02 px-3 py-1.5 text-metadata">
             <span aria-hidden className="size-2 rounded-full bg-green" />
             {COPY.decide.waiting(name)}
