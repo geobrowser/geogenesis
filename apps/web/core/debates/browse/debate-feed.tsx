@@ -64,8 +64,8 @@ const PRELOAD_AHEAD = 2;
  * the feed's own 44px bar, 12px above and below the card, and the same 169px under the media, so
  * `width ≤ (dvh − 44 − 24 − 169 − 2) / 1.2042 + 2`, i.e. `83dvh − 197px`. `dvh` is what keeps the
  * card inside the part of the screen a phone browser's toolbars leave. It does not reserve the
- * signed-out note: on a phone that 17px would push most cards into the narrower wrapped layout, and
- * the item scrolls, so the note is reachable. A claim long enough for its phone-only "Show more"
+ * signed-out note: the item scrolls, so the note is reachable. Phone actions stay on one compact
+ * row, so their budget does not subtract the desktop wrapped row. A claim's phone-only "Show more"
  * adds that 26px row, so a card holding one takes `--debate-feed-phone-column-width-more`
  * (`83dvh − 219px`) instead, through `:has()`; narrowing only ever makes the claim run longer, so
  * the two can't flip back and forth. Never wider than the screen less 16px a side, nor narrower than
@@ -74,8 +74,8 @@ const PRELOAD_AHEAD = 2;
 const debateColumnStyle = (wrapsBelow: number) =>
   ({
     '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', wrapsBelow)}), 640px)`,
-    '--debate-feed-phone-column-width': `clamp(240px, ${debateCardColumnWidth('83dvh - 197px', wrapsBelow)}, calc(100cqw - 2rem))`,
-    '--debate-feed-phone-column-width-more': `clamp(240px, ${debateCardColumnWidth('83dvh - 219px', wrapsBelow)}, calc(100cqw - 2rem))`,
+    '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 197px), calc(100cqw - 2rem))',
+    '--debate-feed-phone-column-width-more': 'clamp(240px, calc(83dvh - 219px), calc(100cqw - 2rem))',
   }) as React.CSSProperties;
 
 const DEBATE_COLUMN_STYLE = debateColumnStyle(DEBATE_CARD_WRAPS_BELOW);

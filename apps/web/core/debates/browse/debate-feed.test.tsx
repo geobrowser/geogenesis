@@ -303,8 +303,8 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
       'md:has-[[data-claim-expander]]:w-[var(--debate-feed-phone-column-width-more)]'
     );
     expect(mediaColumn).toHaveStyle({
-      '--debate-feed-phone-column-width': `clamp(240px, ${debateCardColumnWidth('83dvh - 197px', DEBATE_CARD_WRAPS_BELOW)}, calc(100cqw - 2rem))`,
-      '--debate-feed-phone-column-width-more': `clamp(240px, ${debateCardColumnWidth('83dvh - 219px', DEBATE_CARD_WRAPS_BELOW)}, calc(100cqw - 2rem))`,
+      '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 197px), calc(100cqw - 2rem))',
+      '--debate-feed-phone-column-width-more': 'clamp(240px, calc(83dvh - 219px), calc(100cqw - 2rem))',
     });
     // 16px either side on a phone, not 8.
     expect(feedItem).not.toHaveClass('md:px-2');

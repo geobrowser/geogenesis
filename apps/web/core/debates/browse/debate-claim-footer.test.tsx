@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate, DebateClaimPositionSummary } from '~/core/debates/api';
 
 import { DebateClaimFooter } from './debate-claim-footer';
+import { DebateInteractionBar } from './debate-interaction-bar';
 
 const mocks = vi.hoisted(() => ({
   respond: vi.fn(),
@@ -234,6 +235,38 @@ describe('DebateClaimFooter', () => {
       'grid-cols-2',
       'claim-row-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
     );
+  });
+
+  it.each([claim, null])('keeps mobile actions inline before and after the claim resolves (%s)', claim => {
+    const onComment = vi.fn();
+    const onShare = vi.fn();
+    renderFooter({
+      claim,
+      wideActions: true,
+      actions: (
+        <DebateInteractionBar
+          commentCount={123}
+          onComment={onComment}
+          onShare={onShare}
+          overflow={<button type="button">More debate options</button>}
+        />
+      ),
+    });
+
+    const comments = screen.getByRole('button', { name: 'Comments (123)' });
+    const slot = comments.parentElement!.parentElement!;
+    expect(slot).toHaveClass('md:col-span-1');
+    expect(slot.parentElement).toHaveClass('md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_auto]', 'md:gap-1');
+    expect(slot.parentElement!.parentElement).toHaveClass('@container/debate-actions');
+    expect(screen.getByRole('button', { name: 'Agree' })).toHaveClass('md:px-1.5', 'md:text-[15px]');
+    expect(screen.getByRole('button', { name: 'Disagree' })).toHaveClass('md:px-1.5', 'md:text-[15px]');
+    // Only the visual count collapses on very narrow rows; its exact accessible count stays.
+    expect(comments.querySelector('span.tabular-nums')).toHaveClass('md:@max-[300px]/debate-actions:hidden');
+    fireEvent.click(comments);
+    fireEvent.click(screen.getByRole('button', { name: 'Share debate' }));
+    expect(onComment).toHaveBeenCalledOnce();
+    expect(onShare).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'More debate options' })).toBeEnabled();
   });
 
   // A third action needs a wider row to stay beside the pills, so it wraps sooner.
