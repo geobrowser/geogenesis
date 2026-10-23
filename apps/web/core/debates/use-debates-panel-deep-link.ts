@@ -69,6 +69,8 @@ export function useDebatesPanelDeepLink() {
     analytics: {
       link_source: link.via ?? undefined,
       component: 'debate_matchmaking',
+      // GEO-3431: which request, as the Running late and Can't make it links say.
+      ...(requestId ? { target_id: requestId, target_type: 'scheduled_debate_request' } : {}),
       auth_control: 'open_debates',
       auth_trigger: 'deep_link',
       auth_intent: 'join_debate',

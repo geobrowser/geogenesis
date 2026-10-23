@@ -603,6 +603,37 @@ describe('a link to one request', () => {
     }
   });
 
+  it('marks the card current and moves focus to it, for a keyboard or screen reader', () => {
+    setup({ answerable: [mine(), second], focusedRequestId: 'request-2' });
+
+    const [card] = focusedCards();
+    expect(card).toHaveAttribute('aria-current', 'true');
+    expect(card).toHaveFocus();
+  });
+
+  it('says a request that is no longer open is no longer on, in the Running late dialog’s words', () => {
+    mocks.requests = [mine({ status: 'declined' })];
+    setup({ answerable: [], focusedRequestId: 'request-1' });
+
+    expect(screen.getByRole('status')).toHaveTextContent('This debate is no longer on.');
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('says it could not find a request that is not this account’s', () => {
+    setup({ answerable: [mine()], focusedRequestId: 'request-9' });
+
+    expect(screen.getByRole('status')).toHaveTextContent('We couldn’t find this debate.');
+    expect(focusedCards()).toHaveLength(0);
+  });
+
+  it('says nothing about the link while loading, or when the read failed', () => {
+    const { rerender } = setup({ answerable: [], focusedRequestId: 'request-1', loading: true });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+    rerender(sectionFor({ focusedRequestId: 'request-1', requestsError: new Error('down') }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('outlines and scrolls nothing without one', () => {
     setup({ answerable: [mine()] });
 

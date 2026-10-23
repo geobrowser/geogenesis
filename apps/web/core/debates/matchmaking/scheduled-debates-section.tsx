@@ -19,11 +19,12 @@ import { hostsLabel } from '~/core/debates/lobbies/lobby-format';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
-import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
+import { SCHEDULED_NOTICE_COPY, UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useOpenScheduledRequests } from '~/core/debates/rooms/scheduled-awaiting';
+import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
 import { useCancelScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
 import { cancelFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
@@ -78,7 +79,26 @@ export function ScheduledDebatesSection({
     const scroller = hubScrollSelector ? node.closest<HTMLElement>(hubScrollSelector) : null;
     const stickyBar = scroller?.querySelector<HTMLElement>(HUB_STICKY_CONTROLS_SELECTOR);
     scrollToSection(node, scroller, stickyBar?.getBoundingClientRect().height ?? 0);
+    // And focus, for a keyboard or screen reader: the hub is not modal, so focus is still on the page.
+    node.focus({ preventScroll: true });
   }, [focusedId, hubScrollSelector]);
+  // A link to a request that is no longer here (answered, withdrawn or lapsed since the email, or
+  // another account's) says so rather than opening on nothing, in the Running late dialog's words.
+  // Not when the read failed: "Could not read your scheduled debates" already says why.
+  const { data: scheduledRequests } = useScheduledDebates();
+  const linkedShown =
+    answerable.some(request => isFocused(request.request_id)) || upcoming.some(row => isFocused(row.requestId));
+  const linkGone =
+    focusedId !== null && !linkedShown && !requestsError
+      ? noticeRequestState(scheduledRequests?.requests.find(request => sameId(request.request_id, focusedId)))
+      : null;
+  const linkGoneNotice = linkGone && (
+    <div role="status">
+      <Text as="p" variant="footnote" color="grey-04">
+        {SCHEDULED_NOTICE_COPY.state[linkGone === 'missing' ? 'missing' : 'over']}
+      </Text>
+    </div>
+  );
   const { answer, busy, error: conflict } = useScheduledDebateAnswer();
   const viewerId = useCurrentGeoChatUserId();
   const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0, people);
@@ -105,10 +125,11 @@ export function ScheduledDebatesSection({
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
 
-  if (!hasScheduledContent(content)) return null;
+  if (!hasScheduledContent(content)) return linkGoneNotice || null;
 
   return (
     <>
+      {linkGoneNotice}
       {(upcoming.length > 0 || roomsError) && (
         <RequestSection label="Upcoming debates">
           {upcoming.map(({ room, opponentUserId, scheduledEndAt, requestId }) => (
@@ -724,6 +745,8 @@ function ScheduleCard({
       )}
       data-testid={testId}
       data-focused={focused || undefined}
+      aria-current={focused || undefined}
+      tabIndex={focused ? -1 : undefined}
     >
       {/* The time on its own line, with where things stand under it: side by side, a slot and a
           sentence crowd each other out at this width, and it was the status that lost. */}
