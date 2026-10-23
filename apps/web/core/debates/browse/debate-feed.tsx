@@ -16,7 +16,7 @@ import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/d
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
 import { useComments } from '~/core/hooks/use-comments';
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -690,14 +690,7 @@ function DebateFeedItem({
             // the moment one arrives.
             enabled={active || preload}
             meta={<DebateMeta spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} topics={topics} />}
-            title={
-              <DebateClaimTitle
-                key={debate.claim.claim}
-                claim={debate.claim.claim}
-                claimEntityId={debate.claim.claim_entity_id}
-                spaceId={spaceId}
-              />
-            }
+            title={<DebateClaimTitle claim={debate.claim} />}
             actions={
               <DebateInteractionBar
                 commentCount={commentCount}
@@ -781,27 +774,20 @@ function DebateMeta({
  * the whole claim is on hover when it runs longer. Opening the title shows the claim in the
  * entity panel, which becomes a bottom sheet on phones, just like Explore.
  */
-function DebateClaimTitle({
-  claim,
-  claimEntityId,
-  spaceId,
-}: {
-  claim: string;
-  claimEntityId: string;
-  spaceId: string;
-}) {
+function DebateClaimTitle({ claim }: { claim: Debate['claim'] }) {
+  const { claim: text, claim_entity_id: claimEntityId, space_id: spaceId } = claim;
   const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
-  const { openSidePanel } = useEntitySidePanel();
+  const openClaim = useOpenClaimInSidePanel();
 
   const isClaimOverflowing = useLineClampOverflow(claimElement, {
     maxLines: CLAIM_CLAMP_LINES,
-    contentKey: claim,
+    contentKey: text,
   });
 
   return (
     <h2
       ref={setClaimElement}
-      title={isClaimOverflowing ? claim : undefined}
+      title={isClaimOverflowing ? text : undefined}
       className={cx(EXPLORE_CARD_TITLE_CLASS_NAME, 'line-clamp-2 text-pretty')}
     >
       <Link
@@ -813,10 +799,10 @@ function DebateClaimTitle({
         {...observePanelNavigation(event => {
           if (event.defaultPrevented || isModifiedClick(event)) return;
           event.preventDefault();
-          openSidePanel(claimEntityId, spaceId, false);
+          openClaim(claim);
         })}
       >
-        {claim}
+        {text}
       </Link>
     </h2>
   );

@@ -276,9 +276,30 @@ describe('DebatesBrowseFeed header links', () => {
       entityId: 'claim-entity-debate-1',
       spaceId: 'space-1',
       openedWithMainViewEditing: false,
+      forceRequestedSpace: true,
     });
     expect(store.get(debateFeedPanelAtom)).toBeNull();
     expect(screen.getByTestId('player-debate-1')).toBe(player);
+  });
+
+  it('opens and links the claim in its own space rather than the debate listing space', () => {
+    mocks.debates[0].claim.space_id = 'claim-space';
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <DebatesBrowseFeed spaceId="listing-space" />
+      </Provider>
+    );
+    const link = screen.getByRole('link', { name: 'Debates are useful' });
+
+    expect(link).toHaveAttribute('href', '/space/claim-space/claim-entity-debate-1');
+    fireEvent.click(link);
+
+    expect(store.get(entitySidePanelAtom)).toMatchObject({
+      entityId: 'claim-entity-debate-1',
+      spaceId: 'claim-space',
+      forceRequestedSpace: true,
+    });
   });
 
   it.each([{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }])(
