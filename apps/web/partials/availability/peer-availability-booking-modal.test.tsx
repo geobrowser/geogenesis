@@ -19,6 +19,10 @@ const mocks = vi.hoisted(() => ({
   viewerTimezone: 'UTC',
   /** Swapped for a real mutation where the timing of a settle is what is under test. */
   useCreate: null as (() => unknown) | null,
+  /** The viewer's scheduled requests, as the reschedule screen reads the one it moves (GEO-3429). */
+  requests: [] as { request_id: string; status: string; scheduled_start_at: string }[],
+  noneWork: vi.fn(),
+  noneWorkReset: vi.fn(),
 }));
 
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
@@ -35,6 +39,15 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
     isPending: mocks.pending,
     error: mocks.error,
   }),
+  useScheduledDebates: () => ({ data: { requests: mocks.requests } }),
+  useNoTimeWorks: () => ({ mutate: mocks.noneWork, reset: mocks.noneWorkReset, isPending: false, error: null }),
+}));
+
+// Can't make it is GEO-3427's own screen, tested there; here it only has to be the one that opens.
+vi.mock('~/partials/scheduled-debates/scheduled-debate-notice', () => ({
+  ScheduledDebateNoticeDialog: ({ requestId, initialStep }: { requestId: string; initialStep: string }) => (
+    <output aria-label="notice">{`${initialStep} ${requestId}`}</output>
+  ),
 }));
 
 // The week itself is covered by peer-availability.test.tsx; this suite is about what the modal
@@ -47,6 +60,8 @@ vi.mock('./peer-availability', async importOriginal => ({
     booking?: {
       mode?: string;
       requestId?: string | null;
+      moving?: { startsAt: string; agreed: boolean } | null;
+      noTimeWorks?: { onPress: () => void } | null;
       onRequest: (startsAt: string, pick: { viewerIsFree: boolean | null; viewerTimezone: string }) => void;
       error: string | null;
     };
@@ -63,6 +78,14 @@ vi.mock('./peer-availability', async importOriginal => ({
         pick
       </button>
       <output aria-label="error">{booking?.error ?? ''}</output>
+      <output aria-label="current">
+        {booking?.moving ? `${booking.moving.startsAt} ${booking.moving.agreed ? 'agreed' : 'pending'}` : ''}
+      </output>
+      {booking?.noTimeWorks && (
+        <button type="button" onClick={booking.noTimeWorks.onPress}>
+          none work
+        </button>
+      )}
     </>
   ),
 }));
@@ -87,6 +110,9 @@ afterEach(() => {
   mocks.error = null;
   mocks.viewerTimezone = 'UTC';
   mocks.useCreate = null;
+  mocks.requests = [];
+  mocks.noneWork = vi.fn();
+  mocks.noneWorkReset = vi.fn();
 });
 
 const setup = (userId = 'user-them', onClose = vi.fn()) => ({
@@ -364,5 +390,103 @@ describe('a refused move', () => {
     mocks.error = new GeoChatRequestError('that time is already committed', 'schedule_conflict', 409);
     setup();
     expect(screen.getByLabelText('error')).toHaveTextContent('that time is already committed');
+  });
+});
+
+// GEO-3429: the reschedule screen names the debate it moves, can call it off when no time works,
+// and won't let an agreed debate be closed on without saying it is still on.
+describe('moving a debate', () => {
+  const REQUEST_ID = '6676b145-0970-4c1c-bfbc-7497d9721b39';
+  const START = '2026-10-22T17:00:00Z';
+  const moving = (status: 'accepted' | 'pending', onClose = vi.fn()) => {
+    mocks.requests = [{ request_id: REQUEST_ID.replace(/-/g, ''), status, scheduled_start_at: START }];
+    render(
+      withToast(
+        <PeerAvailabilityBookingModal
+          open
+          userId="user-them"
+          peerName="Ada Lovelace"
+          rescheduleRequestId={REQUEST_ID}
+          onClose={onClose}
+        />
+      )
+    );
+    return { user: userEvent.setup(), onClose };
+  };
+
+  it('hands the week the debate it moves', () => {
+    moving('accepted');
+    expect(screen.getByLabelText('current')).toHaveTextContent(`${START} agreed`);
+  });
+
+  it('says nothing about a request it cannot find, and offers no way to call it off', () => {
+    render(
+      <PeerAvailabilityBookingModal
+        open
+        userId="user-them"
+        peerName="Ada"
+        rescheduleRequestId={REQUEST_ID}
+        onClose={vi.fn()}
+      />
+    );
+    expect(screen.getByLabelText('current')).toBeEmptyDOMElement();
+    expect(screen.queryByRole('button', { name: 'none work' })).not.toBeInTheDocument();
+  });
+
+  it('calls it off when no time works, then closes and says so', async () => {
+    const { user, onClose } = moving('accepted');
+    mocks.noneWork.mockImplementation((_vars, options) => options?.onSuccess?.());
+
+    await user.click(screen.getByRole('button', { name: 'none work' }));
+
+    expect(mocks.noneWork).toHaveBeenCalledWith({ requestId: REQUEST_ID }, expect.anything());
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // No "still on" warning on the way out: it isn't.
+    expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
+    expect(
+      await screen.findByText('Debate cancelled. We’ve sent Ada your free times to pick from.')
+    ).toBeInTheDocument();
+  });
+
+  it('warns before closing on an agreed debate, and Keep closes', async () => {
+    const { user, onClose } = moving('accepted');
+
+    await user.click(screen.getByLabelText('Close'));
+
+    expect(onClose).not.toHaveBeenCalled();
+    const warning = screen.getByRole('dialog', { name: /^Your debate is still on for / });
+    expect(warning).toHaveTextContent('Ada will expect you then.');
+    await user.click(screen.getByRole('button', { name: /^Keep / }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes back to the times from the warning', async () => {
+    const { user, onClose } = moving('accepted');
+
+    await user.click(screen.getByLabelText('Close'));
+    await user.click(screen.getByRole('button', { name: 'Back to times' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'pick' })).toBeInTheDocument();
+  });
+
+  it("opens Can't make it from the warning", async () => {
+    const { user, onClose } = moving('accepted');
+
+    await user.click(screen.getByLabelText('Close'));
+    await user.click(screen.getByRole('button', { name: 'I can’t make it' }));
+
+    expect(screen.getByLabelText('notice')).toHaveTextContent(`cant ${REQUEST_ID}`);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes an unanswered request straight away: nothing is booked to warn about', async () => {
+    const { user, onClose } = moving('pending');
+
+    await user.click(screen.getByLabelText('Close'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: /still on/ })).not.toBeInTheDocument();
   });
 });

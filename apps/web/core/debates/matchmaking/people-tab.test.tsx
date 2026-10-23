@@ -165,6 +165,9 @@ vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
 vi.mock('../rooms/scheduling-hooks', () => ({
   useCreateScheduledDebate: () => mocks.propose,
   useRescheduleScheduledDebate: () => mocks.propose,
+  // The week reads these only when moving a request (GEO-3429), which the People tab never does.
+  useScheduledDebates: () => ({ data: undefined }),
+  useNoTimeWorks: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
 }));
 
 vi.mock('../use-current-geo-chat-user-id', () => ({

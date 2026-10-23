@@ -10,7 +10,9 @@ import {
   type PeerSchedule,
   formatOffset,
   formatViewerInstant,
+  markCurrent,
   peerScheduleDays,
+  viewerDayAndTime,
   viewerInputInstant,
   viewerInputValue,
 } from '~/core/availability/peer-schedule';
@@ -52,6 +54,16 @@ export type PeerAvailabilityBooking = {
   mode?: 'request' | 'reschedule';
   /** The request being moved, in `reschedule` mode. For analytics only (GEO-3432). */
   requestId?: string | null;
+  /**
+   * The debate being moved, in `reschedule` mode (GEO-3429): its booked time, and whether both had
+   * agreed to it. Names it above the week and marks its time there, which can't be picked.
+   */
+  moving?: { startsAt: string; agreed: boolean } | null;
+  /**
+   * "None of these work" (GEO-3429): call the debate off and send the other person the viewer's own
+   * free times. Offered under the week, and under an empty one, which is where it matters most.
+   */
+  noTimeWorks?: { onPress: () => void; pending: boolean; error: string | null } | null;
   /**
    * An instant, not a chip: a week with no slots is still requestable (GEO-2938). `viewerIsFree` is
    * the picked chip's, for analytics; `null` for a time typed in by hand. `viewerTimezone` is the
@@ -182,13 +194,19 @@ export function PeerAvailabilityView({
   // rather than dimmed: a time nobody can pick is not information about their week, and geo-chat
   // refuses a past start anyway. Drawn once per opening; `SendRequest` rechecks at the click.
   const clock = React.useCallback(() => (now ? now.getTime() : Date.now()), [now]);
+  // The time being moved is marked after that, so it shows even once it has passed: it is the debate
+  // they are moving, not a time on offer.
+  const currentStart = booking?.mode === 'reschedule' ? (booking.moving?.startsAt ?? null) : null;
   const days = React.useMemo(() => {
     const cutoff = clock();
-    return peerScheduleDays(schedule, now).map(day => ({
+    const upcoming = peerScheduleDays(schedule, now).map(day => ({
       ...day,
       slots: day.slots.filter(slot => Date.parse(slot.start) > cutoff),
     }));
-  }, [schedule, now, clock]);
+    return markCurrent(upcoming, schedule, currentStart);
+  }, [schedule, now, clock, currentStart]);
+  // The times on offer: everything drawn but the one being moved.
+  const pickable = days.flatMap(day => day.slots).filter(slot => !slot.current);
   // One pick per week, held here rather than per chip: two selected times is not a thing anyone
   // can ask for, and the footer needs to name the one that is.
   // Matched by instant, not spelling: the wire sends `…:00Z` and the grid's starts are `…:00.000Z`.
@@ -197,18 +215,18 @@ export function PeerAvailabilityView({
     if (!initialSelectedStart) return null;
     // A chip can outlive its time; `days` has already dropped it, so a past pick seeds nothing.
     const instant = Date.parse(initialSelectedStart);
-    return days.flatMap(day => day.slots).find(slot => Date.parse(slot.start) === instant)?.start ?? null;
+    return pickable.find(slot => Date.parse(slot.start) === instant)?.start ?? null;
   });
-  const selectedSlot = days.flatMap(day => day.slots).find(slot => slot.start === selectedStart) ?? null;
+  const selectedSlot = pickable.find(slot => slot.start === selectedStart) ?? null;
   // For the free-time field, whose `min` is the only thing keeping a past time out of it.
   const notBefore = clock();
   const name = peerDisplayName(peerName, schedule.userId);
-  const hasAnySlot = days.some(day => day.slots.length > 0);
+  const hasAnySlot = pickable.length > 0;
 
   // A week crossing a DST boundary holds two genuinely different offsets, so the header names one
   // only when every slot agrees. This line is the only place their zone appears: every time in the
   // modal is the viewer's own, since a second clock on each chip read as noise.
-  const offsets = new Set(days.flatMap(day => day.slots).map(slot => slot.offsetMinutes));
+  const offsets = new Set(pickable.map(slot => slot.offsetMinutes));
   const uniformOffset = offsets.size === 1 ? [...offsets][0] : null;
   // geo-chat sends an empty zone for a side with no saved schedule, so naming them is conditional —
   // "Ada is in ," otherwise.
@@ -223,10 +241,17 @@ export function PeerAvailabilityView({
   // so it gets the line on its own at the bottom.
   const zoneInFooter = Boolean(booking) && week === 'slots';
 
+  const moving = currentStart && booking?.moving ? booking.moving : null;
+  const movingTime = moving ? viewerDayAndTime(moving.startsAt, schedule.viewerTimezone) : null;
+  const first = firstName(name) ?? name;
+
   return (
     <div className={cx('flex min-h-0 flex-col gap-4', className)}>
+      {/* Which debate this moves, before anything else (GEO-3429): the week alone reads like a new
+          booking. Right padding for the close button, which sits over it. */}
+      {moving && movingTime && <MovingCard peerFirstName={first} time={movingTime} agreed={moving.agreed} />}
       {/* Right padding keeps the heading clear of the modal's close button, which sits over it. */}
-      <header className="flex shrink-0 flex-col gap-1 pr-8">
+      <header className={cx('flex shrink-0 flex-col gap-1', !moving && 'pr-8')}>
         <Text as="h2" variant="smallTitle">
           When {name} is free
         </Text>
@@ -292,6 +317,89 @@ export function PeerAvailabilityView({
       {!zoneInFooter && (
         <Text as="p" variant="footnote" color="grey-04" className="shrink-0">
           {zoneNote}
+        </Text>
+      )}
+      {booking?.noTimeWorks && (
+        <NoTimeWorks peerFirstName={first} time={movingTime?.time ?? null} {...booking.noTimeWorks} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The debate being moved, above the week (GEO-3429, board 4): who it is with, when it is now, and
+ * what proposing does to it. An agreed debate's time is cancelled the moment a new one is proposed
+ * (geo-chat has done that since GEO-3106); an invite's is just replaced.
+ */
+function MovingCard({
+  peerFirstName,
+  time,
+  agreed,
+}: {
+  peerFirstName: string;
+  time: { day: string; time: string };
+  agreed: boolean;
+}) {
+  return (
+    <section
+      aria-label={`Moving your debate with ${peerFirstName}`}
+      className="flex shrink-0 flex-col gap-1 rounded-lg bg-grey-01 px-4 py-3 pr-10"
+    >
+      <Text as="p" variant="footnoteMedium" color="grey-04" className="tracking-wide uppercase">
+        Moving your debate with {peerFirstName}
+      </Text>
+      <Text as="p" variant="metadataMedium">
+        Currently: {time.day}, {time.time}
+      </Text>
+      <Text as="p" variant="footnote" color="grey-04">
+        {agreed
+          ? `Proposing a new time cancels ${time.time} right away and tells ${peerFirstName}. The new time is booked once they accept.`
+          : `Proposing a new time replaces ${time.time}. Nothing is booked until ${peerFirstName} accepts.`}
+      </Text>
+    </section>
+  );
+}
+
+/**
+ * "None of these work?" (GEO-3429, board 4): for someone who can't make the booked time or any of
+ * theirs. One press calls it off and hands the other person the viewer's free times, which the line
+ * under it says first.
+ */
+function NoTimeWorks({
+  peerFirstName,
+  time,
+  onPress,
+  pending,
+  error,
+}: {
+  peerFirstName: string;
+  time: string | null;
+  onPress: () => void;
+  pending: boolean;
+  error: string | null;
+}) {
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-0.5 border-t border-grey-02 pt-3 text-center">
+      <div className="flex flex-wrap items-center justify-center gap-x-1.5">
+        <Text as="span" variant="metadata" color="grey-04">
+          None of these work?
+        </Text>
+        <button
+          type="button"
+          disabled={pending}
+          {...debateActionAnalyticsAttributes('peer-availability', 'None of these work', 'no_time_works')}
+          onClick={onPress}
+          className="py-1 text-metadataMedium text-text underline underline-offset-2 disabled:opacity-40"
+        >
+          {pending ? 'Sending…' : `Ask ${peerFirstName} to pick a time`}
+        </button>
+      </div>
+      <Text as="p" variant="footnote" color="grey-04">
+        Cancels {time ?? 'this debate'} and sends {peerFirstName} your free times to choose from.
+      </Text>
+      {error && (
+        <Text as="p" variant="footnote" color="red-01">
+          {error}
         </Text>
       )}
     </div>
@@ -524,16 +632,20 @@ function DayColumn({
         </Text>
       ) : (
         <div className="flex flex-col gap-1 mobile:flex-row mobile:flex-wrap">
-          {shown.map(slot => (
-            <SlotChip
-              key={slot.start}
-              slot={slot}
-              dayLabel={dayLabel}
-              peerName={peerName}
-              selected={slot.start === selectedStart}
-              onSelect={() => onSelect(slot.start === selectedStart ? null : slot.start)}
-            />
-          ))}
+          {shown.map(slot =>
+            slot.current ? (
+              <CurrentChip key={slot.start} slot={slot} dayLabel={dayLabel} />
+            ) : (
+              <SlotChip
+                key={slot.start}
+                slot={slot}
+                dayLabel={dayLabel}
+                peerName={peerName}
+                selected={slot.start === selectedStart}
+                onSelect={() => onSelect(slot.start === selectedStart ? null : slot.start)}
+              />
+            )
+          )}
           {(hidden > 0 || expanded) && (
             <button
               type="button"
@@ -616,6 +728,22 @@ function SlotChip({
     >
       {slot.label}
     </button>
+  );
+}
+
+/**
+ * The time the debate being moved is booked for (GEO-3429): struck through and not a button, since
+ * proposing it again would move nothing.
+ */
+function CurrentChip({ slot, dayLabel }: { slot: PeerDaySlot; dayLabel: string }) {
+  return (
+    <span
+      aria-label={`${dayLabel} at ${slot.label}, the current time`}
+      data-current
+      className="rounded-md bg-grey-01 px-2 py-1 text-left text-footnote text-grey-04 tabular-nums"
+    >
+      <span className="line-through">{slot.label}</span> · current
+    </span>
   );
 }
 

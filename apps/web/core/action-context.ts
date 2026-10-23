@@ -54,6 +54,7 @@ export type ActionKind =
   | 'join_debate'
   | 'running_late'
   | 'cant_make_it'
+  | 'no_time_works'
   | 'search'
   | 'search_result'
   | 'assistant_message'

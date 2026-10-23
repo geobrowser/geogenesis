@@ -52,6 +52,7 @@ vi.mock('../rooms/scheduling-hooks', () => ({
   // The People tab's booking modal; booking has its own coverage.
   useCreateScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useRescheduleScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useNoTimeWorks: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
 }));
 
 // The card has its own suite; here it only matters which tabs show it.

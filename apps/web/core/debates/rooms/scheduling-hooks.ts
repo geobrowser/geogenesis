@@ -24,6 +24,7 @@ import {
   createScheduledDebate,
   listAdminScheduledDebates,
   listScheduledDebates,
+  noTimeWorks,
   reportRunningLate,
   rescheduleScheduledDebate,
   respondToScheduledDebate,
@@ -275,6 +276,30 @@ export function useCancelScheduledDebate() {
 export function useCantMakeIt() {
   const getContext = useActionContext('scheduled_debate_notice', 'entity', '');
   return useObservedMutation(useCancelScheduledDebate(), 'cant_make_it', ({ requestId }) =>
+    getContext({ target_type: 'scheduled_debate_request', target_id: requestId })
+  );
+}
+
+/**
+ * "None of these work" on the reschedule screen (GEO-3429): calls the debate off and emails the other
+ * debater the viewer's free times. Observed as its own action, beside Can't make it, so the outcome
+ * measurement (GEO-3432) can count it; geo-chat also tags its cancelled or declined event.
+ */
+export function useNoTimeWorks() {
+  const getContext = useActionContext('scheduled_debate_notice', 'entity', '');
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const mutation = useMutation<ScheduledDebateRequest, Error, { requestId: string }>({
+    mutationFn: ({ requestId }) => noTimeWorks(requestId, getPrivyIdentityToken, accountKey),
+    onSettled: () => {
+      // As cancel: the slot is free again for both, and a refusal means the list is stale.
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: ['debates', 'account', accountKey, 'peer-schedule'] });
+    },
+  });
+  return useObservedMutation(mutation, 'no_time_works', ({ requestId }) =>
     getContext({ target_type: 'scheduled_debate_request', target_id: requestId })
   );
 }

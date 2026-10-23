@@ -707,3 +707,83 @@ describe('times that have already gone', () => {
     expect(book.onRequest).not.toHaveBeenCalled();
   });
 });
+
+// GEO-3429: moving a debate says which one, marks its time, and offers a way out when none work.
+describe('moving a debate', () => {
+  const moving = (overrides: Partial<PeerAvailabilityBooking> = {}) =>
+    booking({ mode: 'reschedule', moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true }, ...overrides });
+
+  it('names the debate and its time above the week, and what proposing does to it', () => {
+    setupBooking(moving());
+
+    const card = screen.getByRole('region', { name: 'Moving your debate with Ada' });
+    expect(card).toHaveTextContent('Currently: Tue, Sep 22, 5pm');
+    expect(card).toHaveTextContent(
+      'Proposing a new time cancels 5pm right away and tells Ada. The new time is booked once they accept.'
+    );
+    // Before the week's own heading.
+    expect(card.compareDocumentPosition(screen.getByRole('heading', { name: 'When Ada is free' }))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
+  it('says an unanswered request is only replaced', () => {
+    setupBooking(moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: false } }));
+    expect(screen.getByRole('region', { name: 'Moving your debate with Ada' })).toHaveTextContent(
+      'Proposing a new time replaces 5pm. Nothing is booked until Ada accepts.'
+    );
+  });
+
+  it('marks the current time in its day, where it cannot be picked', () => {
+    setupBooking(moving(), { slots: [slot(16, true, 22), slot(18, true, 22)] });
+
+    const tuesday = within(day('2026-09-22'));
+    const current = tuesday.getByLabelText(/at 5pm, the current time$/);
+    expect(current.tagName).not.toBe('BUTTON');
+    expect(current).toHaveTextContent('5pm · current');
+    // In time order among the chips that can be picked.
+    expect(tuesday.getAllByText(/^(4pm|5pm|6pm)$/).map(node => node.textContent)).toEqual(['4pm', '5pm', '6pm']);
+  });
+
+  it("marks one of their free times as current rather than drawing it twice, and won't pick it", () => {
+    setupBooking(moving({ moving: { startsAt: '2026-09-22T16:00:00Z', agreed: true } }), {
+      slots: [slot(16, true, 22), slot(18, true, 22)],
+    });
+
+    const tuesday = within(day('2026-09-22'));
+    expect(tuesday.getAllByText('4pm')).toHaveLength(1);
+    expect(tuesday.queryByRole('button', { name: /at 4pm/ })).not.toBeInTheDocument();
+  });
+
+  it('says the week has nothing free when the only time is the current one', () => {
+    setupBooking(moving({ moving: { startsAt: '2026-09-22T16:00:00Z', agreed: true } }), {
+      slots: [slot(16, true, 22)],
+    });
+    expect(screen.getByText('Ada has no times free in the next 7 days.')).toBeInTheDocument();
+  });
+
+  it('marks nothing outside reschedule mode', () => {
+    setupBooking(booking({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } }));
+    expect(screen.queryByRole('region', { name: /Moving your debate/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/the current time$/)).not.toBeInTheDocument();
+  });
+
+  it('offers None of these work under the week, and under an empty one', async () => {
+    const onPress = vi.fn();
+    const { user } = setupBooking(moving({ noTimeWorks: { onPress, pending: false, error: null } }));
+
+    expect(screen.getByText('Cancels 5pm and sends Ada your free times to choose from.')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Ask Ada to pick a time' }));
+    expect(onPress).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    setupBooking(moving({ noTimeWorks: { onPress, pending: false, error: null } }), { slots: [] });
+    expect(screen.getByRole('button', { name: 'Ask Ada to pick a time' })).toBeInTheDocument();
+  });
+
+  it('shows it sending, and why it failed', () => {
+    setupBooking(moving({ noTimeWorks: { onPress: vi.fn(), pending: true, error: 'This debate is no longer on.' } }));
+    expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled();
+    expect(screen.getByText('This debate is no longer on.')).toBeInTheDocument();
+  });
+});
