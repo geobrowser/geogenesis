@@ -4,6 +4,7 @@ import * as RadioGroup from '@radix-ui/react-radio-group';
 
 import cx from 'classnames';
 
+import { type DebateAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import type { MediaDeviceOption } from '~/core/media/device-options';
 import { readMediaDevicePreference } from '~/core/media/device-preferences';
 
@@ -22,6 +23,7 @@ export function DeviceOptionGroup({
   /** Draws a border around the list. The bottom sheet has no popover chrome to sit inside. */
   framed = false,
   onChange,
+  analytics,
 }: {
   label: string;
   options: MediaDeviceOption[];
@@ -29,6 +31,8 @@ export function DeviceOptionGroup({
   disabled?: boolean;
   framed?: boolean;
   onChange: (deviceId: string) => void;
+  /** Every row's click-analytics label and intent. One for the group: a device's name is not for analytics. */
+  analytics?: DebateAnalyticsAttributes;
 }) {
   return (
     <RadioGroup.Root aria-label={label} value={selectedDeviceId} disabled={disabled} onValueChange={onChange}>
@@ -42,6 +46,7 @@ export function DeviceOptionGroup({
             <RadioGroup.Item
               key={`${device.kind}:${device.deviceId}`}
               value={device.deviceId}
+              {...analytics}
               onClick={() => {
                 const remembered = readMediaDevicePreference(device.kind);
                 // Radix does not emit onValueChange for the checked row. An explicit click can

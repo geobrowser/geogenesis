@@ -83,7 +83,15 @@ export function useRestartedEach<T extends HTMLElement>(tick: number | null) {
 }
 
 /** The room's red rim, at the disc's very edge. */
-const finalRimMask = turnTimerRimMask('0.55cqw');
+export const TURN_TIMER_FINAL_RIM_MASK = turnTimerRimMask('0.55cqw');
+
+/** The room timer's dark disc, behind its number, its rim and the finishing ring (GEO-3407). */
+export const TURN_TIMER_FACE_BACKGROUND = 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.25))';
+
+/** A white rim drained to `--turn-timer-rim`, over a faint track of the given opacity. */
+export function turnTimerRimGradient(trackOpacity: number) {
+  return `conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,${trackOpacity}) 0deg)`;
+}
 
 export type RecordingCountdownRingProps = {
   remainingSeconds: number;
@@ -133,9 +141,9 @@ export function RecordingCountdownRing({
           style={
             {
               '--turn-timer-rim': `${final ? rimDegrees : (1 - elapsedRatio) * 360}deg`,
-              backgroundImage: `conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,${final ? 0.28 : 0.3}) 0deg)`,
-              maskImage: final ? finalRimMask : turnTimerRimMask('2px'),
-              WebkitMaskImage: final ? finalRimMask : turnTimerRimMask('2px'),
+              backgroundImage: turnTimerRimGradient(final ? 0.28 : 0.3),
+              maskImage: final ? TURN_TIMER_FINAL_RIM_MASK : turnTimerRimMask('2px'),
+              WebkitMaskImage: final ? TURN_TIMER_FINAL_RIM_MASK : turnTimerRimMask('2px'),
             } as React.CSSProperties
           }
         />
@@ -226,7 +234,7 @@ export function RecordingCountdownRing({
                 scale: counting
                   ? 'calc(1 + (var(--turn-timer-swell) - 1) * sin(var(--turn-timer-pulse-angle)))'
                   : undefined,
-                backgroundImage: 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.25))',
+                backgroundImage: TURN_TIMER_FACE_BACKGROUND,
                 ...(microphone
                   ? {
                       animationPlayState: 'paused',

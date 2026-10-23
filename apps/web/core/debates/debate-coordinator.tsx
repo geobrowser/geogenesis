@@ -12,6 +12,8 @@ import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
+import { ScheduledDebateNoticeDialog } from '~/partials/scheduled-debates/scheduled-debate-notice';
+
 import { activeDebate } from './activity-state';
 import { type DebateSharePrompt, GeoChatRequestError } from './api';
 import { ChallengeAcceptedPrompt } from './challenge-accepted-prompt';
@@ -29,6 +31,7 @@ import { debateRoomClaimKey, useForeignDebateTabClaim } from './debate-tab-claim
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
+  useDebateMedia,
   useDebateSharePrompts,
   useGeoChatAuth,
   useHandleDebateSharePrompt,
@@ -42,14 +45,16 @@ import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
-import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
+import { DebateRoomJoinPrompt, type RoomJoinPromptNotice } from './rooms/room-join-prompt';
 import { sameId } from './rooms/room-presence';
 import { debateRoomIdFromPath } from './rooms/room-routes';
+import { SocialVideoCaptionChoiceRows, useSocialVideoCaptionChoice } from './social-video-caption-choice';
 import {
+  type PreparedSocialVideo,
+  type SocialVideoCaptions,
   getPreparedSocialVideoHandoffMethod,
   handoffPreparedSocialVideo,
   isAbortError,
-  usePreparedSocialVideo,
 } from './social-video-share';
 import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
 import { useDebateInteractionReporter } from './use-debate-interaction-reporter';
@@ -281,6 +286,9 @@ export function DebateCoordinator() {
   // cannot offer a room that would refuse the join.
   const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
+  const snoozeRoom = (roomId: string) => setSnoozedRoomIds(current => [...current, roomId]);
+  // The join banner's Running late or Can't make it, open over the page (GEO-3430).
+  const [roomNotice, setRoomNotice] = React.useState<(RoomJoinPromptNotice & { roomId: string }) | null>(null);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
   const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
   // A room whose debate already happened is never offered again. Reminded lobbies ride the same
@@ -515,7 +523,21 @@ export function DebateCoordinator() {
         <DebateRoomJoinPrompt
           key={promptedRoom.room_id}
           room={promptedRoom}
-          onNotNow={() => setSnoozedRoomIds(current => [...current, promptedRoom.room_id])}
+          onDismiss={() => snoozeRoom(promptedRoom.room_id)}
+          onNotice={notice => setRoomNotice({ ...notice, roomId: promptedRoom.room_id })}
+        />
+      )}
+      {/* Here rather than in the banner: Can't make it drops the room from the list, and the banner
+          with it, before the dialog has said it worked. */}
+      {roomNotice && (
+        <ScheduledDebateNoticeDialog
+          key={`${roomNotice.step}:${roomNotice.requestId}`}
+          open
+          requestId={roomNotice.requestId}
+          initialStep={roomNotice.step}
+          // Told, the other debater knows something; until then the banner stays (GEO-3430).
+          onSent={() => snoozeRoom(roomNotice.roomId)}
+          onClose={() => setRoomNotice(null)}
         />
       )}
       {promptedDebate && currentUserId && !activity?.rematch && (
@@ -607,9 +629,10 @@ function DebateSharePromptDialog({
   const [isUpdatingPrompt, setIsUpdatingPrompt] = React.useState(false);
   const [handoffCompleted, setHandoffCompleted] = React.useState(false);
   const [promptHandled, setPromptHandled] = React.useState(false);
+  const [choosingCaptions, setChoosingCaptions] = React.useState(false);
   const sharingRef = React.useRef(false);
   const promptActionRef = React.useRef(false);
-  const preparedVideo = usePreparedSocialVideo(prompt.debate_id, { enabled: true, includePreview: true });
+  const media = useDebateMedia(prompt.debate_id, true);
 
   useScrollLock();
 
@@ -649,17 +672,9 @@ function DebateSharePromptDialog({
     }
     finishPrompt(handoffCompleted ? 'shared' : 'dismissed');
   };
-  const handoffMethod = React.useMemo(
-    () => (preparedVideo.file ? getPreparedSocialVideoHandoffMethod(preparedVideo.file) : null),
-    [preparedVideo.file]
-  );
-  const share = async () => {
-    if (handoffCompleted) {
-      if (promptHandled) closeDialog();
-      else finishPrompt('shared', true);
-      return;
-    }
-    if (!preparedVideo.file || !preparedVideo.downloadUrl) return;
+  // Called from the caption row's click, so the system share sheet still has its gesture.
+  const shareVideo = async (video: PreparedSocialVideo, captions: SocialVideoCaptions) => {
+    if (!video.file || !video.downloadUrl) return;
     if (sharingRef.current) return;
     sharingRef.current = true;
     setIsSharing(true);
@@ -668,9 +683,11 @@ function DebateSharePromptDialog({
       await handoffPreparedSocialVideo({
         debateId: prompt.debate_id,
         title: prompt.claim,
-        file: preparedVideo.file,
-        downloadUrl: preparedVideo.downloadUrl,
+        file: video.file,
+        downloadUrl: video.downloadUrl,
+        captions,
       });
+      setChoosingCaptions(false);
       setHandoffCompleted(true);
       finishPrompt('shared', true);
     } catch (error) {
@@ -681,6 +698,36 @@ function DebateSharePromptDialog({
       setIsSharing(false);
     }
   };
+  const captionChoice = useSocialVideoCaptionChoice({
+    debateId: prompt.debate_id,
+    media: media.data,
+    enabled: true,
+    includePreview: true,
+    handoff: (video, captions) => void shareVideo(video, captions),
+    // A file that finishes after the tap may still download, but must not open the share sheet:
+    // browsers refuse that outside a gesture. The ready row then asks for one more tap.
+    canHandoffWithoutGesture: video =>
+      video.file !== null && getPreparedSocialVideoHandoffMethod(video.file) === 'download',
+  });
+  const preparedVideo = captionChoice.captioned;
+  // Probed with an empty MP4 until the real file arrives: the share capability depends on the
+  // file's type, not its bytes, so the button can name the right action before the download ends.
+  const handoffMethod = React.useMemo(
+    () =>
+      getPreparedSocialVideoHandoffMethod(
+        preparedVideo.file ?? new File([], 'debate-social.mp4', { type: 'video/mp4' })
+      ),
+    [preparedVideo.file]
+  );
+  const share = () => {
+    if (handoffCompleted) {
+      if (promptHandled) closeDialog();
+      else finishPrompt('shared', true);
+      return;
+    }
+    setShareError(null);
+    setChoosingCaptions(true);
+  };
   const shareButtonLabel = isSharing
     ? 'Sharing…'
     : isUpdatingPrompt
@@ -689,11 +736,9 @@ function DebateSharePromptDialog({
         ? promptHandled
           ? 'Done'
           : 'Finish sharing'
-        : preparedVideo.status !== 'ready'
-          ? 'Preparing video…'
-          : handoffMethod === 'native_share'
-            ? 'Share video'
-            : 'Download video';
+        : handoffMethod === 'native_share'
+          ? 'Share video'
+          : 'Download video';
 
   return (
     <div className="fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-text/55 p-4 backdrop-blur-sm">
@@ -790,17 +835,39 @@ function DebateSharePromptDialog({
             {shareError}
           </Text>
         )}
-        <div className="mt-5 flex justify-center">
-          <Button
-            type="button"
-            onClick={share}
-            disabled={isSharing || isUpdatingPrompt || handlePrompt.isPending || preparedVideo.status !== 'ready'}
-            icon={<Upload />}
-            className="gap-2 rounded-full"
-          >
-            {shareButtonLabel}
-          </Button>
-        </div>
+        {choosingCaptions ? (
+          <div className="mt-5">
+            <SocialVideoCaptionChoiceRows
+              options={captionChoice.options}
+              onChoose={captionChoice.choose}
+              readyAction={handoffMethod === 'native_share' ? 'share' : 'download'}
+              disabled={isSharing || isUpdatingPrompt || handlePrompt.isPending}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                captionChoice.cancel();
+                setChoosingCaptions(false);
+              }}
+              disabled={isSharing}
+              className="mx-auto mt-3 block text-[13px] text-grey-04 transition-colors hover:text-text"
+            >
+              Back
+            </button>
+          </div>
+        ) : (
+          <div className="mt-5 flex justify-center">
+            <Button
+              type="button"
+              onClick={share}
+              disabled={isSharing || isUpdatingPrompt || handlePrompt.isPending}
+              icon={<Upload />}
+              className="gap-2 rounded-full"
+            >
+              {shareButtonLabel}
+            </Button>
+          </div>
+        )}
       </section>
     </div>
   );

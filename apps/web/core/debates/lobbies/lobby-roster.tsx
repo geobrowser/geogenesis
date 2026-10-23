@@ -99,7 +99,7 @@ export function LobbyPeople({
 
   return (
     <>
-      <LobbyDebatePairs pairs={pairs} members={lobby.members} />
+      <LobbyDebatePairs pairs={pairs} members={lobby.members} lobby={lobby} viewerId={viewerId} />
       {speakers.length > 0 ? <SpeakerVideoGrid speakers={speakers} personProps={personProps} /> : null}
       {listeners.length + guests > 0 ? (
         <section className="flex flex-col gap-2.5 md:gap-2" aria-label="Listening">

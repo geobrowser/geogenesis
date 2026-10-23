@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import type { AvailabilityBlock } from '~/core/availability/blocks';
+import type { BusyInterval } from '~/core/availability/calendar-busy';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 
 import { Text } from '~/design-system/text';
@@ -23,6 +24,10 @@ type Props = {
   openerRef?: React.RefObject<HTMLElement | null>;
   /** Beside the close button — the "copy my availability link" control, where the caller has one. */
   headerAction?: React.ReactNode;
+  /** Between the title and the grid: the viewer's connected calendar, in their own editor only. */
+  calendarSection?: (state: { unsavedChanges: boolean }) => React.ReactNode;
+  /** The viewer's own calendar busy time, shaded on the grid. */
+  busyIntervals?: BusyInterval[];
 };
 
 /**
@@ -44,6 +49,8 @@ export function AvailabilityModal({
   onSave,
   openerRef,
   headerAction,
+  calendarSection,
+  busyIntervals,
 }: Props) {
   const [draft, setDraft] = React.useState<AvailabilityBlock[]>(blocks ?? []);
 
@@ -56,6 +63,8 @@ export function AvailabilityModal({
       closeButtonProps={debateActionAnalyticsAttributes('schedule-editor', 'Close', 'close_debate_schedule')}
       openerRef={openerRef}
     >
+      {/* The grid echoes `blocks` back on mount, so any other draft is an edit. */}
+      {calendarSection?.({ unsavedChanges: blocks !== undefined && draft !== blocks })}
       {/* Remounted per opening so a discarded draft cannot survive into the next one. The
           footer buttons ride in the calendar's own action row, beside its Clear all.
 
@@ -90,6 +99,7 @@ export function AvailabilityModal({
           className="min-h-0 flex-1"
           initialBlocks={blocks}
           onChange={setDraft}
+          busyIntervals={busyIntervals}
           actions={
             <>
               <button

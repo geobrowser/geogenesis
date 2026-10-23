@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { pushMarketingEvent } from './marketing-events';
+import { marketingVoteDirection, pushMarketingEvent } from './marketing-events';
 
 type DataLayerWindow = Window & { dataLayer?: Record<string, unknown>[] };
 
@@ -31,5 +31,18 @@ describe('pushMarketingEvent', () => {
     expect(join).toHaveProperty('debate_id', undefined);
     expect(join).toHaveProperty('user_id', undefined);
     expect(join).toHaveProperty('space_name', undefined);
+  });
+
+  it('names the side of a vote the way its controls do', () => {
+    expect(marketingVoteDirection('stance', 'positive')).toBe('agree');
+    expect(marketingVoteDirection('stance', 'negative')).toBe('disagree');
+    expect(marketingVoteDirection('curation', 'positive')).toBe('up');
+    expect(marketingVoteDirection('curation', 'negative')).toBe('down');
+  });
+
+  it('does not carry a vote direction onto a later winner vote', () => {
+    pushMarketingEvent('geo_vote', { target_id: 'c1', vote_kind: 'stance', vote_direction: 'disagree' });
+    pushMarketingEvent('geo_vote', { debate_id: 'd1', target_id: 'd1', vote_kind: 'debate_winner' });
+    expect((window as DataLayerWindow).dataLayer?.[1]).toHaveProperty('vote_direction', undefined);
   });
 });

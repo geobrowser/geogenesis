@@ -21,6 +21,11 @@ type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'>
    */
   rescheduleRequestId?: string | null;
   /**
+   * What someone wrote under Can't make it (GEO-3427). Kept on the room, where the other debater sees
+   * it; the email about the new time carries the approved copy only.
+   */
+  rescheduleNote?: string;
+  /**
    * A new request the server accepted, before the requests list has been read again. The calendar
    * (GEO-3152) draws it on its week straight away with this.
    */
@@ -35,6 +40,7 @@ export function PeerAvailabilityBookingModal({
   userId,
   onClose,
   rescheduleRequestId = null,
+  rescheduleNote,
   entry = null,
   onRequested,
   ...props
@@ -77,6 +83,7 @@ export function PeerAvailabilityBookingModal({
       onClose={close}
       booking={{
         mode,
+        requestId: rescheduleRequestId,
         onRequest: (startsAt, pick) => {
           const slot = {
             startsAt: new Date(startsAt),
@@ -86,8 +93,9 @@ export function PeerAvailabilityBookingModal({
           const callbacks = {
             onSuccess: (request: ScheduledDebateRequest) => onSent(request, pick.viewerTimezone),
           };
-          if (rescheduleRequestId) reschedule.mutate({ requestId: rescheduleRequestId, ...slot }, callbacks);
-          else propose.mutate({ opponentUserId: userId, ...slot }, callbacks);
+          if (rescheduleRequestId) {
+            reschedule.mutate({ requestId: rescheduleRequestId, note: rescheduleNote, ...slot }, callbacks);
+          } else propose.mutate({ opponentUserId: userId, ...slot }, callbacks);
         },
         pending: mutation.isPending,
         error: mutation.error
@@ -104,7 +112,7 @@ export function PeerAvailabilityBookingModal({
 export function rescheduleFailureMessage(error: unknown): string {
   if (error instanceof GeoChatRequestError) {
     if (error.code === 'debate_already_started') {
-      return 'Someone has already joined this debate, so its time can no longer be changed.';
+      return 'This debate has already started, so its time can no longer be changed.';
     }
     if (error.code === 'schedule_conflict') return 'You already have a debate at that time. Pick another.';
     if (error.code === 'reschedule_refused') {
