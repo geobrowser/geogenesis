@@ -373,6 +373,9 @@ function SpeakingBars() {
 function PersonTags({ member, small }: { member: DebateLobbyMember; small: boolean }) {
   // The phone's size beside a name at the phone's size (a phone, or a compact tile).
   const size = small ? 'text-[12px]' : 'text-[14px]';
+  // "New" means no completed debate yet, which says nothing in a space call.
+  const call = useIsCallRoom();
+  const newcomer = Boolean(member.newcomer) && !call;
   return (
     <>
       {isHosting(member) ? (
@@ -380,7 +383,7 @@ function PersonTags({ member, small }: { member: DebateLobbyMember; small: boole
           {member.acting_host ? 'Hosting' : 'Host'}
         </span>
       ) : null}
-      {member.newcomer ? (
+      {newcomer ? (
         <span
           className={cx('shrink-0 rounded bg-ctaTertiary px-1 pb-px leading-none font-normal text-ctaPrimary', size)}
         >
@@ -406,6 +409,8 @@ function ListenerChip({
   'data-testid': testId = 'lobby-listener-chip',
 }: PersonProps & { voice?: SpeakerVoice; 'data-testid'?: string }) {
   const name = personName(member);
+  const call = useIsCallRoom();
+  const newcomer = Boolean(member.newcomer) && !call;
   const moved =
     Boolean(member.moved_to_listeners) ||
     (isSelf && lobby.viewer.kind === 'member' && lobby.viewer.last_moderation?.action === 'move_to_listeners');
@@ -442,7 +447,7 @@ function ListenerChip({
           {name}
           {isSelf ? ' (you)' : ''}
         </span>
-        {member.newcomer ? (
+        {newcomer ? (
           <span className="shrink-0 rounded bg-ctaTertiary px-1 pb-px text-[12px] leading-none text-ctaPrimary">
             New
           </span>

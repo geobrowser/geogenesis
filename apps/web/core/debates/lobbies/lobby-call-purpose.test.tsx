@@ -136,6 +136,23 @@ describe('the roster in a space call', () => {
     expect(screen.queryByText(/Disagrees/)).not.toBeInTheDocument();
   });
 
+  it('does not tag anyone New, which counts debates', () => {
+    render(
+      inCall(
+        <LobbyPeople
+          lobby={view([
+            member('Adam', { role: 'host', newcomer: true }),
+            member('Eve', { role: 'listener', newcomer: true }),
+          ])}
+          viewerId={null}
+          ownAvailable={undefined}
+          disagreements={null}
+        />
+      )
+    );
+    expect(screen.queryByText('New')).not.toBeInTheDocument();
+  });
+
   it('keeps them in a lobby', () => {
     render(
       <LobbyPeople lobby={view(roster, { debate_pairs: pairs })} viewerId="Adam" ownAvailable disagreements={null} />
