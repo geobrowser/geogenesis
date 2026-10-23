@@ -44,6 +44,7 @@ import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
+import { RoomNudgePopup } from './rooms/room-nudge-popup';
 import { sameId } from './rooms/room-presence';
 import { debateRoomIdFromPath } from './rooms/room-routes';
 import { SocialVideoCaptionChoiceRows, useSocialVideoCaptionChoice } from './social-video-caption-choice';
@@ -284,6 +285,8 @@ export function DebateCoordinator() {
   // cannot offer a room that would refuse the join.
   const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
+  // GEO-3428: a nudge's popup is up, so the join banner for the same room waits behind it.
+  const [nudgeOpen, setNudgeOpen] = React.useState(false);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
   const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
   // A room whose debate already happened is never offered again. Reminded lobbies ride the same
@@ -514,7 +517,8 @@ export function DebateCoordinator() {
           {pausedBannerText(gateway.pauseReason)}
         </div>
       )}
-      {promptedRoom && (
+      <RoomNudgePopup rooms={joinableRooms} enabled={!atRoom && !activeFlow} onOpenChange={setNudgeOpen} />
+      {promptedRoom && !nudgeOpen && (
         <DebateRoomJoinPrompt
           key={promptedRoom.room_id}
           room={promptedRoom}

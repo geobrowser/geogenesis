@@ -142,6 +142,32 @@ function open(step: 'decide' | 'late' | 'cant', onReschedule?: () => void) {
   return { onClose };
 }
 
+// GEO-3428, board 6c: the popup a nudge puts on screen.
+describe('ScheduledDebateNoticeDialog: the nudge popup', () => {
+  it('says who is waiting and since when, with Join now, Running late and Can’t make it', () => {
+    render(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />);
+
+    expect(heading()).toHaveTextContent('Maya is waiting for you');
+    expect(screen.getByText(/debate started 3 minutes ago and Maya is in the room\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Join now' })).toHaveAttribute('href', '/debate/room-1');
+    expect(screen.getByRole('button', { name: 'Running late' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Can’t make it' })).toBeInTheDocument();
+    expect(state.late.mutate).not.toHaveBeenCalled();
+  });
+
+  it('answers in place, with a way back to the popup', async () => {
+    render(<ScheduledDebateNoticeDialog open requestId={REQUEST} initialStep="nudge" onClose={() => {}} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Running late' }));
+    expect(heading()).toHaveTextContent('How late will you be?');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(heading()).toHaveTextContent('Maya is waiting for you');
+    await user.click(screen.getByRole('button', { name: 'Can’t make it' }));
+    expect(heading()).toHaveTextContent('Can’t make it?');
+  });
+});
+
 describe('ScheduledDebateNoticeDialog', () => {
   // A mail scanner opening the link must not mark anyone late or cancel anything.
   it('sends nothing on opening, whichever screen it lands on', () => {

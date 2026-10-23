@@ -112,6 +112,8 @@ vi.mock('./rooms/room-opponent', async importOriginal => ({
   useUpcomingRoomOpponent: () => null,
 }));
 
+// GEO-3428's nudge popup has its own tests, and reads the request list this suite does not mock.
+vi.mock('./rooms/room-nudge-popup', () => ({ RoomNudgePopup: () => null }));
 vi.mock('./debate-attention', () => ({
   useDebatePresence: () => mocks.visiblePresence,
   useDebateAttention: () => mocks.hasAttention,

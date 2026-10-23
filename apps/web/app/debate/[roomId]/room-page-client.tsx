@@ -181,7 +181,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   }
 
   return (
-    <DebateRoomProvider roomId={roomId} presence={presence} rejoin={rejoin}>
+    <DebateRoomProvider roomId={roomId} presence={presence} rejoin={rejoin} room={room}>
       <DebateRematchPageClient sessionId={room.rematch_session_id} />
     </DebateRoomProvider>
   );

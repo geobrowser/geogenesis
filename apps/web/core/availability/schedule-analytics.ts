@@ -59,7 +59,8 @@ export type ScheduleEntry =
   /** Can't make it's "Suggest another time instead" (GEO-3427). */
   | 'cant_make_it'
   /** Reschedule on the waiting room's running-late notice (GEO-3427, board 6b). */
-  | 'room_late_notice';
+  | 'room_late_notice'
+  | 'room_waiting_status';
 
 /** Which control opened the viewer's own schedule editor. */
 export type ScheduleEditorSurface =

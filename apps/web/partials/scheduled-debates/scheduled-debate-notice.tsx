@@ -20,7 +20,7 @@ import { HubPillButton, hubPillClassName } from '~/core/debates/matchmaking/hub-
 import { formatDebateTime, formatTime } from '~/core/debates/matchmaking/scheduled-debate-format';
 import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
 import { useRequestRoom } from '~/core/debates/rooms/request-room';
-import { SCHEDULED_NOTICE_COPY as COPY } from '~/core/debates/rooms/room-copy';
+import { SCHEDULED_NOTICE_COPY as COPY, ROOM_NUDGE_POPUP } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, useRequestOpponent } from '~/core/debates/rooms/room-opponent';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { startOffset } from '~/core/debates/rooms/room-time';
@@ -96,8 +96,9 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
   const [outcome, setOutcome] = React.useState<Outcome | null>(null);
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
-  // Board 3 and its Back belong to arriving through board 2; an email's button lands on board 1b.
-  const fromDecide = initialStep === 'decide';
+  // Board 3 and its Back belong to arriving through board 2, or the nudge popup (board 6c) that
+  // offers the same choices; an email's button lands on board 1b.
+  const fromDecide = initialStep === 'decide' || initialStep === 'nudge';
 
   const { authenticated } = useGeoChatAuth();
   // A debate that already happened stays listed as joinable until its room is swept: it is over,
@@ -201,7 +202,7 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
 
   // Back to the choices, from a step reached through them; its heading takes focus on the way in,
   // since the button that was pressed is gone.
-  const back = fromDecide && step !== 'decide' ? () => go('decide') : undefined;
+  const back = fromDecide && step !== initialStep ? () => go(initialStep) : undefined;
 
   switch (step) {
     case 'decide':
@@ -215,6 +216,21 @@ export function ScheduledDebateNoticeDialog({ open, requestId, initialStep, onCl
           onLate={() => go('late')}
           onCant={() => go('cant')}
           onReschedule={onReschedule}
+          onJoin={onClose}
+          focusHeading={moved}
+        />,
+        { ownHeading: true }
+      );
+    case 'nudge':
+      return shell(
+        title,
+        <NudgeStep
+          name={name}
+          opponent={opponent}
+          startsAt={request.scheduled_start_at}
+          room={room}
+          onLate={() => go('late')}
+          onCant={() => go('cant')}
           onJoin={onClose}
           focusHeading={moved}
         />,
@@ -320,6 +336,68 @@ function DecideStep({
           </QuietButton>
         </Actions>
       )}
+    </>
+  );
+}
+
+/**
+ * The popup a nudge puts on the other debater's screen (GEO-3428, board 6c): who is waiting, since
+ * when, and Join now, Running late and Can't make it. The last two go on in this dialog, so nobody is
+ * taken off the page they were on to answer.
+ */
+function NudgeStep({
+  name,
+  opponent,
+  startsAt,
+  room,
+  onLate,
+  onCant,
+  onJoin,
+  focusHeading,
+}: {
+  name: string;
+  opponent: DebateParticipantSummary | null;
+  startsAt: string;
+  room: UpcomingDebateRoom | null;
+  onLate: () => void;
+  onCant: () => void;
+  onJoin: () => void;
+  focusHeading: boolean;
+}) {
+  const now = useMinuteNow();
+  const started = new Date(startsAt).getTime();
+  const ago = Number.isNaN(started) ? null : Math.max(1, Math.floor((now - started) / 60_000));
+
+  return (
+    <>
+      <div className="flex flex-col items-center gap-3.5 text-center">
+        <OpponentAvatar opponent={opponent} name={name} size={52} />
+        <Heading focus={focusHeading}>{ROOM_NUDGE_POPUP.heading(name)}</Heading>
+        <Text as="p" variant="metadata" color="grey-04">
+          {ROOM_NUDGE_POPUP.lead(name, formatTime(startsAt), ago)}
+        </Text>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        {room?.joinable && <JoinRoom roomId={room.room_id} onJoin={onJoin} label="Join now" />}
+        <div className="grid grid-cols-2 gap-2.5">
+          <HubPillButton
+            size="large"
+            className="w-full"
+            onClick={onLate}
+            {...pill('Nudge running late', 'open_running_late')}
+          >
+            {ROOM_NUDGE_POPUP.late}
+          </HubPillButton>
+          <HubPillButton
+            size="large"
+            className="w-full"
+            onClick={onCant}
+            {...pill('Nudge cant make it', 'open_cant_make_it')}
+          >
+            {ROOM_NUDGE_POPUP.cant}
+          </HubPillButton>
+        </div>
+      </div>
     </>
   );
 }
