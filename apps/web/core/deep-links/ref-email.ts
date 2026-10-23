@@ -19,6 +19,23 @@ export function readRefEmail(params: ReadableParams): string | null {
   return value && REF_EMAIL_PATTERN.test(value) ? value : null;
 }
 
+/** `ref_send`: the send an email link came from, an id geo-notifications gave that email (GEO-3370). */
+export const REF_SEND_PARAM = 'ref_send';
+/** `ref_link`: which link in the email it was (`main`, `profile`, `claim`, …; GEO-3370). */
+export const REF_LINK_PARAM = 'ref_link';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The shape geo-notifications accepts for `ref_link`. */
+const REF_LINK_PATTERN = /^[a-z0-9][a-z0-9_]{0,31}$/;
+
+/** The send and link an email link carries, or null when it isn't a tagged email link. */
+export function readEmailClick(params: ReadableParams): { sendId: string; link: string | null } | null {
+  const sendId = params?.get(REF_SEND_PARAM)?.trim();
+  if (!sendId || !UUID_PATTERN.test(sendId)) return null;
+  const link = params?.get(REF_LINK_PARAM)?.trim();
+  return { sendId: sendId.toLowerCase(), link: link && REF_LINK_PATTERN.test(link) ? link : null };
+}
+
 /**
  * Marks the browser session as one that started from one of our emails. Everyone they go to already
  * has an account, so for the rest of the visit the save sheet asks them to log in rather than to sign
