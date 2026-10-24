@@ -66,9 +66,7 @@ export function ScheduledDebatesSection({
   const { answerable, upcoming, lobbies, people, requestsError, roomsError, lobbiesError } = content;
   // Not until every read has landed: a section that loads above it would push the card back out of
   // view after the scroll.
-  const focusedId = content.loading ? null : focusedRequestId;
-  const isFocused = (requestId: string | null) =>
-    focusedId !== null && requestId !== null && sameId(focusedId, requestId);
+  const { focusedId, isFocused, linkGone } = useLinkedScheduledRequest(focusedRequestId, content);
   const hubScrollSelector = useHubScrollSelector();
   React.useEffect(() => {
     if (!focusedId) return;
@@ -82,49 +80,11 @@ export function ScheduledDebatesSection({
     // And focus, for a keyboard or screen reader: the hub is not modal, so focus is still on the page.
     node.focus({ preventScroll: true });
   }, [focusedId, hubScrollSelector]);
-  // A link to a request that is no longer here (answered, withdrawn or lapsed since the email, or
-  // another account's) says so rather than opening on nothing, in the Running late dialog's words.
-  // Never for an accepted one: its card is under Upcoming debates, which another read fills, so it
-  // can be a poll behind (or that read failed); either way the debate is on. And not when the
-  // requests read failed: the read-failed line already says why.
-  const { data: scheduledRequests } = useScheduledDebates();
-  const linkedShown =
-    answerable.some(request => isFocused(request.request_id)) || upcoming.some(row => isFocused(row.requestId));
-  const linkedState =
-    focusedId !== null && !linkedShown && !requestsError
-      ? noticeRequestState(scheduledRequests?.requests.find(request => sameId(request.request_id, focusedId)))
-      : null;
-  // A pending one not listed lapsed at its start, which reads as over.
-  const linkGone = linkedState === 'missing' ? 'missing' : linkedState && linkedState !== 'active' ? 'over' : null;
-  const linkGoneNotice = linkGone && (
-    <div role="status">
-      <Text as="p" variant="footnote" color="grey-04">
-        {SCHEDULED_NOTICE_COPY.state[linkGone]}
-      </Text>
-    </div>
-  );
+  const linkGoneNotice = linkGone && <LinkGoneNotice state={linkGone} />;
   const { answer, busy, error: conflict } = useScheduledDebateAnswer();
   const viewerId = useCurrentGeoChatUserId();
   const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0, people);
-  // The debate whose time is being moved, on the other debater's week. One at a time, so the modal
-  // lives here rather than per row, and closing it hands focus back to the row's button.
-  const [rescheduling, setRescheduling] = React.useState<Rescheduling | null>(null);
-  const rescheduleOpenerRef = React.useRef<HTMLElement | null>(null);
-
-  // Both kinds of card move their request the same way; only the button that asked differs. Null
-  // when there is no request to move or no week to move it on.
-  const reschedulerFor = (requestId: string | null, opponentUserId: string | null, entry: ScheduleEntry) =>
-    requestId && opponentUserId
-      ? (opener: HTMLElement) => {
-          rescheduleOpenerRef.current = opener;
-          setRescheduling({
-            requestId,
-            opponentUserId,
-            opponentName: lookUp(opponentUserId)?.display_name ?? null,
-            entry,
-          });
-        }
-      : null;
+  const { reschedulerFor, reschedulingModal } = useRescheduler(lookUp);
 
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
@@ -200,15 +160,7 @@ export function ScheduledDebatesSection({
 
       {/* The week the scheduling emails' "Choose different time" opens, in the same reschedule
           mode: picking a slot moves this request rather than proposing a new one. */}
-      <PeerAvailabilityBookingModal
-        open={rescheduling !== null}
-        userId={rescheduling?.opponentUserId ?? ''}
-        peerName={rescheduling?.opponentName}
-        rescheduleRequestId={rescheduling?.requestId ?? null}
-        entry={rescheduling?.entry ?? null}
-        openerRef={rescheduleOpenerRef}
-        onClose={() => setRescheduling(null)}
-      />
+      {reschedulingModal}
     </>
   );
 }
@@ -218,6 +170,120 @@ const FOCUSED_CARD = '[data-focused]';
 
 /** A debate being moved: whose week to open, the request it moves, and which button asked. */
 type Rescheduling = { requestId: string; opponentUserId: string; opponentName: string | null; entry: ScheduleEntry };
+
+/**
+ * Who may do what with a pending scheduled request. Whoever proposed the current time may withdraw
+ * it, and so may anyone who has already accepted it (GEO-3233: in an admin match neither debater
+ * proposed it). Someone who has not answered declines instead. Shared by this section's card and the
+ * panel's schedule (GEO-3463), so the two cannot offer different actions on one request.
+ */
+export function scheduledRequestRoles(request: ScheduledDebateRequest, viewerId: string | null) {
+  const proposedByViewer =
+    viewerId !== null && request.proposed_by_user_id !== null && sameId(request.proposed_by_user_id, viewerId);
+  const viewerAccepted =
+    viewerId !== null && request.participants.some(entry => entry.accepted === true && sameId(entry.user_id, viewerId));
+  const withdrawable = !request.viewer_must_answer && (proposedByViewer || viewerAccepted);
+  return { proposedByViewer, viewerAccepted, withdrawable };
+}
+
+/**
+ * Whether a booked room can still be called off or moved. geo-chat refuses once anyone has joined
+ * (`debate_already_started`), so the buttons go first. The room's session is created on first join,
+ * so a non-null one means someone has been in even if they have since left and `others_present` no
+ * longer says so.
+ */
+export function roomCancellable(row: Pick<UpcomingRoomRow, 'room' | 'requestId'>) {
+  return row.requestId !== null && !row.room.others_present && !row.room.rematch_session_id;
+}
+
+/** A booked room's state in words, the same on the section's card and the panel's timeline. */
+export function roomStatusLabel(room: UpcomingDebateRoom, opponent: DebateParticipantSummary | null) {
+  return room.others_present
+    ? `${opponentName(opponent)} is waiting for you now`
+    : room.joinable
+      ? 'The room is open'
+      : `Opens at ${formatTime(room.opens_at)}`;
+}
+
+/**
+ * A scheduled request a link asked to see (GEO-3431), and whether it is still here to show.
+ *
+ * Not until every read has landed: anything loading above it would push it back out of view after
+ * the scroll. A link to a request that is no longer here (answered, withdrawn or lapsed since the
+ * email, or another account's) says so rather than opening on nothing. Never for an accepted one: its
+ * card is under the booked debates, which another read fills, so it can be a poll behind; either way
+ * the debate is on. And not when the requests read failed: the read-failed line already says why.
+ */
+export function useLinkedScheduledRequest(
+  focusedRequestId: string | null,
+  content: Pick<ScheduledContent, 'answerable' | 'upcoming' | 'requestsError' | 'loading'>
+) {
+  const focusedId = content.loading ? null : focusedRequestId;
+  const isFocused = React.useCallback(
+    (requestId: string | null) => focusedId !== null && requestId !== null && sameId(focusedId, requestId),
+    [focusedId]
+  );
+  const { data: scheduledRequests } = useScheduledDebates();
+  const linkedShown =
+    content.answerable.some(request => isFocused(request.request_id)) ||
+    content.upcoming.some(row => isFocused(row.requestId));
+  const linkedState =
+    focusedId !== null && !linkedShown && !content.requestsError
+      ? noticeRequestState(scheduledRequests?.requests.find(request => sameId(request.request_id, focusedId)))
+      : null;
+  // A pending one not listed lapsed at its start, which reads as over.
+  const linkGone: 'missing' | 'over' | null =
+    linkedState === 'missing' ? 'missing' : linkedState && linkedState !== 'active' ? 'over' : null;
+  return { focusedId, isFocused, linkedShown, linkGone };
+}
+
+/** What a link to a request no longer here says, in the Running late dialog's words. */
+export function LinkGoneNotice({ state, className }: { state: 'missing' | 'over'; className?: string }) {
+  return (
+    <div role="status" className={className}>
+      <Text as="p" variant="footnote" color="grey-04">
+        {SCHEDULED_NOTICE_COPY.state[state]}
+      </Text>
+    </div>
+  );
+}
+
+/**
+ * Moving a scheduled debate on the other debater's week. One at a time, so the modal lives with the
+ * list rather than per row, and closing it hands focus back to the row's button. `reschedulerFor` is
+ * null when there is no request to move or no week to move it on.
+ */
+export function useRescheduler(lookUp: (userId: string | null) => DebateParticipantSummary | null) {
+  const [rescheduling, setRescheduling] = React.useState<Rescheduling | null>(null);
+  const rescheduleOpenerRef = React.useRef<HTMLElement | null>(null);
+
+  const reschedulerFor = (requestId: string | null, opponentUserId: string | null, entry: ScheduleEntry) =>
+    requestId && opponentUserId
+      ? (opener: HTMLElement) => {
+          rescheduleOpenerRef.current = opener;
+          setRescheduling({
+            requestId,
+            opponentUserId,
+            opponentName: lookUp(opponentUserId)?.display_name ?? null,
+            entry,
+          });
+        }
+      : null;
+
+  const reschedulingModal = (
+    <PeerAvailabilityBookingModal
+      open={rescheduling !== null}
+      userId={rescheduling?.opponentUserId ?? ''}
+      peerName={rescheduling?.opponentName}
+      rescheduleRequestId={rescheduling?.requestId ?? null}
+      entry={rescheduling?.entry ?? null}
+      openerRef={rescheduleOpenerRef}
+      onClose={() => setRescheduling(null)}
+    />
+  );
+
+  return { reschedulerFor, reschedulingModal };
+}
 
 /**
  * What this tab has to show. Shared with the tab itself, which needs it for its empty state; both
@@ -366,10 +432,7 @@ function UpcomingRow({
   /** Opens the other debater's week to move this debate. Null when it cannot be offered. */
   onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
-  // geo-chat refuses once anyone has joined (`debate_already_started`), so the button goes first.
-  // The room's session is created on first join, so a non-null one means someone has been in even
-  // if they have since left and `others_present` no longer says so.
-  const cancellable = requestId !== null && !room.others_present && !room.rematch_session_id;
+  const cancellable = roomCancellable({ room, requestId });
   const router = useRouter();
   const roomPath = debateRoomPath(room.room_id);
 
@@ -384,13 +447,7 @@ function UpcomingRow({
             ? formatDebateSlot(room.starts_at, scheduledEndAt)
             : formatDebateTime(room.starts_at)
       }
-      status={
-        room.others_present
-          ? `${opponentName(opponent)} is waiting for you now`
-          : room.joinable
-            ? 'The room is open'
-            : `Opens at ${formatTime(room.opens_at)}`
-      }
+      status={roomStatusLabel(room, opponent)}
       urgent={room.others_present}
       actions={
         (room.joinable || cancellable) && (
@@ -416,7 +473,7 @@ function UpcomingRow({
                 Reschedule
               </HubPillButton>
             )}
-            {cancellable && <CancelScheduled requestId={requestId} kind="debate" opponent={opponent} />}
+            {cancellable && requestId && <CancelScheduled requestId={requestId} kind="debate" opponent={opponent} />}
           </div>
         )
       }
@@ -451,14 +508,7 @@ export function ScheduledRow({
   onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
   const expiry = useScheduledExpiry(request.scheduled_start_at);
-  // Whoever proposed the current time may withdraw it, and so may anyone who has already accepted
-  // it (GEO-3233: in an admin match neither debater proposed it). Someone who has not answered
-  // declines instead.
-  const proposedByViewer =
-    viewerId !== null && request.proposed_by_user_id !== null && sameId(request.proposed_by_user_id, viewerId);
-  const viewerAccepted =
-    viewerId !== null && request.participants.some(entry => entry.accepted === true && sameId(entry.user_id, viewerId));
-  const withdrawable = !request.viewer_must_answer && (proposedByViewer || viewerAccepted);
+  const { proposedByViewer, viewerAccepted, withdrawable } = scheduledRequestRoles(request, viewerId);
   return (
     <ScheduleCard
       ref={ref}
@@ -511,21 +561,68 @@ export function ScheduledRow({
   );
 }
 
-/** One answer per request version, including taps before the mutation's pending render. */
-function ScheduledAnswerButtons({
+/**
+ * One answer per request version, including taps before the mutation's pending render. Key it on the
+ * request's time and reschedule count, so a moved request can be answered again.
+ *
+ * `inline` is the panel's schedule (GEO-3463): one line, primary first — Accept · Decline · Suggest a
+ * time. The analytics labels are the same in both layouts, so the two read as one series.
+ */
+export function ScheduledAnswerButtons({
   requestId,
   busy,
   onAnswer,
   onReschedule,
   analyticsSurface,
+  layout = 'stacked',
 }: {
   requestId: string;
   busy: boolean;
   onAnswer: ScheduledDebateAnswer;
   onReschedule: ((opener: HTMLElement) => void) | null;
   analyticsSurface: DebateAnalyticsSurface;
+  layout?: 'stacked' | 'inline';
 }) {
   const { answerOnce, releaseAnswer } = useAnswerOnce();
+  if (layout === 'inline') {
+    return (
+      <>
+        <HubPillButton
+          size="compact"
+          variant="primary"
+          analyticsSurface={analyticsSurface}
+          analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Accept scheduled debate')}
+          analyticsIntent="accept_scheduled_debate"
+          onClick={() => answerOnce(() => onAnswer(requestId, true, releaseAnswer.onError))}
+          disabled={busy}
+        >
+          Accept
+        </HubPillButton>
+        <HubPillButton
+          size="compact"
+          analyticsSurface={analyticsSurface}
+          analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Decline scheduled debate')}
+          analyticsIntent="decline_scheduled_debate"
+          onClick={() => answerOnce(() => onAnswer(requestId, false, releaseAnswer.onError))}
+          disabled={busy}
+        >
+          Decline
+        </HubPillButton>
+        {onReschedule ? (
+          <HubPillButton
+            size="compact"
+            analyticsSurface={analyticsSurface}
+            analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Choose different time for scheduled request')}
+            analyticsIntent="choose_different_time_scheduled_request"
+            onClick={event => onReschedule(event.currentTarget)}
+            disabled={busy}
+          >
+            Suggest a time
+          </HubPillButton>
+        ) : null}
+      </>
+    );
+  }
   return (
     // Decline first, Accept primary on the right: the order every other request card uses.
     // Under them, the scheduling email's third answer in its words (GEO-3232): a time that
@@ -640,6 +737,7 @@ export function CancelScheduled({
       <div className="flex flex-col gap-2">
         <HubPillButton
           className={compact ? undefined : 'w-full'}
+          size={compact ? 'compact' : 'default'}
           analyticsSurface={analyticsSurface}
           analyticsLabel={debateAnalyticsLabel(analyticsSurface, label)}
           analyticsIntent={intent}
@@ -666,6 +764,7 @@ export function CancelScheduled({
       </Text>
       <div className={compact ? 'flex flex-nowrap gap-1.5' : 'grid grid-cols-2 gap-2'}>
         <HubPillButton
+          size={compact ? 'compact' : 'default'}
           analyticsSurface={analyticsSurface}
           analyticsLabel={debateAnalyticsLabel(analyticsSurface, `Keep ${kind}`)}
           analyticsIntent={`keep_scheduled_${kind}`}
@@ -676,6 +775,7 @@ export function CancelScheduled({
         </HubPillButton>
         <HubPillButton
           variant="primary"
+          size={compact ? 'compact' : 'default'}
           analyticsSurface={analyticsSurface}
           analyticsLabel={debateAnalyticsLabel(analyticsSurface, `Confirm ${label}`)}
           analyticsIntent={`confirm_${intent}`}

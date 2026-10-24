@@ -20,4 +20,13 @@ describe('nextFreeLabel', () => {
     expect(nextFreeLabel({ slots: [] }, now)).toBeNull();
     expect(nextFreeLabel(undefined, now)).toBeNull();
   });
+
+  // A 24-hour clock keeps its minutes: an hour alone reads "18", not a time.
+  it('keeps the minutes on a 24-hour clock', () => {
+    expect(nextFreeLabel({ slots: [at(7, 18)] }, now, undefined, 'en-GB')).toBe('Free today 18:00');
+  });
+
+  it('drops them on the hour on a 12-hour clock', () => {
+    expect(nextFreeLabel({ slots: [at(7, 18)] }, now, undefined, 'en-US')).toBe('Free today 6 PM');
+  });
 });

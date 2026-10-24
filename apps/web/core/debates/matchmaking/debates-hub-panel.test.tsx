@@ -52,6 +52,7 @@ const mocks = vi.hoisted(() => ({
   isMobile: false,
   scheduledAwaitingAnswerCount: undefined as number | undefined,
   scheduledRequests: undefined as unknown[] | undefined,
+  matches: [] as unknown[],
 }));
 
 vi.mock('../rooms/scheduling-hooks', () => ({
@@ -150,7 +151,7 @@ vi.mock('./hooks', () => ({
     error: mocks.peopleError,
   }),
   useMatchmakingClaims: () => ({ data: undefined, isLoading: false, error: null, hasNextPage: false }),
-  useMatchmakingMatches: () => ({ data: { matches: [] }, isLoading: false, error: null }),
+  useMatchmakingMatches: () => ({ data: { matches: mocks.matches }, isLoading: false, error: null }),
   useCreateDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useAcceptDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -250,6 +251,7 @@ beforeEach(() => {
   mocks.isMobile = false;
   mocks.scheduledAwaitingAnswerCount = undefined;
   mocks.scheduledRequests = undefined;
+  mocks.matches = [];
 });
 
 afterEach(cleanup);
@@ -286,7 +288,7 @@ const FILTER_ATOMS = [
   { name: 'debatesHubPeopleSpaceIdsAtom', atom: debatesHubPeopleSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
   { name: 'debatesHubPeopleOnlineOnlyAtom', atom: debatesHubPeopleOnlineOnlyAtom, dirty: true, cleared: false },
   // GEO-3463: the panel's Sort and its tab-specific filters are session state like the rest.
-  { name: 'debatesHubPeopleSortAtom', atom: debatesHubPeopleSortAtom, dirty: 'az', cleared: 'matches' },
+  { name: 'debatesHubPeopleSortAtom', atom: debatesHubPeopleSortAtom, dirty: 'az', cleared: 'online' },
   { name: 'debatesHubMatchesSortAtom', atom: debatesHubMatchesSortAtom, dirty: 'people', cleared: 'best' },
   { name: 'debatesHubExploreSortAtom', atom: debatesHubExploreSortAtom, dirty: 'newest', cleared: 'best' },
   {
@@ -322,6 +324,17 @@ describe('DebatesHubPanel', () => {
     expect(labels).toEqual(order);
     expect(screen.queryByRole('button', { name: /^Live/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^My positions/ })).not.toBeInTheDocument();
+  });
+
+  // The Panel-Matches board: how many matches are online, quietly beside the tab's name.
+  it('shows how many matches are online beside Matches, and nothing at none', () => {
+    renderOpen('explore');
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches$/);
+    cleanup();
+
+    mocks.matches = [{}, {}, {}];
+    renderOpen('explore');
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent('Matches3 online');
   });
 
   it('labels each tab’s clicks with its new name', () => {
@@ -534,8 +547,9 @@ describe('DebatesHubPanel', () => {
   });
 
   it('draws each tab’s own body', () => {
+    // Nobody who disagrees is online in this suite, so Matches shows the wider list on its own.
     renderOpen('lobby');
-    expect(screen.getByTestId('matches-list')).toBeInTheDocument();
+    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
     cleanup();
 
     renderOpen('requests');

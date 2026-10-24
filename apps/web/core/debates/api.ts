@@ -4230,9 +4230,15 @@ export type DebateHistoryItem = {
   id: string;
   kind: DebateHistoryKind;
   occurred_at: string;
-  /** `null` for debates and lobbies, which have no sender. */
+  /** `null` for debates, lobbies and invites the Geo team arranged, which have no sender. */
   direction: 'outgoing' | 'incoming' | null;
-  /** How it ended, from the viewer's side. Read through `historyOutcomeLabel`, which knows the values. */
+  /**
+   * How it ended, from the viewer's side. Read through `historyOutcomeLabel`, which knows the values:
+   * requests and challenges `accepted | declined | taken_by_other | cancelled | expired |
+   * passed_by_everyone | unknown`; invites their status, with `declined` the viewer's own answer and
+   * `declined_by_other` the other debater's; debates (finished only) `held | never_started |
+   * abandoned`; lobbies `joined`.
+   */
   outcome: string;
   /** geo-chat user ids of everyone else involved, the viewer left out. */
   other_user_ids: string[];
@@ -4241,6 +4247,7 @@ export type DebateHistoryItem = {
   /** The request lists' own claim shape: `claim` is the text, `id` the debate claim row. */
   claim: DebateClaimSummary | null;
   debate_id: string | null;
+  /** The lobby: the one joined, or the one a request, challenge or debate was made in. */
   lobby: { room_id: string; name: string } | null;
   scheduled_start_at: string | null;
 };

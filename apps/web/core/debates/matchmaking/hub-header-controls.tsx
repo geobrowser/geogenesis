@@ -169,12 +169,15 @@ function AvailabilityMenu({
 
               <CopyBookingLink />
 
-              {canHost ? (
+              {/* Not from inside a lobby: one is already open around the menu. */}
+              {canHost && analyticsSurface !== 'lobby' ? (
                 <button
                   type="button"
                   {...debateActionAnalyticsAttributes(analyticsSurface, 'Open a lobby')}
-                  // The label the lobbies card's button had, so the event keeps reading the same.
-                  data-geo-analytics-label="Open a lobby"
+                  // On the hub, the label the lobbies card's button had, so that series keeps reading
+                  // the same; elsewhere the surface's own prefix, so full screen and the calendar are
+                  // told apart from it.
+                  {...(analyticsSurface === 'hub' ? { 'data-geo-analytics-label': 'Open a lobby' } : {})}
                   onClick={() => {
                     setOpen(false);
                     setOpeningLobby(true);

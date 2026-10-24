@@ -86,6 +86,14 @@ describe('the Requests tab count', () => {
     expect(count({ activity: { challenge: challengeTo('user-me') } as unknown as Partial<DebateActivity> })).toBe(1);
   });
 
+  // geo-chat spells uuids dashed in one field and dashless in another; the tinted row compares with
+  // `sameId`, so the badge has to as well or "Needs you (N)" disagrees with the rows under it.
+  it('counts a challenge to the viewer whichever way its id is spelt', () => {
+    mocks.viewerId = '0198a4f2-1111-7aaa-8bbb-ccccdddd0001';
+    const challenge = challengeTo('0198A4F211117AAA8BBBCCCCDDDD0001');
+    expect(count({ activity: { challenge } as unknown as Partial<DebateActivity> })).toBe(1);
+  });
+
   it('leaves out a challenge the viewer sent', () => {
     expect(count({ activity: { challenge: challengeTo('user-them') } as unknown as Partial<DebateActivity> })).toBe(0);
   });

@@ -21,7 +21,7 @@ import {
 import type { ClaimPickerEntity } from '../claim-picker-page';
 import type { ParticipantPositionsByClaim } from '../participant-positions';
 import type { PersonRecord } from './person-record';
-import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
+import { debatesHubPeopleSortAtom, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -50,6 +50,9 @@ const mocks = vi.hoisted(() => ({
   createRequest: vi.fn(),
   createRequestPending: false,
   createRequestVariables: undefined as { claim_entity_id: string } | undefined,
+  /** What the shared claim-request path says about "Debate on this" (`useClaimMatchup`). */
+  matchupBlockedReason: undefined as string | undefined,
+  matchupError: null as string | null,
   onTabChange: vi.fn(),
   cancelChallenge: vi.fn(),
   cancelPending: false,
@@ -146,6 +149,19 @@ vi.mock('./hooks', () => ({
     variables: mocks.createRequestVariables,
   }),
   useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+// "Debate on this" goes through the claim cards' own request path (`useClaimMatchup`), which has
+// its own suite; here it only matters that the list hands it the claim and shows what it says back.
+vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/claims/browse/use-claim-matchup')>()),
+  useClaimMatchup: ({ claimId, spaceId }: { claimId: string; spaceId: string }) => ({
+    match: null,
+    blockedReason: mocks.matchupBlockedReason,
+    isRequesting: mocks.createRequestPending,
+    requestError: mocks.matchupError,
+    request: () => mocks.createRequest({ space_id: spaceId, claim_entity_id: claimId }),
+  }),
 }));
 
 // The record is fetched once for the whole list through react-query; these tests render the tab
@@ -571,7 +587,8 @@ describe('PeopleTab', () => {
     mocks.claimEntities = [claimEntity('claim-1', 'Should we build this?'), claimEntity('claim-2', 'Is this true?')];
     mocks.spaceLabels = new Map([[normId(spaceId), { name: 'US Politics', image: null }]]);
 
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    // The full row's list: space, name and each side as a badge. The panel's compact list has its own test.
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     fireEvent.click(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' }));
 
@@ -1262,6 +1279,26 @@ describe('PeopleTab filters', () => {
       expect(within(filters).getByRole('radio', { name: 'A–Z' })).toHaveAttribute('aria-checked', 'true');
     });
 
+    // Preston, 23 Oct: Online first leads and is the default, matches ordering each group.
+    it('opens on Online first, offered first, then Most matches and A–Z', async () => {
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const filters = await openFilters();
+      const sorts = within(filters).getAllByRole('radio');
+      expect(sorts.map(option => option.textContent)).toEqual(['Online first', 'Most matches', 'A–Z']);
+      expect(sorts[0]).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('puts people who can be asked now ahead of someone in a debate by default', () => {
+      mocks.people = [{ ...person('user-other', 'Vytautas'), in_debate: true }, person('user-them', 'Arturas')];
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const names = screen.getAllByRole('listitem').map(item => item.textContent ?? '');
+      expect(names.findIndex(text => text.includes('Arturas'))).toBeLessThan(
+        names.findIndex(text => text.includes('Vytautas'))
+      );
+    });
+
     it('sorts A–Z from Filters', async () => {
       mocks.people = [person('user-other', 'Vytautas'), person('user-them', 'Arturas')];
       render(<PeopleTab onTabChange={mocks.onTabChange} />);
@@ -1889,7 +1926,10 @@ describe('Online only', () => {
       truncated: false,
       people: [{ ...offline, user: { ...offline.user, profile_space_id: ona } }],
     };
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    // Most matches, the sort this is about; the panel opens on Online first.
+    const store = createStore();
+    store.set(debatesHubPeopleSortAtom, 'matches');
+    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
 
     const onaRow = screen.getByText('Ona').closest('li')!;
     const arturasRow = screen.getByText('Arturas').closest('li')!;
@@ -2313,7 +2353,8 @@ describe('panel row (GEO-3463)', () => {
    * By text: role queries find nothing inside this popover's list in jsdom (the matches tests above
    * read it by text for the same reason), though the button is there.
    */
-  const debateOnThis = (list: HTMLElement) => within(list).queryByText('Debate on this')?.closest('button') ?? null;
+  const debateOnThis = (list: HTMLElement) =>
+    within(list).queryAllByText('Debate on this')[0]?.closest('button') ?? null;
   const fact = (name: string) => within(rowOf(name)).getByTestId('person-row-fact');
 
   /** One claim where the viewer agrees and Arturas disagrees. */
@@ -2354,6 +2395,8 @@ describe('panel row (GEO-3463)', () => {
     mocks.createRequest.mockReset();
     mocks.createRequestPending = false;
     mocks.createRequestVariables = undefined;
+    mocks.matchupBlockedReason = undefined;
+    mocks.matchupError = null;
   });
 
   afterEach(() => {
@@ -2442,7 +2485,9 @@ describe('panel row (GEO-3463)', () => {
       </HubAskProvider>
     );
 
-    expect(within(rowOf('Arturas')).getByRole('status')).toHaveTextContent(/^Requesting · 1:1\d$/);
+    // A timer, not a live region: a status re-announced every second would read the countdown aloud.
+    expect(within(rowOf('Arturas')).getByRole('timer')).toHaveTextContent(/^Requesting · 1:1\d$/);
+    expect(within(rowOf('Arturas')).queryByRole('status')).not.toBeInTheDocument();
     expect(within(rowOf('Arturas')).queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
     expect(within(rowOf('Vytautas')).getByRole('button', { name: 'Debate now' })).toBeDisabled();
     expect(screen.queryByText(/Asking/)).not.toBeInTheDocument();
@@ -2456,10 +2501,57 @@ describe('panel row (GEO-3463)', () => {
     const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
     fireEvent.click(debateOnThis(list)!);
 
-    expect(mocks.createRequest).toHaveBeenCalledWith(
-      { space_id: spaceId, claim_entity_id: 'claim-1' },
-      expect.objectContaining({ onSuccess: expect.any(Function) })
-    );
+    expect(mocks.createRequest).toHaveBeenCalledWith({ space_id: spaceId, claim_entity_id: 'claim-1' });
+  });
+
+  // The same blocked reasons and errors as a claim card's offer, rather than a quiet no-op.
+  it('greys "Debate on this" out for an unavailable viewer, and says why', async () => {
+    oneMatchWithArturas();
+    mocks.matchupBlockedReason = 'Switch yourself to available to send a request.';
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' }));
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    expect(debateOnThis(list)!).toBeDisabled();
+  });
+
+  it('shows a refused "Debate on this" in the list', async () => {
+    oneMatchWithArturas();
+    mocks.matchupError = 'Your response is still confirming — try again in a moment.';
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' }));
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    expect(within(list).getByText(/still confirming/)).toBeInTheDocument();
+  });
+
+  // Note from Preston: every row with matches carries the link, before the next-free fact.
+  it('puts the matches link on an offline row too, before when they are next free', async () => {
+    oneMatchWithArturas();
+    mocks.people = [person('user-other', 'Vytautas')];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [
+        {
+          ...schedulablePerson('user-them', 'Arturas'),
+          user: {
+            user_id: 'user-them',
+            profile_space_id: PROFILE_SPACE_IDS['user-them'],
+            display_name: 'Arturas',
+            avatar_cid: null,
+          },
+        },
+      ],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(fact('Arturas')).toHaveTextContent(/^\s*1 match\s*·\s*Free /);
+    fireEvent.click(within(fact('Arturas')).getByRole('button', { name: 'View 1 matching claim with Arturas' }));
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    // Asking on a claim is for someone online to take; an offline row's list only shows the sides.
+    expect(debateOnThis(list)).not.toBeInTheDocument();
   });
 
   it('greys "Debate on this" out while another ask is out', async () => {
@@ -2483,6 +2575,38 @@ describe('panel row (GEO-3463)', () => {
     fireEvent.click(trigger);
     const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
     expect(debateOnThis(list)).not.toBeInTheDocument();
+  });
+
+  // Review: the panel row opened an empty week on its own after "recipient away" with nothing to book.
+  it('opens no week on "recipient away" when the person has no time to book', () => {
+    mocks.createChallenge.mockImplementation((_request, options) =>
+      options.onError(new GeoChatRequestError('away', 'recipient_away', 409))
+    );
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(within(rowOf('Arturas')).getByRole('button', { name: 'Debate now' }));
+
+    expect(mocks.createChallenge).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // Mockup pass: the prototype's matches list, one tight row per claim, sides in words.
+  it('lists each match with both sides in words and an outlined "Debate on this"', async () => {
+    oneMatchWithArturas();
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' }));
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    expect(within(list).getByText('You: Agree · Arturas: Disagree')).toBeInTheDocument();
+    expect(debateOnThis(list)!).toHaveClass('border', 'bg-white');
+  });
+
+  // Mockup pass: row separators are the divider tone, and the row's pills grow to 32px on phones.
+  it('draws the panel row with the divider separator and phone-height pills', () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(rowOf('Arturas')).toHaveClass('border-divider');
+    expect(within(rowOf('Arturas')).getByRole('button', { name: 'Debate now' })).toHaveClass('md:h-8');
   });
 
   describe('profile card', () => {
@@ -2526,6 +2650,31 @@ describe('panel row (GEO-3463)', () => {
       fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'touch' });
       await new Promise(resolve => setTimeout(resolve, 400));
       expect(screen.queryByRole('dialog', { name: 'About Arturas' })).not.toBeInTheDocument();
+    });
+
+    // Review: a click on the name left a pending open running, so the card opened over the next page.
+    it('drops a pending open when the name is clicked', async () => {
+      canHover(true);
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'mouse' });
+      fireEvent.click(nameOf('Arturas'));
+      await new Promise(resolve => setTimeout(resolve, 400));
+      // Queried directly: after the click the card would sit outside the accessible tree, which a role
+      // query would read as "not open" either way.
+      expect(document.querySelector('[aria-label="About Arturas"]')).toBeNull();
+    });
+
+    it('waits for the pointer to stop moving before it opens', async () => {
+      canHover(true);
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'mouse' });
+      await new Promise(resolve => setTimeout(resolve, 200));
+      fireEvent.pointerMove(nameOf('Arturas'), { pointerType: 'mouse' });
+      await new Promise(resolve => setTimeout(resolve, 200));
+      expect(screen.queryByRole('dialog', { name: 'About Arturas' })).not.toBeInTheDocument();
+      expect(await screen.findByRole('dialog', { name: 'About Arturas' })).toBeInTheDocument();
     });
 
     it('stays shut while the matches list is open', async () => {

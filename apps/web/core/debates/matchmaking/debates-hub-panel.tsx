@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { DEBATES_MODAL } from '~/core/debates/debates-panel-deep-link';
-import { requestsModal, urlWithoutModal } from '~/core/deep-links/modal-deep-link';
+import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 
@@ -26,8 +26,7 @@ import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popov
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useLobbyLineup } from '../lobbies/live-lobbies';
 import { ClaimsTab } from './claims-tab';
-import { calendarHref } from './debate-calendar-route';
-import { useDebateRequests, useMatchmakingScope } from './hooks';
+import { useDebateRequests, useMatchmakingMatches, useMatchmakingScope } from './hooks';
 import { hubAnalyticsAttributes } from './hub-analytics';
 import { HubAskProvider } from './hub-ask-context';
 import { HubHeaderControls } from './hub-header-controls';
@@ -41,6 +40,7 @@ import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
 import { ScrollableTabRow } from './scrollable-tab-row';
 import { SIGNED_OUT_TABS } from './signed-out-tabs';
+import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useHubFilterOwner } from './use-hub-filter-owner';
@@ -258,6 +258,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
   const { data: requests } = useDebateRequests(authenticated);
 
   const requestCount = useRequestsTabCount({ authenticated, activity, requests });
+  // How many matches are online now, quietly beside the tab's name (the Panel-Matches board). The
+  // same query Matches reads, so opening the tab costs nothing more.
+  const { data: matches } = useMatchmakingMatches(authenticated);
+  const matchCount = matches?.matches.length ?? 0;
   const lobbyLineup = useLobbyLineup();
   const setExploreShow = useSetAtom(debatesHubExploreShowAtom);
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -317,11 +321,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
       <div className={cx('shrink-0 px-4', !ready && 'invisible')} aria-hidden={!ready}>
         {/* The row is `w-max` so the labels never compress, and both panel shells are
             `overflow-hidden` — so on a narrow phone whichever tab sits last would simply be cut
-            off. It scrolls instead, with a fade and an arrow on whichever side has more (GEO-3148):
-            "My positions" pushed the five labels past the panel's 400px, and a hidden scrollbar
-            alone never said there was anything to scroll to. `gap-4` rather than `gap-6` for the
-            same width (see #2603). */}
-        <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate hub" className="gap-4">
+            off. It scrolls instead, with a fade and an arrow on whichever side has more (GEO-3148).
+            The four tabs (GEO-3463) fit the panel's 400px at the design's 18px gap with the
+            Requests badge showing, so the arrows only appear on a very narrow phone. */}
+        <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate hub" className="gap-[18px]">
           {tabs.map(tab => (
             <button
               key={tab.id}
@@ -333,6 +336,12 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
             >
               {tab.label}
+              {tab.id === 'lobby' && matchCount > 0 ? (
+                <span className="text-breadcrumb font-medium text-grey-04">
+                  {matchCount}
+                  <span className="sr-only"> online</span>
+                </span>
+              ) : null}
               {tab.id === 'requests' && requestCount > 0 ? (
                 <Badge>
                   {requestCount}
@@ -383,8 +392,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               )}
             </HubSwap>
             {/* Explore's four serial round trips, started from whichever tab the viewer is on
-                instead of from the moment they ask for Explore — see `ClaimsTab`'s `warm`. The hub
-                opens on the Lobby and Explore is one press away, so the chain has the whole time
+                instead of from the moment they ask for Explore — see `ClaimsTab`'s `warm`. The panel
+                opens on People and Explore is one press away, so the chain has the whole time
                 the viewer spends reading this tab to finish, and usually has.
 
                 Inside the readiness gate above for the reason that gate exists: warming with the
@@ -398,7 +407,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         )}
       </motion.div>
 
-      {!ready || !filtersReconciled ? null : <NoTimesNudge />}
+      {!ready || !filtersReconciled ? null : <NoTimesNudge scheduleButtonRef={scheduleButtonRef} />}
       {!ready || !filtersReconciled ? null : <ExpandToWorkspaceLink activeTab={activeTab} />}
     </div>
   );
@@ -413,14 +422,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
  */
 function CalendarButton() {
   const { close } = useDebatesHub();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  // Without the panel's own trigger, which Back to Debates puts back itself. The fragment is read
-  // from the location: neither hook carries it.
-  const from = urlWithoutModal(pathname, searchParams, typeof window === 'undefined' ? '' : window.location.hash);
+  const href = useCalendarHref();
   return (
     <Link
-      href={calendarHref(from)}
+      href={href}
       onClick={close}
       aria-label="Calendar"
       data-geo-analytics-label="Debate hub Calendar"

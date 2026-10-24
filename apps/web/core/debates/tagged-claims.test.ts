@@ -13,6 +13,7 @@ import {
   NO_TAGGED_CLAIM_FILTERS,
   TAGGED_CLAIMS_PAGE_SIZE,
   type TaggedClaimFilters,
+  useTaggedAnsweredCount,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -1151,5 +1152,24 @@ describe('the total it reports', () => {
 
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
     expect(result.current.totalCount).toBeNull();
+  });
+});
+
+// GEO-3463. Sort changes which claim comes first, not how many were answered.
+describe('the answered count', () => {
+  it('is not asked again when only the order changes', async () => {
+    graphqlMock.mockImplementation(({ decoder }) => Effect.succeed(decoder({ entitiesConnection: { totalCount: 3 } })));
+    const filters: TaggedClaimFilters = { ...NO_TAGGED_CLAIM_FILTERS, excludeAnsweredBy: 'space-me' };
+    const { result, rerender } = renderHook(
+      ({ order }: { order: 'best' | 'newest' }) => useTaggedAnsweredCount(TAG, { ...filters, order }, true),
+      { wrapper: Wrapper, initialProps: { order: 'best' } }
+    );
+    await waitFor(() => expect(result.current.answeredCount).toBe(3));
+    const asked = graphqlMock.mock.calls.length;
+
+    rerender({ order: 'newest' });
+
+    expect(result.current.answeredCount).toBe(3);
+    expect(graphqlMock.mock.calls.length).toBe(asked);
   });
 });

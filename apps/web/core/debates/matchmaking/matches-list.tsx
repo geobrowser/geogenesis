@@ -4,20 +4,18 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
-import { useSpaceLabels } from '~/core/hooks/use-space-labels';
-
 import { Input } from '~/design-system/input';
 
 import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
-import { useDebateActivity, useUpdateDebateAvailability } from '../hooks';
+import { useDebateActivity } from '../hooks';
 import { useClaimOrderFacts } from './claim-order-facts';
 import { claimRowKey } from './claim-row-key';
 import { type ClaimsLayout, HubListColumns, HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubFacetRail } from './hub-facet-rail';
-import { HubFiltersBar, type PanelListFilters, panelFacetOptions, sortClaimRows } from './hub-filters';
+import { PanelFiltersBar, type PanelListFilters, sortClaimRows } from './hub-filters';
 import { HubCardList } from './hub-motion';
 import { HubQueryState, exploreClaimsAction } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -60,12 +58,15 @@ export function MatchesList({
   scopePicker,
   layout = 'panel',
   panelFilters,
+  notice,
 }: {
   /**
    * The side panel's search and Filters button in place of the menus row (GEO-3463). Panel only:
    * full screen keeps Lobby's toggle and its rail.
    */
   panelFilters?: PanelListFilters;
+  /** Above the list, under the filters: what the panel wants said about this list (GEO-3463). */
+  notice?: React.ReactNode;
   /** Only reached from the empty state's action, so the rail need not pass one. */
   onTabChange?: (tab: DebatesHubTab) => void;
   /** Lobby's "Matches only" switch, at the end of the filter row. */
@@ -77,7 +78,6 @@ export function MatchesList({
 }) {
   const workspace = layout === 'workspace';
   const panelMode = panelFilters !== undefined && !workspace;
-  const updateAvailability = useUpdateDebateAvailability();
   // Lobby's one selection, shared with its toggled-off state (GEO-2861) — the toggle narrows the
   // list, and would be a strange place to also change which spaces the viewer had picked.
   //
@@ -249,10 +249,6 @@ export function MatchesList({
     return panelMode && clientSort ? sortClaimRows(kept, clientSort, orderFacts) : kept;
   }, [clientSort, matches, orderFacts, panelMode, passesSearch, passesSpace, passesTopics]);
 
-  const { labelsById: panelLabelsById, isLoading: panelLabelsLoading } = useSpaceLabels(
-    React.useMemo(() => (panelMode ? facetSpaces.map(space => space.id) : []), [facetSpaces, panelMode])
-  );
-
   // The viewer's own filters emptied a list that has something in it — the one empty state here
   // they can undo, and the one `serverMatches.length === 0` is false for.
   const filteredByViewer = filtered.length === 0 && serverMatches.length > 0;
@@ -278,41 +274,20 @@ export function MatchesList({
           couldn't be offset by a known height. */}
       <HubStickyControls workspaceStickyOffset={workspace}>
         {panelFilters && panelMode ? (
-          <HubFiltersBar
-            analyticsSurface="hub"
+          <PanelFiltersBar
+            filters={panelFilters}
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search claims"
-            sort={panelFilters.sort}
-            choice={panelFilters.choice}
-            toggles={panelFilters.toggles}
-            facets={{
-              heading: 'Spaces and topics',
-              options: panelFacetOptions({
-                spaces: facetSpaces,
-                topics: facetTopics,
-                spaceIds,
-                topicIds,
-                listedCount: filtered.length,
-                labelsById: panelLabelsById,
-                labelsLoading: panelLabelsLoading,
-              }),
-              pickedIds: [...spaceIds, ...topicIds],
-              onToggle: option =>
-                option.kind === 'space'
-                  ? onSpaceToggle(option.id)
-                  : setTopicIds(current => toggleId(current, option.id)),
-              onClear: () => {
-                onSpacesClear();
-                setTopicIds([]);
-              },
-            }}
+            spaces={facetSpaces}
+            topics={facetTopics}
+            spaceIds={spaceIds}
+            topicIds={topicIds}
+            onSpaceToggle={onSpaceToggle}
+            onSpacesClear={onSpacesClear}
+            onTopicIdsChange={setTopicIds}
+            listedCount={filtered.length}
             resultCount={matchesQuery.isLoading ? null : filtered.length}
-            onClearAll={() => {
-              onSpacesClear();
-              setTopicIds([]);
-              panelFilters.onClearExtras?.();
-            }}
           />
         ) : (
           <>
@@ -344,6 +319,7 @@ export function MatchesList({
       </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">
+        {notice}
         <HubQueryState
           analyticsSurface="hub"
           // `activity` is a second query, and an empty list cannot be described without it: both
@@ -369,12 +345,8 @@ export function MatchesList({
             filteredByViewer
               ? 'No matches match these filters.'
               : activity?.available_to_debate === false
-                ? panelMode
-                  ? 'You’re not available now. Nobody can ask you, and you can’t ask on a claim.'
-                  : 'You’re marked unavailable, so nobody can be matched with you.'
-                : panelMode && serverMatches.length === 0
-                  ? 'Nobody who disagrees with you is online. People who do and have times this week are on People.'
-                  : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
+                ? 'You’re marked unavailable, so nobody can be matched with you.'
+                : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
           }
           // GEO-2840. Read off `serverMatches` rather than off the space filter: with nothing to
           // match on at all, the filter is not what emptied the list, so the test is whether anyone
@@ -406,14 +378,7 @@ export function MatchesList({
                     panelFilters?.onClearExtras?.();
                   },
                 }
-              : panelMode && activity?.available_to_debate === false
-                ? // Each empty tab offers what would fill it (GEO-3463): here, being available.
-                  { label: 'Turn on', onClick: () => updateAvailability.mutate(true) }
-                : panelMode && onTabChange
-                  ? // Nobody who disagrees is online. The people who do and have times are on People,
-                    // sorted by matches, each offering Schedule.
-                    { label: 'See who’s free', onClick: () => onTabChange('people') }
-                  : exploreClaimsAction(onTabChange)
+              : exploreClaimsAction(onTabChange)
           }
         >
           <HubCardList>

@@ -271,13 +271,13 @@ export const debatesHubPeopleOnlineOnlyAtom = atom(false);
 /**
  * The side panel's Sort, one per tab (GEO-3463). Sort lives in the Filters popover and never counts
  * as a filter, so these sit beside the filters rather than in them — Clear all leaves them alone.
- * Session-scoped like the rest of the bar. The defaults are the orders the tabs had before Sort
- * existed: People by most matches, both claim lists by Explore's ranking.
+ * Session-scoped like the rest of the bar. People opens Online first (matches order each group);
+ * both claim lists open on Explore's ranking.
  */
 export type DebatesHubPeopleSort = 'matches' | 'online' | 'az';
 export type DebatesHubMatchesSort = 'best' | 'newest' | 'people';
 export type DebatesHubExploreSort = 'best' | 'newest';
-export const debatesHubPeopleSortAtom = atom<DebatesHubPeopleSort>('matches');
+export const debatesHubPeopleSortAtom = atom<DebatesHubPeopleSort>('online');
 export const debatesHubMatchesSortAtom = atom<DebatesHubMatchesSort>('best');
 export const debatesHubExploreSortAtom = atom<DebatesHubExploreSort>('best');
 
@@ -398,7 +398,7 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(lobbyExploreSpaceSeedSpentAtom, false);
   set(debatesHubPeopleSpaceIdsAtom, []);
   set(debatesHubPeopleOnlineOnlyAtom, false);
-  set(debatesHubPeopleSortAtom, 'matches');
+  set(debatesHubPeopleSortAtom, 'online');
   set(debatesHubMatchesSortAtom, 'best');
   set(debatesHubExploreSortAtom, 'best');
   set(debatesHubMatchesIncludeOfflineAtom, false);

@@ -4,9 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
-
-import { urlWithoutModal } from '~/core/deep-links/modal-deep-link';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 
@@ -18,14 +15,12 @@ import { LobbyReminderError, useLobbyReminderPress } from '../lobbies/lobby-remi
 import { LOBBY_DARK_SURFACE_CLASS_NAME, LiveDot, joinLabel } from '../lobbies/lobby-spotlight';
 import { useMinuteNow } from '../lobbies/use-minute-now';
 import { debateRoomPath } from '../rooms/room-routes';
-import { claimPickKey } from './calendar-narrowing';
-import { calendarHref } from './debate-calendar-route';
+import { claimCalendarPicks, personCalendarPicks } from './debate-calendar-route';
 import { hubAnalyticsAttributes } from './hub-analytics';
+import { useHubAskState } from './hub-ask-context';
+import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
-import { type EndedAsk, type OutgoingAsk, useAskClock, useOutgoingAsk } from './use-outgoing-ask';
-
-/** Claim requests live 90 s and challenges 2 min (geo-chat); the bar's width is measured against these. */
-const ASK_LIFETIME_MS: Record<OutgoingAsk['kind'], number> = { claim: 90_000, person: 120_000 };
+import { type EndedAsk, type OutgoingAsk, useAskClock } from './use-outgoing-ask';
 
 const STRIP_CLASS_NAME = 'mx-4 mb-3 flex h-11 shrink-0 items-center gap-2 overflow-hidden rounded-lg pr-2 pl-3';
 
@@ -46,7 +41,7 @@ const STRIP_PILL_CLASS_NAME =
  * It sits outside the tabs, so the ask stays in view on every tab while it runs.
  */
 export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
-  const { ask, ended, cancel, cancelling, dismissEnded } = useOutgoingAsk();
+  const { ask, ended, cancel, cancelling, dismissEnded } = useHubAskState();
 
   if (ask) return <AskStrip ask={ask} onCancel={cancel} cancelling={cancelling} />;
   if (ended) return <EndedAskStrip ended={ended} onDismiss={dismissEnded} />;
@@ -60,14 +55,23 @@ export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
   return null;
 }
 
+/**
+ * How much of the ask's own lifetime is left, for the bar under it. Measured from the request's
+ * timestamps rather than from geo-chat's timeouts written down here, so it cannot drift from them.
+ */
+export function askShareLeft(ask: Pick<OutgoingAsk, 'createdAt' | 'expiresAt'>, remainingMs: number) {
+  const lifetime = Date.parse(ask.expiresAt) - Date.parse(ask.createdAt);
+  if (!Number.isFinite(lifetime) || lifetime <= 0) return 0;
+  return Math.max(0, Math.min(1, remainingMs / lifetime));
+}
+
 function askTitle(ask: OutgoingAsk) {
   return ask.kind === 'person' ? `Requesting ${ask.recipientName}` : 'Requesting · people who disagree';
 }
 
 function AskStrip({ ask, onCancel, cancelling }: { ask: OutgoingAsk; onCancel: () => void; cancelling: boolean }) {
   const { remainingMs, label } = useAskClock(ask.expiresAt);
-  const lifetime = ASK_LIFETIME_MS[ask.kind];
-  const share = Math.max(0, Math.min(1, remainingMs / lifetime));
+  const share = askShareLeft(ask, remainingMs);
 
   return (
     <section
@@ -110,14 +114,10 @@ function AskStrip({ ask, onCancel, cancelling }: { ask: OutgoingAsk; onCancel: (
  */
 function EndedAskStrip({ ended, onDismiss }: { ended: EndedAsk; onDismiss: () => void }) {
   const { close } = useDebatesHub();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const from = urlWithoutModal(pathname, searchParams, typeof window === 'undefined' ? '' : window.location.hash);
-  const href = calendarHref(
-    from,
+  const href = useCalendarHref(
     ended.kind === 'claim'
-      ? { people: [], claims: [claimPickKey(ended.claim.space_id, ended.claim.claim_entity_id)], matchesOnly: false }
-      : { people: [ended.recipientProfileSpaceId], claims: [], matchesOnly: false }
+      ? claimCalendarPicks(ended.claim.space_id, ended.claim.claim_entity_id)
+      : personCalendarPicks(ended.recipientProfileSpaceId)
   );
 
   return (

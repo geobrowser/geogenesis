@@ -4,27 +4,37 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
 
 import { ClaimEndSlot, WatchLiveLink } from '~/core/claims/browse/claim-end-slot';
 import { useClaimMatchup } from '~/core/claims/browse/use-claim-matchup';
 import { useRematchPanelContext } from '~/core/debates/rematch-panel-context';
-import { urlWithoutModal } from '~/core/deep-links/modal-deep-link';
-
-import { Tooltip } from '~/design-system/tooltip';
 
 import type { Debate, DebateClaimSummary } from '../api';
-import { claimSlotPillClass } from '../request-debate-control';
+import { useGeoChatAuth } from '../hooks';
+import { RequestDebateControl, claimSlotPillClass } from '../request-debate-control';
 import { WATCH_LIVE_ENABLED } from '../watch-live';
-import { claimPickKey } from './calendar-narrowing';
-import { calendarHref } from './debate-calendar-route';
+import { claimCalendarPicks } from './debate-calendar-route';
 import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes } from './hub-analytics';
 import { useHubAsk } from './hub-ask-context';
+import { RequestingPill } from './requesting-pill';
+import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
-import { type OutgoingAsk, askIsForClaim, useAskClock } from './use-outgoing-ask';
+import { type OutgoingAsk, askIsForClaim } from './use-outgoing-ask';
 
 /** The end slot's pill, one step taller on a phone (Specs: h-5 desktop, h-6 phone). */
 const PILL_CLASS_NAME = cx(claimSlotPillClass('inline'), 'md:h-6');
+
+/**
+ * Whether anyone other than the viewer holds the side opposite theirs (GEO-3463). Schedule only
+ * makes sense when someone does: otherwise it opens a calendar narrowed to a claim with nobody on it.
+ */
+export function otherSideHeld(
+  positions: readonly { position: boolean; total_count: number }[],
+  viewerPosition: boolean | null | undefined
+) {
+  if (typeof viewerPosition !== 'boolean') return false;
+  return positions.some(position => position.position !== viewerPosition && position.total_count > 0);
+}
 
 /**
  * A hub card's end slot (GEO-3463): Debate now when someone on the other side is online, with a
@@ -34,13 +44,14 @@ const PILL_CLASS_NAME = cx(claimSlotPillClass('inline'), 'md:h-6');
  * Its own component rather than a branch of `ClaimEndSlot`, which also ends the meta row of feed
  * cards and the claim page. Those surfaces have no strip to say a request is out and no Cancel to
  * take it back, so they keep "Request debate" until the label pass outside the panel reaches them.
+ * The offer itself is the same `RequestDebateControl` they draw.
  */
 export function HubClaimEndSlot({
   claim,
   ask,
   activeDebate,
   viewerPosition,
-  someoneOnline,
+  otherSideHeld: heldOpposite,
   analyticsSurface = 'hub',
 }: {
   claim: DebateClaimSummary;
@@ -49,18 +60,19 @@ export function HubClaimEndSlot({
   activeDebate?: Debate | boolean | null;
   /** As on `ClaimEndSlot`: a side, `null` for none, `undefined` for not known yet. */
   viewerPosition: boolean | null | undefined;
-  /** See `MatchmakingClaimCard`'s prop of the same name. */
-  someoneOnline?: boolean;
+  /** Someone holds the side opposite the viewer's — see {@link otherSideHeld}. */
+  otherSideHeld: boolean;
   analyticsSurface?: DebateAnalyticsSurface;
 }) {
+  const { authenticated } = useGeoChatAuth();
   const { match, blockedReason, isRequesting, requestError, request } = useClaimMatchup({
     claimId: claim.claim_entity_id,
     spaceId: claim.space_id,
     viewerPosition,
   });
 
-  if (askIsForClaim(ask, claim.claim_entity_id) && ask) {
-    return <RequestingPill expiresAt={ask.expiresAt} />;
+  if (ask && askIsForClaim(ask, claim)) {
+    return <RequestingPill expiresAt={ask.expiresAt} className={cx(PILL_CLASS_NAME, REQUESTING_CLASS_NAME)} />;
   }
 
   // The same contradiction `ClaimEndSlot` withdraws its offer on: a match computed for the side the
@@ -68,73 +80,38 @@ export function HubClaimEndSlot({
   const matchedSide = match ? (match.viewer_response?.position ?? match.viewer_position) : null;
   const contradictsViewerSide =
     matchedSide !== null && matchedSide !== undefined && viewerPosition !== undefined && matchedSide !== viewerPosition;
-  const offersDebate = Boolean(match) && !contradictsViewerSide && someoneOnline !== false;
+  // Signed out there is no one to schedule as, and a device-only vote is not a side anyone can
+  // debate — so Schedule waits for an account and for someone actually on the other side.
+  const offersSchedule = authenticated && typeof viewerPosition === 'boolean' && heldOpposite;
 
-  if (offersDebate) {
+  if (match && !contradictsViewerSide) {
     // Paused rather than hidden while another request is out: the offer is still there, it just
-    // has to wait its turn, and a button vanishing from every other card reads as the list breaking.
+    // has to wait its turn.
     const paused = ask !== null;
-    const button = (
-      <button
-        type="button"
-        onClick={paused ? undefined : request}
-        {...debateActionAnalyticsAttributes(analyticsSurface, 'Debate now', 'start_debate')}
-        disabled={paused || Boolean(blockedReason) || isRequesting}
-        aria-busy={isRequesting || undefined}
-        className={cx(
-          PILL_CLASS_NAME,
-          'bg-text text-white hover:bg-text/90 disabled:pointer-events-none disabled:cursor-default',
-          paused ? 'disabled:opacity-35' : 'disabled:opacity-50'
-        )}
-      >
-        {/* Both labels in one cell, so the pill does not shrink the moment it is pressed. */}
-        <span className="grid place-items-center">
-          <span className="invisible col-start-1 row-start-1" aria-hidden>
-            Requesting…
-          </span>
-          <span className="col-start-1 row-start-1">{isRequesting ? 'Requesting…' : 'Debate now'}</span>
-        </span>
-      </button>
-    );
-    const reason = paused ? 'One request at a time. Cancel yours to ask on another claim.' : blockedReason;
-
     return (
-      <span className="flex shrink-0 flex-col items-end gap-1">
-        <span className="flex items-center gap-2.5">
-          {/* Not while a request is out: scheduling is the other way to debate this claim, and the
-              strip above is where the open request is dealt with first. */}
-          {paused ? null : <ScheduleOnClaim claim={claim} variant="link" analyticsSurface={analyticsSurface} />}
-          {reason ? (
-            <Tooltip
-              label={reason}
-              position="bottom"
-              align="end"
-              openOnPress
-              trigger={
-                <span tabIndex={0} className="inline-flex cursor-default">
-                  {button}
-                </span>
-              }
-            />
-          ) : (
-            button
-          )}
-        </span>
-        {requestError ? (
-          <span role="alert" className="text-right text-footnote text-red-01">
-            {requestError}
-          </span>
-        ) : null}
+      <span className="flex shrink-0 items-start gap-2.5">
+        {/* Not while a request is out: scheduling is the other way to debate this claim, and the
+            strip above is where the open request is dealt with first. */}
+        {paused || !offersSchedule ? null : (
+          <ScheduleOnClaim claim={claim} variant="link" analyticsSurface={analyticsSurface} />
+        )}
+        <RequestDebateControl
+          onRequest={request}
+          label="Debate now"
+          paused={paused}
+          disabled={Boolean(blockedReason)}
+          isRequesting={isRequesting}
+          blockedReason={paused ? 'One request at a time. Cancel yours to ask on another claim.' : blockedReason}
+          requestError={requestError}
+          buttonClassName="md:h-6"
+          analytics={debateActionAnalyticsAttributes(analyticsSurface, 'Debate now', 'start_debate')}
+        />
       </span>
     );
   }
 
-  // Nobody on the other side is online. Once the viewer holds a side there is someone to debate
-  // later, so Schedule is the main action. On Matches with offline people included the side is held
-  // by construction, so it does not wait for the viewer's position to load.
-  if (someoneOnline === false || typeof viewerPosition === 'boolean') {
-    return <ScheduleOnClaim claim={claim} variant="pill" analyticsSurface={analyticsSurface} />;
-  }
+  // Nobody on the other side is online, but someone holds it: Schedule is the main action.
+  if (offersSchedule) return <ScheduleOnClaim claim={claim} variant="pill" analyticsSurface={analyticsSurface} />;
 
   if (WATCH_LIVE_ENABLED && activeDebate) return <WatchLiveLink activeDebate={activeDebate} spaceId={claim.space_id} />;
 
@@ -157,16 +134,7 @@ function ScheduleOnClaim({
   analyticsSurface: DebateAnalyticsSurface;
 }) {
   const { close } = useDebatesHub();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const from = pathname
-    ? urlWithoutModal(pathname, searchParams, typeof window === 'undefined' ? '' : window.location.hash)
-    : null;
-  const href = calendarHref(from, {
-    people: [],
-    claims: [claimPickKey(claim.space_id, claim.claim_entity_id)],
-    matchesOnly: true,
-  });
+  const href = useCalendarHref(claimCalendarPicks(claim.space_id, claim.claim_entity_id));
 
   return (
     <Link
@@ -176,7 +144,7 @@ function ScheduleOnClaim({
       {...debateActionAnalyticsAttributes(analyticsSurface, 'Schedule on claim', 'open_debate_calendar')}
       className={
         variant === 'link'
-          ? 'shrink-0 text-[13px] leading-none text-grey-04 transition-colors hover:text-text hover:underline'
+          ? 'shrink-0 text-browseSection leading-5 text-grey-04 transition-colors hover:text-text hover:underline md:leading-6'
           : cx(PILL_CLASS_NAME, 'border border-grey-02 bg-white text-text hover:bg-grey-01')
       }
     >
@@ -185,20 +153,7 @@ function ScheduleOnClaim({
   );
 }
 
-/** The pressed card's button while its request is out, counting down the real expiry. */
-function RequestingPill({ expiresAt }: { expiresAt: string }) {
-  const { remainingMs, label } = useAskClock(expiresAt);
-  const seconds = Math.ceil(remainingMs / 1_000);
-  return (
-    <span
-      role="timer"
-      aria-label={`Requesting, ${seconds} ${seconds === 1 ? 'second' : 'seconds'} left`}
-      className={cx(PILL_CLASS_NAME, 'bg-white text-text tabular-nums ring-1 ring-text ring-inset')}
-    >
-      Requesting · {label}
-    </span>
-  );
-}
+const REQUESTING_CLASS_NAME = 'bg-white text-text ring-1 ring-text ring-inset';
 
 /**
  * The card's end slot: the hub's own inside a hub surface, the shared one everywhere else. A rematch

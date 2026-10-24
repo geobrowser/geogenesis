@@ -16,14 +16,16 @@ const mocks = vi.hoisted(() => ({
   remind: vi.fn(),
 }));
 
-vi.mock('./use-outgoing-ask', () => ({
-  useOutgoingAsk: () => ({
+vi.mock('./hub-ask-context', () => ({
+  useHubAskState: () => ({
     ask: mocks.ask,
     ended: mocks.ended,
     cancel: mocks.cancel,
     cancelling: false,
     dismissEnded: mocks.dismissEnded,
   }),
+}));
+vi.mock('./use-outgoing-ask', () => ({
   useAskClock: () => ({ remainingMs: 72_000, label: '1:12' }),
 }));
 vi.mock('./use-debates-hub', () => ({ useDebatesHub: () => ({ close: mocks.close }) }));
@@ -37,7 +39,7 @@ vi.mock('../lobbies/lobby-reminder-press', () => ({
   LobbyReminderError: () => null,
 }));
 
-const { HubLiveStrip } = await import('./hub-live-strip');
+const { HubLiveStrip, askShareLeft } = await import('./hub-live-strip');
 
 const CLAIM = {
   id: 'dc-1',
@@ -181,5 +183,20 @@ describe('HubLiveStrip', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(mocks.dismissEnded).toHaveBeenCalled();
+  });
+});
+
+describe('askShareLeft', () => {
+  // The bar is measured against the ask's own lifetime, so a 2-minute challenge and a 90 s claim
+  // request both start full, whatever geo-chat's timeouts become.
+  it('is the share of the ask’s own lifetime still left', () => {
+    const ask = { createdAt: '2026-10-23T12:00:00.000Z', expiresAt: '2026-10-23T12:02:00.000Z' };
+    expect(askShareLeft(ask, 120_000)).toBe(1);
+    expect(askShareLeft(ask, 30_000)).toBe(0.25);
+    expect(askShareLeft({ createdAt: ask.createdAt, expiresAt: '2026-10-23T12:01:30.000Z' }, 45_000)).toBe(0.5);
+  });
+
+  it('draws an empty bar rather than a broken one for unusable times', () => {
+    expect(askShareLeft({ createdAt: 'nope', expiresAt: 'nope' }, 10_000)).toBe(0);
   });
 });

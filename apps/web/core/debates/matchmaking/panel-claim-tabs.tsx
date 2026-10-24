@@ -5,9 +5,11 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 
 import type { MatchmakingClaim } from '../api';
-import { useGeoChatAuth } from '../hooks';
+import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
 import { type ClaimsListVariant, ClaimsTab } from './claims-tab';
+import { useMatchmakingMatches } from './hooks';
 import type { HubSortOption, PanelListFilters } from './hub-filters';
+import { HubPillButton } from './hub-pill-button';
 import { MatchesList } from './matches-list';
 import {
   type DebatesHubExploreShow,
@@ -49,9 +51,13 @@ function hasSomeoneOnTheOtherSide(entry: MatchmakingClaim) {
   return opposingSides(entry).some(position => position.total_count > 0);
 }
 
-/** A claim where someone online holds a side, which Debate now can act on straight away. */
-function hasSomeoneOnline(entry: MatchmakingClaim) {
-  return entry.positions.some(position => position.available_now_count > 0);
+/**
+ * A claim of yours where someone online holds the other side, which Debate now can act on straight
+ * away. Only the other side: someone online who agrees with you is no one to debate, and the card
+ * would offer Schedule.
+ */
+function hasSomeoneOnlineOpposite(entry: MatchmakingClaim) {
+  return opposingSides(entry).some(position => position.available_now_count > 0);
 }
 
 /**
@@ -63,10 +69,24 @@ function hasSomeoneOnline(entry: MatchmakingClaim) {
  * positions narrowed to those claims; the card offers Schedule where nobody on the other side is
  * online. The search and the spaces and topics picked are shared by both, so the switch narrows or
  * widens what is on screen rather than starting over.
+ *
+ * With nobody who disagrees online, the tab does not stop at saying so: it shows that wider list on
+ * its own, under a line that says why, without touching the stored switch — so the moment a match
+ * comes online the tab is back to matches. Unavailable, a card says so and offers Turn on first.
  */
 export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
   const [sort, setSort] = useAtom(debatesHubMatchesSortAtom);
   const [includeOffline, setIncludeOffline] = useAtom(debatesHubMatchesIncludeOfflineAtom);
+  const { data: activity } = useDebateActivity(true);
+  const matchesQuery = useMatchmakingMatches(true);
+  // Settled, not loading: an empty answer still on its way back, or a failed one, is not "nobody is
+  // online", and swapping lists on it would flicker.
+  const nobodyOnline =
+    !matchesQuery.isLoading &&
+    !matchesQuery.isFetching &&
+    !matchesQuery.error &&
+    (matchesQuery.data?.matches.length ?? 0) === 0;
+  const showsOffline = includeOffline || nobodyOnline;
 
   const filters = React.useMemo<PanelListFilters>(
     () => ({
@@ -82,20 +102,62 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
       ],
       onClearExtras: () => setIncludeOffline(false),
       clientSort: sort,
+      emptyPredicate: {
+        message: 'Nobody holds the other side of a claim you’ve answered yet.',
+        action: { label: 'Explore claims', onClick: () => onTabChange('explore') },
+      },
     }),
-    [includeOffline, setIncludeOffline, setSort, sort]
+    [includeOffline, onTabChange, setIncludeOffline, setSort, sort]
   );
 
-  return includeOffline ? (
+  const notice =
+    activity?.available_to_debate === false || (nobodyOnline && !includeOffline) ? (
+      <div className="flex flex-col gap-4">
+        {activity?.available_to_debate === false ? <NotAvailableCard /> : null}
+        {nobodyOnline && !includeOffline ? (
+          <div data-testid="matches-nobody-online">
+            <h3 className="text-quoteMedium text-text">Nobody who disagrees with you is online</h3>
+            <p className="text-breadcrumb text-grey-04">
+              These claims have someone on the other side. Pick a time and they get an invite.
+            </p>
+          </div>
+        ) : null}
+      </div>
+    ) : null;
+
+  return showsOffline ? (
     <ClaimsTab
       variant="positions"
       atomsFrom="lobby"
       panelFilters={filters}
       keepClaim={hasSomeoneOnTheOtherSide}
+      notice={notice}
       onTabChange={onTabChange}
     />
   ) : (
-    <MatchesList onTabChange={onTabChange} panelFilters={filters} />
+    <MatchesList onTabChange={onTabChange} panelFilters={filters} notice={notice} />
+  );
+}
+
+/** The Panel-Empty board's card: what being unavailable means here, and the one press that fixes it. */
+function NotAvailableCard() {
+  const updateAvailability = useUpdateDebateAvailability();
+  return (
+    <div data-testid="matches-not-available" className="flex items-center gap-3 rounded-xl bg-grey-01 p-3.5">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="text-metadataMedium text-text">You’re not available now</span>
+        <span className="text-breadcrumb text-grey-04">Nobody can ask you, and you can’t ask on a claim.</span>
+      </div>
+      <HubPillButton
+        variant="primary"
+        analyticsLabel="Debate hub Turn on availability"
+        analyticsIntent="update_debate_availability"
+        disabled={updateAvailability.isPending}
+        onClick={() => updateAvailability.mutate(true)}
+      >
+        Turn on
+      </HubPillButton>
+    </div>
   );
 }
 
@@ -159,14 +221,9 @@ export function PanelExploreTab({ onTabChange }: { onTabChange: (tab: DebatesHub
     [authenticated, setShow, setSomeoneOnline, setSort, show, someoneOnline, sort, variant]
   );
 
-  // What the chosen source cannot be asked for. `debate_now` keeps answered claims, so Not answered
-  // is applied to it here; My positions has no online filter, so that one is applied here too.
-  const keepClaim = React.useMemo(() => {
-    if (variant === 'lobby' && show === 'unanswered')
-      return (entry: MatchmakingClaim) => entry.viewer_response === null;
-    if (variant === 'positions' && someoneOnline) return hasSomeoneOnline;
-    return undefined;
-  }, [show, someoneOnline, variant]);
+  // What the chosen source cannot be asked for. My positions has no online filter, so that one is
+  // applied here.
+  const keepClaim = variant === 'positions' && someoneOnline ? hasSomeoneOnlineOpposite : undefined;
 
   return (
     <ClaimsTab
@@ -175,6 +232,10 @@ export function PanelExploreTab({ onTabChange }: { onTabChange: (tab: DebatesHub
       atomsFrom="explore"
       panelFilters={filters}
       keepClaim={keepClaim}
+      // `debate_now` keeps the claims you have answered. Under Not answered they fold away the way
+      // Explore's do, which also holds one you answer in front of you long enough to press its new
+      // Debate now, instead of dropping it on the next refetch.
+      collapsesAnswered={variant === 'lobby' ? show === 'unanswered' : undefined}
       onTabChange={onTabChange}
     />
   );

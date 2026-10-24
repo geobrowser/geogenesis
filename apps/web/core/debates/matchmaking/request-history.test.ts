@@ -1,7 +1,56 @@
-import { describe, expect, it } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
 
-import type { DebateHistoryItem } from '../api';
-import { historyOutcomeLabel, isSettledHistoryItem } from './request-history';
+import * as React from 'react';
+
+import { describe, expect, it, vi } from 'vitest';
+
+import type { DebateHistoryItem, DebateHistoryResponse } from '../api';
+
+const mocks = vi.hoisted(() => ({ list: vi.fn() }));
+
+vi.mock('../api', async importOriginal => ({
+  ...(await importOriginal<typeof import('../api')>()),
+  listDebateHistory: mocks.list,
+}));
+vi.mock('../hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('../hooks')>()),
+  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
+}));
+
+const {
+  dedupeHistory,
+  historyNames,
+  historyOutcomeLabel,
+  historyTitle,
+  historyWatchable,
+  isSettledHistoryItem,
+  unnamedHistoryUserIds,
+  useDebateHistory,
+} = await import('./request-history');
+
+function item(overrides: Partial<DebateHistoryItem>): DebateHistoryItem {
+  return {
+    id: 'claim_request:1',
+    kind: 'claim_request',
+    occurred_at: '2026-10-22T12:00:00Z',
+    direction: 'outgoing',
+    outcome: 'expired',
+    other_user_ids: [],
+    claim: null,
+    debate_id: null,
+    lobby: null,
+    scheduled_start_at: null,
+    ...overrides,
+  };
+}
+
+const person = (id: string, name: string) => ({
+  user_id: id,
+  profile_space_id: `p-${id}`,
+  display_name: name,
+  avatar_cid: null,
+});
 
 const label = (kind: DebateHistoryItem['kind'], direction: DebateHistoryItem['direction'], outcome: string) =>
   historyOutcomeLabel({ kind, direction, outcome });
@@ -25,10 +74,18 @@ describe('historyOutcomeLabel', () => {
     expect(label('challenge', 'outgoing', 'accepted')).toBe('They accepted');
   });
 
+  // geo-chat#299 tells invites from the viewer's side itself, whoever sent them.
   it('reads invites from the viewer’s side', () => {
     expect(label('scheduled_invite', 'incoming', 'declined')).toBe('You declined');
-    expect(label('scheduled_invite', 'outgoing', 'declined')).toBe('They declined');
+    expect(label('scheduled_invite', 'outgoing', 'declined')).toBe('You declined');
+    expect(label('scheduled_invite', 'outgoing', 'declined_by_other')).toBe('They declined');
     expect(label('scheduled_invite', 'outgoing', 'superseded')).toBe('The time went to another debate');
+  });
+
+  // An arranged invite has no inviter, but the outcome still says whose answer it was.
+  it('reads an arranged invite from the viewer’s side too', () => {
+    expect(label('scheduled_invite', null, 'declined')).toBe('You declined');
+    expect(label('scheduled_invite', null, 'declined_by_other')).toBe('They declined');
   });
 
   it('describes debates and lobbies', () => {
@@ -54,7 +111,95 @@ describe('isSettledHistoryItem', () => {
 
   it('drops still-open items and anything not yet happened', () => {
     expect(isSettledHistoryItem(item('pending', '2026-10-22T12:00:00Z'), now)).toBe(false);
-    expect(isSettledHistoryItem(item('in_progress', '2026-10-22T12:00:00Z'), now)).toBe(false);
     expect(isSettledHistoryItem(item('accepted', '2026-10-24T12:00:00Z'), now)).toBe(false);
+  });
+});
+
+describe('historyNames', () => {
+  // geo-chat leaves out anyone it has no user row for, so `others` can be shorter than the ids.
+  it('names each id by id, not by position', () => {
+    const entry = item({ other_user_ids: ['gone', 'b'], others: [person('b', 'Ben')] });
+    expect(historyNames(entry, () => null)).toEqual(['Your opponent', 'Ben']);
+  });
+
+  it('only asks the graph about ids geo-chat did not name', () => {
+    const entries = [item({ other_user_ids: ['a', 'b'], others: [person('a', 'Ana')] })];
+    expect(unnamedHistoryUserIds(entries)).toEqual(['b']);
+  });
+});
+
+describe('historyTitle', () => {
+  it('names who took an accepted claim request', () => {
+    expect(historyTitle(item({ outcome: 'accepted', other_user_ids: ['a'] }), ['Ana'])).toBe('Ana took your request');
+  });
+
+  it('names the one person a targeted request went to', () => {
+    expect(historyTitle(item({ other_user_ids: ['a'] }), ['Ana'])).toBe('You asked Ana');
+  });
+
+  it('keeps the fan-out wording for a request offered to several', () => {
+    expect(historyTitle(item({ other_user_ids: ['a', 'b'] }), ['Ana', 'Ben'])).toBe('Requested · people who disagree');
+  });
+
+  it('calls an arranged invite a debate with them, not an invitation', () => {
+    expect(historyTitle(item({ kind: 'scheduled_invite', direction: null }), ['Ana'])).toBe('Debate with Ana');
+  });
+});
+
+describe('dedupeHistory', () => {
+  const debate = item({ id: 'debate:d1', kind: 'debate', direction: null, outcome: 'held', debate_id: 'd1' });
+
+  it('drops the request, challenge or invite a listed debate came from', () => {
+    const request = item({ id: 'claim_request:r1', outcome: 'accepted', debate_id: 'D1' });
+    const invite = item({ id: 'scheduled_invite:s1', kind: 'scheduled_invite', outcome: 'accepted', debate_id: 'd1' });
+    expect(dedupeHistory([debate, request, invite], { requestIds: [], lobbyIds: [] })).toEqual([debate]);
+  });
+
+  it('keeps a request whose debate is not listed', () => {
+    const request = item({ id: 'claim_request:r1', outcome: 'accepted', debate_id: 'd9' });
+    expect(dedupeHistory([request], { requestIds: [], lobbyIds: [] })).toEqual([request]);
+  });
+
+  it('drops invites and lobbies the live lists still show', () => {
+    const invite = item({ id: 'scheduled_invite:S-1', kind: 'scheduled_invite', outcome: 'accepted' });
+    const lobby = item({ id: 'lobby:l1', kind: 'lobby', outcome: 'joined', lobby: { room_id: 'l1', name: 'NYC' } });
+    expect(dedupeHistory([invite, lobby], { requestIds: ['s1'], lobbyIds: ['L1'] })).toEqual([]);
+  });
+});
+
+describe('historyWatchable', () => {
+  it('offers Watch only on a debate that happened', () => {
+    expect(historyWatchable(item({ kind: 'debate', outcome: 'held', debate_id: 'd1' }))).toBe(true);
+    expect(historyWatchable(item({ kind: 'debate', outcome: 'never_started', debate_id: 'd1' }))).toBe(false);
+    expect(historyWatchable(item({ outcome: 'accepted', debate_id: 'd1' }))).toBe(false);
+  });
+});
+
+describe('useDebateHistory', () => {
+  function renderHistory() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client }, children);
+    return renderHook(() => useDebateHistory(true), { wrapper });
+  }
+
+  it('reads as unavailable when the first page fails', async () => {
+    mocks.list.mockReset().mockRejectedValue(new Error('404'));
+    const { result } = renderHistory();
+    await waitFor(() => expect(result.current.unavailable).toBe(true));
+  });
+
+  // A later page failing keeps what has loaded: the graph stand-in must not join it.
+  it('stays available when only a later page fails', async () => {
+    const page: DebateHistoryResponse = { items: [item({})], next_cursor: 'next' };
+    mocks.list.mockReset().mockResolvedValueOnce(page).mockRejectedValueOnce(new Error('timeout'));
+    const { result } = renderHistory();
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    await result.current.loadMore();
+    await waitFor(() => expect(result.current.loadingMore).toBe(false));
+
+    expect(result.current.unavailable).toBe(false);
+    expect(result.current.items).toHaveLength(1);
   });
 });

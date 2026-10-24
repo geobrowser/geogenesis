@@ -45,7 +45,6 @@ const mocks = vi.hoisted(() => ({
   }>,
   claimEntitiesLoading: false,
   claimEntitiesError: null as Error | null,
-  updateAvailability: vi.fn(),
 }));
 
 // Topics come from the claim entities now (GEO-2861), which is a real request. Answerless while
@@ -60,8 +59,6 @@ vi.mock('../claim-picker-page', () => ({
 }));
 
 vi.mock('../hooks', () => ({
-  // The panel's "Turn on" empty-state action (GEO-3463).
-  useUpdateDebateAvailability: () => ({ mutate: mocks.updateAvailability, isPending: false }),
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
@@ -778,25 +775,5 @@ describe('MatchesList in the panel', () => {
 
     const titles = screen.getAllByText(/better than/).map(node => node.textContent);
     expect(titles).toEqual(['Tea is better than coffee', 'Chips are better than fries']);
-  });
-
-  it('offers Turn on when the viewer is not available', () => {
-    mocks.matches = [];
-    mocks.availableToDebate = false;
-    render(<MatchesList panelFilters={panelFilters()} onTabChange={vi.fn()} />);
-
-    expect(screen.getByText(/You’re not available now/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Turn on' }));
-    expect(mocks.updateAvailability).toHaveBeenCalledWith(true);
-  });
-
-  it('sends the viewer to People when nobody who disagrees is online', () => {
-    mocks.matches = [];
-    const onTabChange = vi.fn();
-    render(<MatchesList panelFilters={panelFilters()} onTabChange={onTabChange} />);
-
-    expect(screen.getByText(/Nobody who disagrees with you is online/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'See who’s free' }));
-    expect(onTabChange).toHaveBeenCalledWith('people');
   });
 });

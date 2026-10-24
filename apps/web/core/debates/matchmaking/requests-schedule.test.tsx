@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,6 +24,10 @@ const mocks = vi.hoisted(() => ({
   pastDebates: [] as { entityId: string; spaceId: string; title: string; createdAtSec: number; debateClaim: null }[],
   pastDebatesEnabled: [] as boolean[],
   scheduled: null as unknown as ScheduledContent,
+  requestsError: null as Error | null,
+  block: vi.fn(),
+  challenge: null as unknown,
+  challengeError: null as Error | null,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -76,19 +80,20 @@ vi.mock('../rooms/scheduling-hooks', () => ({
 
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
-  useDebateActivity: () => ({ data: { challenge: null, outbound_request: null } }),
-  useAcceptDebateChallenge: () => ({ mutate: vi.fn(), isPending: false }),
+  useDebateActivity: () => ({ data: { challenge: mocks.challenge, outbound_request: null } }),
+  useAcceptDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: mocks.challengeError }),
   useRejectDebateChallenge: () => ({ mutate: vi.fn(), isPending: false }),
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
 }));
 
 vi.mock('./hooks', () => ({
   useDebateRequests: () => ({
-    data: { incoming: mocks.incoming, outbound: mocks.outbound },
+    data: mocks.requestsError ? undefined : { incoming: mocks.incoming, outbound: mocks.outbound },
     isLoading: false,
-    error: null,
+    error: mocks.requestsError,
     refetch: vi.fn(),
   }),
+  useBlockDebateUser: () => ({ mutate: mocks.block, isPending: false }),
   useAcceptDebateRequest: () => ({ mutate: mocks.accept, isPending: false }),
   useDismissDebateRequest: () => ({ mutate: mocks.dismiss, isPending: false }),
   useWithdrawDebateRequest: () => ({ mutate: mocks.withdraw, isPending: false }),
@@ -102,6 +107,9 @@ vi.mock('../api', async importOriginal => ({
 }));
 
 const { RequestsSchedule } = await import('./requests-schedule');
+// The panel's one reading of the open ask (GEO-3463); the schedule reads it rather than asking again.
+const { HubAskProvider } = await import('./hub-ask-context');
+const render = (ui: import('react').ReactElement) => rtlRender(ui, { wrapper: HubAskProvider });
 
 const EMPTY_SCHEDULED: ScheduledContent = {
   answerable: [],
@@ -195,9 +203,16 @@ beforeEach(() => {
   mocks.dismiss.mockReset();
   mocks.withdraw.mockReset();
   mocks.respond.mockReset().mockResolvedValue({ outcome: 'answered' });
+  mocks.requestsError = null;
+  mocks.block.mockReset();
+  mocks.challenge = null;
+  mocks.challengeError = null;
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const nowLine = () => screen.getByRole('separator', { name: 'Now' });
 const isAbove = (node: Element, other: Element) =>
@@ -216,8 +231,9 @@ describe('RequestsSchedule', () => {
     ).toBeInTheDocument();
     const buttons = within(item)
       .getAllByRole('button')
-      .map(button => button.textContent);
-    expect(buttons).toEqual(['Accept', 'Not now']);
+      .map(button => button.textContent || button.getAttribute('aria-label'));
+    // The card's "…" comes along: Block and "I don't want to debate this claim".
+    expect(buttons).toEqual(['Accept', 'Not now', 'More options']);
     expect(isAbove(nowLine(), item)).toBe(true);
   });
 
@@ -269,10 +285,13 @@ describe('RequestsSchedule', () => {
     mocks.scheduled = { ...EMPTY_SCHEDULED, answerable: [invite('s1', true), invite('s2', false)] };
     render(<RequestsSchedule />);
 
-    const needsYou = screen.getByRole('button', { name: 'Needs you (2)' });
+    // The Filters popover's segmented control: one radio group, equal centred segments.
+    expect(screen.getByRole('radiogroup', { name: 'Show' })).toBeInTheDocument();
+    const needsYou = screen.getByRole('radio', { name: 'Needs you (2)' });
     fireEvent.click(needsYou);
 
-    expect(needsYou).toHaveAttribute('aria-pressed', 'true');
+    expect(needsYou).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'All' })).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('Mia invited you')).toBeInTheDocument();
     expect(screen.queryByText('Invite to Mia')).not.toBeInTheDocument();
   });
@@ -293,6 +312,18 @@ describe('RequestsSchedule', () => {
     expect(screen.getByText('Stablecoins should be regulated · Nobody took it')).toBeInTheDocument();
     expect(screen.getByText('Mia asked you')).toBeInTheDocument();
     for (const row of rows) expect(isAbove(row, nowLine())).toBe(true);
+  });
+
+  it('says which lobby a request was made in', () => {
+    mocks.history = {
+      ...mocks.history,
+      items: [historyItem({ lobby: { room_id: 'l1', name: 'NYC Debates' } })],
+    };
+    render(<RequestsSchedule />);
+
+    expect(screen.getByTestId('requests-history')).toHaveTextContent(
+      'Stablecoins should be regulated · in NYC Debates · Nobody took it'
+    );
   });
 
   // Pending and under-way items are already drawn from the live reads at their own time.
@@ -408,6 +439,254 @@ describe('RequestsSchedule', () => {
       expect(scroller.scrollTop).toBe(548);
     } finally {
       Element.prototype.getBoundingClientRect = original;
+    }
+  });
+
+  // The section's rule: one failed read must not take the others' rows with it.
+  it('keeps booked debates, invites and history on screen when the requests read fails', () => {
+    mocks.requestsError = new Error('geo-chat is down');
+    mocks.scheduled = { ...EMPTY_SCHEDULED, answerable: [invite('s1', true)] };
+    mocks.history = { ...mocks.history, items: [historyItem({})] };
+    render(<RequestsSchedule />);
+
+    expect(screen.getByText('Mia invited you')).toBeInTheDocument();
+    expect(screen.getByTestId('requests-history')).toBeInTheDocument();
+  });
+
+  // geo-chat gives every kind its own entry, so one debate would otherwise be listed twice.
+  it('lists a debate once, not again as the request that led to it', () => {
+    mocks.history = {
+      ...mocks.history,
+      items: [
+        historyItem({ id: 'debate:d1', kind: 'debate', direction: null, outcome: 'held', debate_id: 'd1' }),
+        historyItem({ id: 'claim_request:r1', outcome: 'accepted', debate_id: 'd1' }),
+      ],
+    };
+    render(<RequestsSchedule />);
+
+    const rows = screen.getAllByTestId('requests-history');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Debate with Mia');
+    // Straight to the debate's page: history's claim names the space it lives under.
+    expect(within(rows[0]).getByRole('link', { name: 'Watch' })).toHaveAttribute('href', '/space/s1/debates/d1');
+  });
+
+  it('leaves out history for an invite still open on the timeline', () => {
+    mocks.scheduled = { ...EMPTY_SCHEDULED, answerable: [invite('s1', true)] };
+    mocks.history = {
+      ...mocks.history,
+      items: [historyItem({ id: 'scheduled_invite:s1', kind: 'scheduled_invite', outcome: 'accepted' })],
+    };
+    render(<RequestsSchedule />);
+
+    expect(screen.queryByTestId('requests-history')).not.toBeInTheDocument();
+  });
+
+  it('offers Watch only for a debate that happened', () => {
+    mocks.history = {
+      ...mocks.history,
+      items: [
+        historyItem({ id: 'debate:d2', kind: 'debate', direction: null, outcome: 'never_started', debate_id: 'd2' }),
+      ],
+    };
+    render(<RequestsSchedule />);
+
+    expect(within(screen.getByTestId('requests-history')).queryByText('Watch')).not.toBeInTheDocument();
+  });
+
+  // The latch is the buttons' own, keyed on the request's version: a moved time can be answered again.
+  it('lets an invite be answered again once its time has been moved', async () => {
+    mocks.scheduled = { ...EMPTY_SCHEDULED, answerable: [invite('s1', true)] };
+    const view = render(<RequestsSchedule />);
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    await waitFor(() => expect(mocks.respond).toHaveBeenCalledTimes(1));
+
+    mocks.scheduled = { ...EMPTY_SCHEDULED, answerable: [{ ...invite('s1', true), reschedule_count: 1 }] };
+    view.rerender(<RequestsSchedule />);
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    await waitFor(() => expect(mocks.respond).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps Block requester in the incoming request’s menu', () => {
+    // The menu is a Radix popper, which measures itself; jsdom ships no observer.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    mocks.incoming = [liveRequest('r1', 'A claim')];
+    render(<RequestsSchedule />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Block Ana' }));
+
+    expect(mocks.block).toHaveBeenCalledWith('user-them');
+  });
+
+  it('keeps the request’s analytics series: Accept, and Dismiss for Not now', () => {
+    mocks.incoming = [liveRequest('r1', 'A claim')];
+    render(<RequestsSchedule />);
+
+    expect(screen.getByRole('button', { name: 'Accept' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Accept'
+    );
+    expect(screen.getByRole('button', { name: 'Not now' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Dismiss'
+    );
+  });
+
+  it('announces a challenge that failed to accept', () => {
+    mocks.challenge = {
+      id: 'ch-1',
+      status: 'pending',
+      requester: party('user-them', 'Ana'),
+      recipient: party('user-me', 'You'),
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    };
+    mocks.challengeError = new Error('They are in a debate now');
+    render(<RequestsSchedule />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('They are in a debate now');
+  });
+
+  it('calls an arranged invite a debate with them, not an invitation from them', () => {
+    mocks.scheduled = {
+      ...EMPTY_SCHEDULED,
+      answerable: [{ ...invite('s1', true), invited_by_user_id: null, created_by_admin: true }],
+    };
+    render(<RequestsSchedule />);
+
+    expect(screen.queryByText('Mia invited you')).not.toBeInTheDocument();
+    expect(screen.getByText('Debate with Mia')).toBeInTheDocument();
+  });
+
+  // Today's date sits once, on its first section. With nothing of today above the line, that is below.
+  it('dates today below the line when nothing of today is above it', () => {
+    const start = Date.now() + 60_000;
+    if (new Date(start).toDateString() !== new Date().toDateString()) return;
+    mocks.scheduled = {
+      ...EMPTY_SCHEDULED,
+      answerable: [
+        {
+          ...invite('s1', true),
+          scheduled_start_at: new Date(start).toISOString(),
+          scheduled_end_at: new Date(start + 30 * 60_000).toISOString(),
+        },
+      ],
+    };
+    render(<RequestsSchedule />);
+
+    expect(screen.getByText('TODAY')).toBeInTheDocument();
+  });
+});
+
+// Preston's notes on the build (GEO-3463), against the schedule board.
+describe('RequestsSchedule against the board', () => {
+  it('separates neighbouring Needs-you cards, whatever sits next to them', () => {
+    mocks.incoming = [liveRequest('r1', 'First claim'), liveRequest('r2', 'Second claim', party('user-two', 'Ben'))];
+    mocks.outbound = { ...liveRequest('out-1', 'My claim'), requester: party('user-me', 'You') };
+    render(<RequestsSchedule />);
+
+    const needs = screen.getAllByTestId('requests-incoming');
+    const plain = screen.getByTestId('requests-outgoing');
+    // All three share the Now group, whose items are spaced by the group, not by luck.
+    for (const item of [...needs, plain]) {
+      expect(item.parentElement).toHaveClass('gap-2');
+      expect(item).toHaveClass('rounded-[10px]', 'p-2');
+    }
+    expect(needs[0].parentElement).toBe(plain.parentElement);
+  });
+
+  it('draws the board’s 26px, 14px action pills', () => {
+    mocks.incoming = [liveRequest('r1', 'A claim')];
+    mocks.scheduled = { ...EMPTY_SCHEDULED, answerable: [invite('s1', true)] };
+    render(<RequestsSchedule />);
+
+    for (const name of ['Not now', 'Decline', 'Suggest a time']) {
+      expect(screen.getByRole('button', { name })).toHaveClass('h-[26px]', 'text-breadcrumb');
+    }
+  });
+
+  it('dims past items as the board does, and labels Needs you in semibold purple', () => {
+    mocks.incoming = [liveRequest('r1', 'A claim')];
+    mocks.history = { ...mocks.history, items: [historyItem({})] };
+    render(<RequestsSchedule />);
+
+    expect(screen.getByTestId('requests-history')).toHaveClass('opacity-55');
+    expect(within(screen.getByTestId('requests-incoming')).getByText('Needs you')).toHaveClass(
+      'font-semibold',
+      'text-purple'
+    );
+    expect(screen.getByText('NOW')).toHaveClass('text-green', 'font-semibold');
+  });
+});
+
+describe('RequestsSchedule scrolling', () => {
+  const rect = (top: number, height = 0) =>
+    ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+
+  // GEO-3431: a link followed while Requests is already open still lands on its request.
+  it('scrolls to and focuses a request a link asks for after the tab is open', () => {
+    mocks.scheduled = { ...EMPTY_SCHEDULED, answerable: [invite('s1', true)] };
+    const view = render(
+      <div data-debates-hub-scroll>
+        <RequestsSchedule />
+      </div>
+    );
+    view.rerender(
+      <div data-debates-hub-scroll>
+        <RequestsSchedule focusedRequestId="s1" />
+      </div>
+    );
+
+    expect(document.activeElement).toBe(screen.getByText('Mia invited you').closest('[data-focused]'));
+  });
+
+  it('holds the now-line still when something above it changes height', () => {
+    mocks.history = { ...mocks.history, items: [historyItem({})] };
+    let observed: (() => void) | null = null;
+    const originalObserver = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      constructor(callback: () => void) {
+        observed = callback;
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    let lineTop = 600;
+    const original = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (this.hasAttribute('data-requests-now-line')) {
+        return rect(lineTop - (this.closest('[data-debates-hub-scroll]') as HTMLElement).scrollTop);
+      }
+      if (this.hasAttribute('data-hub-sticky-controls')) return rect(0, 52);
+      return rect(0);
+    };
+    try {
+      render(
+        <div data-debates-hub-scroll>
+          <RequestsSchedule />
+        </div>
+      );
+      const scroller = document.querySelector('[data-debates-hub-scroll]') as HTMLElement;
+      expect(scroller.scrollTop).toBe(548);
+
+      // A notice lands above the line and pushes it 40px down.
+      lineTop = 640;
+      act(() => observed?.());
+
+      expect(scroller.scrollTop).toBe(588);
+    } finally {
+      Element.prototype.getBoundingClientRect = original;
+      globalThis.ResizeObserver = originalObserver;
     }
   });
 });

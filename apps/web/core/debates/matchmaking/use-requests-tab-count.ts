@@ -1,6 +1,7 @@
 'use client';
 
 import type { DebateActivity, DebateRequestsResponse } from '../api';
+import { sameId } from '../rooms/room-presence';
 import { useOpenScheduledRequests } from '../rooms/scheduled-awaiting';
 import { useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
@@ -42,7 +43,7 @@ export function useRequestsTabCount({
   const instantIncoming = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
   // A challenge counts only once it is known to be addressed to the viewer: one they sent is theirs
   // to wait on, not to answer.
-  const challengeToViewer = challenge && viewerId !== null && challenge.recipient.user_id === viewerId ? 1 : 0;
+  const challengeToViewer = challenge && viewerId !== null && sameId(challenge.recipient.user_id, viewerId) ? 1 : 0;
   const scheduledToAnswer = scheduled.data
     ? openScheduled.filter(request => request.viewer_must_answer).length
     : (activity?.scheduled_awaiting_answer_count ?? 0);

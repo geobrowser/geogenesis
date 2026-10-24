@@ -235,6 +235,8 @@ describe('DebateGatewayClient', () => {
         ['debates', 'account', 'user-a', 'scheduled-debates'],
         ['debates', 'account', 'user-a', 'upcoming-rooms'],
         ['debates', 'account', 'user-a', 'room'],
+        // GEO-3463: a request that ends moves into the Requests timeline's history.
+        ['debates', 'account', 'user-a', 'history'],
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
       ],
@@ -261,6 +263,7 @@ describe('DebateGatewayClient', () => {
       { event_type: 'debate.lobbies_changed', payload: { lobby_id: 'abc' } },
       [
         ['debates', 'account', 'user-a', 'lobbies'],
+        ['debates', 'account', 'user-a', 'history'],
         ['debates', 'account', 'user-a', 'lobby', 'abc'],
       ],
     ],
@@ -270,6 +273,7 @@ describe('DebateGatewayClient', () => {
       [
         ['debates', 'account', 'user-a', 'lobbies'],
         ['debates', 'account', 'user-a', 'my-lobby'],
+        ['debates', 'account', 'user-a', 'history'],
         ['debates', 'account', 'user-a', 'lobby', 'abc'],
       ],
     ],

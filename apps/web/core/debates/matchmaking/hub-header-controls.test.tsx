@@ -192,6 +192,29 @@ describe('HubHeaderControls', () => {
     expect(await screen.findByRole('dialog', { name: 'Open a debate lobby' })).toBeInTheDocument();
   });
 
+  it('labels Open a lobby with the surface it is clicked on away from the hub', async () => {
+    mocks.canHost = true;
+    const user = userEvent.setup();
+    render(<HubHeaderControls analyticsSurface="calendar" />);
+
+    await user.click(pill());
+    const menu = await screen.findByRole('dialog', { name: 'Your availability' });
+    expect(within(menu).getByRole('button', { name: 'Open a lobby' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Open a lobby'
+    );
+  });
+
+  it('offers no Open a lobby inside a lobby', async () => {
+    mocks.canHost = true;
+    const user = userEvent.setup();
+    render(<HubHeaderControls analyticsSurface="lobby" />);
+
+    await user.click(pill());
+    const menu = await screen.findByRole('dialog', { name: 'Your availability' });
+    expect(within(menu).queryByRole('button', { name: 'Open a lobby' })).not.toBeInTheDocument();
+  });
+
   it('keeps Open a lobby from people who cannot host', async () => {
     const user = userEvent.setup();
     render(<HubHeaderControls />);

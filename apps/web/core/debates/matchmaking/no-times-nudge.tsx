@@ -5,6 +5,7 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
+import { localTimezone } from '~/core/availability/blocks';
 import { hasUpcomingAvailability } from '~/core/availability/upcoming-availability';
 import { useDebateSchedule, useGeoChatAuth } from '~/core/debates/hooks';
 
@@ -30,20 +31,24 @@ const noTimesNudgeDismissedAtom = atomWithStorage('debatesHubNoTimesNudgeDismiss
  * while you're offline — but it is one line, outside the tabs so it is not repeated per tab, and it
  * goes away for good when dismissed.
  */
-export function NoTimesNudge() {
+export function NoTimesNudge({ scheduleButtonRef }: { scheduleButtonRef?: React.RefObject<HTMLButtonElement | null> }) {
   return (
     <ClientOnly>
-      <Nudge />
+      <Nudge scheduleButtonRef={scheduleButtonRef} />
     </ClientOnly>
   );
 }
 
-function Nudge() {
+function Nudge({ scheduleButtonRef }: { scheduleButtonRef?: React.RefObject<HTMLButtonElement | null> }) {
   const { authenticated } = useGeoChatAuth();
   const { data, blocks } = useDebateSchedule();
   const [dismissed, setDismissed] = useAtom(noTimesNudgeDismissedAtom);
   const [editing, setEditing] = React.useState(false);
   const openerRef = React.useRef<HTMLButtonElement | null>(null);
+  // Where the editor sends focus when it closes. The line it opened from goes once times are saved,
+  // so focus would land on nothing; the availability pill, which edits the same times, takes it —
+  // as it does for the banner this replaced.
+  const returnFocusRef = React.useRef<HTMLElement | null>(null);
 
   const hasTimes = data !== undefined && hasUpcomingAvailability(blocks, data.schedule.timezone);
   // The modal outlives the line: saving times hides the line, and the modal must not go with it.
@@ -56,7 +61,7 @@ function Nudge() {
       {showLine ? (
         <div
           data-testid="no-times-nudge"
-          className="flex shrink-0 items-center gap-2.5 border-t border-grey-02 bg-[#EFE2FF] py-2 pr-2 pl-4"
+          className="flex shrink-0 items-center gap-2.5 border-t border-grey-02 bg-purple-tint py-2 pr-2 pl-4"
         >
           <p className="min-w-0 flex-1 text-breadcrumb text-text">
             <span className="font-medium">You have no times set.</span> Add some so people can invite you when you’re
@@ -67,7 +72,10 @@ function Nudge() {
             variant="primary"
             analyticsLabel={debateAnalyticsLabel('hub', 'Open schedule')}
             analyticsIntent="open_debate_schedule"
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              returnFocusRef.current = openerRef.current;
+              setEditing(true);
+            }}
           >
             Set my times
           </HubPillButton>
@@ -82,7 +90,17 @@ function Nudge() {
           </button>
         </div>
       ) : null}
-      <OwnScheduleModal open={editing} onOpenChange={setEditing} openerRef={openerRef} surface="hub_banner" />
+      <OwnScheduleModal
+        open={editing}
+        onOpenChange={setEditing}
+        openerRef={returnFocusRef}
+        surface="hub_banner"
+        onSaved={saved => {
+          if (scheduleButtonRef?.current && hasUpcomingAvailability(saved, localTimezone())) {
+            returnFocusRef.current = scheduleButtonRef.current;
+          }
+        }}
+      />
     </>
   );
 }

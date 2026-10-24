@@ -92,6 +92,7 @@ import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
+import { markAskWithdrawn } from './matchmaking/ask-withdrawals';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -224,6 +225,8 @@ export const debateQueryKeys = {
     ['debates', 'account', accountKey, 'matchmaking-claims', filters] as const,
   matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
   requests: (accountKey: string | null) => ['debates', 'account', accountKey, 'requests'] as const,
+  /** GEO-3464. The viewer's past requests, invites, debates and lobbies, paged; refreshed with the requests. */
+  history: (accountKey: string | null) => ['debates', 'account', accountKey, 'history'] as const,
   blocks: (accountKey: string | null) => ['debates', 'account', accountKey, 'blocks'] as const,
   /** GEO-2862. The viewer's private "Not interested" list. */
   notInterested: (accountKey: string | null) => ['debates', 'account', accountKey, 'not-interested'] as const,
@@ -1437,7 +1440,10 @@ export function useRejectDebateChallenge() {
 
   return useMutation({
     mutationFn: (challengeId: string) => rejectDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => {
+    onSuccess: (_result, challengeId) => {
+      // The requester taking theirs back is not "nobody took it" (GEO-3463). A recipient's own reject
+      // is recorded too, harmlessly: only the viewer's outgoing asks are ever looked up.
+      markAskWithdrawn(challengeId);
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
         current ? { ...current, challenge: null } : current
       );

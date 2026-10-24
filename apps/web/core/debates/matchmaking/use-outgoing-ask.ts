@@ -11,8 +11,9 @@ import type { DebateClaimSummary } from '../api';
 import { useDebateActivity, useGeoChatAuth, useRejectDebateChallenge } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { consumeAskWithdrawn } from './ask-withdrawals';
 import { useDebateRequests, useWithdrawDebateRequest } from './hooks';
-import { useLiveRequest, useServerClock } from './use-request-countdown';
+import { useLiveRequest, useRequestCountdown } from './use-request-countdown';
 
 /**
  * The one live ask the viewer has out (GEO-3463): a claim request, which fans out to up to three
@@ -40,52 +41,27 @@ export type OutgoingAsk =
 
 /**
  * An ask that ran out without anyone taking it. Kept until the viewer dismisses it or asks again, so
- * the strip can say so and offer Schedule rather than the ask silently vanishing (GEO-3463). Held in
- * an atom rather than state because the strip lives in the panel header, which outlives every tab.
+ * the strip can say so and offer Schedule rather than the ask silently vanishing (GEO-3463).
  */
-export type EndedAsk = Extract<OutgoingAsk, { kind: 'claim' }> | Extract<OutgoingAsk, { kind: 'person' }>;
+export type EndedAsk = OutgoingAsk;
 
-const endedAskAtom = atom<EndedAsk | null>(null);
+/** How long "nobody took it" stays up untouched. Past this it is old news rather than a prompt. */
+export const ENDED_ASK_TTL_MS = 5 * 60_000;
 
 /**
- * Asks the viewer withdrew themselves. Withdrawing is not "nobody took it", so the ended state skips
- * them. Module-level ids rather than an atom: nothing renders from this, it is only consulted when
- * an ask disappears.
+ * The ended ask, with whose it was and when it ended. In an atom rather than state because the strip
+ * lives in the panel header, which outlives every tab. Stamped with the account, so a sign-out or a
+ * switch on this device never shows one person's ended ask to another.
  */
-const withdrawnAskIds = new Set<string>();
+const endedAskAtom = atom<{ ask: EndedAsk; accountKey: string; endedAt: number } | null>(null);
 
 /**
- * `m:ss`, the countdown format the design uses everywhere a live ask is timed ("Requesting · 1:12").
- * Rounded up, so the label never reads 0:00 while the ask is still open.
- */
-export function formatAskClock(remainingMs: number) {
-  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return '0:00';
-  const totalSeconds = Math.ceil(remainingMs / 1_000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-/**
- * Seconds-resolution remaining time for an ask, against the server's clock. `useRequestCountdown`
- * ticks every 15 s while more than a minute is left, which is fine for "Expires in 2m" but would
- * make an m:ss clock jump in quarter-minutes.
+ * `m:ss` for a live ask, the format the design uses wherever one is timed ("Requesting · 1:12"). The
+ * countdown itself is the request cards' (`useRequestCountdown`), asked for in its clock format.
  */
 export function useAskClock(expiresAt: string | null) {
-  const clock = useServerClock(expiresAt !== null);
-  const expiresAtMs = expiresAt ? new Date(expiresAt).getTime() : NaN;
-  const [now, setNow] = React.useState(() => Date.now());
-
-  React.useEffect(() => {
-    if (!Number.isFinite(expiresAtMs)) return;
-    const read = () => (clock ? clock.now() : Date.now());
-    setNow(read());
-    const interval = setInterval(() => setNow(read()), 1_000);
-    return () => clearInterval(interval);
-  }, [clock, expiresAtMs]);
-
-  const remainingMs = Number.isFinite(expiresAtMs) ? Math.max(0, expiresAtMs - now) : 0;
-  return { remainingMs, label: formatAskClock(remainingMs) };
+  const { remainingMs, label } = useRequestCountdown(expiresAt, { format: 'clock' });
+  return { remainingMs, label };
 }
 
 /**
@@ -93,9 +69,13 @@ export function useAskClock(expiresAt: string | null) {
  *
  * Reads the same two sources every other surface does — the requests list, falling back to the
  * activity payload — so the strip, the pressed button and the paused ones cannot disagree.
+ *
+ * Call it once per surface: `HubAskProvider` does, and everything else reads its context. Each call
+ * keeps its own memory of the previous ask, so two of them would each decide for themselves whether
+ * the ask that just went had ended.
  */
 export function useOutgoingAsk() {
-  const { authenticated } = useGeoChatAuth();
+  const { authenticated, accountKey } = useGeoChatAuth();
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
   const currentUserId = useCurrentGeoChatUserId();
@@ -135,6 +115,9 @@ export function useOutgoingAsk() {
   // An ask that disappears without a debate or a rematch session behind it ran out unanswered:
   // expired, or passed on by everyone offered it. Telling those two apart needs geo-chat (GEO-3464),
   // so the strip says the one thing both share.
+  //
+  // Not while signed out (the ask went because the viewer did), and not for one the viewer took back
+  // from anywhere (`markAskWithdrawn`).
   const previousRef = React.useRef<OutgoingAsk | null>(null);
   const tiedUp = hasActiveDebateFlow(activity);
   React.useEffect(() => {
@@ -145,33 +128,58 @@ export function useOutgoingAsk() {
       return;
     }
     if (!previous) return;
-    // Consulted once, then forgotten, so the set only ever holds asks still on their way out.
-    const withdrawn = withdrawnAskIds.delete(previous.id);
-    if (tiedUp || withdrawn) return;
-    setEnded(previous);
-  }, [ask, setEnded, tiedUp]);
+    const withdrawn = consumeAskWithdrawn(previous.id);
+    if (!authenticated || !accountKey || tiedUp || withdrawn) return;
+    setEnded({ ask: previous, accountKey, endedAt: Date.now() });
+  }, [accountKey, ask, authenticated, setEnded, tiedUp]);
+
+  // Someone took it after all: the requests list can let go of an accepted request a beat before the
+  // activity payload reports the debate, which reads as an ask that ran out. Once the debate shows
+  // up, that was wrong.
+  React.useEffect(() => {
+    if (tiedUp) setEnded(null);
+  }, [setEnded, tiedUp]);
+
+  // Old news after a few minutes, whether or not anyone looked.
+  const endedAt = ended?.endedAt ?? null;
+  React.useEffect(() => {
+    if (endedAt === null) return;
+    const timeout = setTimeout(() => setEnded(null), Math.max(0, endedAt + ENDED_ASK_TTL_MS - Date.now()));
+    return () => clearTimeout(timeout);
+  }, [endedAt, setEnded]);
 
   const cancel = React.useCallback(() => {
     if (!ask) return;
-    withdrawnAskIds.add(ask.id);
     if (ask.kind === 'claim') withdrawRequest.mutate(ask.id);
     else rejectChallenge.mutate(ask.id);
   }, [ask, rejectChallenge, withdrawRequest]);
 
   const dismissEnded = React.useCallback(() => setEnded(null), [setEnded]);
 
+  const endedForViewer = !ask && authenticated && ended !== null && ended.accountKey === accountKey ? ended.ask : null;
+
   return {
     ask,
-    ended: ask ? null : ended,
+    ended: endedForViewer,
     cancel,
     cancelling: withdrawRequest.isPending || rejectChallenge.isPending,
     dismissEnded,
   };
 }
 
+export type OutgoingAskState = ReturnType<typeof useOutgoingAsk>;
+
 /** Whether this ask is the one a claim card's button sent. Ids compare dashless either way. */
-export function askIsForClaim(ask: OutgoingAsk | null, claimEntityId: string) {
-  return ask?.kind === 'claim' && normId(ask.claim.claim_entity_id) === normId(claimEntityId);
+export function askIsForClaim(
+  ask: OutgoingAsk | null,
+  claim: string | Pick<DebateClaimSummary, 'space_id' | 'claim_entity_id'>
+) {
+  if (ask?.kind !== 'claim') return false;
+  // Given the card's claim, the space has to match too: the same claim tagged in two spaces is two
+  // cards, and only the one in the request's space sent it.
+  if (typeof claim !== 'string' && normId(ask.claim.space_id) !== normId(claim.space_id)) return false;
+  const claimEntityId = typeof claim === 'string' ? claim : claim.claim_entity_id;
+  return normId(ask.claim.claim_entity_id) === normId(claimEntityId);
 }
 
 /** Whether this ask is the one a People row's button sent. */

@@ -426,20 +426,39 @@ describe('position avatar stack', () => {
       expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
     });
 
-    it('makes Schedule the main action where the host says only offline people disagree', () => {
+    it('makes Schedule the main action when someone holds the other side but nobody is online', () => {
       mocks.hubAsk = null;
-      mocks.match = { id: 'match-1', viewer_position: true };
+      mocks.match = null;
       renderCard(
         <MatchmakingClaimCard
           claim={claim}
-          positions={twoSides()}
+          positions={withCounts([
+            { total_count: 1, available_now_count: 0, present_count: 0, participants: [] },
+            { total_count: 2, available_now_count: 0, present_count: 0, participants: [] },
+          ])}
           readiness={readiness({ viewer_response: { position: true, position_label: 'Agree' } })}
-          someoneOnline={false}
         />
       );
 
       expect(screen.queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
       expect(screen.getByRole('link', { name: /Schedule a debate on/ })).toBeInTheDocument();
+    });
+
+    it('offers no Schedule when nobody holds the other side', () => {
+      mocks.hubAsk = null;
+      mocks.match = null;
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={withCounts([
+            { total_count: 3, available_now_count: 1, present_count: 1, participants: [] },
+            { total_count: 0, available_now_count: 0, present_count: 0, participants: [] },
+          ])}
+          readiness={readiness({ viewer_response: { position: true, position_label: 'Agree' } })}
+        />
+      );
+
+      expect(screen.queryByRole('link', { name: /Schedule a debate on/ })).not.toBeInTheDocument();
     });
 
     it('withdraws an offer made for the side the viewer has switched away from', () => {

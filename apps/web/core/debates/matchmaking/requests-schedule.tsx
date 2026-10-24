@@ -4,19 +4,17 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
-import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
-import { urlWithoutModal } from '~/core/deep-links/modal-deep-link';
+import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Text } from '~/design-system/text';
 
-import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
-
 import {
   type DebateChallenge,
+  type DebateClaimSummary,
   type DebateHistoryItem,
   type DebateParticipantSummary,
   type DebateRequest,
@@ -27,41 +25,58 @@ import { debatePath } from '../debate-routes';
 import { useAcceptDebateChallenge, useDebateActivity, useGeoChatAuth, useRejectDebateChallenge } from '../hooks';
 import { markLobbyEntry } from '../lobbies/lobby-analytics';
 import { hostsLabel } from '../lobbies/lobby-format';
+import { LOBBY_DARK_SURFACE_CLASS_NAME } from '../lobbies/lobby-spotlight';
 import { debateEntryClick } from '../lobbies/step-out';
 import { useMinuteNow } from '../lobbies/use-minute-now';
 import { speakerLabel } from '../playback-utils';
-import { SCHEDULED_NOTICE_COPY } from '../rooms/room-copy';
 import { opponentName, opponentOf } from '../rooms/room-opponent';
 import { sameId } from '../rooms/room-presence';
 import { debateRoomPath } from '../rooms/room-routes';
-import { noticeRequestState } from '../rooms/scheduled-notice';
-import { useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { usePersonDebates } from '../use-person-debates';
 import { AvailabilityRequestNotice, useAvailabilityRequests } from './availability-request-notice';
 import { HubStickyControls } from './claims-tab';
-import { calendarHref } from './debate-calendar-route';
-import { useAcceptDebateRequest, useDebateRequests, useDismissDebateRequest } from './hooks';
+import { SegmentedControl } from './debate-calendar-controls';
+import { useAcceptDebateRequest, useBlockDebateUser, useDebateRequests, useDismissDebateRequest } from './hooks';
 import { debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
+import { useHubAskState } from './hub-ask-context';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { HUB_SCROLL_SELECTOR, HUB_STICKY_CONTROLS_SELECTOR, useHubScrollSelector } from './hub-scroll';
 import { HubQueryState } from './hub-states';
-import { historyOutcomeLabel, isSettledHistoryItem, useDebateHistory } from './request-history';
-import { formatTime } from './scheduled-debate-format';
+import {
+  dedupeHistory,
+  historyNames,
+  historyOutcomeLabel,
+  historyTitle,
+  historyWatchable,
+  isSettledHistoryItem,
+  unnamedHistoryUserIds,
+  useDebateHistory,
+} from './request-history';
+import { RequestOverflowMenu } from './request-overflow-menu';
+import { formatTime, formatTimeRange, startOfDay } from './scheduled-debate-format';
 import {
   CancelScheduled,
   LOBBY_ACTIONS,
+  LinkGoneNotice,
+  ScheduledAnswerButtons,
   type ScheduledContent,
   type UpcomingRoomRow,
   adminArrangedNote,
+  roomCancellable,
+  roomStatusLabel,
+  scheduledRequestRoles,
+  useLinkedScheduledRequest,
   useParticipantLookup,
+  useRescheduler,
   useScheduledContent,
 } from './scheduled-debates-section';
 import { type UpcomingLobbyRow } from './upcoming-lobby-rows';
 import { useAnswerOnce } from './use-answer-once';
+import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
-import { useAskClock, useOutgoingAsk } from './use-outgoing-ask';
+import { useAskClock } from './use-outgoing-ask';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 import { useRequestsTabCount } from './use-requests-tab-count';
 import { type ScheduledDebateAnswer, useScheduledDebateAnswer } from './use-scheduled-debate-answer';
@@ -90,7 +105,7 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const challenge = useLiveRequest(activity?.challenge);
   const incomingChallenge =
     challenge && viewerId !== null && sameId(challenge.recipient.user_id, viewerId) ? challenge : null;
-  const { ask } = useOutgoingAsk();
+  const { ask } = useHubAskState();
   // The badge's own number, so "Needs you (N)" can never disagree with it.
   const needsYouCount = useRequestsTabCount({ authenticated, activity, requests: requestsQuery.data });
 
@@ -99,44 +114,31 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   // Only once history has said it cannot answer: the graph read is a stand-in, not a second source.
   const pastDebates = usePersonDebates(personalSpaceId ?? '', history.unavailable);
 
-  const historyUserIds = React.useMemo(
-    () => [...new Set(history.items.flatMap(item => item.other_user_ids))],
-    [history.items]
-  );
+  // geo-chat names history's people itself; only anyone it could not name is looked up.
+  const historyUserIds = React.useMemo(() => unnamedHistoryUserIds(history.items), [history.items]);
   const historyPeople = useGeoChatUserSummaries(historyUserIds, historyUserIds.length > 0);
   const people = React.useMemo(() => [...scheduled.people, ...historyPeople], [historyPeople, scheduled.people]);
   const lookUp = useParticipantLookup(true, people);
 
   const { answer, busy, error: conflict } = useScheduledDebateAnswer();
   // The debate whose time is being moved, on the other debater's week — as in `ScheduledDebatesSection`.
-  const [rescheduling, setRescheduling] = React.useState<Rescheduling | null>(null);
-  const rescheduleOpenerRef = React.useRef<HTMLElement | null>(null);
-  const reschedulerFor = (requestId: string | null, opponentUserId: string | null, entry: ScheduleEntry) =>
-    requestId && opponentUserId
-      ? (opener: HTMLElement) => {
-          rescheduleOpenerRef.current = opener;
-          setRescheduling({
-            requestId,
-            opponentUserId,
-            opponentName: lookUp(opponentUserId)?.display_name ?? null,
-            entry,
-          });
-        }
-      : null;
+  const { reschedulerFor, reschedulingModal } = useRescheduler(lookUp);
 
   // GEO-3431: a link's scheduled request, outlined and scrolled to in place of the now-line.
-  const focusedId = scheduled.loading ? null : focusedRequestId;
-  const isFocused = (requestId: string | null) =>
-    focusedId !== null && requestId !== null && sameId(focusedId, requestId);
-  const { data: scheduledRequests } = useScheduledDebates();
-  const linkedShown =
-    scheduled.answerable.some(request => isFocused(request.request_id)) ||
-    scheduled.upcoming.some(row => isFocused(row.requestId));
-  const linkedState =
-    focusedId !== null && !linkedShown && !scheduled.requestsError
-      ? noticeRequestState(scheduledRequests?.requests.find(request => sameId(request.request_id, focusedId)))
-      : null;
-  const linkGone = linkedState === 'missing' ? 'missing' : linkedState && linkedState !== 'active' ? 'over' : null;
+  const { focusedId, isFocused, linkedShown, linkGone } = useLinkedScheduledRequest(focusedRequestId, scheduled);
+
+  // What the live reads already show, so history does not repeat it (GEO-3464 lists every kind).
+  const historyItems = React.useMemo(
+    () =>
+      dedupeHistory(history.items, {
+        requestIds: [
+          ...scheduled.answerable.map(request => request.request_id),
+          ...scheduled.upcoming.flatMap(row => (row.requestId ? [row.requestId] : [])),
+        ],
+        lobbyIds: scheduled.lobbies.map(row => row.lobbyId),
+      }),
+    [history.items, scheduled.answerable, scheduled.lobbies, scheduled.upcoming]
+  );
 
   const entries = buildEntries({
     now,
@@ -144,7 +146,7 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
     incomingChallenge,
     ask,
     scheduled,
-    history: history.items,
+    history: historyItems,
     pastDebates: history.unavailable ? pastDebates.rows : [],
     render: {
       incoming: request => <IncomingRequestItem request={request} />,
@@ -187,14 +189,16 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const present = shown.filter(entry => entry.when === 'now');
   const upcoming = shown.filter(entry => entry.when === 'upcoming');
 
-  const { rootRef, nowLineRef, sentinelRef, spacerHeight } = useTimelineScroll({
+  const { rootRef, nowLineRef, aboveLineRef, sentinelRef, spacerHeight } = useTimelineScroll({
     // Everything below the now-line that can be known on arrival: anchoring before it lands would put
     // the line in the right place over a list that then grows under it.
     ready: !scheduled.loading && !requestsQuery.isLoading,
     focused: focusedId !== null && linkedShown,
+    focusKey: focusedId,
     pastKey: past.map(entry => entry.key).join('|'),
     layoutKey: `${filter}:${present.length}:${upcoming.length}`,
-    canLoadMore: filter === 'all' && !history.unavailable && Boolean(history.hasMore) && !history.loadingMore,
+    canLoadMore: filter === 'all' && !history.unavailable && Boolean(history.hasMore),
+    loadingMore: history.loadingMore,
     loadMore: history.loadMore,
   });
 
@@ -204,52 +208,63 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
     <div ref={rootRef} className="flex flex-col">
       <HubStickyControls>
         <div className="flex items-center gap-2">
-          <div role="group" aria-label="Show" className="flex w-[220px] rounded-full bg-grey-01 p-0.5">
-            {(['all', 'needs'] as const).map(value => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={filter === value}
-                {...hubAnalyticsAttributes(
-                  value === 'all' ? 'Requests All' : 'Requests Needs you',
+          {/* The Filters popover's segmented control, at the board's 220px. */}
+          <div className="w-[220px] shrink-0">
+            <SegmentedControl
+              label="Show"
+              variant="tinted"
+              options={[
+                { value: 'all', label: 'All' },
+                { value: 'needs', label: `Needs you (${needsYouCount})` },
+              ]}
+              value={filter}
+              onChange={setFilter}
+              optionAttributes={option =>
+                hubAnalyticsAttributes(
+                  option.value === 'all' ? 'Requests All' : 'Requests Needs you',
                   'filter_debate_requests'
-                )}
-                onClick={() => setFilter(value)}
-                className={cx(
-                  'h-[26px] flex-1 rounded-full text-breadcrumb font-normal transition-colors',
-                  filter === value ? 'bg-white text-text shadow-button' : 'text-grey-04 hover:text-text'
-                )}
-              >
-                {value === 'all' ? 'All' : `Needs you (${needsYouCount})`}
-              </button>
-            ))}
+                )
+              }
+            />
           </div>
           <CalendarLink />
         </div>
       </HubStickyControls>
 
       <div className="flex flex-col px-4 pt-1">
-        {linkGone ? (
-          <div role="status" className="py-2">
-            <Text as="p" variant="footnote" color="grey-04">
-              {SCHEDULED_NOTICE_COPY.state[linkGone]}
+        {/* Everything above the now-line that can change height after it is anchored, so the line can
+            be held still when any of it grows or shrinks. */}
+        <div ref={aboveLineRef} className="flex flex-col">
+          {linkGone ? <LinkGoneNotice state={linkGone} className="py-2" /> : null}
+          <AvailabilityRequestNotice requests={availabilityRequests} />
+          <ReadFailures content={scheduled} />
+          {conflict ? (
+            <Text as="p" variant="footnote" color="red-01" className="py-2">
+              {conflict}
             </Text>
-          </div>
-        ) : null}
-        <AvailabilityRequestNotice requests={availabilityRequests} />
-        <ReadFailures content={scheduled} />
-        {conflict ? (
-          <Text as="p" variant="footnote" color="red-01" className="py-2">
-            {conflict}
-          </Text>
+          ) : null}
+        </div>
+
+        {/* Only the instant rows depend on the requests read. A debate that is due, an invite, a lobby
+            or the past must not vanish behind its error or its warming-up retry, as on the section. */}
+        {requestsQuery.error ? (
+          <HubQueryState
+            analyticsSurface="hub"
+            isLoading={false}
+            error={requestsQuery.error}
+            failureReason={requestsQuery.failureReason}
+            onRetry={() => void requestsQuery.refetch()}
+            isEmpty={false}
+            emptyMessage=""
+          >
+            {null}
+          </HubQueryState>
         ) : null}
 
         <HubQueryState
           analyticsSurface="hub"
           isLoading={requestsQuery.isLoading && scheduled.loading}
-          error={requestsQuery.error}
-          failureReason={requestsQuery.failureReason}
-          onRetry={() => void requestsQuery.refetch()}
+          error={null}
           isEmpty={isEmpty}
           emptyMessage={
             filter === 'needs'
@@ -269,35 +284,27 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
             <DaySections entries={past} now={now} past />
             <NowLine ref={nowLineRef} />
             {present.length > 0 ? (
-              <DaySection label={<span className="text-footnoteMedium tracking-[.3px] text-green">NOW</span>}>
+              <DaySection
+                label={<span className="text-browseSection font-semibold tracking-[.3px] text-green">NOW</span>}
+              >
                 {present.map(entry => (
                   <React.Fragment key={entry.key}>{entry.node}</React.Fragment>
                 ))}
               </DaySection>
             ) : null}
-            <DaySections entries={upcoming} now={now} />
+            <DaySections entries={upcoming} now={now} todayAbove={past.some(entry => sameDay(entry.at, now))} />
             {/* Room for the now-line to reach the top of the box with only an item or two below it. */}
             <div aria-hidden style={{ height: spacerHeight }} />
           </div>
         </HubQueryState>
       </div>
 
-      <PeerAvailabilityBookingModal
-        open={rescheduling !== null}
-        userId={rescheduling?.opponentUserId ?? ''}
-        peerName={rescheduling?.opponentName}
-        rescheduleRequestId={rescheduling?.requestId ?? null}
-        entry={rescheduling?.entry ?? null}
-        openerRef={rescheduleOpenerRef}
-        onClose={() => setRescheduling(null)}
-      />
+      {reschedulingModal}
     </div>
   );
 }
 
 type TimelineFilter = 'all' | 'needs';
-
-type Rescheduling = { requestId: string; opponentUserId: string; opponentName: string | null; entry: ScheduleEntry };
 
 /** Where an entry sits: above the now-line, in the Now group just under it, or later. */
 type Placement = 'past' | 'now' | 'upcoming';
@@ -422,16 +429,30 @@ export function buildEntries({
 
 /** Midnight-anchored key for a day in the viewer's zone. */
 function dayKey(at: number) {
-  const date = new Date(at);
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  return startOfDay(new Date(at)).getTime();
+}
+
+function sameDay(a: number, b: number) {
+  return dayKey(a) === dayKey(b);
 }
 
 /**
  * Entries grouped by day, each day one section with its date in the left column. Today can appear
  * twice — once above the now-line and once below — and only the first carries the date.
  */
-function DaySections({ entries, now, past = false }: { entries: TimelineEntry[]; now: number; past?: boolean }) {
-  const groups: { key: string; at: number; entries: TimelineEntry[] }[] = [];
+function DaySections({
+  entries,
+  now,
+  past = false,
+  todayAbove = false,
+}: {
+  entries: TimelineEntry[];
+  now: number;
+  past?: boolean;
+  /** Today already has a section above the now-line, which carries its date. */
+  todayAbove?: boolean;
+}) {
+  const groups: { key: number; at: number; entries: TimelineEntry[] }[] = [];
   for (const entry of entries) {
     const key = dayKey(entry.at);
     const last = groups[groups.length - 1];
@@ -445,7 +466,9 @@ function DaySections({ entries, now, past = false }: { entries: TimelineEntry[];
       {groups.map(group => (
         <DaySection
           key={group.key}
-          label={<DateLabel at={group.at} today={group.key === today} repeat={!past && group.key === today} />}
+          label={
+            <DateLabel at={group.at} today={group.key === today} repeat={!past && todayAbove && group.key === today} />
+          }
         >
           {group.entries.map(entry => (
             <React.Fragment key={entry.key}>{entry.node}</React.Fragment>
@@ -460,7 +483,8 @@ function DaySection({ label, children }: { label: React.ReactNode; children: Rea
   return (
     <section className="flex gap-2.5 border-b border-divider py-2.5 last:border-b-0">
       <div className="flex w-10 shrink-0 flex-col items-center gap-0.5 pt-1">{label}</div>
-      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      {/* A gap between every item, so two tinted "Needs you" cards read as two, not one block. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-2">{children}</div>
     </section>
   );
 }
@@ -506,7 +530,7 @@ const DOT_CLASS: Record<Dot, string> = {
   needs: 'bg-purple',
   booked: 'bg-text',
   waiting: 'border-2 border-text bg-white',
-  lobby: 'bg-[#151515] ring-2 ring-grey-02',
+  lobby: `${LOBBY_DARK_SURFACE_CLASS_NAME} ring-2 ring-grey-02`,
   live: 'bg-green',
   past: 'bg-grey-03',
 };
@@ -530,6 +554,7 @@ function TimelineItem({
   needsYou = false,
   past = false,
   focused = false,
+  error = null,
   testId,
 }: {
   dot: Dot;
@@ -541,6 +566,8 @@ function TimelineItem({
   past?: boolean;
   /** A link asked for this item (GEO-3431): outlined, and scrolled to on arrival. */
   focused?: boolean;
+  /** A failed action, announced as well as drawn, as on the request cards. */
+  error?: string | null;
   testId?: string;
 }) {
   return (
@@ -551,9 +578,9 @@ function TimelineItem({
       aria-current={focused || undefined}
       tabIndex={focused ? -1 : undefined}
       className={cx(
-        'flex items-start gap-2.5 rounded-lg p-2',
+        'flex items-start gap-2.5 rounded-[10px] p-2',
         needsYou && 'bg-purple-tint',
-        past && 'opacity-60',
+        past && 'opacity-55',
         focused && 'outline outline-1 outline-text'
       )}
     >
@@ -568,22 +595,34 @@ function TimelineItem({
           <Text as="span" variant="metadataMedium">
             {title}
           </Text>
-          {needsYou ? <span className="text-footnoteMedium tracking-[.2px] text-purple">Needs you</span> : null}
+          {needsYou ? <span className="text-footnote font-semibold tracking-[.2px] text-purple">Needs you</span> : null}
         </div>
         {sub ? <span className="text-browseSection leading-[17px] text-grey-04">{sub}</span> : null}
         {actions ? <div className="mt-2 flex flex-nowrap items-center gap-1.5">{actions}</div> : null}
+        {error ? (
+          <div role="alert" className="mt-1">
+            <Text as="p" variant="footnote" color="red-01">
+              {error}
+            </Text>
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
-/** A live claim request sent to the viewer: Accept · Not now, with its real time left. */
+/**
+ * A live claim request sent to the viewer: Accept · Not now, with its real time left. The card's
+ * "…" comes with it — Block and "I don't want to debate this claim" — so the panel keeps a way to
+ * block a requester once the popup has gone.
+ */
 function IncomingRequestItem({ request }: { request: DebateRequest }) {
   const clock = useAskClock(request.expires_at);
   const acceptRequest = useAcceptDebateRequest();
   const dismissRequest = useDismissDebateRequest();
+  const blockUser = useBlockDebateUser();
   const { answerOnce, releaseAnswer } = useAnswerOnce();
-  const busy = acceptRequest.isPending || dismissRequest.isPending;
+  const busy = acceptRequest.isPending || dismissRequest.isPending || blockUser.isPending;
   const unavailable = request.requester.in_debate;
 
   return (
@@ -601,7 +640,10 @@ function IncomingRequestItem({ request }: { request: DebateRequest }) {
       actions={
         <>
           <HubPillButton
+            size="compact"
             variant="primary"
+            // The card's labels, so the Requests series runs on through the redesign.
+            analyticsLabel={debateAnalyticsLabel('hub', 'Accept')}
             onClick={() => answerOnce(() => acceptRequest.mutate({ requestId: request.id }, releaseAnswer))}
             disabled={busy || unavailable}
             pending={acceptRequest.isPending}
@@ -611,6 +653,8 @@ function IncomingRequestItem({ request }: { request: DebateRequest }) {
           </HubPillButton>
           {/* Passes it on to the next person, which is what "Not now" means everywhere now. */}
           <HubPillButton
+            size="compact"
+            analyticsLabel={debateAnalyticsLabel('hub', 'Dismiss')}
             onClick={() => answerOnce(() => dismissRequest.mutate({ requestId: request.id }, releaseAnswer))}
             disabled={busy}
             pending={dismissRequest.isPending}
@@ -618,6 +662,23 @@ function IncomingRequestItem({ request }: { request: DebateRequest }) {
           >
             Not now
           </HubPillButton>
+          <RequestOverflowMenu
+            analyticsSurface="hub"
+            actions={[
+              {
+                label: "I don't want to debate this claim",
+                analyticsLabel: 'Remove claim request intent',
+                onClick: () =>
+                  answerOnce(() => dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer)),
+              },
+              {
+                label: `Block ${speakerLabel(request.requester)}`,
+                analyticsLabel: 'Block requester',
+                destructive: true,
+                onClick: () => blockUser.mutate(request.requester.user_id),
+              },
+            ]}
+          />
         </>
       }
     />
@@ -630,6 +691,7 @@ function IncomingChallengeItem({ challenge }: { challenge: DebateChallenge }) {
   const accept = useAcceptDebateChallenge();
   const reject = useRejectDebateChallenge();
   const busy = accept.isPending || reject.isPending;
+  const actionError = accept.error ?? reject.error;
 
   return (
     <TimelineItem
@@ -639,9 +701,11 @@ function IncomingChallengeItem({ challenge }: { challenge: DebateChallenge }) {
       time="Now"
       title={`${speakerLabel(challenge.requester)} wants to debate you`}
       sub={`Pick a claim together · ${clock.label} left`}
+      error={actionError instanceof Error ? actionError.message : null}
       actions={
         <>
           <HubPillButton
+            size="compact"
             variant="primary"
             analyticsLabel="Debate hub Accept challenge"
             analyticsIntent="accept_debate_challenge"
@@ -653,6 +717,7 @@ function IncomingChallengeItem({ challenge }: { challenge: DebateChallenge }) {
             Accept
           </HubPillButton>
           <HubPillButton
+            size="compact"
             analyticsLabel="Debate hub Dismiss challenge"
             analyticsIntent="dismiss_debate_challenge"
             onClick={() => reject.mutate(challenge.id)}
@@ -668,7 +733,7 @@ function IncomingChallengeItem({ challenge }: { challenge: DebateChallenge }) {
 
 /** The viewer's own open ask, which the strip above the tabs also shows. */
 function OutgoingAskItem() {
-  const { ask, cancel, cancelling } = useOutgoingAsk();
+  const { ask, cancel, cancelling } = useHubAskState();
   const clock = useAskClock(ask?.expiresAt ?? null);
   if (!ask) return null;
 
@@ -681,6 +746,7 @@ function OutgoingAskItem() {
       sub={ask.kind === 'claim' ? `${ask.claim.claim} · ${clock.label} left` : `${clock.label} left to answer`}
       actions={
         <HubPillButton
+          size="compact"
           analyticsLabel="Debate hub Withdraw request"
           analyticsIntent="withdraw_debate_request"
           onClick={cancel}
@@ -716,15 +782,10 @@ function InviteItem({
   onAnswer: ScheduledDebateAnswer;
   onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
-  const { answerOnce, releaseAnswer } = useAnswerOnce();
-  const proposedByViewer =
-    viewerId !== null && request.proposed_by_user_id !== null && sameId(request.proposed_by_user_id, viewerId);
-  const viewerAccepted =
-    viewerId !== null && request.participants.some(entry => entry.accepted === true && sameId(entry.user_id, viewerId));
-  const withdrawable = !request.viewer_must_answer && (proposedByViewer || viewerAccepted);
+  const { proposedByViewer, viewerAccepted, withdrawable } = scheduledRequestRoles(request, viewerId);
   const name = opponentName(opponent);
   const note = adminArrangedNote(request, opponent, viewerId);
-  const slot = `${formatTime(request.scheduled_start_at)} – ${formatTime(request.scheduled_end_at)}`;
+  const slot = formatTimeRange(request.scheduled_start_at, request.scheduled_end_at);
 
   if (request.viewer_must_answer) {
     return (
@@ -733,38 +794,20 @@ function InviteItem({
         needsYou
         focused={focused}
         time={formatTime(request.scheduled_start_at)}
-        title={`${name} invited you`}
+        // An arranged match has no inviter: nobody asked anybody, so it is a debate with them.
+        title={request.invited_by_user_id ? `${name} invited you` : `Debate with ${name}`}
         sub={note ?? `Debate · ${slot}`}
         actions={
-          <React.Fragment key={`${request.scheduled_start_at}:${request.reschedule_count}`}>
-            <HubPillButton
-              variant="primary"
-              analyticsLabel={debateAnalyticsLabel('hub', 'Accept scheduled debate')}
-              analyticsIntent="accept_scheduled_debate"
-              onClick={() => answerOnce(() => onAnswer(request.request_id, true, releaseAnswer.onError))}
-              disabled={busy}
-            >
-              Accept
-            </HubPillButton>
-            <HubPillButton
-              analyticsLabel={debateAnalyticsLabel('hub', 'Decline scheduled debate')}
-              analyticsIntent="decline_scheduled_debate"
-              onClick={() => answerOnce(() => onAnswer(request.request_id, false, releaseAnswer.onError))}
-              disabled={busy}
-            >
-              Decline
-            </HubPillButton>
-            {onReschedule ? (
-              <HubPillButton
-                analyticsLabel={debateAnalyticsLabel('hub', 'Choose different time for scheduled request')}
-                analyticsIntent="choose_different_time_scheduled_request"
-                onClick={event => onReschedule(event.currentTarget)}
-                disabled={busy}
-              >
-                Suggest a time
-              </HubPillButton>
-            ) : null}
-          </React.Fragment>
+          // Keyed on the request's version, as the section keys it: a moved time can be answered again.
+          <ScheduledAnswerButtons
+            key={`${request.scheduled_start_at}:${request.reschedule_count}`}
+            layout="inline"
+            requestId={request.request_id}
+            busy={busy}
+            onAnswer={onAnswer}
+            onReschedule={onReschedule}
+            analyticsSurface="hub"
+          />
         }
       />
     );
@@ -782,6 +825,7 @@ function InviteItem({
           <>
             {viewerAccepted && onReschedule ? (
               <HubPillButton
+                size="compact"
                 analyticsLabel={debateAnalyticsLabel('hub', 'Reschedule scheduled request')}
                 analyticsIntent="reschedule_scheduled_request"
                 onClick={event => onReschedule(event.currentTarget)}
@@ -817,13 +861,7 @@ function RoomItem({
   const { room, requestId } = row;
   const router = useRouter();
   const roomPath = debateRoomPath(room.room_id);
-  // geo-chat refuses once anyone has joined, as on the section's card.
-  const cancellable = requestId !== null && !room.others_present && !room.rematch_session_id;
-  const status = room.others_present
-    ? `${opponentName(opponent)} is waiting for you now`
-    : room.joinable
-      ? 'The room is open'
-      : `Room opens ${formatTime(room.opens_at)}`;
+  const cancellable = roomCancellable(row);
 
   return (
     <TimelineItem
@@ -831,25 +869,26 @@ function RoomItem({
       focused={focused}
       time={room.due || room.others_present ? 'Now' : formatTime(room.starts_at)}
       title={`Debate with ${opponentName(opponent)}`}
-      sub={status}
+      sub={roomStatusLabel(room, opponent)}
       actions={
         <>
           {room.joinable ? (
             <Link
               href={roomPath}
               onClick={debateEntryClick(() => router.push(roomPath))}
-              className={hubPillClassName('primary')}
+              className={hubPillClassName('primary', undefined, 'compact')}
               {...hubAnalyticsAttributes('Join scheduled debate', 'join_scheduled_debate')}
             >
               Join
             </Link>
           ) : (
-            <span aria-disabled className={hubPillClassName('secondary', 'opacity-40')}>
+            <span aria-disabled className={hubPillClassName('secondary', 'opacity-40', 'compact')}>
               Join
             </span>
           )}
           {cancellable && onReschedule ? (
             <HubPillButton
+              size="compact"
               analyticsLabel="Debate hub Reschedule scheduled debate"
               analyticsIntent="reschedule_scheduled_debate"
               onClick={event => onReschedule(event.currentTarget)}
@@ -857,7 +896,9 @@ function RoomItem({
               Reschedule
             </HubPillButton>
           ) : null}
-          {cancellable ? <CancelScheduled compact requestId={requestId} kind="debate" opponent={opponent} /> : null}
+          {cancellable && requestId ? (
+            <CancelScheduled compact requestId={requestId} kind="debate" opponent={opponent} />
+          ) : null}
         </>
       }
     />
@@ -885,7 +926,7 @@ function LobbyItem({ row }: { row: UpcomingLobbyRow }) {
         <Link
           href={debateRoomPath(row.lobbyId)}
           onClick={() => markLobbyEntry(row.lobbyId, 'requests')}
-          className={hubPillClassName(row.open && !row.onRoster ? 'primary' : 'secondary')}
+          className={hubPillClassName(row.open && !row.onRoster ? 'primary' : 'secondary', undefined, 'compact')}
           {...hubAnalyticsAttributes(analyticsLabel, analyticsIntent)}
         >
           {row.open ? (row.onRoster ? 'Open' : 'Join') : 'View'}
@@ -903,28 +944,14 @@ function HistoryRow({
   item: DebateHistoryItem;
   lookUp: (userId: string | null) => DebateParticipantSummary | null;
 }) {
-  // geo-chat names them itself (`others`); the lookup covers a response from before it did.
-  const names = item.other_user_ids.map((id, index) => opponentName(item.others?.[index] ?? lookUp(id)));
-  const name = names[0] ?? 'someone';
+  const names = historyNames(item, lookUp);
   const outcome = historyOutcomeLabel(item);
   const claim = item.claim?.claim ?? null;
+  const title = historyTitle(item, names);
 
-  const title =
-    item.kind === 'debate'
-      ? `Debate with ${name}`
-      : item.kind === 'lobby'
-        ? (item.lobby?.name ?? 'Debate lobby')
-        : item.kind === 'scheduled_invite'
-          ? item.direction === 'incoming'
-            ? `${name} invited you`
-            : `Invite to ${name}`
-          : item.direction === 'incoming'
-            ? `${name} asked you`
-            : item.kind === 'challenge'
-              ? `You asked ${name}`
-              : 'Requested · people who disagree';
-
-  const sub = [item.kind === 'lobby' ? 'Lobby' : claim, outcome].filter(Boolean).join(' · ');
+  // A request, challenge or debate made in a lobby says which (geo-chat#299 carries it).
+  const where = item.kind === 'lobby' ? 'Lobby' : item.lobby ? `in ${item.lobby.name}` : null;
+  const sub = [item.kind === 'lobby' ? null : claim, where, outcome].filter(Boolean).join(' · ');
 
   return (
     <TimelineItem
@@ -934,38 +961,57 @@ function HistoryRow({
       time={formatTime(item.occurred_at)}
       title={title}
       sub={sub || undefined}
-      actions={
-        item.debate_id && item.outcome !== 'never_started' ? <WatchDebate debateId={item.debate_id} /> : undefined
-      }
+      actions={historyWatchable(item) ? <WatchDebate debateId={item.debate_id!} claim={item.claim} /> : undefined}
     />
   );
 }
 
 /**
- * History names the debate but not the space its page lives under, so the link resolves it on
- * press: one read for the one debate the viewer asked about, rather than one per row on the way past.
+ * A past debate's page. History's claim carries the space the page lives under, so the link is built
+ * from it directly; only an item without one resolves the debate on press, and says so if it can't.
  */
-function WatchDebate({ debateId }: { debateId: string }) {
+function WatchDebate({ debateId, claim }: { debateId: string; claim: DebateClaimSummary | null }) {
   const router = useRouter();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-  const [pending, setPending] = React.useState(false);
+  const [state, setState] = React.useState<'idle' | 'pending' | 'failed'>('idle');
+  const analytics = { analyticsLabel: 'Debate hub Watch past debate', analyticsIntent: 'open_debate' };
+
+  if (claim) {
+    return (
+      <Link
+        href={debatePath({ id: debateId, claim })}
+        className={hubPillClassName('secondary', undefined, 'compact')}
+        data-geo-analytics-label={analytics.analyticsLabel}
+        data-geo-analytics-intent={analytics.analyticsIntent}
+      >
+        Watch
+      </Link>
+    );
+  }
 
   return (
-    <HubPillButton
-      analyticsLabel="Debate hub Watch past debate"
-      analyticsIntent="open_debate"
-      pending={pending}
-      pendingLabel="Opening…"
-      onClick={() => {
-        setPending(true);
-        void getDebate(debateId, getPrivyIdentityToken, accountKey).then(
-          debate => router.push(debatePath(debate)),
-          () => setPending(false)
-        );
-      }}
-    >
-      Watch
-    </HubPillButton>
+    <>
+      <HubPillButton
+        size="compact"
+        {...analytics}
+        pending={state === 'pending'}
+        pendingLabel="Opening…"
+        onClick={() => {
+          setState('pending');
+          void getDebate(debateId, getPrivyIdentityToken, accountKey).then(
+            debate => router.push(debatePath(debate)),
+            () => setState('failed')
+          );
+        }}
+      >
+        Watch
+      </HubPillButton>
+      {state === 'failed' ? (
+        <span role="alert" className="text-footnote text-red-01">
+          Couldn’t open it
+        </span>
+      ) : null}
+    </>
   );
 }
 
@@ -982,7 +1028,7 @@ function PastDebateRow({ row }: { row: PastDebate }) {
       actions={
         <Link
           href={NavUtils.toEntity(row.spaceId, row.entityId)}
-          className={hubPillClassName('secondary')}
+          className={hubPillClassName('secondary', undefined, 'compact')}
           {...hubAnalyticsAttributes('Watch past debate', 'open_debate')}
         >
           Watch
@@ -995,12 +1041,10 @@ function PastDebateRow({ row }: { row: PastDebate }) {
 /** The calendar, from the filter row, as the design has it. Closes the panel so the week is not covered. */
 function CalendarLink() {
   const { close } = useDebatesHub();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const from = urlWithoutModal(pathname, searchParams, typeof window === 'undefined' ? '' : window.location.hash);
+  const href = useCalendarHref();
   return (
     <Link
-      href={calendarHref(from)}
+      href={href}
       onClick={close}
       {...hubAnalyticsAttributes('Requests Open calendar', 'open_debate_calendar')}
       className="ml-auto shrink-0 text-browseSection text-grey-04 transition-colors hover:text-text"
@@ -1043,25 +1087,30 @@ function ReadFailures({ content }: { content: ScheduledContent }) {
 function useTimelineScroll({
   ready,
   focused,
+  focusKey,
   pastKey,
   layoutKey,
   canLoadMore,
+  loadingMore,
   loadMore,
 }: {
   ready: boolean;
   focused: boolean;
+  /** The request a link asked for. A new one, arriving while the tab is open, is scrolled to too. */
+  focusKey: string | null;
   pastKey: string;
   layoutKey: string;
   canLoadMore: boolean;
+  loadingMore: boolean;
   loadMore: () => unknown;
 }) {
   const hubScrollSelector = useHubScrollSelector() ?? HUB_SCROLL_SELECTOR;
   const rootRef = React.useRef<HTMLDivElement>(null);
   const nowLineRef = React.useRef<HTMLDivElement>(null);
-  const sentinelRef = React.useRef<HTMLDivElement>(null);
+  const aboveLineRef = React.useRef<HTMLDivElement>(null);
   const [anchored, setAnchored] = React.useState(false);
   const [spacerHeight, setSpacerHeight] = React.useState(0);
-  // Where the now-line sat in the box, last time anyone looked: what a prepend restores.
+  // Where the now-line sat in the box, last time anyone looked: what a change above it restores.
   const lineOffsetRef = React.useRef<number | null>(null);
 
   const measure = React.useCallback(() => {
@@ -1077,6 +1126,17 @@ function useTimelineScroll({
     };
   }, [hubScrollSelector]);
 
+  // Puts the line back where it was on screen after something above it changed height.
+  const holdLine = React.useCallback(() => {
+    const measured = measure();
+    if (!measured) return;
+    const previous = lineOffsetRef.current;
+    if (previous !== null && measured.lineOffset !== previous) {
+      measured.scroller.scrollTop += measured.lineOffset - previous;
+    }
+    lineOffsetRef.current = measured.line.getBoundingClientRect().top - measured.scroller.getBoundingClientRect().top;
+  }, [measure]);
+
   // The spacer: enough below the last item for the line to reach the top of the box.
   React.useLayoutEffect(() => {
     const measured = measure();
@@ -1088,9 +1148,14 @@ function useTimelineScroll({
     if (needed !== spacerHeight) setSpacerHeight(needed);
   }, [layoutKey, measure, spacerHeight, pastKey]);
 
-  // The first anchor. A link's focused request takes its place (GEO-3431).
+  // The first anchor, and again for each request a link asks for (GEO-3431), which takes the line's
+  // place. A link followed while the tab is already open must land on its request too.
+  const anchoredForRef = React.useRef<string | null | undefined>(undefined);
   React.useLayoutEffect(() => {
-    if (anchored || !ready) return;
+    if (!ready) return;
+    const key = focused ? focusKey : null;
+    if (anchored && anchoredForRef.current === key) return;
+    if (anchored && key === null) return;
     const measured = measure();
     if (!measured) return;
     const { scroller, stickyHeight } = measured;
@@ -1101,22 +1166,26 @@ function useTimelineScroll({
     scroller.scrollTop = Math.max(0, top - stickyHeight);
     if (focused && target !== measured.line) target.focus({ preventScroll: true });
     lineOffsetRef.current = measured.line.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    anchoredForRef.current = key;
     setAnchored(true);
-  }, [anchored, focused, measure, ready]);
+  }, [anchored, focusKey, focused, measure, ready]);
 
   // Keep the line still when rows arrive above it.
   React.useLayoutEffect(() => {
-    if (!anchored) return;
-    const measured = measure();
-    if (!measured) return;
-    const previous = lineOffsetRef.current;
-    if (previous !== null && measured.lineOffset !== previous) {
-      measured.scroller.scrollTop += measured.lineOffset - previous;
-    }
-    lineOffsetRef.current = measured.line.getBoundingClientRect().top - measured.scroller.getBoundingClientRect().top;
-  }, [anchored, measure, pastKey]);
+    if (anchored) holdLine();
+  }, [anchored, holdLine, pastKey, loadingMore]);
 
-  // Follow the viewer's own scrolling, so the next prepend restores where they are, not where they were.
+  // And when anything else above it changes height — a notice landing, a failed read's line, the
+  // conflict message. Safari has no CSS scroll anchoring, so nothing else would hold it.
+  React.useEffect(() => {
+    const region = aboveLineRef.current;
+    if (!anchored || !region || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => holdLine());
+    observer.observe(region);
+    return () => observer.disconnect();
+  }, [anchored, holdLine]);
+
+  // Follow the viewer's own scrolling, so the next change restores where they are, not where they were.
   React.useEffect(() => {
     if (!anchored) return;
     const scroller = rootRef.current?.closest<HTMLElement>(hubScrollSelector);
@@ -1129,21 +1198,15 @@ function useTimelineScroll({
     return () => scroller.removeEventListener('scroll', onScroll);
   }, [anchored, hubScrollSelector]);
 
-  // Page history in from the top.
-  React.useEffect(() => {
-    if (!anchored || !canLoadMore) return;
-    const sentinel = sentinelRef.current;
-    if (!sentinel || typeof IntersectionObserver === 'undefined') return;
-    const root = sentinel.closest<HTMLElement>(hubScrollSelector);
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries.some(entry => entry.isIntersecting)) void loadMore();
-      },
-      { root, rootMargin: '400px 0px 0px 0px' }
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [anchored, canLoadMore, hubScrollSelector, loadMore]);
+  // Page history in from the top, only after the first anchor: before it, the top of a short list is
+  // always in view and would page everything at once.
+  const sentinelRef = useInfiniteScrollSentinel({
+    hasNextPage: anchored && canLoadMore,
+    isFetchingNextPage: loadingMore,
+    fetchNextPage: loadMore,
+    rootMargin: '400px 0px 0px 0px',
+    rootSelector: hubScrollSelector,
+  });
 
-  return { rootRef, nowLineRef, sentinelRef, spacerHeight };
+  return { rootRef, nowLineRef, aboveLineRef, sentinelRef, spacerHeight };
 }

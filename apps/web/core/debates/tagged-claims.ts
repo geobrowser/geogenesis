@@ -860,7 +860,12 @@ export function useTaggedAnsweredCount(tagId: string, filters: TaggedClaimFilter
   const userId = filters.excludeAnsweredBy ?? null;
 
   const query = useQuery({
-    queryKey: [...taggedClaimsQueryKey(tagId, filters, search.claimIds), 'answered-count'] as const,
+    // The list's key without its order: Sort changes which claim comes first, not how many were
+    // answered, and keying on it refetched this count on every Sort change.
+    queryKey: [
+      ...taggedClaimsQueryKey(tagId, { ...filters, order: undefined }, search.claimIds),
+      'answered-count',
+    ] as const,
     queryFn: ({ signal }) => {
       const { and } = taggedEntityFilter(tagId, { ...filters, excludeAnsweredBy: null }, search.claimIds);
       return Effect.runPromise(

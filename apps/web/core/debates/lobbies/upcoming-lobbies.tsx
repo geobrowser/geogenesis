@@ -7,19 +7,8 @@ import cx from 'classnames';
 import type { DebateLobbySummary } from '../api';
 import { type DebateAnalyticsSurface, debateAnalyticsLabel } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
-import { localDaysFrom, rsvpLabel } from './lobby-format';
+import { rsvpLabel } from './lobby-format';
 import { LobbyReminderError, useLobbyReminderPress } from './lobby-reminder-press';
-
-/** "Today", "Tomorrow", "Wed", then "Oct 21" past a week. Local time. */
-export function lobbyDayLabel(iso: string, now: number = Date.now()) {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return null;
-  const days = localDaysFrom(now, at.getTime());
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Tomorrow';
-  if (days > 1 && days < 7) return at.toLocaleDateString(undefined, { weekday: 'short' });
-  return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
 
 /** "4 PM", or "4:30 PM" off the hour. Local time. */
 export function lobbyBadgeTime(iso: string) {

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -15,27 +15,45 @@ type ListProps = {
   atomsFrom?: string;
   panelFilters?: PanelListFilters;
   keepClaim?: (entry: MatchmakingClaim) => boolean;
+  collapsesAnswered?: boolean;
+  notice?: React.ReactNode;
 };
 
 const seen = vi.hoisted(() => ({
   claimsTab: null as ListProps | null,
   matchesList: null as ListProps | null,
   authenticated: true,
+  available: true,
+  matches: [{}] as unknown[],
+  matchesLoading: false,
+  turnOn: vi.fn(),
 }));
 
-vi.mock('../hooks', () => ({ useGeoChatAuth: () => ({ authenticated: seen.authenticated }) }));
+vi.mock('../hooks', () => ({
+  useGeoChatAuth: () => ({ authenticated: seen.authenticated }),
+  useDebateActivity: () => ({ data: { available_to_debate: seen.available } }),
+  useUpdateDebateAvailability: () => ({ mutate: seen.turnOn, isPending: false }),
+}));
+vi.mock('./hooks', () => ({
+  useMatchmakingMatches: () => ({
+    data: seen.matchesLoading ? undefined : { matches: seen.matches },
+    isLoading: seen.matchesLoading,
+    isFetching: false,
+    error: null,
+  }),
+}));
 
 // Both lists have their own suites; here it only matters which one each filter draws, and with what.
 vi.mock('./claims-tab', () => ({
   ClaimsTab: (props: ListProps) => {
     seen.claimsTab = props;
-    return <div data-testid="claims-tab" />;
+    return <div data-testid="claims-tab">{props.notice}</div>;
   },
 }));
 vi.mock('./matches-list', () => ({
   MatchesList: (props: ListProps) => {
     seen.matchesList = props;
-    return <div data-testid="matches-list" />;
+    return <div data-testid="matches-list">{props.notice}</div>;
   },
 }));
 
@@ -66,6 +84,9 @@ afterEach(() => {
   seen.claimsTab = null;
   seen.matchesList = null;
   seen.authenticated = true;
+  seen.available = true;
+  seen.matches = [{}];
+  seen.matchesLoading = false;
 });
 
 describe('PanelMatchesTab', () => {
@@ -98,6 +119,49 @@ describe('PanelMatchesTab', () => {
   });
 });
 
+// Preston, 23 Oct: with nobody who disagrees online, Matches shows who you could schedule with
+// instead of a bare empty state, without flipping the stored switch.
+describe('PanelMatchesTab empty and unavailable', () => {
+  it('shows the wider list on its own, under a line saying why, once the match list settles empty', () => {
+    seen.matches = [];
+    const store = renderTab(<PanelMatchesTab onTabChange={vi.fn()} />);
+
+    expect(seen.claimsTab).toMatchObject({ variant: 'positions', atomsFrom: 'lobby' });
+    expect(screen.getByTestId('matches-nobody-online')).toHaveTextContent('Nobody who disagrees with you is online');
+    expect(store.get(debatesHubMatchesIncludeOfflineAtom)).toBe(false);
+  });
+
+  it('waits for the match list to answer before swapping lists', () => {
+    seen.matches = [];
+    seen.matchesLoading = true;
+    renderTab(<PanelMatchesTab onTabChange={vi.fn()} />);
+
+    expect(screen.getByTestId('matches-list')).toBeInTheDocument();
+    expect(seen.claimsTab).toBeNull();
+  });
+
+  it('leads with a Turn on card when the viewer is not available', () => {
+    seen.available = false;
+    renderTab(<PanelMatchesTab onTabChange={vi.fn()} />);
+
+    const card = screen.getByTestId('matches-not-available');
+    expect(card).toHaveTextContent('You’re not available now');
+    fireEvent.click(within(card).getByRole('button', { name: 'Turn on' }));
+    expect(seen.turnOn).toHaveBeenCalledWith(true);
+  });
+
+  it('points somewhere useful when nobody holds the other side of anything either', () => {
+    seen.matches = [];
+    const onTabChange = vi.fn();
+    renderTab(<PanelMatchesTab onTabChange={onTabChange} />);
+
+    const empty = seen.claimsTab?.panelFilters?.emptyPredicate;
+    expect(empty?.message).toMatch(/Nobody holds the other side/);
+    empty?.action?.onClick();
+    expect(onTabChange).toHaveBeenCalledWith('explore');
+  });
+});
+
 describe('PanelExploreTab', () => {
   it('browses the Debate tag by default: Not answered, ranked server-side', () => {
     renderTab(<PanelExploreTab onTabChange={vi.fn()} />);
@@ -121,15 +185,22 @@ describe('PanelExploreTab', () => {
     expect(seen.claimsTab?.panelFilters?.clientSort).toBe('best');
   });
 
-  it('reads geo-chat’s debate-now list for Someone online, leaving out what you have answered', () => {
-    renderTab(<PanelExploreTab onTabChange={vi.fn()} />);
+  it('reads geo-chat’s debate-now list for Someone online, folding away what you have answered', () => {
+    const store = renderTab(<PanelExploreTab onTabChange={vi.fn()} />);
 
     act(() => seen.claimsTab?.panelFilters?.toggles?.[0]?.onChange(true));
 
-    expect(seen.claimsTab).toMatchObject({ variant: 'lobby', atomsFrom: 'explore' });
-    const keep = seen.claimsTab!.keepClaim!;
-    expect(keep(claim(null, { total: 1, now: 1 }, { total: 0, now: 0 }))).toBe(true);
-    expect(keep(claim(true, { total: 1, now: 1 }, { total: 1, now: 1 }))).toBe(false);
+    // Folded by Explore's own collapse, which holds a claim you answer in front of you, rather than
+    // a filter that drops it on the next refetch.
+    expect(seen.claimsTab).toMatchObject({
+      variant: 'lobby',
+      atomsFrom: 'explore',
+      keepClaim: undefined,
+      collapsesAnswered: true,
+    });
+
+    act(() => store.set(debatesHubExploreShowAtom, 'all'));
+    expect(seen.claimsTab?.collapsesAnswered).toBe(false);
   });
 
   it('narrows My positions to claims with someone online when both are on', () => {
@@ -144,6 +215,8 @@ describe('PanelExploreTab', () => {
     const keep = seen.claimsTab!.keepClaim!;
     expect(keep(claim(true, { total: 1, now: 0 }, { total: 1, now: 1 }))).toBe(true);
     expect(keep(claim(true, { total: 1, now: 0 }, { total: 1, now: 0 }))).toBe(false);
+    // Only people on your own side online: nobody to debate.
+    expect(keep(claim(true, { total: 3, now: 2 }, { total: 1, now: 0 }))).toBe(false);
   });
 
   it('clears Show and Someone online with Clear all, leaving Sort', () => {

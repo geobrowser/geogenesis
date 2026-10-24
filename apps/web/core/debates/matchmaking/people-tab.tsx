@@ -34,7 +34,6 @@ import {
   type DebatePerson,
   GeoChatRequestError,
   RECIPIENT_AWAY_CODE,
-  type SchedulablePeopleResponse,
   type SchedulablePerson,
   type ScheduleOverlapSlot,
 } from '../api';
@@ -54,7 +53,7 @@ import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import type { ClaimMatch } from './disagreement-counts';
 import { FilterSwitch } from './filter-switch';
-import { useCreateDebateRequest, useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
+import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
 import {
   type DebateAnalyticsSurface,
   debateActionAnalyticsAttributes,
@@ -62,7 +61,7 @@ import {
   debateSurfaceAnalyticsAttributes,
 } from './hub-analytics';
 import { useHubAsk } from './hub-ask-context';
-import { HubFiltersBar, type HubSortOption, panelFacetOptions } from './hub-filters';
+import { type HubSortOption, PanelFiltersBar, type PanelListFilters } from './hub-filters';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton, hubPillClassName } from './hub-pill-button';
 import { HubQueryState, exploreClaimsAction } from './hub-states';
 import { offlinePerson } from './offline-person';
@@ -73,9 +72,10 @@ import { nextFreeLabel } from './person-next-free';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { PersonSpaceIcons } from './person-space-icons';
+import { RequestingPill } from './requesting-pill';
 import { INLINE_SLOTS, SharedTimes } from './shared-times';
 import { useLiveRequestBlock } from './use-live-request-block';
-import { askIsForPerson, useAskClock } from './use-outgoing-ask';
+import { askIsForPerson } from './use-outgoing-ask';
 import { usePersonFacts } from './use-person-facts';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import {
@@ -135,13 +135,11 @@ function personSchedule(
   return { slots: own, truncated: available > own.length };
 }
 
-/**
- * An offline person drawn in the roster's shape, so search, the space filter and match counts treat
- * them like anyone else. Not requestable: nobody here can take a request right now.
- */
+// Online first is the default (Preston, 23 Oct): the people you can debate right now lead, and matches
+// order each group.
 const PEOPLE_SORTS: HubSortOption<DebatesHubPeopleSort>[] = [
-  { value: 'matches', label: 'Most matches' },
   { value: 'online', label: 'Online first' },
+  { value: 'matches', label: 'Most matches' },
   { value: 'az', label: 'A–Z' },
 ];
 
@@ -156,8 +154,9 @@ function reachability(person: DebatePerson) {
 
 /**
  * The People sorts (GEO-3463). Every one falls back to the server's order, so rows stay put as live
- * updates land. "Most matches" is the order the tab always had: among equal matches the person who
- * can be asked now goes first.
+ * updates land. "Online first" groups people by whether they can be asked now and orders each group
+ * by matches; "Most matches" is the order the tab had before, with the person who can be asked now
+ * first among equals.
  */
 function comparePeople(left: RankedPerson, right: RankedPerson, sort: DebatesHubPeopleSort) {
   if (sort === 'az') {
@@ -173,6 +172,10 @@ function comparePeople(left: RankedPerson, right: RankedPerson, sort: DebatesHub
   return right.matchCount - left.matchCount || right.online - left.online || left.index - right.index;
 }
 
+/**
+ * An offline person drawn in the roster's shape, so search, the space filter and match counts treat
+ * them like anyone else. Not requestable: nobody here can take a request right now.
+ */
 export function schedulableAsPerson({ user }: SchedulablePerson): DebatePerson {
   return offlinePerson(user);
 }
@@ -185,11 +188,8 @@ export function schedulableAsPerson({ user }: SchedulablePerson): DebatePerson {
  * ranked by matches alongside everyone online, each with a few of their free times and a Schedule
  * button in place of the request (GEO-2937). That includes a viewer with no hours set (GEO-3154).
  *
- * `dense` (live rail): no sticky chrome; search stays so you can still find a name.
- */
-/**
- * `dense` is the live rail (GEO-2726) — see the note on `RequestsTab`. Search stays: a presence
- * list is the one of the three you actually scan for a name.
+ * `dense` is the live rail (GEO-2726) — see the note on `RequestsTab`: no sticky chrome, and search
+ * stays, because a presence list is the one of the three you actually scan for a name.
  */
 export function PeopleTab({
   onTabChange,
@@ -254,13 +254,22 @@ export function PeopleTab({
 
   // Anyone on the roster keeps their roster row: requestable now, or online but away (GEO-3119).
   // Someone online but off the roster (unavailable) stays here.
-  const { offlinePeople, schedulesByUser, schedulableUserIds } = React.useMemo(() => {
+  const { offlinePeople, schedulesByUser, awayTimesByUser, schedulableUserIds } = React.useMemo(() => {
     const byUser = new Map<string, PersonSchedule>();
+    const awayByUser = new Map<string, PersonSchedule>();
     if (!showOffline || !schedulableQuery.data) {
-      return { offlinePeople: [], schedulesByUser: byUser, schedulableUserIds: EMPTY_USER_IDS };
+      return {
+        offlinePeople: [],
+        schedulesByUser: byUser,
+        awayTimesByUser: awayByUser,
+        schedulableUserIds: EMPTY_USER_IDS,
+      };
     }
 
     const onRoster = new Set(onlinePeople.map(person => normId(person.user_id)));
+    // Away people stay on the roster with no `schedule`, but the panel row still has to say when
+    // they are next free (GEO-3463), so their times are built here with the same clock.
+    const awayOnRoster = new Set(onlinePeople.filter(person => person.away).map(person => normId(person.user_id)));
     // geo-chat lists everyone with free time this week, online or not, whether or not the viewer
     // has hours of their own (GEO-3153). An away person on it can be booked; one off it has no free
     // time, so their week would open empty and their row offers no Schedule.
@@ -272,13 +281,22 @@ export function PeopleTab({
     const offline: DebatePerson[] = [];
     for (const candidate of schedulableQuery.data.people) {
       const key = normId(candidate.user.user_id);
+      if (awayOnRoster.has(key)) {
+        awayByUser.set(key, personSchedule(candidate, viewerHasSchedule, now, weekEnds));
+        continue;
+      }
       if (onRoster.has(key) || isExcludedFromPeopleTab(candidate.user.profile_space_id)) continue;
       // Kept with no times left to draw: geo-chat lists everyone with free time, and Schedule
       // still opens their week, where the viewer can book outside their own hours.
       byUser.set(key, personSchedule(candidate, viewerHasSchedule, now, weekEnds));
       offline.push(schedulableAsPerson(candidate));
     }
-    return { offlinePeople: offline, schedulesByUser: byUser, schedulableUserIds: schedulable };
+    return {
+      offlinePeople: offline,
+      schedulesByUser: byUser,
+      awayTimesByUser: awayByUser,
+      schedulableUserIds: schedulable,
+    };
   }, [now, onlinePeople, schedulableQuery.data, showOffline]);
 
   const allPeople = React.useMemo(() => [...onlinePeople, ...offlinePeople], [onlinePeople, offlinePeople]);
@@ -410,7 +428,7 @@ export function PeopleTab({
   // Names and thumbnails for the menu and the row icons in one lookup, so the same space is drawn
   // the same way in both. The viewer's selection is included: a space can be picked and then
   // counted out of the facets, and it still has to be nameable in the trigger.
-  const { labelsById, isLoading: labelsLoading } = useSpaceLabels(
+  const { labelsById } = useSpaceLabels(
     React.useMemo(
       () => [...new Set([...facetSpaces.map(space => space.id), ...effectiveSpaceIds, ...matchingSpaceIds])],
       [effectiveSpaceIds, facetSpaces, matchingSpaceIds]
@@ -428,6 +446,25 @@ export function PeopleTab({
 
   const { outboundChallenge, blockedReason, buttonsDisabled } = useLiveRequestBlock(activity, requests);
 
+  const peopleFilters = React.useMemo<PanelListFilters>(
+    () => ({
+      sort: { options: PEOPLE_SORTS, value: sort, onChange: next => setSort(next as DebatesHubPeopleSort) },
+      toggles: authenticated
+        ? [
+            {
+              id: 'online-now',
+              label: 'Online now',
+              chipLabel: 'Online now',
+              checked: onlineOnly,
+              onChange: setOnlineOnly,
+            },
+          ]
+        : [],
+      onClearExtras: () => setOnlineOnly(false),
+    }),
+    [authenticated, onlineOnly, setOnlineOnly, setSort, sort]
+  );
+
   return (
     <div className="flex flex-col">
       {/* One pinned block, like Matches: a request you are waiting on shouldn't scroll away behind
@@ -438,45 +475,21 @@ export function PeopleTab({
         {panelMode ? (
           // One search and one Filters button (GEO-3463). The challenge you sent is in the strip above
           // the tabs, with its countdown and Cancel, so it is not repeated here.
-          <HubFiltersBar
-            analyticsSurface="hub"
+          <PanelFiltersBar
+            filters={peopleFilters}
             search={search}
             onSearchChange={setSearch}
             searchPlaceholder="Search people"
-            sort={{ options: PEOPLE_SORTS, value: sort, onChange: setSort }}
-            toggles={
-              authenticated
-                ? [
-                    {
-                      id: 'online-now',
-                      label: 'Online now',
-                      chipLabel: 'Online now',
-                      checked: onlineOnly,
-                      onChange: setOnlineOnly,
-                    },
-                  ]
-                : []
-            }
-            facets={{
-              heading: 'Spaces',
-              options: panelFacetOptions({
-                spaces: facetSpaces,
-                spaceIds: effectiveSpaceIds,
-                listedCount: people.length,
-                labelsById,
-                labelsLoading,
-                spacesAreExclusive: false,
-              }),
-              pickedIds: effectiveSpaceIds,
-              onToggle: option => onSpaceToggle(option.id),
-              onClear: onSpacesClear,
-              countsPending: peopleQuery.isLoading || publishableSpacesPending || personRecordsPending,
-            }}
+            facetHeading="Spaces"
+            spaces={facetSpaces}
+            spaceIds={effectiveSpaceIds}
+            onSpaceToggle={onSpaceToggle}
+            onSpacesClear={onSpacesClear}
+            // A person is active in several spaces, so every space can still narrow after a pick.
+            spacesAreExclusive={false}
+            listedCount={people.length}
             resultCount={peopleQuery.isLoading ? null : people.length}
-            onClearAll={() => {
-              onSpacesClear();
-              setOnlineOnly(false);
-            }}
+            countsPending={peopleQuery.isLoading || publishableSpacesPending || personRecordsPending}
           />
         ) : (
           <>
@@ -613,7 +626,8 @@ export function PeopleTab({
                     claimNamesById={matchingClaimNamesById}
                     claimNamesLoading={matchingClaimsLoading}
                     schedule={schedulesByUser.get(userKey)}
-                    times={dense ? undefined : awayPersonTimes(person, schedulableQuery.data)}
+                    times={dense ? undefined : awayTimesByUser.get(userKey)}
+                    now={now}
                     canScheduleAway={schedulableUserIds.has(userKey)}
                     record={records.get(person.profile_space_id) ?? null}
                     spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
@@ -680,6 +694,11 @@ type PersonRowProps = {
    * The calendar (GEO-3152) lists online people by their free time too.
    */
   times?: PersonSchedule;
+  /**
+   * The list's clock, so "Free today 6 PM" moves on as time passes rather than holding whatever was
+   * true at the row's first render. Defaults to now.
+   */
+  now?: number;
   /**
    * Where every week this row opens says it came from. The calendar sets one for the whole row; the
    * People tab leaves it unset, and each control names its own.
@@ -766,7 +785,6 @@ function DefaultPersonRow({
   pick,
   openProfileInSidePanel = false,
 }: Omit<PersonRowProps, 'layout'>) {
-  const createChallenge = useCreateDebateChallenge();
   // Online but away (GEO-3119): a hidden tab, or nobody at it lately. A live request would go unseen,
   // so the row offers Schedule the way an offline row does — but only when there is a week to book.
   // Otherwise the pill says Away, the way it says In a debate, until they are back.
@@ -774,6 +792,10 @@ function DefaultPersonRow({
   const offersSchedule = Boolean(schedule) || (away && canScheduleAway);
   // Reached only when Schedule is not offered: someone who cannot take a live request right now.
   const unrequestable = person.in_debate || away;
+  const openTimes = (opener: HTMLElement | null, rowEntry: ScheduleEntry) =>
+    onRequireSignIn
+      ? onRequireSignIn({ target_id: person.profile_space_id, target_type: 'space', auth_control: 'see_times' })
+      : onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, entry ?? rowEntry);
   const openSchedule = (opener: HTMLElement | null) =>
     onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, entry ?? 'people_schedule');
   const chips = schedule ?? times;
@@ -835,26 +857,7 @@ function DefaultPersonRow({
           <CheckboxVisual checked={pick.selected} />
         </button>
       ) : null}
-      {/* The dot means "can be asked now", the same as inside the claim pills, so offline and away
-          rows (GEO-3119) go without it. The clip sits on the inner span: on the
-          wrapper it would cut the half of the dot that hangs over the rim. */}
-      <div className="relative h-8 w-8 shrink-0">
-        <div className="h-8 w-8 overflow-hidden rounded-full">
-          <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
-        </div>
-        {/* The face here is 32px, twice the claim pills', so the dot is twice theirs: 8px of green
-            in a 4px ring. It carried the pills' 8px dot before, which on a face this size read as
-            a speck rather than a badge. */}
-        {schedule || away ? null : <OnlineDot faceSize={32} />}
-        {/* GEO-3236, as a "+" on the face (GEO-3310) the way the debate videos have it, rather than
-            a pill crowding the name. It draws nothing on the viewer's own row or once followed. */}
-        {profileHref ? (
-          <FollowButton
-            target={{ kind: 'person', id: person.profile_space_id, name: speakerLabel(person) }}
-            variant="avatar"
-          />
-        ) : null}
-      </div>
+      <PersonFace person={person} online={!(schedule || away)} followable={profileHref !== null} />
       <div className="flex min-w-0 flex-col gap-0.5">
         {/* The name goes to their personal space, which is the profile page GEO-2611 settled on.
             A plain anchor whose click handler only observes analytics: the hub survives the
@@ -864,27 +867,12 @@ function DefaultPersonRow({
             Unlinked when the id is not a space id. Rendering an anchor to `/space/undefined`
             would look identical until it was clicked. */}
         <div className="flex min-w-0 items-center gap-2">
-          {profileHref && openProfileInSidePanel ? (
-            <SidePanelProfileName person={person} href={profileHref} analyticsSurface={analyticsSurface} />
-          ) : profileHref ? (
-            <Link
-              href={profileHref}
-              onClick={() =>
-                personProfileOpened(person.profile_space_id, null, {
-                  interaction_surface: analyticsSurface === 'calendar' ? 'debate_calendar' : 'debates_hub_people',
-                })
-              }
-              className="min-w-0"
-            >
-              <Text as="span" variant="metadataMedium" className="block truncate hover:underline">
-                {speakerLabel(person)}
-              </Text>
-            </Link>
-          ) : (
-            <Text as="p" variant="metadataMedium" className="truncate">
-              {speakerLabel(person)}
-            </Text>
-          )}
+          <PersonNameLink
+            person={person}
+            href={profileHref}
+            analyticsSurface={analyticsSurface}
+            inSidePanel={openProfileInSidePanel}
+          />
         </div>
         {/* One compact row: debates, positions, then the viewer-relative match count. The
             latter opens the exact claims without making every person row permanently taller. */}
@@ -922,83 +910,30 @@ function DefaultPersonRow({
             place. Signed out it opens Privy like the pill does, because the endpoint behind it is
             viewer-scoped and would only 401. */}
         {!offersSchedule && (
-          <button
-            type="button"
-            // Every row carries this control, so the visible label alone leaves a screen reader or
-            // voice control with a list of identical targets.
-            aria-label={`See times for ${speakerLabel(person)}`}
-            {...debateActionAnalyticsAttributes(analyticsSurface, 'See times', 'open_peer_availability')}
-            onClick={event =>
-              onRequireSignIn
-                ? onRequireSignIn({
-                    target_id: person.profile_space_id,
-                    target_type: 'space',
-                    auth_control: 'see_times',
-                  })
-                : onSeeTimes(
-                    { userId: person.user_id, name: speakerLabel(person) },
-                    event.currentTarget,
-                    entry ?? 'people_see_times'
-                  )
-            }
-            title="See times"
-            // An icon rather than text: the stats beside it need the width in a narrow panel.
-            className={HUB_ICON_BUTTON_CLASS_NAME}
-          >
-            <Calendar />
-          </button>
+          <SeeTimesButton
+            person={person}
+            analyticsSurface={analyticsSurface}
+            onPress={opener => openTimes(opener, 'people_see_times')}
+          />
         )}
         {offersSchedule ? (
           // Offline and away people cannot take a live request, so the pill books a time instead.
           // Never disabled by the viewer's live request state, for the same reason "See times" is not.
-          <HubPillButton
-            aria-label={`Schedule a debate with ${speakerLabel(person)}`}
-            analyticsSurface={analyticsSurface}
-            analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Schedule debate')}
-            analyticsIntent="open_peer_availability"
-            onClick={event => openSchedule(event.currentTarget)}
-          >
-            Schedule
-          </HubPillButton>
+          <SchedulePill person={person} analyticsSurface={analyticsSurface} onPress={opener => openSchedule(opener)} />
         ) : (
-          <HubPillButton
-            // Only the offer is primary. "In a debate" and "Away" are statuses, so they keep the outlined
-            // pill and their own text-derived analytics labels.
-            variant={unrequestable ? 'secondary' : 'primary'}
-            // Pinned to the old label so the analytics series survives the copy change to "Debate now".
+          <DebateNowPill
+            person={person}
             analyticsSurface={analyticsSurface}
-            analyticsLabel={unrequestable ? undefined : debateAnalyticsLabel(analyticsSurface, 'Request debate')}
-            onClick={() =>
-              onRequireSignIn
-                ? onRequireSignIn({
-                    target_id: person.profile_space_id,
-                    target_type: 'space',
-                    auth_control: 'start_debate',
-                  })
-                : createChallenge.mutate(
-                    { recipient_profile_space_id: person.profile_space_id },
-                    {
-                      // They went away after the list loaded (GEO-3119): steer to scheduling rather
-                      // than leave the press looking like it did nothing. With no week to book, the
-                      // refetched list redraws them as Away instead.
-                      onError: error => {
-                        if (
-                          canScheduleAway &&
-                          error instanceof GeoChatRequestError &&
-                          error.code === RECIPIENT_AWAY_CODE
-                        ) {
-                          openSchedule(null);
-                        }
-                      },
-                    }
-                  )
-            }
-            // `in_debate` and `away` hold signed out too: they describe this person rather than any
-            // viewer, so signing in would not make them available. `can_challenge` and the viewer's own pending request are the viewer-relative
-            // ones, and those are what the press bypasses on its way to the sign-in.
-            disabled={unrequestable || (!onRequireSignIn && (!person.can_challenge || disabled))}
-            pending={createChallenge.isPending}
-            pendingLabel="Requesting…"
+            onRequireSignIn={onRequireSignIn}
+            // They went away after the list loaded (GEO-3119): steer to scheduling rather than leave
+            // the press looking like it did nothing. With no week to book, the refetched list redraws
+            // them as Away instead.
+            onRecipientAway={canScheduleAway ? () => openSchedule(null) : undefined}
+            // Only the offer is primary. "In a debate" and "Away" are statuses, so they keep the
+            // outlined pill and their own text-derived analytics labels. `in_debate` and `away` hold
+            // signed out too: they describe this person rather than any viewer.
+            status={unrequestable ? (person.in_debate ? 'In a debate' : 'Away') : null}
+            disabled={disabled}
             title={
               away
                 ? `${speakerLabel(person)} is away. You can request a debate when they're back.`
@@ -1006,33 +941,11 @@ function DefaultPersonRow({
                   ? disabledReason
                   : undefined
             }
-          >
-            {person.in_debate ? 'In a debate' : away ? 'Away' : 'Debate now'}
-          </HubPillButton>
+          />
         )}
       </div>
     </li>
   );
-}
-
-/**
- * Free times for an away person on the live roster (GEO-3463), whose row has to say when they are
- * next free. The tab builds `schedule` for offline people only — someone on the roster is never in
- * the offline list — so this reads the same schedulable answer for one person, through the same
- * `personSchedule` the offline rows use. Undefined when they are not away or have no week to book.
- */
-export function awayPersonTimes(
-  person: DebatePerson,
-  schedulable: SchedulablePeopleResponse | undefined,
-  now: number = Date.now()
-): PersonSchedule | undefined {
-  if (!person.away || !schedulable) return undefined;
-  const key = normId(person.user_id);
-  const candidate = schedulable.people.find(entry => normId(entry.user.user_id) === key);
-  if (!candidate) return undefined;
-  const today = new Date(now);
-  const weekEnds = new Date(today.getFullYear(), today.getMonth(), today.getDate() + PEER_SCHEDULE_DAYS).getTime();
-  return personSchedule(candidate, schedulable.viewer_has_schedule, now, weekEnds);
 }
 
 /**
@@ -1055,6 +968,7 @@ function PanelPersonRow({
   schedule,
   times,
   entry,
+  canScheduleAway,
   record,
   spaceIds,
   labelsById,
@@ -1064,13 +978,12 @@ function PanelPersonRow({
   disabledReason,
   onRequireSignIn,
   onSeeTimes,
+  now = Date.now(),
 }: Omit<PersonRowProps, 'layout'>) {
-  const createChallenge = useCreateDebateChallenge();
-  const createRequest = useCreateDebateRequest();
   // The panel's one copy of the open ask (`HubAskProvider`), rather than a `useOutgoingAsk` per row
   // with its own bookkeeping. `undefined` outside the panel, where no row is ever "the one asked".
   const ask = useHubAsk() ?? null;
-  const [matchesOpen, setMatchesOpen] = React.useState(false);
+  const [matchesWanted, setMatchesWanted] = React.useState(false);
 
   const name = speakerLabel(person);
   // Offline rows are the ones the tab gave a week (`schedule`); the roster's own flags decide the rest.
@@ -1083,8 +996,17 @@ function PanelPersonRow({
         : person.online
           ? 'online'
           : 'offline';
+  // Held through the match count rather than on its own: a list whose matches all went away (a side
+  // changed, a claim left the comparison) unmounts without telling anyone, and would otherwise keep
+  // the hover card shut and reopen on its own once a match came back.
+  const hasMatches = matches.length > 0;
+  const matchesOpen = matchesWanted && hasMatches;
+  React.useEffect(() => {
+    if (!hasMatches) setMatchesWanted(false);
+  }, [hasMatches]);
+  const closeMatches = React.useCallback(() => setMatchesWanted(false), []);
   const free = schedule ?? times;
-  const nextFree = nextFreeLabel(free);
+  const nextFree = nextFreeLabel(free, new Date(now));
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
   const askedHere = askIsForPerson(ask, person.profile_space_id) ? ask : null;
 
@@ -1098,178 +1020,306 @@ function PanelPersonRow({
     .filter((label): label is string => Boolean(label))
     .slice(0, 3);
 
-  const secondLine =
-    status === 'debating' ? (
-      'In a debate'
-    ) : status === 'online' ? (
-      matches.length > 0 ? (
-        <PersonMatches
-          personName={name}
-          matches={matches}
-          claimNamesById={claimNamesById}
-          claimNamesLoading={claimNamesLoading}
-          labelsById={labelsById}
-          popoverPortal={popoverPortal}
-          hideWhenDetached={hidePopoversWhenDetached}
-          open={matchesOpen}
-          onOpenChange={setMatchesOpen}
-          debate={
-            onRequireSignIn
-              ? undefined
-              : {
-                  onDebate: match =>
-                    createRequest.mutate(
-                      { space_id: match.spaceId, claim_entity_id: match.claimId },
-                      { onSuccess: () => setMatchesOpen(false) }
-                    ),
-                  disabledReason: disabled ? disabledReason : null,
-                  pendingClaimId: createRequest.isPending ? (createRequest.variables?.claim_entity_id ?? null) : null,
-                }
-          }
-        />
-      ) : (
-        'Online now'
-      )
-    ) : status === 'away' ? (
-      nextFree ? (
-        `Away · ${nextFree}`
-      ) : (
-        'Away'
-      )
-    ) : (
-      (nextFree ?? 'No free times this week')
-    );
+  // Every row with matches carries the link to them (the Panel-Matches board), whatever the status;
+  // asking on one ("Debate on this") is only for someone online to take it.
+  const matchesLink = hasMatches ? (
+    <PersonMatches
+      personName={name}
+      matches={matches}
+      claimNamesById={claimNamesById}
+      claimNamesLoading={claimNamesLoading}
+      labelsById={labelsById}
+      popoverPortal={popoverPortal}
+      hideWhenDetached={hidePopoversWhenDetached}
+      open={matchesOpen}
+      onOpenChange={setMatchesWanted}
+      compact
+      debate={
+        onRequireSignIn || status !== 'online'
+          ? undefined
+          : {
+              // Fans out like any claim request: to people on the other side, this person among them.
+              pausedReason: ask
+                ? 'One request at a time. Cancel yours to ask on another claim.'
+                : disabled
+                  ? disabledReason
+                  : null,
+              onRequested: closeMatches,
+            }
+      }
+    />
+  ) : null;
+  // The status's own fact. Online with matches needs none: the link is the useful thing to say.
+  const fact =
+    status === 'debating'
+      ? 'In a debate'
+      : status === 'online'
+        ? hasMatches
+          ? null
+          : 'Online now'
+        : status === 'away'
+          ? nextFree
+            ? `Away · ${nextFree}`
+            : 'Away'
+          : (nextFree ?? 'No free times this week');
 
   return (
-    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
-      <div className="relative h-8 w-8 shrink-0">
-        <div className="h-8 w-8 overflow-hidden rounded-full">
-          <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
-        </div>
-        {/* "Can be asked now", as on the full row: offline, away and debating faces go without. */}
-        {status === 'online' ? <OnlineDot faceSize={32} /> : null}
-        {profileHref ? (
-          <FollowButton target={{ kind: 'person', id: person.profile_space_id, name }} variant="avatar" />
-        ) : null}
-      </div>
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <PersonHoverCard
-          person={person}
-          status={status}
-          record={record}
-          spaceNames={spaceNames}
-          nextFree={nextFree}
-          followable={profileHref !== null}
-          suppressed={matchesOpen}
-          popoverPortal={popoverPortal}
-          hideWhenDetached={hidePopoversWhenDetached}
-        >
-          {profileHref ? (
-            <Link
-              href={profileHref}
-              onClick={() =>
-                personProfileOpened(person.profile_space_id, null, { interaction_surface: 'debates_hub_people' })
-              }
-              className="min-w-0"
-            >
-              <Text as="span" variant="metadataMedium" className="block truncate hover:underline">
-                {name}
-              </Text>
-            </Link>
-          ) : (
-            <Text as="p" variant="metadataMedium" className="truncate">
-              {name}
-            </Text>
-          )}
-        </PersonHoverCard>
-        <span className="flex min-w-0 text-browseSection text-grey-04" data-testid="person-row-fact">
-          {typeof secondLine === 'string' ? <span className="truncate">{secondLine}</span> : secondLine}
+    // The prototype's `.prow`: the separator is the divider tone, lighter than a card border.
+    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-divider py-2.5 last:border-b-0">
+      {/* "Can be asked now", as on the full row: offline, away and debating faces go without. */}
+      <PersonFace person={person} online={status === 'online'} followable={profileHref !== null} />
+      <PersonHoverCard
+        person={person}
+        status={status}
+        record={record}
+        spaceNames={spaceNames}
+        nextFree={nextFree}
+        matchCount={matches.length}
+        followable={profileHref !== null}
+        suppressed={matchesOpen}
+        popoverPortal={popoverPortal}
+        hideWhenDetached={hidePopoversWhenDetached}
+        name={<PersonNameLink person={person} href={profileHref} analyticsSurface="hub" />}
+      >
+        <span className="flex min-w-0 text-browseSection leading-4 text-grey-04" data-testid="person-row-fact">
+          {matchesLink}
+          {matchesLink && fact ? (
+            <span aria-hidden className="shrink-0 px-1.5">
+              ·
+            </span>
+          ) : null}
+          {fact ? <span className="truncate">{fact}</span> : null}
         </span>
-      </div>
-      <div className="flex shrink-0 items-center gap-1">
+      </PersonHoverCard>
+      <div className="flex shrink-0 items-center gap-0.5">
         {/* On every row, never disabled: someone in a debate, or a viewer whose own request is out, is
             exactly who wants to book a time instead. */}
-        <button
-          type="button"
-          aria-label={`See times for ${name}`}
-          {...debateActionAnalyticsAttributes('hub', 'See times', 'open_peer_availability')}
-          onClick={event => openTimes(event.currentTarget, 'people_see_times')}
-          title="See times"
-          className={HUB_ICON_BUTTON_CLASS_NAME}
-        >
-          <Calendar />
-        </button>
+        <SeeTimesButton
+          person={person}
+          analyticsSurface="hub"
+          onPress={opener => openTimes(opener, 'people_see_times')}
+        />
         {status === 'debating' ? (
-          <HubPillButton disabled>In a debate</HubPillButton>
+          <HubPillButton disabled className={PANEL_PILL_CLASS_NAME}>
+            In a debate
+          </HubPillButton>
         ) : status === 'online' ? (
           askedHere ? (
-            <RequestingPill expiresAt={askedHere.expiresAt} name={name} />
+            <RequestingPill
+              expiresAt={askedHere.expiresAt}
+              who={name}
+              className={hubPillClassName('secondary', cx('gap-1', PANEL_PILL_CLASS_NAME))}
+            />
           ) : (
-            <HubPillButton
-              variant="primary"
+            <DebateNowPill
+              person={person}
               analyticsSurface="hub"
-              analyticsLabel={debateAnalyticsLabel('hub', 'Request debate')}
-              onClick={() =>
-                onRequireSignIn
-                  ? onRequireSignIn({
-                      target_id: person.profile_space_id,
-                      target_type: 'space',
-                      auth_control: 'start_debate',
-                    })
-                  : createChallenge.mutate(
-                      { recipient_profile_space_id: person.profile_space_id },
-                      {
-                        // They went away between the list loading and the press (GEO-3119): their week
-                        // is the next best thing, as on the full row.
-                        onError: error => {
-                          if (error instanceof GeoChatRequestError && error.code === RECIPIENT_AWAY_CODE) {
-                            openTimes(null, 'people_schedule');
-                          }
-                        },
-                      }
-                    )
-              }
+              onRequireSignIn={onRequireSignIn}
+              // They went away between the list loading and the press (GEO-3119): their week is the
+              // next best thing, as on the full row — but only when there is a week to book.
+              onRecipientAway={canScheduleAway ? () => openTimes(null, 'people_schedule') : undefined}
               // Paused while any ask is out (one at a time), or when the viewer is otherwise tied up.
-              // Signed out, Privy is the press, so nothing viewer-relative gates it.
-              disabled={!onRequireSignIn && (!person.can_challenge || disabled)}
-              pending={createChallenge.isPending}
-              pendingLabel="Requesting…"
+              disabled={disabled}
               title={disabled && !onRequireSignIn ? disabledReason : undefined}
-            >
-              Debate now
-            </HubPillButton>
+              className={PANEL_PILL_CLASS_NAME}
+            />
           )
         ) : (
-          <HubPillButton
-            aria-label={`Schedule a debate with ${name}`}
+          <SchedulePill
+            person={person}
             analyticsSurface="hub"
-            analyticsLabel={debateAnalyticsLabel('hub', 'Schedule debate')}
-            analyticsIntent="open_peer_availability"
-            onClick={event => openTimes(event.currentTarget, 'people_schedule')}
-          >
-            Schedule
-          </HubPillButton>
+            onPress={opener => openTimes(opener, 'people_schedule')}
+            className={PANEL_PILL_CLASS_NAME}
+          />
         )}
       </div>
     </li>
   );
 }
 
+/** The panel row's pills, one step taller on a phone (Specs: 28px desktop, 32px phone). */
+const PANEL_PILL_CLASS_NAME = 'md:h-8';
+
 /**
- * The pressed Debate now, while the ask is out: "Requesting · 1:12", counting down the real expiry
- * (GEO-3463). A live clock only on this one row, so the rest of the list does not re-render each
- * second. Not a control: Cancel lives on the strip above the tabs, where it is on every tab.
+ * A person's face: the avatar, the green dot that means "can be asked now", and Follow as a "+" on
+ * it (GEO-3236, GEO-3310). Shared by the full row and the panel's.
  */
-function RequestingPill({ expiresAt, name }: { expiresAt: string; name: string }) {
-  const { label, remainingMs } = useAskClock(expiresAt);
+function PersonFace({ person, online, followable }: { person: DebatePerson; online: boolean; followable: boolean }) {
   return (
-    <span
-      role="status"
-      aria-label={`Requesting ${name}, ${Math.ceil(remainingMs / 1_000)} seconds left`}
-      className={hubPillClassName('secondary', 'gap-1 tabular-nums')}
+    // The clip sits on the inner span: on the wrapper it would cut the half of the dot that hangs
+    // over the rim.
+    <div className="relative h-8 w-8 shrink-0">
+      <div className="h-8 w-8 overflow-hidden rounded-full">
+        <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
+      </div>
+      {/* The face here is 32px, twice the claim pills', so the dot is twice theirs: 8px of green in a
+          4px ring. The pills' 8px dot read as a speck on a face this size. */}
+      {online ? <OnlineDot faceSize={32} /> : null}
+      {/* Draws nothing on the viewer's own row or once followed. */}
+      {followable ? (
+        <FollowButton
+          target={{ kind: 'person', id: person.profile_space_id, name: speakerLabel(person) }}
+          variant="avatar"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The name, linked to their personal space — the profile page GEO-2611 settled on. A plain anchor
+ * whose click only observes analytics, which keeps cmd-click, middle click and "copy link address"
+ * working (GEO-2701). Unlinked when the id is not a space id: an anchor to `/space/undefined` would
+ * look identical until it was clicked. `inSidePanel` opens it in the entity side panel instead, for
+ * a page that is itself the work (the calendar).
+ */
+function PersonNameLink({
+  person,
+  href,
+  analyticsSurface,
+  inSidePanel = false,
+}: {
+  person: DebatePerson;
+  href: string | null;
+  analyticsSurface: DebateAnalyticsSurface;
+  inSidePanel?: boolean;
+}) {
+  if (!href) {
+    return (
+      <Text as="p" variant="metadataMedium" className="truncate">
+        {speakerLabel(person)}
+      </Text>
+    );
+  }
+  if (inSidePanel) return <SidePanelProfileName person={person} href={href} analyticsSurface={analyticsSurface} />;
+  return (
+    <Link
+      href={href}
+      onClick={() =>
+        personProfileOpened(person.profile_space_id, null, {
+          interaction_surface: analyticsSurface === 'calendar' ? 'debate_calendar' : 'debates_hub_people',
+        })
+      }
+      className="min-w-0"
     >
-      Requesting · {label}
-    </span>
+      <Text as="span" variant="metadataMedium" className="block truncate hover:underline">
+        {speakerLabel(person)}
+      </Text>
+    </Link>
+  );
+}
+
+/**
+ * The calendar icon that opens a person's week. Quiet, and never disabled alongside the pill:
+ * someone in a debate, or a viewer whose own request is out, is exactly who wants to know when this
+ * person is next free. An icon rather than text, for the width a narrow panel needs.
+ */
+function SeeTimesButton({
+  person,
+  analyticsSurface,
+  onPress,
+}: {
+  person: DebatePerson;
+  analyticsSurface: DebateAnalyticsSurface;
+  onPress: (opener: HTMLElement) => void;
+}) {
+  return (
+    <button
+      type="button"
+      // Every row carries this control, so the visible label alone leaves a screen reader or voice
+      // control with a list of identical targets.
+      aria-label={`See times for ${speakerLabel(person)}`}
+      {...debateActionAnalyticsAttributes(analyticsSurface, 'See times', 'open_peer_availability')}
+      onClick={event => onPress(event.currentTarget)}
+      title="See times"
+      className={HUB_ICON_BUTTON_CLASS_NAME}
+    >
+      <Calendar />
+    </button>
+  );
+}
+
+/** Schedule: offline and away people cannot take a live request, so the pill books a time instead. */
+function SchedulePill({
+  person,
+  analyticsSurface,
+  onPress,
+  className,
+}: {
+  person: DebatePerson;
+  analyticsSurface: DebateAnalyticsSurface;
+  onPress: (opener: HTMLElement) => void;
+  className?: string;
+}) {
+  return (
+    <HubPillButton
+      className={className}
+      aria-label={`Schedule a debate with ${speakerLabel(person)}`}
+      analyticsSurface={analyticsSurface}
+      analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Schedule debate')}
+      analyticsIntent="open_peer_availability"
+      onClick={event => onPress(event.currentTarget)}
+    >
+      Schedule
+    </HubPillButton>
+  );
+}
+
+/**
+ * Debate now: the claimless challenge, or Privy signed out. `status` turns it into an outlined,
+ * disabled "In a debate" / "Away" — statuses of this person rather than of any viewer, so they hold
+ * signed out too. `can_challenge` and the viewer's own pending request are the viewer-relative gates,
+ * and those are what a signed-out press bypasses on its way to the sign-in.
+ */
+function DebateNowPill({
+  person,
+  analyticsSurface,
+  onRequireSignIn,
+  onRecipientAway,
+  status = null,
+  disabled,
+  title,
+  className,
+}: {
+  person: DebatePerson;
+  analyticsSurface: DebateAnalyticsSurface;
+  onRequireSignIn?: (properties?: AnalyticsProperties) => void;
+  /** They went away between the list loading and the press (GEO-3119). Unset: nothing to offer. */
+  onRecipientAway?: () => void;
+  status?: 'In a debate' | 'Away' | null;
+  disabled: boolean;
+  title?: string;
+  className?: string;
+}) {
+  const createChallenge = useCreateDebateChallenge();
+  return (
+    <HubPillButton
+      className={className}
+      variant={status ? 'secondary' : 'primary'}
+      analyticsSurface={analyticsSurface}
+      // Pinned to the old label so the analytics series survives the copy change to "Debate now".
+      analyticsLabel={status ? undefined : debateAnalyticsLabel(analyticsSurface, 'Request debate')}
+      onClick={() =>
+        onRequireSignIn
+          ? onRequireSignIn({ target_id: person.profile_space_id, target_type: 'space', auth_control: 'start_debate' })
+          : createChallenge.mutate(
+              { recipient_profile_space_id: person.profile_space_id },
+              {
+                onError: error => {
+                  if (onRecipientAway && error instanceof GeoChatRequestError && error.code === RECIPIENT_AWAY_CODE) {
+                    onRecipientAway();
+                  }
+                },
+              }
+            )
+      }
+      disabled={Boolean(status) || (!onRequireSignIn && (!person.can_challenge || disabled))}
+      pending={createChallenge.isPending}
+      pendingLabel="Requesting…"
+      title={title}
+    >
+      {status ?? 'Debate now'}
+    </HubPillButton>
   );
 }
 

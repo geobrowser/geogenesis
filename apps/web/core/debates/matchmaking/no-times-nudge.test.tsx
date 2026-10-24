@@ -4,7 +4,15 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ authenticated: true, loaded: true, hasTimes: false }));
+const mocks = vi.hoisted(() => ({
+  authenticated: true,
+  loaded: true,
+  hasTimes: false,
+  modal: null as null | {
+    openerRef?: { current: HTMLElement | null };
+    onSaved?: (blocks: unknown[]) => void;
+  },
+}));
 
 vi.mock('~/core/debates/hooks', () => ({
   useGeoChatAuth: () => ({ authenticated: mocks.authenticated }),
@@ -16,15 +24,22 @@ vi.mock('~/core/debates/hooks', () => ({
 vi.mock('~/core/availability/upcoming-availability', () => ({ hasUpcomingAvailability: () => mocks.hasTimes }));
 // The editor has its own suite; here it only matters that the line opens it.
 vi.mock('~/partials/availability/own-schedule-modal', () => ({
-  OwnScheduleModal: ({ open }: { open: boolean }) => (open ? <div role="dialog" aria-label="My times" /> : null),
+  OwnScheduleModal: (props: {
+    open: boolean;
+    openerRef?: { current: HTMLElement | null };
+    onSaved?: (blocks: unknown[]) => void;
+  }) => {
+    mocks.modal = props;
+    return props.open ? <div role="dialog" aria-label="My times" /> : null;
+  },
 }));
 
 const { NoTimesNudge } = await import('./no-times-nudge');
 
-function renderNudge(store = createStore()) {
+function renderNudge(store = createStore(), scheduleButtonRef?: { current: HTMLButtonElement | null }) {
   render(
     <Provider store={store}>
-      <NoTimesNudge />
+      <NoTimesNudge scheduleButtonRef={scheduleButtonRef} />
     </Provider>
   );
   return store;
@@ -64,5 +79,27 @@ describe('NoTimesNudge', () => {
     renderNudge();
 
     expect(screen.queryByTestId('no-times-nudge')).not.toBeInTheDocument();
+  });
+
+  it('wears the purple-tint token rather than a literal colour', () => {
+    renderNudge();
+
+    expect(screen.getByTestId('no-times-nudge')).toHaveClass('bg-purple-tint');
+  });
+
+  // Saving times takes this line away, so the editor must not hand focus back to it.
+  it('sends focus to the availability pill once saving times removes the line', () => {
+    const pill = document.createElement('button');
+    document.body.appendChild(pill);
+    renderNudge(createStore(), { current: pill });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set my times' }));
+    expect(mocks.modal?.openerRef?.current).toBe(screen.getByRole('button', { name: 'Set my times' }));
+
+    mocks.hasTimes = true;
+    mocks.modal?.onSaved?.([]);
+
+    expect(mocks.modal?.openerRef?.current).toBe(pill);
+    pill.remove();
   });
 });

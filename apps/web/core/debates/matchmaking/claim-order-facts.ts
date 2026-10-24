@@ -1,5 +1,5 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -70,6 +70,10 @@ export function useClaimOrderFacts(claimEntityIds: string[], enabled = true) {
       ),
     enabled: enabled && ids.length > 0,
     staleTime: 5 * 60_000,
+    // A new match or a new page changes the id set and so the key. Without the previous answer held
+    // for that round trip, the list fell back to arrival order and then jumped back once it landed.
+    // The claims already listed are in the previous answer; only the new ones wait.
+    placeholderData: keepPreviousData,
   });
   return { facts: query.data ?? NO_FACTS, isLoading: query.isLoading };
 }

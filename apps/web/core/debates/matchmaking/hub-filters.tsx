@@ -1,6 +1,5 @@
 'use client';
 
-import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
@@ -8,21 +7,24 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
-import { type SpaceLabel, spaceLabel } from '~/core/hooks/use-space-labels';
+import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
 
-import { CheckboxVisual } from '~/design-system/checkbox';
+import { BottomSheet } from '~/design-system/bottom-sheet';
 import { CloseSmall } from '~/design-system/icons/close-small';
-import { Input } from '~/design-system/input';
+import { Search } from '~/design-system/icons/search';
+import { inputStyles } from '~/design-system/input';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import type { DebateClaimPositionSummary } from '../api';
 import type { TaggedClaimOrder } from '../tagged-claims';
 import { type ClaimOrderFacts, compareByNewest, compareByRanking } from './claim-order-facts';
+import { SegmentedControl } from './debate-calendar-controls';
 import { FacetFilterPills, type FacetPillOption } from './facet-filter-pills';
 import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
-import { narrowingOptions, orderFacetOptions } from './topic-facets';
+import type { HubEmptyAction } from './hub-states';
+import { narrowingOptions, orderFacetOptions, toggleId } from './topic-facets';
 
 /**
  * The side panel's one search field and one Filters button (GEO-3463).
@@ -68,7 +70,13 @@ export type HubFilterChoice<T extends string> = {
 export type HubFacetFilter = {
   heading: string;
   options: FacetPillOption[];
-  pickedIds: string[];
+  /**
+   * Picked spaces and picked topics, apart. A pick can drop out of `options` (its count went to
+   * nothing under a later pick, or its facet failed to load), and its chip must still know which
+   * kind it is: removing a topic's chip as though it were a space would add it to the spaces.
+   */
+  pickedSpaceIds: string[];
+  pickedTopicIds: string[];
   onToggle: (option: FacetPillOption) => void;
   onClear: () => void;
   countsPending?: boolean;
@@ -90,6 +98,11 @@ export type PanelListFilters = {
   graphOrder?: TaggedClaimOrder;
   /** For lists ordered by geo-chat, which cannot be asked for another order. */
   clientSort?: ClaimRowSort;
+  /**
+   * What to say when the tab's own narrowing (`keepClaim`) left nothing, and the way out — usually
+   * turning that switch back off. Without it the list would blame a filter the viewer never set.
+   */
+  emptyPredicate?: { message: string; action?: HubEmptyAction };
 };
 
 export type ClaimRowSort = 'best' | 'newest' | 'people';
@@ -143,8 +156,6 @@ type Props<S extends string, C extends string> = {
   resultCount: number | null;
   /** Everything but Sort back to its default. */
   onClearAll: () => void;
-  /** Above the search row, inside the same sticky block (the People tab's sent-challenge card). */
-  leading?: React.ReactNode;
 };
 
 /** One chip under search per active filter, each removable on its own. */
@@ -161,7 +172,6 @@ export function HubFiltersBar<S extends string, C extends string>({
   facets,
   resultCount,
   onClearAll,
-  leading,
 }: Props<S, C>) {
   const isMobile = useIsMobileLayout();
   const [open, setOpen] = React.useState(false);
@@ -182,15 +192,18 @@ export function HubFiltersBar<S extends string, C extends string>({
       }
     }
     if (facets) {
-      const byId = new Map(facets.options.map(option => [normId(option.id), option]));
-      for (const id of facets.pickedIds) {
-        const option = byId.get(normId(id));
-        active.push({
-          key: `facet:${id}`,
-          label: option?.name ?? (option?.kind === 'topic' ? 'Topic' : 'Space'),
-          onRemove: () => facets.onToggle(option ?? { kind: 'space', id, name: null, count: 0 }),
+      const byId = new Map(facets.options.map(option => [`${option.kind}:${normId(option.id)}`, option]));
+      const picked = (kind: FacetPillOption['kind'], ids: string[]) =>
+        ids.map(id => {
+          const option = byId.get(`${kind}:${normId(id)}`) ?? { kind, id, name: null, count: 0 };
+          active.push({
+            key: `${kind}:${id}`,
+            label: option.name ?? (kind === 'topic' ? 'Topic' : 'Space'),
+            onRemove: () => facets.onToggle(option),
+          });
         });
-      }
+      picked('space', facets.pickedSpaceIds);
+      picked('topic', facets.pickedTopicIds);
     }
     return active;
   }, [choice, facets, toggles]);
@@ -210,7 +223,7 @@ export function HubFiltersBar<S extends string, C extends string>({
       {activeCount > 0 ? (
         <span
           aria-hidden
-          className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-white px-1 text-[13px] leading-none text-text"
+          className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-white px-1 text-browseSection leading-none text-text"
         >
           {activeCount}
         </span>
@@ -229,24 +242,22 @@ export function HubFiltersBar<S extends string, C extends string>({
       hasSelection={activeCount > 0}
       onClearAll={onClearAll}
       onDone={() => setOpen(false)}
+      phone={isMobile}
     />
   );
 
   return (
     <div className="flex flex-col gap-2">
-      {leading}
       <div className="flex items-center gap-2">
-        <div className="min-w-0 flex-1">
-          <Input
-            withSearchIcon
-            value={search}
-            onChange={event => onSearchChange(event.currentTarget.value)}
-            placeholder={searchPlaceholder}
-            aria-label={searchPlaceholder}
-          />
-        </div>
+        <SearchField value={search} onChange={onSearchChange} placeholder={searchPlaceholder} />
         {isMobile ? (
-          <FiltersSheet open={open} onOpenChange={setOpen} trigger={trigger}>
+          <FiltersSheet
+            open={open}
+            onOpenChange={setOpen}
+            trigger={trigger}
+            onClearAll={activeCount > 0 ? onClearAll : undefined}
+            analyticsSurface={analyticsSurface}
+          >
             {body}
           </FiltersSheet>
         ) : (
@@ -264,15 +275,71 @@ export function HubFiltersBar<S extends string, C extends string>({
               aria-label={`Remove ${chip.label}`}
               {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'Remove filter chip', 'filter')}
               onClick={chip.onRemove}
-              className="inline-flex h-6 max-w-full items-center gap-1 rounded-full border border-grey-02 bg-white pr-1.5 pl-2.5 text-footnote text-text transition-colors hover:bg-grey-01"
+              className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full bg-divider pr-1.5 pl-2.5 text-browseSection text-text transition-colors hover:bg-grey-02"
             >
               <span className="truncate">{chip.label}</span>
               <CloseSmall />
             </button>
           ))}
+          <ClearLink analyticsSurface={analyticsSurface} onClick={onClearAll} className="text-browseSection">
+            Clear
+          </ClearLink>
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The panel's search box: the app's input, 32px tall on a desktop and 36px on a phone as the build
+ * spec has it, so it lines up with the Filters pill beside it.
+ */
+function SearchField({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative min-w-0 flex-1">
+      <span aria-hidden className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2">
+        <Search />
+      </span>
+      <input
+        value={value}
+        onChange={event => onChange(event.currentTarget.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        data-testid="hub-filters-search"
+        className={cx(inputStyles({ withSearchIcon: true }), 'h-8 py-0 md:h-9')}
+      />
+    </div>
+  );
+}
+
+function ClearLink({
+  analyticsSurface,
+  onClick,
+  className,
+  children,
+}: {
+  analyticsSurface: DebateAnalyticsSurface;
+  onClick: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'Clear all filters', 'filter')}
+      onClick={onClick}
+      className={cx('text-grey-04 underline transition-colors hover:text-text', className)}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -295,14 +362,15 @@ function FiltersPopover({
         <Popover.Portal container={portal}>
           {/* Radix closes this on any outside press, which is the "click anywhere outside" the
               ticket asks for; its wrapper carries `data-radix-popper-content-wrapper`, which the
-              panel's own outside-press handler already leaves alone. */}
+              panel's own outside-press handler already leaves alone. The panel's width less its
+              16px gutters, as the prototype draws it. */}
           <Popover.Content
             side="bottom"
             align="end"
             sideOffset={8}
             collisionPadding={16}
             aria-label="Filters"
-            className="z-100 flex w-[368px] max-w-[calc(100vw-32px)] flex-col gap-3.5 rounded-xl border border-grey-02 bg-white p-3.5 shadow-lg"
+            className="z-100 flex w-[368px] max-w-[calc(100vw-32px)] flex-col gap-3.5 rounded-xl border border-grey-02 bg-white p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.12)]"
           >
             {children}
           </Popover.Content>
@@ -313,51 +381,44 @@ function FiltersPopover({
 }
 
 /**
- * The phone version. A Dialog rather than a popover: it needs a backdrop, a focus trap and Escape,
- * and the panel's own Escape handler already steps aside for an `aria-modal` dialog that isn't the
- * panel itself. The card is Content *inside* Overlay, so a press on the backdrop reaches the
- * overlay and dismisses — a full-screen Content would swallow it.
+ * The phone version, the app's bottom sheet: a modal with a backdrop, a focus trap and Escape.
+ * Portaled into the panel's own sheet so it stays inside that sheet's focus trap, with Clear all in
+ * its header and Show N across its foot as the phone board draws it.
  */
 function FiltersSheet({
   open,
   onOpenChange,
   trigger,
+  onClearAll,
+  analyticsSurface,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trigger: React.ReactNode;
+  onClearAll?: () => void;
+  analyticsSurface: DebateAnalyticsSurface;
   children: React.ReactNode;
 }) {
   const portal = useElevatedPopoverPortal();
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
-      {portal ? (
-        <Dialog.Portal container={portal}>
-          <Dialog.Overlay className="fixed inset-0 z-[220] flex items-end bg-grey-04/50">
-            {/* `aria-modal` said outright: the panel's Escape handler steps aside for a modal dialog
-                that isn't the panel, and Radix does not set the attribute itself. */}
-            <Dialog.Content
-              aria-modal="true"
-              aria-describedby={undefined}
-              className="flex max-h-[85dvh] w-full flex-col gap-3.5 overflow-y-auto rounded-t-xl bg-white px-4 pt-3 pb-[max(16px,env(safe-area-inset-bottom))]"
-            >
-              <div className="flex items-center justify-between">
-                <Dialog.Title className="text-smallTitle text-text">Filters</Dialog.Title>
-                <Dialog.Close
-                  aria-label="Close filters"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-grey-04 hover:bg-grey-01"
-                >
-                  <CloseSmall />
-                </Dialog.Close>
-              </div>
-              {children}
-            </Dialog.Content>
-          </Dialog.Overlay>
-        </Dialog.Portal>
-      ) : null}
-    </Dialog.Root>
+    <BottomSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      trigger={trigger}
+      title="Filters"
+      showTitle
+      headerAction={
+        onClearAll ? (
+          <ClearLink analyticsSurface={analyticsSurface} onClick={onClearAll} className="text-metadata">
+            Clear all
+          </ClearLink>
+        ) : undefined
+      }
+      container={portal}
+    >
+      <div className="flex flex-col gap-5">{children}</div>
+    </BottomSheet>
   );
 }
 
@@ -371,6 +432,7 @@ function FiltersBody<S extends string, C extends string>({
   hasSelection,
   onClearAll,
   onDone,
+  phone,
 }: {
   analyticsSurface: DebateAnalyticsSurface;
   sort: Props<S, C>['sort'];
@@ -381,27 +443,46 @@ function FiltersBody<S extends string, C extends string>({
   hasSelection: boolean;
   onClearAll: () => void;
   onDone: () => void;
+  phone: boolean;
 }) {
+  const optionAttributes = (name: string) => (option: { label: string }) =>
+    debateSurfaceAnalyticsAttributes(analyticsSurface, `${name} ${option.label}`, 'filter');
+  const show = (
+    <HubPillButton
+      variant="primary"
+      analyticsSurface={analyticsSurface}
+      analyticsLabel="Show filtered results"
+      onClick={onDone}
+      className={phone ? 'h-11 w-full text-input' : undefined}
+    >
+      {resultCount === null ? 'Show' : `Show ${resultCount}`}
+    </HubPillButton>
+  );
+
   return (
     <>
       <FilterSection heading="Sort">
-        <Segmented
-          analyticsSurface={analyticsSurface}
-          analyticsName="Sort"
+        <SegmentedControl
+          label="Sort"
+          variant="tinted"
+          size={phone ? 'large' : 'default'}
           options={sort.options}
           value={sort.value}
           onChange={sort.onChange}
+          optionAttributes={optionAttributes('Sort')}
         />
       </FilterSection>
 
       {choice ? (
         <FilterSection heading={choice.heading}>
-          <Segmented
-            analyticsSurface={analyticsSurface}
-            analyticsName={choice.heading}
+          <SegmentedControl
+            label={choice.heading}
+            variant="tinted"
+            size={phone ? 'large' : 'default'}
             options={choice.options}
             value={choice.value}
             onChange={choice.onChange}
+            optionAttributes={optionAttributes(choice.heading)}
           />
         </FilterSection>
       ) : null}
@@ -416,100 +497,188 @@ function FiltersBody<S extends string, C extends string>({
               aria-checked={toggle.checked}
               {...debateSurfaceAnalyticsAttributes(analyticsSurface, toggle.label, 'filter')}
               onClick={() => toggle.onChange(!toggle.checked)}
-              className="-mx-1.5 flex min-h-8 items-center gap-2.5 rounded-lg px-1.5 text-left text-metadata text-text transition-colors hover:bg-grey-01 md:min-h-11"
+              className={cx(
+                '-mx-1.5 flex items-center gap-2 rounded-md p-1.5 text-left text-metadata transition-colors hover:bg-grey-01 md:min-h-11',
+                toggle.checked ? 'text-text' : 'text-grey-04'
+              )}
             >
-              <CheckboxVisual checked={toggle.checked} />
+              <CheckBox checked={toggle.checked} />
               {toggle.label}
             </button>
           ))}
         </div>
       ) : null}
 
-      {facets && (facets.options.length > 0 || facets.pickedIds.length > 0) ? (
+      {facets && (facets.options.length > 0 || facets.pickedSpaceIds.length + facets.pickedTopicIds.length > 0) ? (
         <FilterSection heading={facets.heading}>
           <FacetFilterPills
             analyticsSurface={analyticsSurface}
             options={facets.options}
-            pickedIds={facets.pickedIds}
+            pickedIds={[...facets.pickedSpaceIds, ...facets.pickedTopicIds]}
             onToggle={facets.onToggle}
             onClear={facets.onClear}
             countsPending={facets.countsPending}
           />
+          <p className="mt-2 text-browseSection text-grey-04">
+            Each pick narrows further. Counts show what’s left if you add it.
+          </p>
         </FilterSection>
       ) : null}
 
-      <div className="flex items-center justify-between gap-3 border-t border-divider pt-3">
-        {/* Only once there is something to clear (decision 30); Show stays right-aligned either way. */}
-        {hasSelection ? (
-          <button
-            type="button"
-            {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'Clear all filters', 'filter')}
-            onClick={onClearAll}
-            className="text-metadata text-text underline transition-colors hover:text-grey-04"
-          >
-            Clear all
-          </button>
-        ) : (
-          <span />
-        )}
-        <HubPillButton
-          variant="primary"
-          analyticsSurface={analyticsSurface}
-          analyticsLabel="Show filtered results"
-          onClick={onDone}
-          className="md:h-11 md:px-5"
-        >
-          {resultCount === null ? 'Show' : `Show ${resultCount}`}
-        </HubPillButton>
-      </div>
+      {phone ? (
+        <div className="-mx-4 border-t border-divider px-4 pt-3">{show}</div>
+      ) : (
+        <div className="flex items-center justify-between gap-3 border-t border-divider pt-3">
+          {/* Only once there is something to clear (decision 30); Show stays right-aligned either way. */}
+          {hasSelection ? (
+            <ClearLink analyticsSurface={analyticsSurface} onClick={onClearAll} className="text-breadcrumb">
+              Clear all
+            </ClearLink>
+          ) : (
+            <span />
+          )}
+          {show}
+        </div>
+      )}
     </>
+  );
+}
+
+/** The prototype's `.box`: 14px, a grey outline, filled black when on. */
+function CheckBox({ checked }: { checked: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cx(
+        'inline-flex size-3.5 shrink-0 items-center justify-center rounded-[4px] border',
+        checked ? 'border-text bg-text text-white' : 'border-grey-03 bg-white'
+      )}
+    >
+      {checked ? (
+        <svg viewBox="0 0 10 10" className="size-2.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M2 5.2 4.1 7.2 8 3" />
+        </svg>
+      ) : null}
+    </span>
   );
 }
 
 function FilterSection({ heading, children }: { heading: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-footnoteMedium tracking-[0.3px] text-grey-04 uppercase">{heading}</h3>
+    <section className="flex flex-col">
+      <h3 className="mb-2 text-footnoteMedium tracking-[0.2px] text-grey-04 uppercase">{heading}</h3>
       {children}
     </section>
   );
 }
 
-function Segmented<T extends string>({
-  analyticsSurface,
-  analyticsName,
-  options,
-  value,
-  onChange,
+/**
+ * The Filters bar for a panel list (GEO-3463), wired the one way every list wires it: the list's
+ * spaces and topics as the pill row under the panel's rules, named from the sidebar's labels, picks
+ * toggled by kind, and Clear all resetting them along with the tab's own switches. People, Matches
+ * and Explore each drew this by hand before; this is that wiring once.
+ */
+export function PanelFiltersBar({
+  analyticsSurface = 'hub',
+  filters,
+  search,
+  onSearchChange,
+  searchPlaceholder,
+  facetHeading = 'Spaces and topics',
+  spaces,
+  topics,
+  spaceIds,
+  topicIds,
+  onSpaceToggle,
+  onSpacesClear,
+  onTopicIdsChange,
+  spacesAreExclusive = true,
+  listedCount,
+  resultCount,
+  countsPending,
 }: {
-  analyticsSurface: DebateAnalyticsSurface;
-  analyticsName: string;
-  options: HubSortOption<T>[];
-  value: T;
-  onChange: (next: T) => void;
+  analyticsSurface?: DebateAnalyticsSurface;
+  filters: PanelListFilters;
+  search: string;
+  onSearchChange: (next: string) => void;
+  searchPlaceholder: string;
+  facetHeading?: string;
+  spaces: { id: string; count: number }[];
+  topics?: { id: string; name: string | null; count: number }[];
+  spaceIds: string[];
+  topicIds?: string[];
+  onSpaceToggle: (spaceId: string) => void;
+  onSpacesClear: () => void;
+  onTopicIdsChange?: (update: (current: string[]) => string[]) => void;
+  spacesAreExclusive?: boolean;
+  /** Distinct rows under the current filters, for which pills still narrow; 0 while unknown. */
+  listedCount: number;
+  resultCount: number | null;
+  countsPending?: boolean;
 }) {
+  const { labelsById, isLoading: labelsLoading } = useSpaceLabels(
+    React.useMemo(() => spaces.map(space => space.id), [spaces])
+  );
+  const clearFacets = React.useCallback(() => {
+    onSpacesClear();
+    onTopicIdsChange?.(() => []);
+  }, [onSpacesClear, onTopicIdsChange]);
+
+  const facets = React.useMemo<HubFacetFilter>(
+    () => ({
+      heading: facetHeading,
+      options: panelFacetOptions({
+        spaces,
+        topics,
+        spaceIds,
+        topicIds,
+        listedCount,
+        labelsById,
+        labelsLoading,
+        spacesAreExclusive,
+      }),
+      pickedSpaceIds: spaceIds,
+      pickedTopicIds: topicIds ?? [],
+      onToggle: option =>
+        option.kind === 'space'
+          ? onSpaceToggle(option.id)
+          : onTopicIdsChange?.(current => toggleId(current, option.id)),
+      onClear: clearFacets,
+      countsPending,
+    }),
+    [
+      clearFacets,
+      countsPending,
+      facetHeading,
+      labelsById,
+      labelsLoading,
+      listedCount,
+      onSpaceToggle,
+      onTopicIdsChange,
+      spaceIds,
+      spaces,
+      spacesAreExclusive,
+      topicIds,
+      topics,
+    ]
+  );
+
   return (
-    <div role="radiogroup" aria-label={analyticsName} className="flex rounded-full bg-grey-01 p-0.5">
-      {options.map(option => {
-        const selected = option.value === value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            {...debateSurfaceAnalyticsAttributes(analyticsSurface, `${analyticsName} ${option.label}`, 'filter')}
-            onClick={() => onChange(option.value)}
-            className={cx(
-              'h-[26px] flex-1 rounded-full px-2 text-breadcrumb whitespace-nowrap transition-colors md:h-9',
-              selected ? 'bg-white text-text shadow-[0_1px_2px_rgba(0,0,0,0.12)]' : 'text-grey-04 hover:text-text'
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
+    <HubFiltersBar
+      analyticsSurface={analyticsSurface}
+      search={search}
+      onSearchChange={onSearchChange}
+      searchPlaceholder={searchPlaceholder}
+      sort={filters.sort}
+      choice={filters.choice}
+      toggles={filters.toggles}
+      facets={facets}
+      resultCount={resultCount}
+      onClearAll={() => {
+        clearFacets();
+        filters.onClearExtras?.();
+      }}
+    />
   );
 }
 

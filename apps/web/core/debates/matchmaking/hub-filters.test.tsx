@@ -32,11 +32,20 @@ const SORTS = [
   { value: 'newest', label: 'Newest' },
 ];
 
-function Harness({ onClearAll = vi.fn() }: { onClearAll?: () => void }) {
+function Harness({
+  onClearAll = vi.fn(),
+  initialTopics = [],
+  onToggle,
+}: {
+  onClearAll?: () => void;
+  initialTopics?: string[];
+  onToggle?: (option: { kind: string; id: string }) => void;
+}) {
   const [sort, setSort] = React.useState('best');
   const [online, setOnline] = React.useState(false);
   const [show, setShow] = React.useState('unanswered');
   const [picked, setPicked] = React.useState<string[]>([]);
+  const [topics, setTopics] = React.useState<string[]>(initialTopics);
   return (
     <HubFiltersBar
       analyticsSurface="hub"
@@ -66,9 +75,17 @@ function Harness({ onClearAll = vi.fn() }: { onClearAll?: () => void }) {
       facets={{
         heading: 'Spaces and topics',
         options: [{ kind: 'space', id: 'space1', name: 'Crypto', count: 3 }],
-        pickedIds: picked,
-        onToggle: option => setPicked(current => (current.includes(option.id) ? [] : [option.id])),
-        onClear: () => setPicked([]),
+        pickedSpaceIds: picked,
+        pickedTopicIds: topics,
+        onToggle: option => {
+          onToggle?.(option);
+          if (option.kind === 'topic') setTopics(current => current.filter(id => id !== option.id));
+          else setPicked(current => (current.includes(option.id) ? [] : [option.id]));
+        },
+        onClear: () => {
+          setPicked([]);
+          setTopics([]);
+        },
       }}
       resultCount={7}
       onClearAll={() => {
@@ -118,7 +135,7 @@ describe('HubFiltersBar', () => {
     const chips = screen.getByRole('group', { name: 'Active filters' });
     expect(
       within(chips)
-        .getAllByRole('button')
+        .getAllByRole('button', { name: /^Remove / })
         .map(chip => chip.textContent)
     ).toEqual(['All claims', 'Someone online', 'Crypto']);
 
@@ -129,6 +146,60 @@ describe('HubFiltersBar', () => {
       'aria-checked',
       'false'
     );
+  });
+
+  // A picked topic can drop out of the options (its count went to nothing under a later pick). Its
+  // chip still has to remove a topic: read as a space, removing it would add it to the spaces.
+  it('removes a picked topic missing from the options as a topic, not a space', () => {
+    const onToggle = vi.fn();
+    render(<Harness initialTopics={['topic-gone']} onToggle={onToggle} />);
+
+    const chip = screen.getByRole('button', { name: 'Remove Topic' });
+    fireEvent.click(chip);
+
+    expect(onToggle).toHaveBeenCalledWith(expect.objectContaining({ kind: 'topic', id: 'topic-gone' }));
+    expect(screen.queryByRole('group', { name: 'Active filters' })).not.toBeInTheDocument();
+  });
+
+  // The shared segmented control: one tab stop, arrow keys move the choice (a radio group).
+  it('moves Sort with the arrow keys, as one tab stop', async () => {
+    render(<Harness />);
+    const filters = await openFilters();
+    const best = within(filters).getByRole('radio', { name: 'Best' });
+
+    expect(best).toHaveAttribute('tabindex', '0');
+    expect(within(filters).getByRole('radio', { name: 'Newest' })).toHaveAttribute('tabindex', '-1');
+    fireEvent.keyDown(best, { key: 'ArrowRight' });
+
+    expect(within(filters).getByRole('radio', { name: 'Newest' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  // Each choice an equal share of the track, words centred (Preston, 23 Oct).
+  it('draws each Sort option as an equal, centred share of the track', async () => {
+    render(<Harness />);
+    const filters = await openFilters();
+
+    for (const option of within(filters).getAllByRole('radio')) {
+      expect(option).toHaveClass('flex-1', 'basis-0', 'justify-center', 'text-center', 'px-3');
+    }
+  });
+
+  it('says what each pick does under the pill row', async () => {
+    render(<Harness />);
+    const filters = await openFilters();
+
+    expect(within(filters).getByText(/Each pick narrows further/)).toBeInTheDocument();
+  });
+
+  it('offers Clear beside the chips', () => {
+    const onClearAll = vi.fn();
+    render(<Harness initialTopics={['topic-gone']} onClearAll={onClearAll} />);
+
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Active filters' })).getByRole('button', { name: 'Clear' })
+    );
+
+    expect(onClearAll).toHaveBeenCalled();
   });
 
   it('offers Clear all only once something is picked, and says how many rows are left', async () => {
@@ -155,14 +226,27 @@ describe('HubFiltersBar', () => {
     expect(screen.queryByRole('dialog', { name: 'Filters' })).not.toBeInTheDocument();
   });
 
-  it('opens as a modal sheet with a close button on a phone', async () => {
+  it('opens as a modal sheet on a phone, Show N across its foot', async () => {
     mocks.isMobile = true;
     render(<Harness />);
     const filters = await openFilters();
 
     expect(filters).toHaveAttribute('aria-modal', 'true');
+    expect(within(filters).getByRole('heading', { name: 'Filters' })).toBeInTheDocument();
+    const show = within(filters).getByRole('button', { name: 'Show 7' });
+    expect(show).toHaveClass('w-full');
     fireEvent.click(within(filters).getByRole('button', { name: 'Close filters' }));
     expect(screen.queryByRole('dialog', { name: 'Filters' })).not.toBeInTheDocument();
+  });
+
+  it('puts Clear all in the phone sheet’s header once something is picked', async () => {
+    mocks.isMobile = true;
+    const onClearAll = vi.fn();
+    render(<Harness initialTopics={['topic-gone']} onClearAll={onClearAll} />);
+    const filters = await openFilters();
+
+    fireEvent.click(within(filters).getByRole('button', { name: 'Clear all' }));
+    expect(onClearAll).toHaveBeenCalled();
   });
 });
 
