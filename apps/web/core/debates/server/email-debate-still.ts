@@ -1,10 +1,8 @@
-import sharp from 'sharp';
+import sharp, { type Sharp } from 'sharp';
 
-import { FILEBASE_GATEWAY_READ_PATH } from '~/core/constants';
-import { getGeoChatApiBaseUrl } from '~/core/debates/geo-chat-public-base-url';
-import { toSatoriImageSrc } from '~/core/og-share-image';
+import { MAX_IMAGE_SIZE_BYTES } from '~/core/constants';
 
-import { geoChatBaseUrl } from './geo-chat-base-url';
+import { debateArtifactContentUrl } from '../speaker-still';
 
 /**
  * A debate's video still for the retention emails' debate rows (GEO-3377): portrait, with the play
@@ -20,29 +18,42 @@ export const STILL_HEIGHT = 216;
 /** The emails' placeholder grey (geo-notifications `T.placeholder`). */
 const PLACEHOLDER = '#e4e4e4';
 
-const hostOf = (url: string) => {
-  try {
-    return new URL(url).host;
-  } catch {
-    return null;
-  }
-};
+/**
+ * A real key frame is under 2M pixels; this refuses a small file that decodes to a huge image (a
+ * decompression bomb) before sharp allocates it.
+ */
+const MAX_INPUT_PIXELS = 40_000_000;
 
 /**
- * Where a still may be fetched from: the IPFS gateway the app reads, and geo-chat (which redirects to
- * its object storage). A keyframe's URL is published data, so anything else is refused rather than
- * fetched from the server.
+ * Where the still comes from: geo-chat's own preview image for this debate (the key frame the app
+ * shows), by its durable route. Built from the id, never read from the graph: a key frame value is
+ * published data anyone can add to from their own space, and the server would fetch it.
  */
-const stillHosts = () =>
-  new Set(
-    [FILEBASE_GATEWAY_READ_PATH, getGeoChatApiBaseUrl(), geoChatBaseUrl()]
-      .map(hostOf)
-      .filter((host): host is string => !!host)
-  );
+export const emailStillSourceUrl = (debateId: string) => debateArtifactContentUrl(debateId, 'preview_image');
 
-/** The URL to fetch a stored keyframe value from (`ipfs://` through the gateway), or null if refused. */
-export function emailStillSource(keyframe: string | null): string | null {
-  return toSatoriImageSrc(keyframe, stillHosts());
+/**
+ * The body, or null when it is not ok or would pass `MAX_IMAGE_SIZE_BYTES`. Read in chunks, so a body
+ * with no Content-Length is cut off at the cap rather than buffered whole.
+ */
+export async function readImageBody(res: Response): Promise<Buffer | null> {
+  const declared = Number(res.headers.get('content-length') ?? 0);
+  if (!res.ok || !res.body || declared > MAX_IMAGE_SIZE_BYTES) {
+    await res.body?.cancel();
+    return null;
+  }
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return Buffer.concat(chunks);
+    total += value.byteLength;
+    if (total > MAX_IMAGE_SIZE_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
 }
 
 /** A white disc with a dark triangle, centered, at 3×: the app's play button on a still. */
@@ -54,17 +65,28 @@ const PLAY_BUTTON = Buffer.from(
     `</svg>`
 );
 
-/**
- * The still cropped to fill the portrait frame, with the play button on top. `source` null draws the
- * button on the placeholder grey, so a row still lines up when the still can't be read.
- */
-export async function renderEmailStill(source: Buffer | null): Promise<Buffer> {
-  const base = source
-    ? sharp(source).resize(STILL_WIDTH, STILL_HEIGHT, { fit: 'cover', position: 'attention' })
-    : sharp({ create: { width: STILL_WIDTH, height: STILL_HEIGHT, channels: 3, background: PLACEHOLDER } });
-  return base
+const withPlayButton = (base: Sharp) =>
+  base
     .composite([{ input: PLAY_BUTTON }])
     .flatten({ background: PLACEHOLDER })
     .jpeg({ quality: 82, mozjpeg: true })
     .toBuffer();
+
+/** The still cropped to fill the portrait frame, with the play button on top. Throws on a non-image. */
+export function renderEmailStill(source: Buffer): Promise<Buffer> {
+  return withPlayButton(
+    sharp(source, { limitInputPixels: MAX_INPUT_PIXELS }).resize(STILL_WIDTH, STILL_HEIGHT, {
+      fit: 'cover',
+      position: 'attention',
+    })
+  );
+}
+
+let placeholder: Promise<Buffer> | null = null;
+
+/** The button on the placeholder grey, for a debate with no still: the same bytes every time, made once. */
+export function emailStillPlaceholder(): Promise<Buffer> {
+  return (placeholder ??= withPlayButton(
+    sharp({ create: { width: STILL_WIDTH, height: STILL_HEIGHT, channels: 3, background: PLACEHOLDER } })
+  ));
 }

@@ -2,29 +2,56 @@
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { STILL_HEIGHT, STILL_WIDTH, emailStillSource, renderEmailStill } from './email-debate-still';
+import { MAX_IMAGE_SIZE_BYTES } from '~/core/constants';
 
-const DEBATE = '01a15b610e7075709ac5b5acd61c36d5';
+import {
+  STILL_HEIGHT,
+  STILL_WIDTH,
+  emailStillPlaceholder,
+  emailStillSourceUrl,
+  readImageBody,
+  renderEmailStill,
+} from './email-debate-still';
 
-describe('emailStillSource', () => {
-  beforeEach(() => {
-    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', 'https://chat-api-testnet.geobrowser.io');
-    vi.stubEnv('GEO_CHAT_API_BASE_URL', 'http://geo-chat.internal:8080');
-  });
+describe('emailStillSourceUrl', () => {
+  beforeEach(() => vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', 'https://chat-api-testnet.geobrowser.io/'));
   afterEach(() => vi.unstubAllEnvs());
 
-  it('resolves IPFS through the gateway and keeps geo-chat URLs', () => {
-    expect(emailStillSource('ipfs://QmStill')).toBe('https://mature-tomato-basilisk.myfilebase.com/ipfs/QmStill');
-    const web = `https://chat-api-testnet.geobrowser.io/debates/${DEBATE}/media/artifacts/preview_image/content`;
-    expect(emailStillSource(web)).toBe(web);
-    expect(emailStillSource('http://geo-chat.internal:8080/x')).toBe('http://geo-chat.internal:8080/x');
+  it("is geo-chat's durable preview-image route for the debate, whatever the id's spelling", () => {
+    const url =
+      'https://chat-api-testnet.geobrowser.io/debates/01a15b610e7075709ac5b5acd61c36d5/media/artifacts/preview_image/content';
+    expect(emailStillSourceUrl('01a15b610e7075709ac5b5acd61c36d5')).toBe(url);
+    expect(emailStillSourceUrl('01A15B61-0E70-7570-9AC5-B5ACD61C36D5')).toBe(url);
+  });
+});
+
+/** A response whose body arrives in chunks, with no Content-Length. */
+const streamed = (chunks: Uint8Array[], init: ResponseInit = {}) =>
+  new Response(
+    new ReadableStream({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(chunk);
+        controller.close();
+      },
+    }),
+    init
+  );
+
+describe('readImageBody', () => {
+  it('reads a body in chunks', async () => {
+    const body = await readImageBody(streamed([new Uint8Array([1, 2]), new Uint8Array([3])]));
+    expect([...(body ?? [])]).toEqual([1, 2, 3]);
   });
 
-  it('refuses any other host, and nothing', () => {
-    expect(emailStillSource('https://evil.example/still.jpg')).toBeNull();
-    expect(emailStillSource('https://chat-api-testnet.geobrowser.io.evil.example/x')).toBeNull();
-    expect(emailStillSource('not a url')).toBeNull();
-    expect(emailStillSource(null)).toBeNull();
+  it('stops at the cap when there is no Content-Length, and refuses a declared oversize body', async () => {
+    const half = new Uint8Array(MAX_IMAGE_SIZE_BYTES / 2 + 1);
+    expect(await readImageBody(streamed([half, half]))).toBeNull();
+    const declared = new Response('x', { headers: { 'content-length': String(MAX_IMAGE_SIZE_BYTES + 1) } });
+    expect(await readImageBody(declared)).toBeNull();
+  });
+
+  it('refuses a non-ok answer', async () => {
+    expect(await readImageBody(new Response('missing', { status: 404 }))).toBeNull();
   });
 });
 
@@ -50,10 +77,20 @@ describe('renderEmailStill', () => {
     expect(at(5, 5)).toBeLessThan(40);
   });
 
-  it('draws the placeholder grey with the button when there is no still', async () => {
-    const { data, info } = await sharp(await renderEmailStill(null))
-      .raw()
-      .toBuffer({ resolveWithObject: true });
+  it('refuses an image that decodes to too many pixels, and anything that is not an image', async () => {
+    const huge = await sharp({ create: { width: 8000, height: 6000, channels: 3, background: '#000' } })
+      .png()
+      .toBuffer();
+    await expect(renderEmailStill(huge)).rejects.toThrow();
+    await expect(renderEmailStill(Buffer.from('<html>not an image</html>'))).rejects.toThrow();
+  });
+});
+
+describe('emailStillPlaceholder', () => {
+  it('is the placeholder grey with the button, made once', async () => {
+    const first = await emailStillPlaceholder();
+    expect(await emailStillPlaceholder()).toBe(first);
+    const { data, info } = await sharp(first).raw().toBuffer({ resolveWithObject: true });
     expect([info.width, info.height]).toEqual([STILL_WIDTH, STILL_HEIGHT]);
     expect(data[0]).toBeGreaterThan(220);
   });
