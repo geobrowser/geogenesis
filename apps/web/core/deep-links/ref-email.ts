@@ -25,9 +25,9 @@ export function readRefEmail(params: ReadableParams): string | null {
 }
 
 /** `ref_send`: the send an email link came from, an id geo-notifications gave that email (GEO-3370). */
-export const REF_SEND_PARAM = 'ref_send';
+const REF_SEND_PARAM = 'ref_send';
 /** `ref_link`: which link in the email it was (`main`, `profile`, `claim`, …; GEO-3370). */
-export const REF_LINK_PARAM = 'ref_link';
+const REF_LINK_PARAM = 'ref_link';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** The shape geo-notifications accepts for `ref_link`. */
