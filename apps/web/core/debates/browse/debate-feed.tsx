@@ -697,7 +697,13 @@ function DebateFeedItem({
                 onComment={onOpenComments}
                 onShare={share.onOpen}
                 shareOpen={share.open}
-                overflow={canRemove ? <DebateOverflowMenu debate={debate} /> : null}
+                overflow={
+                  canRemove ? (
+                    <span className="md:hidden">
+                      <DebateOverflowMenu debate={debate} />
+                    </span>
+                  ) : null
+                }
               />
             }
             wideActions={canRemove}
