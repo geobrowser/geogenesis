@@ -10,6 +10,7 @@ import { Text } from '~/design-system/text';
 import { useGeoChatAuth } from '../hooks';
 import { fromClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST, VARIANT_ATOMS, readUrlSeed } from './claims-tab';
+import { HubAskProvider } from './hub-ask-context';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubLiveRail } from './hub-live-rail';
@@ -141,15 +142,19 @@ export function DebatesHubWorkspace() {
       </header>
 
       <div className="flex gap-8 px-4">
-        <div className="min-w-0 flex-1">
-          {!ready || !filtersReconciled ? (
-            <HubSkeleton />
-          ) : shown === 'lobby' ? (
-            <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} />
-          ) : (
-            <ClaimsTab key={shown} variant={shown} layout="workspace" scopePicker={picker} />
-          )}
-        </div>
+        {/* Shared claim cards read the open ask here too (GEO-3463, decision 4): "Requesting · m:ss"
+            on the card that sent it, the others paused. */}
+        <HubAskProvider>
+          <div className="min-w-0 flex-1">
+            {!ready || !filtersReconciled ? (
+              <HubSkeleton />
+            ) : shown === 'lobby' ? (
+              <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} />
+            ) : (
+              <ClaimsTab key={shown} variant={shown} layout="workspace" scopePicker={picker} />
+            )}
+          </div>
+        </HubAskProvider>
 
         <aside
           aria-label="Live"

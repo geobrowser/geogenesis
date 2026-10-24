@@ -13,7 +13,7 @@ import { LiveLobbiesPreview } from '../lobbies/live-lobbies-preview';
 import { useLobbyReminderReplay } from '../lobbies/lobby-reminder-press';
 import { useDebateRequests } from './hooks';
 import { useDebatesHub } from './use-debates-hub';
-import { useUnexpiredRequests } from './use-request-countdown';
+import { useRequestsTabCount } from './use-requests-tab-count';
 
 /**
  * Navbar entry point for the matchmaking hub.
@@ -38,14 +38,11 @@ export function DebatesHubButton({ compact = false }: { compact?: boolean } = {}
   // Read-only: the coordinator already fetches this list whenever there is anything in it, and the
   // badge must agree with the one in the panel rather than counting requests that have expired.
   const { data: requests } = useDebateRequests(false);
-  const incoming = useUnexpiredRequests(requests?.incoming ?? []);
 
-  // Guarded rather than relying on the lookups being empty: a stale cache from a session that has
-  // since signed out would otherwise badge the button for nobody.
-  const requestCount = !authenticated
-    ? 0
-    : (requests ? incoming.length : (activity?.incoming_request_count ?? 0)) +
-      (activity?.scheduled_awaiting_answer_count ?? 0);
+  // The panel's Requests badge, from the same hook, so the two always show one number (GEO-3463).
+  // It returns zero signed out rather than relying on the lookups being empty: a stale cache from a
+  // session that has since signed out would otherwise badge the button for nobody.
+  const requestCount = useRequestsTabCount({ authenticated, activity, requests, fetchScheduled: false });
 
   // GEO-3268. Mounting the lineup here, on every page, is also what keeps the lobby list live with
   // the panel closed: it holds the matchmaking scope that carries `debate.lobbies_changed`.

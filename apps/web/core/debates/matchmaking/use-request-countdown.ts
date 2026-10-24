@@ -73,33 +73,45 @@ export type RequestCountdown = {
   expired: boolean;
 };
 
+export type CountdownFormat = 'words' | 'clock';
+
 /**
  * Ticks once every 15s while more than a minute remains, then every second. `expired` lets a card
  * disappear immediately instead of waiting for the server's `debate.requests_changed` event.
+ *
+ * `format: 'clock'` is the `m:ss` the side panel times a live ask in ("Requesting · 1:12",
+ * GEO-3463). A clock shows its seconds, so it ticks every second throughout rather than in
+ * quarter-minutes while more than a minute is left. Both stop at expiry. `null` is "nothing to
+ * time": no clock sync, no interval.
  */
-export function useRequestCountdown(expiresAt: string): RequestCountdown {
-  const clock = useServerClock();
-  const expiresAtMs = React.useMemo(() => new Date(expiresAt).getTime(), [expiresAt]);
+export function useRequestCountdown(
+  expiresAt: string | null,
+  { format = 'words' }: { format?: CountdownFormat } = {}
+): RequestCountdown {
+  const clock = useServerClock(expiresAt !== null);
+  const expiresAtMs = React.useMemo(() => (expiresAt ? new Date(expiresAt).getTime() : NaN), [expiresAt]);
   const [now, setNow] = React.useState(() => Date.now());
 
-  const remainingMs = Math.max(0, expiresAtMs - now);
+  // An unparseable time stays NaN, which `formatCountdown` reads as "Expires later", as before.
+  const remainingMs = expiresAt === null ? 0 : Math.max(0, expiresAtMs - now);
   // The tick rate only changes when we cross the final minute, so the effect re-arms then — and
   // once more at expiry, where it clears the interval for good.
-  const isFinalMinute = remainingMs <= MINUTE_MS;
+  const everySecond = format === 'clock' || remainingMs <= MINUTE_MS;
   const expired = Number.isFinite(expiresAtMs) && remainingMs <= 0;
 
   React.useEffect(() => {
+    if (!Number.isFinite(expiresAtMs)) return;
     const read = () => (clock ? clock.now() : Date.now());
     setNow(read());
 
-    if (expired || !Number.isFinite(expiresAtMs) || expiresAtMs - read() <= 0) return;
+    if (expired || expiresAtMs - read() <= 0) return;
 
-    const interval = setInterval(() => setNow(read()), isFinalMinute ? SECOND_TICK_MS : MINUTE_TICK_MS);
+    const interval = setInterval(() => setNow(read()), everySecond ? SECOND_TICK_MS : MINUTE_TICK_MS);
     return () => clearInterval(interval);
-  }, [clock, expired, expiresAtMs, isFinalMinute]);
+  }, [clock, expired, expiresAtMs, everySecond]);
 
   return {
-    label: formatCountdown(remainingMs),
+    label: format === 'clock' ? formatCountdownClock(remainingMs) : formatCountdown(remainingMs),
     remainingMs,
     expired,
   };
@@ -163,4 +175,13 @@ export function formatCountdown(remainingMs: number) {
   if (remainingMs <= 0) return 'Expired';
   if (remainingMs < MINUTE_MS) return `Expires in ${Math.ceil(remainingMs / 1_000)}s`;
   return `Expires in ${Math.ceil(remainingMs / MINUTE_MS)}m`;
+}
+
+/** `m:ss`, rounded up so an open request never reads 0:00 while it is still live. */
+export function formatCountdownClock(remainingMs: number) {
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return '0:00';
+  const totalSeconds = Math.ceil(remainingMs / 1_000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }

@@ -73,6 +73,8 @@ vi.mock('./lobby-tab', () => ({
 }));
 
 vi.mock('./hub-live-rail', () => ({ HubLiveRail: () => <div data-testid="hub-live-rail" /> }));
+// The open ask is the strip's and the cards' business, covered in their own suites.
+vi.mock('./hub-ask-context', () => ({ HubAskProvider: ({ children }: { children: React.ReactNode }) => children }));
 // Covered through the side panel's suite; here it only matters that the header draws them.
 vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => <div data-testid="hub-header-controls" /> }));
 

@@ -736,3 +736,44 @@ describe('MatchesList', () => {
     });
   });
 });
+
+// GEO-3463. The side panel's Matches: one search and one Filters button, its Sort, and empty states
+// that offer what would fill the tab.
+describe('MatchesList in the panel', () => {
+  const panelFilters = (clientSort: 'best' | 'newest' | 'people' = 'best') => ({
+    sort: { options: [{ value: 'best', label: 'Best' }], value: clientSort, onChange: vi.fn() },
+    toggles: [],
+    clientSort,
+  });
+
+  it('swaps the menus row for a search field and a Filters button', () => {
+    render(<MatchesList panelFilters={panelFilters()} />);
+
+    expect(screen.getByRole('textbox', { name: 'Search claims' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any space/ })).not.toBeInTheDocument();
+  });
+
+  it('sorts Most people by who could take the other side right now', () => {
+    const fewer = match();
+    const more = match({
+      claim: {
+        id: 'debate-claim-2',
+        space_id: OTHER_SPACE_ID,
+        claim_entity_id: OTHER_CLAIM_ENTITY_ID,
+        claim: 'Tea is better than coffee',
+        description: null,
+      },
+      positions: [
+        { position: true, position_label: 'Agree', total_count: 1, available_now_count: 1, participants: [] },
+        { position: false, position_label: 'Disagree', total_count: 9, available_now_count: 6, participants: [] },
+      ],
+    } as Partial<MatchmakingMatch>);
+    mocks.matches = [fewer, more];
+
+    render(<MatchesList panelFilters={panelFilters('people')} />);
+
+    const titles = screen.getAllByText(/better than/).map(node => node.textContent);
+    expect(titles).toEqual(['Tea is better than coffee', 'Chips are better than fries']);
+  });
+});

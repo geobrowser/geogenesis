@@ -549,6 +549,8 @@ export class DebateGatewayClient {
         this.queueAccountQuery('scheduled-debates');
         this.queueAccountQuery('upcoming-rooms');
         this.queueAccountQuery('room');
+        // A request ending moves it from the live lists into the Requests timeline's past (GEO-3463).
+        this.queueAccountQuery('history');
         this.queueAccountActivity();
         break;
       case 'debate.matchmaking_changed':
@@ -562,6 +564,8 @@ export class DebateGatewayClient {
         if (!patch) {
           // Card-less: a lobby was created, opened or closed.
           this.queueAccountQuery('lobbies');
+          // A closed lobby the viewer joined belongs in their history now.
+          this.queueAccountQuery('history');
           if (lobbyId) this.queueAccountQuery('lobby', lobbyId);
         } else {
           this.holdLobbyPatch(patch);
@@ -574,6 +578,7 @@ export class DebateGatewayClient {
       case 'debate.my_lobby_changed':
         this.queueAccountQuery('lobbies');
         this.queueAccountQuery('my-lobby');
+        this.queueAccountQuery('history');
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
       // GEO-3131. Sent to the lobby's present members.
@@ -795,7 +800,8 @@ export class DebateGatewayClient {
       | 'lobbies'
       | 'lobby'
       | 'lobby-claims'
-      | 'my-lobby',
+      | 'my-lobby'
+      | 'history',
     id?: string
   ) {
     if (!this.accountKey) return;

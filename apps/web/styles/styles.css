@@ -11,6 +11,8 @@
   --color-ctaHover: #002fd9;
   --color-ctaTertiary: #f0f3ff;
   --color-purple: #6833ff;
+  /* Needs-you rows, shared slots and the no-times nudge (GEO-3463), which used it as a literal. */
+  --color-purple-tint: #efe2ff;
   --color-black: #000000;
   --color-pink: #fe31c5;
   --color-bg: #fbfbfb;

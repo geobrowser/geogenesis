@@ -14,6 +14,10 @@ import {
   type DebatesHubTab,
   debatesHubAtom,
   debatesHubExploreSearchAtom,
+  debatesHubExploreShowAtom,
+  debatesHubExploreShowMineAtom,
+  debatesHubExploreSomeoneOnlineAtom,
+  debatesHubExploreSortAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
   debatesHubExploreTopicIdsAtom,
@@ -21,8 +25,11 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubMatchesIncludeOfflineAtom,
   debatesHubMatchesOnlyAtom,
+  debatesHubMatchesSortAtom,
   debatesHubPeopleOnlineOnlyAtom,
+  debatesHubPeopleSortAtom,
   debatesHubPeopleSpaceIdsAtom,
   debatesHubPositionsSearchAtom,
   debatesHubPositionsSpaceIdsAtom,
@@ -45,6 +52,7 @@ const mocks = vi.hoisted(() => ({
   isMobile: false,
   scheduledAwaitingAnswerCount: undefined as number | undefined,
   scheduledRequests: undefined as unknown[] | undefined,
+  matches: [] as unknown[],
 }));
 
 // Booking reads room completion only when moving a scheduled request.
@@ -66,8 +74,18 @@ vi.mock('../rooms/scheduling-hooks', () => ({
   useNoTimeWorks: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
 }));
 
-// The card has its own suite; here it only matters which tabs show it.
-vi.mock('../lobbies/lobbies-card', () => ({ UpcomingLobbiesCard: () => <div data-testid="live-lobbies-card" /> }));
+// The strip, the nudge and the Requests schedule have their own suites; here it only matters that
+// the panel draws them where it should.
+vi.mock('./hub-live-strip', () => ({
+  HubLiveStrip: ({ lineup }: { lineup: { live: unknown[] } }) => (
+    <div data-testid="hub-live-strip" data-live={String(lineup.live.length)} />
+  ),
+}));
+vi.mock('./no-times-nudge', () => ({ NoTimesNudge: () => <div data-testid="no-times-nudge" /> }));
+vi.mock('./requests-schedule', () => ({ RequestsSchedule: () => <div data-testid="requests-schedule" /> }));
+// Matches reads geo-chat's match list and the graph through react-query, which this suite does not
+// stand up. Its own suite covers it; here it only matters which tab shows it.
+vi.mock('./matches-list', () => ({ MatchesList: () => <div data-testid="matches-list" /> }));
 
 // The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
 vi.mock('./scheduled-debates-section', () => ({
@@ -116,13 +134,6 @@ vi.mock('../claim-picker-page', async importOriginal => ({
 // GEO-3268's lineup reads the lobby list and holds the matchmaking scope; nothing is live here.
 const lineup = vi.hoisted(() => ({ live: [] as { lobby_id: string }[], soon: null, later: [] }));
 vi.mock('../lobbies/live-lobbies', () => ({ useLobbyLineup: () => lineup }));
-// The banner's own suite covers what it draws; here, only whether the panel keeps it mounted.
-vi.mock('./set-schedule-banner', () => ({
-  SetScheduleBanner: ({ hidden }: { hidden?: boolean }) => (
-    <div data-testid="schedule-banner" data-hidden={String(Boolean(hidden))} />
-  ),
-}));
-vi.mock('../lobbies/lobby-spotlight', () => ({ LobbySpotlight: () => <div data-testid="lobby-spotlight" /> }));
 
 vi.mock('../hooks', () => ({
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
@@ -154,7 +165,7 @@ vi.mock('./hooks', () => ({
     error: mocks.peopleError,
   }),
   useMatchmakingClaims: () => ({ data: undefined, isLoading: false, error: null, hasNextPage: false }),
-  useMatchmakingMatches: () => ({ data: { matches: [] }, isLoading: false, error: null }),
+  useMatchmakingMatches: () => ({ data: { matches: mocks.matches }, isLoading: false, error: null }),
   useCreateDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useAcceptDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -254,6 +265,7 @@ beforeEach(() => {
   mocks.isMobile = false;
   mocks.scheduledAwaitingAnswerCount = undefined;
   mocks.scheduledRequests = undefined;
+  mocks.matches = [];
 });
 
 afterEach(cleanup);
@@ -289,6 +301,23 @@ const FILTER_ATOMS = [
   { name: 'debatesHubLobbySpaceSeedSpentAtom', atom: debatesHubLobbySpaceSeedSpentAtom, dirty: true, cleared: false },
   { name: 'debatesHubPeopleSpaceIdsAtom', atom: debatesHubPeopleSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
   { name: 'debatesHubPeopleOnlineOnlyAtom', atom: debatesHubPeopleOnlineOnlyAtom, dirty: true, cleared: false },
+  // GEO-3463: the panel's Sort and its tab-specific filters are session state like the rest.
+  { name: 'debatesHubPeopleSortAtom', atom: debatesHubPeopleSortAtom, dirty: 'az', cleared: 'online' },
+  { name: 'debatesHubMatchesSortAtom', atom: debatesHubMatchesSortAtom, dirty: 'people', cleared: 'best' },
+  { name: 'debatesHubExploreSortAtom', atom: debatesHubExploreSortAtom, dirty: 'newest', cleared: 'best' },
+  {
+    name: 'debatesHubMatchesIncludeOfflineAtom',
+    atom: debatesHubMatchesIncludeOfflineAtom,
+    dirty: true,
+    cleared: false,
+  },
+  {
+    name: 'debatesHubExploreSomeoneOnlineAtom',
+    atom: debatesHubExploreSomeoneOnlineAtom,
+    dirty: true,
+    cleared: false,
+  },
+  { name: 'debatesHubExploreShowMineAtom', atom: debatesHubExploreShowMineAtom, dirty: true, cleared: false },
 ] as const;
 
 describe('DebatesHubPanel', () => {
@@ -298,17 +327,37 @@ describe('DebatesHubPanel', () => {
   //
   // Every atom the bar holds, not a sample of them: this is the isolation test, so an atom left out
   // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
-  // GEO-2861. Four tabs, and "My positions" is not one of them: it is a source inside Explore's
-  // menu, one more answer to "which claims?" rather than a surface of its own.
-  it('offers Live, People, Explore, My positions and Requests, in that order', () => {
+  // GEO-3463. Four tabs, People first. "Live" became Matches and "My positions" one of Explore's Shows.
+  it('offers People, Matches, Explore and Requests, in that order', () => {
     renderOpen('explore');
 
-    const order = ['Live', 'People', 'Explore', 'My positions', 'Requests'];
-    const row = screen.getByRole('button', { name: /^Live/ }).closest('.overflow-x-auto');
+    const order = ['People', 'Matches', 'Explore', 'Requests'];
+    const row = screen.getByRole('button', { name: /^People/ }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
 
     expect(labels).toEqual(order);
-    expect(screen.queryByRole('button', { name: 'My claims' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Live/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^My positions/ })).not.toBeInTheDocument();
+  });
+
+  // The Panel-Matches board: how many matches are online, quietly beside the tab's name.
+  it('shows how many matches are online beside Matches, and nothing at none', () => {
+    renderOpen('explore');
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches$/);
+    cleanup();
+
+    mocks.matches = [{}, {}, {}];
+    renderOpen('explore');
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent('Matches3 online');
+  });
+
+  it('labels each tab’s clicks with its new name', () => {
+    renderOpen('explore');
+
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Matches tab'
+    );
   });
 
   it('clears the filter bar when the account behind it changes', () => {
@@ -338,7 +387,9 @@ describe('DebatesHubPanel', () => {
    */
   it('covers every filter atom on every surface', () => {
     const exported = Object.keys(atomsModule).filter(name =>
-      /^debatesHub[A-Z][A-Za-z]*(?:SpaceIds|TopicIds|Search|SpaceSeedSpent|OnlineOnly)Atom$/.test(name)
+      /^debatesHub[A-Z][A-Za-z]*(?:SpaceIds|TopicIds|Search|SpaceSeedSpent|OnlineOnly|Sort|IncludeOffline|SomeoneOnline|ShowMine)Atom$/.test(
+        name
+      )
     );
 
     expect(new Set(exported)).toEqual(new Set(FILTER_ATOMS.map(entry => entry.name)));
@@ -470,18 +521,18 @@ describe('DebatesHubPanel', () => {
   it('renders every tab and switches between them', async () => {
     renderOpen();
 
-    for (const label of ['Requests', 'Live', 'Explore', 'People']) {
+    for (const label of ['Requests', 'Matches', 'Explore', 'People']) {
       expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
 
     // jsdom has no layout, so reachability at a narrow width can't be asserted directly. The
     // scroll container is the thing that guarantees it, so pin that instead — without it the
     // last tab is clipped by the panel's `overflow-hidden` with no way to get to it.
-    const row = screen.getByRole('button', { name: /^Live/ }).closest('.overflow-x-auto');
+    const row = screen.getByRole('button', { name: /^People/ }).closest('.overflow-x-auto');
     expect(row).not.toBeNull();
 
     // Order, not just presence: the labels alone stayed green through a reorder.
-    const order = ['Live', 'People', 'Explore', 'My positions', 'Requests'];
+    const order = ['People', 'Matches', 'Explore', 'Requests'];
     const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
     for (const [index, tab] of rendered.slice(0, -1).entries()) {
       const next = rendered[index + 1];
@@ -495,13 +546,28 @@ describe('DebatesHubPanel', () => {
     expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
   });
 
-  it('leaves the lobbies card off Requests, which lists the lobbies itself', async () => {
-    renderOpen('people');
-    expect(screen.getByTestId('live-lobbies-card')).toBeInTheDocument();
+  // GEO-3463. Before the tabs: the header and at most one strip. The strip decides for itself
+  // whether it has anything to say; the upcoming-lobbies card and the schedule banner are gone.
+  it('puts only the strip between the header and the tabs, on every tab', () => {
+    for (const tab of ['people', 'lobby', 'explore', 'requests'] as const) {
+      renderOpen(tab);
+      const strip = screen.getByTestId('hub-live-strip');
+      const firstTab = screen.getByRole('button', { name: /^People/ });
+      expect(Boolean(strip.compareDocumentPosition(firstTab) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+      expect(screen.queryByTestId('schedule-banner')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('live-lobbies-card')).not.toBeInTheDocument();
+      cleanup();
+    }
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: /^Requests/ }));
+  it('draws each tab’s own body', () => {
+    // Nobody who disagrees is online in this suite, so Matches shows the wider list on its own.
+    renderOpen('lobby');
+    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+    cleanup();
 
-    expect(screen.queryByTestId('live-lobbies-card')).not.toBeInTheDocument();
+    renderOpen('requests');
+    expect(screen.getByTestId('requests-schedule')).toBeInTheDocument();
   });
 
   it('toggles availability from the panel header', async () => {
@@ -539,22 +605,18 @@ describe('DebatesHubPanel', () => {
   });
 
   // GEO-2725. The hub used to be one sign-in message end to end. Explore and People describe the
-  // corpus rather than the viewer, so both are readable signed out and are what the row offers.
-  it('offers Explore and People to anonymous visitors, and shows the Explore list', () => {
+  // corpus rather than the viewer, so both are readable signed out and are what the row offers —
+  // People first since GEO-3463, the tab the panel opens on for everyone.
+  it('offers People and Explore to anonymous visitors, and lands on People', () => {
     mocks.authenticated = false;
     renderOpen();
 
-    // Explore leads: it is the one the panel opens on, and a row that led with the tab you are not
-    // on was `SIGNED_OUT_TABS` naming the contents while `TABS` quietly decided the order.
     const row = screen.getByRole('button', { name: 'Explore' }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
-    expect(labels).toEqual(['Explore', 'People']);
+    expect(labels).toEqual(['People', 'Explore']);
 
-    expect(screen.getByRole('button', { name: 'Explore' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
     expect(screen.queryByText('Sign in to find people to debate.')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-current', 'true');
-    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'People' })).toHaveAttribute('aria-current', 'true');
   });
 
   // Matches and Requests are a particular person's, so signed out they have no possible contents.
@@ -569,11 +631,22 @@ describe('DebatesHubPanel', () => {
     expect(screen.queryByRole('button', { name: /positions/i })).not.toBeInTheDocument();
   });
 
-  it('draws My positions as its own tab once there is a viewer to have any', () => {
-    renderOpen('positions');
+  // GEO-3463. My positions is one of Explore's Shows; a link to the old tab lands there.
+  it('opens Explore on My positions when asked for the positions tab', () => {
+    const store = renderOpen('positions');
 
-    expect(screen.getByRole('button', { name: /^My positions/ })).toHaveAttribute('aria-current', 'true');
+    expect(store.get(debatesHubAtom)).toEqual({ tab: 'explore' });
+    expect(store.get(debatesHubExploreShowAtom)).toBe('mine');
+    expect(screen.getByRole('button', { name: /^Explore/ })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+  });
+
+  it('opens plain Explore for a signed-out link to the positions tab', () => {
+    mocks.authenticated = false;
+    const store = renderOpen('positions');
+
+    expect(store.get(debatesHubAtom)).toEqual({ tab: 'explore' });
+    expect(store.get(debatesHubExploreShowAtom)).toBe('unanswered');
   });
 
   // `authenticated` is false while Privy restores, so a row drawn before then is the signed-out
@@ -596,11 +669,11 @@ describe('DebatesHubPanel', () => {
   });
 
   // Signing out with Matches open would otherwise leave a tab body showing with no tab selected.
-  it('falls back to Explore when signed out on a tab that is no longer offered', () => {
+  it('falls back to People when signed out on a tab that is no longer offered', () => {
     mocks.authenticated = false;
     renderOpen('lobby');
 
-    expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: 'People' })).toHaveAttribute('aria-current', 'true');
     expect(screen.queryByRole('button', { name: /Matches/ })).not.toBeInTheDocument();
   });
 
@@ -633,20 +706,39 @@ describe('DebatesHubPanel', () => {
     opener.remove();
   });
 
-  it('keeps mobile status-filter options inside the modal focus boundary', async () => {
+  // GEO-3463. On a phone, Filters is a bottom sheet — inside the panel's own sheet, so the focus
+  // trap and `aria-modal` boundary still hold around it.
+  it('opens Filters as a sheet inside the mobile sheet', async () => {
     mocks.isMobile = true;
     window.ResizeObserver ??= class {
       observe() {}
       unobserve() {}
       disconnect() {}
     } as unknown as typeof ResizeObserver;
-    renderOpen();
+    renderOpen('people');
     const dialog = screen.getByRole('dialog', { name: 'Debates' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Any status' }));
-    const option = await screen.findByRole('button', { name: 'Received' });
-    expect(dialog).toContainElement(option);
-    fireEvent.click(option);
-    expect(within(dialog).getByRole('button', { name: 'Received' })).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Filters' }));
+    const filters = await screen.findByRole('dialog', { name: 'Filters' });
+    expect(dialog).toContainElement(filters);
+    expect(within(filters).getByRole('button', { name: /^Show/ })).toBeInTheDocument();
+  });
+
+  // Escape belongs to whatever is on top: closing Filters must not take the panel with it.
+  it.each([false, true])('closes Filters, not the panel, on Escape (mobile: %s)', async isMobile => {
+    mocks.isMobile = isMobile;
+    window.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    const store = renderOpen('people');
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const filters = await screen.findByRole('dialog', { name: 'Filters' });
+
+    fireEvent.keyDown(filters, { key: 'Escape' });
+
+    expect(screen.queryByRole('dialog', { name: 'Filters' })).not.toBeInTheDocument();
+    expect(store.get(debatesHubAtom)).not.toBeNull();
   });
 
   it('gives the mobile sheet a close button that assistive tech can reach', () => {
@@ -811,6 +903,7 @@ describe('the way out to the full-screen hub', () => {
     }
   });
 
+  // `positions` lands on Explore's My positions, which is full screen's positions list.
   it.each([
     ['explore', 'explore'],
     ['positions', 'positions'],
@@ -832,19 +925,18 @@ describe('the way out to the full-screen hub', () => {
 
   // Link the list on screen, not the stored tab — signed out that can be Explore while storage still says Lobby.
   describe('signed out, where the tab on screen is not the tab in storage', () => {
-    it('carries what Explore is showing, not the stored tab’s empty atoms', () => {
+    it('carries what is on screen (People), not the stored tab’s list', () => {
       mocks.authenticated = false;
       const store = createStore();
       store.set(debatesHubAtom, { tab: 'lobby' });
-      store.set(debatesHubExploreSearchAtom, 'nuclear');
+      store.set(debatesHubLobbySearchAtom, 'nuclear');
       render(
         <Provider store={store}>
           <DebatesHubPanel />
         </Provider>
       );
 
-      const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
-      expect(new URLSearchParams(href.split('?')[1] ?? '').get('q')).toBe('nuclear');
+      expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute('href', '/matchmaking');
     });
 
     it('names Explore, not the list the viewer cannot see', () => {
@@ -1004,8 +1096,8 @@ describe('Requests badge', () => {
     expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
   });
 
-  // Pending in either direction: a request you sent is still in the tab until they answer.
-  it('counts every pending scheduled request once the list lands, sent or received', () => {
+  // GEO-3463: only what needs the viewer's answer. A request you sent is waiting on them, not you.
+  it('counts only the scheduled requests waiting on your answer once the list lands', () => {
     mocks.scheduledAwaitingAnswerCount = 1;
     mocks.scheduledRequests = [
       { status: 'pending', room_id: null, viewer_must_answer: true },
@@ -1013,23 +1105,23 @@ describe('Requests badge', () => {
       { status: 'accepted', room_id: 'room-1', viewer_must_answer: false },
     ];
 
-    expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
+    expect(renderRequestsButton()).toHaveTextContent('1 pending requests');
   });
 });
 
-// GEO-3268. A live lobby takes the schedule banner's place. The banner holds the schedule dialog,
-// so it stays mounted, hidden, rather than being swapped out under someone mid-edit.
-describe('DebatesHubPanel lobby spotlight', () => {
-  it('shows the schedule banner while nothing is live', () => {
-    renderOpen('explore');
-    expect(screen.getByTestId('schedule-banner')).toHaveAttribute('data-hidden', 'false');
-    expect(screen.queryByTestId('lobby-spotlight')).not.toBeInTheDocument();
-  });
-
-  it('puts the spotlight in its place while a lobby is live, keeping the banner mounted and hidden', () => {
+// GEO-3463. One strip above the tabs, fed the lobby lineup, and one "no times" line below the list.
+describe('DebatesHubPanel strip and nudge', () => {
+  it('hands the strip the lobby lineup', () => {
     lineup.live = [{ lobby_id: 'nyc' }];
     renderOpen('explore');
-    expect(screen.getByTestId('lobby-spotlight')).toBeInTheDocument();
-    expect(screen.getByTestId('schedule-banner')).toHaveAttribute('data-hidden', 'true');
+    expect(screen.getByTestId('hub-live-strip')).toHaveAttribute('data-live', '1');
+  });
+
+  it('draws the no-times line once, outside the tabs, above the way out to full screen', () => {
+    renderOpen('people');
+    const nudge = screen.getByTestId('no-times-nudge');
+    const link = screen.getByRole('link', { name: /open full screen/i });
+    expect(Boolean(nudge.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.getAllByTestId('no-times-nudge')).toHaveLength(1);
   });
 });

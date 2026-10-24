@@ -9,11 +9,13 @@ import { Input } from '~/design-system/input';
 import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity } from '../hooks';
+import { useClaimOrderFacts } from './claim-order-facts';
 import { claimRowKey } from './claim-row-key';
 import { type ClaimsLayout, HubListColumns, HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubFacetRail } from './hub-facet-rail';
+import { PanelFiltersBar, type PanelListFilters, sortClaimRows } from './hub-filters';
 import { HubCardList } from './hub-motion';
 import { HubQueryState, exploreClaimsAction } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -55,7 +57,16 @@ export function MatchesList({
   trailing,
   scopePicker,
   layout = 'panel',
+  panelFilters,
+  notice,
 }: {
+  /**
+   * The side panel's search and Filters button in place of the menus row (GEO-3463). Panel only:
+   * full screen keeps Lobby's toggle and its rail.
+   */
+  panelFilters?: PanelListFilters;
+  /** Above the list, under the filters: what the panel wants said about this list (GEO-3463). */
+  notice?: React.ReactNode;
   /** Only reached from the empty state's action, so the rail need not pass one. */
   onTabChange?: (tab: DebatesHubTab) => void;
   /** Lobby's "Matches only" switch, at the end of the filter row. */
@@ -66,6 +77,7 @@ export function MatchesList({
   layout?: ClaimsLayout;
 }) {
   const workspace = layout === 'workspace';
+  const panelMode = panelFilters !== undefined && !workspace;
   // Lobby's one selection, shared with its toggled-off state (GEO-2861) — the toggle narrows the
   // list, and would be a strange place to also change which spaces the viewer had picked.
   //
@@ -225,10 +237,17 @@ export function MatchesList({
     [matches, passesSearch, passesSpace, passesTopics, topicIds, topicsByClaimId]
   );
 
-  const filtered = React.useMemo(
-    () => matches.filter(match => passesSpace(match) && passesTopics(match) && passesSearch(match)),
-    [matches, passesSearch, passesSpace, passesTopics]
+  // The panel's Sort (GEO-3463). The whole list is in hand, so it sorts here; "Best" is Explore's
+  // ranking, looked up for these claims, rather than geo-chat's order.
+  const clientSort = panelFilters?.clientSort;
+  const { facts: orderFacts } = useClaimOrderFacts(
+    claimEntityIds,
+    panelMode && (clientSort === 'best' || clientSort === 'newest')
   );
+  const filtered = React.useMemo(() => {
+    const kept = matches.filter(match => passesSpace(match) && passesTopics(match) && passesSearch(match));
+    return panelMode && clientSort ? sortClaimRows(kept, clientSort, orderFacts) : kept;
+  }, [clientSort, matches, orderFacts, panelMode, passesSearch, passesSpace, passesTopics]);
 
   // The viewer's own filters emptied a list that has something in it — the one empty state here
   // they can undo, and the one `serverMatches.length === 0` is false for.
@@ -254,32 +273,53 @@ export function MatchesList({
           both claim `top-0` and overlap, and the outbound card is conditional so the filters
           couldn't be offset by a known height. */}
       <HubStickyControls workspaceStickyOffset={workspace}>
-        {outbound ? <OutboundRequestCard request={outbound} /> : null}
-        <Input
-          withSearchIcon
-          value={search}
-          onChange={event => setSearch(event.currentTarget.value)}
-          placeholder="Search claims"
-          aria-label="Search claims"
-        />
+        {panelFilters && panelMode ? (
+          <PanelFiltersBar
+            filters={panelFilters}
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search claims"
+            spaces={facetSpaces}
+            topics={facetTopics}
+            spaceIds={spaceIds}
+            topicIds={topicIds}
+            onSpaceToggle={onSpaceToggle}
+            onSpacesClear={onSpacesClear}
+            onTopicIdsChange={setTopicIds}
+            listedCount={filtered.length}
+            resultCount={matchesQuery.isLoading ? null : filtered.length}
+          />
+        ) : (
+          <>
+            {outbound ? <OutboundRequestCard request={outbound} /> : null}
+            <Input
+              withSearchIcon
+              value={search}
+              onChange={event => setSearch(event.currentTarget.value)}
+              placeholder="Search claims"
+              aria-label="Search claims"
+            />
 
-        <SpaceTopicFilters
-          analyticsSurface="hub"
-          leading={scopePicker}
-          menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
-          spaceIds={spaceIds}
-          onSpaceToggle={onSpaceToggle}
-          onSpacesClear={onSpacesClear}
-          topicIds={topicIds}
-          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-          onTopicsClear={() => setTopicIds([])}
-          facetSpaces={facetSpaces}
-          facetTopics={facetTopics}
-          trailing={trailing}
-        />
+            <SpaceTopicFilters
+              analyticsSurface="hub"
+              leading={scopePicker}
+              menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
+              spaceIds={spaceIds}
+              onSpaceToggle={onSpaceToggle}
+              onSpacesClear={onSpacesClear}
+              topicIds={topicIds}
+              onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+              onTopicsClear={() => setTopicIds([])}
+              facetSpaces={facetSpaces}
+              facetTopics={facetTopics}
+              trailing={trailing}
+            />
+          </>
+        )}
       </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">
+        {notice}
         <HubQueryState
           analyticsSurface="hub"
           // `activity` is a second query, and an empty list cannot be described without it: both
@@ -335,6 +375,7 @@ export function MatchesList({
                     // the default cannot put its spaces back.
                     onSpacesClear();
                     setTopicIds([]);
+                    panelFilters?.onClearExtras?.();
                   },
                 }
               : exploreClaimsAction(onTabChange)

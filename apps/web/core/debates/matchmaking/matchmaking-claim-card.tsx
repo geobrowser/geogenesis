@@ -9,7 +9,6 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { useActionContext } from '~/core/action-context-provider';
-import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
 import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
@@ -64,6 +63,7 @@ import {
   type DebateAnalyticsSurface,
   debateActionAnalyticsAttributes,
 } from './hub-analytics';
+import { CardEndSlot, otherSideHeld } from './hub-claim-end-slot';
 import { hubCardMotion } from './hub-motion';
 import { useHubScrollSelector } from './hub-scroll';
 
@@ -965,10 +965,11 @@ function RespondableControls({
         endSlot={
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              otherSideHeld={otherSideHeld(optimisticPositions, viewerPosition)}
+              analyticsSurface={analyticsSurface}
               // `undefined` until the reads have landed, so a card that cannot yet say which side
               // the viewer holds does not read as saying they hold none.
               viewerPosition={sideKnown ? viewerPosition : undefined}
@@ -1196,10 +1197,11 @@ function UnresolvableControls({
              is not the safe direction to be wrong in. */
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              otherSideHeld={otherSideHeld(positions, readiness.viewer_response?.position)}
+              analyticsSurface={analyticsSurface}
               // No response control here, so there is no optimistic side to read — geo-chat's is
               // the only answer this card has about where the viewer stands, and where it is silent
               // this card genuinely does not know. Not `?? null`: on the Matches tab this readiness

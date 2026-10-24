@@ -22,16 +22,24 @@ export function formatDebateSlot(startIso: string, endIso: string, now = new Dat
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
     return formatDebateTime(startIso, now);
   }
+  return `${formatDay(start, now)}, ${formatTimeRange(startIso, endIso)}`;
+}
+
+/**
+ * `11:00 – 11:30 AM` rather than `11:00 AM – 11:30 AM` when both ends share the period. For a row
+ * already under its day, such as the Requests timeline's (GEO-3463).
+ */
+export function formatTimeRange(startIso: string, endIso: string) {
   const from = formatTime(startIso);
   const to = formatTime(endIso);
-  // `11:00 – 11:30 AM` rather than `11:00 AM – 11:30 AM`, when both ends share the period.
   const period = /\s?([AP]M)$/i;
   const fromPeriod = from.match(period)?.[1];
   const shared = fromPeriod !== undefined && fromPeriod === to.match(period)?.[1];
-  return `${formatDay(start, now)}, ${shared ? from.replace(period, '') : from} – ${to}`;
+  return `${shared ? from.replace(period, '') : from} – ${to}`;
 }
 
-function startOfDay(at: Date) {
+/** Local midnight on the day of `at`: what a list grouped by day keys its days on. */
+export function startOfDay(at: Date) {
   return new Date(at.getFullYear(), at.getMonth(), at.getDate());
 }
 

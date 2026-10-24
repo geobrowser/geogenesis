@@ -4342,3 +4342,56 @@ function decodeGeoChatAccessToken(token: string | undefined): { user_id?: string
     return null;
   }
 }
+
+/** One past request, invite, debate or lobby in the viewer's history (GEO-3464). */
+export type DebateHistoryKind = 'claim_request' | 'challenge' | 'scheduled_invite' | 'debate' | 'lobby';
+
+export type DebateHistoryItem = {
+  /** Unique across kinds, e.g. `claim_request:<uuid>`. */
+  id: string;
+  kind: DebateHistoryKind;
+  occurred_at: string;
+  /** `null` for debates, lobbies and invites the Geo team arranged, which have no sender. */
+  direction: 'outgoing' | 'incoming' | null;
+  /**
+   * How it ended, from the viewer's side. Read through `historyOutcomeLabel`, which knows the values:
+   * requests and challenges `accepted | declined | taken_by_other | cancelled | expired |
+   * passed_by_everyone | unknown`; invites their status, with `declined` the viewer's own answer and
+   * `declined_by_other` the other debater's; debates (finished only) `held | never_started |
+   * abandoned`; lobbies `joined`.
+   */
+  outcome: string;
+  /** geo-chat user ids of everyone else involved, the viewer left out. */
+  other_user_ids: string[];
+  /** The same people, named, in the same order (geo-chat#299). Optional so an older response still reads. */
+  others?: DebateParticipantSummary[];
+  /** The request lists' own claim shape: `claim` is the text, `id` the debate claim row. */
+  claim: DebateClaimSummary | null;
+  debate_id: string | null;
+  /** The lobby: the one joined, or the one a request, challenge or debate was made in. */
+  lobby: { room_id: string; name: string } | null;
+  scheduled_start_at: string | null;
+};
+
+export type DebateHistoryResponse = {
+  items: DebateHistoryItem[];
+  next_cursor: string | null;
+};
+
+/** The viewer's history, newest first, a page at a time (GEO-3464). */
+export async function listDebateHistory(
+  cursor: string | null,
+  limit: number,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+  return geoChatRequest<DebateHistoryResponse>(`/me/debate-history?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}

@@ -51,6 +51,7 @@ import {
 } from '../hooks';
 import { lobbyDebateRequested } from '../lobbies/lobby-analytics';
 import { routeIntoDebate } from '../lobbies/step-out';
+import { markAskWithdrawn } from './ask-withdrawals';
 
 const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
 
@@ -429,7 +430,11 @@ export function useWithdrawDebateRequest() {
 
   return useMutation({
     mutationFn: (requestId: string) => withdrawDebateRequest(requestId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
+    onSuccess: (_result, requestId) => {
+      // Before the refetch takes the request away, so the panel reads its end as taken back (GEO-3463).
+      markAskWithdrawn(requestId);
+      void invalidateDebatesOutsideRematchClaims(queryClient);
+    },
   });
 }
 

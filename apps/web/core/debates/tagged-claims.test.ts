@@ -13,6 +13,7 @@ import {
   NO_TAGGED_CLAIM_FILTERS,
   TAGGED_CLAIMS_PAGE_SIZE,
   type TaggedClaimFilters,
+  useTaggedAnsweredCount,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -169,8 +170,17 @@ describe('the page it asks for', () => {
     const { result } = renderClaims();
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    expect(sentQuery()).toContain('RANKING_SCORE_DESC');
-    expect(sentQuery()).not.toContain('ID_DESC');
+    expect(sentVariables().orderBy).toEqual(['RANKING_SCORE_DESC']);
+  });
+
+  it('orders by creation time, ties broken by id, when the panel asks for Newest', async () => {
+    // GEO-3463. The id tiebreak is what keeps a cursor from skipping or repeating claims created
+    // in the same block.
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, order: 'newest' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().orderBy).toEqual(['CREATED_AT_DESC', 'ID_DESC']);
   });
 
   it('asks for one page rather than the whole tag', async () => {
@@ -1142,5 +1152,24 @@ describe('the total it reports', () => {
 
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
     expect(result.current.totalCount).toBeNull();
+  });
+});
+
+// GEO-3463. Sort changes which claim comes first, not how many were answered.
+describe('the answered count', () => {
+  it('is not asked again when only the order changes', async () => {
+    graphqlMock.mockImplementation(({ decoder }) => Effect.succeed(decoder({ entitiesConnection: { totalCount: 3 } })));
+    const filters: TaggedClaimFilters = { ...NO_TAGGED_CLAIM_FILTERS, excludeAnsweredBy: 'space-me' };
+    const { result, rerender } = renderHook(
+      ({ order }: { order: 'best' | 'newest' }) => useTaggedAnsweredCount(TAG, { ...filters, order }, true),
+      { wrapper: Wrapper, initialProps: { order: 'best' } }
+    );
+    await waitFor(() => expect(result.current.answeredCount).toBe(3));
+    const asked = graphqlMock.mock.calls.length;
+
+    rerender({ order: 'newest' });
+
+    expect(result.current.answeredCount).toBe(3);
+    expect(graphqlMock.mock.calls.length).toBe(asked);
   });
 });
