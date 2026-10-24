@@ -19,6 +19,7 @@ describe('publication outcome instrumentation', () => {
       const context = vm.createContext({
         activeSpace: 'space',
         isReadyToPublish: true,
+        isResolvingLinkTargets: false,
         setIsPublishing: vi.fn(),
         ID: { createEntityId: () => 'proposal' },
         findDanglingDependencies: () => [],
