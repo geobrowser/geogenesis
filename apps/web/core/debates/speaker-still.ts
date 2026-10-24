@@ -1,4 +1,4 @@
-import type { DebateMediaArtifact } from './api';
+import type { DebateMediaArtifact, DebateMediaArtifactKind } from './api';
 import { getGeoChatApiBaseUrl } from './geo-chat-public-base-url';
 
 /**
@@ -21,18 +21,23 @@ export function speakerStillUrl(
 }
 
 /**
- * The durable content route for a slot's still, whether or not the artifact list is in hand. The
- * explore feed may hand the card a presigned storage URL instead (it saves a redirect); this is what
- * the card falls back to when that one has lapsed.
+ * The durable content route for a debate's media artifact, whether or not the artifact list is in
+ * hand: unauthenticated, and it 302s to a fresh presigned GET, so an image painted late in a long
+ * session does not 403 on an expired signature. One spelling of the id whoever builds it: geo-chat
+ * returns `debate.id` without hyphens, the feed derives it hyphenated from the entity id, and two
+ * spellings are two images to the browser.
  */
-export function speakerStillContentUrl(debateId: string, slot: 1 | 2): string {
-  const kind = `speaker_still_slot_${slot}` as const;
-  // The durable content route, not a presigned URL: it is unauthenticated and 302s to a fresh
-  // presigned GET, so a poster painted late in a long session does not 403 on an expired signature.
-  // One spelling of the id whoever builds it: geo-chat returns `debate.id` without hyphens, the feed
-  // derives it hyphenated from the entity id, and two spellings are two images to the browser.
+export function debateArtifactContentUrl(debateId: string, kind: DebateMediaArtifactKind): string {
   const id = debateId.replace(/-/g, '').toLowerCase();
   return `${getGeoChatApiBaseUrl()}/debates/${encodeURIComponent(id)}/media/artifacts/${kind}/content`;
+}
+
+/**
+ * A slot's still by its durable route. The explore feed may hand the card a presigned storage URL
+ * instead (it saves a redirect); this is what the card falls back to when that one has lapsed.
+ */
+export function speakerStillContentUrl(debateId: string, slot: 1 | 2): string {
+  return debateArtifactContentUrl(debateId, `speaker_still_slot_${slot}`);
 }
 
 /**
