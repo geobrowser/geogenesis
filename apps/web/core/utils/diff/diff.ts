@@ -416,16 +416,33 @@ export async function postProcessDiffs(
     }
   }
 
+  // Resolve names, unscoped: idsToResolve includes system entities (Name, Types, …) from
+  // outside this space, and scoping would drop them so names would render as raw ids.
   const fetchedEntityMap = new Map<string, Entity>();
   if (idsToResolve.size > 0) {
     try {
-      const fetched = await Effect.runPromise(getBatchEntities([...idsToResolve], spaceId));
+      const fetched = await Effect.runPromise(getBatchEntities([...idsToResolve]));
       for (const e of fetched) {
         nameMap.set(e.id, e.name);
         fetchedEntityMap.set(e.id, e);
       }
     } catch (error) {
       console.error('[postProcessDiffs] Failed to fetch entity names:', error);
+    }
+  }
+
+  // Resolve block content, scoped: the synthesis pass below reads these blocks' values and
+  // relations, which are space-scoped. Re-fetch them with spaceId and overwrite their entries.
+  const blockIdsNeedingSpaceScope = [...blocksWithParent.keys()].filter(id => !entityMap.has(id));
+  if (blockIdsNeedingSpaceScope.length > 0) {
+    try {
+      const scopedBlocks = await Effect.runPromise(getBatchEntities(blockIdsNeedingSpaceScope, spaceId));
+      for (const e of scopedBlocks) {
+        fetchedEntityMap.set(e.id, e);
+        if (!nameMap.has(e.id)) nameMap.set(e.id, e.name);
+      }
+    } catch (error) {
+      console.error('[postProcessDiffs] Failed to fetch scoped block content:', error);
     }
   }
 
