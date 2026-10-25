@@ -133,6 +133,8 @@ interface UpsertBlocksRelationsArgs {
 export type UpsertEditorStateOptions = {
   /** Blocks whose complete graph will be restored by a clone operation. */
   skipDefaultInitializationForBlockIds?: ReadonlySet<string>;
+  /** The block the user just dragged, used to attribute one-slot reorders correctly. */
+  reorderedBlockId?: string;
 };
 
 // Helper function to create or update the block IDs on an entity
@@ -587,7 +589,7 @@ export function useEditorStore() {
       // Q:
       // Does tiptap copy metadata about the block when you copy-paste it in the editor?
 
-      const { added, removed, moved } = getBlockPositionChanges(currentBlockIds, newBlockIds);
+      const { added, removed, moved } = getBlockPositionChanges(currentBlockIds, newBlockIds, options.reorderedBlockId);
 
       const addedBlocks = newBlocks.filter(b => added.includes(b.id));
       const movedBlocks = newBlocks.filter(b => moved.includes(b.id));

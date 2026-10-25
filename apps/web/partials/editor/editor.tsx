@@ -196,12 +196,15 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
 
   // A deliberate drop is an explicit document change, so persist it immediately
   // even if a suggestion popup happened to be active before the drag began.
-  const persistReorderedBlocks = React.useCallback(() => {
-    if (!editableRef.current || !editorRef.current) return;
-    const json = editorRef.current.getJSON();
-    trackEditorDocument(json);
-    upsertEditorStateRef.current(json);
-  }, [trackEditorDocument]);
+  const persistReorderedBlocks = React.useCallback(
+    (reorderedBlockId?: string) => {
+      if (!editableRef.current || !editorRef.current) return;
+      const json = editorRef.current.getJSON();
+      trackEditorDocument(json);
+      upsertEditorStateRef.current(json, reorderedBlockId ? { reorderedBlockId } : {});
+    },
+    [trackEditorDocument]
+  );
 
   // When transitioning from edit → view mode, persist the editor content to the
   // store BEFORE useEditor destroys and recreates the editor. Without this,
