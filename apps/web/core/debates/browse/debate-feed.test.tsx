@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { Provider, createStore } from 'jotai';
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 
 import {
@@ -16,6 +17,10 @@ import { debateFeedPanelAtom, debateFullscreenActiveAtom, entitySidePanelAtom } 
 
 const mocks = vi.hoisted(() => ({
   debates: [] as Debate[],
+  claims: [] as Array<{
+    id: string;
+    relations: Array<{ type: { id: string }; toEntity: { id: string; name: string } }>;
+  }>,
   /** null = every debate reads as processed (the common-case default). */
   processedIds: null as string[] | null,
   mediaLoading: false,
@@ -83,7 +88,7 @@ vi.mock('next/navigation', async () => {
 });
 
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: () => ({ entities: [], isLoading: false }),
+  useQueryEntities: () => ({ entities: mocks.claims, isLoading: false }),
 }));
 
 vi.mock('./debate-feed-player', async () => {
@@ -195,6 +200,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   observers = [];
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
+  mocks.claims = [];
   mocks.processedIds = null;
   mocks.anchorDebate = null;
   mocks.anchorLoading = false;
@@ -243,6 +249,32 @@ afterEach(() => {
 });
 
 describe('DebatesBrowseFeed header links', () => {
+  it.each([
+    { topics: ['Human rights'] },
+    { topics: ['Human rights', 'Free speech', 'Civil liberties', 'Rights', 'Press', 'Law'] },
+  ])('shows only the space in metadata when the claim has topics: $topics', ({ topics }) => {
+    mocks.claims = [
+      {
+        id: mocks.debates[0].claim.claim_entity_id,
+        relations: topics.map((name, index) => ({
+          type: { id: TOPICS_PROPERTY_ID },
+          toEntity: { id: `topic-${index}`, name },
+        })),
+      },
+    ];
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const footer = screen.getByTestId('claim-footer');
+    const spaceLink = within(footer).getByRole('link', { name: 'Fashion' });
+    expect(spaceLink).toHaveAttribute('href', '/space/space-1');
+    const metadata = spaceLink.parentElement;
+    assert(metadata, 'Expected the space link to be inside the metadata row');
+    expect(metadata).toHaveTextContent(/^Fashion$/);
+    for (const topic of topics) {
+      expect(within(footer).queryByText(topic)).not.toBeInTheDocument();
+    }
+  });
+
   // Both name something that has a page, and neither was reachable.
   it('links the space chip to the space and the claim title to its entity', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
