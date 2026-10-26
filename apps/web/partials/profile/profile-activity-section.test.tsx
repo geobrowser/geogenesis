@@ -429,6 +429,23 @@ describe('ProfileActivitySection', () => {
     expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('keeps a visible gallery mounted while rankings refresh for newly arrived debates', () => {
+    const debates = kind({ rows: [row('d1'), row('d2')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[debates]} />);
+    const gallery = screen.getByTestId('playback-gate');
+    const cards = screen.getAllByTestId('card');
+    fireEvent.click(cards[1]);
+    expect(gallery).toHaveAttribute('data-allowed-id', 'd2');
+
+    // A new debate changes useEntityScores' query key, so ranking is loading again.
+    rerender(<ProfileActivitySection kinds={[{ ...debates, rows: [...debates.rows, row('d3')], isLoading: true }]} />);
+
+    expect(screen.queryByRole('status', { name: 'Loading activity' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('playback-gate')).toBe(gallery);
+    expect(screen.getAllByTestId('card')[1]).toBe(cards[1]);
+    expect(gallery).toHaveAttribute('data-allowed-id', 'd2');
+  });
+
   it('keeps a pick through a render where both kinds blank together', () => {
     const debates = kind({ rows: [row('d1')] });
     const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });

@@ -171,6 +171,14 @@ export function ProfileActivitySection({
   const selected =
     available.find(kind => kind.key === pickedKey) ?? available.find(kind => kind.key === defaultKey) ?? lead;
 
+  // Wait for the first ranked view, then keep that gallery mounted if new rows trigger another
+  // ranking request. Replacing it with a skeleton would discard scroll and playback ownership.
+  const [loadedGalleryKey, setLoadedGalleryKey] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (selected && !selected.isLoading && selected.rows.length > 0) setLoadedGalleryKey(selected.key);
+  }, [selected]);
+  const showGalleryLoading = selected?.isLoading && (loadedGalleryKey !== selected.key || selected.rows.length === 0);
+
   const { sectionRef, reserveRef, prepareSwitch } = useMobileActivityHeightReserve(selected?.key);
   // The gallery measures whether its row can scroll; the arrows live in the header, so it reports
   // up. Null while no gallery is mounted — a kind that failed to load has no row to step through.
@@ -264,7 +272,7 @@ export function ProfileActivitySection({
           </div>
         </header>
 
-        {selected.isLoading ? (
+        {showGalleryLoading ? (
           <ActivityGallerySkeleton />
         ) : selected.isError && selected.rows.length === 0 ? (
           /*
