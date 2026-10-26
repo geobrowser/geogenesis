@@ -5,6 +5,7 @@ import * as React from 'react';
 import dynamic from 'next/dynamic';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
+import { useSticky } from '~/core/hooks/use-sticky';
 
 import { MobileNavbarBrand } from '~/partials/navbar/mobile-navbar-brand';
 
@@ -22,13 +23,15 @@ const NavbarAccountActions = dynamic(
  * screenshot of the feed carries the brand the way the video does.
  */
 export function DebateFeedMobileBar() {
-  // CSS hides the bar on desktop; avoid mounting a second set of account controls there.
+  // Leave desktop-only visits lazy, but keep an opened profile editor and any pending save alive
+  // after a phone visit. CSS hides the bar on desktop; compact controls own no extra shortcuts.
   const isPhone = useIsPhoneLayout();
+  const mountAccountActions = useSticky(isPhone);
 
   return (
     <header className="hidden h-11 shrink-0 items-center justify-between bg-white px-4 md:flex">
       <MobileNavbarBrand placement="debate_feed_bar" />
-      {isPhone ? <NavbarAccountActions compact placement="debate_feed_bar" /> : null}
+      {mountAccountActions ? <NavbarAccountActions compact placement="debate_feed_bar" /> : null}
     </header>
   );
 }
