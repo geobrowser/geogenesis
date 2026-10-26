@@ -4,11 +4,7 @@ import * as React from 'react';
 
 import { dashlessId } from '~/core/debates/api';
 
-/**
- * What someone on stage is told about a recording (GEO-3421):
- * - `prompt`: going on stage while it records; a confirm, once per call.
- * - `toast`: already on stage when it started; told without being stopped.
- */
+/** Going on stage while it records: `prompt`, once per call. Already on stage when it started: `toast`. */
 export type StageRecordingNotice = 'none' | 'prompt' | 'toast';
 
 export function stageRecordingNotice({

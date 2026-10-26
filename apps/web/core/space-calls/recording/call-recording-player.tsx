@@ -21,12 +21,8 @@ export const CALL_RECORDING_PLAYER_COPY = {
 const MAX_SOURCE_RETRIES = 2;
 
 /**
- * A call recording (GEO-3421): one <video> on Stream HLS through `attachStreamSource`, native on
- * Safari and iOS, hls.js elsewhere. Native controls own play, mute and full screen; nothing here
- * flips `muted` or adds a second element, which is what iOS refuses outside a gesture.
- *
- * The first signed URL is kept for the element's life, so a background re-sign never interrupts
- * playback. A failed source is re-signed and reattached at the same position.
+ * A call recording (GEO-3421) on Stream HLS. Never flips `muted` or adds a second element: iOS
+ * refuses both outside a gesture. Keeps its first URL; a failed source is re-signed and resumed.
  */
 export function CallRecordingPlayer({
   callId,

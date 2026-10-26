@@ -1,8 +1,6 @@
 /**
- * Where published past calls sit among Explore's cards (GEO-3421), on the fresh slot's rule
- * (`merge-fresh-slot`): the first after card `firstPosition`, then one every `cadence` cards. Client
- * side, between cards the server already paged, so feed pages, cursors and caches are untouched.
- * A call never trails the feed: one goes in only after a card that is there.
+ * Past calls among Explore's cards (GEO-3421): after card `firstPosition`, then every `cadence`.
+ * Client side, so feed pages and caches are untouched; a call never trails the feed.
  */
 export type PastCallSlots = { firstPosition: number; cadence: number };
 
