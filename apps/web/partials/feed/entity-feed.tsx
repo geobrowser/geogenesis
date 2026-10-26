@@ -39,6 +39,18 @@ import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
  */
 const EAGER_CARD_COUNT = 4;
 
+// A feed is a browsing session: refetching an infinite query starts at page one and can
+// replace every loaded page with a new ranking. Keep it until a deliberate refresh or a
+// different query (sort, filters, account), including when a phone returns to the browser.
+// Keep inactive sessions for 30 minutes so a brief route detour also resumes cached pages.
+const FEED_SESSION_OPTIONS = {
+  staleTime: Infinity,
+  gcTime: 30 * 60_000,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+  refetchOnMount: false,
+} as const;
+
 function LoadingSkeleton() {
   return (
     <div className="space-y-4 rounded-lg border border-grey-02 p-4">
@@ -537,6 +549,7 @@ export function EntityFeed({
     viewerAddress !== null &&
     buildFeedQuery({ ...feedParams, cursor: undefined, anonymous: true }).includes(`${PUBLIC_FEED_PARAM}=1`);
   const publicFirstPage = useQuery({
+    ...FEED_SESSION_OPTIONS,
     queryKey: [apiEndpoint, PUBLIC_FEED_PARAM],
     queryFn: () => fetchFeedPage(apiEndpoint, { ...feedParams, cursor: undefined, anonymous: true }),
     enabled: paintsFromPublicPage,
@@ -544,8 +557,9 @@ export function EntityFeed({
   });
   const publicPlaceholder = paintsFromPublicPage ? publicFirstPage.data : undefined;
 
-  const { data, isLoading, isFetchingNextPage, isPlaceholderData, fetchNextPage, hasNextPage, error } =
+  const { data, isLoading, isFetching, isFetchingNextPage, isPlaceholderData, fetchNextPage, hasNextPage, error } =
     useInfiniteQuery({
+      ...FEED_SESSION_OPTIONS,
       queryKey,
       queryFn: async ({ pageParam }) =>
         fetchFeedPage(apiEndpoint, {
@@ -577,15 +591,17 @@ export function EntityFeed({
     if (!el || !hasNextPage || isPlaceholderData) return;
     const io = new IntersectionObserver(
       entries => {
-        if (entries[0]?.isIntersecting && !isFetchingNextPage) {
-          void fetchNextPage();
+        if (entries[0]?.isIntersecting && !isFetching) {
+          // Observer callbacks can repeat before React renders the fetching state. Reuse the
+          // in-flight request rather than canceling it and starting the same page again.
+          void fetchNextPage({ cancelRefetch: false });
         }
       },
       { rootMargin: '8000px' }
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData]);
+  }, [fetchNextPage, hasNextPage, isFetching, isPlaceholderData]);
 
   // GEO-3234. Load what this browser has already shown, once, while the first page is in flight.
   const isBest = sort === 'best';
