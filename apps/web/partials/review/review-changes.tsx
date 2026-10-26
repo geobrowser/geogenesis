@@ -497,11 +497,6 @@ export const ReviewChanges = () => {
   }, []);
 
   const ownershipIndex = React.useMemo(
-    () => buildOwnershipIndex(visibleEntities, relationsFromSpace),
-    [visibleEntities, relationsFromSpace]
-  );
-
-  const discardOwnershipIndex = React.useMemo(
     () => buildOwnershipIndex(visibleEntities, allSpaceRelations),
     [visibleEntities, allSpaceRelations]
   );
@@ -586,8 +581,8 @@ export const ReviewChanges = () => {
       if (wouldDangle) return;
 
       // Cascade new rows that would be left with no remaining inbound links.
-      const toDiscard = expandDiscardSet(discardOwnershipIndex, entityIds, allSpaceRelations, isNewEntity);
-      const removed = collectOpsForEntities(discardOwnershipIndex, toDiscard, valuesFromSpace, relationsFromSpace);
+      const toDiscard = expandDiscardSet(ownershipIndex, entityIds, allSpaceRelations, isNewEntity);
+      const removed = collectOpsForEntities(ownershipIndex, toDiscard, valuesFromSpace, relationsFromSpace);
       if (removed.values.length === 0 && removed.relations.length === 0) return;
 
       store.clearLocalChangesByIds({
@@ -617,7 +612,7 @@ export const ReviewChanges = () => {
     },
     [
       activeSpace,
-      discardOwnershipIndex,
+      ownershipIndex,
       allSpaceRelations,
       valuesFromSpace,
       relationsFromSpace,
