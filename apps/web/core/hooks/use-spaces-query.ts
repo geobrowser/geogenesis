@@ -60,7 +60,7 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
           signal,
         });
 
-        return { rows: page.results, offset: pageParam, rawCount: page.rawCount, total: page.total };
+        return { rows: page.results, offset: pageParam, total: page.total, serverCount: page.serverCount };
       } catch (error) {
         // Re-throw cancellations for the same reason `useSearch` does: returning an
         // empty page here caches "no matches" under this key, and the key only
@@ -76,11 +76,12 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
         // handled as one, so a real failure was silently indistinguishable from a
         // cancelled keystroke and the branch meant to re-throw it was unreachable.
         console.error('useSpacesQuery error:', error);
-        return { rows: [], offset: pageParam, rawCount: 0, total: 0 };
+        return { rows: [], offset: pageParam, total: 0, serverCount: 0 };
       }
     },
     getNextPageParam: lastPage => {
-      const nextOffset = lastPage.offset + matchLimit;
+      if (lastPage.serverCount === 0) return undefined;
+      const nextOffset = lastPage.offset + lastPage.serverCount;
       return nextOffset >= lastPage.total ? undefined : nextOffset;
     },
     enabled: enabled && (allowEmptyQuery || debouncedQuery.trim().length > 0),
