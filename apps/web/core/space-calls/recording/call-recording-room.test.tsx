@@ -21,8 +21,14 @@ vi.mock('./hooks', () => ({
   useCallRecordingControl: () => ({ ...mocks.control, mutate: mocks.mutate }),
 }));
 
-const { CallRecordingBar, EndCallPublishChoice, StageRecordingPrompt, startErrorMessage, CALL_RECORDING_COPY } =
-  await import('./call-recording-room');
+const {
+  CallRecordingBar,
+  EndCallPublishChoice,
+  StageRecordingPrompt,
+  callRecordingMetaLabel,
+  startErrorMessage,
+  CALL_RECORDING_COPY,
+} = await import('./call-recording-room');
 
 afterEach(() => {
   cleanup();
@@ -63,9 +69,16 @@ function call(recording: CallRecordingState | null, { manage = false, guest = fa
 }
 
 describe('CallRecordingBar', () => {
-  it('draws nothing with the flag off, even while recording', () => {
+  it('tells everyone it records with the flag off, but offers an editor no control', () => {
     mocks.flag = false;
-    const { container } = render(<CallRecordingBar lobby={call(RECORDING, { manage: true })} />);
+    render(<CallRecordingBar lobby={call(RECORDING, { manage: true })} />);
+    expect(screen.getByText(CALL_RECORDING_COPY.banner)).toBeInTheDocument();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('offers no Start with the flag off', () => {
+    mocks.flag = false;
+    const { container } = render(<CallRecordingBar lobby={call(OFF, { manage: true })} />);
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -166,5 +179,19 @@ describe('EndCallPublishChoice', () => {
     rerender(<EndCallPublishChoice lobby={call(RECORDING, { manage: true })} checked={false} onChange={onChange} />);
     fireEvent.click(screen.getByRole('checkbox', { name: /Publish the recording/ }));
     expect(onChange).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('callRecordingMetaLabel', () => {
+  it('follows the server, whatever the flag says', () => {
+    mocks.flag = false;
+    expect(callRecordingMetaLabel(call(RECORDING))).toBe(CALL_RECORDING_COPY.recordingMeta);
+    expect(callRecordingMetaLabel(call(OFF))).toBe(CALL_RECORDING_COPY.notRecorded);
+    expect(callRecordingMetaLabel(call({ ...RECORDING, status: 'processing' }))).toBe(CALL_RECORDING_COPY.recorded);
+    expect(callRecordingMetaLabel(call({ ...RECORDING, status: 'failed' }))).toBe(CALL_RECORDING_COPY.recordingFailed);
+  });
+
+  it('says nothing when geo-chat sends no recording', () => {
+    expect(callRecordingMetaLabel(call(null))).toBeNull();
   });
 });

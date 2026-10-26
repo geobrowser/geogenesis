@@ -50,8 +50,11 @@ export const CALL_RECORDING_COPY = {
   recordingFailed: 'Recording failed',
 } as const;
 
-/** The call's recording, with the flag on; `null` otherwise or from geo-chat without it. */
-export function useCallRecording(lobby: Pick<LobbyPageView, 'call'> | null): CallRecordingState | null {
+/**
+ * The recording for the flagged surfaces: controls, the publish choice, the ended page. Telling
+ * people a call records reads `callRecordingOf` instead, whatever this browser's flag says.
+ */
+export function useFlaggedCallRecording(lobby: Pick<LobbyPageView, 'call'> | null): CallRecordingState | null {
   const enabled = useFeatureFlag('callRecording');
   return enabled ? callRecordingOf(lobby) : null;
 }
@@ -61,9 +64,9 @@ export function canManageCallRecording(lobby: LobbyPageView): boolean {
   return isMemberView(lobby) && lobby.viewer.can_manage_recording === true;
 }
 
-/** For the header's meta line; `null` leaves the line as it was. */
-export function useCallRecordingMetaLabel(lobby: Pick<LobbyPageView, 'call'>): string | null {
-  const status = useCallRecording(lobby)?.status;
+/** For the header's meta line; `null` from geo-chat without recording, which says nothing. */
+export function callRecordingMetaLabel(lobby: Pick<LobbyPageView, 'call'>): string | null {
+  const status = callRecordingOf(lobby)?.status;
   if (!status) return null;
   switch (status) {
     case 'off':
@@ -89,15 +92,15 @@ export function startErrorMessage(error: unknown): string {
 }
 
 /**
- * Under the call's header (GEO-3421): the REC banner everyone sees while it records, and an
- * editor's Start or Stop. Once stopped there is nothing: a call has one recording window.
+ * Under the call's header (GEO-3421): the REC banner, for everyone while it records, and an
+ * editor's Start or Stop behind the flag. A call has one recording window.
  */
 export function CallRecordingBar({ lobby }: { lobby: LobbyPageView }) {
-  const recording = useCallRecording(lobby);
+  const recording = callRecordingOf(lobby);
   const control = useCallRecordingControl(lobby.lobby_id);
   const [confirmingStop, setConfirmingStop] = React.useState(false);
+  const canManage = useFeatureFlag('callRecording') && canManageCallRecording(lobby);
   if (!recording) return null;
-  const canManage = canManageCallRecording(lobby);
   // Shown from the click: people are told before the file starts.
   const starting = control.isPending && control.variables === 'start';
   const live = recording.status === 'recording' || starting;
@@ -250,7 +253,7 @@ export function PreJoinRecordingNote() {
  * refuses the choice from anyone else without ending the call.
  */
 export function useEndCallPublishes(lobby: LobbyPageView): boolean {
-  const recording = useCallRecording(lobby);
+  const recording = useFlaggedCallRecording(lobby);
   return (
     recording !== null &&
     canManageCallRecording(lobby) &&

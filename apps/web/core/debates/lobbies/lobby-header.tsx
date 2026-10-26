@@ -9,7 +9,7 @@ import { copyShareLink } from '~/core/sharing/share-handoff';
 import { createShareLink } from '~/core/sharing/share-link';
 import {
   EndCallPublishChoice,
-  useCallRecordingMetaLabel,
+  callRecordingMetaLabel,
   useEndCallPublishes,
 } from '~/core/space-calls/recording/call-recording-room';
 import { spaceCallPath } from '~/core/space-calls/routes';
@@ -53,10 +53,10 @@ export function lobbyMetaLabel(lobby: Pick<LobbyPageView, 'members'>) {
   return [hosts ? `Hosted by ${hosts}` : 'No host here', 'Video on', 'Not recorded'].join(' · ');
 }
 
-/** "Hosted by Adam and Priya · Not recorded", for a space call; `recording` replaces the last part. */
+/** "Hosted by Adam and Priya · Recording", for a space call; no recording part when geo-chat sends none. */
 export function callMetaLabel(lobby: Pick<LobbyPageView, 'members'>, recording: string | null = null) {
   const hosts = hostsLabel(lobby.members.filter(isHosting));
-  return [hosts ? `Hosted by ${hosts}` : 'No host here', recording ?? 'Not recorded'].join(' · ');
+  return [hosts ? `Hosted by ${hosts}` : 'No host here', recording].filter(Boolean).join(' · ');
 }
 
 function useCopyLink(lobbyId: string) {
@@ -95,7 +95,7 @@ export function LobbyHeader({
   const memberLobby = isMemberView(lobby) && lobby.viewer.hosting ? lobby : null;
   const hostLists = memberLobby ? <LobbyHostListsChip lobby={memberLobby} /> : null;
   const call = useLobbyRoomPurpose().purpose === 'call';
-  const recordingLabel = useCallRecordingMetaLabel(lobby);
+  const recordingLabel = callRecordingMetaLabel(lobby);
 
   if (phone) {
     return (

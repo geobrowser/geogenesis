@@ -15,12 +15,8 @@ import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { PreJoinDeviceCheck } from '~/partials/community-calls/pre-join';
 
 import { CallScreenStage } from './call-screen-stage';
-import {
-  CallRecordingBar,
-  PreJoinRecordingNote,
-  StageRecordingPrompt,
-  useCallRecording,
-} from './recording/call-recording-room';
+import { callRecordingOf } from './recording/api';
+import { CallRecordingBar, PreJoinRecordingNote, StageRecordingPrompt } from './recording/call-recording-room';
 import { useStageRecordingNotice } from './recording/stage-notice';
 
 /** A space call's room (GEO-3419): the lobby room with no claims, pairs or availability. */
@@ -45,7 +41,8 @@ export function CallRoom({
   const currentUserId = useCurrentGeoChatUserId();
   // No aside, so no phone tabs; the shell still wants the state.
   const [tab, setTab] = React.useState<LobbyPhoneTab>('people');
-  const recording = useCallRecording(lobby)?.status === 'recording';
+  // Everyone is told from the server's state, whatever this browser's flag says.
+  const recording = callRecordingOf(lobby)?.status === 'recording';
   const viewer = isMemberView(lobby) ? lobby.viewer : null;
   const onStage =
     state.status === 'joined' &&

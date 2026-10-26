@@ -10,7 +10,7 @@ import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { Text } from '~/design-system/text';
 
 import { CallRecordingPlayer } from './call-recording-player';
-import { canManageCallRecording, useCallRecording } from './call-recording-room';
+import { canManageCallRecording, useFlaggedCallRecording } from './call-recording-room';
 import { usePollWhileProcessing, usePublishCallRecording } from './hooks';
 
 export const ENDED_CALL_RECORDING_COPY = {
@@ -41,7 +41,7 @@ export function visibleEndedRecording(recording: CallRecordingState | null, edit
  * failed state, and an editor's publish toggle.
  */
 export function EndedCallRecording({ lobby }: { lobby: LobbyPageView }) {
-  const recording = useCallRecording(lobby);
+  const recording = useFlaggedCallRecording(lobby);
   const editor = canManageCallRecording(lobby);
   usePollWhileProcessing(lobby.lobby_id, recording?.status === 'processing');
   const visible = visibleEndedRecording(recording, editor);
