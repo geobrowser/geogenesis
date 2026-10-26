@@ -328,6 +328,18 @@ describe('formatSchedule', () => {
     expect(formatted).toContain('Every 2 weeks on Monday');
   });
 
+  it('names an ordinal monthly weekday', () => {
+    expect(formatSchedule('DTSTART:20260518T130000Z\nRRULE:FREQ=MONTHLY;BYDAY=3MO')).toContain(
+      'Monthly on the third Monday'
+    );
+    expect(formatSchedule('DTSTART:20261030T170000Z\nRRULE:FREQ=MONTHLY;BYDAY=-1FR')).toContain(
+      'Monthly on the last Friday'
+    );
+    expect(formatSchedule('DTSTART:20261030T170000Z\nRRULE:FREQ=MONTHLY;INTERVAL=2;BYDAY=1TU')).toContain(
+      'Every 2 months on the first Tuesday'
+    );
+  });
+
   it('formats multiple days', () => {
     const formatted = formatSchedule('DTSTART:20260305T170000Z\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR');
     expect(formatted).toContain('Monday');

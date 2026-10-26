@@ -25,6 +25,25 @@ const DAY_NAMES: Record<string, string> = {
 
 const VALID_DAYS = new Set(Object.keys(DAY_NAMES));
 
+const ORDINAL_NAMES: Record<string, string> = {
+  '1': 'first',
+  '2': 'second',
+  '3': 'third',
+  '4': 'fourth',
+  '5': 'fifth',
+  '-1': 'last',
+  '-2': 'second to last',
+};
+
+/** "Monday", or "the third Monday" for an ordinal BYDAY such as `3MO` or `-1FR`. */
+function byDayLabel(token: string): string {
+  const match = /^([+-]?\d{1,2})([A-Z]{2})$/.exec(token);
+  if (!match) return DAY_NAMES[token] ?? token;
+  const ordinal = ORDINAL_NAMES[String(Number(match[1]))];
+  const day = DAY_NAMES[match[2]];
+  return ordinal && day ? `the ${ordinal} ${day}` : token;
+}
+
 const FREQ_LABELS: Record<string, string> = {
   DAILY: 'Daily',
   WEEKLY: 'Weekly',
@@ -465,8 +484,9 @@ export function formatSchedule(schedule: string): string {
     const freqLabel = rrule.freq ? (FREQ_LABELS[rrule.freq] ?? rrule.freq) : '';
 
     if (rrule.byDay && rrule.byDay.length > 0) {
-      const dayNames = rrule.byDay.map(d => DAY_NAMES[d] ?? d);
-      const interval = rrule.interval && rrule.interval > 1 ? `Every ${rrule.interval} weeks` : freqLabel;
+      const dayNames = rrule.byDay.map(byDayLabel);
+      const unit = rrule.freq === 'MONTHLY' ? 'months' : 'weeks';
+      const interval = rrule.interval && rrule.interval > 1 ? `Every ${rrule.interval} ${unit}` : freqLabel;
       parts.push(`${interval} on ${dayNames.join(', ')}`);
     } else if (rrule.interval && rrule.interval > 1) {
       const unit =
