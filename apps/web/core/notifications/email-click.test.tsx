@@ -22,6 +22,7 @@ const { EmailClickReporter } = await import('./email-click');
 const { NotificationsRequestError } = await import('./api');
 
 const SEND = '3b0c2c8e-9a51-4d7e-8f43-2f1c6a0d9e11';
+const OTHER = '7d1e2f30-4a5b-4c6d-8e9f-0a1b2c3d4e5f';
 
 let visibility: DocumentVisibilityState = 'visible';
 
@@ -144,6 +145,46 @@ describe('EmailClickReporter', () => {
     land('');
     render(<EmailClickReporter />);
     expect(mocks.report).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a pending click when the service fails, and the signed-in state it was first reported with', async () => {
+    mocks.report = vi.fn(async () => {
+      throw new NotificationsRequestError('down', 500);
+    });
+    land(`?ref_send=${SEND}`);
+    render(<EmailClickReporter />);
+    await act(async () => {});
+    cleanup();
+    // They log in on that page; the retry still says how they arrived.
+    mocks.session = true;
+    mocks.report = vi.fn(async () => ({ outcome: 'counted' }));
+    land('');
+    render(<EmailClickReporter />);
+    await act(async () => {});
+    expect(mocks.report).toHaveBeenCalledWith('https://n.example', { send_id: SEND, link: null, signed_in: false });
+  });
+
+  it('reports a pending click and a second email opened in the same tab, both', async () => {
+    mocks.report = vi.fn(async () => {
+      throw new Error('offline');
+    });
+    land(`?ref_send=${SEND}&ref_link=main`);
+    render(<EmailClickReporter />);
+    await act(async () => {});
+    cleanup();
+    mocks.report = vi.fn(async () => ({ outcome: 'counted' }));
+    land(`?ref_send=${OTHER}&ref_link=claim_0`);
+    render(<EmailClickReporter />);
+    await act(async () => {});
+    expect(mocks.report.mock.calls.map(([, click]) => click)).toEqual([
+      { send_id: SEND, link: 'main', signed_in: false },
+      { send_id: OTHER, link: 'claim_0', signed_in: false },
+    ]);
+    // Both answered: nothing left pending.
+    cleanup();
+    land('');
+    render(<EmailClickReporter />);
+    expect(mocks.report).toHaveBeenCalledTimes(2);
   });
 
   it('still reports once with session storage blocked', () => {
