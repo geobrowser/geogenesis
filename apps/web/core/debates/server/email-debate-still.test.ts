@@ -95,8 +95,7 @@ describe('emailStillPlaceholder', () => {
       // sharp's chain returns the same instance; the failure arrives from toBuffer, as libvips' do.
       const fake = Object.assign((...args: Parameters<typeof sharp>) => {
         const instance = real(...args);
-        if (++calls === 1)
-          instance.toBuffer = (() => Promise.reject(new Error('vips: out of memory'))) as typeof instance.toBuffer;
+        if (++calls === 1) vi.spyOn(instance, 'toBuffer').mockRejectedValue(new Error('vips: out of memory'));
         return instance;
       }, real);
       return { default: fake };
