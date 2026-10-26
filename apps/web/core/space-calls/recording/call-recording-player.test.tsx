@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   playback: {
-    data: undefined as { url: string } | undefined,
+    data: undefined as { url: string; thumbnail_url?: string | null } | undefined,
     dataUpdatedAt: 0,
     isError: false,
     refetch: vi.fn(),
@@ -47,6 +47,18 @@ describe('CallRecordingPlayer', () => {
     expect(video).toHaveAttribute('playsinline');
     expect(video).toHaveAttribute('preload', 'none');
     expect(mocks.attached.map(a => a.url)).toEqual(['https://s/a.m3u8']);
+  });
+
+  it('uses the signed thumbnail as the poster unless given one', () => {
+    mocks.playback = {
+      ...mocks.playback,
+      data: { url: 'https://s/a.m3u8', thumbnail_url: 'https://s/thumb.jpg' },
+      dataUpdatedAt: tick(),
+    };
+    const { rerender } = render(<CallRecordingPlayer callId="call1" />);
+    expect(screen.getByTestId('call-recording-video')).toHaveAttribute('poster', 'https://s/thumb.jpg');
+    rerender(<CallRecordingPlayer callId="call1" poster="https://s/own.jpg" />);
+    expect(screen.getByTestId('call-recording-video')).toHaveAttribute('poster', 'https://s/own.jpg');
   });
 
   it('keeps the attached source when a background re-sign brings a new URL', () => {

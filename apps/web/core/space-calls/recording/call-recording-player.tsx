@@ -37,6 +37,7 @@ export function CallRecordingPlayer({
   callId: string;
   /** `none` in a list, so a card nobody plays costs no manifest fetch on iOS. */
   preload?: 'none' | 'metadata';
+  /** Defaults to the signed thumbnail that comes with the playback URL. */
   poster?: string | null;
   className?: string;
 }) {
@@ -110,7 +111,7 @@ export function CallRecordingPlayer({
         controls
         playsInline
         preload={preload}
-        poster={poster ?? undefined}
+        poster={poster ?? playback.data?.thumbnail_url ?? undefined}
         // Native HLS reports a lapsed or broken manifest here; hls.js reports through its own event.
         onError={fail}
         className={cx('size-full object-contain', broken && 'invisible')}
