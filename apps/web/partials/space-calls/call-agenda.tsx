@@ -21,9 +21,8 @@ export const CALL_AGENDA_COPY = {
 } as const;
 
 /**
- * A call's agenda (GEO-3420): markdown anyone can read, signed out included. Hosts edit it in place;
- * `onSave` resolves once stored and rejects to keep the draft open with `errorMessage`'s words.
- * The save's base is the agenda the edit started from, or the newer one a conflict reported.
+ * A call's agenda (GEO-3420): markdown anyone can read; hosts edit in place. A save's base is the
+ * agenda the edit started from, or the newer one a conflict reported; a rejection keeps the draft.
  */
 export function CallAgenda({
   markdown,
