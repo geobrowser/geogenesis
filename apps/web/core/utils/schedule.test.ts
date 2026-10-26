@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   MAX_CALL_DURATION_MINUTES,
@@ -96,6 +96,36 @@ describe('validateSchedule', () => {
   it('accepts a future DTSTART when requireFutureStart is set', () => {
     const result = validateSchedule('DTSTART:20990101T000000Z', { requireFutureStart: true });
     expect(result.valid).toBe(true);
+  });
+
+  describe('requireFutureStart with a TZID start, at 17:17 EDT', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-10-26T21:17:00Z'));
+    });
+    afterEach(() => vi.useRealTimers());
+
+    const future = (schedule: string) => validateSchedule(schedule, { requireFutureStart: true });
+
+    it('accepts a New York start later today', () => {
+      expect(future('DTSTART;TZID=America/New_York:20261026T174000').valid).toBe(true);
+      expect(future('DTSTART;TZID=America/New_York:20261026T175700').valid).toBe(true);
+    });
+
+    it('rejects a New York start five minutes ago', () => {
+      expect(future('DTSTART;TZID=America/New_York:20261026T171200').errors).toContain(
+        'Start time must be in the future'
+      );
+    });
+
+    it('rejects a Tokyo start an hour ago', () => {
+      expect(future('DTSTART;TZID=Asia/Tokyo:20261027T051700').errors).toContain('Start time must be in the future');
+    });
+
+    it('reads a Z value as UTC', () => {
+      expect(future('DTSTART:20261026T213000Z').valid).toBe(true);
+      expect(future('DTSTART:20261026T210000Z').valid).toBe(false);
+    });
   });
 
   it('accepts a past DTSTART when requireFutureStart is not set', () => {

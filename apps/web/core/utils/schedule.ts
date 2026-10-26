@@ -66,6 +66,12 @@ export interface ScheduleValidationResult {
   errors: string[];
 }
 
+/** The instant a valid iCal date names: TZID digits are that zone's wall clock, a `Z` value is UTC. */
+function icalInstantMs(value: string, tzid: string | undefined): number {
+  const naive = parseICalDate(value)!.getTime();
+  return tzid && !value.endsWith('Z') ? localToUtcMs(naive, tzid) : naive;
+}
+
 function parseICalDate(value: string): Date | null {
   const match = value.match(ICAL_DATE_RE);
   if (!match) return null;
@@ -240,6 +246,7 @@ export function validateSchedule(
 
   const lines = schedule.split('\n').filter(l => l.trim());
   const props: Record<string, string> = {};
+  let startTzid: string | undefined;
 
   for (const line of lines) {
     const colonIdx = line.indexOf(':');
@@ -268,13 +275,14 @@ export function validateSchedule(
     }
 
     props[key] = value;
+    if (key === 'DTSTART') startTzid = tzid;
   }
 
   if (!props.DTSTART) {
     errors.push('DTSTART is required');
   } else if (!isValidICalDate(props.DTSTART)) {
     errors.push(`Invalid DTSTART date "${props.DTSTART}". Expected format: YYYYMMDDTHHmmSS (optionally ending with Z)`);
-  } else if (options?.requireFutureStart && parseICalDate(props.DTSTART)!.getTime() <= Date.now()) {
+  } else if (options?.requireFutureStart && icalInstantMs(props.DTSTART, startTzid) <= Date.now()) {
     errors.push('Start time must be in the future');
   }
 
