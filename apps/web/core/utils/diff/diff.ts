@@ -199,10 +199,11 @@ export function groupBlocksUnderParents(entities: EntityDiff[]): EntityDiff[] {
         // blocks. The per-entity diff endpoint may return imageBlocks with null before/after
         // (URL not serialized), while step 7's synthesized block correctly carries the URL.
         const mergedBlocks = e.blocks.map(eb => {
+          const synth = synthBlockMap.get(eb.id);
           if (eb.before === null && eb.after === null) {
-            const synth = synthBlockMap.get(eb.id);
             if (synth !== undefined && (synth.before !== null || synth.after !== null)) return synth;
           }
+          if (synth?.moved && !eb.moved) return { ...eb, moved: true };
           return eb;
         });
         const existingBlockIds = new Set(e.blocks.map(b => b.id));
