@@ -26,7 +26,7 @@ describe('GET /api/email/debate-still/<debateId>', () => {
     vi.unstubAllGlobals();
   });
 
-  it("serves geo-chat's still with the play button, cached for a week", async () => {
+  it("serves geo-chat's still with the play button, cached for a day", async () => {
     const still = await sharp({ create: { width: 400, height: 600, channels: 3, background: '#336699' } })
       .jpeg()
       .toBuffer();
@@ -34,7 +34,8 @@ describe('GET /api/email/debate-still/<debateId>', () => {
     const res = await get(DEBATE);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/jpeg');
-    expect(res.headers.get('cache-control')).toContain('s-maxage=604800');
+    // A day, not a week: a debate hidden after its email went out stops showing its still soon.
+    expect(res.headers.get('cache-control')).toBe('public, max-age=3600, s-maxage=86400');
     // Bounded: geo-chat gets a timeout, so a hung upstream can't hold the request.
     expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
@@ -58,11 +59,16 @@ describe('GET /api/email/debate-still/<debateId>', () => {
     expect(res.headers.get('cache-control')).toBe('public, max-age=300, s-maxage=300');
   });
 
-  it('answers with the placeholder when geo-chat is unreachable', async () => {
-    fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+  it.each([
+    ['geo-chat is unreachable', () => Promise.reject(new TypeError('fetch failed'))],
+    ['geo-chat answers 502', () => Promise.resolve(new Response('bad gateway', { status: 502 }))],
+  ])('answers with the placeholder, cached nowhere, when %s', async (_, answer) => {
+    fetchMock.mockImplementation(answer);
     const res = await get(DEBATE);
     expect(res.status).toBe(200);
-    expect(res.headers.get('cache-control')).toBe('public, max-age=300, s-maxage=300');
+    expect(res.headers.get('content-type')).toBe('image/jpeg');
+    // A blip mustn't leave a grey still in the CDN or a mail provider's image cache.
+    expect(res.headers.get('cache-control')).toBe('no-store');
   });
 
   it.each([

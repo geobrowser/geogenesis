@@ -8,10 +8,16 @@ import { validateSpaceId } from '~/core/io/rest/validation';
 
 export const runtime = 'nodejs';
 
-/** A still rarely changes once published: the CDN keeps it a week. */
-const FOUND_CACHE = 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400';
-/** The placeholder is kept briefly, so a still that appears later shows up soon. */
-const PLACEHOLDER_CACHE = 'public, max-age=300, s-maxage=300';
+/**
+ * A found still: a day at the CDN, an hour in a browser. Emails are opened days after a send, and a
+ * debate hidden after its email went out must stop showing its still soon; nothing purges the CDN.
+ * The render only happens once per debate per day.
+ */
+const FOUND_CACHE = 'public, max-age=3600, s-maxage=86400';
+/** geo-chat answered that there is no still: kept briefly, so a still that appears later shows up soon. */
+const NO_STILL_CACHE = 'public, max-age=300, s-maxage=300';
+/** geo-chat was down or too slow: kept nowhere, so a blip doesn't leave a grey still in a cache. */
+const TRANSIENT_CACHE = 'no-store';
 
 /** Long enough for geo-chat's redirect and the image; the email's row waits on it. */
 const FETCH_TIMEOUT_MS = 8000;
@@ -23,7 +29,8 @@ const FETCH_TIMEOUT_MS = 8000;
  * button when the debate has no still or it can't be read, so the row keeps its shape.
  *
  * Only the canonical URL is served (32 lowercase hex, no query string), so every request for a
- * debate shares one CDN entry and a cache-busting query can't make the route redo the work. *
+ * debate shares one CDN entry and a cache-busting query can't make the route redo the work.
+ *
  * Local dev: with `NEXT_PUBLIC_GEO_CHAT_API_BASE_URL` set to the relative `/geo-chat-proxy`, the
  * server can't fetch the still, so every row draws the placeholder there. Production uses the
  * absolute public host.
@@ -36,17 +43,24 @@ export async function GET(req: Request, { params }: { params: Promise<{ debateId
   }
 
   let image: Buffer | null = null;
+  let placeholderCache = TRANSIENT_CACHE;
   try {
     // geo-chat's durable route 302s to its object storage; the redirect is followed.
     const res = await fetch(emailStillSourceUrl(debateId), { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
-    const body = await readImageBody(res);
-    // Not an image sharp can read, or too many pixels: the placeholder.
-    image = body ? await renderEmailStill(body).catch(() => null) : null;
+    if (res.status >= 500) {
+      await res.body?.cancel();
+    } else {
+      // A definite answer: no still (a 404, also for a private or hidden debate), too big, or not an
+      // image sharp can read.
+      placeholderCache = NO_STILL_CACHE;
+      const body = await readImageBody(res);
+      image = body ? await renderEmailStill(body).catch(() => null) : null;
+    }
   } catch {
-    // Unreachable or too slow: the placeholder.
+    // Unreachable or too slow: the placeholder, cached nowhere.
   }
 
   return new Response(new Uint8Array(image ?? (await emailStillPlaceholder())), {
-    headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': image ? FOUND_CACHE : PLACEHOLDER_CACHE },
+    headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': image ? FOUND_CACHE : placeholderCache },
   });
 }
