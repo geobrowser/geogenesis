@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -38,6 +38,22 @@ vi.mock('../lobbies/lobby-reminder-press', () => ({
   useLobbyReminderPress: () => ({ reminded: false, pending: false, error: null, press: mocks.remind }),
   LobbyReminderError: () => null,
 }));
+
+// The lobby's own read, for what the list row leaves out (GEO-3463 details).
+const lobbyView = vi.hoisted(() => ({ data: undefined as unknown }));
+vi.mock('../lobbies/hooks', () => ({ useDebateLobby: () => lobbyView }));
+vi.mock('../lobbies/lobby-host-lobbies', () => ({
+  usePreOpenHosts: (lobby: { hosts?: unknown[] }) => lobby.hosts ?? [],
+}));
+vi.mock('../lobbies/lobby-claim-list-tab', () => ({
+  useClaimListName: (list: { entity_id: string }) => `List ${list.entity_id}`,
+}));
+
+window.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
 
 const { HubLiveStrip, askShareLeft } = await import('./hub-live-strip');
 
@@ -105,6 +121,45 @@ describe('HubLiveStrip', () => {
     expect(strip).toHaveTextContent('AI policy night');
     fireEvent.click(screen.getByRole('button', { name: 'RSVP' }));
     expect(mocks.remind).toHaveBeenCalled();
+  });
+
+  // 26 Oct (Preston): black means live. A lobby on Tuesday is not.
+  it('draws an upcoming lobby light, not on the live strip’s black', () => {
+    const later = lobby({ open: false, scheduled: true });
+    render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
+
+    const strip = screen.getByTestId('hub-strip-next-lobby');
+    expect(strip).toHaveClass('bg-white');
+    expect(strip.className).not.toMatch(/151515/);
+  });
+
+  it('opens the lobby’s details from its name: full name, hosts, who is going and its claim lists', () => {
+    const host = { user_id: 'host-1', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null };
+    const person = (id: string, name: string) => ({
+      user_id: id,
+      profile_space_id: `space-${id}`,
+      display_name: name,
+      avatar_cid: null,
+    });
+    lobbyView.data = {
+      name: 'Geo Open Debates - Politics and Policy Night',
+      hosts: [host],
+      reminder_count: 14,
+      going: [person('a', 'Ana'), person('b', 'Ben')],
+      claim_lists: [{ entity_id: 'page-1', space_id: 'space-1', position: 0, added_by: null, added_at: '' }],
+    };
+    const later = lobby({ open: false, scheduled: true, name: 'Geo Open Debates - Pol…' });
+    render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
+    const details = screen.getByRole('dialog', { name: 'Lobby details' });
+
+    expect(details).toHaveTextContent('Geo Open Debates - Politics and Policy Night');
+    expect(details).toHaveTextContent('Hosted by Bryan');
+    expect(details).toHaveTextContent('Ana, Ben and 12 more going');
+    expect(details).toHaveTextContent('List page-1');
+    expect(within(details).getByRole('link', { name: 'Open lobby page' })).toHaveAttribute('href', '/debate/lobby1');
+    lobbyView.data = undefined;
   });
 
   it('puts your open request ahead of a live lobby, with the time left and Cancel', () => {

@@ -25,7 +25,6 @@ import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popov
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useLobbyLineup } from '../lobbies/live-lobbies';
-import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingMatches, useMatchmakingScope } from './hooks';
 import { hubAnalyticsAttributes } from './hub-analytics';
 import { HubAskProvider } from './hub-ask-context';
@@ -402,7 +401,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 
                 Dropped once Explore is the open tab, so the real one is the only instance holding
                 the selection atoms and geo-chat's space scopes. */}
-            {activeTab === 'explore' ? null : <ClaimsTab warm />}
+            {activeTab === 'explore' ? null : <PanelExploreTab warm onTabChange={changeTab} />}
           </>
         )}
       </motion.div>

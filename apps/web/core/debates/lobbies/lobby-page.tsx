@@ -10,7 +10,6 @@ import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { useBrowseSidebarPageDefault } from '~/core/state/browse-sidebar-state';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Avatar } from '~/design-system/avatar';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
@@ -40,10 +39,8 @@ import { LobbyControlBar, LobbyHandControl } from './lobby-control-bar';
 import { useExitLobbyWhenOut, useLobbyExitHref } from './lobby-exit';
 import {
   RSVP_FAILED,
-  goingLabel,
   hostAfterChange,
   hostWhoLeft,
-  hostsLabel,
   isAlone,
   isHosting,
   lobbyDateLabel,
@@ -66,6 +63,7 @@ import { usePreOpenHosts } from './lobby-host-lobbies';
 import { EndPickerLeftBehind } from './lobby-left-picker';
 import { LobbyHostLists, LobbyRemovedNotice, useModerationNotice } from './lobby-moderation';
 import { type LobbyGuestNotice, type LobbyHandoffNotice, LobbyNotices, LobbyToast } from './lobby-notices';
+import { LobbyClaimListNames, LobbyGoing, LobbyHostedBy } from './lobby-pre-open-details';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
 import { LobbyAnalyticsScope } from './lobby-room-analytics';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
@@ -288,7 +286,6 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
   // Ticks so the countdown moves; passed in so the compiler sees it change.
   const now = useMinuteNow();
   const hosts = usePreOpenHosts(lobby);
-  const hostedBy = hostsLabel(hosts);
   const date = lobbyDateLabel(lobby.starts_at);
 
   return (
@@ -297,16 +294,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
         {LOBBY_COPY.scheduled}
       </Text>
       <LobbyTitle lobby={lobby} />
-      {hostedBy ? (
-        <div className="flex items-center gap-2.5">
-          <span className="size-6 shrink-0 overflow-hidden rounded-full [&>svg]:size-full">
-            <Avatar avatarUrl={hosts[0]!.avatar_cid} value={hosts[0]!.profile_space_id} alt="" size={24} />
-          </span>
-          <Text as="span" variant="metadata" color="grey-04">
-            Hosted by {hostedBy}
-          </Text>
-        </div>
-      ) : null}
+      <LobbyHostedBy hosts={hosts} />
       <div className="flex flex-col gap-1 rounded-xl bg-grey-01 p-3">
         {date ? (
           <Text as="p" variant="smallTitle">
@@ -317,11 +305,9 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
           {notYetOpenLabel(lobby, now)}
         </Text>
       </div>
-      {lobby.reminder_count > 0 ? (
-        <Text as="p" variant="metadata" color="grey-04">
-          {goingLabel(lobby.reminder_count)}
-        </Text>
-      ) : null}
+      {/* Who is going and what it starts with, as the side panel's lobby details show them (GEO-3463). */}
+      <LobbyGoing going={lobby.going} count={lobby.reminder_count} />
+      <LobbyClaimListNames lists={lobby.claim_lists} />
       <div className="flex flex-wrap gap-2">
         {guest ? null : (
           <HubPillButton

@@ -1163,12 +1163,18 @@ function useTimelineScroll({
       ? (rootRef.current?.querySelector<HTMLElement>('[data-focused]') ?? measured.line)
       : measured.line;
     const top = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-    scroller.scrollTop = Math.max(0, top - stickyHeight);
+    const wanted = Math.max(0, top - stickyHeight);
+    scroller.scrollTop = wanted;
+    // Short of it means the box could not scroll that far yet: with nothing below the line, the
+    // spacer that makes the room renders a pass after this. Marking the anchor done then left the
+    // timeline at the top, on past days (26 Oct). Not done until the line actually got there; the
+    // spacer's render runs this again.
+    if (scroller.scrollTop + 1 < wanted) return;
     if (focused && target !== measured.line) target.focus({ preventScroll: true });
     lineOffsetRef.current = measured.line.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
     anchoredForRef.current = key;
     setAnchored(true);
-  }, [anchored, focusKey, focused, measure, ready]);
+  }, [anchored, focusKey, focused, measure, ready, spacerHeight]);
 
   // Keep the line still when rows arrive above it.
   React.useLayoutEffect(() => {

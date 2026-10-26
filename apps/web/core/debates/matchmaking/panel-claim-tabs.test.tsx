@@ -11,6 +11,7 @@ import type { PanelListFilters } from './hub-filters';
 import { debatesHubExploreShowAtom, debatesHubMatchesIncludeOfflineAtom } from '~/atoms';
 
 type ListProps = {
+  warm?: boolean;
   variant?: string;
   atomsFrom?: string;
   panelFilters?: PanelListFilters;
@@ -26,6 +27,7 @@ const seen = vi.hoisted(() => ({
   available: true,
   matches: [{}] as unknown[],
   matchesLoading: false,
+  matchesFetching: false,
   turnOn: vi.fn(),
 }));
 
@@ -38,7 +40,7 @@ vi.mock('./hooks', () => ({
   useMatchmakingMatches: () => ({
     data: seen.matchesLoading ? undefined : { matches: seen.matches },
     isLoading: seen.matchesLoading,
-    isFetching: false,
+    isFetching: seen.matchesFetching,
     error: null,
   }),
 }));
@@ -87,6 +89,7 @@ afterEach(() => {
   seen.available = true;
   seen.matches = [{}];
   seen.matchesLoading = false;
+  seen.matchesFetching = false;
 });
 
 describe('PanelMatchesTab', () => {
@@ -129,6 +132,16 @@ describe('PanelMatchesTab empty and unavailable', () => {
     expect(seen.claimsTab).toMatchObject({ variant: 'positions', atomsFrom: 'lobby' });
     expect(screen.getByTestId('matches-nobody-online')).toHaveTextContent('Nobody who disagrees with you is online');
     expect(store.get(debatesHubMatchesIncludeOfflineAtom)).toBe(false);
+  });
+
+  // 26 Oct: every background refresh swapped to the bare match list and back, flashing its empty state.
+  it('keeps the wider list through a background refresh of an empty match list', () => {
+    seen.matches = [];
+    seen.matchesFetching = true;
+    renderTab(<PanelMatchesTab onTabChange={vi.fn()} />);
+
+    expect(seen.claimsTab).toMatchObject({ variant: 'positions' });
+    expect(screen.queryByTestId('matches-list')).not.toBeInTheDocument();
   });
 
   it('waits for the match list to answer before swapping lists', () => {
@@ -240,5 +253,14 @@ describe('PanelExploreTab', () => {
     expect(seen.claimsTab?.variant).toBe('explore');
     expect(seen.claimsTab?.panelFilters?.choice).toBeUndefined();
     expect(seen.claimsTab?.panelFilters?.toggles).toEqual([]);
+  });
+
+  // 26 Oct: the warming copy ran with full screen's settings and seeded the viewer's spaces into
+  // Explore's selection, which the panel's AND then read as a filter nobody set.
+  it('warms with the panel’s own settings, so it never seeds a selection', () => {
+    renderTab(<PanelExploreTab onTabChange={vi.fn()} warm />);
+
+    expect(seen.claimsTab).toMatchObject({ warm: true, variant: 'explore', atomsFrom: 'explore' });
+    expect(seen.claimsTab?.panelFilters).toBeDefined();
   });
 });

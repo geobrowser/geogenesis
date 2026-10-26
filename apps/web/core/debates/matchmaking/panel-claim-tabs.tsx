@@ -79,13 +79,11 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
   const [includeOffline, setIncludeOffline] = useAtom(debatesHubMatchesIncludeOfflineAtom);
   const { data: activity } = useDebateActivity(true);
   const matchesQuery = useMatchmakingMatches(true);
-  // Settled, not loading: an empty answer still on its way back, or a failed one, is not "nobody is
-  // online", and swapping lists on it would flicker.
-  const nobodyOnline =
-    !matchesQuery.isLoading &&
-    !matchesQuery.isFetching &&
-    !matchesQuery.error &&
-    (matchesQuery.data?.matches.length ?? 0) === 0;
+  // Read off the last answer in hand. A first load or a failed one is not "nobody is online". A
+  // background refresh is not a new answer either: react-query keeps the previous data through it,
+  // and gating on `isFetching` swapped to the bare match list and back on every refresh, flashing
+  // that list's empty state in between (26 Oct).
+  const nobodyOnline = matchesQuery.data !== undefined && !matchesQuery.error && matchesQuery.data.matches.length === 0;
   const showsOffline = includeOffline || nobodyOnline;
 
   const filters = React.useMemo<PanelListFilters>(
@@ -171,7 +169,20 @@ function NotAvailableCard() {
  * the Debate tag for browsing, geo-chat's `debate_now` for "someone online", the viewer's own
  * positions for My positions. All three read Explore's search and picks, so changing Show keeps them.
  */
-export function PanelExploreTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
+export function PanelExploreTab({
+  onTabChange,
+  warm = false,
+}: {
+  onTabChange: (tab: DebatesHubTab) => void;
+  /**
+   * Run the queries, draw nothing: the panel keeps one of these behind the other tabs so Explore is
+   * warm when the viewer gets there (GEO-2863). It has to be this tab, not a bare `ClaimsTab warm`:
+   * that one ran with full screen's settings, so it seeded the viewer's spaces into Explore's
+   * selection, which under the panel's AND emptied the list (26 Oct), and it warmed queries the
+   * panel's Explore never asks for.
+   */
+  warm?: boolean;
+}) {
   const [sort, setSort] = useAtom(debatesHubExploreSortAtom);
   const [show, setShow] = useAtom(debatesHubExploreShowAtom);
   const [someoneOnline, setSomeoneOnline] = useAtom(debatesHubExploreSomeoneOnlineAtom);
@@ -237,6 +248,7 @@ export function PanelExploreTab({ onTabChange }: { onTabChange: (tab: DebatesHub
       // Debate now, instead of dropping it on the next refetch.
       collapsesAnswered={variant === 'lobby' ? show === 'unanswered' : undefined}
       onTabChange={onTabChange}
+      warm={warm}
     />
   );
 }

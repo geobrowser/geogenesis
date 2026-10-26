@@ -442,6 +442,52 @@ describe('RequestsSchedule', () => {
     }
   });
 
+  // 26 Oct: with nothing upcoming, the box cannot scroll the line to the top until the spacer below it
+  // has rendered, a pass after the first anchor. It used to settle short, on past days.
+  it('still lands on the now-line when only the spacer makes room for it', () => {
+    mocks.history = { ...mocks.history, items: [historyItem({})] };
+    let scrollTop = 0;
+    const rect = (top: number, height = 0) =>
+      ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    const original = Element.prototype.getBoundingClientRect;
+    // A real box: 800px tall, scrolling only as far as its content, which the past rows make 200px
+    // longer than the box until the spacer adds its own height.
+    const scroller = document.createElement('div');
+    scroller.setAttribute('data-debates-hub-scroll', '');
+    const spacer = () =>
+      Math.max(
+        0,
+        ...[...scroller.querySelectorAll<HTMLElement>('div[aria-hidden]')].map(el => parseFloat(el.style.height) || 0)
+      );
+    Object.defineProperties(scroller, {
+      clientHeight: { get: () => 800 },
+      scrollTop: {
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = Math.min(value, 200 + spacer());
+        },
+      },
+    });
+    document.body.appendChild(scroller);
+    // Laid out as a browser would: the line 600px down the content, the content ending at the spacer's
+    // bottom, both moving with the scroll; the pinned filter row 52px tall at the top.
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (this.hasAttribute('data-requests-now-line')) return rect(600 - scrollTop);
+      if (this.hasAttribute('data-hub-sticky-controls')) return rect(0, 52);
+      const line = scroller.querySelector('[data-requests-now-line]');
+      if (this !== scroller && line && this.contains(line)) return rect(-scrollTop, 600 + spacer());
+      return rect(0);
+    };
+    try {
+      rtlRender(<RequestsSchedule />, { container: scroller, wrapper: HubAskProvider });
+
+      expect(scrollTop).toBe(548);
+    } finally {
+      Element.prototype.getBoundingClientRect = original;
+      scroller.remove();
+    }
+  });
+
   // The section's rule: one failed read must not take the others' rows with it.
   it('keeps booked debates, invites and history on screen when the requests read fails', () => {
     mocks.requestsError = new Error('geo-chat is down');

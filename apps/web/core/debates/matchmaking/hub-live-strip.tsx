@@ -1,16 +1,23 @@
 'use client';
 
+import * as Popover from '@radix-ui/react-popover';
+
 import * as React from 'react';
 
 import cx from 'classnames';
 import Link from 'next/link';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { Text } from '~/design-system/text';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import type { DebateLobbySummary } from '../api';
+import { useDebateLobby } from '../lobbies/hooks';
 import type { LobbyLineup } from '../lobbies/live-lobbies';
 import { markLobbyEntry } from '../lobbies/lobby-analytics';
-import { hereLabel, lobbyTimeLabel, rsvpLabel } from '../lobbies/lobby-format';
+import { hereLabel, lobbyDateLabel, lobbyTimeLabel, notYetOpenLabel, rsvpLabel } from '../lobbies/lobby-format';
+import { usePreOpenHosts } from '../lobbies/lobby-host-lobbies';
+import { LobbyClaimListNames, LobbyGoing, LobbyHostedBy } from '../lobbies/lobby-pre-open-details';
 import { LobbyReminderError, useLobbyReminderPress } from '../lobbies/lobby-reminder-press';
 import { LOBBY_DARK_SURFACE_CLASS_NAME, LiveDot, joinLabel } from '../lobbies/lobby-spotlight';
 import { useMinuteNow } from '../lobbies/use-minute-now';
@@ -18,6 +25,7 @@ import { debateRoomPath } from '../rooms/room-routes';
 import { claimCalendarPicks, personCalendarPicks } from './debate-calendar-route';
 import { hubAnalyticsAttributes } from './hub-analytics';
 import { useHubAskState } from './hub-ask-context';
+import { hubPillClassName } from './hub-pill-button';
 import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
 import { type EndedAsk, type OutgoingAsk, useAskClock } from './use-outgoing-ask';
@@ -177,34 +185,115 @@ function LiveLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
   );
 }
 
+/**
+ * The next lobby, when none is live. Light, not the live strip's black (Preston, 26 Oct): black means
+ * "happening now", and a lobby on Tuesday is not. The name opens the lobby's details — its full name,
+ * when it opens, who hosts it, who is going and the claim lists it starts with.
+ */
 function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
   const remind = useLobbyReminderPress(lobby);
   const now = useMinuteNow();
   const when = lobbyTimeLabel(lobby.starts_at, now);
+  const portal = useElevatedPopoverPortal();
+  const [open, setOpen] = React.useState(false);
+
+  const rsvp = (
+    <button
+      type="button"
+      {...hubAnalyticsAttributes(remind.reminded ? 'Lobby spotlight reminded' : 'Lobby spotlight remind me')}
+      aria-pressed={remind.reminded}
+      aria-busy={remind.pending || undefined}
+      disabled={remind.pending}
+      onClick={remind.press}
+      className={cx(
+        STRIP_PILL_CLASS_NAME,
+        remind.reminded ? 'border border-grey-02 text-text hover:bg-grey-01' : 'bg-text text-white hover:bg-text/90',
+        'disabled:opacity-50'
+      )}
+    >
+      {rsvpLabel(remind.reminded)}
+    </button>
+  );
 
   return (
     <>
       <section
         aria-label="Next debate lobby"
         data-testid="hub-strip-next-lobby"
-        className={cx(STRIP_CLASS_NAME, LOBBY_DARK_SURFACE_CLASS_NAME, 'text-white')}
+        className={cx(STRIP_CLASS_NAME, 'border border-grey-02 bg-white text-text')}
       >
-        <span className="shrink-0 text-footnoteMedium text-grey-03">Lobby</span>
-        <span className="min-w-0 truncate text-metadataMedium">{lobby.name}</span>
-        {when ? <span className="shrink-0 text-breadcrumb whitespace-nowrap text-grey-03">{when}</span> : null}
-        <button
-          type="button"
-          {...hubAnalyticsAttributes(remind.reminded ? 'Lobby spotlight reminded' : 'Lobby spotlight remind me')}
-          aria-pressed={remind.reminded}
-          aria-busy={remind.pending || undefined}
-          disabled={remind.pending}
-          onClick={remind.press}
-          className={cx(STRIP_PILL_CLASS_NAME, 'ml-auto bg-white text-text hover:bg-white/90 disabled:opacity-50')}
-        >
-          {rsvpLabel(remind.reminded)}
-        </button>
+        <Popover.Root open={open} onOpenChange={setOpen}>
+          <Popover.Trigger asChild>
+            <button
+              type="button"
+              aria-label={`${lobby.name}, lobby details`}
+              {...hubAnalyticsAttributes('Lobby strip details', 'open_lobby_details')}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            >
+              <span className="shrink-0 text-footnoteMedium text-grey-04">Lobby</span>
+              <span className="min-w-0 truncate text-metadataMedium underline-offset-2 hover:underline">
+                {lobby.name}
+              </span>
+              {when ? <span className="shrink-0 text-breadcrumb whitespace-nowrap text-grey-04">{when}</span> : null}
+            </button>
+          </Popover.Trigger>
+          {portal ? (
+            <Popover.Portal container={portal}>
+              <Popover.Content
+                side="bottom"
+                align="start"
+                sideOffset={8}
+                collisionPadding={16}
+                aria-label="Lobby details"
+                className="z-100 flex w-[368px] max-w-[calc(100vw-32px)] flex-col gap-3 rounded-xl border border-grey-02 bg-white p-3.5 shadow-lg"
+              >
+                <LobbyDetails lobby={lobby} now={now} rsvp={rsvp} />
+              </Popover.Content>
+            </Popover.Portal>
+          ) : null}
+        </Popover.Root>
+        {rsvp}
       </section>
       <LobbyReminderError error={remind.error} />
+    </>
+  );
+}
+
+/**
+ * The lobby's own read for what the list row leaves out: hosts, who is going, claim lists. Asked for
+ * only while the details are open, and drawn from the list row until it lands.
+ */
+function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: number; rsvp: React.ReactNode }) {
+  const { data: view } = useDebateLobby(lobby.lobby_id);
+  const hosts = usePreOpenHosts(view ?? lobby);
+  const date = lobbyDateLabel(lobby.starts_at);
+
+  return (
+    <>
+      <div className="flex flex-col gap-0.5">
+        <Text as="p" variant="metadataMedium">
+          {view?.name ?? lobby.name}
+        </Text>
+        {date ? (
+          <Text as="p" variant="breadcrumb" color="grey-04">
+            {date} · {notYetOpenLabel(lobby, now)}
+          </Text>
+        ) : null}
+      </div>
+      <LobbyHostedBy hosts={hosts} />
+      <LobbyGoing going={view?.going} count={view?.reminder_count ?? lobby.reminder_count} />
+      <LobbyClaimListNames lists={view?.claim_lists} />
+      <div className="flex items-center justify-between gap-2 border-t border-divider pt-3">
+        <Link
+          href={debateRoomPath(lobby.lobby_id)}
+          onClick={() => markLobbyEntry(lobby.lobby_id, 'side_panel')}
+          {...hubAnalyticsAttributes('Lobby strip open page', 'open_lobby')}
+          className={hubPillClassName('secondary')}
+        >
+          Open lobby page
+        </Link>
+        {rsvp}
+      </div>
     </>
   );
 }

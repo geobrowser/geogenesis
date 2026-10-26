@@ -2708,6 +2708,11 @@ export type DebateLobbyView = {
   hosts_changed_at: string | null;
   reminder_count: number;
   /**
+   * Who RSVP'd, oldest first, capped (GEO-3463); `reminder_count` stays the true total. People blocked
+   * either way are left out. Absent from a geo-chat that predates it.
+   */
+  going?: DebateLobbyPerson[];
+  /**
    * Who runs the lobby, present or not: the creator first, the acting host last. Empty for a banned
    * viewer. Absent from older geo-chat.
    */
