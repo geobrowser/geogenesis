@@ -63,25 +63,31 @@ let client: QueryClient;
 let fetchPage: Mock<(url: URL) => Promise<ExploreFeedResult>>;
 let now: number;
 
-function mountFeed(cdnFirstPage = false) {
-  return render(
+function feedTree(props: Partial<React.ComponentProps<typeof EntityFeed>> = {}) {
+  return (
     <QueryClientProvider client={client}>
-      <EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showSortFilter cdnFirstPage={cdnFirstPage} />
+      <EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showSortFilter preserveSession {...props} />
     </QueryClientProvider>
   );
+}
+
+function mountFeed(props: Partial<React.ComponentProps<typeof EntityFeed>> = {}) {
+  return render(feedTree(props));
 }
 
 function intersect() {
   act(() => state.intersect?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
 }
 
-async function resume() {
+type ResumeTrigger = 'focus' | 'reconnect';
+
+async function resume(trigger: ResumeTrigger) {
   await act(async () => {
-    focusManager.setFocused(false);
-    onlineManager.setOnline(false);
+    if (trigger === 'focus') focusManager.setFocused(false);
+    else onlineManager.setOnline(false);
     now += 5 * 60_000;
-    focusManager.setFocused(true);
-    onlineManager.setOnline(true);
+    if (trigger === 'focus') focusManager.setFocused(true);
+    else onlineManager.setOnline(true);
   });
 }
 
@@ -125,7 +131,7 @@ afterEach(() => {
 });
 
 describe('resuming an Explore feed', () => {
-  it('keeps loaded pages, order and card DOM when returning from another app or reconnecting', async () => {
+  it.each<ResumeTrigger>(['focus', 'reconnect'])('keeps loaded pages, order and card DOM on %s', async trigger => {
     mountFeed();
     await screen.findByText('Original lead');
     fetchPage.mockResolvedValueOnce(page('Second page'));
@@ -134,11 +140,37 @@ describe('resuming an Explore feed', () => {
     const cards = screen.getAllByRole('article');
 
     fetchPage.mockResolvedValue(page('Re-ranked lead'));
-    await resume();
+    await resume(trigger);
 
     expect(fetchPage).toHaveBeenCalledTimes(2);
-    expect(screen.getAllByRole('article')).toEqual(cards);
+    screen.getAllByRole('article').forEach((card, index) => expect(card).toBe(cards[index]));
     expect(cards.map(card => card.textContent)).toEqual(['Original lead', 'Second page']);
+  });
+
+  it.each<ResumeTrigger>(['focus', 'reconnect'])('recovers a failed first load on %s', async trigger => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fetchPage.mockRejectedValue(new Error('Feed failed'));
+    mountFeed();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_000);
+    });
+    vi.useRealTimers();
+    await screen.findByText('Could not load the feed.');
+    expect(fetchPage).toHaveBeenCalledTimes(3);
+
+    fetchPage.mockResolvedValue(page('Recovered feed'));
+    await resume(trigger);
+    await screen.findByText('Recovered feed');
+    expect(fetchPage).toHaveBeenCalledTimes(4);
+  });
+
+  it('keeps normal focus refreshes for contextual feeds that do not opt into session retention', async () => {
+    mountFeed({ apiEndpoint: '/api/activity/feed', lockedSpaceId: 'space', preserveSession: undefined });
+    await screen.findByText('Original lead');
+    fetchPage.mockResolvedValue(page('Updated activity'));
+    await resume('focus');
+    await screen.findByText('Updated activity');
+    expect(fetchPage).toHaveBeenCalledTimes(2);
   });
 
   it('resumes cached pages after leaving the route for ten minutes', async () => {
@@ -178,11 +210,11 @@ describe('resuming an Explore feed', () => {
 
   it('also holds the public first-page query used during signed-in hydration', async () => {
     state.viewerAddress = 'account';
-    mountFeed(true);
+    mountFeed({ cdnFirstPage: true });
     await screen.findByText('Original lead');
     await waitFor(() => expect(fetchPage).toHaveBeenCalledTimes(2));
     fetchPage.mockResolvedValue(page('Re-ranked lead'));
-    await resume();
+    await resume('focus');
     expect(fetchPage).toHaveBeenCalledTimes(2);
     expect(screen.getByText('Original lead')).toBeTruthy();
   });
@@ -197,11 +229,7 @@ describe('resuming an Explore feed', () => {
 
     fetchPage.mockResolvedValueOnce(page('Other account'));
     state.viewerAddress = 'other-account';
-    view.rerender(
-      <QueryClientProvider client={client}>
-        <EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showSortFilter />
-      </QueryClientProvider>
-    );
+    view.rerender(feedTree());
     await screen.findByText('Other account');
     expect(fetchPage).toHaveBeenCalledTimes(3);
   });

@@ -39,16 +39,13 @@ import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
  */
 const EAGER_CARD_COUNT = 4;
 
-// A feed is a browsing session: refetching an infinite query starts at page one and can
-// replace every loaded page with a new ranking. Keep it until a deliberate refresh or a
-// different query (sort, filters, account), including when a phone returns to the browser.
+// Explore holds successful pages as a browsing session: refetching an infinite query
+// starts at page one and can replace every loaded page with a new ranking. Failed first
+// loads still have no data and remain stale, so the usual focus/reconnect recovery works.
 // Keep inactive sessions for 30 minutes so a brief route detour also resumes cached pages.
 const FEED_SESSION_OPTIONS = {
   staleTime: Infinity,
   gcTime: 30 * 60_000,
-  refetchOnWindowFocus: false,
-  refetchOnReconnect: false,
-  refetchOnMount: false,
 } as const;
 
 function LoadingSkeleton() {
@@ -101,6 +98,8 @@ const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
 type EntityFeedProps = {
   /** REST endpoint this feed fetches from (e.g. `/api/explore/feed` or `/api/activity/feed`). */
   apiEndpoint: string;
+  /** Hold successful pages on resume and cache inactive sessions for 30 minutes. Explore opts in. */
+  preserveSession?: boolean;
   /** When set, the feed is pinned to this space. */
   lockedSpaceId?: string;
   /** Initial value for the time dropdown. Defaults to "week". */
@@ -283,6 +282,7 @@ async function fetchTopicFacets(
  */
 export function EntityFeed({
   apiEndpoint,
+  preserveSession = false,
   lockedSpaceId,
   initialTime = 'week',
   initialSort = 'new',
@@ -548,8 +548,9 @@ export function EntityFeed({
     cdnFirstPage &&
     viewerAddress !== null &&
     buildFeedQuery({ ...feedParams, cursor: undefined, anonymous: true }).includes(`${PUBLIC_FEED_PARAM}=1`);
+  const sessionOptions = preserveSession ? FEED_SESSION_OPTIONS : {};
   const publicFirstPage = useQuery({
-    ...FEED_SESSION_OPTIONS,
+    ...sessionOptions,
     queryKey: [apiEndpoint, PUBLIC_FEED_PARAM],
     queryFn: () => fetchFeedPage(apiEndpoint, { ...feedParams, cursor: undefined, anonymous: true }),
     enabled: paintsFromPublicPage,
@@ -559,7 +560,7 @@ export function EntityFeed({
 
   const { data, isLoading, isFetching, isFetchingNextPage, isPlaceholderData, fetchNextPage, hasNextPage, error } =
     useInfiniteQuery({
-      ...FEED_SESSION_OPTIONS,
+      ...sessionOptions,
       queryKey,
       queryFn: async ({ pageParam }) =>
         fetchFeedPage(apiEndpoint, {
