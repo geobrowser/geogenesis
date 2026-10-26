@@ -97,9 +97,7 @@ export async function startSpaceCall(
 }
 
 /**
- * Hosts: an editor of the space, or a host in the call. `base_updated_at` is the agenda the edit
- * started from (`null` for none); a stale one is `409 agenda_conflict` with `details.agenda`. Blank
- * clears it. GEO-3420.
+ * Hosts only. A stale `base_updated_at` is `409 agenda_conflict`; a blank body clears it. GEO-3420.
  */
 export async function saveCallAgenda(
   callId: string,
@@ -156,9 +154,8 @@ export type CallSeriesRefreshResponse = {
 };
 
 /**
- * Editors, after a series publish confirms: geo-chat re-reads the space's series now. `series_id`
- * with `schedule` (or `removed`) says what was written, so `pending` can tell the graph is behind.
- * GEO-3420.
+ * Editors, after a series publish: geo-chat re-reads the space. `pending` means the graph is behind
+ * what `series_id` and `schedule` say was written. GEO-3420.
  */
 export async function refreshCallSeries(
   spaceId: string,

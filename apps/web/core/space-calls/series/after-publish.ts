@@ -37,9 +37,8 @@ export function seriesSynced(list: Pick<SpaceCallsResponse, 'series'> | undefine
 }
 
 /**
- * After a schedule publish confirms (GEO-3420): reads whether the proposal executed, asks geo-chat
- * to re-read the space when it did, and returns the Calls tab href that says which. A failed
- * refresh is left to geo-chat's sweep.
+ * After a schedule publish (GEO-3420): refreshes geo-chat if the proposal executed and returns the
+ * Calls tab href. A failed refresh is left to geo-chat's sweep.
  */
 export function useAfterSeriesPublish(spaceId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();

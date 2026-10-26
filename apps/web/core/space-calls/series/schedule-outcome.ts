@@ -4,11 +4,8 @@ import { getSpace } from '~/core/io/queries';
 import { isProposalExecuted } from '~/core/utils/contracts/proposal-execution';
 
 /**
- * What a confirmed schedule publish left on the graph (GEO-3420). `usePublish` reports success
- * once the proposal is created, even when its auto-execute failed, so this reads the chain.
- * - `executed`: the call is on the graph.
- * - `pending`: the proposal waits on governance.
- * - `unknown`: the chain could not be read.
+ * Whether a schedule proposal executed (GEO-3420). `usePublish` succeeds even when auto-execute
+ * failed, so this reads the chain; `unknown` when it cannot.
  */
 export type ScheduleOutcome = 'executed' | 'pending' | 'unknown';
 

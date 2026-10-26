@@ -23,10 +23,8 @@ export function parseReminderIntent(intent: string | undefined): { scope: Remind
 }
 
 /**
- * Remind me on a scheduled call (GEO-3420): this call, every call in its series, or both, set
- * independently. Signed out, the press is queued and the account prompt opens; the reminder is set
- * once signed in, by whichever copy of this control is mounted. `call` and `series` are the viewer's
- * stored state; `null` signed out.
+ * Remind me on a scheduled call (GEO-3420): this call and its series, set independently. Signed out,
+ * the press is queued and set after sign-in by whichever copy is mounted.
  */
 export function useCallRemindPress({
   spaceId,

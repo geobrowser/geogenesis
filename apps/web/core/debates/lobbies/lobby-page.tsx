@@ -244,6 +244,7 @@ function LobbyAccess({
         <LobbyClosedCard
           lobby={lobby}
           ended={lobby.access.reason === 'ended'}
+          cancelled={lobby.access.reason === 'cancelled'}
           after={
             <>
               {purpose.purpose === 'call' ? <EndedCallRecording lobby={lobby} /> : null}
