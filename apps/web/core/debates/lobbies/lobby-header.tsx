@@ -7,6 +7,11 @@ import cx from 'classnames';
 import { useActionContext } from '~/core/action-context-provider';
 import { copyShareLink } from '~/core/sharing/share-handoff';
 import { createShareLink } from '~/core/sharing/share-link';
+import {
+  EndCallPublishChoice,
+  callRecordingMetaLabel,
+  useEndCallPublishes,
+} from '~/core/space-calls/recording/call-recording-room';
 import { spaceCallPath } from '~/core/space-calls/routes';
 
 import { Ellipsis } from '~/design-system/icons/ellipsis';
@@ -48,10 +53,10 @@ export function lobbyMetaLabel(lobby: Pick<LobbyPageView, 'members'>) {
   return [hosts ? `Hosted by ${hosts}` : 'No host here', 'Video on', 'Not recorded'].join(' · ');
 }
 
-/** "Hosted by Adam and Priya · Not recorded", for a space call. */
-export function callMetaLabel(lobby: Pick<LobbyPageView, 'members'>) {
+/** "Hosted by Adam and Priya · Recording", for a space call; no recording part when geo-chat sends none. */
+export function callMetaLabel(lobby: Pick<LobbyPageView, 'members'>, recording: string | null = null) {
   const hosts = hostsLabel(lobby.members.filter(isHosting));
-  return [hosts ? `Hosted by ${hosts}` : 'No host here', 'Not recorded'].join(' · ');
+  return [hosts ? `Hosted by ${hosts}` : 'No host here', recording].filter(Boolean).join(' · ');
 }
 
 function useCopyLink(lobbyId: string) {
@@ -90,6 +95,7 @@ export function LobbyHeader({
   const memberLobby = isMemberView(lobby) && lobby.viewer.hosting ? lobby : null;
   const hostLists = memberLobby ? <LobbyHostListsChip lobby={memberLobby} /> : null;
   const call = useLobbyRoomPurpose().purpose === 'call';
+  const recordingLabel = callRecordingMetaLabel(lobby);
 
   if (phone) {
     return (
@@ -119,14 +125,14 @@ export function LobbyHeader({
           <LivePill lobby={lobby} />
         </div>
         <Text as="p" variant="metadata" color="grey-04">
-          {call ? callMetaLabel(lobby) : lobbyMetaLabel(lobby)}
+          {call ? callMetaLabel(lobby, recordingLabel) : lobbyMetaLabel(lobby)}
         </Text>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {hostLists}
         <CopyLinkButton lobbyId={lobby.lobby_id} />
         {availability}
-        {lobby.viewer.hosting ? <EndLobbyControl lobbyId={lobby.lobby_id} /> : null}
+        {lobby.viewer.hosting ? <EndLobbyControl lobby={lobby} /> : null}
       </div>
     </header>
   );
@@ -160,21 +166,25 @@ function CopyLinkButton({ lobbyId }: { lobbyId: string }) {
   );
 }
 
-function EndLobbyControl({ lobbyId }: { lobbyId: string }) {
-  const end = useEndDebateLobby(lobbyId);
+function EndLobbyControl({ lobby }: { lobby: LobbyPageView }) {
+  const end = useEndDebateLobby(lobby.lobby_id);
   const [confirming, setConfirming] = React.useState(false);
   const call = useLobbyRoomPurpose().purpose === 'call';
+  // A call editor's choice to publish its recording (GEO-3421); sent only while it can be made.
+  const [publishRecording, setPublishRecording] = React.useState(false);
+  const publishes = useEndCallPublishes(lobby) && publishRecording;
 
   return (
     <>
       {confirming ? (
         <>
+          <EndCallPublishChoice lobby={lobby} checked={publishRecording} onChange={setPublishRecording} />
           <HubPillButton
             variant="primary"
             analyticsLabel="Lobby end confirm"
             pending={end.isPending}
             pendingLabel="Ending…"
-            onClick={() => end.mutate()}
+            onClick={() => end.mutate({ publishRecording: publishes })}
           >
             {LOBBY_HEADER_COPY.endForEveryone}
           </HubPillButton>
@@ -225,7 +235,7 @@ function LobbyTitleMenu({ lobby }: { lobby: LobbyPageView }) {
         <CopyLinkRow lobbyId={lobby.lobby_id} />
         {lobby.viewer.hosting ? (
           <div className="flex flex-wrap gap-2">
-            <EndLobbyControl lobbyId={lobby.lobby_id} />
+            <EndLobbyControl lobby={lobby} />
           </div>
         ) : null}
       </div>

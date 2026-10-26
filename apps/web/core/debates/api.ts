@@ -2848,6 +2848,8 @@ export type DebateLobbyView = {
     last_moderation?: { action: DebateLobbyModerationAction; at: string } | null;
     /** No completed debate yet (GEO-3126); absent from a geo-chat that predates it. */
     newcomer?: boolean;
+    /** Edits the call's space, so may start, stop and publish its recording (GEO-3421). */
+    can_manage_recording?: boolean;
   };
 };
 
@@ -2862,6 +2864,27 @@ export type DebateLobbyCallDetails = {
   space_id: string;
   space_name: string | null;
   started_by: DebateLobbyPerson | null;
+  /** GEO-3421; the same for every viewer. Absent from geo-chat without recording. */
+  recording?: CallRecordingState | null;
+};
+
+export type CallRecordingStatus = 'off' | 'recording' | 'processing' | 'ready' | 'failed';
+
+/** A call's one recording window (GEO-3421). `off` for a call never recorded. */
+export type CallRecordingState = {
+  status: CallRecordingStatus;
+  started_at: string | null;
+  /** A user id. */
+  started_by: string | null;
+  stopped_at: string | null;
+  end_reason: 'stopped' | 'call_ended' | 'interrupted' | 'start_failed' | null;
+  /** Why an `interrupted` recording stopped; `null` otherwise. Absent from older geo-chat. */
+  end_detail?: 'room_closed' | 'limit_reached' | 'failed' | null;
+  /** A recording can start now; not whether the viewer may. */
+  can_start: boolean;
+  published: boolean;
+  /** Set once `ready`. */
+  duration_seconds: number | null;
 };
 
 export type DebateLobbySummary = {
@@ -3459,13 +3482,19 @@ export async function removeDebateLobbyGuests(
 }
 
 /** Host only. Closes the lobby with reason `ended`. */
+/**
+ * `publish_recording` is a call editor's choice (GEO-3421); geo-chat refuses it from anyone else
+ * without ending the call, so send it only with `viewer.can_manage_recording`.
+ */
 export async function endDebateLobby(
   lobbyId: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
+  accountKey: string | null,
+  options: { publishRecording?: boolean } = {}
 ) {
   return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/end`, {
     method: 'POST',
+    body: options.publishRecording ? { publish_recording: true } : undefined,
     auth: true,
     getPrivyIdentityToken,
     accountKey,
