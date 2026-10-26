@@ -19,8 +19,8 @@ vi.mock('./hooks', () => ({
   },
 }));
 vi.mock('./call-recording-player', () => ({
-  CallRecordingPlayer: ({ callId, preload }: { callId: string; preload: string }) => (
-    <div data-testid="player" data-preload={preload}>
+  CallRecordingPlayer: ({ callId, preload, signOnPlay }: { callId: string; preload: string; signOnPlay?: boolean }) => (
+    <div data-testid="player" data-preload={preload} data-sign-on-play={String(signOnPlay)}>
       {callId}
     </div>
   ),
@@ -57,6 +57,7 @@ describe('PastCallCard', () => {
     );
     expect(screen.getByText(/Community call · Oct 23, 2026 · 1h 29m/)).toBeInTheDocument();
     expect(screen.getByTestId('player')).toHaveAttribute('data-preload', 'none');
+    expect(screen.getByTestId('player')).toHaveAttribute('data-sign-on-play', 'true');
   });
 });
 

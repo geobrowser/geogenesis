@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,13 +10,28 @@ const mocks = vi.hoisted(() => ({
     isError: false,
     refetch: vi.fn(),
   },
-  attached: [] as { url: string; onFatalError?: () => void; destroy: ReturnType<typeof vi.fn> }[],
+  attached: [] as {
+    url: string;
+    autoStartLoad?: boolean;
+    onFatalError?: () => void;
+    destroy: ReturnType<typeof vi.fn>;
+  }[],
+  enabled: [] as boolean[],
 }));
 
-vi.mock('./hooks', () => ({ useCallRecordingPlayback: () => mocks.playback }));
+vi.mock('./hooks', () => ({
+  useCallRecordingPlayback: (_callId: string, enabled: boolean) => {
+    mocks.enabled.push(enabled);
+    return mocks.playback;
+  },
+}));
 vi.mock('~/core/debates/stream-playback', () => ({
-  attachStreamSource: (_video: HTMLVideoElement, url: string, options: { onFatalError?: () => void }) => {
-    const entry = { url, onFatalError: options.onFatalError, destroy: vi.fn() };
+  attachStreamSource: (
+    _video: HTMLVideoElement,
+    url: string,
+    options: { autoStartLoad?: boolean; onFatalError?: () => void }
+  ) => {
+    const entry = { url, autoStartLoad: options.autoStartLoad, onFatalError: options.onFatalError, destroy: vi.fn() };
     mocks.attached.push(entry);
     return { startLoad: vi.fn(), destroy: entry.destroy };
   },
@@ -36,6 +51,9 @@ afterEach(() => {
   cleanup();
   mocks.playback = { data: undefined, dataUpdatedAt: 0, isError: false, refetch: vi.fn() };
   mocks.attached = [];
+  mocks.enabled = [];
+  vi.restoreAllMocks();
+  vi.spyOn(Date, 'now').mockImplementation(() => clock);
 });
 
 describe('CallRecordingPlayer', () => {
@@ -97,5 +115,31 @@ describe('CallRecordingPlayer', () => {
     mocks.playback = { ...mocks.playback, isError: true };
     render(<CallRecordingPlayer callId="call1" />);
     expect(screen.getByText(COPY.failed)).toBeInTheDocument();
+  });
+
+  describe('signing on play', () => {
+    it('signs nothing and shows a play button until tapped', () => {
+      render(<CallRecordingPlayer callId="call1" signOnPlay poster="https://t/p.jpg" />);
+      expect(mocks.enabled.every(enabled => !enabled)).toBe(true);
+      expect(mocks.attached).toHaveLength(0);
+      const video = screen.getByTestId('call-recording-video');
+      expect(video).not.toHaveAttribute('controls');
+      expect(video).toHaveAttribute('poster', 'https://t/p.jpg');
+      expect(screen.queryByText(COPY.loading)).toBeNull();
+    });
+
+    it('calls play inside the tap, then signs, attaches loading and plays the same element', () => {
+      const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+      const { rerender } = render(<CallRecordingPlayer callId="call1" signOnPlay />);
+      fireEvent.click(screen.getByRole('button', { name: COPY.play }));
+      expect(play).toHaveBeenCalledTimes(1);
+      expect(mocks.enabled.at(-1)).toBe(true);
+      expect(screen.getByTestId('call-recording-video')).toHaveAttribute('controls');
+
+      mocks.playback = { ...mocks.playback, data: { url: 'https://s/a.m3u8' }, dataUpdatedAt: tick() };
+      rerender(<CallRecordingPlayer callId="call1" signOnPlay />);
+      expect(mocks.attached).toMatchObject([{ url: 'https://s/a.m3u8', autoStartLoad: true }]);
+      expect(play).toHaveBeenCalledTimes(2);
+    });
   });
 });

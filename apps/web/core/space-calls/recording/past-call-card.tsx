@@ -35,8 +35,8 @@ export function pastCallDurationLabel(seconds: number | null | undefined): strin
 }
 
 /**
- * A published past call on Explore (GEO-3421): its space, title, date and the recording. The
- * player mounts once the card nears the viewport and fetches nothing until played.
+ * A published past call on Explore (GEO-3421): its space, title, date and the recording. Nothing
+ * is signed or fetched until the play button is tapped; the list's thumbnail is the poster.
  */
 export function PastCallCard({ call }: { call: PastCall }) {
   const { ref, nearViewport } = useNearViewport();
@@ -63,6 +63,7 @@ export function PastCallCard({ call }: { call: PastCall }) {
           <CallRecordingPlayer
             callId={call.call_id}
             preload="none"
+            signOnPlay
             poster={call.recording?.thumbnail_url}
             className="aspect-[773/435] rounded-xl"
           />

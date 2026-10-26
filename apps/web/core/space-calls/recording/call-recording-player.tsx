@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { Play } from '~/core/debates/browse/icons';
 import { type AttachedStream, attachStreamSource } from '~/core/debates/stream-playback';
 import { releaseVideo } from '~/core/utils/video/release-video';
 
@@ -12,6 +13,7 @@ import { Text } from '~/design-system/text';
 import { useCallRecordingPlayback } from './hooks';
 
 export const CALL_RECORDING_PLAYER_COPY = {
+  play: 'Play recording',
   loading: 'Loading recording…',
   failed: 'This recording can’t be played right now.',
   retry: 'Try again',
@@ -27,17 +29,25 @@ const MAX_SOURCE_RETRIES = 2;
 export function CallRecordingPlayer({
   callId,
   preload = 'metadata',
+  signOnPlay = false,
   poster,
   className,
 }: {
   callId: string;
   /** `none` in a list, so a card nobody plays costs no manifest fetch on iOS. */
   preload?: 'none' | 'metadata';
+  /**
+   * Sign nothing until the play button is tapped. The tap calls `play()` on the empty element so
+   * iOS lets the same element play once the source arrives.
+   */
+  signOnPlay?: boolean;
   /** Defaults to the signed thumbnail that comes with the playback URL. */
   poster?: string | null;
   className?: string;
 }) {
-  const playback = useCallRecordingPlayback(callId, true);
+  const [requested, setRequested] = React.useState(!signOnPlay);
+  const playOnAttachRef = React.useRef(false);
+  const playback = useCallRecordingPlayback(callId, requested);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const [src, setSrc] = React.useState<string | null>(null);
   const [retries, setRetries] = React.useState(0);
@@ -81,10 +91,14 @@ export function CallRecordingPlayer({
       resumeAtRef.current = null;
     };
     video.addEventListener('loadedmetadata', onMetadata, { once: true });
+    const playNow = playOnAttachRef.current;
+    playOnAttachRef.current = false;
     const attached: AttachedStream = attachStreamSource(video, src, {
-      autoStartLoad: false,
+      autoStartLoad: playNow,
       onFatalError: () => failRef.current(),
     });
+    // A refusal leaves the native controls for the viewer to press.
+    if (playNow) void video.play().catch(() => undefined);
     return () => {
       video.removeEventListener('loadedmetadata', onMetadata);
       attached.destroy();
@@ -99,12 +113,19 @@ export function CallRecordingPlayer({
     void refetch();
   };
 
+  const start = () => {
+    playOnAttachRef.current = true;
+    setRequested(true);
+    // Inside the tap, before any await: this is what lets iOS play the element later.
+    void videoRef.current?.play().catch(() => undefined);
+  };
+
   const broken = failed || (playback.isError && !src);
   return (
     <div className={cx('relative w-full overflow-hidden bg-text', className ?? 'aspect-video rounded-xl')}>
       <video
         ref={videoRef}
-        controls
+        controls={requested}
         playsInline
         preload={preload}
         poster={poster ?? playback.data?.thumbnail_url ?? undefined}
@@ -113,7 +134,19 @@ export function CallRecordingPlayer({
         className={cx('size-full object-contain', broken && 'invisible')}
         data-testid="call-recording-video"
       />
-      {broken ? (
+      {!requested ? (
+        <button
+          type="button"
+          aria-label={CALL_RECORDING_PLAYER_COPY.play}
+          data-geo-analytics-label="Call recording play"
+          onClick={start}
+          className="absolute inset-0 flex items-center justify-center"
+        >
+          <span className="flex size-14 items-center justify-center rounded-full bg-text/70">
+            <Play color="white" size={24} />
+          </span>
+        </button>
+      ) : broken ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
           <Text as="p" variant="metadata" color="white">
             {CALL_RECORDING_PLAYER_COPY.failed}
