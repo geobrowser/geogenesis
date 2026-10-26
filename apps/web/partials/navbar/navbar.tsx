@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { usePathname } from 'next/navigation';
 
-import { useMediaQuery } from '~/core/hooks/use-media-query';
+import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -13,7 +13,7 @@ import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { NavigationMenu } from '~/design-system/icons/navigation-menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { MobileNavbarContent } from './mobile-navbar-content';
+import { MobileNavbarBrand } from './mobile-navbar-brand';
 import { NavbarClientActions } from './navbar-client-actions';
 import { NavbarSpaceMetadata } from './navbar-space-metadata';
 
@@ -37,7 +37,8 @@ export function Navbar({
   showBrowseButton = true,
 }: Props) {
   const isExplore = usePathname() === '/explore';
-  const isPhone = useMediaQuery('(max-width: 767px)');
+  const isPhone = useIsPhoneLayout();
+  const compact = isExplore && isPhone;
 
   return (
     <nav
@@ -50,15 +51,15 @@ export function Navbar({
       )}
     >
       {isExplore ? (
-        <div className="hidden w-full items-center justify-between md:flex">
-          <MobileNavbarContent signInComponent="navbar" />
+        <div className="hidden min-w-0 items-center md:flex">
+          <MobileNavbarBrand placement="navbar" />
         </div>
       ) : null}
       {/* `min-w-0` so this side is what gives when the bar is tight. Without it a flex child will
           not shrink below its content, so on a narrow phone the two groups fought and the controls
           on the right -- the only route to an account since they came back on mobile -- were the
           ones pushed out. The breadcrumb truncating is the right thing to lose. */}
-      {!(isExplore && isPhone) ? (
+      {!compact ? (
         <div
           className={cx(
             'flex min-w-0 items-center gap-8 max-[359px]:gap-2! mobile:gap-2 md:gap-4',
@@ -103,11 +104,9 @@ export function Navbar({
           compact padding and gaps here and in the nested action rows make the fixed controls fit;
           the breadcrumb remains the only content allowed to shrink. */}
       <ClientOnly>
-        {!(isExplore && isPhone) ? (
-          <div className={cx('shrink-0', isExplore && 'md:hidden')}>
-            <NavbarClientActions onSearchClick={onSearchClick} />
-          </div>
-        ) : null}
+        <div className="shrink-0">
+          <NavbarClientActions compact={compact} onSearchClick={onSearchClick} />
+        </div>
       </ClientOnly>
     </nav>
   );

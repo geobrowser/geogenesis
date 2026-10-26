@@ -11,17 +11,13 @@ import { Navbar } from './navbar';
 const mocks = vi.hoisted(() => ({ pathname: '/space/space-1', isPhone: false }));
 
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPhone }));
-vi.mock('./mobile-navbar-actions', () => ({
-  MobileNavbarActions: ({ signInComponent }: { signInComponent: string }) => (
-    <div data-testid="mobile-actions" data-sign-in-component={signInComponent} />
-  ),
-}));
-
 vi.mock('~/design-system/client-only', () => ({
   ClientOnly: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock('./navbar-client-actions', () => ({
-  NavbarClientActions: () => <div data-testid="client-actions" />,
+  NavbarClientActions: ({ compact }: { compact?: boolean }) => (
+    <div data-testid="client-actions" data-compact={String(compact)} />
+  ),
 }));
 // This suite owns the navbar and metadata links in the shrink chain. Focused breadcrumb tests
 // render all three real breadcrumb branches so this stand-in cannot conceal an inner break.
@@ -108,30 +104,37 @@ describe('Navbar', () => {
     expect(screen.getByRole('link')).not.toHaveClass('mobile:hidden');
   });
 
-  it('uses the debate bar on mobile Explore with the navbar sign-in attribution', async () => {
+  it('uses the debate bar on mobile Explore', () => {
     mocks.pathname = '/explore';
     mocks.isPhone = true;
     const navbarRef = React.createRef<HTMLElement>();
     render(<Navbar navbarRef={navbarRef} hideLogo onBrowseClick={vi.fn()} onSearchClick={vi.fn()} />);
 
     expect(screen.getByRole('link', { name: 'Geo' })).toHaveAttribute('href', '/explore');
-    expect(await screen.findByTestId('mobile-actions')).toHaveAttribute('data-sign-in-component', 'navbar');
-    expect(screen.queryByTestId('client-actions')).not.toBeInTheDocument();
+    expect(screen.getByTestId('client-actions')).toHaveAttribute('data-compact', 'true');
     expect(screen.queryByRole('button', { name: 'Open browse menu' })).not.toBeInTheDocument();
     expect(navbarRef.current).toBe(screen.getByRole('navigation'));
   });
 
-  it('switches Explore back to the standard controls at desktop widths', async () => {
+  it('preserves the account subtree across viewport and route changes', () => {
     mocks.pathname = '/explore';
     mocks.isPhone = true;
     const { rerender } = render(<Navbar onBrowseClick={vi.fn()} onSearchClick={vi.fn()} />);
-    expect(await screen.findByTestId('mobile-actions')).toBeInTheDocument();
+    const actions = screen.getByTestId('client-actions');
+    expect(actions).toHaveAttribute('data-compact', 'true');
 
     mocks.isPhone = false;
     rerender(<Navbar onBrowseClick={vi.fn()} onSearchClick={vi.fn()} />);
 
-    expect(screen.getByTestId('client-actions')).toBeInTheDocument();
-    expect(screen.queryByTestId('mobile-actions')).not.toBeInTheDocument();
+    expect(screen.getByTestId('client-actions')).toBe(actions);
+    expect(actions).toHaveAttribute('data-compact', 'false');
+
+    mocks.isPhone = true;
+    mocks.pathname = '/space/space-1';
+    rerender(<Navbar onBrowseClick={vi.fn()} onSearchClick={vi.fn()} />);
+
+    expect(screen.getByTestId('client-actions')).toBe(actions);
+    expect(actions).toHaveAttribute('data-compact', 'false');
   });
 
   it('keeps browse and standard controls on other mobile pages', () => {

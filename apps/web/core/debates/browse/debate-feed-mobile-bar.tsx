@@ -2,7 +2,16 @@
 
 import * as React from 'react';
 
-import { MobileNavbarContent } from '~/partials/navbar/mobile-navbar-content';
+import dynamic from 'next/dynamic';
+
+import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
+
+import { MobileNavbarBrand } from '~/partials/navbar/mobile-navbar-brand';
+
+const NavbarAccountActions = dynamic(
+  () => import('~/partials/navbar/navbar-account-actions').then(m => ({ default: m.NavbarAccountActions })),
+  { ssr: false }
+);
 
 /**
  * The phone-only bar over the full-screen debate feed (GEO-3415). The feed covers the app navbar on
@@ -13,9 +22,13 @@ import { MobileNavbarContent } from '~/partials/navbar/mobile-navbar-content';
  * screenshot of the feed carries the brand the way the video does.
  */
 export function DebateFeedMobileBar() {
+  // CSS hides the bar on desktop; avoid mounting a second set of account controls there.
+  const isPhone = useIsPhoneLayout();
+
   return (
     <header className="hidden h-11 shrink-0 items-center justify-between bg-white px-4 md:flex">
-      <MobileNavbarContent signInComponent="debate_feed_bar" />
+      <MobileNavbarBrand placement="debate_feed_bar" />
+      {isPhone ? <NavbarAccountActions compact placement="debate_feed_bar" /> : null}
     </header>
   );
 }

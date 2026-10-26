@@ -5,11 +5,9 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { MobileNavbarActions } from '~/partials/navbar/mobile-navbar-actions';
-
 import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
 
-const mocks = vi.hoisted(() => ({ authenticated: false, isPhone: true }));
+const mocks = vi.hoisted(() => ({ isPhone: true }));
 
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPhone }));
 
@@ -17,23 +15,14 @@ vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPh
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
 }));
-vi.mock('~/core/wallet/auth-hooks', () => ({ usePrivy: () => ({ authenticated: mocks.authenticated }) }));
-vi.mock('~/partials/navbar/navbar-actions', () => ({
-  NavbarActions: ({ compact, signInComponent }: { compact?: boolean; signInComponent?: string }) => (
-    <div data-testid="account" data-compact={String(compact)} data-sign-in-component={signInComponent} />
-  ),
-}));
-vi.mock('~/core/debates/matchmaking/debates-hub-button', () => ({
-  DebatesHubButton: ({ compact }: { compact?: boolean }) => (
-    <button type="button" data-compact={String(compact)}>
-      Debate
-    </button>
+vi.mock('~/partials/navbar/navbar-account-actions', () => ({
+  NavbarAccountActions: ({ placement }: { placement: string }) => (
+    <div data-testid="account" data-placement={placement} />
   ),
 }));
 
 afterEach(() => {
   cleanup();
-  mocks.authenticated = false;
   mocks.isPhone = true;
 });
 
@@ -54,7 +43,7 @@ describe('DebateFeedMobileBar', () => {
   it('mounts the account controls on phones', async () => {
     render(<DebateFeedMobileBar />);
 
-    expect(await screen.findByTestId('account')).toBeInTheDocument();
+    expect(await screen.findByTestId('account')).toHaveAttribute('data-placement', 'debate_feed_bar');
   });
 
   // Hidden by CSS alone, a desktop copy would run beside the app navbar's: a second ⌘E listener, a
@@ -72,23 +61,5 @@ describe('DebateFeedMobileBar', () => {
     render(<DebateFeedMobileBar />);
 
     expect(screen.getByText('Geo')).toHaveClass('font-[family-name:var(--font-geist-medium)]');
-  });
-});
-
-describe('MobileNavbarActions', () => {
-  it('is Log in alone while signed out', () => {
-    render(<MobileNavbarActions signInComponent="debate_feed_bar" />);
-
-    expect(screen.getByTestId('account')).toHaveAttribute('data-compact', 'true');
-    expect(screen.getByTestId('account')).toHaveAttribute('data-sign-in-component', 'debate_feed_bar');
-    expect(screen.queryByRole('button', { name: 'Debate' })).not.toBeInTheDocument();
-  });
-
-  it('adds the compact Debate button once signed in', () => {
-    mocks.authenticated = true;
-    render(<MobileNavbarActions signInComponent="debate_feed_bar" />);
-
-    expect(screen.getByRole('button', { name: 'Debate' })).toHaveAttribute('data-compact', 'true');
-    expect(screen.getByTestId('account')).toHaveAttribute('data-compact', 'true');
   });
 });
