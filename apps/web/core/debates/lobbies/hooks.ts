@@ -319,7 +319,8 @@ export function useEndDebateLobby(lobbyId: string) {
   const store = useStoreLobbyView();
 
   return useMutation({
-    mutationFn: () => endDebateLobby(lobbyId, getPrivyIdentityToken, accountKey),
+    mutationFn: (options: { publishRecording?: boolean } | void) =>
+      endDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, options ?? {}),
     onSuccess: view => {
       store(view);
       if (view.purpose !== 'call') lobbyEnded(view.lobby_id, { scheduled: view.scheduled, opensAt: view.opens_at });

@@ -75,7 +75,7 @@ export function useCommentCount(
   const queryClient = useQueryClient();
 
   // Whether the list has ever been fetched, rather than merely written to. A disabled subscription to
-  // what another hook owns; `skipToken` because only `useComments` writes this flag.
+  // what the list query and post-publish poller own; neither this subscription nor optimistic writes fetch it.
   const { data: hasFetchedList } = useQuery<boolean>({
     queryKey: commentsFetchedQueryKey(entityId),
     queryFn: skipToken,
