@@ -40,13 +40,15 @@ export function AvailabilityDeepLink() {
   const [profileSpaceId, setProfileSpaceId] = React.useState<string | null>(null);
   const [rescheduleRequestId, setRescheduleRequestId] = React.useState<string | null>(null);
   const [via, setVia] = React.useState<string | null>(null);
+  const [pickedStart, setPickedStart] = React.useState<string | null>(null);
   const setToast = useSetToast();
   const notAPerson = React.useCallback(() => setToast(<span>{NOT_A_PERSON_MESSAGE}</span>), [setToast]);
-  useAvailabilityDeepLink((spaceId, requestId, linkVia) => {
+  useAvailabilityDeepLink((spaceId, requestId, linkVia, start) => {
     if (!spaceId) return notAPerson();
     setProfileSpaceId(spaceId);
     setRescheduleRequestId(requestId);
     setVia(linkVia);
+    setPickedStart(start);
   });
   // Stable, since the modal fires it from an effect.
   const dismissNotAPerson = React.useCallback(() => {
@@ -59,10 +61,11 @@ export function AvailabilityDeepLink() {
   return (
     <SharedAvailabilityModal
       // A new link starts its own decision rather than inheriting the last one's.
-      key={rescheduleRequestId ?? profileSpaceId}
+      key={`${profileSpaceId}:${rescheduleRequestId ?? pickedStart ?? ''}`}
       open
       profileSpaceId={profileSpaceId}
       rescheduleRequestId={rescheduleRequestId}
+      pickedStart={pickedStart}
       via={via}
       onClose={() => setProfileSpaceId(null)}
       onNotAPerson={dismissNotAPerson}
@@ -85,6 +88,7 @@ export function SharedAvailabilityModal({
   open,
   profileSpaceId,
   rescheduleRequestId = null,
+  pickedStart = null,
   via = null,
   onClose,
   onNotAPerson,
@@ -93,6 +97,8 @@ export function SharedAvailabilityModal({
   profileSpaceId: string;
   /** Picking a slot moves this scheduled request rather than proposing a new one. */
   rescheduleRequestId?: string | null;
+  /** A time the link picked in advance: "none of these work"'s emailed times (GEO-3429). */
+  pickedStart?: string | null;
   /** The link's `via` attribution, for analytics. */
   via?: string | null;
   onClose: () => void;
@@ -118,7 +124,7 @@ export function SharedAvailabilityModal({
     // The trigger was cleared on arrival, so the current URL would not reopen this. A new account
     // goes through onboarding and is sent back here afterwards, and should land on the week again —
     // still carrying the `via` it came with, or that second arrival loses its attribution.
-    redirectTo: toAvailability(profileSpaceId, { rescheduleRequestId, via: via ?? undefined }),
+    redirectTo: toAvailability(profileSpaceId, { rescheduleRequestId, pickedStart, via: via ?? undefined }),
   });
   // Whether this is a person at all, and the only name there is for a signed-out recipient — who is
   // who this link is mostly for. `null` is a space that does not exist, which is not a person either.
@@ -238,7 +244,8 @@ export function SharedAvailabilityModal({
       userId={person?.user_id ?? ''}
       peerName={name}
       rescheduleRequestId={rescheduleRequestId}
-      entry={rescheduleRequestId ? 'reschedule_link' : 'availability_link'}
+      initialSelectedStart={pickedStart}
+      entry={rescheduleRequestId ? 'reschedule_link' : pickedStart ? 'no_time_works_link' : 'availability_link'}
       disagreementCount={disagreementCount}
       onClose={onClose}
     >

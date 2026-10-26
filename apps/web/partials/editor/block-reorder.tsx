@@ -70,7 +70,7 @@ type Props = {
   editor: Editor;
   editorWrapperRef: React.RefObject<HTMLDivElement | null>;
   enabled: boolean;
-  onReorder: () => void;
+  onReorder: (reorderedBlockId?: string) => void;
   onCopyLink: (childIndex: number) => void | Promise<void>;
   onCopyBlock: (childIndex: number) => void | Promise<void>;
   onDuplicateBlock: (childIndex: number) => void | Promise<void>;
@@ -412,13 +412,18 @@ export function BlockReorder({
     const dropBoundary = event.over?.data.current?.boundary;
     const boundaries = makeDropZones(blockLayoutRef.current).map(zone => zone.boundary);
 
+    const draggedBlockId =
+      typeof sourceIndex === 'number' && sourceIndex >= 0 && sourceIndex < editor.state.doc.childCount
+        ? editor.state.doc.child(sourceIndex).attrs.id
+        : undefined;
+
     if (
       typeof sourceIndex === 'number' &&
       typeof dropBoundary === 'number' &&
       !isBlockDropNoOp(sourceIndex, dropBoundary, boundaries) &&
       moveTopLevelBlock(editor, sourceIndex, dropBoundary)
     ) {
-      onReorder();
+      onReorder(typeof draggedBlockId === 'string' ? draggedBlockId : undefined);
     }
 
     releasePointerDragFocus(event.activatorEvent);

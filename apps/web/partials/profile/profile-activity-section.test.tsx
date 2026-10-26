@@ -465,7 +465,10 @@ describe('ProfileActivitySection', () => {
 
     const cards = screen.getAllByTestId('card');
     expect(cards).toHaveLength(2);
-    expect(cards[0]?.parentElement).toHaveClass('w-[min(260px,84cqw)]');
+    expect(cards[0]?.parentElement).toHaveClass('w-[min(300px,84cqw)]');
+    // The playable card owns its frame and its 12px inset. A second frame squeezed the pills.
+    expect(cards[0]?.parentElement).not.toHaveClass('border');
+    expect(cards[0]?.parentElement).not.toHaveClass('px-3');
 
     const gate = screen.getByTestId('playback-gate');
     expect(gate).toHaveAttribute('data-allowed-id', 'd1');

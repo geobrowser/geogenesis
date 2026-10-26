@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { useActionContext } from '~/core/action-context-provider';
 import { copyShareLink } from '~/core/sharing/share-handoff';
 import { createShareLink } from '~/core/sharing/share-link';
+import { spaceCallPath } from '~/core/space-calls/routes';
 
 import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Text } from '~/design-system/text';
@@ -27,6 +28,7 @@ import {
 } from './lobby-format';
 import { LobbyHostLists } from './lobby-moderation';
 import { LobbyPopup } from './lobby-popup';
+import { useLobbyRoomPurpose } from './lobby-purpose';
 import { type LobbyPageView, type MemberLobbyPageView, isMemberView } from './lobby-view';
 
 export const LOBBY_HEADER_COPY = {
@@ -36,6 +38,8 @@ export const LOBBY_HEADER_COPY = {
   endLobby: 'End lobby',
   endForEveryone: 'End for everyone',
   raisedHands: (count: number) => `Raised hands · ${count}`,
+  callBreadcrumb: (space: string | null) => `${space ?? 'Space'} / Calls`,
+  endCall: 'End call',
 } as const;
 
 /** "Hosted by Adam and Priya · Video on · Not recorded". */
@@ -44,12 +48,23 @@ export function lobbyMetaLabel(lobby: Pick<LobbyPageView, 'members'>) {
   return [hosts ? `Hosted by ${hosts}` : 'No host here', 'Video on', 'Not recorded'].join(' · ');
 }
 
+/** "Hosted by Adam and Priya · Not recorded", for a space call. */
+export function callMetaLabel(lobby: Pick<LobbyPageView, 'members'>) {
+  const hosts = hostsLabel(lobby.members.filter(isHosting));
+  return [hosts ? `Hosted by ${hosts}` : 'No host here', 'Not recorded'].join(' · ');
+}
+
 function useCopyLink(lobbyId: string) {
   const getContext = useActionContext('share_dialog', 'lobby', lobbyId);
+  const purpose = useLobbyRoomPurpose();
   const [copied, setCopied] = React.useState(false);
   const copy = async () => {
+    const url =
+      purpose.purpose === 'call'
+        ? `${window.location.origin}${spaceCallPath(purpose.spaceId, lobbyId)}`
+        : lobbyShareUrl(lobbyId);
     try {
-      await copyShareLink(createShareLink(lobbyShareUrl(lobbyId), 'lobby', lobbyId, 'copy_link'), getContext());
+      await copyShareLink(createShareLink(url, 'lobby', lobbyId, 'copy_link'), getContext());
       setCopied(true);
     } catch {
       setCopied(false);
@@ -74,6 +89,7 @@ export function LobbyHeader({
 }) {
   const memberLobby = isMemberView(lobby) && lobby.viewer.hosting ? lobby : null;
   const hostLists = memberLobby ? <LobbyHostListsChip lobby={memberLobby} /> : null;
+  const call = useLobbyRoomPurpose().purpose === 'call';
 
   if (phone) {
     return (
@@ -94,7 +110,7 @@ export function LobbyHeader({
     <header className="flex flex-wrap items-center gap-4 border-b border-grey-02 px-8 py-4">
       <div className="flex min-w-0 flex-[1_1_360px] flex-col gap-1.5">
         <Text as="p" variant="footnoteMedium" color="grey-04">
-          {LOBBY_HEADER_COPY.breadcrumb}
+          {call ? LOBBY_HEADER_COPY.callBreadcrumb(lobby.call?.space_name ?? null) : LOBBY_HEADER_COPY.breadcrumb}
         </Text>
         <div className="flex flex-wrap items-center gap-3">
           <Text as="h1" variant="largeTitle">
@@ -103,7 +119,7 @@ export function LobbyHeader({
           <LivePill lobby={lobby} />
         </div>
         <Text as="p" variant="metadata" color="grey-04">
-          {lobbyMetaLabel(lobby)}
+          {call ? callMetaLabel(lobby) : lobbyMetaLabel(lobby)}
         </Text>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -117,6 +133,7 @@ export function LobbyHeader({
 }
 
 function LivePill({ lobby, small = false }: { lobby: LobbyPageView; small?: boolean }) {
+  const call = useLobbyRoomPurpose().purpose === 'call';
   return (
     <span
       className={cx(
@@ -125,7 +142,8 @@ function LivePill({ lobby, small = false }: { lobby: LobbyPageView; small?: bool
       )}
     >
       <span aria-hidden className={cx('rounded-full bg-green', small ? 'size-1.5' : 'size-2')} />
-      Live · {hereLabel(lobbyHeadcount(lobby))} · {debatingLabel(debatingCount(lobby.members))}
+      Live · {hereLabel(lobbyHeadcount(lobby))}
+      {call ? null : ` · ${debatingLabel(debatingCount(lobby.members))}`}
     </span>
   );
 }
@@ -145,6 +163,7 @@ function CopyLinkButton({ lobbyId }: { lobbyId: string }) {
 function EndLobbyControl({ lobbyId }: { lobbyId: string }) {
   const end = useEndDebateLobby(lobbyId);
   const [confirming, setConfirming] = React.useState(false);
+  const call = useLobbyRoomPurpose().purpose === 'call';
 
   return (
     <>
@@ -169,12 +188,12 @@ function EndLobbyControl({ lobbyId }: { lobbyId: string }) {
           onClick={() => setConfirming(true)}
           className="border-red-03 text-[#D9341C]"
         >
-          {LOBBY_HEADER_COPY.endLobby}
+          {call ? LOBBY_HEADER_COPY.endCall : LOBBY_HEADER_COPY.endLobby}
         </HubPillButton>
       )}
       {end.isError ? (
         <Text as="p" variant="footnote" color="red-01" className="basis-full">
-          {lobbyErrorMessage(end.error, 'Could not end the lobby. Try again.')}
+          {lobbyErrorMessage(end.error, `Could not end the ${call ? 'call' : 'lobby'}. Try again.`)}
         </Text>
       ) : null}
     </>
@@ -184,16 +203,17 @@ function EndLobbyControl({ lobbyId }: { lobbyId: string }) {
 /** Phone: Copy link and, for a host, End lobby behind the title's "…". */
 function LobbyTitleMenu({ lobby }: { lobby: LobbyPageView }) {
   const [open, setOpen] = React.useState(false);
+  const title = useLobbyRoomPurpose().purpose === 'call' ? 'Call options' : 'Lobby options';
 
   return (
     <LobbyPopup
       open={open}
       onOpenChange={setOpen}
-      title="Lobby options"
+      title={title}
       trigger={
         <button
           type="button"
-          aria-label="Lobby options"
+          aria-label={title}
           {...debateActionAnalyticsAttributes('hub', 'Lobby options')}
           className="flex size-8 shrink-0 items-center justify-center rounded-full text-grey-04 hover:bg-grey-01 hover:text-text"
         >

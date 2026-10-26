@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
+import { isSpaceCallPath } from '~/core/space-calls/routes';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { validateSpaceId } from '~/core/utils/utils';
 
@@ -46,6 +47,7 @@ import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt, type RoomJoinPromptNotice } from './rooms/room-join-prompt';
+import { RoomNudgePopup } from './rooms/room-nudge-popup';
 import { sameId } from './rooms/room-presence';
 import { debateRoomIdFromPath } from './rooms/room-routes';
 import { SocialVideoCaptionChoiceRows, useSocialVideoCaptionChoice } from './social-video-caption-choice';
@@ -289,6 +291,8 @@ export function DebateCoordinator() {
   const snoozeRoom = (roomId: string) => setSnoozedRoomIds(current => [...current, roomId]);
   // The join banner's Running late or Can't make it, open over the page (GEO-3430).
   const [roomNotice, setRoomNotice] = React.useState<(RoomJoinPromptNotice & { roomId: string }) | null>(null);
+  // GEO-3428: while a nudge's popup is up, the join banner waits behind it: one prompt at a time.
+  const [nudgeOpen, setNudgeOpen] = React.useState(false);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
   const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
   // A room whose debate already happened is never offered again. Reminded lobbies ride the same
@@ -519,7 +523,18 @@ export function DebateCoordinator() {
           {pausedBannerText(gateway.pauseReason)}
         </div>
       )}
-      {promptedRoom && (
+      <RoomNudgePopup
+        // Per account: nothing held or seen carries over a sign-out or a switch.
+        key={geoChatAuth.accountKey ?? 'signed-out'}
+        rooms={joinableRooms}
+        // Not over an incoming request or the share prompt, which want an answer of their own.
+        // Off on any room page, a lobby's or a space call's too: a live room is not the place.
+        enabled={
+          roomIdAtPath === null && !isSpaceCallPath(pathname) && !activeFlow && !promptedRequest && !visibleSharePrompt
+        }
+        onOpenChange={setNudgeOpen}
+      />
+      {promptedRoom && !nudgeOpen && (
         <DebateRoomJoinPrompt
           key={promptedRoom.room_id}
           room={promptedRoom}
@@ -591,7 +606,8 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedChallengeId(promptedChallenge.id)}
         />
       )}
-      {promptedRequest && currentUserId && (
+      {/* Behind a nudge popup that is being answered (one that is not steps aside for this). */}
+      {promptedRequest && currentUserId && !nudgeOpen && (
         <IncomingRequestPopup
           key={promptedRequest.id}
           request={promptedRequest}
@@ -599,7 +615,7 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedRequestIds(current => [...current, promptedRequest.id])}
         />
       )}
-      {!activeFlow && !promptedRequest && visibleSharePrompt && (
+      {!activeFlow && !promptedRequest && !nudgeOpen && visibleSharePrompt && (
         <DebateSharePromptDialog
           key={visibleSharePrompt.id}
           prompt={visibleSharePrompt}

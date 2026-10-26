@@ -3285,6 +3285,25 @@ describe('holding the full recordings until the viewer asks (feed bandwidth)', (
     expect(getDefaultStore().get(feedFullPlaybackStartedAtom)).toBe(true);
   });
 
+  it('keeps a Play tap while scrolling into view and starts only once active', () => {
+    const fixture = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    mocks.controller = fixture;
+    const { container, getByRole, rerender } = render(
+      <DebateFeedPlayer debate={debate} active={false} holdFullPlayback />
+    );
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+    const videos = Array.from(container.querySelectorAll('video'));
+    expect(videos).toHaveLength(2);
+    for (const video of videos) {
+      Object.defineProperty(video, 'readyState', { configurable: true, value: 4 });
+      fireEvent(video, new Event('canplay'));
+    }
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    expect(fixture.resumeBoth).toHaveBeenCalledOnce();
+  });
+
   it('lifts the hold from a tap anywhere on the video, too', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
     const { container, getAllByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
