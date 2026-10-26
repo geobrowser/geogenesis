@@ -37,8 +37,40 @@ type Props = {
 
 /** Local device preview shown before minting the LiveKit token. */
 export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
+  return (
+    <div className="mx-auto flex max-w-[640px] flex-col items-center gap-4 px-4 py-10">
+      <h1 className="text-mainPage">Join {spaceName} community call</h1>
+      <p className="flex items-center gap-1.5 text-metadata text-grey-04">
+        {formatTimeRange(occurrence.startMs, occurrence.endMs)} · {formatFullDate(occurrence.startMs)} ·
+        <GlobeIcon />
+        {spaceName}
+      </p>
+      <PreJoinDeviceCheck
+        notice="This video will be posted online. Don’t share any private information."
+        joinLabel="Join community call"
+        joining={joining}
+        onJoin={onJoin}
+      />
+    </div>
+  );
+}
+
+/** The preview, toggles and device pickers; also a space call's check before it connects (GEO-3419). */
+export function PreJoinDeviceCheck({
+  notice,
+  joinLabel,
+  joining,
+  onJoin,
+  initialVideo = true,
+}: {
+  notice?: string;
+  joinLabel: string;
+  joining: boolean;
+  onJoin: (settings: PreJoinSettings) => void;
+  initialVideo?: boolean;
+}) {
   const [audioEnabled, setAudioEnabled] = React.useState(false);
-  const [videoEnabled, setVideoEnabled] = React.useState(true);
+  const [videoEnabled, setVideoEnabled] = React.useState(initialVideo);
   const initialDevices = useInitialMediaDevices();
   const [pickedAudioDeviceId, setAudioDeviceId] = React.useState<string>();
   const [pickedVideoDeviceId, setVideoDeviceId] = React.useState<string>();
@@ -191,88 +223,77 @@ export function PreJoin({ spaceName, occurrence, joining, onJoin }: Props) {
     list.map((d, i) => ({ value: d.deviceId, label: d.label || `Device ${i + 1}` }));
 
   return (
-    <div className="mx-auto flex max-w-[640px] flex-col items-center gap-4 px-4 py-10">
-      <h1 className="text-mainPage">Join {spaceName} community call</h1>
-      <p className="flex items-center gap-1.5 text-metadata text-grey-04">
-        {formatTimeRange(occurrence.startMs, occurrence.endMs)} · {formatFullDate(occurrence.startMs)} ·
-        <GlobeIcon />
-        {spaceName}
-      </p>
+    <div className="w-full rounded-lg border border-grey-02 p-4">
+      {notice && <p className="mb-3 text-center text-metadata text-grey-04">{notice}</p>}
 
-      <div className="w-full rounded-lg border border-grey-02 p-4">
-        <p className="mb-3 text-center text-metadata text-grey-04">
-          This video will be posted online. Don’t share any private information.
-        </p>
+      {permissionError && <p className="mb-3 text-center text-metadata text-red-01">{permissionError}</p>}
 
-        {permissionError && <p className="mb-3 text-center text-metadata text-red-01">{permissionError}</p>}
-
-        <div className="relative aspect-3/2 w-full overflow-hidden rounded-lg bg-grey-04">
-          {videoEnabled ? (
-            <video ref={videoRef} className="size-full object-cover" muted playsInline />
-          ) : (
-            <div className="flex size-full items-center justify-center text-white">Camera off</div>
-          )}
-
-          <div className="absolute inset-x-0 bottom-3 flex justify-center gap-2">
-            <PreviewToggle
-              on={audioEnabled}
-              icon={<MicIcon muted={!audioEnabled} />}
-              onLabel="Audio on"
-              offLabel="Audio off"
-              onClick={() => {
-                setPermissionError(null);
-                setAudioEnabled(v => !v);
-              }}
-            />
-            <PreviewToggle
-              on={videoEnabled}
-              icon={<VideoIcon off={!videoEnabled} />}
-              onLabel="Video on"
-              offLabel="Video off"
-              onClick={() => {
-                setPermissionError(null);
-                setVideoEnabled(v => !v);
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="mt-3 flex items-center gap-2">
-          <Select
-            value={audioDeviceId}
-            onChange={id => chooseInput('audio', id)}
-            options={deviceOptions(devices.audio)}
-            placeholder="Microphone"
-            className="flex-1"
-          />
-          <Select
-            value={videoDeviceId}
-            onChange={id => chooseInput('video', id)}
-            options={deviceOptions(devices.video)}
-            placeholder="Camera"
-            className="flex-1"
-          />
-          <Button
-            variant="primary"
-            disabled={joining || !initialDevices.ready}
-            onClick={() => onJoin({ audioEnabled, videoEnabled, audioDeviceId, videoDeviceId })}
-          >
-            {joining ? 'Joining…' : 'Join community call'}
-          </Button>
-        </div>
-        {canRememberCurrent && (
-          <button
-            type="button"
-            className="mt-2 text-metadata text-grey-04 underline"
-            onClick={() => {
-              if (audioDeviceId) chooseInput('audio', audioDeviceId);
-              if (videoDeviceId) chooseInput('video', videoDeviceId);
-            }}
-          >
-            Remember current devices
-          </button>
+      <div className="relative aspect-3/2 w-full overflow-hidden rounded-lg bg-grey-04">
+        {videoEnabled ? (
+          <video ref={videoRef} className="size-full object-cover" muted playsInline />
+        ) : (
+          <div className="flex size-full items-center justify-center text-white">Camera off</div>
         )}
+
+        <div className="absolute inset-x-0 bottom-3 flex justify-center gap-2">
+          <PreviewToggle
+            on={audioEnabled}
+            icon={<MicIcon muted={!audioEnabled} />}
+            onLabel="Audio on"
+            offLabel="Audio off"
+            onClick={() => {
+              setPermissionError(null);
+              setAudioEnabled(v => !v);
+            }}
+          />
+          <PreviewToggle
+            on={videoEnabled}
+            icon={<VideoIcon off={!videoEnabled} />}
+            onLabel="Video on"
+            offLabel="Video off"
+            onClick={() => {
+              setPermissionError(null);
+              setVideoEnabled(v => !v);
+            }}
+          />
+        </div>
       </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <Select
+          value={audioDeviceId}
+          onChange={id => chooseInput('audio', id)}
+          options={deviceOptions(devices.audio)}
+          placeholder="Microphone"
+          className="flex-1"
+        />
+        <Select
+          value={videoDeviceId}
+          onChange={id => chooseInput('video', id)}
+          options={deviceOptions(devices.video)}
+          placeholder="Camera"
+          className="flex-1"
+        />
+        <Button
+          variant="primary"
+          disabled={joining || !initialDevices.ready}
+          onClick={() => onJoin({ audioEnabled, videoEnabled, audioDeviceId, videoDeviceId })}
+        >
+          {joining ? 'Joining…' : joinLabel}
+        </Button>
+      </div>
+      {canRememberCurrent && (
+        <button
+          type="button"
+          className="mt-2 text-metadata text-grey-04 underline"
+          onClick={() => {
+            if (audioDeviceId) chooseInput('audio', audioDeviceId);
+            if (videoDeviceId) chooseInput('video', videoDeviceId);
+          }}
+        >
+          Remember current devices
+        </button>
+      )}
     </div>
   );
 }

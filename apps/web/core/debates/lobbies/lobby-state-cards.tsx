@@ -15,6 +15,7 @@ import { debateRoomPath } from '../rooms/room-routes';
 import { markLobbyEntry } from './lobby-analytics';
 import { nextLobbyTimeLabel, personName, rsvpLabel } from './lobby-format';
 import { nextLobbyByHost, useListedLobbies } from './lobby-host-lobbies';
+import { useLobbyRoomPurpose } from './lobby-purpose';
 import { LobbyReminderError, useLobbyReminderPress } from './lobby-reminder-press';
 import type { LobbyPageView } from './lobby-view';
 
@@ -29,6 +30,14 @@ export const LOBBY_STATE_COPY = {
   emptyTitle: 'Nobody’s here right now.',
   emptyDetail: 'You’re the first one here. Share the link, or come back for the next lobby.',
   whoIsFree: 'See who’s free this week',
+} as const;
+
+export const CALL_STATE_COPY = {
+  banned: 'You can’t join this call',
+  ended: 'This call has ended',
+  closed: 'This call has closed',
+  backToSpace: 'Back to the space',
+  emptyDetail: 'You’re the first one here. Share the link so others can join.',
 } as const;
 
 /** The centered card every full-page lobby state sits in; `className` sets its width and spacing. */
@@ -74,7 +83,16 @@ export function LobbyStateCard({
   );
 }
 
+/** Out of a state card: Find a debate from a lobby, back to its space from a call. */
 export function FindDebateLink({ primary = false }: { primary?: boolean }) {
+  const purpose = useLobbyRoomPurpose();
+  if (purpose.purpose === 'call') {
+    return (
+      <Link href={NavUtils.toSpace(purpose.spaceId)} className={hubPillClassName(primary ? 'primary' : 'secondary')}>
+        {CALL_STATE_COPY.backToSpace}
+      </Link>
+    );
+  }
   return (
     <Link href={NavUtils.toExplore()} className={hubPillClassName(primary ? 'primary' : 'secondary')}>
       {LOBBY_STATE_COPY.findDebate}
@@ -83,8 +101,12 @@ export function FindDebateLink({ primary = false }: { primary?: boolean }) {
 }
 
 export function LobbyBannedCard({ name }: { name: string }) {
+  const call = useLobbyRoomPurpose().purpose === 'call';
   return (
-    <LobbyStateCard title={LOBBY_STATE_COPY.banned} actions={<FindDebateLink primary />}>
+    <LobbyStateCard
+      title={call ? CALL_STATE_COPY.banned : LOBBY_STATE_COPY.banned}
+      actions={<FindDebateLink primary />}
+    >
       <Text as="p" variant="metadata" color="grey-04">
         {LOBBY_STATE_COPY.bannedFrom(name)}
       </Text>
@@ -102,13 +124,16 @@ export function LobbyClosedCard({
   ended: boolean;
   after?: React.ReactNode;
 }) {
-  const next = nextLobbyByHost(useListedLobbies(), lobby.created_by, lobby.lobby_id);
+  const call = useLobbyRoomPurpose().purpose === 'call';
+  const listed = useListedLobbies(!call);
+  const next = call ? null : nextLobbyByHost(listed, lobby.created_by, lobby.lobby_id);
   const time = next ? nextLobbyTimeLabel(next.lobby) : null;
   const remind = useLobbyReminderPress(next?.lobby ?? null);
+  const copy = call ? CALL_STATE_COPY : LOBBY_STATE_COPY;
 
   return (
     <LobbyStateCard
-      title={ended ? LOBBY_STATE_COPY.ended : LOBBY_STATE_COPY.closed}
+      title={ended ? copy.ended : copy.closed}
       actions={
         <>
           {next ? <NextLobbyAction lobby={next.lobby} remind={remind} primary /> : null}
@@ -173,7 +198,9 @@ export function LobbyEmptyRoom({
   lobby: Pick<LobbyPageView, 'lobby_id' | 'created_by'>;
   signedIn: boolean;
 }) {
-  const next = nextLobbyByHost(useListedLobbies(), lobby.created_by, lobby.lobby_id);
+  const call = useLobbyRoomPurpose().purpose === 'call';
+  const listed = useListedLobbies(!call);
+  const next = call ? null : nextLobbyByHost(listed, lobby.created_by, lobby.lobby_id);
 
   return (
     <div
@@ -184,11 +211,11 @@ export function LobbyEmptyRoom({
         {LOBBY_STATE_COPY.emptyTitle}
       </Text>
       <Text as="p" variant="metadata" color="grey-04">
-        {LOBBY_STATE_COPY.emptyDetail}
+        {call ? CALL_STATE_COPY.emptyDetail : LOBBY_STATE_COPY.emptyDetail}
       </Text>
       {next ? <NextLobbyCard lobby={next.lobby} /> : null}
       {/* The People tab is signed in only. */}
-      {signedIn ? (
+      {signedIn && !call ? (
         <Link
           href={NavUtils.toDebatesPanel({ tab: 'people', pathname: debateRoomPath(lobby.lobby_id) })}
           className={hubPillClassName('secondary', 'mt-1')}

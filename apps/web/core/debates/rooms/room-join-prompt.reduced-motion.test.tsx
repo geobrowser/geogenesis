@@ -28,7 +28,7 @@ vi.mock('./room-opponent', async importOriginal => ({
   useUpcomingRoomRequest: () => undefined,
 }));
 vi.mock('../matchmaking/use-request-countdown', () => ({
-  useServerClock: () => ({ now: () => Date.parse('2026-09-21T08:52:00.000Z') }),
+  useServerNow: () => Date.parse('2026-09-21T08:52:00.000Z'),
 }));
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => <span /> }));
 

@@ -768,7 +768,7 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
       const scroller = scrollerRef.current;
       if (!scroller) return;
       const firstCard = scroller.querySelector<HTMLElement>('[data-activity-card]');
-      const cardWidth = firstCard?.getBoundingClientRect().width || 260;
+      const cardWidth = firstCard?.getBoundingClientRect().width || 300;
       // `gap-4` is 16px. Move one complete card plus that gap so the next snap point lands flush.
       scroller.scrollBy({ left: direction * (cardWidth + 16), behavior: 'smooth' });
     },
@@ -810,10 +810,9 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
 /**
  * One card in the row.
  *
- * Debate cards stay at `260px`, leaving almost three in view at the profile's
- * 750px content width. Claim cards use `300px`: after the card's border and 24px
- * horizontal padding, their 274px pill row clears the 272px container-query threshold and
- * keeps both response buttons beside each other.
+ * Both kinds use `300px`: after the card's border and 24px horizontal padding,
+ * their 274px pill row has room for both response labels. Debate cards own their
+ * frame, just as claim cards do; an extra gallery frame would spend that room twice.
  *
  * Narrow enough that the next card is visibly cut off, which is what says the
  * row scrolls without a control saying so.
@@ -851,22 +850,9 @@ function GalleryCard({
       <div
         data-activity-card
         data-activity-debate-id={isClaim ? undefined : row.entityId}
-        className={cx(
-          // `cqw`, not `vw`. The viewport is the wrong ruler for a card in a side
-          // panel: the panel is a column of its own width inside a window that may
-          // be three times wider, so `84vw` there is not 84% of anything the reader
-          // can see. The wrapper around the scroller establishes the container this
-          // measures — see `ActivityGallery`.
-          // 260 + 16px gaps shows 2.7 debate cards in the profile's content column. Claims need 300px
-          // to preserve two response columns after the card's padding. `84cqw` remains the phone
-          // ceiling, where the response row may stack rather than overflow.
-          isClaim ? 'w-[min(300px,84cqw)]' : 'w-[min(260px,84cqw)]',
-          'shrink-0 snap-start',
-          // The lobby card brings its own outline; the feed's card does not, and
-          // draws a rule underneath itself to separate it from the next card
-          // *down* — which in a row is a line under nothing.
-          !isClaim && 'rounded-lg border border-grey-02 bg-white px-3 [&>*]:border-b-0'
-        )}
+        // Measure the visible gallery, including inside a side panel, rather than the viewport.
+        // The next card still peeks into view; the card itself owns its frame and padding.
+        className="w-[min(300px,84cqw)] shrink-0 snap-start"
       >
         {isClaim ? (
           <GalleryClaimCard row={row} response={response} personName={personName} />

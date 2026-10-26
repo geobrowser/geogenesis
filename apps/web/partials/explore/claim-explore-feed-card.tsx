@@ -28,6 +28,7 @@ import { Text } from '~/design-system/text';
 import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
+import { EXPLORE_CARD_TITLE_CLASS_NAME } from './explore-card-title';
 import { ExploreCardTopicFollow } from './explore-card-topic-follow';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
@@ -279,7 +280,7 @@ export function ClaimExploreFeedCard({
           extraSegments={extraSegments}
           compactOnMobile={matchesDebatePanelOnMobile}
           endSlot={
-            <div className="ml-auto flex min-w-0 items-center">
+            <div className="flex min-w-0 flex-1 items-center justify-end">
               {topicFollow ? <ExploreCardTopicFollow topics={item.topics} /> : null}
               <ClaimEndSlot
                 claimId={item.entityId}
@@ -305,7 +306,8 @@ export function ClaimExploreFeedCard({
         >
           <h2
             className={cx(
-              'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline',
+              EXPLORE_CARD_TITLE_CLASS_NAME,
+              'text-pretty group-hover/title:underline',
               matchesDebatePanelOnMobile && 'md:claim-card-panel-title!'
             )}
           >

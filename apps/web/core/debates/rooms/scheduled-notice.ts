@@ -22,9 +22,14 @@ export const CANT_MAKE_IT_MODAL = DEEP_LINK_MODALS.cantMakeIt;
 
 /**
  * Which screen of the notice dialog. `decide` is the three-way choice the reschedule link shows once
- * the room is open, where a calendar is the wrong answer to "I'm on my way" (board 2).
+ * the room is open, where a calendar is the wrong answer to "I'm on my way" (board 2). `nudge` is the
+ * same three choices as the popup a nudge from the waiting debater puts on screen (GEO-3428, board
+ * 6c).
  */
-export type ScheduledNoticeStep = 'decide' | 'late' | 'cant';
+export type ScheduledNoticeStep = 'decide' | 'nudge' | 'late' | 'cant';
+
+/** Where the dialog's answer stands: on its opening screen, being made, or sent (GEO-3428). */
+export type ScheduledNoticeAnswer = 'open' | 'answering' | 'sent';
 
 export function toRunningLate(requestId: string, pathname = NavUtils.toExplore()): string {
   return toModal({ modal: RUNNING_LATE_MODAL, pathname, target: requestId });

@@ -22,12 +22,15 @@ export function DebateExploreMetaRow({
   hideSpaceLink = false,
   hideJoinButton = false,
   compact = false,
+  hideTypeTag = false,
   endSlot,
 }: {
   item: ExploreFeedItem;
   hideSpaceLink?: boolean;
   hideJoinButton?: boolean;
   compact?: boolean;
+  /** Leave out the "Debate" tag: the playable card's shape says what it is (GEO-3454). */
+  hideTypeTag?: boolean;
   endSlot?: React.ReactNode;
 }) {
   const offer = useSpaceOffer(item, { hidden: hideJoinButton, joinVariant: 'pill' });
@@ -35,8 +38,11 @@ export function DebateExploreMetaRow({
     <div className="flex items-center justify-between gap-3">
       <div
         className={cx(
-          'flex min-w-0 items-center gap-x-2',
-          compact ? 'flex-nowrap overflow-hidden' : 'flex-wrap gap-y-1'
+          'flex items-center gap-x-2',
+          // The space (avatar + name + offer) keeps its width so it always shows in full; the end
+          // slot shrinks instead, which is what truncates a long followed-topic name rather than
+          // letting it run into the space. The compact gallery stays a clipped single line.
+          compact ? 'min-w-0 flex-nowrap overflow-hidden' : 'shrink-0 flex-wrap gap-y-1'
         )}
       >
         {!hideSpaceLink ? (
@@ -49,7 +55,7 @@ export function DebateExploreMetaRow({
           </Link>
         ) : null}
         {offer.shown}
-        {!compact ? <ExploreTypeTag>Debate</ExploreTypeTag> : null}
+        {!compact && !hideTypeTag ? <ExploreTypeTag>Debate</ExploreTypeTag> : null}
       </div>
       {endSlot}
       {offer.mounted}

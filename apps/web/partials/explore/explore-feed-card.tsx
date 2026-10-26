@@ -239,7 +239,11 @@ function BaseExploreFeedCard({
   const cardActions = <ExploreCardActions item={item} />;
 
   return (
-    <ActionSurfaceArticle className={EXPLORE_CARD_CLASS}>
+    <ActionSurfaceArticle
+      className={
+        compactDebateChrome ? 'flex flex-col gap-2 rounded-lg border border-grey-02 bg-white p-3' : EXPLORE_CARD_CLASS
+      }
+    >
       {compactDebateChrome ? (
         <DebateExploreMetaRow
           item={item}
@@ -256,7 +260,7 @@ function BaseExploreFeedCard({
           endSlot={
             isDebateEntity(item.types) ? (
               topicFollow ? (
-                <div className="ml-auto flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
                   <ExploreCardTopicFollow topics={item.topics} />
                   {debateEndSlot}
                 </div>

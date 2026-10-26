@@ -212,6 +212,9 @@ describe('ExploreFeedCard', () => {
     expect(screen.queryByText('Debate')).toBeNull();
     expect(screen.getByText('Space').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
     expect(screen.getByRole('heading', { name: 'Fast fashion should be discouraged' })).toHaveClass('line-clamp-2');
+    // The gallery no longer adds a frame, so the fallback owns one too.
+    expect(screen.getByRole('article')).toHaveClass('rounded-lg', 'border', 'p-3');
+    expect(screen.getByRole('article')).not.toHaveClass('border-b');
   });
 
   it('draws no age in either meta row', () => {

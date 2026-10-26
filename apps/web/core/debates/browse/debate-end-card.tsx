@@ -6,7 +6,6 @@ import cx from 'classnames';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { ClaimResponders, ClaimSplitBar } from '~/core/claims/browse/claim-summary';
-import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -15,8 +14,8 @@ import { GeoImage } from '~/design-system/geo-image';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Text } from '~/design-system/text';
 
+import { DebateClaimControls } from './debate-claim-controls';
 import { DebateClaimTickerCard } from './debate-claim-ticker';
 import { Play } from './icons';
 import { PILL_ACTION_CLASS } from './pill-action';
@@ -116,26 +115,12 @@ export function DebateEndCard({
           {/* The claim's own control, publishing through the same path the claims panel does. The
               ready-to-debate faces stay out of the pills: the row above already shows who voted,
               and a second face stack meaning something else would read as the same people. */}
-          <div>
-            <PositionRow
-              positions={claimResponse.control.optimisticPositions}
-              responseKind={claimResponse.responseKind}
-              viewerPosition={claimResponse.control.viewerPosition}
-              onRespond={claimResponse.control.respond}
-              disabled={!claimResponse.control.canRespond}
-              pending={claimResponse.control.isResponseSubmitting}
-              titleFor={claimResponse.control.actionTitle}
-              localSide={claimResponse.control.localVoteSide}
-              showParticipants={false}
-            />
-            {claimResponse.control.responseError ? (
-              <div role="alert" className="mt-1.5">
-                <Text as="p" variant="footnote" color="red-01">
-                  {claimResponse.control.responseError}
-                </Text>
-              </div>
-            ) : null}
-          </div>
+          <DebateClaimControls
+            claimId={card.claimId}
+            spaceId={card.spaceId}
+            response={claimResponse}
+            showParticipants={false}
+          />
         </div>
 
         {/* The claims first, then the way onward: the next debate closes the card. */}
