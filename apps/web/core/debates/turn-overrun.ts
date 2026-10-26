@@ -113,7 +113,9 @@ export function useTurnOverrun({
   const phaseRef = React.useRef<'idle' | 'waiting' | 'running'>('idle');
   const endedAtRef = React.useRef(0);
   // When they last made a sound, as far as the gate can tell: it closes `GATE_CLOSE_DELAY_MS` into a
-  // pause, so the pause began that long before. Only read while the gate is closed.
+  // pause, so the pause began that long before. Only read while the gate is closed. It can be stale:
+  // a track swap or `listening` dropping resets the gate without a close report. A stale value only
+  // ever reads as an old pause, which falls back to the clean cut from before GEO-3470.
   const lastSoundAtRef = React.useRef(Number.NEGATIVE_INFINITY);
   const yieldedRef = React.useRef(yielded);
   yieldedRef.current = yielded;
