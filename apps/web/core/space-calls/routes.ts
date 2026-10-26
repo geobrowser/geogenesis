@@ -8,6 +8,11 @@ export function spaceCallsTabPath(spaceId: string) {
   return `/space/${spaceId}/calls`;
 }
 
+/** A call series' schedule form; one-offs included, as each is a Community Call entity too. */
+export function spaceCallSeriesEditPath(spaceId: string, seriesId: string) {
+  return `/space/${spaceId}/community/${seriesId}/edit`;
+}
+
 /** `/space/{id}/calls/{callId}` and anything under it. */
 export function isSpaceCallPath(pathname: string): boolean {
   const segments = pathname.split(/[?#]/, 1)[0].split('/').filter(Boolean);

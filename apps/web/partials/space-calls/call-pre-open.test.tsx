@@ -6,9 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DebateLobbyCallDetails } from '~/core/debates/api';
 import type { LobbyPageView } from '~/core/debates/lobbies/lobby-view';
 
-const mocks = vi.hoisted(() => ({ remind: [] as unknown[], flag: true }));
+const mocks = vi.hoisted(() => ({ remind: [] as unknown[], flag: true, editor: false }));
 
 vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.flag }));
+vi.mock('~/core/hooks/use-access-control', () => ({ useAccessControl: () => ({ isEditor: mocks.editor }) }));
 vi.mock('~/core/space-calls/series/hooks', () => ({ useSaveCallAgenda: () => ({ mutateAsync: vi.fn() }) }));
 vi.mock('./call-remind', () => ({
   CallRemind: (props: unknown) => {
@@ -23,6 +24,7 @@ afterEach(() => {
   cleanup();
   mocks.remind = [];
   mocks.flag = true;
+  mocks.editor = false;
 });
 
 const series = {
@@ -94,5 +96,19 @@ describe('CallPreOpen', () => {
   it('reads a signed-out guest view, and gives a one-off no series reminder', () => {
     render(<CallPreOpen lobby={lobby({ series: { ...series, one_off: true }, agenda: null, viewer: null })} />);
     expect(mocks.remind[0]).toMatchObject({ seriesId: null, call: false, series: false });
+  });
+
+  it('links editors to the schedule form, one-offs included', () => {
+    const edit = () => screen.queryByRole('link', { name: 'Edit schedule' });
+    const { rerender } = render(<CallPreOpen lobby={lobby({ series, agenda: null })} />);
+    expect(edit()).not.toBeInTheDocument();
+
+    mocks.editor = true;
+    rerender(<CallPreOpen lobby={lobby({ series: { ...series, one_off: true }, agenda: null })} />);
+    expect(edit()).toHaveAttribute('href', '/space/space1/community/series1/edit');
+
+    mocks.flag = false;
+    rerender(<CallPreOpen lobby={lobby({ series, agenda: null })} />);
+    expect(edit()).not.toBeInTheDocument();
   });
 });

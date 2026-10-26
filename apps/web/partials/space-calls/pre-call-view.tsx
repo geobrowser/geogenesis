@@ -22,6 +22,7 @@ export function PreCallView({
   opensLabel,
   remind,
   agenda,
+  editHref,
 }: {
   name: string;
   seriesName: string | null;
@@ -33,6 +34,8 @@ export function PreCallView({
   opensLabel: string;
   remind: React.ReactNode;
   agenda: React.ReactNode;
+  /** The series' schedule form, for editors. */
+  editHref?: string | null;
 }) {
   const date = callDateLabel(startsAt);
   const time = callTimeLabel(startsAt, endsAt);
@@ -56,9 +59,16 @@ export function PreCallView({
           </Text>
           {remind}
         </div>
-        <Text as="p" variant="footnote" color="grey-04">
-          {opensLabel}
-        </Text>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Text as="p" variant="footnote" color="grey-04">
+            {opensLabel}
+          </Text>
+          {editHref ? (
+            <Link href={editHref} className="text-footnote text-ctaPrimary hover:underline">
+              Edit schedule
+            </Link>
+          ) : null}
+        </div>
       </header>
       {agenda}
     </div>

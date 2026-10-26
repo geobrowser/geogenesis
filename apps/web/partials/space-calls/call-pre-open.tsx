@@ -5,7 +5,8 @@ import * as React from 'react';
 import { notYetOpenLabel } from '~/core/debates/lobbies/lobby-format';
 import type { LobbyPageView } from '~/core/debates/lobbies/lobby-view';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
-import { spaceCallsTabPath } from '~/core/space-calls/routes';
+import { useAccessControl } from '~/core/hooks/use-access-control';
+import { spaceCallSeriesEditPath, spaceCallsTabPath } from '~/core/space-calls/routes';
 import { agendaConflictBase, agendaErrorMessage } from '~/core/space-calls/series/call-errors';
 import { useSaveCallAgenda } from '~/core/space-calls/series/hooks';
 import { useFeatureFlag } from '~/core/state/feature-flags';
@@ -26,6 +27,7 @@ export function CallPreOpen({ lobby }: { lobby: LobbyPageView }) {
   const callSeries = useFeatureFlag('callSeries');
   const now = useMinuteNow();
   const saveAgenda = useSaveCallAgenda(lobby.lobby_id);
+  const { isEditor } = useAccessControl(call?.space_id ?? '');
   if (!call) return null;
 
   const series = call.series ?? null;
@@ -42,6 +44,7 @@ export function CallPreOpen({ lobby }: { lobby: LobbyPageView }) {
       spaceName={call.space_name}
       exitHref={callSeries ? spaceCallsTabPath(call.space_id) : NavUtils.toSpace(call.space_id)}
       opensLabel={notYetOpenLabel(lobby, now)}
+      editHref={callSeries && isEditor && series ? spaceCallSeriesEditPath(call.space_id, series.series_id) : null}
       remind={
         <CallRemind
           spaceId={call.space_id}
