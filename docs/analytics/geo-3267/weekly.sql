@@ -86,7 +86,7 @@ excluded_accounts AS (
   FROM events
   WHERE event_name = 'share_link_handoff' AND match(outbound_share, '^[a-f0-9]{32}$')
     AND outbound_share NOT IN (SELECT outbound_share FROM excluded_shares)
-    AND method IN ('copy_link', 'x', 'linkedin', 'reddit')
+    AND method IN ('copy_link', 'x', 'linkedin', 'reddit', 'native_share')
     AND handoff_kind IN ('copied', 'composer_requested')
     AND share_content_type IN ('debate', 'lobby', 'availability')
     AND match(share_content_id, '^[a-f0-9]{32}$')
@@ -133,7 +133,7 @@ excluded_accounts AS (
     if(matched AND h.metadata.5 IN ('debater', 'other', 'anonymous', 'unknown'), h.metadata.5, 'unknown') AS sharer_role
   FROM parsed_landings l LEFT JOIN handoffs h ON l.share_id = h.share_id
     LEFT JOIN session_accounts s ON h.metadata.6 = s.visitor AND h.metadata.8 = s.session
-  WHERE medium = 'share' AND campaign = 'geo_share' AND channel IN ('copy_link', 'x', 'linkedin', 'reddit')
+  WHERE medium = 'share' AND campaign = 'geo_share' AND channel IN ('copy_link', 'x', 'linkedin', 'reddit', 'native_share')
     AND length(content) <= 100 AND length(parts) = 4 AND parts[1] = 'v1'
     AND content_type IN ('debate', 'lobby', 'availability')
     AND match(content_id, '^[a-f0-9]{32}$') AND match(l.share_id, '^[a-f0-9]{32}$')
