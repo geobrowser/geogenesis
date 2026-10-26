@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
 import { DEFAULT_EXPLORE_TYPE_IDS } from '~/core/explore/explore-constants';
 import { type ExploreTopicFacet, fetchExploreTopicFacets } from '~/core/explore/explore-topic-facets';
+import { parseExploreTopicIds } from '~/core/explore/explore-topic-ids';
 import { sanitizeExploreTypeIds } from '~/core/explore/explore-type-filter';
 import { narrowExploreSpaceFilter } from '~/core/explore/narrow-explore-space-filter';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
@@ -70,7 +71,7 @@ export async function POST(request: Request) {
     fixedParams?: Record<string, unknown>;
   } | null;
 
-  const selectedTopicIds = parseIds(body?.selectedTopicIds);
+  const selectedTopicIds = parseExploreTopicIds(body?.selectedTopicIds);
   const typeIds = parseTypeIds(body?.typeIds);
 
   const tickedSpaceIds = parseIds(body?.spaceIds);

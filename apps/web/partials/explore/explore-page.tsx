@@ -6,6 +6,7 @@ import { useAtomValue } from 'jotai';
 
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
 import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
+import { MAX_EXPLORE_TOPIC_SELECTIONS } from '~/core/explore/explore-topic-ids';
 import { useAwaitedSmartAccount } from '~/core/hooks/use-awaited-smart-account';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useFollowedTopics } from '~/core/topics/use-followed-topics';
@@ -32,6 +33,7 @@ const EXPLORE_FEED_PROPS = {
   showTopicFilter: true,
   // Exact topic counts from gaia's ranking table, so the dropdown number agrees with the feed.
   topicFacetEndpoint: '/api/explore/topic-facets',
+  maxTopicSelections: MAX_EXPLORE_TOPIC_SELECTIONS,
   typeOptions: EXPLORE_ENTITY_TYPES,
   initialTypeIds: DEFAULT_EXPLORE_TYPE_IDS,
   compactHeader: true,

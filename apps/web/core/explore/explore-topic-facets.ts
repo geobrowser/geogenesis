@@ -103,23 +103,28 @@ async function fetchExactCounts({
   signal?: AbortSignal;
 }): Promise<Map<string, number>> {
   const aliasOf = (index: number) => `c${index}`;
+  const topicVarOf = (index: number) => `t${index}`;
+  const topicVarDeclarations = candidates.map((_, index) => `$${topicVarOf(index)}: [UUID!]`).join(', ');
   const body = candidates
-    .map((candidate, index) => {
-      const topicIds = [...selectedTopicIds, candidate];
-      const topicIdsLiteral = JSON.stringify(topicIds);
-      return `  ${aliasOf(index)}: topicFeedTypeCounts(topicIds: ${topicIdsLiteral}, typeIds: $typeIds, spaceIds: $spaceIds, debateTaggedClaims: $debateTaggedClaims, matchAll: true) { typeId entityCount }`;
-    })
+    .map(
+      (_, index) =>
+        `  ${aliasOf(index)}: topicFeedTypeCounts(topicIds: $${topicVarOf(index)}, typeIds: $typeIds, spaceIds: $spaceIds, debateTaggedClaims: $debateTaggedClaims, matchAll: true) { typeId entityCount }`
+    )
     .join('\n');
 
   const document = parse(
-    `query ExploreTopicFacetCounts($typeIds: [UUID!], $spaceIds: [UUID!], $debateTaggedClaims: Boolean) {\n${body}\n}`
-  ) as TypedDocumentNode<AliasedCountsResult, { typeIds: string[]; spaceIds: string[]; debateTaggedClaims: boolean }>;
+    `query ExploreTopicFacetCounts($typeIds: [UUID!], $spaceIds: [UUID!], $debateTaggedClaims: Boolean, ${topicVarDeclarations}) {\n${body}\n}`
+  ) as TypedDocumentNode<AliasedCountsResult, Record<string, unknown>>;
+
+  const topicVariables = Object.fromEntries(
+    candidates.map((candidate, index) => [topicVarOf(index), [...selectedTopicIds, candidate]])
+  );
 
   const data = await Effect.runPromise(
     graphql({
       query: document,
       decoder: (result: AliasedCountsResult) => result,
-      variables: { typeIds: [...typeIds], spaceIds, debateTaggedClaims: requireDebateTagOnClaims },
+      variables: { typeIds: [...typeIds], spaceIds, debateTaggedClaims: requireDebateTagOnClaims, ...topicVariables },
       signal,
     })
   );

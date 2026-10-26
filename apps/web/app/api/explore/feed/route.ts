@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { PUBLIC_FEED_PARAM, parseExplorePageSort, parseExploreTime } from '~/core/explore/explore-feed-params';
 import { EXPLORE_FEED_POLICY } from '~/core/explore/explore-feed-policy';
+import { parseExploreTopicIds } from '~/core/explore/explore-topic-ids';
 import { parseExploreTypeIdsParam } from '~/core/explore/explore-type-filter';
 import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
 import { type ExploreSort, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
@@ -133,8 +134,7 @@ async function buildFeedResponse(request: Request, searchParams: URLSearchParams
   const spaceIdsParam = searchParams.get('spaceIds') ?? searchParams.get('spaceId');
   const cursor = searchParams.get('cursor');
   const typeIds = parseExploreTypeIdsParam(searchParams.get('typeIds'));
-  const topicIdsParam = searchParams.get('topicIds');
-  const topicIds = topicIdsParam ? topicIdsParam.split(',').map(normId).filter(Boolean) : [];
+  const topicIds = parseExploreTopicIds(searchParams.get('topicIds'));
 
   if (typeIds.length === 0) {
     return NextResponse.json({ items: [], nextCursor: null });
