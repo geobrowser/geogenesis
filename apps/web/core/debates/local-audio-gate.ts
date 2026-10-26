@@ -11,7 +11,7 @@ import type { OpenRoundsRoomPhase } from './open-rounds';
  * from that instant rather than room tone.
  *
  * This is only the ceiling. The microphone normally closes as soon as the speaker actually stops,
- * which the noise gate in `speech-activity` decides from their own signal — a fixed window is
+ * which `useTurnOverrun` decides from their own signal (a pause of `OVERRUN_PAUSE_HOLD_MS`) — a fixed window is
  * wrong for every sentence of a different length, which is why the first version of this was too
  * short for some and needlessly long for others. The cap can be this generous *because* silence
  * closes it early; it exists only so a fan, a sustained cough or a noisy room cannot hold a
@@ -39,10 +39,10 @@ export type LocalAudioGateInput = {
   /** Milliseconds since this participant's turn ended, or null if they were not the last speaker. */
   msSinceTurnEnded: number | null;
   /**
-   * Whether this participant's own microphone still reads as speech, per `speech-activity`.
+   * Whether this participant is still talking past the buzzer, per `useTurnOverrun`.
    *
-   * What actually ends the overrun. The gate's close delay already absorbs the pause between
-   * clauses, so by the time this goes false the sentence really is over.
+   * What actually ends the overrun. It holds through a pause between clauses, up to
+   * `OVERRUN_PAUSE_HOLD_MS`, so by the time this goes false the sentence really is over (GEO-3470).
    */
   stillSpeaking: boolean;
   /** Milliseconds until this participant's turn opens, or null if it is not next. */

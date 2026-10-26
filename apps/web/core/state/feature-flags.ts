@@ -70,6 +70,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'callRecording',
+    label: 'Call recording',
+    description:
+      'Record space calls, play them back on the ended call’s page and show published ones on Explore (GEO-3421). Needs geo-chat with call recording.',
+    enabledByDefault: false,
+  },
+  {
     id: 'googleSignIn',
     label: 'Google sign-in',
     description:

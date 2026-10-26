@@ -24,7 +24,7 @@ const hls = vi.hoisted(() => {
   }> = [];
   class FakeHls {
     static isSupported = vi.fn(() => true);
-    static Events = { ERROR: 'hlsError' };
+    static Events = { ERROR: 'hlsError', MEDIA_ATTACHED: 'hlsMediaAttached' };
     config: { autoStartLoad?: boolean; maxMaxBufferLength?: number };
     loadSource = vi.fn();
     attachMedia = vi.fn();
@@ -191,6 +191,25 @@ describe('attaching a Stream source', () => {
     await Promise.resolve();
 
     expect(hls.instances).toHaveLength(0);
+  });
+
+  it('plays only once asked to, and on hls.js only after the media is attached', async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    const native = document.createElement('video');
+    attachStreamSource(native, MANIFEST, { nativeHls: true });
+    expect(play).not.toHaveBeenCalled();
+    attachStreamSource(native, MANIFEST, { nativeHls: true, playOnAttach: true });
+    expect(play).toHaveBeenCalledTimes(1);
+
+    play.mockClear();
+    const video = document.createElement('video');
+    attachStreamSource(video, MANIFEST, { nativeHls: false, playOnAttach: true });
+    await vi.waitFor(() => expect(hls.instances).toHaveLength(1));
+    expect(hls.instances[0].attachMedia).toHaveBeenCalledWith(video);
+    expect(play).not.toHaveBeenCalled();
+    hls.instances[0].handlers.get('hlsMediaAttached')?.('hlsMediaAttached', { fatal: false });
+    expect(play).toHaveBeenCalledTimes(1);
+    play.mockRestore();
   });
 
   it('falls back to the manifest as src where there is no Media Source', async () => {
