@@ -16,8 +16,10 @@ export function parseSpaceCallPatch(value: unknown): SpaceCallPatch | null {
   return { status, as_of, call: row as SpaceCallSummary };
 }
 
-/** `a` is later than `b`. Stamps carry microseconds, past what `Date.parse` keeps. */
-function later(a: string, b: string) {
+/** `a` is later than `b`, or `b` is unset. Stamps carry microseconds, past what `Date.parse` keeps. */
+function later(a: string | null, b: string | null) {
+  if (b === null) return a !== null;
+  if (a === null) return false;
   const at = Date.parse(a);
   const bt = Date.parse(b);
   if (Number.isNaN(at) || Number.isNaN(bt) || at === bt) return a > b;

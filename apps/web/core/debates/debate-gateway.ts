@@ -631,6 +631,8 @@ export class DebateGatewayClient {
         const patch = parseSpaceCallPatch(identifiers.space_call);
         if (!patch || patch.status !== 'live') {
           this.queueQuery(listKey);
+          // A call's own change, such as its agenda (GEO-3420): its page refetches too.
+          if (!patch && identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
           break;
         }
         this.queryClient.setQueriesData<SpaceCallsResponse>({ queryKey: listKey }, list =>

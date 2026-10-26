@@ -3,6 +3,11 @@ export function spaceCallPath(spaceId: string, callId: string) {
   return `/space/${spaceId}/calls/${callId}`;
 }
 
+/** A space's Calls tab (GEO-3420). */
+export function spaceCallsTabPath(spaceId: string) {
+  return `/space/${spaceId}/calls`;
+}
+
 /** `/space/{id}/calls/{callId}` and anything under it. */
 export function isSpaceCallPath(pathname: string): boolean {
   const segments = pathname.split(/[?#]/, 1)[0].split('/').filter(Boolean);

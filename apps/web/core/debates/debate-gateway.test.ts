@@ -781,6 +781,38 @@ describe('DebateGatewayClient', () => {
     });
   });
 
+  describe('space calls changed', () => {
+    async function spaceCallsChanged(payload: Record<string, unknown>) {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+      sockets[0]!.receive('EVENT', { event_id: 'calls-1', event_type: 'debate.space_calls_changed', payload });
+      await flushInvalidations();
+    }
+
+    it('refetches the list, and the call it names (GEO-3420)', async () => {
+      await spaceCallsChanged({ space_id: 'SP-1', lobby_id: 'AB-CD' });
+      expectInvalidated(invalidateQueries, { queryKey: ['debates', 'space-calls', 'sp1'], refetchType: 'active' });
+      expectInvalidated(invalidateQueries, {
+        queryKey: ['debates', 'account', 'user-a', 'lobby', 'abcd'],
+        refetchType: 'active',
+      });
+    });
+
+    it('refetches only the list when no call is named', async () => {
+      await spaceCallsChanged({ space_id: 'sp1' });
+      expect(invalidateQueries.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+        { queryKey: ['debates', 'space-calls', 'sp1'], refetchType: 'active' },
+      ]);
+    });
+  });
+
   describe('lobby claim lists', () => {
     const lobbyKey = ['debates', 'account', 'user-a', 'lobby', 'abcd'];
     const list = (entityId: string, position: number) => ({

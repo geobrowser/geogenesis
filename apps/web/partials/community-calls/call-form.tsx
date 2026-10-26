@@ -19,8 +19,12 @@ import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identi
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
+import { ID } from '~/core/id';
 import { getRelationsByFromEntityId } from '~/core/io/queries';
+import { spaceCallsTabPath } from '~/core/space-calls/routes';
+import { useAfterSeriesPublish } from '~/core/space-calls/series/after-publish';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { parseSchedule, serializeSchedule, tzAbbreviation, validateSchedule } from '~/core/utils/schedule';
 
 import { Button } from '~/design-system/button';
@@ -102,7 +106,15 @@ export function CallForm(props: Props) {
   // `zd_sponsorUserOperation` calldata. That is after the edit has already been published to
   // IPFS, so the wasted round trip is real and the error is unreadable.
   const { isEditor, isLoading: accessLoading } = useAccessControl(spaceId);
-  const backHref = `/space/${spaceId}/community`;
+  // With call series on, the form returns to the Calls tab and says where the call landed (GEO-3420).
+  const callSeries = useFeatureFlag('callSeries');
+  const backHref = callSeries ? spaceCallsTabPath(spaceId) : `/space/${spaceId}/community`;
+
+  const afterSeriesPublish = useAfterSeriesPublish(spaceId);
+
+  /** The Calls tab once the publish confirms; the proposal may still be waiting on governance. */
+  const doneHref = async (seriesId: string, proposalId: string | undefined, schedule: string) =>
+    callSeries && proposalId ? afterSeriesPublish({ seriesId, proposalId, schedule }) : backHref;
 
   const buildSchedule = () => {
     const freq = repeat === 'none' ? '' : repeat === 'BIWEEKLY' ? 'WEEKLY' : repeat;
@@ -118,6 +130,8 @@ export function CallForm(props: Props) {
     if (!validation.valid) return setToast(<>{validation.errors[0]}</>);
 
     setSubmitting(true);
+    // Named up front, so the chain can be asked afterwards whether it executed.
+    const proposalId = callSeries ? ID.createEntityId() : undefined;
 
     if (props.mode === 'edit') {
       const { callId } = props;
@@ -136,6 +150,7 @@ export function CallForm(props: Props) {
         relations,
         spaceId,
         name: `Update ${name}`,
+        proposalId,
         onSuccess: async () => {
           // Resend the calendar invites, but not from here: curator-backend reads the new time
           // back out of the indexer, and `onSuccess` only means the user operation was
@@ -161,7 +176,7 @@ export function CallForm(props: Props) {
             const token = await getToken();
             if (token) await reconcileAutoPublish({ spaceId, callId }, token).catch(() => {});
           }
-          router.push(backHref);
+          router.push(await doneHref(callId, proposalId, schedule));
         },
         onError: () => setSubmitting(false),
       });
@@ -181,12 +196,13 @@ export function CallForm(props: Props) {
       relations,
       spaceId,
       name: `Schedule ${name}`,
+      proposalId,
       onSuccess: async () => {
         if (autoPublishAhead > 0) {
           const token = await getToken();
           if (token) await reconcileAutoPublish({ spaceId, callId: entityId }, token).catch(() => {});
         }
-        router.push(backHref);
+        router.push(await doneHref(entityId, proposalId, schedule));
       },
       onError: () => setSubmitting(false),
     });
@@ -205,7 +221,7 @@ export function CallForm(props: Props) {
         </p>
         <div className="flex justify-start">
           <Button variant="secondary" onClick={() => router.push(backHref)}>
-            Back to community
+            {callSeries ? 'Back to calls' : 'Back to community'}
           </Button>
         </div>
       </div>

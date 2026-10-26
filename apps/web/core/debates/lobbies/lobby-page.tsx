@@ -15,6 +15,8 @@ import { Avatar } from '~/design-system/avatar';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
+import { CallPreOpen } from '~/partials/space-calls/call-pre-open';
+
 import type { DebateLobbyView } from '../api';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
@@ -256,7 +258,7 @@ function LobbyAccess({
         />
       );
     case 'not_yet_open':
-      return <NotYetOpen lobby={lobby} />;
+      return purpose.purpose === 'call' ? <CallPreOpen lobby={lobby} /> : <NotYetOpen lobby={lobby} />;
     case 'admitted':
       if (guest && guestSession.state.status === 'removed') {
         return (

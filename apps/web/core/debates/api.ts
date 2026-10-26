@@ -2866,6 +2866,16 @@ export type DebateLobbyCallDetails = {
   started_by: DebateLobbyPerson | null;
   /** GEO-3421; the same for every viewer. Absent from geo-chat without recording. */
   recording?: CallRecordingState | null;
+  /** GEO-3420; absent from a geo-chat that predates scheduled calls. */
+  status?: 'scheduled' | 'live' | 'cancelled' | 'ended';
+  /** `null` for a call started on the spot. */
+  ends_at?: string | null;
+  /** `null` for a call started on the spot. */
+  series?: DebateCallSeries | null;
+  /** `null` until a host writes one; the series description stands in meanwhile. */
+  agenda?: DebateCallAgenda | null;
+  /** `null` in the guest view. Reminded about the call if either reminder is set. */
+  viewer?: { can_edit_agenda: boolean; reminded: boolean; series_reminded: boolean } | null;
 };
 
 export type CallRecordingStatus = 'off' | 'recording' | 'processing' | 'ready' | 'failed';
@@ -2885,6 +2895,24 @@ export type CallRecordingState = {
   published: boolean;
   /** Set once `ready`. */
   duration_seconds: number | null;
+};
+
+/** A space's call series: a Community Call entity on the graph (GEO-3420). */
+export type DebateCallSeries = {
+  /** The graph entity id, 32 hex. */
+  series_id: string;
+  name: string;
+  /** The series' graph description: the read-only default agenda. */
+  description: string | null;
+  schedule: string;
+  one_off: boolean;
+};
+
+export type DebateCallAgenda = {
+  body: string;
+  /** Sent back as `base_updated_at`, so two hosts cannot overwrite each other. */
+  updated_at: string;
+  updated_by: DebateLobbyPerson | null;
 };
 
 export type DebateLobbySummary = {

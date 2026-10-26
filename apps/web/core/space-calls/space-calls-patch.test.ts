@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { SpaceCallSummary, SpaceCallsResponse } from './api';
 import { parseSpaceCallPatch, withSpaceCallPatch } from './space-calls-patch';
 
-function row(extra: Partial<SpaceCallSummary> = {}): SpaceCallSummary {
+function row(extra: Partial<SpaceCallSummary> & { as_of?: string } = {}): SpaceCallSummary & { as_of: string } {
   return {
     call_id: 'call1',
     name: 'Community call',
@@ -49,5 +49,13 @@ describe('withSpaceCallPatch', () => {
     const dashed = { ...list, calls: [row({ call_id: 'CALL-1' })] };
     const newer = row({ call_id: 'call1', headcount: 9, as_of: '2026-10-23T16:00:00Z' });
     expect(withSpaceCallPatch(dashed, { status: 'live', as_of: newer.as_of, call: newer }).calls[0]?.headcount).toBe(9);
+  });
+
+  it('patches a scheduled row never broadcast (GEO-3420)', () => {
+    const scheduled = { ...list, calls: [{ ...row(), status: 'scheduled', as_of: null }] };
+    const opened = row({ status: 'live', as_of: '2026-10-23T16:00:00Z' });
+    expect(withSpaceCallPatch(scheduled, { status: 'live', as_of: opened.as_of, call: opened }).calls).toEqual([
+      opened,
+    ]);
   });
 });

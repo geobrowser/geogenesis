@@ -8,8 +8,10 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { ID } from '~/core/id';
 import { profileDebateNavigationCount } from '~/core/profile/profile-debate-visibility';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
+import { useSpaceCalls } from '~/core/space-calls/hooks';
+import { spaceCallsTabPath } from '~/core/space-calls/routes';
 import { useEditable } from '~/core/state/editable-store';
-import { useDebugDebatesPageEnabled } from '~/core/state/feature-flags';
+import { useDebugDebatesPageEnabled, useFeatureFlag } from '~/core/state/feature-flags';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { TabEntity } from '~/core/types';
 import { Relation } from '~/core/types';
@@ -275,6 +277,7 @@ export function SpaceTabs({
 }: SpaceTabsProps) {
   const { editable } = useEditable();
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
+  const isCallSeriesEnabled = useFeatureFlag('callSeries');
   const { personalSpaceId } = usePersonalSpaceId();
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
@@ -320,6 +323,11 @@ export function SpaceTabs({
   const leadingTabs = leadingSpaceTabs(spaceId, overviewHref, isTopicSpace);
   const systemTabsBefore: SystemTab[] = [...leadingTabs];
   if (showCommunity) systemTabsBefore.push({ label: 'Community', href: `/space/${spaceId}/community` });
+  // Calls follow Community (GEO-3420), except where geo-chat says the space has none (a personal one).
+  const callsQuery = useSpaceCalls(spaceId, showCommunity && isCallSeriesEnabled);
+  const showCalls = showCommunity && isCallSeriesEnabled && callsQuery.data?.supported !== false;
+  const callsTab = showCalls ? [{ label: 'Calls', href: spaceCallsTabPath(spaceId) }] : [];
+  systemTabsBefore.push(...callsTab);
 
   const systemTabsAfter: SystemTab[] = [];
 
@@ -411,6 +419,7 @@ export function SpaceTabs({
     ? [
         ...baseTabs.slice(0, leadingTabs.length),
         { label: 'Community', href: `/space/${spaceId}/community`, priority: 1 as const },
+        ...callsTab.map(tab => ({ ...tab, priority: 1 as const })),
         ...baseTabs.slice(leadingTabs.length),
       ]
     : baseTabs;

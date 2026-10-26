@@ -77,6 +77,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'callSeries',
+    label: 'Call series',
+    description:
+      'A Calls tab on every DAO space, scheduled calls and series with an agenda and reminders (GEO-3420). Needs Space calls on and geo-chat with call series.',
+    enabledByDefault: false,
+  },
+  {
     id: 'googleSignIn',
     label: 'Google sign-in',
     description:
