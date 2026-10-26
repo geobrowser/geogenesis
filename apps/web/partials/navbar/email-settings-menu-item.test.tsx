@@ -23,6 +23,7 @@ const { EmailSettingsMenuItem } = await import('./email-settings-menu-item');
 
 const allOn: EmailGroupSettings = {
   invites: true,
+  community_calls: true,
   your_debates: true,
   replies: true,
   digest: true,
@@ -51,7 +52,7 @@ describe('EmailSettingsMenuItem', () => {
     const onOpen = vi.fn();
     render(<EmailSettingsMenuItem onOpen={onOpen} />);
 
-    expect(row()).toHaveTextContent('4 of 5 on');
+    expect(row()).toHaveTextContent('5 of 6 on');
     await userEvent.setup().click(row());
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
@@ -61,7 +62,7 @@ describe('EmailSettingsMenuItem', () => {
     render(<EmailSettingsMenuItem onOpen={() => {}} />);
 
     expect(row()).toHaveTextContent('Off');
-    expect(row()).not.toHaveTextContent('of 5');
+    expect(row()).not.toHaveTextContent('of 6');
   });
 
   it('says On before the service reports groups', () => {
@@ -83,6 +84,6 @@ describe('EmailSettingsMenuItem', () => {
     render(<EmailSettingsMenuItem onOpen={() => {}} />);
 
     expect(screen.getByText('No email on your account')).toBeInTheDocument();
-    expect(row()).not.toHaveTextContent('5 of 5 on');
+    expect(row()).not.toHaveTextContent('6 of 6 on');
   });
 });

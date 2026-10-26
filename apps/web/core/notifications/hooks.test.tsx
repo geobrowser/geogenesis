@@ -38,7 +38,14 @@ vi.mock('./api', async importOriginal => ({
 
 const { useNotificationPreferences, useNotificationRegistration, useSaveEmailSwitch } = await import('./hooks');
 
-const allOn = { invites: true, your_debates: true, replies: true, digest: true, getting_started: true };
+const allOn = {
+  invites: true,
+  community_calls: true,
+  your_debates: true,
+  replies: true,
+  digest: true,
+  getting_started: true,
+};
 type Patch = { email_enabled?: boolean; email_groups?: Partial<typeof allOn> };
 let server: { in_app_enabled: boolean; email_enabled: boolean; email_groups: typeof allOn };
 

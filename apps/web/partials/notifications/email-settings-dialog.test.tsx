@@ -31,6 +31,7 @@ const { EmailSettingsDialog } = await import('./email-settings-dialog');
 
 const allOn: EmailGroupSettings = {
   invites: true,
+  community_calls: true,
   your_debates: true,
   replies: true,
   digest: true,
@@ -58,7 +59,7 @@ afterEach(() => cleanup());
 const toggle = (name: string) => screen.getByRole('switch', { name });
 
 describe('EmailSettingsDialog', () => {
-  it('shows where email goes, the all-email switch and the five groups, and records the open', () => {
+  it('shows where email goes, the all-email switch and the six groups, and records the open', () => {
     render(<EmailSettingsDialog entry="account_menu" onClose={() => {}} />);
 
     expect(screen.getByRole('dialog', { name: 'Email settings' })).toBeInTheDocument();
@@ -66,6 +67,7 @@ describe('EmailSettingsDialog', () => {
     expect(toggle('All Geo emails')).toHaveAttribute('aria-checked', 'true');
     for (const name of [
       'Debate invites and reminders',
+      'Community call reminders',
       'Your debates',
       'Replies',
       'Weekly digest',

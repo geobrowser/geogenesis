@@ -1,5 +1,5 @@
 /**
- * The five email groups a person can switch off one by one (GEO-3392), and their copy.
+ * The six email groups a person can switch off one by one (GEO-3392), and their copy.
  *
  * The ids are geo-notifications' (`src/delivery/email-groups.ts`, GEO-3372), which maps every email
  * kind to exactly one of them. The names and descriptions are the approved mockup's, word for word,
@@ -7,7 +7,14 @@
  * geo-notifications' own unsubscribe page says. The desktop dialog has a description per group, the
  * phone one a shorter one.
  */
-export const EMAIL_GROUPS = ['invites', 'your_debates', 'replies', 'digest', 'getting_started'] as const;
+export const EMAIL_GROUPS = [
+  'invites',
+  'community_calls',
+  'your_debates',
+  'replies',
+  'digest',
+  'getting_started',
+] as const;
 export type EmailGroup = (typeof EMAIL_GROUPS)[number];
 
 export type EmailGroupSettings = Record<EmailGroup, boolean>;
@@ -17,6 +24,11 @@ export const EMAIL_GROUP_COPY: Record<EmailGroup, { name: string; description: s
     name: 'Debate invites and reminders',
     description: 'Bookings, changes, cancellations and reminders before a debate.',
     shortDescription: 'Bookings, changes and reminders.',
+  },
+  community_calls: {
+    name: 'Community call reminders',
+    description: 'An email before a community call you asked to be reminded about.',
+    shortDescription: 'Before calls you asked about',
   },
   your_debates: {
     name: 'Your debates',
@@ -65,10 +77,16 @@ export function emailSettingsSummary(emailEnabled: boolean, groups: EmailGroupSe
  * whichever page serves it. The weekly digest's is the approved mockup's, word for word. `{email}` is
  * the masked address.
  */
-export const UNSUBSCRIBE_COPY: Record<
-  EmailGroup,
-  { askTitle: string; askBody: string; doneTitle: string; doneBody: string; undoneTitle: string; undoneBody: string }
-> = {
+type UnsubscribeCopy = {
+  askTitle: string;
+  askBody: string;
+  doneTitle: string;
+  doneBody: string;
+  undoneTitle: string;
+  undoneBody: string;
+};
+
+export const UNSUBSCRIBE_COPY: Record<EmailGroup, UnsubscribeCopy> = {
   digest: {
     askTitle: 'Unsubscribe from the weekly digest?',
     askBody:
@@ -115,7 +133,34 @@ export const UNSUBSCRIBE_COPY: Record<
     undoneTitle: 'Debate invites and reminders are back on',
     undoneBody: "We'll email you when someone books a debate with you.",
   },
+  community_calls: {
+    askTitle: 'Unsubscribe from community call reminders?',
+    askBody:
+      '{email} will stop getting an email before a community call you asked to be reminded about. Debate invites and reminders keep coming.',
+    doneTitle: "You're unsubscribed from community call reminders",
+    doneBody: "{email} won't get them anymore. You'll still get debate invites and reminders.",
+    undoneTitle: 'Community call reminders are back on',
+    undoneBody: "We'll email you before the next call you asked to be reminded about.",
+  },
 };
+
+/**
+ * A group this build does not know yet, named by the service: geo-notifications can ship a group
+ * before the web does, and its links must still open.
+ */
+export function unsubscribeCopy(group: string, groupName: string | null | undefined): UnsubscribeCopy {
+  const known = UNSUBSCRIBE_COPY[group as EmailGroup];
+  if (known) return known;
+  const name = groupName?.trim() || 'these emails';
+  return {
+    askTitle: `Unsubscribe from ${name}?`,
+    askBody: '{email} will stop getting these emails.',
+    doneTitle: `You're unsubscribed from ${name}`,
+    doneBody: "{email} won't get them anymore.",
+    undoneTitle: 'These emails are back on',
+    undoneBody: "We'll email you again.",
+  };
+}
 
 export const UNDO_EXPIRED_BODY =
   "This can't be undone from here anymore. You can turn it back on in your email settings.";
