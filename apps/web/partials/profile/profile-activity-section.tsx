@@ -110,31 +110,18 @@ export function ProfileActivitySection({
    */
   className?: string;
 }) {
-  // A failed kind is available: it has something to say, even if the something
-  // is that it could not be read.
-  const available = React.useMemo(() => kinds.filter(kind => kind.rows.length > 0 || kind.isError), [kinds]);
-  // Whether the card is still assembling. Read twice: the skeleton below waits on
-  // it, and so does the default — see `defaultKey`.
+  // Keep pending kinds in their declared order so the first response cannot choose the tab.
+  // Only a settled empty kind disappears; errors remain available for their message.
+  const available = React.useMemo(
+    () => kinds.filter(kind => kind.isLoading || kind.rows.length > 0 || kind.isError),
+    [kinds]
+  );
+  // Freeze the default once all kinds have settled; later refetches must not change it.
   const isLoading = kinds.some(kind => kind.isLoading);
 
-  /**
-   * The lead kind: the first that has a *settled* record to show.
-   *
-   * Settled, not merely non-empty, because the rows can arrive before their order
-   * does. `usePersonDebates` hands the profile its debates a round trip before
-   * `useEntityScores` says how to rank them, and the caller folds that second wait
-   * into `isLoading` precisely so a row about to reshuffle is not put up as though
-   * it were final. Preferring a settled kind here honours that.
-   *
-   * A preference, not a guarantee. Where nothing available has settled — one kind,
-   * rows in, ranks still out — the fallback puts it up unsettled, because the
-   * alternative is holding the card blank behind the slower request, which is the
-   * one thing the skeleton gate below is written not to do. That case paints once
-   * and reshuffles, exactly as it did before this change. Closing it means moving
-   * when the card first paints, which is the gate's decision to make and not this
-   * line's.
-   */
-  const lead = available.find(kind => !kind.isLoading) ?? available[0];
+  // Debates comes first on every shared surface. Its gallery waits for rows and ranking to
+  // settle, while the toggle keeps the same selection throughout that wait.
+  const lead = available[0];
 
   /** The reader's own pick, and only that. Null until they make one. */
   const [pickedKey, setPickedKey] = React.useState<string | null>(null);
@@ -188,10 +175,6 @@ export function ProfileActivitySection({
   // The gallery measures whether its row can scroll; the arrows live in the header, so it reports
   // up. Null while no gallery is mounted — a kind that failed to load has no row to step through.
   const [navigation, setNavigation] = React.useState<GalleryNavigation | null>(null);
-
-  // Reserve the section while its first usable record is on the way. Once either kind resolves,
-  // draw it immediately rather than holding the whole card behind the slower request.
-  if (available.length === 0 && isLoading) return <ProfileActivitySkeleton className={className} />;
 
   // Nothing at all once both kinds have settled empty. Most accounts have never been in a debate,
   // and a permanent heading over blank space would imply that content failed to render.
@@ -253,7 +236,11 @@ export function ProfileActivitySection({
                 <span className="relative -top-px">
                   {kind.label}
                   <span className={cx('ml-1.5 tabular-nums', isSelected ? 'text-white/70' : 'text-grey-03')}>
-                    {kind.isCountUnavailable ? '—' : kind.total.toLocaleString()}
+                    {kind.isCountUnavailable
+                      ? '—'
+                      : kind.isLoading && kind.total === 0
+                        ? '…'
+                        : kind.total.toLocaleString()}
                   </span>
                 </span>
               </button>
@@ -265,7 +252,7 @@ export function ProfileActivitySection({
            * full tab. Both belong to the selected kind — see `navigation`.
            */}
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            {selected.rows.length > 0 ? (
+            {selected.isLoading || selected.rows.length > 0 ? (
               // The data block galleries' own arrows (`table-pagination`), 12px apart as they are
               // there: dark when there is somewhere to go, grey at the row's end.
               <span className="mr-1 flex items-center gap-3">
@@ -277,7 +264,9 @@ export function ProfileActivitySection({
           </div>
         </header>
 
-        {selected.isError && selected.rows.length === 0 ? (
+        {selected.isLoading ? (
+          <ActivityGallerySkeleton />
+        ) : selected.isError && selected.rows.length === 0 ? (
           /*
            * No retry here on purpose. This card is a summary; the tab its count
            * links to holds the authoritative list and offers the retry, so a
@@ -315,15 +304,9 @@ export function ProfileActivitySection({
   );
 }
 
-function ProfileActivitySkeleton({ className }: { className?: string }) {
+function ActivityGallerySkeleton() {
   return (
-    <section aria-label="Loading activity" aria-busy="true" className={cx('flex flex-col', className)}>
-      {/* Drawn here too, so the heading is in the tree before the rows are, not only after. */}
-      <h3 className="sr-only">Activity</h3>
-      <header className="flex items-center gap-2 pb-3">
-        <Skeleton className="h-7 w-24 rounded-full" />
-        <Skeleton className="h-7 w-20 rounded-full" />
-      </header>
+    <div role="status" aria-label="Loading activity" aria-busy="true">
       {/*
        * `py-2`, the gallery scroller's own padding — and no footer under it. The real section has
        * had neither a bottom rule nor a centered "see all" since that control moved up into the
@@ -333,7 +316,7 @@ function ProfileActivitySkeleton({ className }: { className?: string }) {
       <div className="py-2">
         <Skeleton className="h-44 w-full rounded-lg" />
       </div>
-    </section>
+    </div>
   );
 }
 
