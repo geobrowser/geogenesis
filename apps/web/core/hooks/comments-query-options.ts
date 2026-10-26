@@ -6,10 +6,8 @@ import { commentsFetchedQueryKey } from '~/core/io/query-keys';
 import type { CommentEntity } from '~/partials/comments/types';
 
 /**
- * The comment list query, shared by every observer of `['comments', id]`. The query runs with the options
- * of whichever observer rendered last, so an observer without this `queryFn` could leave a refetch with
- * nothing to call. Its own module so suites that mock
- * `use-comments` can still render a count.
+ * Every observer of `['comments', id]` must carry this `queryFn`: a refetch uses the options of whichever
+ * observer rendered last. Kept out of `use-comments` so suites mocking it can still render a count.
  */
 export function commentsQueryOptions(queryClient: QueryClient, entityId: string) {
   return queryOptions({

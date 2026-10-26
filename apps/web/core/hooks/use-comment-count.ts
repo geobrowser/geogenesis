@@ -84,8 +84,8 @@ export function useCommentCount(
   const { data, dataUpdatedAt } = useQuery({
     // A cache subscription, not a second reader of the list — `useComments` owns the fetching, and
     // this hook is rendered on surfaces (cards, feed rows) where fetching every count would be a
-    // request per row for a number. It still carries the list's `queryFn` rather than none or
-    // `skipToken`: an invalidation refetches with the options of whichever observer rendered last.
+    // request per row for a number. Carries the list's `queryFn` so a refetch works whichever
+    // observer rendered last.
     ...commentsQueryOptions(queryClient, entityId),
     enabled: false,
   });
