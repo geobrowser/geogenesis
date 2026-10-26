@@ -24,12 +24,16 @@ export type SearchFilterTag = { id: string; name: string | null };
 
 export type FacetScope = { mode: 'global'; includeNonCanonical: boolean } | { mode: 'space'; spaceId: string };
 
-function facetSearchScope(scope: FacetScope): { includeNonCanonical?: boolean; filterBySpace?: string } {
+function facetSearchScope(scope: FacetScope): {
+  includeNonCanonical?: boolean;
+  filterBySpace?: string;
+  alsoSearchSpaceIds?: string[];
+} {
   switch (scope.mode) {
     case 'global':
       return { includeNonCanonical: scope.includeNonCanonical };
     case 'space':
-      return { filterBySpace: scope.spaceId, includeNonCanonical: true };
+      return { includeNonCanonical: false, alsoSearchSpaceIds: [scope.spaceId] };
   }
 }
 
