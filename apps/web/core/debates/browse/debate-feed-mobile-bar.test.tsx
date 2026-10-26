@@ -5,8 +5,9 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { MobileNavbarActions } from '~/partials/navbar/mobile-navbar-actions';
+
 import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
-import { DebateFeedMobileBarActions } from './debate-feed-mobile-bar-actions';
 
 const mocks = vi.hoisted(() => ({ authenticated: false, isPhone: true }));
 
@@ -22,7 +23,7 @@ vi.mock('~/partials/navbar/navbar-actions', () => ({
     <div data-testid="account" data-compact={String(compact)} data-sign-in-component={signInComponent} />
   ),
 }));
-vi.mock('../matchmaking/debates-hub-button', () => ({
+vi.mock('~/core/debates/matchmaking/debates-hub-button', () => ({
   DebatesHubButton: ({ compact }: { compact?: boolean }) => (
     <button type="button" data-compact={String(compact)}>
       Debate
@@ -74,9 +75,9 @@ describe('DebateFeedMobileBar', () => {
   });
 });
 
-describe('DebateFeedMobileBarActions', () => {
+describe('MobileNavbarActions', () => {
   it('is Log in alone while signed out', () => {
-    render(<DebateFeedMobileBarActions />);
+    render(<MobileNavbarActions signInComponent="debate_feed_bar" />);
 
     expect(screen.getByTestId('account')).toHaveAttribute('data-compact', 'true');
     expect(screen.getByTestId('account')).toHaveAttribute('data-sign-in-component', 'debate_feed_bar');
@@ -85,7 +86,7 @@ describe('DebateFeedMobileBarActions', () => {
 
   it('adds the compact Debate button once signed in', () => {
     mocks.authenticated = true;
-    render(<DebateFeedMobileBarActions />);
+    render(<MobileNavbarActions signInComponent="debate_feed_bar" />);
 
     expect(screen.getByRole('button', { name: 'Debate' })).toHaveAttribute('data-compact', 'true');
     expect(screen.getByTestId('account')).toHaveAttribute('data-compact', 'true');

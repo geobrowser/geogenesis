@@ -8,6 +8,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Navbar } from './navbar';
 
+const mocks = vi.hoisted(() => ({ pathname: '/space/space-1', isPhone: false }));
+
+vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPhone }));
+vi.mock('./mobile-navbar-actions', () => ({
+  MobileNavbarActions: ({ signInComponent }: { signInComponent: string }) => (
+    <div data-testid="mobile-actions" data-sign-in-component={signInComponent} />
+  ),
+}));
+
 vi.mock('~/design-system/client-only', () => ({
   ClientOnly: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -21,14 +30,21 @@ vi.mock('./navbar-breadcrumb', () => ({
 }));
 vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null }) }));
 // The metadata reads its space from the route, so the breadcrumb only renders with one present.
-vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'space-1' }) }));
+vi.mock('next/navigation', () => ({
+  useParams: () => ({ id: 'space-1' }),
+  usePathname: () => mocks.pathname,
+}));
 vi.mock('~/design-system/icons/geo-logo-large', () => ({ GeoLogoLarge: () => <svg /> }));
 // Reaches the sync engine through its prefetch behaviour; this suite only needs it to be a link.
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mocks.pathname = '/space/space-1';
+  mocks.isPhone = false;
+});
 
 describe('Navbar', () => {
   /**
@@ -90,5 +106,40 @@ describe('Navbar', () => {
 
     expect(screen.queryByRole('button', { name: 'Open browse menu' })).not.toBeInTheDocument();
     expect(screen.getByRole('link')).not.toHaveClass('mobile:hidden');
+  });
+
+  it('uses the debate bar on mobile Explore with the navbar sign-in attribution', async () => {
+    mocks.pathname = '/explore';
+    mocks.isPhone = true;
+    const navbarRef = React.createRef<HTMLElement>();
+    render(<Navbar navbarRef={navbarRef} hideLogo onBrowseClick={vi.fn()} onSearchClick={vi.fn()} />);
+
+    expect(screen.getByRole('link', { name: 'Geo' })).toHaveAttribute('href', '/explore');
+    expect(await screen.findByTestId('mobile-actions')).toHaveAttribute('data-sign-in-component', 'navbar');
+    expect(screen.queryByTestId('client-actions')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open browse menu' })).not.toBeInTheDocument();
+    expect(navbarRef.current).toBe(screen.getByRole('navigation'));
+  });
+
+  it('switches Explore back to the standard controls at desktop widths', async () => {
+    mocks.pathname = '/explore';
+    mocks.isPhone = true;
+    const { rerender } = render(<Navbar onBrowseClick={vi.fn()} onSearchClick={vi.fn()} />);
+    expect(await screen.findByTestId('mobile-actions')).toBeInTheDocument();
+
+    mocks.isPhone = false;
+    rerender(<Navbar onBrowseClick={vi.fn()} onSearchClick={vi.fn()} />);
+
+    expect(screen.getByTestId('client-actions')).toBeInTheDocument();
+    expect(screen.queryByTestId('mobile-actions')).not.toBeInTheDocument();
+  });
+
+  it('keeps browse and standard controls on other mobile pages', () => {
+    mocks.isPhone = true;
+    render(<Navbar onBrowseClick={vi.fn()} onSearchClick={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Open browse menu' })).toBeInTheDocument();
+    expect(screen.getByTestId('client-actions')).toBeInTheDocument();
+    expect(screen.queryByText('Geo')).not.toBeInTheDocument();
   });
 });
