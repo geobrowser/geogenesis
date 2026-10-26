@@ -5,7 +5,10 @@ import * as React from 'react';
 import dynamic from 'next/dynamic';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorServerContent } from '~/core/state/editor/use-editor-blocks';
+
+import { Skeleton } from '~/design-system/skeleton';
 
 import { ServerContent } from './server-content';
 
@@ -48,6 +51,20 @@ const DynamicEditor = dynamic<EditorProps>(() => import('./editor').then(m => m.
 });
 
 export function Editor(props: EditorProps) {
+  const { isLoadingBlocks } = useEditorInstance();
+
+  // The panel can show its entity while the authored body is still fetching. Do not instantiate
+  // TipTap with incomplete initial content, especially when the panel opens in edit mode.
+  if (isLoadingBlocks) {
+    return (
+      <div role="status" aria-label="Loading content" className="flex flex-col gap-3 py-6">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+        <Skeleton className="h-4 w-2/3" />
+      </div>
+    );
+  }
+
   return (
     <EditorPropsContext.Provider value={props}>
       <DynamicEditor {...props} />

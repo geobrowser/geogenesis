@@ -5,6 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import type { Tabs } from '~/core/state/editor/editor-provider';
 import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntities, useQueryEntitiesAsync } from '~/core/sync/use-store';
@@ -22,6 +23,7 @@ export type EntityPageSurfaceData = {
   tabRelations: Relation[];
   tabEntities: TabEntity[];
   isRelationPage: boolean;
+  isLoadingBlocks: boolean;
   isLoading: boolean;
   isReady: boolean;
 };
@@ -32,6 +34,7 @@ export function useEntityPageSurfaceData(
   entity: Entity | null,
   isLoadingEntity: boolean
 ): EntityPageSurfaceData {
+  const isEditing = useUserIsEditing(entitySpaceId);
   const relationEntityRelations = useRelationEntityRelations(entityId, entitySpaceId);
   const isRelationPage = relationEntityRelations.length > 0;
 
@@ -140,7 +143,13 @@ export function useEntityPageSurfaceData(
     };
   }, [entity, blocks, initialTabs, loadingTabEntities, loadingNestedTabBlocks, entitySpaceId, findMany]);
 
-  const isLoading = (isLoadingEntity && !entity) || isBlocksLoading;
+  // An initial query can still be fetching while every block is already in the sync store.
+  // Render that content immediately; only missing blocks need a placeholder.
+  const availableBlockIds = new Set((blocks ?? []).map(block => block.id));
+  // Editing still waits for the initial read, so cached metadata cannot seed an incomplete document.
+  const isLoadingBlocks = isBlocksLoading && (isEditing || blockIds.some(id => !availableBlockIds.has(id)));
+  // Identity, custom browse views and comments do not depend on the overview's authored blocks.
+  const isLoading = isLoadingEntity && !entity;
   const isReady = Boolean(entity) && !isLoading;
 
   const avatarUrl = entity ? Entities.avatar(entity.relations) : null;
@@ -156,6 +165,7 @@ export function useEntityPageSurfaceData(
     tabRelations,
     tabEntities,
     isRelationPage,
+    isLoadingBlocks,
     isLoading,
     isReady,
   };

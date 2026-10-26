@@ -242,6 +242,7 @@ function EntitySidePanelBody({
         id={entityId}
         spaceId={entitySpaceId}
         initialBlocks={surface.blocks}
+        isLoadingBlocks={surface.isLoadingBlocks}
         initialBlockRelations={surface.blockRelations}
         initialTabs={surface.initialTabs}
         initialCollectionItems={surface.initialCollectionItems}
