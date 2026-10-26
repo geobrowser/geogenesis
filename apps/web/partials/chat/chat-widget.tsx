@@ -50,11 +50,12 @@ import { useReportError } from '~/core/state/status-bar-store';
 import { reportError as captureAssistantError } from '~/core/telemetry/logger';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
-import { ChatPanel } from './chat-panel';
 import { useHideAssistant } from './assistant-visibility';
+import { ChatPanel } from './chat-panel';
 
 type AssistantSuggestionSource = 'welcome' | 'follow_up';
 type AssistantPanelAction = 'opened' | 'closed';
@@ -1164,7 +1165,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
           transition={{ duration: 0.15 }}
           onClick={() => openAssistant('fab')}
           aria-label="Open assistant"
-          className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
+          className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} ${Z_LAYER_CLASS.assistantLauncher} flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
         >
           <AssistantSparkle size={20} />
         </motion.button>
