@@ -19,7 +19,7 @@ export const ENDED_CALL_RECORDING_COPY = {
   processing: 'The recording is processing. It will play here when it’s ready.',
   failed: 'The recording failed. There’s nothing to play.',
   neverStarted: 'Recording never started, so there’s nothing to play.',
-  interrupted: 'The recording stopped on its own when everyone left the call. What was recorded is kept.',
+  interrupted: 'Recording stopped early. What was recorded is kept.',
   published: 'Published: anyone can watch it here and on Explore.',
   unpublished: 'Unpublished: only the space’s editors can watch it.',
   publish: 'Publish',
