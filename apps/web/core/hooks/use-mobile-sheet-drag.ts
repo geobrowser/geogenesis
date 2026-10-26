@@ -2,7 +2,14 @@
 
 import * as React from 'react';
 
-import { type MotionValue, animate, useMotionValue, useReducedMotion, useTransform } from 'framer-motion';
+import {
+  type LegacyAnimationControls,
+  type MotionValue,
+  animate,
+  useMotionValue,
+  useReducedMotion,
+  useTransform,
+} from 'framer-motion';
 
 import {
   type MobileSheetSnap,
@@ -20,17 +27,15 @@ const INSTANT = { duration: 0 } as const;
 const PEEK_CORNER_RADIUS_PX = 16;
 
 /**
- * The slide-up entrance for a sheet surface. `velocity: 0` matters: the surface's `y` is the
- * hook's long-lived motion value, and framer seeds a spring with that value's tracked velocity, so
- * the jump to the starting offset on mount read as a hard downward kick and the sheet overshot
- * ~145px past its resting place.
+ * The slide-up entrance for a sheet surface. Animate `transform` directly: the installed Motion
+ * version runs `y` on the JS thread, where rendering the panel's content can interrupt it. The
+ * surface must own that value, too: externally supplied motion values don't qualify for WAAPI.
+ * Start from rest so reopening can't inherit a previous animation's velocity.
  */
 export const MOBILE_SHEET_ENTRANCE_SPRING = { type: 'spring', damping: 30, stiffness: 320, velocity: 0 } as const;
 
 export type MobileSheetStyle = {
   top: MotionValue<number>;
-  /** Driven by the surface's slide-up entrance. */
-  y: MotionValue<number>;
   borderTopLeftRadius: MotionValue<number>;
   borderTopRightRadius: MotionValue<number>;
 };
@@ -53,7 +58,7 @@ type Options = {
  */
 export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
   const top = useMotionValue(peekTopPx);
-  const y = useMotionValue(0);
+  const sheetControlsRef = React.useRef<LegacyAnimationControls | null>(null);
   // Square corners only once the sheet reaches the top of the screen.
   const borderRadius = useTransform(top, value => Math.min(value, PEEK_CORNER_RADIUS_PX));
   const reduceMotion = useReducedMotion();
@@ -115,8 +120,8 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
         // transform and move what is left of it into `top`, which is what the drag drives.
         const visibleTop = getMobileSheetSurface(overlayElement)?.getBoundingClientRect().top;
         if (visibleTop === undefined || Math.abs(visibleTop - top.get()) < 0.5) return;
-        y.stop();
-        y.jump(0);
+        sheetControlsRef.current?.stop();
+        sheetControlsRef.current?.set({ transform: 'translateY(0%)' });
         top.jump(visibleTop);
       },
       onDragMove: next => top.set(next),
@@ -141,13 +146,12 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
       detachGestures();
       stopWatchingScroll();
     };
-  }, [dismiss, enabled, overlayElement, peekTopPx, settle, top, y]);
+  }, [dismiss, enabled, overlayElement, peekTopPx, settle, top]);
 
   const sheetStyle: MobileSheetStyle = {
     top,
-    y,
     borderTopLeftRadius: borderRadius,
     borderTopRightRadius: borderRadius,
   };
-  return { setOverlayElement, sheetStyle, sheet };
+  return { setOverlayElement, sheetStyle, sheetControlsRef, sheet };
 }

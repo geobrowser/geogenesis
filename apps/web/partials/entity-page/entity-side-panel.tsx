@@ -428,7 +428,7 @@ export function EntitySidePanel() {
     closeSidePanel();
   }, [bumpReviewVersion, closeSidePanel, createPostFlow, jotaiStore, setCreatePostFlow, setEditable, sidePanelTarget]);
 
-  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheetControlsRef, sheet } = useMobileSheetDrag({
     enabled: isMobile && Boolean(sidePanelTarget),
     onDismiss: handleCloseSidePanel,
     peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
@@ -572,6 +572,7 @@ export function EntitySidePanel() {
           aria-modal="true"
           aria-label="Entity side panel"
           sheetStyle={sheetStyle}
+          sheetControlsRef={sheetControlsRef}
           sheet={sheet}
         >
           {panelBody}
