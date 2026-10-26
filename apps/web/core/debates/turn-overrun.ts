@@ -22,6 +22,11 @@ import { useSpeechActivity } from './use-speech-activity';
  */
 export const OVERRUN_PAUSE_HOLD_MS = 900;
 
+function clearTimer(timerRef: React.RefObject<number | null>) {
+  if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+  timerRef.current = null;
+}
+
 /**
  * How long past the listener's own buzzer the opponent can still be heard finishing.
  *
@@ -120,10 +125,8 @@ export function useTurnOverrun({
   // Runs while a running overrun is in a pause; speech resuming before it fires cancels it.
   const holdTimerRef = React.useRef<number | null>(null);
   const clearTimers = React.useCallback(() => {
-    if (capTimerRef.current !== null) window.clearTimeout(capTimerRef.current);
-    if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current);
-    capTimerRef.current = null;
-    holdTimerRef.current = null;
+    clearTimer(capTimerRef);
+    clearTimer(holdTimerRef);
   }, []);
   const stop = React.useCallback(() => {
     phaseRef.current = 'idle';
@@ -132,7 +135,7 @@ export function useTurnOverrun({
   }, [clearTimers]);
   React.useEffect(() => clearTimers, [clearTimers]);
   const holdThroughPause = React.useCallback(() => {
-    if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current);
+    clearTimer(holdTimerRef);
     const remaining = lastSoundAtRef.current + OVERRUN_PAUSE_HOLD_MS - Date.now();
     holdTimerRef.current = window.setTimeout(stop, Math.max(0, remaining));
   }, [stop]);
@@ -143,12 +146,8 @@ export function useTurnOverrun({
       phaseRef.current = 'running';
       setSince(endedAtRef.current);
     } else if (phaseRef.current === 'running') {
-      if (!speaking) {
-        holdThroughPause();
-      } else if (holdTimerRef.current !== null) {
-        window.clearTimeout(holdTimerRef.current);
-        holdTimerRef.current = null;
-      }
+      if (speaking) clearTimer(holdTimerRef);
+      else holdThroughPause();
     }
   });
 
@@ -178,7 +177,7 @@ export function useTurnOverrun({
     } else {
       return;
     }
-    if (capTimerRef.current !== null) window.clearTimeout(capTimerRef.current);
+    clearTimer(capTimerRef);
     capTimerRef.current = window.setTimeout(stop, windowMs);
   }, [holdThroughPause, overrunPossible, speakingRef, startsLate, stop, turnActive, windowMs]);
 
