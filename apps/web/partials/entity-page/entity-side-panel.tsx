@@ -204,6 +204,7 @@ function EntitySidePanelBody({
   previewImageUrl,
   previewName,
   previewDescription,
+  headerOnly = false,
 }: {
   entityId: string;
   entitySpaceId: string;
@@ -213,6 +214,7 @@ function EntitySidePanelBody({
   previewImageUrl?: string | null;
   previewName?: string | null;
   previewDescription?: string | null;
+  headerOnly?: boolean;
 }) {
   const surface = useEntityPageSurfaceData(entityId, entitySpaceId, entity, isLoadingEntity);
 
@@ -258,6 +260,7 @@ function EntitySidePanelBody({
           previewImageUrl={previewImageUrl}
           previewName={previewName}
           previewDescription={previewDescription}
+          headerOnly={headerOnly}
           // A bounty reads the same in the panel as on its page: facts card + interest
           // above the body, submissions/payouts/allocation below, no properties sheet.
           {...(bountiesEnabledForNetwork && isBountyEntity(entity.types)
@@ -291,6 +294,8 @@ export function EntitySidePanelSurface({
   previewDescription,
   scrollToCommentsRequest = null,
   initialTab,
+  headerOnly = false,
+  previewContentRef,
   onClose,
 }: {
   entityId: string;
@@ -310,6 +315,8 @@ export function EntitySidePanelSurface({
    */
   scrollToCommentsRequest?: object | null;
   initialTab?: EntitySidePanelTabSelection;
+  headerOnly?: boolean;
+  previewContentRef?: React.Ref<HTMLDivElement>;
   onClose: () => void;
 }) {
   const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null);
@@ -348,16 +355,19 @@ export function EntitySidePanelSurface({
               data-mobile-sheet-scroll
             >
               <ScrollToCommentsOnOpen container={scrollElement} request={scrollToCommentsRequest} />
-              <EntitySidePanelBody
-                key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
-                entityId={entityId}
-                entitySpaceId={effectiveSpaceId}
-                entity={entity}
-                isLoadingEntity={isLoading}
-                previewImageUrl={previewImageUrl}
-                previewName={previewName}
-                previewDescription={previewDescription}
-              />
+              <div ref={headerOnly ? previewContentRef : undefined}>
+                <EntitySidePanelBody
+                  key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
+                  entityId={entityId}
+                  entitySpaceId={effectiveSpaceId}
+                  entity={entity}
+                  isLoadingEntity={isLoading}
+                  previewImageUrl={previewImageUrl}
+                  previewName={previewName}
+                  previewDescription={previewDescription}
+                  headerOnly={headerOnly}
+                />
+              </div>
             </div>
           </EntitySidePanelNavigation>
         </EntitySidePanelActiveTabProvider>
@@ -383,6 +393,7 @@ export function EntitySidePanel() {
   const slideUpOpenCount = useAtomValue(slideUpOpenCountAtom);
   const overSlideUp = isReviewOpen || slideUpOpenCount > 0;
   const { sidePanelTarget, closeSidePanel } = useEntitySidePanel();
+  const [previewContent, setPreviewContent] = React.useState<HTMLDivElement | null>(null);
   const [createPostFlow, setCreatePostFlow] = useAtom(createPostFlowAtom);
   const { setEditable } = useEditable();
 
@@ -428,11 +439,25 @@ export function EntitySidePanel() {
     closeSidePanel();
   }, [bumpReviewVersion, closeSidePanel, createPostFlow, jotaiStore, setCreatePostFlow, setEditable, sidePanelTarget]);
 
-  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheet, snap, expand } = useMobileSheetDrag({
     enabled: isMobile && Boolean(sidePanelTarget),
     onDismiss: handleCloseSidePanel,
     peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
+    peekContent: previewContent,
+    resetKey: sidePanelTarget,
   });
+
+  React.useEffect(() => {
+    if (
+      isMobile &&
+      (sidePanelTarget?.scrollToComments ||
+        sidePanelTarget?.initialTab ||
+        sidePanelTarget?.openedWithMainViewEditing ||
+        sidePanelTarget?.openedFromReviewEdits)
+    ) {
+      expand();
+    }
+  }, [expand, isMobile, sidePanelTarget]);
 
   React.useEffect(() => {
     if (!sidePanelTarget) return;
@@ -541,6 +566,8 @@ export function EntitySidePanel() {
           forceRequestedSpace={forceRequestedSpace}
           scrollToCommentsRequest={sidePanelTarget.scrollToComments ? sidePanelTarget : null}
           initialTab={sidePanelTarget.initialTab}
+          headerOnly={isMobile && snap === 'peek'}
+          previewContentRef={setPreviewContent}
           onClose={handleCloseSidePanel}
         />
       </EntitySidePanelPopoverPortalProvider>

@@ -123,6 +123,7 @@ export function ClaimPageView({
   tabEntities = [],
   footer,
   isEditing = false,
+  headerOnly = false,
 }: {
   entityId: string;
   spaceId: string;
@@ -130,6 +131,8 @@ export function ClaimPageView({
   tabEntities?: TabEntity[];
   footer?: React.ReactNode;
   isEditing?: boolean;
+  /** Keep only the hero in the mobile sheet's initial preview. */
+  headerOnly?: boolean;
 }) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const pathname = usePathname();
@@ -355,34 +358,40 @@ export function ClaimPageView({
             </div>
           </header>
 
-          <div id={sidePanelTab ? undefined : SPACE_TABS_ANCHOR}>
-            <EntityTabs
-              entityId={entityId}
-              spaceId={spaceId}
-              initialTabRelations={initialTabRelations}
-              tabEntities={tabEntities}
-              systemTabsBefore={systemTabs}
-              reservedSystemLabels={systemTabs.map(tab => tab.label)}
-              divideBeforeAuthored
-            />
-          </div>
+          {headerOnly ? null : (
+            <div id={sidePanelTab ? undefined : SPACE_TABS_ANCHOR}>
+              <EntityTabs
+                entityId={entityId}
+                spaceId={spaceId}
+                initialTabRelations={initialTabRelations}
+                tabEntities={tabEntities}
+                systemTabsBefore={systemTabs}
+                reservedSystemLabels={systemTabs.map(tab => tab.label)}
+                divideBeforeAuthored
+              />
+            </div>
+          )}
         </div>
 
-        <ClaimTabPanel
-          activeTab={requestedTab}
-          entityId={entityId}
-          spaceId={spaceId}
-          claimName={entity.name ?? null}
-          entityRelations={entity.relations}
-          responseKind={responseKind}
-          summary={summary}
-          record={record}
-          topics={topics}
-          availableSpaceIds={entity.spaces}
-          hrefs={{ debates: hrefs.debates, claims: hrefs.claims }}
-          onSelectSystemTab={sidePanelTab?.setActiveSystemTab}
-        />
-        {footer}
+        {headerOnly ? null : (
+          <>
+            <ClaimTabPanel
+              activeTab={requestedTab}
+              entityId={entityId}
+              spaceId={spaceId}
+              claimName={entity.name ?? null}
+              entityRelations={entity.relations}
+              responseKind={responseKind}
+              summary={summary}
+              record={record}
+              topics={topics}
+              availableSpaceIds={entity.spaces}
+              hrefs={{ debates: hrefs.debates, claims: hrefs.claims }}
+              onSelectSystemTab={sidePanelTab?.setActiveSystemTab}
+            />
+            {footer}
+          </>
+        )}
       </div>
     </div>
   );

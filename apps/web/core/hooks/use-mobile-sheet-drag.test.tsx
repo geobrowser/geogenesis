@@ -22,30 +22,40 @@ afterEach(() => {
   cleanup();
   mocks.reducedMotion = false;
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function Sheet({
   topRef,
   open = true,
   onDismiss = () => {},
+  fitContent = false,
+  resetKey,
 }: {
   topRef: { current: MotionValue<number> | null };
   open?: boolean;
   onDismiss?: () => void;
+  fitContent?: boolean;
+  resetKey?: string;
 }) {
-  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
+  const [peekContent, setPeekContent] = React.useState<HTMLDivElement | null>(null);
+  const { setOverlayElement, sheetStyle, sheet, snap } = useMobileSheetDrag({
     enabled: open,
     onDismiss,
     peekTopPx: PEEK,
+    peekContent,
+    resetKey,
   });
   topRef.current = sheetStyle.top;
   // Like the real sheets, the surface only exists while open; the hook outlives it.
   if (!open) return null;
   return (
-    <div ref={setOverlayElement}>
+    <div ref={setOverlayElement} data-snap={snap}>
       <MobileSheetSurface sheetStyle={sheetStyle} sheet={sheet}>
         <div data-mobile-sheet-scroll>
-          <span data-testid="content" />
+          <div ref={fitContent ? setPeekContent : undefined} data-peek-content>
+            <span data-testid="content" />
+          </div>
         </div>
       </MobileSheetSurface>
     </div>
@@ -61,6 +71,82 @@ function touch(type: 'touchstart' | 'touchmove' | 'touchend' | 'touchcancel', ta
 }
 
 describe('useMobileSheetDrag', () => {
+  describe('content-sized previews', () => {
+    function setup() {
+      let contentHeight = 200;
+      const observers = new Set<() => void>();
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(callback: () => void) {
+            observers.add(callback);
+          }
+          observe() {}
+          disconnect() {}
+        }
+      );
+      // Header + grab handle take 60px outside the independently scrolling content.
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(500);
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(440);
+      vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+        return { height: this.hasAttribute('data-peek-content') ? contentHeight : 0 } as DOMRect;
+      });
+      const topRef: { current: MotionValue<number> | null } = { current: null };
+      const view = render(<Sheet topRef={topRef} fitContent resetKey="first" />);
+      const surface = view.container.querySelector<HTMLElement>('[data-mobile-sheet-surface]')!;
+      surface.getBoundingClientRect = () => ({ top: topRef.current?.get() ?? 0 }) as DOMRect;
+      return {
+        ...view,
+        topRef,
+        resize: (height: number) =>
+          act(() => {
+            contentHeight = height;
+            observers.forEach(callback => callback());
+          }),
+      };
+    }
+
+    it('fits short content including the chrome, and caps long content at the old maximum', () => {
+      const view = setup();
+      expect(view.topRef.current?.get()).toBe(window.innerHeight - 260);
+      view.resize(1000);
+      expect(view.topRef.current?.get()).toBe(PEEK);
+      view.resize(300);
+      expect(view.topRef.current?.get()).toBe(window.innerHeight - 360);
+    });
+
+    it('uses the fitted position for drag releases and preserves full screen across content changes', async () => {
+      const view = setup();
+      const content = view.getByTestId('content');
+      const fittedTop = window.innerHeight - 260;
+      let time = 0;
+      const drag = (distance: number) => {
+        const clock = vi.spyOn(performance, 'now').mockImplementation(() => time);
+        act(() => {
+          touch('touchstart', content, 600);
+          time += 100;
+          touch('touchmove', content, 600 + distance);
+          time += 100;
+          touch('touchend', content);
+        });
+        clock.mockRestore();
+      };
+      drag(-20);
+      await act(() => new Promise(resolve => setTimeout(resolve, 900)));
+      expect(view.topRef.current?.get()).toBeCloseTo(fittedTop, 0);
+      drag(-150);
+      await act(() => new Promise(resolve => setTimeout(resolve, 900)));
+      expect(view.topRef.current?.get()).toBeCloseTo(0, 0);
+      expect(view.container.firstElementChild?.getAttribute('data-snap')).toBe('full');
+      view.resize(1000);
+      expect(view.topRef.current?.get()).toBeCloseTo(0, 0);
+
+      view.rerender(<Sheet topRef={view.topRef} fitContent resetKey="second" />);
+      expect(view.container.firstElementChild?.getAttribute('data-snap')).toBe('peek');
+      expect(view.topRef.current?.get()).toBe(PEEK);
+    });
+  });
+
   it('picks a drag up from where the sheet visibly is while it is still sliding in', () => {
     const topRef: { current: MotionValue<number> | null } = { current: null };
     const { container, getByTestId } = render(<Sheet topRef={topRef} />);
