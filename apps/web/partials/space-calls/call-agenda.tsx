@@ -23,34 +23,44 @@ export const CALL_AGENDA_COPY = {
 /**
  * A call's agenda (GEO-3420): markdown anyone can read, signed out included. Hosts edit it in place;
  * `onSave` resolves once stored and rejects to keep the draft open with `errorMessage`'s words.
+ * The save's base is the agenda the edit started from, or the newer one a conflict reported.
  */
 export function CallAgenda({
   markdown,
+  updatedAt,
   note,
   canEdit,
   onSave,
   errorMessage,
+  conflictBase,
 }: {
   markdown: string;
+  /** The stored agenda's stamp, `null` when there is none. */
+  updatedAt: string | null;
   /** Under the agenda, e.g. that it is the series' default. */
   note?: string | null;
   canEdit: boolean;
-  onSave: (markdown: string) => Promise<unknown>;
+  onSave: (markdown: string, base: string | null) => Promise<unknown>;
   errorMessage: (error: unknown) => string;
+  /** A conflict's current stamp, `undefined` for any other failure. */
+  conflictBase: (error: unknown) => string | null | undefined;
 }) {
-  const [draft, setDraft] = React.useState<string | null>(null);
+  const [editing, setEditing] = React.useState<{ draft: string; base: string | null } | null>(null);
+  const draft = editing?.draft ?? null;
   const [saving, setSaving] = React.useState(false);
   const [failed, setFailed] = React.useState<string | null>(null);
   const hasAgenda = markdown.trim().length > 0;
 
   const save = async () => {
-    if (draft === null) return;
+    if (editing === null) return;
     setSaving(true);
     setFailed(null);
     try {
-      await onSave(draft.trim());
-      setDraft(null);
+      await onSave(editing.draft.trim(), editing.base);
+      setEditing(null);
     } catch (error) {
+      const base = conflictBase(error);
+      if (base !== undefined) setEditing(current => (current ? { ...current, base } : current));
       setFailed(errorMessage(error));
     } finally {
       setSaving(false);
@@ -64,7 +74,10 @@ export function CallAgenda({
           {CALL_AGENDA_COPY.title}
         </Text>
         {canEdit && draft === null ? (
-          <HubPillButton analyticsLabel="Call agenda edit" onClick={() => setDraft(markdown)}>
+          <HubPillButton
+            analyticsLabel="Call agenda edit"
+            onClick={() => setEditing({ draft: markdown, base: updatedAt })}
+          >
             {hasAgenda ? CALL_AGENDA_COPY.edit : CALL_AGENDA_COPY.add}
           </HubPillButton>
         ) : null}
@@ -74,7 +87,7 @@ export function CallAgenda({
         <div className="flex flex-col gap-2">
           <Textarea
             value={draft}
-            onChange={event => setDraft(event.target.value)}
+            onChange={event => setEditing(current => (current ? { ...current, draft: event.target.value } : current))}
             minRows={6}
             autoFocus
             aria-label={CALL_AGENDA_COPY.title}
@@ -91,7 +104,7 @@ export function CallAgenda({
               analyticsLabel="Call agenda cancel"
               disabled={saving}
               onClick={() => {
-                setDraft(null);
+                setEditing(null);
                 setFailed(null);
               }}
             >

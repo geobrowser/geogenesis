@@ -1,4 +1,4 @@
-import { GeoChatRequestError } from '~/core/debates/api';
+import { type DebateCallAgenda, GeoChatRequestError } from '~/core/debates/api';
 import { lobbyErrorMessage } from '~/core/debates/lobbies/lobby-format';
 
 export const AGENDA_SAVE_FAILED = 'Could not save the agenda. Try again.';
@@ -24,4 +24,17 @@ export function agendaErrorMessage(error: unknown): string {
     }
   }
   return lobbyErrorMessage(error, AGENDA_SAVE_FAILED, 'call');
+}
+
+/** On `agenda_conflict`, the agenda geo-chat holds now (`null` if cleared); `undefined` otherwise. */
+export function agendaConflictCurrent(error: unknown): DebateCallAgenda | null | undefined {
+  if (!(error instanceof GeoChatRequestError) || error.code !== 'agenda_conflict') return undefined;
+  const agenda = error.details?.agenda;
+  return agenda && typeof agenda === 'object' ? (agenda as DebateCallAgenda) : null;
+}
+
+/** On `agenda_conflict`, the base a deliberate overwrite sends; `undefined` otherwise. */
+export function agendaConflictBase(error: unknown): string | null | undefined {
+  const current = agendaConflictCurrent(error);
+  return current === undefined ? undefined : (current?.updated_at ?? null);
 }

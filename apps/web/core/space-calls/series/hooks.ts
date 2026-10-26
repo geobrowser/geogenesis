@@ -2,11 +2,12 @@
 
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { type DebateLobbyView, dashlessId } from '~/core/debates/api';
+import { type DebateCallAgenda, type DebateLobbyView, dashlessId } from '~/core/debates/api';
 import { debateQueryKeys, useGeoChatAuth } from '~/core/debates/hooks';
 import { sameId } from '~/core/debates/rooms/room-presence';
 
 import { type SpaceCallsResponse, saveCallAgenda, setCallReminder, setCallSeriesReminder } from '../api';
+import { agendaConflictCurrent } from './call-errors';
 
 /** Every viewer's copy of a space's call list, signed in or out. */
 const spaceCallsListKey = (spaceId: string) => ['debates', 'space-calls', dashlessId(spaceId)] as const;
@@ -81,7 +82,12 @@ export function useCallSeriesReminder(spaceId: string) {
   });
 }
 
-/** A host's agenda write (GEO-3420); the response is the call's view. */
+/** A call's view with geo-chat's current agenda, as a conflict reported it. */
+export function withAgenda(view: DebateLobbyView, agenda: DebateCallAgenda | null): DebateLobbyView {
+  return view.call ? { ...view, call: { ...view.call, agenda } } : view;
+}
+
+/** A host's agenda write (GEO-3420); the response is the call's view. A conflict stores the agenda it beat. */
 export function useSaveCallAgenda(callId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const queryClient = useQueryClient();
@@ -89,5 +95,12 @@ export function useSaveCallAgenda(callId: string) {
     mutationFn: (body: { body: string; base_updated_at: string | null }) =>
       saveCallAgenda(callId, body, getPrivyIdentityToken, accountKey),
     onSuccess: view => storeCallView(queryClient, accountKey, view),
+    onError: error => {
+      const current = agendaConflictCurrent(error);
+      if (current === undefined) return;
+      queryClient.setQueryData<DebateLobbyView>(debateQueryKeys.lobby(accountKey, callId), view =>
+        view ? withAgenda(view, current) : view
+      );
+    },
   });
 }

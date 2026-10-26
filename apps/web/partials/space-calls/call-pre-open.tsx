@@ -6,7 +6,7 @@ import { notYetOpenLabel } from '~/core/debates/lobbies/lobby-format';
 import type { LobbyPageView } from '~/core/debates/lobbies/lobby-view';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { spaceCallsTabPath } from '~/core/space-calls/routes';
-import { agendaErrorMessage } from '~/core/space-calls/series/call-errors';
+import { agendaConflictBase, agendaErrorMessage } from '~/core/space-calls/series/call-errors';
 import { useSaveCallAgenda } from '~/core/space-calls/series/hooks';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
@@ -55,10 +55,12 @@ export function CallPreOpen({ lobby }: { lobby: LobbyPageView }) {
       agenda={
         <CallAgenda
           markdown={agenda?.body ?? fallback ?? ''}
+          updatedAt={agenda?.updated_at ?? null}
           note={fallback ? SERIES_DEFAULT_AGENDA_NOTE : null}
           canEdit={viewer?.can_edit_agenda ?? false}
-          onSave={body => saveAgenda.mutateAsync({ body, base_updated_at: agenda?.updated_at ?? null })}
+          onSave={(body, base) => saveAgenda.mutateAsync({ body, base_updated_at: base })}
           errorMessage={agendaErrorMessage}
+          conflictBase={agendaConflictBase}
         />
       }
     />
