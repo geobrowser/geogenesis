@@ -50,6 +50,13 @@ describe('share URLs', () => {
     expect(link.url).not.toContain('old-sharer');
   });
 
+  it('round trips a link handed to the system share sheet', () => {
+    const link = createShareLink('https://geobrowser.io/explore', 'debate', target, 'native_share', shareId);
+    const params = new URL(link.url).searchParams;
+    expect(params.get('utm_source')).toBe('native_share');
+    expect(parseShareLink(params)).toEqual(link.attribution);
+  });
+
   it('generates a new share for each action and leaves invalid product targets usable', () => {
     const url = 'https://geobrowser.io/debate/example';
     expect(createShareLink(url, 'debate', target, 'x').attribution?.share_id).not.toBe(
