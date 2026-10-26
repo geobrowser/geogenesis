@@ -119,6 +119,7 @@ export function TopicPageView({
   tabEntities = [],
   footer,
   isEditing = false,
+  headerOnly = false,
 }: {
   entityId: string;
   spaceId: string;
@@ -126,6 +127,7 @@ export function TopicPageView({
   tabEntities?: TabEntity[];
   footer?: React.ReactNode;
   isEditing?: boolean;
+  headerOnly?: boolean;
 }) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const activeAuthoredTabId = useActiveTabIdForEditor();
@@ -365,22 +367,26 @@ export function TopicPageView({
           <TopicComposition topicId={entityId} spaceId={spaceId} spaceIds={topicSpaceIds} />
         </header>
 
-        <div id={sidePanelTab ? undefined : SPACE_TABS_ANCHOR}>
-          <EntityTabs
-            entityId={entityId}
-            spaceId={spaceId}
-            initialTabRelations={initialTabRelations}
-            tabEntities={tabEntities}
-            systemTabsBefore={systemTabs}
-            reservedSystemLabels={systemTabs.map(tab => tab.label)}
-            // Overview already carries the rule when it is there. Two dividers, or one in front of
-            // a tab that is on the same side of it, would say the row splits somewhere it does not.
-            divideBeforeAuthored={!showBlocksTab}
-          />
-        </div>
+        {headerOnly ? null : (
+          <>
+            <div id={sidePanelTab ? undefined : SPACE_TABS_ANCHOR}>
+              <EntityTabs
+                entityId={entityId}
+                spaceId={spaceId}
+                initialTabRelations={initialTabRelations}
+                tabEntities={tabEntities}
+                systemTabsBefore={systemTabs}
+                reservedSystemLabels={systemTabs.map(tab => tab.label)}
+                // Overview already carries the rule when it is there. Two dividers, or one in front of
+                // a tab that is on the same side of it, would say the row splits somewhere it does not.
+                divideBeforeAuthored={!showBlocksTab}
+              />
+            </div>
 
-        <TopicTabPanel activeTab={activeTab} entityId={entityId} spaceId={spaceId} topicSpaceIds={topicSpaceIds} />
-        {footer}
+            <TopicTabPanel activeTab={activeTab} entityId={entityId} spaceId={spaceId} topicSpaceIds={topicSpaceIds} />
+            {footer}
+          </>
+        )}
       </div>
     </div>
   );

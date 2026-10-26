@@ -176,6 +176,21 @@ afterEach(cleanup);
  * entity be acted on". Nothing enforced that split before; this does.
  */
 describe('EntityPageBody relation side panel', () => {
+  it('keeps the generic header in preview and restores the body on expansion', () => {
+    const view = render(<EntityPageBody variant="sidePanel" {...SHARED} headerOnly />);
+    expect(screen.getByTestId('title')).toBeInTheDocument();
+    expect(screen.getByTestId('description')).toBeInTheDocument();
+    expect(screen.getByTestId('actions')).toBeInTheDocument();
+    expect(screen.queryByTestId('properties')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('backlinks')).not.toBeInTheDocument();
+    expect(mocks.commentSection).toBeNull();
+
+    view.rerender(<EntityPageBody variant="sidePanel" {...SHARED} />);
+    expect(screen.getByTestId('properties')).toBeInTheDocument();
+    expect(screen.getByTestId('backlinks')).toBeInTheDocument();
+    expect(mocks.commentSection).not.toBeNull();
+  });
+
   it('keeps the menu and history on a relation page', () => {
     renderPanel({ isRelationPage: true });
 
@@ -265,6 +280,20 @@ describe('EntityPageBody relation side panel', () => {
 });
 
 describe('EntityPageBody claim side panel', () => {
+  it('requests only the claim header for a mobile preview', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+    render(<EntityPageBody variant="sidePanel" {...SHARED} headerOnly />);
+    expect(mocks.claimPage?.headerOnly).toBe(true);
+  });
+
+  it('keeps editing content available when the mobile preview enters edit mode', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+    mocks.editing = true;
+    render(<EntityPageBody variant="sidePanel" {...SHARED} headerOnly />);
+    expect(mocks.claimPage?.headerOnly).toBe(false);
+    expect(screen.getByTestId('properties')).toBeInTheDocument();
+  });
+
   it('shows both configured claim images above the custom view', () => {
     mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
 

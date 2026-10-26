@@ -376,6 +376,26 @@ beforeEach(() => {
   mocks.positionControl = null;
 });
 
+describe('ClaimPageView mobile header preview', () => {
+  it('keeps the claim and response controls, then reveals tabs and activity on expansion', () => {
+    const view = render(
+      <ClaimPageView entityId="claim-1" spaceId="space-1" headerOnly footer={<div data-testid="footer" />} />
+    );
+
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(mocks.positionControl).not.toBeNull();
+    expect(screen.queryByTestId('tabs')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('activity')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('footer')).not.toBeInTheDocument();
+
+    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-1" footer={<div data-testid="footer" />} />);
+
+    expect(screen.getByTestId('tabs')).toBeInTheDocument();
+    expect(screen.getByTestId('activity')).toBeInTheDocument();
+    expect(screen.getByTestId('footer')).toBeInTheDocument();
+  });
+});
+
 describe('ClaimPageView record', () => {
   /*
    * GEO-3021, reached by walking rather than by loading. The route renders

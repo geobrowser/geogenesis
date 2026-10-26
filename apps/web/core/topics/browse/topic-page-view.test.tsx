@@ -226,6 +226,17 @@ describe('TopicPageView title', () => {
 });
 
 describe('TopicPageView explore feed', () => {
+  it('shows only the header in the mobile preview and restores the feed on expansion', () => {
+    const view = render(<TopicPageView entityId="topic-1" spaceId="space-1" headerOnly />);
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(screen.queryByTestId('entity-tabs')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('topic-feed')).not.toBeInTheDocument();
+
+    view.rerender(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+    expect(screen.getByTestId('entity-tabs')).toBeInTheDocument();
+    expect(screen.getByTestId('topic-feed')).toBeInTheDocument();
+  });
+
   it('renders one mixed feed whose filters are derived from that feed', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 

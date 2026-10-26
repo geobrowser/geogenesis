@@ -40,6 +40,10 @@ type Options = {
   onDismiss: () => void;
   /** Distance from the viewport top to the sheet's top edge while it is a container. */
   peekTopPx: number;
+  /** Natural-height content to fit in peek mode, capped by `peekTopPx`. */
+  peekContent?: HTMLElement | null;
+  /** Start a fresh preview when the requested entity changes without closing the sheet. */
+  resetKey?: unknown;
 };
 
 /**
@@ -51,7 +55,7 @@ type Options = {
  * Pass `sheetStyle` to `MobileSheetSurface` (or to any surface pinned to the bottom of the
  * viewport, so `top` sets its height) and `setOverlayElement` to the fixed overlay around it.
  */
-export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
+export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx, peekContent, resetKey }: Options) {
   const top = useMotionValue(peekTopPx);
   const y = useMotionValue(0);
   // Square corners only once the sheet reaches the top of the screen.
@@ -62,6 +66,9 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
   const [sheet] = React.useState(() => Symbol('mobile sheet'));
 
   const snapRef = React.useRef<MobileSheetSnap>('peek');
+  const [snap, setSnap] = React.useState<MobileSheetSnap>('peek');
+  const fittedPeekTopRef = React.useRef(peekTopPx);
+  const draggingRef = React.useRef(false);
   const scrolledSinceFullRef = React.useRef(false);
   const dismissingRef = React.useRef(false);
   const onDismissRef = React.useRef(onDismiss);
@@ -73,10 +80,13 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
     (next: MobileSheetSnap) => {
       if (next === 'full' && snapRef.current !== 'full') scrolledSinceFullRef.current = false;
       snapRef.current = next;
-      animate(top, next === 'full' ? 0 : peekTopPx, reduceMotion ? INSTANT : SNAP_SPRING);
+      setSnap(next);
+      animate(top, next === 'full' ? 0 : fittedPeekTopRef.current, reduceMotion ? INSTANT : SNAP_SPRING);
     },
-    [peekTopPx, reduceMotion, top]
+    [reduceMotion, top]
   );
+
+  const expand = React.useCallback(() => settle('full'), [settle]);
 
   /** Slides the sheet off the bottom of the screen, then closes it. */
   const dismiss = React.useCallback(() => {
@@ -90,10 +100,47 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
   React.useLayoutEffect(() => {
     if (!enabled) return;
     top.jump(peekTopPx);
+    fittedPeekTopRef.current = peekTopPx;
     snapRef.current = 'peek';
+    setSnap('peek');
+    draggingRef.current = false;
     scrolledSinceFullRef.current = false;
     dismissingRef.current = false;
-  }, [enabled, peekTopPx, top]);
+  }, [enabled, peekTopPx, resetKey, top]);
+
+  React.useLayoutEffect(() => {
+    if (!enabled || !peekContent || !overlayElement) return;
+    const surface = getMobileSheetSurface(overlayElement);
+    const scroll = peekContent.closest<HTMLElement>('[data-mobile-sheet-scroll]');
+    if (!surface || !scroll) return;
+
+    const measure = () => {
+      // Include the grab handle and panel navigation, which sit outside the scroll area.
+      const chromeHeight = surface.offsetHeight - scroll.clientHeight;
+      const previousPeekTop = fittedPeekTopRef.current;
+      fittedPeekTopRef.current = Math.max(
+        peekTopPx,
+        window.innerHeight - Math.ceil(peekContent.getBoundingClientRect().height + chromeHeight)
+      );
+      if (
+        fittedPeekTopRef.current !== previousPeekTop &&
+        snapRef.current === 'peek' &&
+        !draggingRef.current &&
+        !dismissingRef.current
+      ) {
+        top.jump(fittedPeekTopRef.current);
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(peekContent);
+    observer.observe(surface);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [enabled, overlayElement, peekContent, peekTopPx, resetKey, top]);
 
   React.useLayoutEffect(() => {
     if (!enabled) return;
@@ -110,6 +157,7 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
       getSnap: () => snapRef.current,
       getTop: () => top.get(),
       onDragStart: () => {
+        draggingRef.current = true;
         top.stop();
         // A drag during the slide-up entrance takes over from where the sheet visibly is: stop the
         // transform and move what is left of it into `top`, which is what the drag drives.
@@ -121,17 +169,21 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
       },
       onDragMove: next => top.set(next),
       onDragEnd: (releaseTop, velocityY) => {
+        draggingRef.current = false;
         const next = resolveMobileSheetRelease({
           from: snapRef.current,
           top: releaseTop,
           velocityY,
-          peekTop: peekTopPx,
+          peekTop: fittedPeekTopRef.current,
           scrolledSinceFull: scrolledSinceFullRef.current,
         });
         if (next === 'dismiss') dismiss();
         else settle(next);
       },
-      onDragCancel: () => settle(snapRef.current),
+      onDragCancel: () => {
+        draggingRef.current = false;
+        settle(snapRef.current);
+      },
     });
     const stopWatchingScroll = watchMobileSheetContentScroll(overlayElement, () => {
       if (snapRef.current === 'full') scrolledSinceFullRef.current = true;
@@ -149,5 +201,5 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
     borderTopLeftRadius: borderRadius,
     borderTopRightRadius: borderRadius,
   };
-  return { setOverlayElement, sheetStyle, sheet };
+  return { setOverlayElement, sheetStyle, sheet, snap, expand };
 }

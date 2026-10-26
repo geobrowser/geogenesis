@@ -69,6 +69,8 @@ export type RouteEntityPageBodyProps = SharedProps & {
 
 export type SidePanelEntityPageBodyProps = SharedProps & {
   variant: 'sidePanel';
+  /** The mobile sheet's initial preview, before expanding to the full entity. */
+  headerOnly?: boolean;
   isRelationPage?: boolean;
   previewImageUrl?: string | null;
   previewName?: string | null;
@@ -210,6 +212,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   const isEditing = useUserIsEditing(spaceId);
   const { customView, entity } = useCustomBrowseView(entityId, spaceId, isEditing);
   const targetEntityType = commentTargetEntityType(entity);
+  const headerOnly = props.variant === 'sidePanel' && Boolean(props.headerOnly) && !isEditing;
 
   const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
   const entityMediaUrl = useEntityMediaUrl(entityId, spaceId);
@@ -272,6 +275,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
           isEditing={isEditing}
+          headerOnly={headerOnly}
           footer={customViewFooter}
         />
       </>
@@ -304,6 +308,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
           isEditing={isEditing}
+          headerOnly={headerOnly}
           footer={customViewFooter}
         />
       </>
@@ -389,7 +394,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     );
 
     return (
-      <div className="px-4 pt-6 pb-12 mobile:px-5">
+      <div className={`px-4 pt-6 mobile:px-5 ${headerOnly ? 'pb-6' : 'pb-12'}`}>
         {/* A profile brings its avatar: it is the person's face, and the panel
             opened on a cover with nobody in it. Everything else keeps the
             cover-only header — see `EditableCoverAvatarHeader`. */}
@@ -449,7 +454,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                 </div>
               )}
             </div>
-            {personProfile ? (
+            {headerOnly ? null : personProfile ? (
               // The full-screen profile uses this margin rather than a fixed
               // spacer, allowing it to collapse with the description's mb-5.
               <div className="mt-6">{personProfile}</div>
