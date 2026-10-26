@@ -39,11 +39,12 @@ import { Toggle } from '~/design-system/toggle';
 
 import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
+import { EmailSettingsDialog } from '~/partials/notifications/email-settings-dialog';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
 import { useCreateEntityActions } from '../create-entity/use-create-entity-actions';
 import { avatarAtom } from '../onboarding/onboarding-atoms';
-import { EmailNotificationsMenuItem } from './email-notifications-menu-item';
+import { EmailSettingsMenuItem } from './email-settings-menu-item';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount, error } = useSmartAccount();
@@ -104,6 +105,7 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
   // Deferred like the dialog above: the week grid is only built once somebody asks for it.
   const [hasOpenedSchedule, setHasOpenedSchedule] = React.useState(false);
   const avatarTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const [isEmailSettingsOpen, setIsEmailSettingsOpen] = React.useState(false);
 
   const {
     isLoading: isUserLoading,
@@ -332,9 +334,15 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
                 >
                   Set my schedule
                 </button>
-                {/* GEO-3029. Needs a personal space to register against, and the service configured. */}
+                {/* GEO-3392. Needs a personal space to register against, and the service configured. */}
                 {personalSpaceId && geoNotificationsApiUrl() ? (
-                  <EmailNotificationsMenuItem className={PROFILE_MENU_DIVIDED_ACTION_CLASS} />
+                  <EmailSettingsMenuItem
+                    className={PROFILE_MENU_DIVIDED_ACTION_CLASS}
+                    onOpen={() => {
+                      onOpenChange(false);
+                      setIsEmailSettingsOpen(true);
+                    }}
+                  />
                 ) : null}
                 {/* Sign out keeps its own group below the divider — the destructive action
                   stays alone at the bottom where people expect it. */}
@@ -359,6 +367,13 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
       ) : null}
       {/* `openerRef` is the avatar, not the item that was clicked: that item unmounts with the
           popover on the same click, leaving no live node for the dialog to return focus to. */}
+      {isEmailSettingsOpen ? (
+        <EmailSettingsDialog
+          entry="account_menu"
+          onClose={() => setIsEmailSettingsOpen(false)}
+          openerRef={avatarTriggerRef}
+        />
+      ) : null}
       {hasOpenedSchedule ? (
         <OwnScheduleModal
           key="availability-modal"

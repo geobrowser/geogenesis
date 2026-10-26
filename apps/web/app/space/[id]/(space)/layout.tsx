@@ -10,6 +10,7 @@ import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collecti
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { EntityId } from '~/core/io/substream-schema';
 import { profileRailFacts } from '~/core/profile/profile-rail-facts';
+import { SpaceCallEntry } from '~/core/space-calls/space-call-entry';
 import { SpaceVerifyButton } from '~/core/space/space-verify-button';
 import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -211,6 +212,8 @@ export default async function Layout(props0: LayoutProps) {
                       <ProfileActions spaceId={spaceId} name={props.space?.entity?.name ?? null} />
                     ) : typeIds.includes(SystemIds.PERSON_TYPE) ? (
                       <ProfileDebateButton spaceId={spaceId} />
+                    ) : props.space?.type === 'DAO' ? (
+                      <SpaceCallEntry spaceId={spaceId} />
                     ) : null
                   }
                 />

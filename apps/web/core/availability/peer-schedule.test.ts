@@ -5,9 +5,11 @@ import type { ScheduleOverlapResponse } from '~/core/debates/api';
 import {
   formatOffset,
   formatViewerInstant,
+  markCurrent,
   peerScheduleDays,
   slotStarts,
   toPeerSchedule,
+  viewerDayAndTime,
   viewerInputInstant,
   viewerInputValue,
 } from './peer-schedule';
@@ -428,5 +430,55 @@ describe('slotStarts', () => {
       '2026-10-06T10:00:00.000Z',
       '2026-10-06T10:30:00.000Z',
     ]);
+  });
+});
+
+// GEO-3429: the time a debate being moved is booked for, marked in the week.
+describe('markCurrent', () => {
+  const now = new Date('2026-09-21T15:00:00Z');
+  const schedule = (spans: ReturnType<typeof their>) =>
+    toPeerSchedule(
+      response({ viewer_timezone: 'America/New_York', with_timezone: 'Europe/Berlin', their_slots: spans })
+    );
+  const marked = (spans: ReturnType<typeof their>, current: string | null) => {
+    const peer = schedule(spans);
+    return markCurrent(peerScheduleDays(peer, now), peer, current);
+  };
+  const currentOf = (days: ReturnType<typeof marked>) =>
+    days.flatMap(day => day.slots.filter(slot => slot.current).map(slot => ({ date: day.date, slot })));
+
+  it("adds it to its day in the viewer's zone, since geo-chat leaves committed time out", () => {
+    // 1am UTC on the 23rd is still the 22nd in New York, 9pm.
+    const days = marked(their(['2026-09-22T22:00:00Z', '2026-09-22T22:30:00Z']), '2026-09-23T01:00:00Z');
+    const [only, ...rest] = currentOf(days);
+    expect(rest).toEqual([]);
+    expect(only.date).toBe('2026-09-22');
+    expect(only.slot.label).toBe('9pm');
+    expect(only.slot.viewerIsFree).toBeNull();
+    // Berlin is six hours ahead of New York.
+    expect(only.slot.offsetMinutes).toBe(360);
+    // In time order: 6pm (their free slot), then 9pm.
+    expect(days.find(day => day.date === '2026-09-22')?.slots.map(slot => slot.label)).toEqual(['6pm', '9pm']);
+  });
+
+  it('marks one of their own slots instead of adding a second', () => {
+    const days = marked(their(['2026-09-22T22:00:00Z', '2026-09-22T22:30:00Z']), '2026-09-22T22:00:00.000Z');
+    expect(days.find(day => day.date === '2026-09-22')?.slots).toHaveLength(1);
+    expect(currentOf(days)).toHaveLength(1);
+  });
+
+  it('leaves the week alone without a time, or for one outside it', () => {
+    const spans = their(['2026-09-22T22:00:00Z', '2026-09-22T22:30:00Z']);
+    expect(currentOf(marked(spans, null))).toEqual([]);
+    expect(currentOf(marked(spans, '2026-10-30T22:00:00Z'))).toEqual([]);
+    expect(currentOf(marked(spans, 'not a time'))).toEqual([]);
+  });
+});
+
+describe('viewerDayAndTime', () => {
+  it("names an instant as the week's labels do, in the grid's zone", () => {
+    expect(viewerDayAndTime('2026-09-23T01:00:00Z', 'America/New_York')).toEqual({ day: 'Tue, Sep 22', time: '9pm' });
+    expect(viewerDayAndTime('2026-09-23T01:30:00Z', 'UTC')).toEqual({ day: 'Wed, Sep 23', time: '1:30am' });
+    expect(viewerDayAndTime('nope', 'UTC')).toBeNull();
   });
 });

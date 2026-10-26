@@ -396,7 +396,7 @@ export class GeoStore {
       this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
     }
 
-    this.stream.emit({ type: GeoEventStream.LOCAL_CHANGES_CLEARED, spaceId });
+    this.stream.emit({ type: GeoEventStream.LOCAL_CHANGES_CLEARED, spaceId, valueIds, relationIds });
   }
 
   public hydrateWith(entities: Entity[]) {

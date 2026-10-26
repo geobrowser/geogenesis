@@ -36,7 +36,14 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  * has no room for full-tab chrome. No heading or outer padding either: each section below names
  * itself, and the rail spaces its sections the way the facet rail opposite does.
  */
-export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
+export function RequestsTab({
+  dense = false,
+  focusedRequestId = null,
+}: {
+  dense?: boolean;
+  /** A scheduled request a link asked to see (GEO-3431). Only the hub's own tab passes one. */
+  focusedRequestId?: string | null;
+} = {}) {
   const scheduled = useScheduledContent();
   const availabilityRequests = useAvailabilityRequests();
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
@@ -125,7 +132,7 @@ export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
         {/* Outside `HubQueryState`, which reports the instant-requests query: a debate that is due
             must not vanish because an unrelated read failed. */}
         <AvailabilityRequestNotice requests={availabilityRequests} />
-        <ScheduledDebatesSection content={scheduled} />
+        <ScheduledDebatesSection content={scheduled} focusedRequestId={focusedRequestId} />
 
         {/* Dense with only scheduled debates to show, the requests list would be an empty box that
             still takes a gap below them. */}

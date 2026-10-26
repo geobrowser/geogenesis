@@ -175,8 +175,12 @@ export const openDebateFeedPanelAtom = atom(null, (_get, set, panel: 'claims' | 
 
 export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'people';
 
-/** `null` while the debates matchmaking hub is closed. */
-export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
+/**
+ * `null` while the debates matchmaking hub is closed. `requestId` is a scheduled request a link
+ * asked to see (GEO-3431): the Requests tab brings it into view and outlines it until the hub is
+ * opened on something else.
+ */
+export const debatesHubAtom = atom<{ tab: DebatesHubTab; requestId?: string } | null>(null);
 
 /**
  * The hub's filter selections, held outside the tabs that draw them (GEO-2850).

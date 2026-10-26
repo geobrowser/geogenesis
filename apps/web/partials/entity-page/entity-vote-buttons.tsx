@@ -13,6 +13,7 @@ import { withActionContext } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
 import { personProfileOpened } from '~/core/analytics';
 import { FollowTopicButton } from '~/core/follows/follow-button';
+import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -52,7 +53,6 @@ import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { Avatar } from '~/design-system/avatar';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
-import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
@@ -68,7 +68,6 @@ type EntityVoteButtonsProps = {
   spaceId: string;
   responseKind?: ResponseKind | null;
   claimResponderAvatarsPosition?: 'leading' | 'trailing';
-  presentation?: 'inline' | 'debate-vertical' | 'debate-horizontal';
   /**
    * A surface with no room for prose: the sticky entity header's 48px row.
    *
@@ -128,7 +127,6 @@ function EntityResponseButtons({
   spaceId: requestedSpaceId,
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
-  presentation = 'inline',
   compact = false,
   nearViewport = true,
 }: EntityVoteButtonsProps) {
@@ -188,6 +186,7 @@ function EntityResponseButtons({
   const { ready: authReady, authenticated } = usePrivy();
   // Known to be signed out — not still restoring a session, when `authenticated` reads false too.
   const signedOut = authReady && !authenticated;
+  const authResolving = useAuthResolving();
   const queryClient = useQueryClient();
   // Signed in without a usable space, a vote is held only when one is on its way: being created for
   // a new account, or still loading for a returning one. With neither, nothing would ever publish it,
@@ -266,13 +265,17 @@ function EntityResponseButtons({
 
   // A queued (pre-personal-space) vote overrides the mutation's own optimistic state until it is
   // replayed and cleared from the queue, at which point the mutation's state takes over.
-  const effectiveOptimistic = queuedResponse !== undefined ? queuedResponse : optimisticResponse;
+  // While sign-in resolves, a queued press may yet become a device vote.
+  const heldResponse = authResolving ? queuedResponse : undefined;
+  const countedQueuedResponse = authResolving ? undefined : queuedResponse;
+  const effectiveOptimistic = countedQueuedResponse !== undefined ? countedQueuedResponse : optimisticResponse;
   const activeResponse = effectiveOptimistic === undefined ? serverResponseDirection : effectiveOptimistic;
   // A vote cast signed out and kept on this device until a save publishes it (GEO-3214). Drawn as the
   // viewer's — the arrow fills — but left out of the score and the split: it doesn't count until it
   // is saved, and the counts say so by not moving. `activeResponse` stays the counted side.
   const localDirection = useLocalVote(entityId, spaceId, responseKind);
-  const drawnResponse = effectiveOptimistic === undefined && localDirection !== null ? localDirection : activeResponse;
+  const drawnResponse =
+    heldResponse ?? (effectiveOptimistic === undefined && localDirection !== null ? localDirection : activeResponse);
 
   const positiveResponses = BigInt(responseCounts?.positive ?? 0);
   const negativeResponses = BigInt(responseCounts?.negative ?? 0);
@@ -299,10 +302,31 @@ function EntityResponseButtons({
   function queueResponse(direction: ActiveResponseDirection) {
     if (!smartAccount) {
       // Signed out: vote on this device, with no sign-in in the way. The save sheet asks for an
-      // account once there are a few. Signed in with the account still loading, the old prompt stays.
-      // Still restoring a session, the press is dropped: kept as a visitor's, a returning account's
-      // vote would be cleared as somebody else's the moment the session came back.
-      if (!authReady) return;
+      // account once there are a few.
+      //
+      // Still resolving, the side is queued with what to do if it resolves signed out: a device vote,
+      // or the prompt when there is no response kind to keep one under (`PendingActionsRunner`).
+      // `!smartAccount` reads as signed out for that moment, and acting on it showed a signed-in
+      // viewer the sign-in prompt — or, before that, dropped the press, which loses a fast tap on a
+      // page that has only just loaded.
+      if (authResolving) {
+        const attribution = getContext();
+        const title = entity?.name ?? '';
+        queuedVote.queue(direction, {
+          onSignedOut:
+            responseKind === null
+              ? {
+                  prompt: {
+                    ...attribution,
+                    auth_control: `${responseKind}_${direction}`,
+                    auth_intent: 'vote',
+                    auth_continuation: 'queued',
+                  },
+                }
+              : () => castLocalVote({ entityId, spaceId, responseKind, direction, title, attribution }),
+        });
+        return;
+      }
       if (signedOut && responseKind !== null) {
         castLocalVote({
           entityId,
@@ -478,22 +502,6 @@ function EntityResponseButtons({
     );
   }
 
-  if (presentation !== 'inline') {
-    return (
-      <DebateVotePill
-        orientation={presentation === 'debate-vertical' ? 'vertical' : 'horizontal'}
-        score={scoreLabel}
-        positiveActive={positiveActive}
-        negativeActive={negativeActive}
-        disabled={responseDisabled}
-        positiveTitle={positiveTitle}
-        negativeTitle={negativeTitle}
-        onPositive={handlePositiveResponse}
-        onNegative={handleNegativeResponse}
-      />
-    );
-  }
-
   /*
    * Everything the two thumbs share, so the two cannot drift — and so this control matches the claim
    * pills while a response confirms, which is how they came apart in the first place: #2587 and #2598
@@ -509,10 +517,6 @@ function EntityResponseButtons({
    * - drop the hover step, since nothing under the pointer is going to happen;
    * - put `RESPONSE_CONFIRMING_COPY` in the tooltip, as the pills' `actionTitle` does;
    * - stay at full strength: `aria-disabled` rather than `disabled`, so the side still reads as taken.
-   *
-   * Inline only. `DebateVotePill` draws this control in the debate overlay and shares its handlers,
-   * so the guard sits on these buttons rather than in `handlePositiveResponse` — widening it to the
-   * overlay belongs with unifying the pills and the thumbs into one control.
    */
   const voteButtonProps = (onPress: () => void, title: string) => ({
     onClick: () => {
@@ -634,68 +638,6 @@ function RespondersPopover({
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
-  );
-}
-
-function DebateVotePill({
-  orientation,
-  score,
-  positiveActive,
-  negativeActive,
-  disabled,
-  positiveTitle,
-  negativeTitle,
-  onPositive,
-  onNegative,
-}: {
-  orientation: 'vertical' | 'horizontal';
-  score: string;
-  positiveActive: boolean;
-  negativeActive: boolean;
-  disabled: boolean;
-  positiveTitle: string;
-  negativeTitle: string;
-  onPositive: () => void;
-  onNegative: () => void;
-}) {
-  return (
-    <div
-      data-entity-vote-presentation={`debate-${orientation}`}
-      className={cx(
-        'flex items-center justify-center gap-1.5 rounded-full border border-grey-02 bg-white text-text shadow-light',
-        orientation === 'vertical' ? 'w-9 flex-col py-2' : 'h-7 px-2.5'
-      )}
-    >
-      <button
-        type="button"
-        aria-label={positiveTitle}
-        aria-pressed={positiveActive}
-        disabled={disabled}
-        title={positiveTitle}
-        onClick={onPositive}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
-      >
-        <VoteArrow direction="up" filled={positiveActive} />
-      </button>
-      <span className="text-metadataMedium text-text tabular-nums">{score}</span>
-      <button
-        type="button"
-        aria-label={negativeTitle}
-        aria-pressed={negativeActive}
-        disabled={disabled}
-        title={negativeTitle}
-        onClick={onNegative}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
-      >
-        <VoteArrow direction="down" filled={negativeActive} />
-      </button>
-    </div>
   );
 }
 

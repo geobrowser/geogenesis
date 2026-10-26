@@ -94,3 +94,17 @@ it('should return moved blocks', () => {
     moved: ['b'],
   });
 });
+
+it('attributes a one-slot move to the dragged block', () => {
+  expect(getBlockPositionChanges(['a', 't'], ['t', 'a'], 't')).toEqual({
+    added: [],
+    removed: [],
+    moved: ['t'],
+  });
+
+  expect(getBlockPositionChanges(['a', 't', 'b'], ['t', 'a', 'b'], 't')).toEqual({
+    added: [],
+    removed: [],
+    moved: ['t'],
+  });
+});
