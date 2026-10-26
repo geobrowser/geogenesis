@@ -20,6 +20,8 @@ export const ENDED_CALL_RECORDING_COPY = {
   failed: 'The recording failed. There’s nothing to play.',
   neverStarted: 'Recording never started, so there’s nothing to play.',
   interrupted: 'Recording stopped early. What was recorded is kept.',
+  roomClosed: 'Recording stopped when everyone left. What was recorded is kept.',
+  limitReached: 'Recording reached its time limit. What was recorded is kept.',
   published: 'Published: anyone can watch it here and on Explore.',
   unpublished: 'Unpublished: only the space’s editors can watch it.',
   publish: 'Publish',
@@ -66,7 +68,7 @@ export function EndedCallRecording({ lobby }: { lobby: LobbyPageView }) {
 
 function EndedRecordingBody({ callId, recording }: { callId: string; recording: CallRecordingState }) {
   const interrupted =
-    recording.end_reason === 'interrupted' ? <Note>{ENDED_CALL_RECORDING_COPY.interrupted}</Note> : null;
+    recording.end_reason === 'interrupted' ? <Note>{interruptedMessage(recording.end_detail)}</Note> : null;
   switch (recording.status) {
     case 'off':
     case 'recording':
@@ -106,6 +108,13 @@ function EndedRecordingBody({ callId, recording }: { callId: string; recording: 
         </>
       );
   }
+}
+
+/** Unknown or `failed` details read as the neutral copy. */
+export function interruptedMessage(detail: CallRecordingState['end_detail']): string {
+  if (detail === 'room_closed') return ENDED_CALL_RECORDING_COPY.roomClosed;
+  if (detail === 'limit_reached') return ENDED_CALL_RECORDING_COPY.limitReached;
+  return ENDED_CALL_RECORDING_COPY.interrupted;
 }
 
 function PublishToggle({ callId, published }: { callId: string; published: boolean }) {

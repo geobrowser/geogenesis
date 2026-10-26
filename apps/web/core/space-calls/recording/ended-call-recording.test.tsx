@@ -23,7 +23,11 @@ vi.mock('./call-recording-player', () => ({
   CallRecordingPlayer: ({ callId }: { callId: string }) => <div data-testid="player">{callId}</div>,
 }));
 
-const { EndedCallRecording, ENDED_CALL_RECORDING_COPY: COPY } = await import('./ended-call-recording');
+const {
+  EndedCallRecording,
+  interruptedMessage,
+  ENDED_CALL_RECORDING_COPY: COPY,
+} = await import('./ended-call-recording');
 
 afterEach(() => {
   cleanup();
@@ -115,5 +119,15 @@ describe('EndedCallRecording', () => {
     expect(screen.getByText(COPY.interrupted)).toBeInTheDocument();
     rerender(<EndedCallRecording lobby={ended({ ...READY, status: 'off' }, { editor: true })} />);
     expect(screen.getByText(COPY.none)).toBeInTheDocument();
+  });
+});
+
+describe('interruptedMessage', () => {
+  it('says why when geo-chat knows, and stays neutral otherwise', () => {
+    expect(interruptedMessage('room_closed')).toBe(COPY.roomClosed);
+    expect(interruptedMessage('limit_reached')).toBe(COPY.limitReached);
+    expect(interruptedMessage('failed')).toBe(COPY.interrupted);
+    expect(interruptedMessage(null)).toBe(COPY.interrupted);
+    expect(interruptedMessage(undefined)).toBe(COPY.interrupted);
   });
 });

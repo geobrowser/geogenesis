@@ -2878,6 +2878,8 @@ export type CallRecordingState = {
   started_by: string | null;
   stopped_at: string | null;
   end_reason: 'stopped' | 'call_ended' | 'interrupted' | 'start_failed' | null;
+  /** Why an `interrupted` recording stopped; `null` otherwise. Absent from older geo-chat. */
+  end_detail?: 'room_closed' | 'limit_reached' | 'failed' | null;
   /** A recording can start now; not whether the viewer may. */
   can_start: boolean;
   published: boolean;
