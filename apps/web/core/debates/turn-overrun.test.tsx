@@ -225,6 +225,22 @@ describe('useTurnOverrun', () => {
       expect(view.result.current).toBeNull();
     });
 
+    it('waits for their next words through a pause at our buzzer, rather than holding from it', () => {
+      const view = renderOverrun({ turnActive: true, startsLate: true });
+      setSpeaking(true);
+      setSpeaking(false);
+      act(() => vi.advanceTimersByTime(400));
+      const buzzer = Date.now();
+      view.rerender({ turnActive: false, startsLate: true });
+      expect(view.result.current).toBeNull();
+
+      // Past where a hold timed from their last sound would have run out: our buzzer can land before
+      // theirs, so they may still be mid-sentence.
+      act(() => vi.advanceTimersByTime(500));
+      setSpeaking(true);
+      expect(view.result.current).toBe(buzzer);
+    });
+
     it('waits no longer than the window for late speech', () => {
       const view = renderOverrun({ turnActive: true, startsLate: true });
       view.rerender({ turnActive: false, startsLate: true });

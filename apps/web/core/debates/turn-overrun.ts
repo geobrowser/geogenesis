@@ -167,7 +167,10 @@ export function useTurnOverrun({
     }
     endedAtRef.current = Date.now();
     // A pause at the buzzer is still mid-sentence when they spoke within the hold before it (GEO-3470).
-    const pausing = !speakingRef.current && endedAtRef.current - lastSoundAtRef.current < OVERRUN_PAUSE_HOLD_MS;
+    // Our own microphone only: the opponent's pause is timed against our buzzer, which can land before
+    // theirs, so a hold from it could run out before their next words arrive. `waiting` covers them.
+    const pausing =
+      !startsLate && !speakingRef.current && endedAtRef.current - lastSoundAtRef.current < OVERRUN_PAUSE_HOLD_MS;
     if (speakingRef.current || pausing) {
       phaseRef.current = 'running';
       setSince(endedAtRef.current);
