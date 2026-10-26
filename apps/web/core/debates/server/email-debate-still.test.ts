@@ -87,6 +87,26 @@ describe('renderEmailStill', () => {
 });
 
 describe('emailStillPlaceholder', () => {
+  it('renders again after a failed render instead of keeping the failure', async () => {
+    vi.resetModules();
+    let calls = 0;
+    vi.doMock('sharp', async () => {
+      const real = (await vi.importActual<{ default: typeof sharp }>('sharp')).default;
+      // sharp's chain returns the same instance; the failure arrives from toBuffer, as libvips' do.
+      const fake = Object.assign((...args: Parameters<typeof sharp>) => {
+        const instance = real(...args);
+        if (++calls === 1) instance.toBuffer = () => Promise.reject(new Error('vips: out of memory'));
+        return instance;
+      }, real);
+      return { default: fake };
+    });
+    const fresh = await import('./email-debate-still');
+    await expect(fresh.emailStillPlaceholder()).rejects.toThrow('out of memory');
+    expect((await fresh.emailStillPlaceholder()).length).toBeGreaterThan(0);
+    vi.doUnmock('sharp');
+    vi.resetModules();
+  });
+
   it('is the placeholder grey with the button, made once', async () => {
     const first = await emailStillPlaceholder();
     expect(await emailStillPlaceholder()).toBe(first);

@@ -23,7 +23,10 @@ const FETCH_TIMEOUT_MS = 8000;
  * button when the debate has no still or it can't be read, so the row keeps its shape.
  *
  * Only the canonical URL is served (32 lowercase hex, no query string), so every request for a
- * debate shares one CDN entry and a cache-busting query can't make the route redo the work.
+ * debate shares one CDN entry and a cache-busting query can't make the route redo the work. *
+ * Local dev: with `NEXT_PUBLIC_GEO_CHAT_API_BASE_URL` set to the relative `/geo-chat-proxy`, the
+ * server can't fetch the still, so every row draws the placeholder there. Production uses the
+ * absolute public host.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ debateId: string }> }): Promise<Response> {
   const { debateId } = await params;

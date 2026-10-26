@@ -84,9 +84,16 @@ export function renderEmailStill(source: Buffer): Promise<Buffer> {
 
 let placeholder: Promise<Buffer> | null = null;
 
-/** The button on the placeholder grey, for a debate with no still: the same bytes every time, made once. */
+/**
+ * The button on the placeholder grey, for a debate with no still: the same bytes every time, made once.
+ * A failed render isn't kept, so the next request tries again rather than failing for good.
+ */
 export function emailStillPlaceholder(): Promise<Buffer> {
-  return (placeholder ??= withPlayButton(
+  placeholder ??= withPlayButton(
     sharp({ create: { width: STILL_WIDTH, height: STILL_HEIGHT, channels: 3, background: PLACEHOLDER } })
-  ));
+  ).catch(error => {
+    placeholder = null;
+    throw error;
+  });
+  return placeholder;
 }

@@ -2,6 +2,8 @@
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MAX_IMAGE_SIZE_BYTES } from '~/core/constants';
+
 import { GET } from './route';
 
 const DEBATE = '01a15b610e7075709ac5b5acd61c36d5';
@@ -33,6 +35,8 @@ describe('GET /api/email/debate-still/<debateId>', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/jpeg');
     expect(res.headers.get('cache-control')).toContain('s-maxage=604800');
+    // Bounded: geo-chat gets a timeout, so a hung upstream can't hold the request.
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
       `https://chat-api-testnet.geobrowser.io/debates/${DEBATE}/media/artifacts/preview_image/content`
     );
@@ -43,6 +47,10 @@ describe('GET /api/email/debate-still/<debateId>', () => {
   it.each([
     ['a missing still', () => new Response('not found', { status: 404 })],
     ['a body that is not an image', () => new Response('<html></html>')],
+    [
+      'a body over the size cap',
+      () => new Response('x', { headers: { 'content-length': String(MAX_IMAGE_SIZE_BYTES + 1) } }),
+    ],
   ])('answers with the placeholder for %s, cached for 5 minutes', async (_, answer) => {
     fetchMock.mockResolvedValue(answer());
     const res = await get(DEBATE);
