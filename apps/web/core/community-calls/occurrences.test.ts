@@ -61,6 +61,56 @@ describe('getOccurrences', () => {
   });
 });
 
+describe('getOccurrences against geo-chat (RFC 5545)', () => {
+  const DAY = 86_400_000;
+  // The next 42 days, as geo-chat's parity fixture reads them.
+  const slots = (schedule: string, now: string) => {
+    const at = Date.parse(now);
+    return getOccurrences(schedule, at)
+      .filter(o => o.startMs > at && o.startMs <= at + 42 * DAY)
+      .map(o => [new Date(o.startMs).toISOString(), new Date(o.endMs).toISOString()]);
+  };
+
+  it('reads an ordinal monthly BYDAY as the nth weekday', () => {
+    expect(
+      slots(
+        'DTSTART;TZID=Europe/London:20260518T130000\nDTEND;TZID=Europe/London:20260518T140000\nRRULE:FREQ=MONTHLY;BYDAY=3MO',
+        '2026-10-26T00:00:00Z'
+      )
+    ).toEqual([['2026-11-16T13:00:00.000Z', '2026-11-16T14:00:00.000Z']]);
+  });
+
+  it('counts a negative ordinal from the month end, and skips a month without the nth weekday', () => {
+    const lastFriday = getOccurrences(
+      'DTSTART:20261030T170000Z\nDTEND:20261030T180000Z\nRRULE:FREQ=MONTHLY;BYDAY=-1FR',
+      Date.UTC(2026, 9, 1)
+    ).map(o => new Date(o.startMs).toISOString().slice(0, 10));
+    expect(lastFriday.slice(0, 3)).toEqual(['2026-10-30', '2026-11-27', '2026-12-25']);
+
+    // A fifth Monday: Nov 2026 has one (30th), Dec 2026 does not, Feb 2027 does not, Mar 2027 does (29th).
+    const fifthMonday = getOccurrences(
+      'DTSTART:20261130T170000Z\nRRULE:FREQ=MONTHLY;BYDAY=5MO',
+      Date.UTC(2026, 10, 1)
+    ).map(o => new Date(o.startMs).toISOString().slice(0, 10));
+    expect(fifthMonday.slice(0, 2)).toEqual(['2026-11-30', '2027-03-29']);
+  });
+
+  it('reads an end earlier on the clock than the start as the next day', () => {
+    expect(
+      slots(
+        'DTSTART;TZID=Europe/London:20261105T220000\nDTEND;TZID=Europe/London:20261106T003000',
+        '2026-10-26T00:00:00Z'
+      )
+    ).toEqual([['2026-11-05T22:00:00.000Z', '2026-11-06T00:30:00.000Z']]);
+  });
+
+  it('keeps a monthly series without BYDAY on its day of month, skipping short months', () => {
+    expect(
+      slots('DTSTART:20261031T150000Z\nDTEND:20261031T160000Z\nRRULE:FREQ=MONTHLY', '2026-12-15T00:00:00Z')
+    ).toEqual([['2026-12-31T15:00:00.000Z', '2026-12-31T16:00:00.000Z']]);
+  });
+});
+
 describe('bucketOccurrences', () => {
   it('marks the in-window occurrence live and splits past/upcoming', () => {
     const occ = getOccurrences('DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=TH', NOW);

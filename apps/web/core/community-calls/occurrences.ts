@@ -19,6 +19,29 @@ const PAST_WINDOW_MS = 60 * DAY_MS;
 const FUTURE_WINDOW_MS = 180 * DAY_MS;
 const MAX_OCCURRENCES = 500;
 
+/** `MONTHLY;BYDAY=3MO` or `-1FR`: the nth weekday of the month, counted from the end when negative. */
+function parseOrdinalByDay(byDay: string[]): { n: number; weekday: number }[] {
+  return byDay.flatMap(token => {
+    const match = /^([+-]?\d{1,2})([A-Z]{2})$/.exec(token);
+    const weekday = match ? BYDAY_INDEX[match[2]] : undefined;
+    const n = match ? Number(match[1]) : 0;
+    return weekday === undefined || n === 0 ? [] : [{ n, weekday }];
+  });
+}
+
+/** Day of month of the nth `weekday` in a month (0-based month), or null when it has none. */
+function nthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): number | null {
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  if (n > 0) {
+    const first = (weekday - new Date(Date.UTC(year, month, 1)).getUTCDay() + 7) % 7;
+    const day = 1 + first + (n - 1) * 7;
+    return day <= daysInMonth ? day : null;
+  }
+  const last = (new Date(Date.UTC(year, month, daysInMonth)).getUTCDay() - weekday + 7) % 7;
+  const day = daysInMonth - last + (n + 1) * 7;
+  return day >= 1 ? day : null;
+}
+
 function toMs(dateStr: string, time: string): number {
   const [y, m, d] = dateStr.split('-').map(Number);
   const [h, min] = time.split(':').map(Number);
@@ -45,9 +68,10 @@ export function getOccurrences(schedule: string, now = Date.now()): Occurrence[]
   // final occurrence instants get converted to true UTC via `toTrueMs`, once per
   // occurrence, so each one picks up the correct offset for its own date.
   const baseStart = toMs(parsed.startDate, parsed.startTime);
-  const duration = parsed.endTime
-    ? Math.max(toMs(parsed.startDate, parsed.endTime) - baseStart, DEFAULT_DURATION_MS)
-    : DEFAULT_DURATION_MS;
+  // An end earlier on the clock than the start is the next day's (RFC 5545; geo-chat agrees).
+  const sameDayEnd = parsed.endTime ? toMs(parsed.startDate, parsed.endTime) : null;
+  const endMs = sameDayEnd !== null && sameDayEnd < baseStart ? sameDayEnd + DAY_MS : sameDayEnd;
+  const duration = endMs !== null ? Math.max(endMs - baseStart, DEFAULT_DURATION_MS) : DEFAULT_DURATION_MS;
 
   const windowStart = now - PAST_WINDOW_MS;
   const windowEnd = now + FUTURE_WINDOW_MS;
@@ -69,8 +93,21 @@ export function getOccurrences(schedule: string, now = Date.now()): Occurrence[]
   };
 
   const base = new Date(baseStart);
+  const ordinals = parsed.freq === 'MONTHLY' ? parseOrdinalByDay(parsed.byDay) : [];
 
-  if (parsed.freq === 'WEEKLY' && parsed.byDay.length > 0) {
+  if (ordinals.length > 0) {
+    for (let i = 0; i < MAX_OCCURRENCES; i++) {
+      const month = Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + i * interval, 1);
+      if (month > windowEnd) break;
+      const at = new Date(month);
+      for (const { n, weekday } of ordinals) {
+        const day = nthWeekdayOfMonth(at.getUTCFullYear(), at.getUTCMonth(), weekday, n);
+        if (day !== null) {
+          push(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), day, base.getUTCHours(), base.getUTCMinutes()));
+        }
+      }
+    }
+  } else if (parsed.freq === 'WEEKLY' && parsed.byDay.length > 0) {
     const days = parsed.byDay.map(d => BYDAY_INDEX[d]).filter(d => d !== undefined);
     // Walk the week containing the first occurrence, stepping `interval` weeks.
     const weekStart = baseStart - base.getUTCDay() * DAY_MS;
