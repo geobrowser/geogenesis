@@ -29,7 +29,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
-import { getAllEntities, getBatchEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import { getAllEntities, getEntityNames, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import {
   buildIsNewEntity,
@@ -505,15 +505,26 @@ export const ReviewChanges = () => {
     return [...ids].sort();
   }, [relationsFromSpace, ownershipIndex, storeIsNewEntity]);
 
-  const { data: confirmedOnGraphIds = EMPTY_ID_SET, isFetching: isResolvingLinkTargets } = useQuery({
+  const hasUnresolvedLinkTargets = isReviewOpen && unresolvedLinkTargetIds.length > 0;
+
+  const {
+    data: confirmedOnGraphIds = EMPTY_ID_SET,
+    isPending: isLinkTargetLookupPending,
+    isError: linkTargetLookupErrored,
+    refetch: retryLinkTargetLookup,
+  } = useQuery({
     queryKey: ['review-link-target-existence', unresolvedLinkTargetIds.join(',')],
-    enabled: isReviewOpen && unresolvedLinkTargetIds.length > 0,
+    enabled: hasUnresolvedLinkTargets,
     staleTime: 30_000,
-    queryFn: async () => {
-      const entities = await Effect.runPromise(getBatchEntities(unresolvedLinkTargetIds));
+    queryFn: async ({ signal }) => {
+      const entities = await Effect.runPromise(getEntityNames(unresolvedLinkTargetIds, signal));
       return new Set(entities.map(entity => entity.id));
     },
   });
+
+  const isResolvingLinkTargets = hasUnresolvedLinkTargets && isLinkTargetLookupPending;
+
+  const linkTargetLookupFailed = hasUnresolvedLinkTargets && linkTargetLookupErrored;
 
   const isNewEntity = React.useMemo(
     () => buildIsNewEntity(candidateValues, candidateRelations, confirmedOnGraphIds),
@@ -754,6 +765,7 @@ export const ReviewChanges = () => {
     if (!activeSpace) return;
     if (!isReadyToPublish) return;
     if (isResolvingLinkTargets) return;
+    if (linkTargetLookupFailed) return;
 
     const dangling = findDanglingDependencies(ownershipIndex, selectedEntityIds, relationsFromSpace, isNewEntity);
     if (dangling.length > 0) {
@@ -956,6 +968,7 @@ export const ReviewChanges = () => {
     activeSpace,
     isReadyToPublish,
     isResolvingLinkTargets,
+    linkTargetLookupFailed,
     makeProposal,
     relationsFromSpace,
     publishSelection,
@@ -976,10 +989,10 @@ export const ReviewChanges = () => {
   useKeyboardShortcuts(
     React.useMemo(
       () =>
-        isReviewOpen && isReadyToPublish && !isPublishing && !isResolvingLinkTargets
+        isReviewOpen && isReadyToPublish && !isPublishing && !isResolvingLinkTargets && !linkTargetLookupFailed
           ? [{ key: 'Enter', callback: () => handleSubmit() }]
           : [],
-      [isReviewOpen, isReadyToPublish, isPublishing, isResolvingLinkTargets, handleSubmit]
+      [isReviewOpen, isReadyToPublish, isPublishing, isResolvingLinkTargets, linkTargetLookupFailed, handleSubmit]
     )
   );
 
@@ -1093,10 +1106,22 @@ export const ReviewChanges = () => {
                     isFastPathRestricted={isFastPathRestricted}
                   />
                 )}
+                {linkTargetLookupFailed && (
+                  <div className="flex items-center gap-2 text-metadataMedium text-grey-04">
+                    <span>Couldn’t verify linked edits</span>
+                    <SmallButton onClick={() => void retryLinkTargetLookup()}>Retry</SmallButton>
+                  </div>
+                )}
                 <Button
                   variant="primary"
                   onClick={handleSubmit}
-                  disabled={!isReadyToPublish || isPublishing || isPublishGatedByPendingSetup || isResolvingLinkTargets}
+                  disabled={
+                    !isReadyToPublish ||
+                    isPublishing ||
+                    isPublishGatedByPendingSetup ||
+                    isResolvingLinkTargets ||
+                    linkTargetLookupFailed
+                  }
                 >
                   <Pending isPending={isPublishing}>{publishButtonLabel}</Pending>
                 </Button>
