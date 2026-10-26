@@ -13,7 +13,7 @@ import { updateRelation as updateGrc20Relation } from '@geoprotocol/grc-20';
 import { Effect } from 'effect';
 
 import { Relation, Value } from '~/core/types';
-import { GeoDate } from '~/core/utils/utils';
+import { GeoDate, GeoPoint } from '~/core/utils/utils';
 
 import { PrepareOpsError } from '../../errors';
 import { buildOrphanChildDeleteOps } from './delete-orphan-blocks';
@@ -81,6 +81,46 @@ export function prepareLocalDataForPublishing(
       });
       return Effect.fail(new PrepareOpsError('Failed to prepare ops for publishing', { cause: error as unknown }));
     })
+  );
+}
+
+/**
+ * Local changes in `spaceId` that `prepareOps` would silently discard because they are not attached
+ * to any entity (GEO-2966).
+ *
+ * `prepareOps` skips a value whose `entity.id` is `''`, and `Graph.createRelation` throws on a
+ * relation whose `fromEntity.id` is `''`. Either way the user's change never reaches the edit, while
+ * the review screen, which does not check ids, keeps showing it. Callers use this to say so instead
+ * of reporting "an empty edit" or a generic failure.
+ */
+export function findUnattachedChanges(
+  values: Value[],
+  relations: Relation[],
+  spaceId: string
+): { values: Value[]; relations: Relation[] } {
+  return {
+    values: values.filter(
+      v =>
+        v.spaceId === spaceId && !v.hasBeenPublished && v.isLocal === true && v.property.id !== '' && v.entity.id === ''
+    ),
+    relations: relations.filter(r => r.spaceId === spaceId && !r.isDeleted && r.fromEntity.id === ''),
+  };
+}
+
+/** The user-facing error for changes `findUnattachedChanges` found, naming what would be lost. */
+export function describeUnattachedChanges(unattached: { values: Value[]; relations: Relation[] }): string {
+  const count = unattached.values.length + unattached.relations.length;
+  const names = [
+    ...new Set([
+      ...unattached.values.map(v => v.property.name || v.property.id),
+      ...unattached.relations.map(r => r.type.name || r.type.id),
+    ]),
+  ];
+  const noun = count === 1 ? 'change is' : 'changes are';
+
+  return (
+    `Unable to publish: ${count} ${noun} not attached to any entity (${names.join(', ')}), ` +
+    'so publishing would drop them. Deselect or discard them in review, then make them again.'
   );
 }
 
@@ -222,21 +262,45 @@ function convertToGrc20Value(value: Value): PropertyValueParam | null {
       // Stored as full ISO string (e.g. "1970-01-01T14:30:00.000Z"), SDK expects "HH:MM:SSZ"
       return { property, type: 'time', value: toRfc3339Time(val) };
     case 'POINT': {
-      try {
-        const point = JSON.parse(val);
-        return {
-          property,
-          type: 'point',
-          lon: point.lon ?? point.x ?? 0,
-          lat: point.lat ?? point.y ?? 0,
-        };
-      } catch {
-        throw new Error(`Invalid lon/lat conversion data type ${val}`);
-      }
+      const point = parsePointValue(val);
+      if (!point) throw new Error(`Invalid lon/lat conversion data type ${val}`);
+      return { property, type: 'point', lon: point.lon, lat: point.lat };
     }
     default:
       throw new Error(`Unsupported conversion data type: ${dataType}`);
   }
+}
+
+/**
+ * A stored POINT value, in either encoding the app writes.
+ */
+function parsePointValue(val: string): { lon: number; lat: number } | null {
+  try {
+    const parsed = JSON.parse(val);
+    if (parsed !== null && typeof parsed === 'object') {
+      const lon = (parsed as Record<string, unknown>).lon ?? (parsed as Record<string, unknown>).x;
+      const lat = (parsed as Record<string, unknown>).lat ?? (parsed as Record<string, unknown>).y;
+      if (typeof lon === 'number' && typeof lat === 'number' && Number.isFinite(lon) && Number.isFinite(lat)) {
+        return { lon, lat };
+      }
+    }
+  } catch {
+    // Not JSON. The comma form below is the other encoding, not a failure.
+  }
+
+  // `"lat, lon"`, in that order — the same reading the entity page renders from, so the published
+  // point and the drawn one cannot disagree.
+  const parts = val.split(',').map(part => part.trim());
+  if (parts.length !== 2 || !parts.every(isFiniteDecimal)) return null;
+
+  const coordinates = GeoPoint.parseCoordinates(val);
+  return coordinates ? { lon: coordinates.longitude, lat: coordinates.latitude } : null;
+}
+
+const DECIMAL_TOKEN = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+function isFiniteDecimal(part: string): boolean {
+  return DECIMAL_TOKEN.test(part) && Number.isFinite(Number(part));
 }
 
 /**
@@ -287,10 +351,22 @@ function parseDecimalString(val: string): { exponent: number; mantissa: DecimalM
 }
 
 /**
+ * Parses a stored date/time value, refusing one the engine cannot read.
+ *
+ * An unreadable value used to become "NaN-NaN-NaN", which the SDK only rejects at encode time and
+ * the publish flow then reports, and retries, as an IPFS upload failure.
+ */
+function parseStoredDate(val: string): Date {
+  const date = new Date(GeoDate.toFullISOString(val));
+  if (Number.isNaN(date.getTime())) throw new Error(`Cannot publish unreadable date value "${val}"`);
+  return date;
+}
+
+/**
  * Convert a stored value to RFC 3339 date-only: "YYYY-MM-DD"
  */
 function toRfc3339Date(val: string): string {
-  const date = new Date(GeoDate.toFullISOString(val));
+  const date = parseStoredDate(val);
   const yyyy = String(date.getUTCFullYear()).padStart(4, '0');
   const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(date.getUTCDate()).padStart(2, '0');
@@ -301,7 +377,7 @@ function toRfc3339Date(val: string): string {
  * Convert a stored value to RFC 3339 time-only: "HH:MM:SSZ"
  */
 function toRfc3339Time(val: string): string {
-  const date = new Date(GeoDate.toFullISOString(val));
+  const date = parseStoredDate(val);
   const hh = String(date.getUTCHours()).padStart(2, '0');
   const min = String(date.getUTCMinutes()).padStart(2, '0');
   const ss = String(date.getUTCSeconds()).padStart(2, '0');
@@ -317,6 +393,8 @@ function toRfc3339Datetime(val: string): string {
 
 export const Publish = {
   prepareLocalDataForPublishing,
+  findUnattachedChanges,
+  describeUnattachedChanges,
   /** @internal Exported for testing only */
   parseDecimalString,
   toRfc3339Date,

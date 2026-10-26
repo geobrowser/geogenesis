@@ -1,6 +1,6 @@
 'use client';
 
-import { PopoverContent, Root, Trigger } from '@radix-ui/react-popover';
+import { Close, PopoverContent, Portal, Root, Trigger } from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
@@ -10,6 +10,7 @@ import cx from 'classnames';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 export type MenuAlign = 'end' | 'center' | 'start';
 
@@ -49,7 +50,7 @@ interface Props {
 
 /** Outer shell: opaque + clips corners so overscroll never reveals “holes” behind the panel. */
 const shellStyles = cva(
-  'isolate z-100 w-full max-w-[360px] min-w-0 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none',
+  'pointer-events-auto isolate z-100 w-full max-w-[360px] min-w-0 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none',
   {
     variants: {
       align: {
@@ -83,6 +84,7 @@ export function Menu({
   triggerRef: externalTriggerRef,
   viewportRef,
 }: Props) {
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
   const internalTriggerRef = React.useRef<HTMLButtonElement>(null);
   const triggerRef = externalTriggerRef ?? internalTriggerRef;
   const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
@@ -139,21 +141,24 @@ export function Menu({
       <Trigger ref={triggerRef} asChild={asChild} suppressHydrationWarning>
         {trigger}
       </Trigger>
-      <PopoverContent
-        ref={setContentElement}
-        align={resolvedAlign}
-        side={adaptiveSide}
-        sideOffset={sideOffset}
-        avoidCollisions={true}
-        collisionPadding={8}
-        className={cx(shellStyles({ align: resolvedAlign }), className)}
-        onWheel={onMenuWheel}
-        onCloseAutoFocus={onCloseAutoFocus}
-      >
-        <div ref={setScrollNode} className={viewportClassName ?? defaultScrollViewportClass}>
-          {children}
-        </div>
-      </PopoverContent>
+      {/* Escape sticky controls and clipping ancestors while respecting the active overlay host. */}
+      <Portal container={elevatedPopoverPortal ?? undefined}>
+        <PopoverContent
+          ref={setContentElement}
+          align={resolvedAlign}
+          side={adaptiveSide}
+          sideOffset={sideOffset}
+          avoidCollisions={true}
+          collisionPadding={8}
+          className={cx(shellStyles({ align: resolvedAlign }), className)}
+          onWheel={onMenuWheel}
+          onCloseAutoFocus={onCloseAutoFocus}
+        >
+          <div ref={setScrollNode} className={viewportClassName ?? defaultScrollViewportClass}>
+            {children}
+          </div>
+        </PopoverContent>
+      </Portal>
     </Root>
   );
 }
@@ -164,9 +169,25 @@ type MenuItemProps = {
   onClick?: () => void;
   children: React.ReactNode;
   className?: string;
+  /**
+   * Close the menu once the item is pressed, through Radix's own `Close` — for an item that is
+   * handed to a menu it cannot reach the state of, such as one a server component passes in.
+   */
+  closeOnSelect?: boolean;
 };
 
-export function MenuItem({ className = '', active = false, children, href, ...rest }: MenuItemProps) {
+export function MenuItem({ closeOnSelect = false, ...props }: MenuItemProps) {
+  const item = <MenuItemBody {...props} />;
+  return closeOnSelect ? <Close asChild>{item}</Close> : item;
+}
+
+function MenuItemBody({
+  className = '',
+  active = false,
+  children,
+  href,
+  ...rest
+}: Omit<MenuItemProps, 'closeOnSelect'>) {
   if (href) {
     return (
       <Link

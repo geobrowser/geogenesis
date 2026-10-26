@@ -1,14 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { TAG_PROPERTY_ID } from '~/core/constants';
+import { ENTITY_ID_BATCH_CONCURRENCY, ENTITY_ID_BATCH_SIZE } from '~/core/io/queries';
 
 import type { DebateClaimInput } from '../debate-publish-draft';
 import {
   type ExistingClaimEntity,
+  type ExistingClaimFactsFetcher,
   type ExistingClaimLookup,
   applyClaimReusePolicy,
   isDebateClaimReuseEnabled,
+  lookupExistingClaimsInGraph,
 } from './claim-reuse';
+import type { RelationTargetsPageFetcher } from './relation-targets';
 
 const SPACE = 'c9f267dcb0d270718c2a3c45a64afd32';
 const OTHER_SPACE = '4582fbbee28a16589154f7e36f1ee3c5';
@@ -298,5 +303,89 @@ describe('isDebateClaimReuseEnabled', () => {
     expect(isDebateClaimReuseEnabled()).toBe(false);
     vi.stubEnv('DEBATE_CLAIM_REUSE_ENABLED', 'off');
     expect(isDebateClaimReuseEnabled()).toBe(false);
+  });
+});
+
+describe('lookupExistingClaimsInGraph', () => {
+  const id = (n: number) => n.toString(16).padStart(32, '0');
+  const facts = (ids: string[]) =>
+    ids.map(entityId => ({ id: entityId, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }] }));
+  const noRelations: RelationTargetsPageFetcher = async () => ({ items: [], endCursor: null, hasNextPage: false });
+
+  // An unpaged `id: { in }` read stops at 100 rows (verified against the live API with 150 ids).
+  // Every entity past the cap would read as unverified and be minted as a duplicate.
+  it('verifies every referenced entity, however many there are', async () => {
+    const ids = Array.from({ length: 150 }, (_, n) => id(n + 1));
+    // Answers the way the API does: at most 100 rows per request.
+    const fetchFacts = vi.fn<ExistingClaimFactsFetcher>(async batch => facts(batch.slice(0, 100)));
+
+    const entities = await lookupExistingClaimsInGraph(ids, SPACE, fetchFacts, noRelations);
+
+    expect(entities.map(entity => entity.id)).toEqual(ids);
+  });
+
+  it('caps how many entity batches are in flight at once', async () => {
+    const ids = Array.from({ length: ENTITY_ID_BATCH_SIZE * (ENTITY_ID_BATCH_CONCURRENCY + 2) }, (_, n) => id(n + 1));
+    let inFlight = 0;
+    let peak = 0;
+    const fetchFacts = vi.fn<ExistingClaimFactsFetcher>(async batch => {
+      peak = Math.max(peak, ++inFlight);
+      await new Promise(resolve => setTimeout(resolve, 1));
+      inFlight--;
+      return facts(batch);
+    });
+
+    const entities = await lookupExistingClaimsInGraph(ids, SPACE, fetchFacts, noRelations);
+
+    expect(peak).toBe(ENTITY_ID_BATCH_CONCURRENCY);
+    expect(entities).toHaveLength(ids.length);
+  });
+
+  // A topic or tag missed here is one the writer adds a second time.
+  it('attributes Topics and Tags from every relation page to the entity that carries them', async () => {
+    const [first, second] = [id(1), id(2)];
+    const fetchRelationPage = vi
+      .fn<RelationTargetsPageFetcher>()
+      .mockResolvedValueOnce({
+        items: [{ fromEntityId: first, typeId: TOPICS_PROPERTY_ID, toEntityId: id(100) }],
+        endCursor: 'c1',
+        hasNextPage: true,
+      })
+      .mockResolvedValueOnce({
+        items: [
+          // Dashed, as the API may return ids; still the same entity.
+          { fromEntityId: '00000000-0000-0000-0000-000000000001', typeId: TAG_PROPERTY_ID, toEntityId: id(200) },
+          { fromEntityId: second, typeId: TOPICS_PROPERTY_ID, toEntityId: id(101) },
+        ],
+        endCursor: null,
+        hasNextPage: false,
+      });
+
+    const entities = await lookupExistingClaimsInGraph(
+      [first, second],
+      SPACE,
+      async batch => facts(batch),
+      fetchRelationPage
+    );
+
+    expect(entities).toEqual([
+      expect.objectContaining({ id: first, topicIds: [id(100)], tagIds: [id(200)] }),
+      expect.objectContaining({ id: second, topicIds: [id(101)], tagIds: [] }),
+    ]);
+    expect(fetchRelationPage.mock.calls[0]?.[0]).toEqual({
+      fromEntityIds: [first, second],
+      typeIds: [TOPICS_PROPERTY_ID, TAG_PROPERTY_ID],
+      spaceId: SPACE,
+    });
+  });
+
+  // The policy treats a thrown lookup as unverifiable and withholds reuse; a partial relation list
+  // would instead let it write duplicates it believes are missing.
+  it('throws when the relation read cannot finish', async () => {
+    const broken: RelationTargetsPageFetcher = async () => ({ items: [], endCursor: null, hasNextPage: true });
+
+    await expect(lookupExistingClaimsInGraph([id(1)], SPACE, async batch => facts(batch), broken)).rejects.toThrow(
+      'next page but no end cursor'
+    );
   });
 });

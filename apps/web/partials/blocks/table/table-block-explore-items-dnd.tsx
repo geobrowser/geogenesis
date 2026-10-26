@@ -8,6 +8,7 @@ import { DndItemsConfig, RenderItemProps, TableBlockDndItems, TableBlockDndItems
 import { TableBlockExploreItem } from './table-block-explore-item';
 
 const renderItem = ({
+  itemPosition,
   row,
   isEditing,
   spaceId,
@@ -20,6 +21,7 @@ const renderItem = ({
   collectionTypeFilters,
 }: RenderItemProps) => (
   <TableBlockExploreItem
+    itemPosition={itemPosition}
     isEditing={isEditing}
     columns={row.columns}
     currentSpaceId={spaceId}

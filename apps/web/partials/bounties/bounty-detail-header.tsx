@@ -57,7 +57,7 @@ export function BountyDetailHeader({ spaceId, bountyId }: Props) {
 export function BountyDetailHeaderSkeleton() {
   return (
     <div
-      className="grid grid-cols-1 gap-x-8 gap-y-2 rounded-lg border border-grey-02 bg-white p-4 md:grid-cols-2"
+      className="grid grid-cols-2 gap-x-8 gap-y-2 rounded-lg border border-grey-02 bg-white p-4 md:grid-cols-1"
       aria-busy
     >
       {Array.from({ length: 10 }, (_, i) => (

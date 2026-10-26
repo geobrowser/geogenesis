@@ -3,7 +3,32 @@ import { describe, expect, it } from 'vitest';
 import { SIGN_IN_MODAL, toSignIn } from '~/core/auth/sign-in-deep-link';
 import { modalTarget, requestsModal } from '~/core/deep-links/modal-deep-link';
 
-import { DEBATES_MODAL, debatesPanelTab, toDebatesPanel } from './debates-panel-deep-link';
+import { DEBATES_MODAL, debatesPanelRequestId, debatesPanelTab, toDebatesPanel } from './debates-panel-deep-link';
+
+// GEO-3431: the requester heads-up email's "Withdraw the invite", as geo-chat builds it.
+describe('a link to one scheduled request', () => {
+  const REQUEST = '5f0c2a9e-1b7d-4c3e-9a8f-2d6b1e4c7a90';
+
+  it('opens the Requests tab on that request', () => {
+    expect(debatesPanelTab(`requests:${REQUEST}`)).toBe('requests');
+    expect(debatesPanelRequestId(`requests:${REQUEST}`)).toBe(REQUEST);
+    expect(debatesPanelRequestId(`requests:${REQUEST.replaceAll('-', '')}`)).toBe(REQUEST.replaceAll('-', ''));
+  });
+
+  it('names no request for a plain tab, or anything that is not an id', () => {
+    for (const target of [null, 'requests', 'people', 'requests:', 'requests:abc', `people:${REQUEST}`]) {
+      expect(debatesPanelRequestId(target)).toBeNull();
+    }
+    expect(debatesPanelTab(`people:${REQUEST}`)).toBeNull();
+  });
+
+  it('builds the link and reads it back', () => {
+    const built = toDebatesPanel({ requestId: REQUEST, via: 'email' });
+    expect(built).toBe(`/explore?modal=debates&modalTarget=requests%3A${REQUEST}&via=email`);
+    const url = new URL(built, 'https://geobrowser.io');
+    expect(debatesPanelRequestId(modalTarget(url.searchParams))).toBe(REQUEST);
+  });
+});
 
 /**
  * Only what is specific to this link. Reading a trigger, clearing one, and the param names are the

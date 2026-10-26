@@ -11,6 +11,7 @@ import {
   encodePathSegment,
   findMembershipAction,
   getApiProposalCanExecute,
+  getEffectiveApiProposalStatus,
   getSpaceTopicProposalDetails,
   getSubspaceProposalDetails,
   getVotingSettingsProposalDetails,
@@ -168,7 +169,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     createdAtBlock: '0',
     startTime: apiProposal.timing.startTime,
     endTime: apiProposal.timing.endTime,
-    status: mapProposalStatus(apiProposal.status),
+    status: mapProposalStatus(getEffectiveApiProposalStatus(apiProposal)),
     canExecute: getApiProposalCanExecute(apiProposal),
     votingMode: apiProposal.votingMode,
     space: {

@@ -38,7 +38,7 @@ function renderSummary(value: ClaimResponseSummary) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ClaimSummary entityId={ENTITY} spaceId={SPACE} responseKind="veracity" summary={value} />
+      <ClaimSummary entityId={ENTITY} spaceId={SPACE} responseKind="stance" summary={value} />
     </QueryClientProvider>
   );
 }

@@ -1,8 +1,8 @@
 'use client';
 
-import { getIdentityToken, useIdentityToken } from '@geogenesis/auth';
-
 import * as React from 'react';
+
+import { getIdentityToken, useIdentityToken } from '~/core/wallet/auth-hooks';
 
 /**
  * Cached access to the current user's Privy identity token (JWT).

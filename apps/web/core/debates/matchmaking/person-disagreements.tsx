@@ -4,7 +4,10 @@ import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { type SpaceLabel, spaceLabel } from '~/core/hooks/use-space-labels';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -22,6 +25,8 @@ export function PersonMatches({
   claimNamesLoading,
   labelsById,
   popoverPortal,
+  triggerAttributes,
+  hideWhenDetached = true,
 }: {
   personName: string;
   matches: ClaimMatch[];
@@ -29,6 +34,10 @@ export function PersonMatches({
   claimNamesLoading: boolean;
   labelsById: Map<string, SpaceLabel>;
   popoverPortal: HTMLElement | null;
+  /** Analytics attributes for the trigger, where its surface labels its own clicks (GEO-3220). */
+  triggerAttributes?: Readonly<Record<`data-${string}`, string>>;
+  /** Off when the row sits inside another popover; see `PersonRow`'s `hidePopoversWhenDetached`. */
+  hideWhenDetached?: boolean;
 }) {
   const firstClaimRef = React.useRef<HTMLAnchorElement>(null);
   const count = matches.length;
@@ -40,6 +49,7 @@ export function PersonMatches({
         <button
           type="button"
           aria-label={`View ${count} matching ${count === 1 ? 'claim' : 'claims'} with ${personName}`}
+          {...triggerAttributes}
           className="inline-flex items-center gap-1 whitespace-nowrap text-purple transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple"
         >
           <span className="tabular-nums">{count}</span> {count === 1 ? 'match' : 'matches'}
@@ -53,7 +63,7 @@ export function PersonMatches({
             align="start"
             sideOffset={8}
             collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
-            hideWhenDetached
+            hideWhenDetached={hideWhenDetached}
             aria-label={`Matching claims with ${personName}`}
             onOpenAutoFocus={event => {
               event.preventDefault();
@@ -69,39 +79,23 @@ export function PersonMatches({
               aria-label={`Matching claims with ${personName}`}
               className="m-0 max-h-[320px] list-none overflow-y-auto overscroll-contain p-0"
             >
-              {matches.map((match, index) => {
-                const name = claimName(match.claimId, claimNamesById, claimNamesLoading);
-                const space = spaceLabel(labelsById, match.spaceId);
-                return (
-                  <li
-                    key={`${normId(match.claimId)}:${normId(match.spaceId)}`}
-                    className="border-t border-grey-02 first:border-t-0"
-                  >
-                    <Link
-                      ref={index === 0 ? firstClaimRef : undefined}
-                      href={NavUtils.toEntity(match.spaceId, match.claimId)}
-                      className="block px-3 py-2.5 transition-colors duration-75 hover:bg-grey-01 focus-visible:bg-grey-01 focus-visible:outline-none"
-                    >
-                      <span className="mb-1 flex min-w-0 items-center gap-1.5 text-footnoteMedium text-grey-04">
-                        <PersonSpaceIcon spaceId={match.spaceId} labelsById={labelsById} size={12} />
-                        <span className="truncate">{space?.name?.trim() || 'Space'}</span>
-                      </span>
-                      <span className="block text-metadataMedium text-text">{name}</span>
-                      <span className="mt-2 flex items-center gap-1.5">
-                        <PositionBadge actor="You" responseKind={match.responseKind} position={match.viewerPosition} />
-                        <span className="shrink-0 text-footnote text-grey-03" aria-hidden>
-                          vs
-                        </span>
-                        <PositionBadge
-                          actor={personName}
-                          responseKind={match.responseKind}
-                          position={match.personPosition}
-                        />
-                      </span>
-                    </Link>
-                  </li>
-                );
-              })}
+              {matches.map((match, index) => (
+                <li
+                  key={`${normId(match.claimId)}:${normId(match.spaceId)}`}
+                  className="border-t border-grey-02 first:border-t-0"
+                >
+                  <MatchingClaim
+                    ref={index === 0 ? firstClaimRef : undefined}
+                    match={match}
+                    viewerName="You"
+                    personName={personName}
+                    claimNamesById={claimNamesById}
+                    claimNamesLoading={claimNamesLoading}
+                    labelsById={labelsById}
+                    className="px-3 py-2.5"
+                  />
+                </li>
+              ))}
             </ul>
           </Popover.Content>
         </Popover.Portal>
@@ -111,13 +105,63 @@ export function PersonMatches({
 }
 
 /**
+ * One claim a pair holds opposite positions on: its space, its name, and each side. Shared by the
+ * People tab's matches popover and admin New match's inline list (GEO-3230), so a match reads the
+ * same wherever it is listed. `newTab` keeps a half-built admin match open behind the claim page.
+ */
+export const MatchingClaim = React.forwardRef<
+  HTMLAnchorElement,
+  {
+    match: ClaimMatch;
+    /** Who holds `viewerPosition`: "You" on the People tab, debater 1 in New match. */
+    viewerName: string;
+    personName: string;
+    claimNamesById: ReadonlyMap<string, string | null>;
+    claimNamesLoading: boolean;
+    labelsById: Map<string, SpaceLabel>;
+    newTab?: boolean;
+    className?: string;
+  }
+>(function MatchingClaim(
+  { match, viewerName, personName, claimNamesById, claimNamesLoading, labelsById, newTab, className },
+  ref
+) {
+  const name = claimName(match.claimId, claimNamesById, claimNamesLoading);
+  const space = spaceLabel(labelsById, match.spaceId);
+  return (
+    <Link
+      ref={ref}
+      href={NavUtils.toEntity(match.spaceId, match.claimId)}
+      {...(newTab ? { target: '_blank', rel: 'noreferrer' } : {})}
+      className={cx(
+        'block transition-colors duration-75 hover:bg-grey-01 focus-visible:bg-grey-01 focus-visible:outline-none',
+        className
+      )}
+    >
+      <span className="mb-1 flex min-w-0 items-center gap-1.5 text-footnoteMedium text-grey-04">
+        <PersonSpaceIcon spaceId={match.spaceId} labelsById={labelsById} size={12} />
+        <span className="truncate">{space?.name?.trim() || 'Space'}</span>
+      </span>
+      <span className="block text-metadataMedium text-text">{name}</span>
+      <span className="mt-2 flex items-center gap-1.5">
+        <PositionBadge actor={viewerName} responseKind={match.responseKind} position={match.viewerPosition} />
+        <span className="shrink-0 text-footnote text-grey-03" aria-hidden>
+          vs
+        </span>
+        <PositionBadge actor={personName} responseKind={match.responseKind} position={match.personPosition} />
+      </span>
+    </Link>
+  );
+});
+
+/**
  * Names a claim without confusing missing metadata with an entity whose name is genuinely empty.
  *
  * `Map#get` alone cannot distinguish those cases because both return a nullish value. Presence in
  * the map means the entity loaded successfully, so only that case earns the "Untitled" fallback;
  * a settled lookup with no entity covers both a failed batch and a successfully missing entity.
  */
-function claimName(
+export function claimName(
   claimId: string,
   claimNamesById: ReadonlyMap<string, string | null>,
   claimNamesLoading: boolean
@@ -136,7 +180,7 @@ function PositionBadge({
   responseKind: ClaimMatch['responseKind'];
   position: boolean;
 }) {
-  const action = responseKind === 'veracity' ? (position ? 'Verify' : 'Dispute') : position ? 'Agree' : 'Disagree';
+  const action = responsePositionLabel(position);
 
   return (
     <span className="inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-full border border-transparent bg-divider px-2 py-1 text-footnote">

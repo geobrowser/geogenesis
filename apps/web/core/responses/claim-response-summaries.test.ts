@@ -3,7 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Space } from '~/core/io/dto/spaces';
-import { profilesBySpaceIdsQueryKey, spacesByIdsQueryKey } from '~/core/io/query-keys';
+import { profilesBySpaceIdsQueryKey, spaceByIdQueryKey } from '~/core/io/query-keys';
 import type { Profile } from '~/core/types';
 
 import {
@@ -23,45 +23,53 @@ import {
 } from './entity-response';
 
 const targets = [
-  { entityId: 'claim-veracity', responseKind: 'veracity' as const },
-  { entityId: 'claim-stance', responseKind: 'stance' as const },
+  { entityId: 'claim-b', responseKind: 'stance' as const },
+  { entityId: 'claim-a', responseKind: 'stance' as const },
 ];
 
 describe('claim response summaries', () => {
   it('normalizes duplicate claim-kind pairs deterministically', () => {
     expect(normalizeClaimResponseTargets([targets[0], targets[1], targets[0]])).toEqual([
-      { entityId: 'claim-stance', responseKind: 'stance' },
-      { entityId: 'claim-veracity', responseKind: 'veracity' },
+      { entityId: 'claim-a', responseKind: 'stance' },
+      { entityId: 'claim-b', responseKind: 'stance' },
     ]);
   });
 
-  it('builds an exact-space entity filter with one exact branch per active vote kind', () => {
+  it('builds an exact-space entity filter with one exact branch per claim', () => {
     expect(buildClaimResponseSummaryFilter('space-1', targets)).toEqual({
       spaceId: { is: 'space-1' },
       objectType: { is: 0 },
       voteType: { in: [0, 1] },
       or: [
-        { objectId: { is: 'claim-stance' }, voteKind: { is: 1 } },
-        { objectId: { is: 'claim-veracity' }, voteKind: { is: 2 } },
+        { objectId: { is: 'claim-a' }, voteKind: { is: 1 } },
+        { objectId: { is: 'claim-b' }, voteKind: { is: 1 } },
       ],
     });
   });
 
-  it('groups active positive and negative rows and ignores cleared or inactive-kind rows', () => {
+  /**
+   * The retired veracity rows are the interesting half here.
+   *
+   * Vote kind 2 is what a Verify or a Dispute was published as, and there are real ones indexed.
+   * Dropping the kind was the deliberate choice when Verify/Dispute was removed, so a legacy row
+   * must not reappear in a claim's tally — and it must not reappear as the *viewer's* position
+   * either, which would draw a side as held that this app can no longer publish or clear.
+   */
+  it('counts only stance rows, leaving retired veracity rows out of the tally', () => {
     const summaries = groupClaimResponseSummaryRows(
       targets,
       [
-        row('claim-stance', 1, 'viewer', 0),
-        row('claim-stance', 1, 'negative-user', 1),
-        row('claim-stance', 1, 'cleared-user', 2),
-        row('claim-stance', 2, 'wrong-kind', 0),
-        row('claim-veracity', 2, 'verifier', 0),
+        row('claim-a', 1, 'viewer', 0),
+        row('claim-a', 1, 'negative-user', 1),
+        row('claim-a', 1, 'cleared-user', 2),
+        row('claim-a', 2, 'legacy-verifier', 0),
+        row('claim-b', 2, 'viewer', 0),
         row('another-claim', 1, 'wrong-claim', 0),
       ],
       'viewer'
     );
 
-    expect(summaries.get('claim-stance:stance')).toEqual({
+    expect(summaries.get('claim-a:stance')).toEqual({
       counts: { positive: 1, negative: 1 },
       viewerResponse: 'positive',
       responders: [
@@ -69,32 +77,39 @@ describe('claim response summaries', () => {
         { userId: 'negative-user', direction: 'negative' },
       ],
     });
-    expect(summaries.get('claim-veracity:veracity')).toEqual({
-      counts: { positive: 1, negative: 0 },
+
+    // Every row this claim has is a retired verify, the viewer's own among them. It reads as a
+    // claim nobody has answered, which is the agreed cost of the clean break.
+    expect(summaries.get('claim-b:stance')).toEqual({
+      counts: { positive: 0, negative: 0 },
       viewerResponse: null,
-      responders: [{ userId: 'verifier', direction: 'positive' }],
+      responders: [],
     });
   });
 
   it('does not assign a viewer response for anonymous requests', () => {
     const summaries = groupClaimResponseSummaryRows(
-      [{ entityId: 'claim-stance', responseKind: 'stance' }],
-      [row('claim-stance', 1, 'user-1', 1)],
+      [{ entityId: 'claim-a', responseKind: 'stance' }],
+      [row('claim-a', 1, 'user-1', 1)],
       null
     );
 
-    expect(summaries.get('claim-stance:stance')?.viewerResponse).toBeNull();
+    expect(summaries.get('claim-a:stance')?.viewerResponse).toBeNull();
   });
 
-  it('paginates in deterministic 1,000-row pages and deduplicates rows repeated across pages', async () => {
+  it('paginates in deterministic 1,000-row cursor pages and deduplicates rows repeated across pages', async () => {
     const firstPage = Array.from({ length: CLAIM_RESPONSE_SUMMARY_PAGE_SIZE }, (_, index) =>
       row('claim-stance', 1, `user-${index}`, index % 2)
     );
     const duplicate = firstPage.at(-1)!;
     const fetchPage = vi
       .fn()
-      .mockResolvedValueOnce(firstPage)
-      .mockResolvedValueOnce([duplicate, row('claim-stance', 1, 'user-1000', 0)]);
+      .mockResolvedValueOnce({ items: firstPage, endCursor: 'cursor-1', hasNextPage: true })
+      .mockResolvedValueOnce({
+        items: [duplicate, row('claim-stance', 1, 'user-1000', 0)],
+        endCursor: 'cursor-2',
+        hasNextPage: false,
+      });
 
     const summaries = await fetchClaimResponseSummaries({
       spaceId: 'space-1',
@@ -104,7 +119,7 @@ describe('claim response summaries', () => {
     });
 
     expect(fetchPage).toHaveBeenCalledTimes(2);
-    expect(fetchPage.mock.calls.map(call => call[0].offset)).toEqual([0, 1000]);
+    expect(fetchPage.mock.calls.map(call => call[0].after)).toEqual([undefined, 'cursor-1']);
     expect(fetchPage.mock.calls[0]?.[0]).toMatchObject({
       first: 1000,
       filter: {
@@ -118,6 +133,41 @@ describe('claim response summaries', () => {
       viewerResponse: 'positive',
     });
     expect(summaries.get('claim-stance:stance')?.responders).toHaveLength(1001);
+  });
+
+  // The graph rejects an offset past 1000. Largest testnet space held 2,598 matching rows on
+  // 2026-10-19, so a batch over its claims needs a third page.
+  it('reads past 2,000 rows from a graph that rejects offsets above 1000', async () => {
+    const claims = Array.from({ length: 50 }, (_, index) => `claim-${index}`);
+    const rows = Array.from({ length: 2_500 }, (_, index) =>
+      row(claims[index % claims.length]!, 1, `user-${index}`, index % 5 === 0 ? 1 : 0)
+    );
+    const fetchPage = vi.fn(async (args: { first: number; offset?: number; after?: string }) => {
+      if (args.offset !== undefined) {
+        if (args.offset > 1000)
+          throw new Error(`Pagination argument "offset" cannot exceed 1000; received ${args.offset}`);
+        return rows.slice(args.offset, args.offset + args.first);
+      }
+      const start = args.after ? Number(args.after) : 0;
+      const end = start + args.first;
+      return { items: rows.slice(start, end), endCursor: String(end), hasNextPage: end < rows.length };
+    });
+
+    const summaries = await fetchClaimResponseSummaries({
+      spaceId: 'space-1',
+      targets: claims.map(entityId => ({ entityId, responseKind: 'stance' as const })),
+      personalSpaceId: null,
+      fetchPage: fetchPage as never,
+    });
+
+    let positive = 0;
+    let negative = 0;
+    for (const summary of summaries.values()) {
+      positive += summary.counts.positive;
+      negative += summary.counts.negative;
+    }
+    expect({ positive, negative }).toEqual({ positive: 2_000, negative: 500 });
+    expect(fetchPage).toHaveBeenCalledTimes(3);
   });
 
   it('deduplicates avatar metadata in chunks and seeds every existing per-claim cache', async () => {
@@ -173,7 +223,7 @@ describe('claim response summaries', () => {
       ])
     ).toHaveLength(205);
     expect(queryClient.getQueryData(profilesBySpaceIdsQueryKey(responderIds))).toBeInstanceOf(Map);
-    expect(queryClient.getQueryData(spacesByIdsQueryKey(responderIds))).toHaveLength(205);
+    expect(responderIds.every(id => queryClient.getQueryData(spaceByIdQueryKey(id)))).toBe(true);
   });
 
   it('keeps response caches usable when avatar metadata fails and reuses successful metadata on retry', async () => {

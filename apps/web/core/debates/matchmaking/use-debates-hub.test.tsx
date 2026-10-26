@@ -13,6 +13,33 @@ function renderHub() {
   return { store, ...renderHook(() => useDebatesHub(), { wrapper }) };
 }
 
+// GEO-3431: a link's scheduled request outlines its card only until the hub is opened on anything
+// else, so a stale outline never comes back.
+describe('useDebatesHub focused request', () => {
+  it('holds the request a link opened the hub on', () => {
+    const { result } = renderHub();
+
+    act(() => result.current.open('requests', 'request-1'));
+    expect(result.current.activeTab).toBe('requests');
+    expect(result.current.focusedRequestId).toBe('request-1');
+  });
+
+  it('forgets it on every other way of moving the hub', () => {
+    const { result } = renderHub();
+    const moves: [string, () => void][] = [
+      ['open', () => result.current.open('requests')],
+      ['setTab', () => result.current.setTab('requests')],
+      ['close', () => result.current.close()],
+      ['toggle', () => result.current.toggle()],
+    ];
+    for (const [name, move] of moves) {
+      act(() => result.current.open('requests', 'request-1'));
+      act(move);
+      expect([name, result.current.focusedRequestId]).toEqual([name, null]);
+    }
+  });
+});
+
 describe('useDebatesHub landing tab', () => {
   it('opens on Lobby', () => {
     // The list you can always act on. The panel is closed far more often than it is left on a

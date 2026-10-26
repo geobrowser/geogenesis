@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
-import { stepAtom } from '~/partials/onboarding/dialog';
+import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 

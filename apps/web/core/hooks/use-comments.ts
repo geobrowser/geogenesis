@@ -138,6 +138,12 @@ function buildCommentTree(comments: CommentEntity[]): CommentWithReplies[] {
 interface UseCommentsOptions {
   entityId: string;
   spaceId: string;
+  /**
+   * Skip the fetch entirely. For a caller that already knows the count is zero — the claim page's
+   * activity feed reads one aggregate for every debate on it — this is the difference between one
+   * request and one per row, for rows that would all come back empty.
+   */
+  enabled?: boolean;
 }
 
 /**
@@ -225,7 +231,7 @@ export function mergePendingWithServer(server: CommentEntity[], prev: CommentEnt
   return pendingOnly.length > 0 ? [...server, ...pendingOnly] : server;
 }
 
-export function useComments({ entityId }: UseCommentsOptions) {
+export function useComments({ entityId, enabled = true }: UseCommentsOptions) {
   const queryClient = useQueryClient();
 
   const {
@@ -246,7 +252,7 @@ export function useComments({ entityId }: UseCommentsOptions) {
       queryClient.setQueryData(commentsFetchedQueryKey(entityId), true);
       return mergePendingWithServer(server, prev);
     },
-    enabled: !!entityId,
+    enabled: enabled && !!entityId,
   });
 
   const comments = React.useMemo(() => {

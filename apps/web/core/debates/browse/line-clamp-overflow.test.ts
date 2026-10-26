@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { exceedsLineClamp } from './line-clamp-overflow';
+import { drawnLineClamp, exceedsLineClamp } from './line-clamp-overflow';
 
 /**
  * The numbers below are measured, not invented: Chromium rendering the debate claim title at its
@@ -45,5 +45,37 @@ describe('exceedsLineClamp', () => {
     expect(exceedsLineClamp({ contentHeight: 72, clampedHeight: 48, lineHeight: NaN, maxLines: 2 })).toBe(true);
     expect(exceedsLineClamp({ contentHeight: 48, clampedHeight: 48, lineHeight: NaN, maxLines: 2 })).toBe(false);
     expect(exceedsLineClamp({ contentHeight: 72, clampedHeight: 48, lineHeight: 0, maxLines: 2 })).toBe(true);
+  });
+});
+
+/**
+ * A container query can change the clamp without the component knowing (GEO-3114): the debate
+ * claim card is two lines on a wide player, one on a small one, and unclamped in the small
+ * player's opened list. The measurement counts against the clamp actually drawn.
+ */
+describe('drawnLineClamp', () => {
+  const styleWith = (value: string) => {
+    const element = document.createElement('span');
+    element.style.setProperty('-webkit-line-clamp', value);
+    return element.style;
+  };
+  const styleOf = (value: string) => ({ getPropertyValue: () => value }) as unknown as CSSStyleDeclaration;
+
+  it('reads the number of lines being drawn', () => {
+    expect(drawnLineClamp(styleOf('1'))).toBe(1);
+    expect(drawnLineClamp(styleOf(' 2 '))).toBe(2);
+  });
+
+  // `line-clamp-none`: nothing is hidden, so nothing can be overflowing.
+  it('reports an unclamped box as unclamped', () => {
+    expect(drawnLineClamp(styleOf('none'))).toBe('none');
+  });
+
+  // jsdom parses no stylesheet, and a browser may not expose the property: the caller's own
+  // `maxLines` stands rather than a guess.
+  it('says nothing where the style carries no clamp', () => {
+    expect(drawnLineClamp(styleOf(''))).toBeNull();
+    expect(drawnLineClamp(styleOf('0'))).toBeNull();
+    expect(drawnLineClamp(styleWith(''))).toBeNull();
   });
 });

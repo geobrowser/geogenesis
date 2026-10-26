@@ -18,13 +18,7 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 
 import { AudioSettings, MobileSettingsSheet } from './audio-settings';
 import { DebateRecordingStatusPill } from './debate-recording-status-pill';
-import {
-  CameraIcon,
-  DebateTileToggleButton,
-  LeaveIcon,
-  MicrophoneIcon,
-  RecordingCircleButton,
-} from './debate-room-controls';
+import { CameraIcon, DebateLeaveButton, DebateTileToggleButton, MicrophoneIcon } from './debate-room-controls';
 import { DebateTileChip, DebateVideoTile, tileChipSurface } from './debate-video-tile';
 import { DeviceOptionGroup } from './device-option-group';
 import { MicrophoneLevelMeter } from './microphone-level-meter';
@@ -84,6 +78,7 @@ export function DebatePreScreen({
   readyBusy,
   onReady,
   onLeave,
+  returnsToLobby = false,
   leaveDisabled,
 }: {
   claim: string;
@@ -150,6 +145,7 @@ export function DebatePreScreen({
   readyBusy: boolean;
   onReady: () => void;
   onLeave: () => void;
+  returnsToLobby?: boolean;
   leaveDisabled: boolean;
 }) {
   const isMobile = useIsMobileCallLayout();
@@ -167,6 +163,8 @@ export function DebatePreScreen({
     ? remoteParticipant.display_name || remoteParticipant.profile_space_id
     : 'the other speaker';
   const mediaReady = previewState === 'ready';
+
+  const controlsAvailable = mediaReady || previewState === 'idle';
   const selectedCameraLabel =
     videoInputDevices.find(device => device.deviceId === selectedVideoInputId)?.label ?? 'Camera';
   // Named after what the person has to do, not after which flag is false — it is the only thing
@@ -198,7 +196,6 @@ export function DebatePreScreen({
     <DebateVideoTile
       key="local"
       participantPosition={localParticipant?.position ?? null}
-      positionLabel={localParticipant?.position_label ?? null}
       active={false}
       // Permission is reported inside the tile, not in place of the layout: replacing the screen
       // hid the opponent and their readiness from whoever was slowest to grant.
@@ -216,7 +213,7 @@ export function DebatePreScreen({
       inactiveIndicatorId="local"
       tileLabel="You"
       tileControls={
-        mediaReady ? (
+        controlsAvailable ? (
           <div className="flex items-center gap-2">
             <DebateTileToggleButton
               ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
@@ -269,7 +266,6 @@ export function DebatePreScreen({
     <DebateVideoTile
       key="remote"
       participantPosition={remoteParticipant?.position ?? null}
-      positionLabel={remoteParticipant?.position_label ?? null}
       active={false}
       // Presence and video are separate facts: not yet granted reads very differently from
       // someone who was here and left.
@@ -319,7 +315,7 @@ export function DebatePreScreen({
     <div key="local" className={cx(cardGroup, 'order-1')}>
       {localTile}
 
-      {!mediaReady && previewState !== 'requesting' && (
+      {!mediaReady && previewState !== 'requesting' && previewState !== 'idle' && (
         <button
           type="button"
           onClick={onRetryMedia}
@@ -333,8 +329,12 @@ export function DebatePreScreen({
       )}
 
       {/* Laid out but hidden while access is requested, so granting it does not shift the screen. */}
-      {(mediaReady || previewState === 'requesting') && (
-        <div className={cx('contents', !mediaReady && 'invisible')} aria-hidden={!mediaReady} inert={!mediaReady}>
+      {(controlsAvailable || previewState === 'requesting') && (
+        <div
+          className={cx('contents', !controlsAvailable && 'invisible')}
+          aria-hidden={!controlsAvailable}
+          inert={!controlsAvailable}
+        >
           <div className={cx('flex w-full flex-col gap-[6px]', controlsOrder)}>
             {isMobile ? (
               <>
@@ -486,14 +486,7 @@ export function DebatePreScreen({
         )}
 
         <div className="mt-5 flex w-full justify-center">
-          <RecordingCircleButton
-            ariaLabel="Leave debate"
-            title="Leave debate"
-            onClick={onLeave}
-            disabled={leaveDisabled}
-          >
-            <LeaveIcon />
-          </RecordingCircleButton>
+          <DebateLeaveButton returnsToLobby={returnsToLobby} onClick={onLeave} disabled={leaveDisabled} />
         </div>
       </main>
 

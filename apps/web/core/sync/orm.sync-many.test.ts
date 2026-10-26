@@ -4,8 +4,14 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getAllEntities, getBatchEntities, getEntitiesOrderedByPropertyConnection } from '../io/queries';
-import type { Entity, Value } from '../types';
+import { EntitiesOrderBy } from '../gql/graphql';
+import {
+  getAllEntities,
+  getBatchEntities,
+  getEntitiesOrderedByPropertyConnection,
+  getEntityNames,
+} from '../io/queries';
+import type { Entity, Relation, Value } from '../types';
 import { E } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues, syncedEntities } from './store';
 import { GeoEventStream } from './stream';
@@ -65,12 +71,81 @@ describe('E.syncMany pagination', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getEntityNames).mockReturnValue(Effect.succeed([]));
     reactiveValues.set([]);
     reactiveRelations.set([]);
     syncedEntities.clear();
     store = new GeoStore(mockStream);
     cache = new QueryClient();
   });
+
+  it('returns confirmed absent pending ids independently of merged entities', async () => {
+    reactiveValues.set([
+      { ...makeNameValue('missing', 'New'), isDeleted: true, isLocal: true, hasBeenPublished: false },
+    ]);
+    vi.mocked(getBatchEntities).mockReturnValue(Effect.succeed([]));
+    vi.mocked(getEntityNames).mockReturnValue(Effect.succeed([]));
+    const result = await E.syncMany({ store, cache, where: { id: { in: ['missing'] } }, first: 1 });
+    expect(result.merged).toEqual([]);
+    expect(result.confirmedAbsentEntityIds).toEqual(['missing']);
+  });
+
+  it.each(['value', 'relation'])(
+    'does not return a discarded %s after awaiting another ID’s absence confirmation',
+    async kind => {
+      const missing = {
+        ...makeNameValue('missing', 'Missing'),
+        isDeleted: true,
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      const discardedValue = {
+        ...makeNameValue('edited', 'Edited'),
+        id: 'discarded-value',
+        spaceId: 'discard-space',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      const discardedRelation: Relation = {
+        id: 'discarded-relation',
+        entityId: 'relation-entity',
+        fromEntity: { id: 'edited', name: 'Edited' },
+        toEntity: { id: 'target', name: 'Target', value: '' },
+        type: { id: 'type', name: 'Type' },
+        renderableType: 'RELATION',
+        spaceId: 'discard-space',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      reactiveValues.set(kind === 'value' ? [missing, discardedValue] : [missing]);
+      if (kind === 'relation') reactiveRelations.set([discardedRelation]);
+      let finish!: () => void;
+      vi.mocked(getEntityNames).mockReturnValue(
+        Effect.promise(
+          () =>
+            new Promise(resolve => {
+              finish = () => resolve([]);
+            })
+        )
+      );
+      vi.mocked(getBatchEntities).mockReturnValue(
+        Effect.succeed([{ ...makeEntity('edited', 'Remote'), values: [], relations: [] }])
+      );
+
+      const pending = E.syncMany({ store, cache, where: { id: { in: ['missing', 'edited'] } }, first: 2 });
+      await vi.waitFor(() => expect(getEntityNames).toHaveBeenCalled());
+      store.clearLocalChangesForSpace('discard-space');
+      finish();
+      const result = await pending;
+      store.hydrateWith(result.merged);
+      expect(result.merged.flatMap(entity => entity.values).some(value => value.id === discardedValue.id)).toBe(false);
+      expect(
+        result.merged.flatMap(entity => entity.relations).some(relation => relation.id === discardedRelation.id)
+      ).toBe(false);
+      expect(reactiveValues.get().some(value => value.id === discardedValue.id)).toBe(false);
+      expect(reactiveRelations.get().some(relation => relation.id === discardedRelation.id)).toBe(false);
+    }
+  );
 
   it('returns only the requested page when entities from other pages are in the local store (GEO-2181)', async () => {
     // Simulate page 1 having been viewed: its entities are synced into the store.
@@ -154,6 +229,80 @@ describe('E.syncMany pagination', () => {
     expect(vi.mocked(getBatchEntities).mock.calls.map(call => call[0].length)).toEqual([50, 50, 17]);
     expect(result.merged.map(e => e.id)).toEqual(ids);
     expect(result.remote).toHaveLength(ids.length);
+  });
+
+  it('sends one request for the same id set asked for in a different order, or with repeats', async () => {
+    vi.mocked(getBatchEntities).mockImplementation((batchIds: string[]) =>
+      Effect.succeed(batchIds.map(id => makeEntity(id, `Entity ${id}`)))
+    );
+
+    const [first, second] = await Promise.all([
+      E.syncMany({ store, cache, where: { id: { in: ['c', 'a', 'b'] } }, first: 3 }),
+      E.syncMany({ store, cache, where: { id: { in: ['b', 'c', 'a', 'a'] } }, first: 4 }),
+    ]);
+
+    expect(vi.mocked(getBatchEntities)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getBatchEntities).mock.calls[0][0]).toEqual(['a', 'b', 'c']);
+    expect(first.merged.map(e => e.id)).toEqual(['c', 'a', 'b']);
+    expect(second.merged.map(e => e.id)).toEqual(['b', 'c', 'a', 'a']);
+  });
+
+  it('orders collection id queries on the server when a built-in orderBy is set', async () => {
+    const served = [makeEntity('entity-b', 'Entity B'), makeEntity('entity-a', 'Entity A')];
+    vi.mocked(getAllEntities).mockReturnValue(
+      Effect.succeed({ entities: served, endCursor: 'cursor-a', hasNextPage: true })
+    );
+
+    const result = await E.syncMany({
+      store,
+      cache,
+      where: { id: { in: ['entity-a', 'entity-b'] } },
+      first: 9,
+      orderBy: [EntitiesOrderBy.RankingScoreDesc, EntitiesOrderBy.IdAsc],
+    });
+
+    expect(vi.mocked(getBatchEntities)).not.toHaveBeenCalled();
+    expect(vi.mocked(getEntitiesOrderedByPropertyConnection)).not.toHaveBeenCalled();
+    const [options, signal] = vi.mocked(getAllEntities).mock.calls[0] ?? [];
+    expect(signal).toBeUndefined();
+    expect(options).toEqual(
+      expect.objectContaining({ limit: 9, orderBy: [EntitiesOrderBy.RankingScoreDesc, EntitiesOrderBy.IdAsc] })
+    );
+    // The id list rides along inside the filter rather than as a batch fetch.
+    expect(JSON.stringify(options?.filter)).toContain('entity-a');
+    expect(JSON.stringify(options?.filter)).toContain('entity-b');
+    // Server order wins over the caller's id order.
+    expect(result.merged.map(e => e.id)).toEqual(['entity-b', 'entity-a']);
+    expect(result.endCursor).toBe('cursor-a');
+    expect(result.hasNextPage).toBe(true);
+  });
+
+  it('drops empty relation targets and keeps unnamed members when an id list is ordered', async () => {
+    vi.mocked(getAllEntities).mockReturnValue(Effect.succeed({ entities: [], endCursor: null, hasNextPage: false }));
+    vi.mocked(getEntitiesOrderedByPropertyConnection).mockReturnValue(
+      Effect.succeed({ entities: [], endCursor: null, hasNextPage: false })
+    );
+
+    await E.syncMany({
+      store,
+      cache,
+      where: { id: { in: ['entity-a', '', 'entity-b'] } },
+      first: 9,
+      orderBy: [EntitiesOrderBy.CreatedAtDesc],
+    });
+    await E.syncMany({
+      store,
+      cache,
+      where: { id: { in: ['entity-a', '', 'entity-b'] } },
+      first: 9,
+      sort: { propertyId: 'score-property', direction: 'desc' },
+    });
+
+    const [orderedOptions] = vi.mocked(getAllEntities).mock.calls[0] ?? [];
+    const [sortedOptions] = vi.mocked(getEntitiesOrderedByPropertyConnection).mock.calls[0] ?? [];
+    // No '' in the list, and no `name` exclusion wrapped around an explicit id list.
+    expect(orderedOptions?.filter).toEqual({ id: { in: ['entity-a', 'entity-b'] } });
+    expect(sortedOptions?.filter).toEqual({ id: { in: ['entity-a', 'entity-b'] } });
   });
 
   it.each([

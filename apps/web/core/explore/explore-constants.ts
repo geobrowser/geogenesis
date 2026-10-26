@@ -7,14 +7,13 @@ export const TWEET_TYPE_ID = 'd6f0506def324d8e9de4976b986e78ec';
 export const PAPER_TYPE_ID = '5e24fb52856c4189a9716af4387b1b89';
 
 /**
- * Entity types shown on Explore (Geo ontology IDs, hyphenless for GraphQL variables).
- *
- * This array is the single source of order: the dropdown maps it directly, and
- * `sanitizeExploreTypeIds` sorts every selection into it. The three defaults lead the list so the
- * boxes a reader arrives with are the ones they see first, instead of being scattered down it —
- * Debate and Claim used to sit at the bottom. The rest keep the order they already had.
+ * Every entity type the shared feed classifier knows (Geo ontology IDs, hyphenless for GraphQL
+ * variables). `explore-diversity` derives its classification priority from this list, and the Topic
+ * feed runs through that classifier too — so this list is not Explore's whitelist, and News story
+ * stays on it even though Explore no longer serves news stories. Removing it here would reclassify
+ * a Claim-and-News-story entity as a Claim in the Topic feed's mix.
  */
-export const EXPLORE_ENTITY_TYPES = [
+export const FEED_ENTITY_TYPES = [
   { id: NEWS_STORY_TYPE_ID, label: 'News story' },
   { id: DEBATE_TYPE_ID, label: 'Debate' },
   { id: CLAIM_TYPE_ID, label: 'Claim' },
@@ -29,21 +28,34 @@ export const EXPLORE_ENTITY_TYPES = [
   { id: '0419ca20118b4cdb84dfdb9ed73b50c2', label: 'Community call event' },
 ] as const;
 
+export const FEED_ENTITY_TYPE_IDS = FEED_ENTITY_TYPES.map(type => type.id);
+
+/**
+ * Types Explore never shows. An entity carrying one is dropped from every sort even when it also
+ * carries a type Explore does serve — a Claim that is also a News story is still a news story.
+ */
+export const EXPLORE_EXCLUDED_TYPE_IDS: readonly string[] = [NEWS_STORY_TYPE_ID];
+
+/**
+ * Entity types the Explore feed will serve: every feed type except the excluded ones.
+ *
+ * `sanitizeExploreTypeIds` sorts every selection into this order, so it is the single source of
+ * order. Leaving the excluded types off means a `typeIds` parameter naming one (an old client, a
+ * kept link) is sanitized away rather than served.
+ */
+export const EXPLORE_ENTITY_TYPES = FEED_ENTITY_TYPES.filter(type => !EXPLORE_EXCLUDED_TYPE_IDS.includes(type.id));
+
 export const EXPLORE_ENTITY_TYPE_IDS = EXPLORE_ENTITY_TYPES.map(type => type.id);
 
 /**
- * What the types filter arrives checked with (GEO-2790).
+ * What Explore serves. There is no types menu any more, so this is the whole feed rather than an
+ * opening selection: `/api/explore/feed` reads a missing `typeIds` parameter as these.
  *
- * A narrower opening view, not a narrower feed: every option above stays in the dropdown and a
- * reader can tick any of them. This is only what is selected before anyone touches it.
- *
- * Still derived from `EXPLORE_ENTITY_TYPES` by membership rather than sliced off the front, even
- * though these now lead the list. `sanitizeExploreTypeIds` sorts selections into that order and the
- * feed compares them as joined keys, so a default ordered differently would look like a different
- * selection from the same three ticked by hand — deriving it keeps the two in step through any
- * future reshuffle, where a `slice(0, 3)` would silently follow the list somewhere else.
+ * Derived from `EXPLORE_ENTITY_TYPES` by membership so it stays in that list's order — the feed
+ * compares selections as joined keys, and the same types in another order would look like a
+ * different selection.
  */
-const DEFAULT_SELECTED_TYPE_IDS: ReadonlySet<string> = new Set([NEWS_STORY_TYPE_ID, DEBATE_TYPE_ID, CLAIM_TYPE_ID]);
+const DEFAULT_SELECTED_TYPE_IDS: ReadonlySet<string> = new Set([DEBATE_TYPE_ID, CLAIM_TYPE_ID]);
 
 export const DEFAULT_EXPLORE_TYPE_IDS = EXPLORE_ENTITY_TYPES.filter(type => DEFAULT_SELECTED_TYPE_IDS.has(type.id)).map(
   type => type.id

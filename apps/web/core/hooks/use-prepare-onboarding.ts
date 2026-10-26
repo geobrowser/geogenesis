@@ -1,11 +1,11 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
+
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
   avatarAtom,
@@ -14,8 +14,9 @@ import {
   spaceIdAtom,
   stepAtom,
   topicIdAtom,
-} from '~/partials/onboarding/dialog';
+} from '~/partials/onboarding/onboarding-atoms';
 
+import { NO_HELD_FEED_TOPICS, feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 /**
@@ -47,14 +48,15 @@ export function usePrepareOnboarding() {
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
   const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
+  const setFeedTopics = useSetAtom(feedTopicsAtom);
 
   /**
-   * Where to land once onboarding finishes, which the four callers want three different things
-   * from. Omitted sends them back to the page they pressed on, which is right for a control in the
+   * Where to land once onboarding finishes, which the callers want three different things from.
+   * Omitted sends them back to the page they pressed on, which is right for a control in the
    * page. `returnTo: null` clears it — the navbar's button is a sign-in from anywhere, not a return
    * to anywhere. `keepReturnTo` leaves the stored value alone entirely, for callers that track
    * their own destination and would be fighting this one: `use-ranking-compose-access.ts` holds
-   * its redirect in a ref, and `sign-in-prompt.tsx` never set this at all.
+   * its redirect in a ref.
    *
    * Spelled as two fields rather than a magic string because the alternative was a sentinel that
    * could collide with a real path.
@@ -69,10 +71,10 @@ export function usePrepareOnboarding() {
       // Nothing is cleared for somebody already signed in, and that is the point of the check.
       //
       // The leak this reset exists to stop needs a *different* person arriving on a browser where
-      // the last one abandoned onboarding — which means not authenticated. Two callers here
-      // (`use-ranking-compose-access.ts`, `sign-in-prompt.tsx`) gate on `!smartAccount` rather than
-      // `!authenticated`, and a brand-new account from the email capture is authenticated with no
-      // smart account for as long as wallet creation and activation take. Clearing in that window
+      // the last one abandoned onboarding — which means not authenticated.
+      // `use-ranking-compose-access.ts` gates on `!smartAccount` rather than `!authenticated`, and
+      // a brand-new account from the email capture is authenticated with no smart account for as
+      // long as wallet creation and activation take. Clearing in that window
       // wipes the interests somebody is part-way through picking, and
       // `PendingPersonalSpaceRunner` then submits no membership proposals for choices they made.
       //
@@ -86,12 +88,14 @@ export function usePrepareOnboarding() {
       setSpaceId('');
       setStep('start');
       setSelectedTopicIds([]);
+      setFeedTopics(NO_HELD_FEED_TOPICS);
     },
     [
       authenticated,
       pathname,
       searchParams,
       setAvatar,
+      setFeedTopics,
       setName,
       setPostOnboardingRedirect,
       setSelectedTopicIds,

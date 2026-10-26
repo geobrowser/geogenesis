@@ -4,7 +4,7 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { COVERAGE_TYPE_IDS } from '../ontology';
-import { TOPIC_FEED_ENTITY_TYPE_IDS, parseTopicFeedTypeIds } from './topic-feed-types';
+import { TOPIC_FEED_ENTITY_TYPE_IDS, parseTopicFeedBodyTypeIds, parseTopicFeedTypeIds } from './topic-feed-types';
 
 describe('Topic feed entity types', () => {
   it('combines Claims, Debates, and every former Coverage type', () => {
@@ -21,5 +21,11 @@ describe('Topic feed entity types', () => {
       CLAIM_TYPE_ID,
       DEBATE_TYPE_ID,
     ]);
+  });
+
+  it('reads a facets body the way the query string is read', () => {
+    expect(parseTopicFeedBodyTypeIds(undefined)).toEqual(TOPIC_FEED_ENTITY_TYPE_IDS);
+    expect(parseTopicFeedBodyTypeIds([])).toEqual([]);
+    expect(parseTopicFeedBodyTypeIds([DEBATE_TYPE_ID, 42, CLAIM_TYPE_ID])).toEqual([CLAIM_TYPE_ID, DEBATE_TYPE_ID]);
   });
 });

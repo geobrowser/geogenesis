@@ -9,7 +9,7 @@
  * intersection kept for surfaces wanting a few suggested times. That is what lets the grid show
  * their availability and style it by the viewer's, instead of filtering by it.
  */
-import type { ScheduleOverlapResponse } from '~/core/debates/api';
+import type { ScheduleOverlapResponse, ScheduleOverlapSlot } from '~/core/debates/api';
 
 import { SLOT_MINUTES, addDays, formatTime, isoDate } from './blocks';
 
@@ -42,7 +42,7 @@ export type PeerSchedule = {
   slots: PeerSlot[];
 };
 
-/** One 30-minute chip, resolved into both people's wall clocks. */
+/** One 30-minute chip, labelled in the viewer's wall clock. */
 export type PeerDaySlot = {
   /** Absolute instant, kept so a later scheduling half has something unambiguous to send. */
   start: string;
@@ -55,10 +55,13 @@ export type PeerDaySlot = {
   minutes: number;
   /** `9:30am`, in the viewer's zone. */
   label: string;
-  /** The same instant in theirs. */
-  peerLabel: string;
   /** Their wall clock minus the viewer's, at this instant. Signed, and DST-correct. */
   offsetMinutes: number;
+  /**
+   * The time the debate being moved is booked for (GEO-3429). Drawn so the viewer can see what they
+   * are moving away from, and never pickable: proposing the same time again would move nothing.
+   */
+  current?: true;
 };
 
 export type PeerDay = {
@@ -120,22 +123,16 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
   const byDate = new Map(days.map(day => [day.date, day]));
 
   for (const slot of schedule.slots) {
-    for (const instant of chipStarts(slot)) {
+    for (const instant of slotStarts(slot)) {
       const viewer = zonedParts(instant, viewerZone);
       const day = byDate.get(viewer.date);
       // Outside the drawn week. The server bounds this with `days`, but it counts from its own
       // clock in its own zone, so the edges are its to disagree with rather than ours to force.
       if (!day) continue;
 
-      const peer = zonedParts(instant, peerZone);
-      day.slots.push({
-        start: instant.toISOString(),
-        viewerIsFree: instant.getTime() < viewerWindowOpens ? null : slot.viewerIsFree,
-        minutes: viewer.minutes,
-        label: formatTime(viewer.minutes),
-        peerLabel: formatTime(peer.minutes),
-        offsetMinutes: wallMinutes(peer) - wallMinutes(viewer),
-      });
+      day.slots.push(
+        daySlot(instant, viewer, peerZone, instant.getTime() < viewerWindowOpens ? null : slot.viewerIsFree)
+      );
     }
   }
 
@@ -145,23 +142,80 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
   return days;
 }
 
+/** One chip at `instant`, whose wall clock in the viewer's zone is `viewer`. */
+function daySlot(
+  instant: Date,
+  viewer: ZonedParts,
+  peerZone: string | undefined,
+  viewerIsFree: boolean | null
+): PeerDaySlot {
+  return {
+    start: instant.toISOString(),
+    viewerIsFree,
+    minutes: viewer.minutes,
+    label: formatTime(viewer.minutes),
+    offsetMinutes: wallMinutes(zonedParts(instant, peerZone)) - wallMinutes(viewer),
+  };
+}
+
 /**
- * A wire slot as the chips it offers.
+ * The days with the time being moved marked (GEO-3429): its own chip when it is one of their free
+ * times, otherwise added to its day, since geo-chat leaves out time already committed to a debate.
+ * Unchanged when that time is not in the drawn week.
+ */
+export function markCurrent(days: PeerDay[], schedule: PeerSchedule, currentStart: string | null): PeerDay[] {
+  const at = currentStart ? Date.parse(currentStart) : Number.NaN;
+  if (Number.isNaN(at)) return days;
+  const instant = new Date(at);
+  const viewerZone = usableZone(schedule.viewerTimezone);
+  const viewer = zonedParts(instant, viewerZone);
+  if (!days.some(day => day.date === viewer.date)) return days;
+
+  return days.map(day => {
+    if (day.date !== viewer.date) return day;
+    if (day.slots.some(slot => Date.parse(slot.start) === at)) {
+      return {
+        ...day,
+        slots: day.slots.map(slot => (Date.parse(slot.start) === at ? { ...slot, current: true as const } : slot)),
+      };
+    }
+    const slot: PeerDaySlot = {
+      ...daySlot(instant, viewer, usableZone(schedule.peerTimezone), null),
+      current: true,
+    };
+    return { ...day, slots: [...day.slots, slot].sort((a, b) => a.minutes - b.minutes) };
+  });
+}
+
+/**
+ * A wire slot, or a merged window of them, as the chips it offers. The People tab reads its
+ * offline rows' times through this too (GEO-3154), so a chip there is always one this grid draws.
  *
- * Stepping by {@link SLOT_MINUTES} rather than trusting one entry to be one chip. The endpoint
- * sends slot-sized entries today, so this is a no-op; it earns its keep if that ever changes.
+ * Stepping by {@link SLOT_MINUTES} rather than trusting one entry to be one chip. The week's
+ * endpoint sends slot-sized entries, where this is a no-op; the free-people list sends merged
+ * windows (geo-chat#204), where it is what splits them back into bookable times.
  *
  * A trailing part-slot still counts — a debate runs six to eight minutes, so the last 30 minutes
  * of a block is as usable as the first. There is deliberately no "unbookable" state here.
+ *
+ * `after` skips to the first start later than it, on the window's own grid. Filtering afterwards
+ * would not do: a window that began more than a day ago fills the ceiling with past starts first.
+ *
+ * `max` raises that ceiling for a reader that draws whole windows rather than a day of chips: Find
+ * a time's fortnight (GEO-3152), where a merged window can run past midnight.
  */
-function chipStarts(slot: PeerSlot): Date[] {
+export function slotStarts(
+  slot: ScheduleOverlapSlot,
+  { after, max = MAX_CHIPS_PER_SLOT }: { after?: number; max?: number } = {}
+): Date[] {
   const start = Date.parse(slot.start);
   const end = Date.parse(slot.end);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
 
   const step = SLOT_MINUTES * 60_000;
+  const first = after === undefined || after < start ? start : start + (Math.floor((after - start) / step) + 1) * step;
   const starts: Date[] = [];
-  for (let instant = start; instant < end && starts.length < MAX_CHIPS_PER_SLOT; instant += step) {
+  for (let instant = first; instant < end && starts.length < max; instant += step) {
     starts.push(new Date(instant));
   }
   return starts;
@@ -178,24 +232,53 @@ function dayColumns(now: Date, viewerZone: string | undefined, peerZone: string 
   return Array.from({ length: PEER_SCHEDULE_DAYS }, (_, offset) => isoDate(addDays(first, offset)));
 }
 
-/** Midnight in `zone` on the UTC date, where the server's walk begins. A DST jump over midnight
- * leaves neither candidate on it, and the day then opens at the end of the gap. */
-function windowStart(now: Date, zone: string | undefined): Date {
+/** Midnight in `zone` on the UTC date, where the server's walk begins. */
+export function windowStart(now: Date, zone: string | undefined): Date {
   const [year, month, day] = zonedParts(now, 'UTC').date.split('-').map(Number);
-  const midnightUtc = Date.UTC(year, month - 1, day);
-  const first = midnightUtc - zoneOffsetMinutes(new Date(midnightUtc), zone) * 60_000;
-  const second = midnightUtc - zoneOffsetMinutes(new Date(first), zone) * 60_000;
-
-  const isMidnight = (instant: number) => wallMinutes(zonedParts(new Date(instant), zone)) === midnightUtc / 60_000;
-  const real = [first, second].filter(isMidnight);
-  return new Date(real.length > 0 ? Math.min(...real) : Math.max(first, second));
+  return wallClockInstant(Date.UTC(year, month - 1, day), zone);
 }
+
+/**
+ * {@link wallClockInstant} for a zone as stored: `local`, empty or unknown fall back to the
+ * browser's own. The calendar (GEO-3152) resolves the viewer's saved schedule with it.
+ */
+export function zonedWallClockInstant(wallAsUtc: number, zone: string | undefined): Date {
+  return wallClockInstant(wallAsUtc, usableZone(zone));
+}
+
+/**
+ * {@link zonedParts} for a zone as stored, with the same fallback as {@link zonedWallClockInstant}:
+ * the date (`2026-10-06`) and minutes past midnight an instant reads as in `zone`.
+ */
+export function zonedClock(instant: Date | number, zone: string | undefined): ZonedParts {
+  return zonedParts(new Date(instant), usableZone(zone));
+}
+
+/**
+ * The instant a wall clock in `zone` names, with the wall clock given as if it were UTC.
+ *
+ * Tried with the zone's offset a day either side, since no zone changes offset twice in two days.
+ * A wall clock the clocks go back over has two instants, and resolves to the earlier; one a DST
+ * jump skipped has none, and moves forward by the jump — both what `new Date(local)` does.
+ */
+function wallClockInstant(wallAsUtc: number, zone: string | undefined): Date {
+  const candidates = [-DAY_MS, DAY_MS].map(
+    shift => wallAsUtc - zoneOffsetMinutes(new Date(wallAsUtc + shift), zone) * 60_000
+  );
+
+  const isWall = (instant: number) => wallMinutes(zonedParts(new Date(instant), zone)) === wallAsUtc / 60_000;
+  const real = candidates.filter(isWall);
+  return new Date(real.length > 0 ? Math.min(...real) : Math.max(...candidates));
+}
+
+const DAY_MS = 86_400_000;
 
 function zoneOffsetMinutes(instant: Date, zone: string | undefined): number {
   return wallMinutes(zonedParts(instant, zone)) - wallMinutes(zonedParts(instant, 'UTC'));
 }
 
-function dayLabels(date: string) {
+/** `Tue` and `Oct 6` for an ISO date: it is already a calendar date, so the same in every zone. */
+export function dayLabels(date: string) {
   const [year, month, day] = date.split('-').map(Number);
   const local = new Date(year, month - 1, day, 12);
   return {
@@ -264,6 +347,53 @@ function formatterFor(zone: string | undefined): Intl.DateTimeFormat {
   return formatter;
 }
 
+/**
+ * An instant in full, in the same zone the grid draws the viewer's week in — so a footer naming the
+ * picked time can never disagree with the chip it came from, whatever zone the browser is in.
+ */
+export function formatViewerInstant(iso: string, viewerTimezone: string | undefined): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  const zone = usableZone(viewerTimezone);
+  return at.toLocaleString(undefined, zone ? { timeZone: zone } : undefined);
+}
+
+/**
+ * An instant as the week's own labels name it, in the grid's zone: `Thu, Oct 22` and `1:00pm`. For
+ * the reschedule screen's "moving your debate" card (GEO-3429), so it reads like the chips beneath.
+ */
+export function viewerDayAndTime(
+  iso: string,
+  viewerTimezone: string | undefined
+): { day: string; time: string } | null {
+  const at = Date.parse(iso);
+  if (Number.isNaN(at)) return null;
+  const { date, minutes } = zonedParts(new Date(at), usableZone(viewerTimezone));
+  const { weekdayLabel, dayLabel } = dayLabels(date);
+  return { day: `${weekdayLabel}, ${dayLabel}`, time: formatTime(minutes) };
+}
+
+/**
+ * A `datetime-local` value for an instant, as the wall clock in the grid's zone — the one a typed
+ * time is read back in by `viewerInputInstant`.
+ */
+export function viewerInputValue(at: number, viewerTimezone: string | undefined): string {
+  const { date, minutes } = zonedParts(new Date(at), usableZone(viewerTimezone));
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date}T${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}
+
+/**
+ * A `datetime-local` value read as a wall clock in the grid's zone rather than the browser's, so a
+ * typed time means what the chips and the confirmation say it means. `null` for anything else.
+ */
+export function viewerInputInstant(value: string, viewerTimezone: string | undefined): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const [year, month, day, hour, minute] = match.slice(1).map(Number);
+  return wallClockInstant(Date.UTC(year, month - 1, day, hour, minute), usableZone(viewerTimezone));
+}
+
 /** `+5:30 hrs`, or `same time as you` at zero. For the header, beside both zone names. */
 export function formatOffset(minutes: number): string {
   if (minutes === 0) return 'same time as you';
@@ -273,12 +403,3 @@ export function formatOffset(minutes: number): string {
   const rest = whole % 60;
   return `${sign}${hours}${rest ? `:${String(rest).padStart(2, '0')}` : ''} hr${hours === 1 && !rest ? '' : 's'}`;
 }
-
-/**
- * When a chip is worth carrying their local time as well.
- *
- * Three hours is where "that works for me" stops implying anything about them: below it both
- * people are inside the same rough part of the day, above it a comfortable slot is somebody's
- * night, which is the usual reason a proposed time comes back refused.
- */
-export const LARGE_OFFSET_MINUTES = 3 * 60;

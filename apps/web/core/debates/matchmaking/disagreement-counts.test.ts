@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import type { ParticipantPosition } from '../participant-positions';
 import { groupParticipantPositions } from '../participant-positions';
-import { analyzeMatchingClaims } from './disagreement-counts';
+import { analyzeMatchingClaims, matchesInSpaces } from './disagreement-counts';
 
 const VIEWER = '019fedae-72b6-7ab2-927a-df044d57c500';
 const OTHER = '019fedae-72b6-7ab2-927a-df044d57c501';
 const THIRD = '019fedae-72b6-7ab2-927a-df044d57c502';
+const SECOND_SPACE = '019fedae-72b6-7ab2-927a-df044d57c601';
 
 function position(
   profileSpaceId: string,
@@ -23,9 +24,11 @@ describe('analyzeMatchingClaims', () => {
     const positions = groupParticipantPositions([
       position(VIEWER, 'claim-1', true),
       position(OTHER, 'claim-1', false),
-      // A second opposing response on the same claim must not count the claim twice.
-      position(VIEWER, 'claim-1', true, undefined, 'veracity'),
-      position(OTHER, 'claim-1', false, undefined, 'veracity'),
+      // A second opposing response on the same claim must not count the claim twice. That used to
+      // be a veracity response beside the stance; with one kind left, a second space is the only
+      // way one pair can oppose each other twice on one claim.
+      position(VIEWER, 'claim-1', true, SECOND_SPACE),
+      position(OTHER, 'claim-1', false, SECOND_SPACE),
       position(VIEWER, 'claim-2', false),
       position(OTHER, 'claim-2', true),
       // A third person's count is independent.
@@ -35,13 +38,15 @@ describe('analyzeMatchingClaims', () => {
     expect(analyzeMatchingClaims(positions, VIEWER).byProfile.get(OTHER.replaceAll('-', ''))).toHaveLength(2);
   });
 
-  it('does not compare positions from different spaces or response kinds', () => {
-    const otherSpace = '019fedae-72b6-7ab2-927a-df044d57c601';
+  /**
+   * This also covered response kinds, pairing a stance against a veracity response and expecting
+   * no match. Kind is still half the key (see `positionContext`), but it holds one value now, so
+   * there is no second kind to pair a stance against — the case is unreachable rather than fixed.
+   */
+  it('does not compare positions from different spaces', () => {
     const positions = groupParticipantPositions([
       position(VIEWER, 'claim-1', true),
-      position(OTHER, 'claim-1', false, otherSpace),
-      position(VIEWER, 'claim-2', true, undefined, 'stance'),
-      position(OTHER, 'claim-2', false, undefined, 'veracity'),
+      position(OTHER, 'claim-1', false, SECOND_SPACE),
       position(VIEWER, 'claim-3', true),
       position(OTHER, 'claim-3', true),
     ]);
@@ -68,8 +73,8 @@ describe('analyzeMatchingClaims', () => {
   it('keeps the claim context needed to open each disagreement', () => {
     const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
     const positions = groupParticipantPositions([
-      position(VIEWER, 'claim-1', false, spaceId, 'veracity'),
-      position(OTHER, 'claim-1', true, spaceId, 'veracity'),
+      position(VIEWER, 'claim-1', false, spaceId),
+      position(OTHER, 'claim-1', true, spaceId),
     ]);
 
     expect(analyzeMatchingClaims(positions, VIEWER).byProfile).toEqual(
@@ -80,7 +85,7 @@ describe('analyzeMatchingClaims', () => {
             {
               claimId: 'claim-1',
               spaceId,
-              responseKind: 'veracity',
+              responseKind: 'stance',
               viewerPosition: false,
               personPosition: true,
             },
@@ -96,9 +101,10 @@ describe('analyzeMatchingClaims', () => {
     const positions = groupParticipantPositions([
       position(VIEWER, 'claim-1', true, firstSpace),
       position(OTHER, 'claim-1', false, firstSpace),
-      // Another opposing axis on the same claim and space still counts once.
-      position(VIEWER, 'claim-1', true, firstSpace, 'veracity'),
-      position(OTHER, 'claim-1', false, firstSpace, 'veracity'),
+      // A repeated opposing pair in the same space still counts once. This used to be a veracity
+      // response alongside the stance; with one kind left, only a duplicate row can do it.
+      position(VIEWER, 'claim-1', true, firstSpace),
+      position(OTHER, 'claim-1', false, firstSpace),
       // The same claim can be a match in another space too.
       position(VIEWER, 'claim-1', true, secondSpace),
       position(OTHER, 'claim-1', false, secondSpace),
@@ -117,5 +123,47 @@ describe('analyzeMatchingClaims', () => {
         ],
       ])
     );
+  });
+});
+
+describe('matchesInSpaces', () => {
+  const FIRST_SPACE = '019fedae-72b6-7ab2-927a-df044d57c600';
+  const positions = groupParticipantPositions([
+    // claim-1 is opposed in both spaces, claim-2 only in the second.
+    position(VIEWER, 'claim-1', true, FIRST_SPACE),
+    position(OTHER, 'claim-1', false, FIRST_SPACE),
+    position(VIEWER, 'claim-1', true, SECOND_SPACE),
+    position(OTHER, 'claim-1', false, SECOND_SPACE),
+    position(VIEWER, 'claim-2', true, SECOND_SPACE),
+    position(OTHER, 'claim-2', false, SECOND_SPACE),
+  ]);
+  const analysis = analyzeMatchingClaims(positions, VIEWER);
+  const claims = (spaceIds: string[]) =>
+    matchesInSpaces(analysis, OTHER, new Set(spaceIds)).map(item => [item.claimId, item.spaceId]);
+
+  it('is every match when no space is selected', () => {
+    expect(claims([])).toEqual([
+      ['claim-1', FIRST_SPACE],
+      ['claim-2', SECOND_SPACE],
+    ]);
+  });
+
+  it('keeps only claims opposed in a selected space, shown in that space', () => {
+    expect(claims([FIRST_SPACE])).toEqual([['claim-1', FIRST_SPACE]]);
+    expect(claims([SECOND_SPACE])).toEqual([
+      ['claim-1', SECOND_SPACE],
+      ['claim-2', SECOND_SPACE],
+    ]);
+  });
+
+  it('counts a claim once across several selected spaces, and accepts dashless ids', () => {
+    expect(claims([FIRST_SPACE.replaceAll('-', ''), SECOND_SPACE])).toEqual([
+      ['claim-1', FIRST_SPACE],
+      ['claim-2', SECOND_SPACE],
+    ]);
+  });
+
+  it('is empty for someone with no matches in the selected spaces', () => {
+    expect(matchesInSpaces(analysis, THIRD, new Set([FIRST_SPACE]))).toEqual([]);
   });
 });

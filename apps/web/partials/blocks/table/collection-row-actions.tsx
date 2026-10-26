@@ -208,7 +208,7 @@ export function CollectionRowActions({
                     <button type="button" className="inline-flex items-center p-1">
                       <span className="inline-flex size-[12px] items-center justify-center rounded-sm border group-hover:border-grey-03 group-hover:text-grey-03 hover:border-text! hover:text-text!">
                         {space ? (
-                          <div className="size-[8px] overflow-clip rounded-sm grayscale">
+                          <div className="relative size-[8px] overflow-clip rounded-sm grayscale">
                             <GeoImage fill value={space.entity.image} alt="" />
                           </div>
                         ) : (

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Space } from '~/core/io/dto/spaces';
 
+import { TAGLINE_PROPERTY } from './profile-ontology';
 import { profileRailFacts } from './profile-rail-facts';
 
 const SPACE = 'f3dab79cb5a3d9d1759656dd5361d1c6';
@@ -49,5 +50,53 @@ describe('profileRailFacts description', () => {
 
   it('is null on a space with no entity at all', () => {
     expect(profileRailFacts(null, SPACE).description).toBeNull();
+  });
+});
+
+/**
+ * The tagline the header draws before the store has the person, read the same way and for the
+ * same reason — one line directly above the roles, so it is the line that moves everything
+ * under it when it appears late.
+ *
+ * Pins the property id as well as the scoping. This is the only place the id is read on the
+ * server, and a wrong one here is not an error: it is a header that silently never has a
+ * tagline, on a page where most people have not written one anyway.
+ */
+describe('profileRailFacts tagline', () => {
+  it('reads the tagline this space wrote', () => {
+    const facts = profileRailFacts(space([value(TAGLINE_PROPERTY, 'Head of Product at Geo', SPACE)]), SPACE);
+
+    expect(facts.tagline).toBe('Head of Product at Geo');
+  });
+
+  it('does not borrow one written in another space', () => {
+    const facts = profileRailFacts(space([value(TAGLINE_PROPERTY, 'Elsewhere.', OTHER)]), SPACE);
+
+    expect(facts.tagline).toBeNull();
+  });
+
+  it('is null when the space wrote a description but no tagline', () => {
+    const facts = profileRailFacts(space([value(SystemIds.DESCRIPTION_PROPERTY, 'A bio.', SPACE)]), SPACE);
+
+    expect(facts.tagline).toBeNull();
+  });
+
+  it('is null on a space with no entity at all', () => {
+    expect(profileRailFacts(null, SPACE).tagline).toBeNull();
+  });
+
+  // The two are read by the same helper now, so a mixed-up property id would read as the other
+  // one rather than as nothing.
+  it('does not confuse the two when both are written', () => {
+    const facts = profileRailFacts(
+      space([
+        value(SystemIds.DESCRIPTION_PROPERTY, 'A bio.', SPACE),
+        value(TAGLINE_PROPERTY, 'Head of Product at Geo', SPACE),
+      ]),
+      SPACE
+    );
+
+    expect(facts.tagline).toBe('Head of Product at Geo');
+    expect(facts.description).toBe('A bio.');
   });
 });

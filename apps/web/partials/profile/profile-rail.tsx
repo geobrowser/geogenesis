@@ -10,24 +10,32 @@ import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntity } from '~/core/database/entities';
+import { usePersonFollowers } from '~/core/follows/person-follow-counts';
 import { useEditProfile } from '~/core/hooks/use-edit-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import type { Space } from '~/core/io/dto/spaces';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
 import { type ProfileLinkField, changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
 import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import type { ProfileRailFacts } from '~/core/profile/profile-rail-facts';
-import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
-import { useValue } from '~/core/sync/use-store';
+import { useEntityTextValue } from '~/core/sync/use-entity-text-value';
+import { useFollowEntities } from '~/core/topics/use-follow-topics';
+import { useFollowedInterests } from '~/core/topics/use-followed-topics';
+import { useTopicMetadata } from '~/core/topics/use-topic-metadata';
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
+import { AvatarGroup } from '~/design-system/avatar-group';
 import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton, SquareButton } from '~/design-system/button';
 import { ClampedText } from '~/design-system/clamped-text';
+import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { EditSmall } from '~/design-system/icons/edit-small';
@@ -83,11 +91,6 @@ export function ProfileRailSections({
 }: ProfileRailProps) {
   const { facts, isLoading, isError } = useProfileFacts({ spaceId, personEntityId });
 
-  // Shares its query key with the Positions tab and the Activity gallery, so
-  // this is the same request they make rather than a third one.
-  const responses = usePersonResponses({ spaceId });
-  const positionsCount = isLoading && responses.total === null ? null : heldPositionsCount(responses, facts.positions);
-
   return (
     // A rule between sections, 24px either side — the same divider the Explore
     // and space rails draw (`SideRailSections`). Spacing lives on the sections
@@ -97,7 +100,6 @@ export function ProfileRailSections({
         facts={facts}
         isLoading={isLoading}
         isError={isError}
-        positionsCount={positionsCount}
         spaceId={spaceId}
         personEntityId={personEntityId}
         systemEntityId={systemEntityId}
@@ -313,7 +315,13 @@ export function LinksSection({
     // everything else on this page writes through — one status bar, one proposal
     // shape, and the name and description carried untouched.
     void publish(
-      { name: current.name, description: current.description, banner: UNCHANGED, avatar: UNCHANGED },
+      {
+        name: current.name,
+        tagline: current.tagline,
+        description: current.description,
+        banner: UNCHANGED,
+        avatar: UNCHANGED,
+      },
       {
         values: linkValueRows({
           fields: activeFields,
@@ -388,11 +396,11 @@ export function LinksSection({
   );
 }
 
-function AboutSection({
+/** Exported for its tests, as `LinksSection` above is; the rail is its only caller. */
+export function AboutSection({
   facts,
   isLoading,
   isError,
-  positionsCount,
   spaceId,
   personEntityId,
   systemEntityId,
@@ -404,8 +412,6 @@ function AboutSection({
   isLoading: boolean;
   /** The counts could not be read. Distinct from all three being zero. */
   isError: boolean;
-  /** Positions actually held, or null while the vote table is still out. */
-  positionsCount: number | null;
   spaceId: string;
   personEntityId: string | null;
   systemEntityId: string;
@@ -417,23 +423,24 @@ function AboutSection({
   const joined = formatJoined(facts.joinedAt);
 
   /*
-   * The person's description, read here rather than under their name. It is still edited in the
-   * header, which is where its edit field is; the header shows it only while editing
-   * (`hideWhenReading`).
+   * The person's description, read *and written* here rather than under their name — this card
+   * is the only place a profile shows a bio, so it has to be the place one is typed.
    *
-   * Tombstones included, so the one question this asks is whether the store has an opinion at
-   * all — clearing a bio replaces the row with an `isDeleted` one rather than removing it
-   * (`use-edit-profile`), and a lookup that hid those could not tell "not hydrated yet" from
-   * "just cleared". Read as a live value it brought `serverDescription` back the moment a
-   * deletion was staged.
+   * `serverDescription` is handed to the hook rather than resolved here; what an absent row
+   * means against a cleared one is the hook's to decide, and all three of its callers used to
+   * decide it separately.
    */
-  const stored = useValue({
-    includeDeleted: true,
-    selector: v =>
-      v.entity.id === personEntityId && v.spaceId === spaceId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
+  const isEditing = useUserIsEditing(spaceId);
+  const { text: description, setValue: setDescription } = useEntityTextValue({
+    entityId: personEntityId,
+    spaceId,
+    propertyId: SystemIds.DESCRIPTION_PROPERTY,
+    propertyName: 'Description',
+    fallback: serverDescription,
   });
-
-  const description = stored ? (stored.isDeleted ? undefined : stored.value) : (serverDescription ?? undefined);
+  // An editor with no person entity has nothing to write onto — a personal space whose topic
+  // never resolved. The card still shows the facts; it just offers no field.
+  const canEditDescription = isEditing && personEntityId !== null;
   const elapsed = timeOnGeo(facts.joinedAt);
 
   return (
@@ -449,7 +456,24 @@ function AboutSection({
        * and are the rows a returning reader scans for, so they sit last, next to
        * each other, where a set of numbers reads as a set.
        */}
-      {description && (
+      {canEditDescription ? (
+        <div className="mb-2 text-metadata text-text">
+          <PageStringField
+            variant="metadata"
+            // Short on purpose. `react-textarea-autosize` sizes to the *value*, so an empty
+            // field is one row tall with its overflow hidden — a placeholder that wraps in a
+            // 280px rail would be cut off mid-sentence. The guidance goes below instead.
+            placeholder="Add a description…"
+            aria-label="Description"
+            value={description}
+            onChange={setDescription}
+          />
+          {/* Says what belongs here rather than what the field is, because the tagline under
+              their name is the other place a person writes about themselves and the only real
+              question is which one this is. */}
+          <p className="mt-1 text-footnote text-grey-04">A few sentences on your background and what you work on.</p>
+        </div>
+      ) : description ? (
         <div className="mb-2">
           <ClampedText
             text={description}
@@ -459,7 +483,7 @@ function AboutSection({
             togglePlacement="below"
           />
         </div>
-      )}
+      ) : null}
 
       <dl className="flex flex-col">
         {joined && <Fact label="Joined" value={elapsed ? `${joined} · ${elapsed}` : joined} />}
@@ -471,6 +495,9 @@ function AboutSection({
             <VerifiedBy verifiers={facts.verifiedBy} />
           </Row>
         )}
+        {/* Only a personal space follows anything; a DAO's would always come back empty. */}
+        {spaceType === 'PERSONAL' && <FollowersRow spaceId={spaceId} />}
+        {spaceType === 'PERSONAL' && <FollowingRow spaceId={spaceId} />}
 
         {/* Each count is the tab that lists what it counts, which is the only
             question a number like this raises. */}
@@ -480,13 +507,12 @@ function AboutSection({
           value={isLoading ? null : facts.debates.toLocaleString()}
           href={`/space/${spaceId}/debates`}
         />
-        {/* Not `facts.positions`: the server counts a retracted vote as a
-            position, and this number sits above the list that does not show
-            them. See `heldPositionsCount`. */}
+        {/* Held positions only — the server leaves a retracted one out
+            (`votedByTypes`), so this is the number the list below it shows. */}
         <Fact
           label="Positions"
-          isUnavailable={isError && positionsCount === null}
-          value={positionsCount === null ? null : positionsCount.toLocaleString()}
+          isUnavailable={isError}
+          value={isLoading ? null : facts.positions.toLocaleString()}
           href={`/space/${spaceId}/positions`}
         />
         <Fact
@@ -589,20 +615,259 @@ function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
     return spaceImage && spaceImage !== PLACEHOLDER_SPACE_IMAGE ? spaceImage : null;
   };
 
+  // The trigger is the same face pile a claim card draws over its agree and disagree counts:
+  // overlapped avatars, then a +N badge in the same ring. It resolves its own images from the space
+  // ids, which is why the stack is the whole control rather than a stack plus a count.
   return (
-    // A popover rather than a boolean and a positioned div: outside-click,
-    // Escape, focus return and the aria wiring are the behaviours people expect
-    // of a thing that opened, and hand-rolling them got only the toggle right.
+    <RailPopover
+      label={`Verified by ${verifiers.length} ${verifiers.length === 1 ? 'space or person' : 'spaces and people'}`}
+      trigger={<RankingAggregatedSubmitterAvatars submitterSpaceIds={verifierSpaceIds} size={20} maxVisible={3} />}
+    >
+      {verifiers.map(verifier => (
+        <li key={verifier.spaceId}>
+          <Link
+            href={NavUtils.toSpace(verifier.spaceId)}
+            className="flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-grey-01"
+          >
+            {/* Resolved here rather than read off the verifier: the facts
+                      query never fetches these, so `avatarUrl` is null for
+                      everyone and the whole list drew placeholders under a stack
+                      of real faces. `RankingAggregatedSubmitterAvatars` above
+                      already primed these caches from the same space ids. */}
+            <RailListThumb image={avatarFor(verifier.spaceId)} />
+            <span className="min-w-0 flex-1 truncate text-metadata text-text">
+              {verifier.name ?? (verifier.isPerson ? 'Untitled person' : 'Untitled space')}
+            </span>
+            <span className="shrink-0 text-tag text-grey-04">{verifier.isPerson ? 'Person' : 'Space'}</span>
+          </Link>
+        </li>
+      ))}
+    </RailPopover>
+  );
+}
+
+type FollowListEntry = {
+  id: string;
+  kind: 'person' | 'topic';
+  name: string;
+  image: string | null;
+  href: string | null;
+};
+
+/**
+ * Who follows this person (GEO-3236): a few faces, a +N for the rest, and the whole list on a
+ * click — the same shape as Verified by above it. Hidden while nobody does.
+ */
+export function FollowersRow({ spaceId }: { spaceId: string }) {
+  const followers = usePersonFollowers(spaceId);
+  const ids = followers?.ids ?? EMPTY_IDS;
+  const { spaceFor, isLoading: isLoadingSpaces } = usePeopleSpaces(ids);
+
+  const entries = React.useMemo(
+    () => ids.map(id => personEntry(id, spaceFor)).sort((a, b) => a.name.localeCompare(b.name)),
+    [ids, spaceFor]
+  );
+
+  if (!followers) return <FollowRowSkeleton label="Followers" />;
+  if (followers.count === 0) return null;
+  if (isLoadingSpaces) return <FollowRowSkeleton label="Followers" />;
+
+  return (
+    <FollowListRow
+      label="Followers"
+      count={followers.count}
+      noun={['follower', 'followers']}
+      entries={entries}
+      trailing={() => null}
+    />
+  );
+}
+
+/**
+ * Everything this space follows: people and topics in one list, since following is one action for
+ * both and the count is of both (GEO-3236). Read off the Interested votes the space holds, which
+ * are its follows of either kind (GEO-3191), each marked as a person or a topic when it is read.
+ * Hidden for a space that follows nothing.
+ *
+ * The owner can unfollow from the list, through the same writes as every Follow button, so an
+ * entry leaves the list, the count and any button on screen at once.
+ */
+export function FollowingRow({ spaceId }: { spaceId: string }) {
+  const { personalSpaceId } = usePersonalSpaceId();
+  const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
+
+  const { ids: followedIds, kinds, isLoading } = useFollowedInterests(spaceId);
+  const ids = React.useMemo(() => [...followedIds], [followedIds]);
+  const personIds = React.useMemo(() => ids.filter(id => kinds.get(id) === 'person'), [ids, kinds]);
+  const topicIds = React.useMemo(() => ids.filter(id => kinds.get(id) !== 'person'), [ids, kinds]);
+  // Names and faces only: what each id is comes from the follow itself.
+  const { spaceFor, isLoading: isLoadingSpaces } = usePeopleSpaces(personIds);
+  const { metadata, isLoading: isLoadingMetadata } = useTopicMetadata(topicIds);
+  const topicFollows = useFollowEntities({ kind: 'topic' });
+  const personFollows = useFollowEntities({ kind: 'person' });
+
+  // By name, so a long list reads like an index rather than in the order the votes were cast.
+  const entries = React.useMemo(
+    () =>
+      ids
+        .map((id): FollowListEntry => {
+          if (kinds.get(id) === 'person') return personEntry(id, spaceFor);
+          const meta = metadata.get(id);
+          // The topic's own space. A follow carries none of its own: the space it was cast in is
+          // the follower's.
+          const homeSpaceId = meta?.homeSpaceId;
+          return {
+            id,
+            kind: 'topic',
+            name: meta?.name ?? 'Untitled topic',
+            image: meta?.image ?? null,
+            href: homeSpaceId ? NavUtils.toEntity(homeSpaceId, id) : null,
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [ids, kinds, spaceFor, metadata]
+  );
+
+  if (!isLoading && ids.length === 0) return null;
+  if (isLoading || isLoadingSpaces || isLoadingMetadata) {
+    return <FollowRowSkeleton label="Following" />;
+  }
+
+  return (
+    <FollowListRow
+      label="Following"
+      count={entries.length}
+      noun={['follow', 'follows']}
+      entries={entries}
+      trailing={entry =>
+        isOwner ? (
+          <button
+            type="button"
+            aria-label={`Unfollow ${entry.name}`}
+            onClick={() => void (entry.kind === 'person' ? personFollows : topicFollows).unfollow([entry.id])}
+            disabled={(entry.kind === 'person' ? personFollows : topicFollows).isPending(entry.id)}
+            className="shrink-0 text-tag text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+          >
+            Unfollow
+          </button>
+        ) : (
+          <span className="shrink-0 text-tag text-grey-04">{entry.kind === 'person' ? 'Person' : 'Topic'}</span>
+        )
+      }
+    />
+  );
+}
+
+const EMPTY_IDS: string[] = [];
+
+/**
+ * The personal spaces behind a list of people, for their names and faces.
+ *
+ * Loading exactly while someone asked for is not in the map yet: a list that grew waits for its
+ * new names rather than drawing "Untitled person", and a list that shrank, every name already in
+ * hand, draws at once.
+ */
+function usePeopleSpaces(ids: readonly string[]) {
+  const { spacesById, isLoading } = useSpacesByIds([...ids]);
+  const spaceFor = React.useCallback(
+    (id: string) => spacesById.get(id) ?? [...spacesById.values()].find(space => normId(space.id) === id),
+    [spacesById]
+  );
+  const missing = ids.some(id => !spaceFor(id));
+  return { spaceFor, isLoading: missing && isLoading };
+}
+
+function personEntry(id: string, spaceFor: (id: string) => Space | undefined): FollowListEntry {
+  const space = spaceFor(id);
+  return {
+    id,
+    kind: 'person',
+    name: space?.entity?.name ?? 'Untitled person',
+    image: space?.entity?.image && space.entity.image !== PLACEHOLDER_SPACE_IMAGE ? space.entity.image : null,
+    href: NavUtils.toSpace(id),
+  };
+}
+
+/**
+ * A follow row's face pile and the list it opens: Followers and Following share it. Drawn like
+ * Verified by: three faces, then a +N badge for the rest, so the total reads off the pile.
+ */
+function FollowListRow({
+  label,
+  count,
+  noun,
+  entries,
+  trailing,
+}: {
+  label: string;
+  count: number;
+  noun: readonly [string, string];
+  entries: FollowListEntry[];
+  trailing: (entry: FollowListEntry) => React.ReactNode;
+}) {
+  const visible = entries.slice(0, 3);
+
+  return (
+    <Row label={label}>
+      <RailPopover
+        label={`${label}: ${count} ${count === 1 ? noun[0] : noun[1]}`}
+        trigger={
+          <AvatarGroup>
+            {visible.map(entry => (
+              <AvatarGroup.Item key={entry.id} size={20}>
+                <FallbackImage value={entry.image ?? PLACEHOLDER_SPACE_IMAGE} sizes="20px" className="object-cover" />
+              </AvatarGroup.Item>
+            ))}
+            <AvatarGroup.Overflow count={count - visible.length} size={20} />
+          </AvatarGroup>
+        }
+      >
+        {entries.map(entry => {
+          const content = (
+            <>
+              <RailListThumb image={entry.image} />
+              <span className="min-w-0 flex-1 truncate text-metadata text-text">{entry.name}</span>
+            </>
+          );
+          return (
+            <li key={entry.id} className="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-grey-01">
+              {entry.href ? (
+                <Link href={entry.href} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                  {content}
+                </Link>
+              ) : (
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-left">{content}</span>
+              )}
+              {trailing(entry)}
+            </li>
+          );
+        })}
+      </RailPopover>
+    </Row>
+  );
+}
+
+/**
+ * A rail row's value that opens a list: Verified by and Following. A popover rather than a boolean
+ * and a positioned div: outside-click, Escape, focus return and the aria wiring are the behaviours
+ * people expect of a thing that opened, and hand-rolling them got only the toggle right.
+ */
+function RailPopover({
+  label,
+  trigger,
+  children,
+}: {
+  label: string;
+  trigger: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
     <Popover.Root>
       <Popover.Trigger
-        aria-label={`Verified by ${verifiers.length} ${verifiers.length === 1 ? 'space or person' : 'spaces and people'}`}
+        aria-label={label}
         className="inline-flex items-center gap-2 text-metadata text-text hover:underline"
       >
-        {/* The same face pile a claim card draws over its agree and disagree
-            counts: overlapped avatars, then a +N badge in the same ring. It
-            resolves its own images from the space ids, which is why the stack
-            is the whole control rather than a stack plus a count. */}
-        <RankingAggregatedSubmitterAvatars submitterSpaceIds={verifierSpaceIds} size={20} maxVisible={3} />
+        {trigger}
       </Popover.Trigger>
 
       <Popover.Portal>
@@ -611,36 +876,31 @@ function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
           sideOffset={4}
           className="z-100 max-h-64 w-64 overflow-y-auto rounded-lg border border-grey-02 bg-white py-1 shadow-dropdown"
         >
-          <ul>
-            {verifiers.map(verifier => (
-              <li key={verifier.spaceId}>
-                <Link
-                  href={NavUtils.toSpace(verifier.spaceId)}
-                  className="flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-grey-01"
-                >
-                  {/* Resolved here rather than read off the verifier: the facts
-                      query never fetches these, so `avatarUrl` is null for
-                      everyone and the whole list drew placeholders under a stack
-                      of real faces. `RankingAggregatedSubmitterAvatars` above
-                      already primed these caches from the same space ids. */}
-                  <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white">
-                    <FallbackImage
-                      value={avatarFor(verifier.spaceId) ?? PLACEHOLDER_SPACE_IMAGE}
-                      sizes="20px"
-                      className="object-cover"
-                    />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-metadata text-text">
-                    {verifier.name ?? (verifier.isPerson ? 'Untitled person' : 'Untitled space')}
-                  </span>
-                  <span className="shrink-0 text-tag text-grey-04">{verifier.isPerson ? 'Person' : 'Space'}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <ul>{children}</ul>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+/** The 20px picture that leads each row of a rail list, with the placeholder for none. */
+function RailListThumb({ image }: { image: string | null | undefined }) {
+  return (
+    <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white">
+      <FallbackImage value={image ?? PLACEHOLDER_SPACE_IMAGE} sizes="20px" className="object-cover" />
+    </span>
+  );
+}
+
+function FollowRowSkeleton({ label }: { label: string }) {
+  return (
+    <Row label={label}>
+      <span className="inline-flex" aria-hidden>
+        <span className="inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+        <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+        <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+      </span>
+    </Row>
   );
 }
 

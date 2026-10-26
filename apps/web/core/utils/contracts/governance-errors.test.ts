@@ -31,4 +31,11 @@ describe('governance-errors', () => {
   it('falls back to the raw cause chain for unmapped errors', () => {
     expect(describeGovernanceError(unknown)).toContain('insufficient funds for gas');
   });
+
+  it('decodes InvalidSetting, so removing an editor below quorum is not an unknown failure', () => {
+    // Unmapped reverts fail open to "executable" in the simulation, which would
+    // keep offering an Execute that can only revert.
+    const error = new Error('Execute failed', { cause: new Error('reverted with 0xa4372757') });
+    expect(decodeGovernanceRevert(error)?.name).toBe('InvalidSetting');
+  });
 });

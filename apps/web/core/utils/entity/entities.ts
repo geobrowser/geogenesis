@@ -1,6 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { HIDDEN_PROPERTIES, OG_IMAGE_PROPERTY } from '~/core/constants';
+import { equals as idEquals } from '~/core/id/normalize';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
 import { getTopRankedSpaceId, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -129,8 +130,38 @@ export function nameInSpace(values: Value[], spaceId?: string): string | null {
  * silence is the honest answer. Empty and absent are the same answer here for that reason.
  */
 export function descriptionInSpace(values: Value[], spaceId?: string): string | null {
-  if (!spaceId) return description(values) || null;
-  return description(writtenIn(values, spaceId)) || null;
+  return textInSpace(values, SystemIds.DESCRIPTION_PROPERTY, spaceId);
+}
+
+/**
+ * The same rule as `descriptionInSpace`, for any other text a space writes about an entity.
+ *
+ * Every such property is editorial in the way a description is — a tagline borrowed from
+ * another space puts words in this space's mouth — so none of them fall back across spaces,
+ * and empty reads as absent. `descriptionInSpace` is this function with its property fixed;
+ * it keeps its own name because that is what nearly every caller wants.
+ */
+export function textInSpace(values: Value[], propertyId: string, spaceId?: string): string | null {
+  const scoped = spaceId ? writtenIn(values, spaceId) : values;
+  return pickBySpaceRank(scoped, propertyId)?.value || null;
+}
+
+/**
+ * The entities a relation property points at, skipping deleted relations. Ids compared normalized,
+ * since relations reach the client in both spellings depending on the query that found them.
+ */
+export function relationTargets(relations: Relation[], propertyId: string): string[] {
+  return relations
+    .filter(relation => relation.isDeleted !== true && idEquals(relation.type.id, propertyId))
+    .map(relation => relation.toEntity.id);
+}
+
+/**
+ * The relations published in one space. An entity's relations arrive from every space that has
+ * written to it, and a relation written elsewhere says nothing about this space's view of it.
+ */
+export function relationsInSpace(relations: Relation[], spaceId: string): Relation[] {
+  return relations.filter(relation => idEquals(relation.spaceId, spaceId));
 }
 
 /**

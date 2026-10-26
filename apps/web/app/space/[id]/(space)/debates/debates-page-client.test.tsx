@@ -1,11 +1,13 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
 
 import { DebatesPageClient } from './debates-page-client';
+import { openDebateFeedPanelAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   play: vi.fn(() => Promise.resolve()),
@@ -17,10 +19,44 @@ const mocks = vi.hoisted(() => ({
   // Second stage of the feed's gate: which debates the media worker has composed a final_video for.
   media: { processedIds: ['debate-1'] as string[], isLoading: false, hasError: false },
   castVote: vi.fn(),
+  /** The feed's debates; null for the suite's usual single debate. */
+  debates: null as Debate[] | null,
+  /** Each debate the claims panel was mounted for, in order — a remount appends. */
+  claimsPanelMounts: [] as string[],
 }));
+
+// Stands in for the claims panel so a test can see whether it is remounted or merely handed a new
+// debate: only a mount appends. Its content has its own suite.
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+}));
+
+vi.mock('~/core/debates/browse/debate-claims-panel', async () => {
+  const React = await import('react');
+  return {
+    DebateClaimsPanel: ({ debate }: { debate: Debate }) => {
+      React.useEffect(() => {
+        mocks.claimsPanelMounts.push(debate.id);
+        // Mount-only: a new debate handed to the same panel is exactly what must not register here.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []);
+      return React.createElement('div', { 'data-testid': 'claims-panel', 'data-debate': debate.id });
+    },
+  };
+});
 
 // Voting reaches the chain and the user's personal space, neither of which exists here. The
 // tally logic has its own unit tests; this suite only cares that the feed renders the pills.
+// Needs the wallet and editorship providers this harness does not mount; covered on its own in
+// debate-overflow-menu.test.tsx.
+vi.mock('~/core/debates/browse/debate-overflow-menu', () => ({
+  DebateOverflowMenu: () => null,
+  useCanRemoveDebate: () => false,
+}));
+
 vi.mock('~/core/debates/use-debate-votes', () => ({
   useDebateVotes: () => ({
     sharePercentFor: () => null,
@@ -32,20 +68,42 @@ vi.mock('~/core/debates/use-debate-votes', () => ({
   useDebateVotesByVoter: () => new Map(),
 }));
 
-// The real player resolves affiliations through react-query. This page suite intentionally stubs
-// the player's data dependencies instead of recreating the app provider tree; affiliation loading
+// The real player resolves bylines through react-query. This page suite intentionally stubs
+// the player's data dependencies instead of recreating the app provider tree; byline loading
 // and rendering have focused coverage in the player and hook suites.
-vi.mock('~/core/debates/participant-affiliations', () => ({
-  useParticipantAffiliations: () => new Map(),
+vi.mock('~/core/debates/participant-bylines', () => ({
+  useParticipantBylines: () => new Map(),
 }));
 
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: () => <div data-testid="entity-vote-buttons" />,
+// The end card's numbers come through react-query too, and it is only drawn once a debate has
+// ended, which nothing here does. Its data and its layout have their own suites.
+vi.mock('~/core/debates/browse/use-debate-end-card', () => ({
+  useDebateEndCard: () => ({}),
+}));
+
+// The claim's response reads reach Privy and the sync store; they have their own suites. Here the
+// card only has to draw its Agree and Disagree.
+vi.mock('~/core/debates/browse/use-debate-claim-response', () => ({
+  useDebateClaimResponse: () => ({
+    responseKind: 'stance',
+    summary: { isLoading: true },
+    control: {
+      optimisticPositions: [],
+      viewerPosition: null,
+      respond: vi.fn(),
+      canRespond: true,
+      isResponseSubmitting: false,
+      actionTitle: () => '',
+      localVoteSide: null,
+      responseError: null,
+    },
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
   // `prefetch` is for PrefetchLink, which the feed header's space and claim links use.
   useRouter: () => ({ replace: mocks.replace, prefetch: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // PrefetchLink hydrates the entity it points at on hover, which reaches for the sync engine.
@@ -59,9 +117,13 @@ vi.mock('~/core/state/feature-flags', () => ({
 
 vi.mock('~/core/debates/hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a' }),
-  useSpaceDebates: () => ({ data: { debates: [completedDebate()], matches: [] }, isLoading: false, error: null }),
+  useSpaceDebates: () => ({
+    data: { debates: mocks.debates ?? [completedDebate()], matches: [] },
+    isLoading: false,
+    error: null,
+  }),
   useProcessedVideoDebateIds: () => mocks.media,
-  useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
+  useRecordingPlaybackUrl: () => ({ lookup: mocks.recordingUrl, refresh: mocks.recordingUrl }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaArtifactMutate }),
   useDebateMedia: () => ({ data: undefined, isLoading: false, isError: false }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
@@ -79,12 +141,6 @@ vi.mock('~/core/debates/hooks', () => ({
 // they were written against.
 vi.mock('~/core/debates/browse/use-debates-best-order', () => ({
   useDebatesBestOrder: () => ({ rankByDebateId: new Map(), isLoading: false, isError: false }),
-}));
-
-// The feed's "Join a debate" button opens the login when signed out, and that hook reaches for
-// next-navigation and Privy context this suite does not stand up.
-vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: () => vi.fn(),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({
@@ -106,7 +162,7 @@ vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 0, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
-// The feed's Claims badge reads the debate's transcript claims through react-query, and this
+// The player's claim ticker reads the debate's transcript claims through react-query, and this
 // suite renders the feed without a QueryClientProvider. Stub it the way the other debate suites do;
 // the grouping and ordering have their own unit tests.
 vi.mock('~/core/debates/use-debate-transcript-claims', async () => {
@@ -132,6 +188,8 @@ beforeEach(() => {
   mocks.replace.mockClear();
   mocks.mediaArtifactMutate.mockClear();
   mocks.media = { processedIds: ['debate-1'], isLoading: false, hasError: false };
+  mocks.debates = null;
+  mocks.claimsPanelMounts = [];
   Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play });
   Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: mocks.pause });
   class MockIntersectionObserver {
@@ -148,20 +206,69 @@ afterEach(() => {
 });
 
 describe('DebatesPageClient browse feed', () => {
-  it('renders the claim title, space, join button and both debater videos', async () => {
+  it('renders the claim title, space and both debater videos without a join button', async () => {
     const { container } = render(<DebatesPageClient spaceId="space-1" />);
 
     expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
     expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'Join a debate' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Join a debate' })).not.toBeInTheDocument();
     // Both debaters name themselves on their own tile. The "Winner?" pill used to sit here too;
     // it moved off the tile entirely when the name row took the bottom-right corner, and winner
     // voting now happens on the end-of-debate scorecard and in the claims panel.
     expect(screen.getAllByText('Alex').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Sam').length).toBeGreaterThan(0);
-    expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
+    // The claim is voted on from the card; the debate's own up/down vote is gone (GEO-3454).
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Disagree' })).toBeInTheDocument();
 
+    // The feed holds full recordings until the viewer presses Play (feed-full-playback.ts).
+    const play = await screen.findByRole('button', { name: 'Play debate' });
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+
+    fireEvent.click(play);
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
+  });
+
+  it('opens the claims panel afresh on each debate the feed scrolls to', () => {
+    // The panel follows the active debate. Reused rather than remounted, it carried the old list's
+    // scroll offset — and the debater it had been opened at — onto the next debate.
+    const second = {
+      ...completedDebate(),
+      id: 'debate-2',
+      room_name: 'debate-2',
+      claim: { ...completedDebate().claim, id: 'claim-2', claim_entity_id: 'claim-entity-2', claim: 'Second claim' },
+    };
+    mocks.debates = [completedDebate(), second];
+    mocks.media = { processedIds: ['debate-1', 'debate-2'], isLoading: false, hasError: false };
+    const observed: { callback: IntersectionObserverCallback; element: Element }[] = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(private readonly callback: IntersectionObserverCallback) {}
+        observe(element: Element) {
+          observed.push({ callback: this.callback, element });
+        }
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+
+    render(<DebatesPageClient spaceId="space-1" />);
+    // Opened through the feed's panel slot: the card's claims pill is gone, and what opens the panel
+    // now (the end card) is stubbed here.
+    act(() => getDefaultStore().set(openDebateFeedPanelAtom, 'claims'));
+    expect(mocks.claimsPanelMounts).toEqual(['debate-1']);
+
+    const secondItem = observed.find(entry => entry.element.textContent?.includes('Second claim'))!;
+    act(() =>
+      secondItem.callback(
+        [{ isIntersecting: true, intersectionRatio: 0.7, target: secondItem.element } as IntersectionObserverEntry],
+        {} as IntersectionObserver
+      )
+    );
+
+    expect(screen.getByTestId('claims-panel')).toHaveAttribute('data-debate', 'debate-2');
+    expect(mocks.claimsPanelMounts).toEqual(['debate-1', 'debate-2']);
   });
 
   // Both recordings exist, so `isWatchableDebate` passes — only the media gate withholds it.

@@ -4,6 +4,7 @@ import { diffWords } from 'diff';
 import { Effect } from 'effect';
 
 import { BLOCK_CONFIG_RELATION_TYPE_IDS } from '~/core/blocks/data/shown-column-relations';
+import { hasCompleteEntityList } from '~/core/io/entity-coverage';
 import { getBatchEntities, getEntityBacklinks } from '~/core/io/queries';
 import type { ApiEntityDiffShape } from '~/core/io/rest';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
@@ -1037,7 +1038,13 @@ function computeValueChanges(localValues: Value[], remoteEntity: Entity | undefi
       v => v.property.id === localValue.property.id && v.spaceId === spaceId
     );
 
-    const beforeValue = remoteValue?.value ?? null;
+    // An incomplete response cannot disprove a deletion. The tombstone retains the
+    // last locally known value, so use it when the remote before-state is unavailable.
+    const beforeValue =
+      remoteValue?.value ??
+      (localValue.isDeleted && remoteEntity && !hasCompleteEntityList(remoteEntity, 'values', localValue.spaceId)
+        ? localValue.value
+        : null);
     const afterValue = localValue.isDeleted ? null : localValue.value;
 
     if (beforeValue === afterValue) continue;
@@ -1118,8 +1125,9 @@ function computeRelationChanges(
 
     let changeType: 'ADD' | 'REMOVE' | 'UPDATE';
     if (localRelation.isDeleted) {
-      // Net-zero: added locally then deleted locally — don't show as a deletion
-      if (!remoteRelation) continue;
+      // Only complete coverage can prove an unmatched deletion canceled a local creation.
+      if (!remoteRelation && (!remoteEntity || hasCompleteEntityList(remoteEntity, 'relations', localRelation.spaceId)))
+        continue;
       changeType = 'REMOVE';
     } else if (!remoteRelation) {
       changeType = 'ADD';

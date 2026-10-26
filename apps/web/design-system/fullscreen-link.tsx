@@ -19,6 +19,8 @@ type FullscreenLinkProps = {
    * tab order and says `aria-disabled`, which is what the class was always meant to mean.
    */
   disabled?: boolean;
+  /** The destination has no entity-panel view (for example, a debate video). */
+  requiresFullPage?: boolean;
   /** Prefetch hints, when the target is an entity page. See {@link Link}. */
   entityId?: string;
   spaceId?: string;
@@ -41,6 +43,7 @@ export function FullscreenLink({
   href,
   ariaLabel,
   disabled = false,
+  requiresFullPage = false,
   entityId,
   spaceId,
   className,
@@ -51,6 +54,7 @@ export function FullscreenLink({
       entityId={entityId}
       spaceId={spaceId}
       aria-label={ariaLabel}
+      data-entity-side-panel-full-page={requiresFullPage || undefined}
       aria-disabled={disabled || undefined}
       tabIndex={disabled ? -1 : undefined}
       // The one that actually stops it. `pointer-events-none` stops a mouse, `tabIndex={-1}` stops

@@ -49,8 +49,11 @@ describe('buildPersonRecordsDocument', () => {
   // and so are withdrawn responses, which are a vote *type* and mean "no side".
   it('counts positions through the shared filter', () => {
     expect(buildPersonRecordsDocument([A]).variables.positionFilter).toBe(POSITION_VOTE_FILTER);
-    expect(POSITION_VOTE_FILTER.voteKind.in).toEqual([1, 2]);
+    // Stance alone: kind 0 is curation, and kind 2 is the retired veracity response this app no
+    // longer reads.
+    expect(POSITION_VOTE_FILTER.voteKind.in).toEqual([1]);
     expect(POSITION_VOTE_FILTER.voteKind.in).not.toContain(0);
+    expect(POSITION_VOTE_FILTER.voteKind.in).not.toContain(2);
     expect(POSITION_VOTE_FILTER.voteType.in).toEqual([0, 1]);
     expect(POSITION_VOTE_FILTER.objectType.is).toBe(0);
   });
@@ -137,9 +140,9 @@ describe('readPersonRecords', () => {
     expect(records.get(B)).toMatchObject({ positions: 1, debateIds: ['d3'] });
   });
 
-  // A `userVotes` row is not a position. The same claim answered on both the stance and the veracity
-  // axis is two rows, and one answered in two spaces is two more — both happen on the live graph, and
-  // a row count would say a bigger number than the positions the rest of the app lists for them.
+  // A `userVotes` row is not a position. A claim answered in two spaces is two rows — which happens
+  // on the live graph, and a row count would say a bigger number than the positions the rest of the
+  // app lists for them.
   it('counts a claim answered twice as one position', () => {
     const records = readPersonRecords(
       {

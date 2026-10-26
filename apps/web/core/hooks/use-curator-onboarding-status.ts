@@ -19,7 +19,7 @@ import {
   getUserHasVoteOfKind,
 } from '~/core/io/queries';
 import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
-import { responseKindToVoteKind } from '~/core/responses/entity-response';
+import { RETIRED_VERACITY_VOTE_KIND, responseKindToVoteKind } from '~/core/responses/entity-response';
 
 export type CuratorOnboardingCompletion = Record<CuratorOnboardingStepId, boolean>;
 
@@ -39,7 +39,18 @@ function emptyCompletion(): CuratorOnboardingCompletion {
  * ticked the voting step too. With a claim step beside it that would credit one action as two.
  */
 const ENTITY_VOTE_KINDS = [responseKindToVoteKind('curation')] as const;
-const CLAIM_POSITION_VOTE_KINDS = [responseKindToVoteKind('stance'), responseKindToVoteKind('veracity')] as const;
+
+/**
+ * The retired veracity kind is counted here on purpose — the one place that does.
+ *
+ * This step asks whether the person has *ever* taken a position on a claim, and someone who did so
+ * back when factual claims were verified rather than agreed with did the thing the checklist is
+ * asking about. Dropping it would un-tick a step they had already completed, which is a regression
+ * with nothing to recommend it — unlike a tally or a current side, where reading the retired kind
+ * is what we deliberately stopped doing. Nothing here labels a side or publishes a vote, so there
+ * is no vocabulary to get wrong.
+ */
+const CLAIM_POSITION_VOTE_KINDS = [responseKindToVoteKind('stance'), RETIRED_VERACITY_VOTE_KIND] as const;
 
 async function personalSpaceHasEntityType(
   personalSpaceId: string,

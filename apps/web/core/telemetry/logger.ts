@@ -76,6 +76,8 @@ type TelemetryEvent = {
   tags?: Record<string, string | number | boolean>;
   /** Not indexed — the place for ids, durations and anything high-cardinality. */
   extra?: Record<string, unknown>;
+  /** `warning` for events that predict a failure and should be alertable; defaults to `info`. */
+  level?: 'info' | 'warning';
 };
 
 /**
@@ -85,15 +87,36 @@ type TelemetryEvent = {
  * and no error semantics, and routing it through `captureException` would both pollute
  * error rates and get filtered by the client's `allowUrls` stack-frame policy.
  */
-export function reportEvent({ name, tags, extra }: TelemetryEvent): void {
+export function reportEvent({ name, tags, extra, level = 'info' }: TelemetryEvent): void {
   if (!isTelemetryEnabled) {
     return;
   }
 
   try {
-    Sentry.captureMessage(name, { level: 'info', tags, extra });
+    Sentry.captureMessage(name, { level, tags, extra });
   } catch (reportingError) {
     console.error('[Telemetry] Failed to capture event', reportingError);
+  }
+}
+
+/**
+ * Leaves a trail on whatever this tab reports next, without reporting anything itself. For a
+ * state that is not an error yet but explains one if it follows.
+ */
+export function addTelemetryBreadcrumb(
+  category: string,
+  message: string,
+  data?: Record<string, unknown>,
+  level: 'info' | 'warning' = 'info'
+): void {
+  if (!isTelemetryEnabled) {
+    return;
+  }
+
+  try {
+    Sentry.addBreadcrumb({ category, message, data, level });
+  } catch (reportingError) {
+    console.error('[Telemetry] Failed to add breadcrumb', reportingError);
   }
 }
 

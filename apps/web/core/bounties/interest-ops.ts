@@ -107,21 +107,25 @@ export function buildAllocateOps(args: {
   };
 }
 
-/** Tombstones every allocation row on the bounty that points at `targetId` (space entity or legacy person entity). */
+/**
+ * Tombstones every allocation row on the bounty that points at any of
+ * `targetIds` — one curator can be allocated under both their space entity and
+ * a legacy person entity.
+ */
 export function buildRemoveAllocationOps(args: {
   daoSpaceId: string;
   bounty: EntityPick;
-  targetId: string;
+  targetIds: readonly string[];
   existingRelations: readonly Relation[];
 }): { relations: Relation[] } {
-  const targetHex = uuidToHex(args.targetId);
+  const targets = new Set(args.targetIds.map(uuidToHex));
   return {
     relations: args.existingRelations
       .filter(
         r =>
           r.type.id === BOUNTY_ALLOCATED_PROPERTY_ID &&
           uuidToHex(r.fromEntity.id) === uuidToHex(args.bounty.id) &&
-          uuidToHex(r.toEntity.id) === targetHex
+          targets.has(uuidToHex(r.toEntity.id))
       )
       .map(r => ({ ...r, spaceId: args.daoSpaceId, isLocal: true, isDeleted: true })),
   };
