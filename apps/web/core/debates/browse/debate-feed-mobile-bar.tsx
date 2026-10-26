@@ -4,16 +4,13 @@ import * as React from 'react';
 
 import dynamic from 'next/dynamic';
 
-import { useMediaQuery } from '~/core/hooks/use-media-query';
-import { NavUtils } from '~/core/utils/utils';
+import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
+import { useSticky } from '~/core/hooks/use-sticky';
 
-import { GeoMark } from '~/design-system/icons/geo-mark';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { MobileNavbarBrand } from '~/partials/navbar/mobile-navbar-brand';
 
-// Client-only, like the navbar's own account controls: they read Privy, and the feed renders in tests
-// and on first paint without it.
-const DebateFeedMobileBarActions = dynamic(
-  () => import('./debate-feed-mobile-bar-actions').then(m => ({ default: m.DebateFeedMobileBarActions })),
+const NavbarAccountActions = dynamic(
+  () => import('~/partials/navbar/navbar-account-actions').then(m => ({ default: m.NavbarAccountActions })),
   { ssr: false }
 );
 
@@ -26,27 +23,15 @@ const DebateFeedMobileBarActions = dynamic(
  * screenshot of the feed carries the brand the way the video does.
  */
 export function DebateFeedMobileBar() {
-  // Mounted only where the bar shows. CSS alone would hide it on desktop but still run its copy of the
-  // navbar's account controls beside the real navbar's: a second ⌘E listener, a second edit mode tip.
-  const isPhone = useMediaQuery(PHONE_QUERY);
+  // Leave desktop-only visits lazy, but keep an opened profile editor and any pending save alive
+  // after a phone visit. CSS hides the bar on desktop; compact controls own no extra shortcuts.
+  const isPhone = useIsPhoneLayout();
+  const mountAccountActions = useSticky(isPhone);
 
   return (
     <header className="hidden h-11 shrink-0 items-center justify-between bg-white px-4 md:flex">
-      <Link
-        href={NavUtils.toExplore()}
-        data-geo-analytics-label="Debate feed bar Geo logo"
-        data-geo-analytics-intent="navigate_explore"
-        className="-ml-1 flex h-11 items-center gap-1.5 px-1 text-text"
-      >
-        <span aria-hidden className="flex">
-          <GeoMark size={20} />
-        </span>
-        <span className="font-[family-name:var(--font-geist-medium)] text-[26px] leading-none">Geo</span>
-      </Link>
-      {isPhone ? <DebateFeedMobileBarActions /> : null}
+      <MobileNavbarBrand placement="debate_feed_bar" />
+      {mountAccountActions ? <NavbarAccountActions compact placement="debate_feed_bar" /> : null}
     </header>
   );
 }
-
-/** The `md` variant in styles.css, where the bar's `md:flex` shows it. */
-const PHONE_QUERY = '(max-width: 767px)';
