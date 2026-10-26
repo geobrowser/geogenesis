@@ -1,15 +1,12 @@
-import type { CallSeries } from '~/core/community-calls/types';
-
 import { SpaceOverviewSidePanel } from './space-overview-side-panel';
-import { fetchOverviewSubspaces } from '~/app/space/[id]/(space)/space-sidebar';
+import { fetchOverviewSubspaces, resolveSpaceSidebar } from '~/app/space/[id]/(space)/space-sidebar';
 
 type Props = {
   spaceId: string;
-  communityCalls: CallSeries[];
 };
 
 /**
- * Fetches the Overview rail's subspaces and hands them to the panel (GEO-2875).
+ * Fetches the Overview rail's subspaces and community calls and hands them to the panel (GEO-2875).
  *
  * A container rather than an `await` in the page, because the page's own `await` blocks *all* of
  * its JSX — the editor included — on a query that only the rail needs. The gallery this replaces
@@ -19,8 +16,11 @@ type Props = {
  *
  * Mirrors {@link RootExploreSidePanelContainer}, which already streams the root rail this way.
  */
-export async function SpaceOverviewSidePanelContainer({ spaceId, communityCalls }: Props) {
-  const subspaces = await fetchOverviewSubspaces(spaceId);
+export async function SpaceOverviewSidePanelContainer({ spaceId }: Props) {
+  const [subspaces, { communityCalls }] = await Promise.all([
+    fetchOverviewSubspaces(spaceId),
+    resolveSpaceSidebar(spaceId),
+  ]);
 
   return (
     <SpaceOverviewSidePanel spaceId={spaceId} dailyActivities communityCalls={communityCalls} subspaces={subspaces} />

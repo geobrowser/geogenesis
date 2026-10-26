@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { ROOT_SPACE } from '~/core/constants';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { SpaceTopicFeed } from '~/core/topics/browse/topic-feed';
 import { spacePageEntityId } from '~/core/utils/space/space-page';
@@ -17,7 +18,6 @@ import { SpaceOverviewSidePanelContainer } from '~/partials/space-page/space-ove
 
 import { cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
-import { resolveSpaceSidebar } from './space-sidebar';
 
 type CachedSpace = Awaited<ReturnType<typeof cachedFetchSpace>>;
 
@@ -38,16 +38,12 @@ export async function SpaceOverviewBody({
   /** An authored tab, when one is open. It gets no rail and no activity card. */
   tabId: string | undefined;
 }) {
-  const [props, { isRootSpace, communityCalls }] = await Promise.all([
-    getSpaceFrontPage(space),
-    resolveSpaceSidebar(spaceId),
-  ]);
+  const props = await getSpaceFrontPage(space);
+  const isRootSpace = spaceId === ROOT_SPACE;
 
   // Overview only, which is what `!tabId` means here — a tab gets no rail, and so no subspaces
   // (GEO-2875).
-  const sidebar = tabId ? null : (
-    <SpaceOverviewSidebar spaceId={spaceId} isRootSpace={isRootSpace} communityCalls={communityCalls} />
-  );
+  const sidebar = tabId ? null : <SpaceOverviewSidebar spaceId={spaceId} isRootSpace={isRootSpace} />;
 
   return (
     <EntityPageSidebarLayout sidebar={sidebar}>
@@ -98,13 +94,9 @@ export async function SpaceOverviewBody({
  * Keeps the Overview's rail, so landing on the space reads the same beside the feed as it did
  * beside the authored page — the header's width is seeded from this URL either way.
  */
-export async function SpaceTopicExploreBody({ spaceId, spaceTopicId }: { spaceId: string; spaceTopicId: string }) {
-  const { isRootSpace, communityCalls } = await resolveSpaceSidebar(spaceId);
-
+export function SpaceTopicExploreBody({ spaceId, spaceTopicId }: { spaceId: string; spaceTopicId: string }) {
   return (
-    <EntityPageSidebarLayout
-      sidebar={<SpaceOverviewSidebar spaceId={spaceId} isRootSpace={isRootSpace} communityCalls={communityCalls} />}
-    >
+    <EntityPageSidebarLayout sidebar={<SpaceOverviewSidebar spaceId={spaceId} isRootSpace={spaceId === ROOT_SPACE} />}>
       <SpaceTopicFeed spaceId={spaceId} spaceTopicId={spaceTopicId} />
     </EntityPageSidebarLayout>
   );
@@ -114,21 +106,13 @@ export async function SpaceTopicExploreBody({ spaceId, spaceTopicId }: { spaceId
  * Both branches are containers under Suspense so the rail's query never delays the page's own
  * JSX; the gallery this replaces streamed the same way.
  */
-function SpaceOverviewSidebar({
-  spaceId,
-  isRootSpace,
-  communityCalls,
-}: {
-  spaceId: string;
-  isRootSpace: boolean;
-  communityCalls: Awaited<ReturnType<typeof resolveSpaceSidebar>>['communityCalls'];
-}) {
+function SpaceOverviewSidebar({ spaceId, isRootSpace }: { spaceId: string; isRootSpace: boolean }) {
   return (
     <React.Suspense fallback={null}>
       {isRootSpace ? (
         <RootExploreSidePanelContainer spaceId={spaceId} includeSubspaces />
       ) : (
-        <SpaceOverviewSidePanelContainer spaceId={spaceId} communityCalls={communityCalls} />
+        <SpaceOverviewSidePanelContainer spaceId={spaceId} />
       )}
     </React.Suspense>
   );
