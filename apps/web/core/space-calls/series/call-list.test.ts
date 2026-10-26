@@ -8,6 +8,7 @@ const item = (over: Partial<CallListItem>): CallListItem => ({
   name: 'Call',
   seriesId: null,
   seriesName: null,
+  remindSeriesId: null,
   startsAt: '2026-11-02T17:00:00Z',
   endsAt: null,
   status: 'scheduled',
@@ -46,7 +47,34 @@ describe('splitCallList', () => {
     });
     expect(live.map(call => [call.callId, call.headcount])).toEqual([['live1', 3]]);
     expect(upcoming.map(call => call.callId)).toEqual(['a', 'b']);
-    expect(upcoming[1]).toMatchObject({ seriesId: 's1', seriesName: 'Crypto', endsAt: '2026-11-09T18:00:00Z' });
+    expect(upcoming[1]).toMatchObject({
+      seriesId: 's1',
+      seriesName: 'Crypto',
+      remindSeriesId: 's1',
+      endsAt: '2026-11-09T18:00:00Z',
+    });
+  });
+
+  it('offers no series reminder on a one-off series row', () => {
+    const series = (series_id: string, one_off: boolean) => ({
+      series_id,
+      name: 'Crypto',
+      description: null,
+      schedule: 'DTSTART:20261109T170000Z',
+      one_off,
+      next_call_id: null,
+    });
+    const { upcoming } = splitCallList({
+      calls: [
+        row({ call_id: 'once', status: 'scheduled', series: { series_id: 'S-1', name: 'Crypto' } }),
+        row({ call_id: 'weekly', status: 'scheduled', series: { series_id: 'S-2', name: 'Crypto' } }),
+      ],
+      series: [series('s1', true), series('s2', false)],
+    });
+    expect(upcoming.map(call => [call.callId, call.seriesId, call.remindSeriesId])).toEqual([
+      ['once', 's1', null],
+      ['weekly', 's2', 's2'],
+    ]);
   });
 
   it('reads a row from a geo-chat that predates status as live', () => {

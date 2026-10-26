@@ -47,7 +47,7 @@ export function SpaceCallsRailSection({ spaceId, list }: { spaceId: string; list
             <CallRemind
               spaceId={spaceId}
               callId={call.callId}
-              seriesId={call.seriesId}
+              seriesId={call.remindSeriesId}
               call={reminded.call}
               series={reminded.series}
               analyticsLabel="Space rail remind"

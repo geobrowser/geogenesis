@@ -114,7 +114,7 @@ function SpaceCallsTabInner({ spaceId }: { spaceId: string }) {
                     <CallRemind
                       spaceId={spaceId}
                       callId={call.callId}
-                      seriesId={call.seriesId}
+                      seriesId={call.remindSeriesId}
                       call={reminded.call}
                       series={reminded.series}
                       analyticsLabel="Calls tab remind"

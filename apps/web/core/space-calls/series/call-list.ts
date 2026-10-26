@@ -12,6 +12,8 @@ export type CallListItem = {
   name: string;
   seriesId: string | null;
   seriesName: string | null;
+  /** The series Remind me can follow: `null` for a one-off, as on the call's page. */
+  remindSeriesId: string | null;
   startsAt: string;
   endsAt: string | null;
   status: 'live' | 'scheduled';
@@ -28,6 +30,7 @@ export function callListItem(call: SpaceCallSummary): CallListItem | null {
     name: call.name,
     seriesId: call.series ? dashlessId(call.series.series_id) : null,
     seriesName: call.series?.name ?? null,
+    remindSeriesId: call.series ? dashlessId(call.series.series_id) : null,
     startsAt: call.starts_at ?? call.started_at,
     endsAt: call.ends_at ?? null,
     status,
@@ -36,9 +39,15 @@ export function callListItem(call: SpaceCallSummary): CallListItem | null {
   };
 }
 
-/** The Calls tab's live and upcoming rows, in geo-chat's order. */
-export function splitCallList(list: Pick<SpaceCallsResponse, 'calls'> | undefined) {
-  const items = (list?.calls ?? []).map(callListItem).filter((item): item is CallListItem => item !== null);
+/** The Calls tab's live and upcoming rows, in geo-chat's order. Rows read `one_off` from `list.series`. */
+export function splitCallList(list: Pick<SpaceCallsResponse, 'calls' | 'series'> | undefined) {
+  const oneOff = (list?.series ?? []).filter(series => series.one_off).map(series => series.series_id);
+  const items = (list?.calls ?? [])
+    .map(callListItem)
+    .filter((item): item is CallListItem => item !== null)
+    .map(item =>
+      item.seriesId && oneOff.some(id => sameId(id, item.seriesId!)) ? { ...item, remindSeriesId: null } : item
+    );
   return {
     live: items.filter(item => item.status === 'live'),
     upcoming: items.filter(item => item.status === 'scheduled').sort(byStart),
