@@ -1,14 +1,14 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
-import { DebateFeedMobileBarActions } from './debate-feed-mobile-bar-actions';
 
-const mocks = vi.hoisted(() => ({ authenticated: false, isPhone: true }));
+const mocks = vi.hoisted(() => ({ isPhone: true, save: vi.fn<() => Promise<void>>() }));
 
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPhone }));
 
@@ -16,24 +16,44 @@ vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPh
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, ...props }: React.ComponentProps<'a'>) => <a {...props}>{children}</a>,
 }));
-vi.mock('~/core/wallet/auth-hooks', () => ({ usePrivy: () => ({ authenticated: mocks.authenticated }) }));
-vi.mock('~/partials/navbar/navbar-actions', () => ({
-  NavbarActions: ({ compact, signInComponent }: { compact?: boolean; signInComponent?: string }) => (
-    <div data-testid="account" data-compact={String(compact)} data-sign-in-component={signInComponent} />
-  ),
-}));
-vi.mock('../matchmaking/debates-hub-button', () => ({
-  DebatesHubButton: ({ compact }: { compact?: boolean }) => (
-    <button type="button" data-compact={String(compact)}>
-      Debate
-    </button>
-  ),
+vi.mock('~/partials/navbar/navbar-account-actions', () => ({
+  // The bar owns this subtree's lifetime. Model an open editor and a pending save so remounting
+  // cannot pass by rendering a fresh, identical-looking account placeholder.
+  NavbarAccountActions: function AccountActions({ placement }: { placement: string }) {
+    const [open, setOpen] = React.useState(false);
+    const [name, setName] = React.useState('');
+    const [status, setStatus] = React.useState('Editing');
+
+    return (
+      <div data-testid="account" data-placement={placement}>
+        <button onClick={() => setOpen(true)}>Edit profile</button>
+        {open ? (
+          <>
+            <label>
+              Profile name
+              <input value={name} onChange={event => setName(event.target.value)} />
+            </label>
+            <button
+              onClick={async () => {
+                setStatus('Saving');
+                await mocks.save();
+                setStatus('Saved');
+              }}
+            >
+              Save profile
+            </button>
+            <span role="status">{status}</span>
+          </>
+        ) : null}
+      </div>
+    );
+  },
 }));
 
 afterEach(() => {
   cleanup();
-  mocks.authenticated = false;
   mocks.isPhone = true;
+  mocks.save.mockReset();
 });
 
 describe('DebateFeedMobileBar', () => {
@@ -53,12 +73,10 @@ describe('DebateFeedMobileBar', () => {
   it('mounts the account controls on phones', async () => {
     render(<DebateFeedMobileBar />);
 
-    expect(await screen.findByTestId('account')).toBeInTheDocument();
+    expect(await screen.findByTestId('account')).toHaveAttribute('data-placement', 'debate_feed_bar');
   });
 
-  // Hidden by CSS alone, a desktop copy would run beside the app navbar's: a second ⌘E listener, a
-  // second edit mode tip.
-  it('does not mount them where the bar is hidden', async () => {
+  it('does not mount account controls on a desktop-only visit', async () => {
     mocks.isPhone = false;
     render(<DebateFeedMobileBar />);
 
@@ -67,27 +85,56 @@ describe('DebateFeedMobileBar', () => {
     expect(screen.queryByTestId('account')).not.toBeInTheDocument();
   });
 
+  it.each([false, true])(
+    'preserves profile edits and a pending save across resize (starts desktop: %s)',
+    async startsDesktop => {
+      mocks.isPhone = !startsDesktop;
+      const user = userEvent.setup();
+      const { rerender } = render(<DebateFeedMobileBar />);
+      if (startsDesktop) {
+        expect(screen.queryByTestId('account')).not.toBeInTheDocument();
+        mocks.isPhone = true;
+        rerender(<DebateFeedMobileBar />);
+      }
+
+      let finishSave!: () => void;
+      const pendingSave = new Promise<void>(resolve => {
+        finishSave = resolve;
+      });
+      mocks.save.mockReturnValue(pendingSave);
+
+      await user.click(await screen.findByRole('button', { name: 'Edit profile' }));
+      await user.type(screen.getByRole('textbox', { name: 'Profile name' }), 'Ada');
+      await user.click(screen.getByRole('button', { name: 'Save profile' }));
+      const account = screen.getByTestId('account');
+      expect(screen.getByRole('status')).toHaveTextContent('Saving');
+
+      mocks.isPhone = false;
+      rerender(<DebateFeedMobileBar />);
+
+      expect(screen.getByTestId('account')).toBe(account);
+      expect(screen.getByRole('textbox', { name: 'Profile name' })).toHaveValue('Ada');
+      expect(screen.getByRole('status')).toHaveTextContent('Saving');
+
+      await act(async () => {
+        finishSave();
+        await pendingSave;
+      });
+      expect(screen.getByRole('status')).toHaveTextContent('Saved');
+
+      mocks.isPhone = true;
+      rerender(<DebateFeedMobileBar />);
+
+      expect(screen.getByTestId('account')).toBe(account);
+      expect(screen.getByRole('textbox', { name: 'Profile name' })).toHaveValue('Ada');
+      expect(screen.getByRole('status')).toHaveTextContent('Saved');
+      expect(mocks.save).toHaveBeenCalledTimes(1);
+    }
+  );
+
   it('sets "Geo" in the share video’s face', () => {
     render(<DebateFeedMobileBar />);
 
     expect(screen.getByText('Geo')).toHaveClass('font-[family-name:var(--font-geist-medium)]');
-  });
-});
-
-describe('DebateFeedMobileBarActions', () => {
-  it('is Log in alone while signed out', () => {
-    render(<DebateFeedMobileBarActions />);
-
-    expect(screen.getByTestId('account')).toHaveAttribute('data-compact', 'true');
-    expect(screen.getByTestId('account')).toHaveAttribute('data-sign-in-component', 'debate_feed_bar');
-    expect(screen.queryByRole('button', { name: 'Debate' })).not.toBeInTheDocument();
-  });
-
-  it('adds the compact Debate button once signed in', () => {
-    mocks.authenticated = true;
-    render(<DebateFeedMobileBarActions />);
-
-    expect(screen.getByRole('button', { name: 'Debate' })).toHaveAttribute('data-compact', 'true');
-    expect(screen.getByTestId('account')).toHaveAttribute('data-compact', 'true');
   });
 });

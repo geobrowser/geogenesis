@@ -280,6 +280,16 @@ landing(
   'boundary-outside-session',
   'linkedin'
 )
+// The system share sheet can reach any app, so its arrivals are their own channel rather than X.
+handoff(60, 12, 'native-sender', { method: 'native_share' })
+landing(
+  60,
+  12,
+  14,
+  'native-recipient',
+  'native-recipient-session',
+  'native_share'
+)
 // Reading later evidence must not add later handoffs, visits or conversions to the week.
 handoff(12, 19, 'future-sender', { method: 'linkedin' })
 landing(12, 19, 10, 'future-visitor', 'future-session', 'linkedin')
@@ -822,7 +832,14 @@ try {
   assert.equal(Number(channel('linkedin')?.link_handoffs), 10)
   assert.equal(Number(channel('linkedin')?.matched_visits), 6)
   assert.equal(Number(channel('linkedin')?.unmatched_visits), 0)
-  assert.equal(output.filter((row) => row.breakdown === 'channel').length, 4)
+  assert.equal(
+    Number(channel('native_share')?.visits),
+    1,
+    JSON.stringify(output)
+  )
+  assert.equal(Number(channel('native_share')?.link_handoffs), 1)
+  assert.equal(Number(channel('native_share')?.matched_visits), 1)
+  assert.equal(output.filter((row) => row.breakdown === 'channel').length, 5)
   const anonymousSender = output.find(
     (row) => row.channel === 'linkedin' && row.breakdown === 'sharer'
   )

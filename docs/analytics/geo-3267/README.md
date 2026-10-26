@@ -1,6 +1,6 @@
 # Shared-link acquisition (GEO-3267)
 
-Existing debate copy/X/LinkedIn/Reddit controls, lobby copy controls, and availability copy controls now share tagged destinations. Downloads and native file sharing keep their existing behavior. New claim controls, caption links, and video end cards remain follow-up work.
+Existing debate copy/X/LinkedIn/Reddit controls, lobby copy controls, and availability copy controls now share tagged destinations. The debate video sent through the system share sheet carries one too, as `native_share`: the sheet can reach any app, so it is not counted as X. Downloads keep their existing behavior. New claim controls, caption links, and video end cards remain follow-up work.
 
 Each link carries `utm_source=<method>`, `utm_medium=share`, `utm_campaign=geo_share`, and `utm_content=v1:<debate|lobby|availability>:<content UUID>:<share UUID>`. UUIDs are lowercase and dashless. A new share replaces inherited campaign tags while preserving destination parameters and fragments. Canonical/OG metadata uses the existing untagged destinations.
 

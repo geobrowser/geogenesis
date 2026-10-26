@@ -17,15 +17,21 @@ const mocks = vi.hoisted(() => ({
   status: 'ready',
   artifacts: [{ kind: 'social_video' }] as { kind: string }[],
   prepared: vi.fn(),
+  canShareVideo: false,
+  coarsePointer: true,
+  handoff: vi.fn(),
+  windowOpen: vi.fn(),
+  toast: vi.fn(),
 }));
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
 vi.mock('~/core/debates/hooks', () => ({
   useDebateMedia: () => ({ data: { artifacts: mocks.artifacts } }),
 }));
-vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, vi.fn()] }));
+vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.toast] }));
 vi.mock('../social-video-share', async importOriginal => ({
   ...(await importOriginal<typeof import('../social-video-share')>()),
   downloadPreparedVideo: mocks.download,
+  handoffPreparedSocialVideo: mocks.handoff,
   usePreparedSocialVideo: (_debateId: string, options: { enabled: boolean; captions?: string }) => {
     mocks.prepared(options);
     const captions = options.captions ?? 'captioned';
@@ -53,7 +59,7 @@ function press(label: string) {
 }
 const completed = () => mocks.capture.mock.calls.filter(([event]) => event === 'action_completed');
 function mount(data = debate, spaceId = 'space') {
-  render(
+  return render(
     <DebateShareDialog
       open
       onOpenChange={vi.fn()}
@@ -66,10 +72,26 @@ function mount(data = debate, spaceId = 'space') {
 beforeEach(() => {
   mocks.status = 'ready';
   mocks.artifacts = [{ kind: 'social_video' }];
+  mocks.canShareVideo = false;
+  mocks.handoff.mockReset().mockResolvedValue('native_share');
+  vi.stubGlobal('open', mocks.windowOpen);
+  mocks.windowOpen.mockReset();
+  mocks.toast.mockReset();
+  // jsdom has no Web Share API; the dialog probes it for real, so give it one to answer.
+  Object.defineProperty(navigator, 'share', { configurable: true, value: vi.fn() });
+  Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => mocks.canShareVideo });
+  mocks.coarsePointer = true;
+  vi.stubGlobal(
+    'matchMedia',
+    (query: string) => ({ matches: query.includes('coarse') ? mocks.coarsePointer : false }) as MediaQueryList
+  );
 });
 afterEach(() => {
+  delete (navigator as { share?: unknown }).share;
+  delete (navigator as { canShare?: unknown }).canShare;
   delete window.lytics;
   cleanup();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   mocks.capture.mockReset();
   mocks.download.mockReset();
@@ -327,4 +349,143 @@ it('does not record a link handoff when the clipboard rejects', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
   await waitFor(() => expect(completed()).toHaveLength(1));
   expect(handoffs()).toHaveLength(0);
+});
+
+/*
+ * The X tile is always the link composer, and the video is its own tile: on a phone, one X tile
+ * opened either the composer or the system share sheet (every app, not just X) depending on whether
+ * the video had finished downloading, and nobody could tell which they would get.
+ */
+it('keeps X as the link composer even where the device can share the video', () => {
+  mocks.canShareVideo = true;
+  mount();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Share on X' }));
+
+  expect(mocks.windowOpen.mock.calls[0][0]).toContain('twitter.com/intent/tweet');
+  expect(mocks.handoff).not.toHaveBeenCalled();
+});
+
+it.each([
+  [true, 'Share debate video', 'Share video'],
+  [false, 'Download debate video', 'Download'],
+])('names the video tile for what it will do when canShare is %s', (canShare, ariaLabel, label) => {
+  mocks.canShareVideo = canShare;
+  mount();
+
+  expect(screen.getByRole('button', { name: ariaLabel })).toBeTruthy();
+  expect(screen.getByText(label)).toBeTruthy();
+});
+
+it('downloads the video on a desktop pointer, even where canShare accepts the file', () => {
+  mocks.canShareVideo = true;
+  mocks.coarsePointer = false;
+  mount();
+
+  expect(screen.getByText('Download')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Download debate video' }));
+  fireEvent.click(screen.getByRole('button', { name: 'With captions' }));
+
+  expect(mocks.handoff).not.toHaveBeenCalled();
+  expect(mocks.download).toHaveBeenCalledTimes(1);
+});
+
+const shareVideo = (captions = 'With captions') => {
+  fireEvent.click(screen.getByRole('button', { name: 'Share debate video' }));
+  fireEvent.click(screen.getByRole('button', { name: captions }));
+};
+
+it('hands the chosen video to the share sheet with a link tagged as a native share', async () => {
+  mocks.canShareVideo = true;
+  mount(realDebate);
+  shareVideo();
+  expect(screen.getByRole('heading', { name: 'Share video' })).toBeTruthy();
+  await waitFor(() => expect(handoffs()).toHaveLength(1));
+
+  const shared = mocks.handoff.mock.calls[0][0];
+  expect(shared).toMatchObject({ debateId: realDebate.id, file: { name: 'captioned.mp4' }, captions: 'captioned' });
+  expect(shared).not.toHaveProperty('onUnshareable');
+  expect(shared.text).toMatch(/^Private claim text\. Watch the debate on Geo! /);
+  const destination = new URL(shared.text.split(' ').at(-1));
+  expect(parseShareLink(destination.searchParams)).toMatchObject({ method: 'native_share' });
+  expect(handoffs()[0][1]).toMatchObject({
+    ...parseShareLink(destination.searchParams),
+    handoff_kind: 'composer_requested',
+  });
+  expect(mocks.capture).toHaveBeenCalledWith(
+    'debate_share_action',
+    expect.objectContaining({ method: 'native_share', captions: true })
+  );
+  expect((window as Window & { dataLayer?: Record<string, unknown>[] }).dataLayer).toContainEqual(
+    expect.objectContaining({ event: 'geo_share', share_method: 'native_share' })
+  );
+  expect(mocks.download).not.toHaveBeenCalled();
+});
+
+it('asks for another tap when the video finishes preparing after the choice', () => {
+  mocks.canShareVideo = true;
+  mocks.status = 'preparing';
+  const view = mount();
+  shareVideo();
+  expect(screen.getByText(/Preparing…/)).toBeTruthy();
+
+  mocks.status = 'ready';
+  view.rerender(
+    <DebateShareDialog
+      open
+      onOpenChange={vi.fn()}
+      debate={debate}
+      spaceId="space"
+      openerRef={React.createRef<HTMLButtonElement>()}
+    />
+  );
+
+  expect(screen.getByText('Ready. Tap to share.')).toBeTruthy();
+  expect(mocks.handoff).not.toHaveBeenCalled();
+});
+
+it('retries a video that failed to prepare instead of sharing it', () => {
+  mocks.canShareVideo = true;
+  mocks.status = 'error';
+  mount();
+  shareVideo();
+
+  expect(mocks.retry).toHaveBeenCalledTimes(1);
+  expect(mocks.handoff).not.toHaveBeenCalled();
+});
+
+it('records nothing when the share sheet is closed', async () => {
+  mocks.canShareVideo = true;
+  mocks.handoff.mockRejectedValue(new DOMException('Share canceled', 'AbortError'));
+  mount(realDebate);
+  shareVideo();
+  await waitFor(() => expect(mocks.handoff).toHaveBeenCalled());
+  await Promise.resolve();
+
+  expect(handoffs()).toHaveLength(0);
+  expect(mocks.capture).not.toHaveBeenCalledWith('debate_share_action', expect.anything());
+  expect(mocks.toast).not.toHaveBeenCalled();
+});
+
+// `handoffPreparedSocialVideo` downloads the file itself when the browser refuses the share.
+it('records a refused share that fell back to a download as a download, not a link handoff', async () => {
+  mocks.canShareVideo = true;
+  mocks.handoff.mockResolvedValue('download');
+  mount(realDebate);
+  shareVideo();
+  await waitFor(() =>
+    expect(mocks.capture).toHaveBeenCalledWith('debate_share_action', expect.objectContaining({ method: 'download' }))
+  );
+
+  expect(handoffs()).toHaveLength(0);
+});
+
+it('ignores a second choice while the share sheet is open', () => {
+  mocks.canShareVideo = true;
+  mocks.handoff.mockReturnValue(new Promise(() => {}));
+  mount();
+  shareVideo();
+  fireEvent.click(screen.getByRole('button', { name: 'With captions' }));
+
+  expect(mocks.handoff).toHaveBeenCalledTimes(1);
 });

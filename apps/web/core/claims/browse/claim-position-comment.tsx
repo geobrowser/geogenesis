@@ -45,6 +45,7 @@ export function ClaimPositionCommentControl({
   titleFor,
   noteFor,
   localSide,
+  showParticipants,
   positionRowClassName,
   positionRowEndSlot,
   onActivityPublish,
@@ -74,6 +75,8 @@ export function ClaimPositionCommentControl({
   noteFor?: (position: boolean) => React.ReactNode;
   /** The side held only on this device; see `PositionRow`. */
   localSide?: boolean | null;
+  /** Whether to show online participants inside the position buttons. Defaults to true. */
+  showParticipants?: boolean;
   positionRowClassName?: string;
   /** Compact action rendered after Disagree, such as the Explore comments-panel opener. */
   positionRowEndSlot?: React.ReactNode;
@@ -181,6 +184,7 @@ export function ClaimPositionCommentControl({
           titleFor={titleFor}
           noteFor={noteFor}
           localSide={localSide}
+          showParticipants={showParticipants}
           endSlot={positionRowEndSlot}
         />
       </div>
