@@ -67,7 +67,6 @@ beforeEach(() => {
   resetCommentCountSeeds();
   mocks.publishEdit.mockResolvedValue({ to: '0xabc', calldata: '0x' });
   mocks.sendUserOperation.mockResolvedValue('0x123');
-  mocks.checkEntityExists.mockReturnValue(Effect.succeed(true));
 });
 
 afterEach(() => {
@@ -75,12 +74,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('comment count after publishing without opening the thread', () => {
+describe.each([
+  { sync: 'indexed probe', probeResult: true, syncAfterMs: 1_500 },
+  { sync: 'fallback after exhausted probes', probeResult: false, syncAfterMs: 91_501 },
+])('comment count after publishing without opening the thread ($sync)', ({ probeResult, syncAfterMs }) => {
   it.each([
     { label: 'first comment', seed: 0, existing: 0, commentsInSeed: undefined },
     { label: 'existing comments', seed: 5, existing: 5, commentsInSeed: undefined },
     { label: 'claim activity', seed: 33, existing: 1, commentsInSeed: 1 },
   ])('keeps the increment after indexing: $label', async ({ seed, existing, commentsInSeed }) => {
+    mocks.checkEntityExists.mockReturnValue(Effect.succeed(probeResult));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const serverRows = [...Array.from({ length: existing }, (_, i) => comment(`existing-${i}`)), comment(COMMENT)];
     mocks.fetchComments.mockResolvedValue(serverRows);
@@ -109,7 +112,7 @@ describe('comment count after publishing without opening the thread', () => {
     expect(result.current.count).toBe(seed + 1);
     expect(client.getQueryData(commentsFetchedQueryKey(TARGET))).toBeUndefined();
 
-    await act(() => vi.advanceTimersByTimeAsync(1_500));
+    await act(() => vi.advanceTimersByTimeAsync(syncAfterMs));
 
     // The poll replaces the pending row with indexed rows. The count must now use the fetched
     // list instead of falling back to the original seed when the pending flag disappears.
