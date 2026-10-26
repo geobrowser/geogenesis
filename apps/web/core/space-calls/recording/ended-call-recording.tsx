@@ -29,11 +29,14 @@ export const ENDED_CALL_RECORDING_COPY = {
 
 type Visible = { recording: CallRecordingState; editor: boolean };
 
-/** What the viewer may see: editors see everything, everyone else a published recording only. */
+/**
+ * What the viewer may see: editors everything, everyone else a published recording only. geo-chat
+ * reports an unpublished one as `off` to non-editors, which shows nothing.
+ */
 export function visibleEndedRecording(recording: CallRecordingState | null, editor: boolean): Visible | null {
   if (!recording) return null;
-  if (editor || recording.published) return { recording, editor };
-  return null;
+  if (editor) return { recording, editor };
+  return recording.published && recording.status !== 'off' ? { recording, editor } : null;
 }
 
 /**

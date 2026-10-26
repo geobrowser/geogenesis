@@ -73,6 +73,14 @@ describe('EndedCallRecording', () => {
     expect(screen.getByText(COPY.unpublished)).toBeInTheDocument();
   });
 
+  it('draws nothing for a non-editor told an unpublished recording is off', () => {
+    const off = { ...READY, status: 'off' as const, end_reason: null, duration_seconds: null };
+    const { container, rerender } = render(<EndedCallRecording lobby={ended(off)} />);
+    expect(container).toBeEmptyDOMElement();
+    rerender(<EndedCallRecording lobby={ended(off, { guest: true })} />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('plays a published recording for anyone, signed out included, with no toggle', () => {
     render(<EndedCallRecording lobby={ended({ ...READY, published: true }, { guest: true })} />);
     expect(screen.getByTestId('player')).toBeInTheDocument();
