@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { callWhenLabel } from './format';
+import { callDurationLabel, callWhenLabel } from './format';
 
 describe('callWhenLabel', () => {
   it('renders the instant in the given zone, across a DST change', () => {
@@ -18,5 +18,15 @@ describe('callWhenLabel', () => {
 
   it('is null for an unreadable start', () => {
     expect(callWhenLabel('soon', null, 'UTC')).toBeNull();
+  });
+});
+
+describe('callDurationLabel', () => {
+  it('reads hours and minutes', () => {
+    expect(callDurationLabel(5498)).toBe('1h 32m');
+    expect(callDurationLabel(3600)).toBe('1h');
+    expect(callDurationLabel(2700)).toBe('45m');
+    expect(callDurationLabel(20)).toBe('<1m');
+    expect(callDurationLabel(null)).toBeNull();
   });
 });

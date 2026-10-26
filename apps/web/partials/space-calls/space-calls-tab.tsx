@@ -15,6 +15,7 @@ import { Text } from '~/design-system/text';
 
 import { CallRemind } from './call-remind';
 import { CallRow, CallsSection } from './calls-list';
+import { PastCallsSection } from './past-calls-section';
 import { ScheduledNotice } from './scheduled-notice';
 
 export const CALLS_TAB_COPY = {
@@ -123,6 +124,7 @@ function SpaceCallsTabInner({ spaceId }: { spaceId: string }) {
               );
             })}
           </CallsSection>
+          <PastCallsSection spaceId={spaceId} />
         </>
       ) : null}
     </div>

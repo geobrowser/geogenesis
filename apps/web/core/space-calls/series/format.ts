@@ -26,3 +26,13 @@ export function callWhenLabel(startsAt: string, endsAt: string | null, timeZone?
   const time = callTimeLabel(startsAt, endsAt, timeZone);
   return date && time ? `${date} · ${time}` : null;
 }
+
+/** "1h 31m", "45m", or "<1m"; `null` for no length. */
+export function callDurationLabel(seconds: number | null): string | null {
+  if (seconds === null || !Number.isFinite(seconds) || seconds < 0) return null;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 1) return '<1m';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`;
+}

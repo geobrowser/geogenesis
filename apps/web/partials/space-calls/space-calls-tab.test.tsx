@@ -18,6 +18,8 @@ vi.mock('~/core/space-calls/hooks', () => ({
   useSpaceCalls: () => ({ data: mocks.calls, isError: mocks.isError }),
 }));
 vi.mock('~/core/debates/lobbies/lobby-people', () => ({ LobbyAvatarStack: () => null }));
+vi.mock('./past-calls-section', () => ({ PastCallsSection: () => <section aria-label="Past" /> }));
+vi.mock('./call-remind', () => ({ CallRemind: () => <button type="button">Remind me</button> }));
 
 const { SpaceCallsTab } = await import('./space-calls-tab');
 
@@ -53,6 +55,21 @@ describe('SpaceCallsTab', () => {
     expect(screen.getByRole('link', { name: 'Join' })).toHaveAttribute('href', '/space/space1/calls/call1');
     expect(screen.getByText('No calls scheduled.')).toBeInTheDocument();
     expect(screen.queryByText('Schedule a call')).not.toBeInTheDocument();
+  });
+
+  it('lists scheduled calls with Remind me, then Past', () => {
+    mocks.calls = {
+      space_id: 'space1',
+      supported: true,
+      viewer_can_start: null,
+      calls: [{ ...live, call_id: 'next', status: 'scheduled', name: 'Next call', as_of: null }],
+      viewer: null,
+    };
+    render(<SpaceCallsTab spaceId="space1" />);
+    expect(screen.getByRole('link', { name: 'Next call' })).toHaveAttribute('href', '/space/space1/calls/next');
+    expect(screen.getByRole('button', { name: 'Remind me' })).toBeInTheDocument();
+    expect(screen.getByText('No call is live right now.')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Past' })).toBeInTheDocument();
   });
 
   it('offers an editor scheduling', () => {
