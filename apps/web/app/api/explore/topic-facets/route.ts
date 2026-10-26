@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 
+import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
 import { DEFAULT_EXPLORE_TYPE_IDS } from '~/core/explore/explore-constants';
 import { type ExploreTopicFacet, fetchExploreTopicFacets } from '~/core/explore/explore-topic-facets';
 import { sanitizeExploreTypeIds } from '~/core/explore/explore-type-filter';
+import { narrowExploreSpaceFilter } from '~/core/explore/narrow-explore-space-filter';
+import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
 import { normId } from '~/core/utils/norm-id';
 
 function parseIds(raw: unknown): string[] {
@@ -16,8 +19,8 @@ function parseTypeIds(raw: unknown): string[] {
 }
 
 /**
- * A short in-process cache so repeated opens of the dropdown — and the refetch a sign-in triggers
- * once the sidebar scope settles.
+ * A short in-process cache so repeated opens of the dropdown reuse a recent count. Keyed on the
+ * resolved space set.
  */
 const FACET_CACHE_TTL_MS = 60_000;
 const FACET_CACHE_MAX_ENTRIES = 200;
@@ -69,11 +72,20 @@ export async function POST(request: Request) {
 
   const selectedTopicIds = parseIds(body?.selectedTopicIds);
   const typeIds = parseTypeIds(body?.typeIds);
-  const spaceIds = parseIds(body?.spaceIds);
+
+  const tickedSpaceIds = parseIds(body?.spaceIds);
 
   const requireDebateTagOnClaims = body?.fixedParams?.requireDebateTagOnClaims !== 'false';
 
-  if (typeIds.length === 0 || spaceIds.length === 0) {
+  if (typeIds.length === 0) {
+    return NextResponse.json({ topics: [] });
+  }
+
+  const { browse } = await resolveExploreFeedRequestContext();
+  const spaceFilter = narrowExploreSpaceFilter(browse, tickedSpaceIds.length > 0 ? tickedSpaceIds.join(',') : null);
+  const spaceIds = (spaceFilter ?? browseSidebarVisibleSpaces(browse).map(row => row.id)).map(normId);
+
+  if (spaceIds.length === 0) {
     return NextResponse.json({ topics: [] });
   }
 

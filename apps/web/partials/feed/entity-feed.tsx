@@ -374,16 +374,7 @@ export function EntityFeed({
     [browseSidebar]
   );
 
-  // The topic facet's counts come from the feed's `topicFacetEndpoint` over REST. A feed that wants
-  // a topic filter but has not named its endpoint yet (a topic page before its space scope loads)
-  // shows the picker pending rather than a facet over the wrong population.
-  const facetSpaceIds = React.useMemo(
-    () => (requestedSpaceIds.length > 0 ? requestedSpaceIds : spaceOptions.map(option => option.value)).map(normId),
-    [requestedSpaceIds, spaceOptions]
-  );
-
   const browseSidebarSettled = browseSidebar !== null && !browseSidebar.featuredError;
-  const facetScopeReady = requestedSpaceIds.length > 0 || (browseSidebarSettled && facetSpaceIds.length > 0);
 
   const topicFacets = useQuery({
     queryKey: [
@@ -391,16 +382,16 @@ export function EntityFeed({
       topicFacetEndpoint ?? null,
       topicIdsKey,
       typeIdsKey,
-      facetSpaceIds.join(','),
+      spaceIdsKey,
       fixedParamsKey,
     ],
-    enabled: Boolean(topicFacetEndpoint) && topicFilterVisible && facetScopeReady,
+    enabled: Boolean(topicFacetEndpoint) && topicFilterVisible,
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       fetchTopicFacets(topicFacetEndpoint!, {
         selectedTopicIds,
         typeIds,
-        spaceIds: facetSpaceIds,
+        spaceIds: requestedSpaceIds,
         fixedParams,
         signal,
       }),
@@ -409,7 +400,7 @@ export function EntityFeed({
   // A picker whose endpoint has not arrived yet is pending, not empty: a topic page keeps the
   // control showing a loading state until its space scope resolves rather than offering no topics.
   const topicCountsPending = topicFacetEndpoint
-    ? !facetScopeReady || topicFacets.isLoading || topicFacets.isPlaceholderData
+    ? topicFacets.isLoading || topicFacets.isPlaceholderData
     : showTopicFilter;
   const topicFacetFailed = Boolean(topicFacetEndpoint) && topicFacets.isError && !topicFacets.data;
   const topicCountsExact = sort !== 'top';
