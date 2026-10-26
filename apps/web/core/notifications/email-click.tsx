@@ -17,6 +17,22 @@ const PENDING_KEY = 'geo:email-click-pending';
 
 const sameClick = (a: EmailClick, b: EmailClick) => a.sendId === b.sendId && a.link === b.link;
 
+/**
+ * Whether a failed report is the service's last word on it: any 4xx but a timeout (408) or too many
+ * requests (429). An unknown send (404) won't become known, and a refused body (400, 413) would be
+ * refused on every load, a quiet retry loop if the client and service checks ever drift apart.
+ * Anything else (offline, the service down) stays pending for the next load.
+ */
+function isFinalAnswer(error: unknown): boolean {
+  return (
+    error instanceof NotificationsRequestError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 408 &&
+    error.status !== 429
+  );
+}
+
 function readPending(): ReportedClick[] {
   try {
     const pending: unknown = JSON.parse(readSession(PENDING_KEY) ?? '[]');
@@ -83,9 +99,7 @@ export function EmailClickReporter() {
           link: reported.link,
           signed_in: reported.signedIn,
         }).then(answered, (error: unknown) => {
-          // An unknown send won't become known; anything else (offline, the service down) stays
-          // pending for the next load.
-          if (error instanceof NotificationsRequestError && error.status === 404) answered();
+          if (isFinalAnswer(error)) answered();
         });
       }
     };

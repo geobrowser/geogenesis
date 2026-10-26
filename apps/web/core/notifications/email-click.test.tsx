@@ -134,9 +134,18 @@ describe('EmailClickReporter', () => {
     expect(mocks.report).toHaveBeenCalledTimes(1);
   });
 
-  it('does not retry a send the service does not know', async () => {
+  // A 4xx is the service's last word (an unknown send, a refused body), so it isn't retried on every
+  // load; a timeout, a rate limit or a 5xx is, on the next load.
+  it.each([
+    [404, false],
+    [400, false],
+    [413, false],
+    [408, true],
+    [429, true],
+    [500, true],
+  ])('after a %i, retries on the next load: %s', async (status, retried) => {
     mocks.report = vi.fn(async () => {
-      throw new NotificationsRequestError('unknown send', 404);
+      throw new NotificationsRequestError('refused', status);
     });
     land(`?ref_send=${SEND}`);
     render(<EmailClickReporter />);
@@ -144,7 +153,7 @@ describe('EmailClickReporter', () => {
     cleanup();
     land('');
     render(<EmailClickReporter />);
-    expect(mocks.report).toHaveBeenCalledTimes(1);
+    expect(mocks.report).toHaveBeenCalledTimes(retried ? 2 : 1);
   });
 
   it('keeps a pending click when the service fails, and the signed-in state it was first reported with', async () => {
