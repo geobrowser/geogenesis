@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   attached: [] as {
     url: string;
     autoStartLoad?: boolean;
+    playOnAttach?: boolean;
     onFatalError?: () => void;
     destroy: ReturnType<typeof vi.fn>;
   }[],
@@ -29,9 +30,9 @@ vi.mock('~/core/debates/stream-playback', () => ({
   attachStreamSource: (
     _video: HTMLVideoElement,
     url: string,
-    options: { autoStartLoad?: boolean; onFatalError?: () => void }
+    options: { autoStartLoad?: boolean; playOnAttach?: boolean; onFatalError?: () => void }
   ) => {
-    const entry = { url, autoStartLoad: options.autoStartLoad, onFatalError: options.onFatalError, destroy: vi.fn() };
+    const entry = { url, ...options, destroy: vi.fn() };
     mocks.attached.push(entry);
     return { startLoad: vi.fn(), destroy: entry.destroy };
   },
@@ -128,7 +129,7 @@ describe('CallRecordingPlayer', () => {
       expect(screen.queryByText(COPY.loading)).toBeNull();
     });
 
-    it('calls play inside the tap, then signs, attaches loading and plays the same element', () => {
+    it('calls play inside the tap, then signs and attaches loading, playing once attached', () => {
       const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
       const { rerender } = render(<CallRecordingPlayer callId="call1" signOnPlay />);
       fireEvent.click(screen.getByRole('button', { name: COPY.play }));
@@ -138,8 +139,9 @@ describe('CallRecordingPlayer', () => {
 
       mocks.playback = { ...mocks.playback, data: { url: 'https://s/a.m3u8' }, dataUpdatedAt: tick() };
       rerender(<CallRecordingPlayer callId="call1" signOnPlay />);
-      expect(mocks.attached).toMatchObject([{ url: 'https://s/a.m3u8', autoStartLoad: true }]);
-      expect(play).toHaveBeenCalledTimes(2);
+      expect(mocks.attached).toMatchObject([{ url: 'https://s/a.m3u8', autoStartLoad: true, playOnAttach: true }]);
+      // The second play is the attach's own, after hls.js has taken the element.
+      expect(play).toHaveBeenCalledTimes(1);
     });
   });
 });

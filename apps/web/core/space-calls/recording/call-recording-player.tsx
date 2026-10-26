@@ -95,10 +95,9 @@ export function CallRecordingPlayer({
     playOnAttachRef.current = false;
     const attached: AttachedStream = attachStreamSource(video, src, {
       autoStartLoad: playNow,
+      playOnAttach: playNow,
       onFatalError: () => failRef.current(),
     });
-    // A refusal leaves the native controls for the viewer to press.
-    if (playNow) void video.play().catch(() => undefined);
     return () => {
       video.removeEventListener('loadedmetadata', onMetadata);
       attached.destroy();
