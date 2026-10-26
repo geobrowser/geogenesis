@@ -178,3 +178,40 @@ describe('debate recording links', () => {
     expect(lookup).not.toHaveBeenCalled();
   });
 });
+
+describe('short share links (GEO-3485)', () => {
+  const CODE = 'xdIiIiIiIiQiKCIiIiIiIiIg';
+
+  it('redirects a short debate link to the tagged landing the warehouse reads', async () => {
+    const response = await proxy(request(`/space/${VALID_SPACE}/${VALID_ENTITY}?si=${CODE}`, { headers: NAVIGATION }));
+
+    expect(response.status).toBe(307);
+    const landing = new URL(response.headers.get('location')!);
+    expect(landing.pathname).toBe(`/space/${VALID_SPACE}/${VALID_ENTITY}`);
+    expect(landing.searchParams.has('si')).toBe(false);
+    expect(landing.searchParams.get('utm_source')).toBe('x');
+    expect(landing.searchParams.get('utm_content')).toBe(`v1:debate:${VALID_ENTITY}:22222222222242228222222222222222`);
+  });
+
+  it('redirects a short lobby link, keeping its other parameters', async () => {
+    const response = await proxy(request(`/debate/${VALID_ENTITY}?via=lobby&si=cl${CODE.slice(2)}`));
+
+    expect(response.status).toBe(307);
+    const landing = new URL(response.headers.get('location')!);
+    expect(landing.pathname).toBe(`/debate/${VALID_ENTITY}`);
+    expect(landing.searchParams.get('via')).toBe('lobby');
+    expect(landing.searchParams.get('utm_source')).toBe('copy_link');
+  });
+
+  it('opens a room as it is when its code does not parse', async () => {
+    const response = await proxy(request(`/debate/${VALID_ENTITY}?si=nonsense`));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
+
+  it('only routes /debate through the proxy when it carries a short code', async () => {
+    const { config } = await import('./proxy');
+    expect(config.matcher).toContainEqual({ source: '/debate/:path*', has: [{ type: 'query', key: 'si' }] });
+  });
+});

@@ -35,8 +35,9 @@ it.each([false, true])('tags the lobby copy control (phone: %s)', async phone =>
   const url = new URL(write.mock.calls[0][0]);
   expect(url.pathname).toBe(`/debate/${lobby.lobby_id}`);
   expect(url.searchParams.get('via')).toBe('lobby');
+  expect(url.searchParams.get('si')).toHaveLength(24);
   expect(capture).toHaveBeenCalledWith(
     'share_link_handoff',
-    expect.objectContaining({ ...parseShareLink(url.searchParams), handoff_kind: 'copied', target_type: 'lobby' })
+    expect.objectContaining({ ...parseShareLink(url), handoff_kind: 'copied', target_type: 'lobby' })
   );
 });

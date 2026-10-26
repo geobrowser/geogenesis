@@ -229,8 +229,8 @@ it('preserves the LinkedIn caption allowance independently of the tracked destin
   const text = new URL(open.mock.calls[0][0] as string).searchParams.get('text')!;
   const [caption, destination] = text.split('\n');
   expect(caption).toBe(`${claim}. Watch the debate on Geo!`);
-  expect(parseShareLink(new URL(destination).searchParams)).toMatchObject({ method: 'linkedin' });
-  expect(handoffs()[0][1].share_id).toBe(parseShareLink(new URL(destination).searchParams)!.share_id);
+  expect(parseShareLink(destination)).toMatchObject({ method: 'linkedin' });
+  expect(handoffs()[0][1].share_id).toBe(parseShareLink(destination)!.share_id);
 });
 
 it.each([
@@ -244,8 +244,8 @@ it.each([
   const composer = new URL(open.mock.calls[0][0] as string);
   const destination = new URL(composer.searchParams.get('url')!);
   const text = composer.searchParams.get('text')!;
-  expect(destination.href.length).toBeGreaterThan(240);
-  expect(parseShareLink(destination.searchParams)).toMatchObject({ method: 'x', share_content_id: realDebate.id });
+  expect(destination.searchParams.get('si')).toHaveLength(24);
+  expect(parseShareLink(destination)).toMatchObject({ method: 'x', share_content_id: realDebate.id });
   expect(destination.pathname).toContain('33333333-3333-4333-8333-333333333333');
   expect(text).toContain('Sharing knowledge helps people make better decisions together');
   expect(text).toMatch(/\. Watch the debate on Geo!$/);
@@ -253,7 +253,7 @@ it.each([
   if (claim.length < 100) expect(text).toBe(`${claim}. Watch the debate on Geo!`);
   else expect(text).toContain('…');
   expect(handoffs()).toHaveLength(1);
-  expect(handoffs()[0][1].share_id).toBe(parseShareLink(destination.searchParams)!.share_id);
+  expect(handoffs()[0][1].share_id).toBe(parseShareLink(destination)!.share_id);
 });
 
 it.each([
@@ -295,7 +295,7 @@ it.each([
     ).toBeGreaterThan(280);
   }
   expect(handoffs()).toHaveLength(1);
-  expect(handoffs()[0][1].share_id).toBe(parseShareLink(destination.searchParams)!.share_id);
+  expect(handoffs()[0][1].share_id).toBe(parseShareLink(destination)!.share_id);
 });
 
 it.each(cases.slice(0, 3))('correlates the tagged %s destination with its synchronous handoff', (label, method) => {
@@ -316,7 +316,7 @@ it.each(cases.slice(0, 3))('correlates the tagged %s destination with its synchr
   expect(recordsAtOpen).toBe(0);
   expect(handoffs()).toHaveLength(1);
   expect(handoffs()[0][1]).toMatchObject({
-    ...parseShareLink(new URL(destination).searchParams),
+    ...parseShareLink(destination),
     method,
     sharer_role: 'debater',
     handoff_kind: 'composer_requested',
@@ -333,7 +333,7 @@ it('gives repeated copies different IDs and never counts downloads as link hando
   await waitFor(() => expect(handoffs()).toHaveLength(1));
   fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
   await waitFor(() => expect(handoffs()).toHaveLength(2));
-  const ids = write.mock.calls.map(([url]) => parseShareLink(new URL(url).searchParams)!.share_id);
+  const ids = write.mock.calls.map(([url]) => parseShareLink(url)!.share_id);
   expect(ids[0]).not.toBe(ids[1]);
   expect(handoffs().map(([, props]) => props.share_id)).toEqual(ids);
   press('Download debate video');
@@ -407,9 +407,9 @@ it('hands the chosen video to the share sheet with a link tagged as a native sha
   expect(shared).not.toHaveProperty('onUnshareable');
   expect(shared.text).toMatch(/^Private claim text\. Watch the debate on Geo! /);
   const destination = new URL(shared.text.split(' ').at(-1));
-  expect(parseShareLink(destination.searchParams)).toMatchObject({ method: 'native_share' });
+  expect(parseShareLink(destination)).toMatchObject({ method: 'native_share' });
   expect(handoffs()[0][1]).toMatchObject({
-    ...parseShareLink(destination.searchParams),
+    ...parseShareLink(destination),
     handoff_kind: 'composer_requested',
   });
   expect(mocks.capture).toHaveBeenCalledWith(
