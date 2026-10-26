@@ -4,7 +4,7 @@ import { capture } from '~/core/analytics';
  * The calendar's screen-level events (GEO-3152).
  *
  * Bookings are not here. They go through the booking modal's own scheduling events, with the
- * `entry` saying which part of this screen opened it (`calendar_slot` / `_hour` / `_card`), so a
+ * `entry` saying which part of this screen opened it (`calendar_hour` / `calendar_card`), so a
  * booking is counted once, the same way wherever it came from. Debate now is the hub's existing
  * `start_debate` action, told apart by its page path.
  *
@@ -33,7 +33,11 @@ export function calendarWeekChanged(direction: 'previous' | 'next' | 'today') {
   capture('debate_calendar_week_changed', { direction });
 }
 
-export type CalendarFilter = 'space' | 'search' | 'clear';
+/**
+ * Which filter changed. `person`, `claim` and `matches_only` are the People and Claims panel's picks
+ * (GEO-3220); `search` was the people search box the panel replaced, kept so old rows still type.
+ */
+export type CalendarFilter = 'space' | 'search' | 'person' | 'claim' | 'matches_only' | 'clear';
 
 export function calendarFilterChanged(filter: CalendarFilter) {
   capture('debate_calendar_filter_changed', { filter });

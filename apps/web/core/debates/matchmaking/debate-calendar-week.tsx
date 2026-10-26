@@ -38,13 +38,33 @@ import { useDebatesHub } from './use-debates-hub';
 /** Faces drawn in a cell before the rest collapse into "+N". */
 const FACES_PER_CELL = 3;
 
+/** A face and the "+N" after the faces: the same disc, each tucked under the one before it. */
+const FACE_CLASS_NAME = 'h-[30px] w-[30px] shrink-0 rounded-full ring-2 ring-white not-first:-ml-2';
+
 /** How long a face's card waits before opening on hover, and before closing once the pointer leaves. */
 const CARD_OPEN_DELAY_MS = 250;
 const CARD_CLOSE_DELAY_MS = 200;
 
 const GRID_COLUMNS = 'grid-cols-[4rem_repeat(7,minmax(0,1fr))]';
 
-type RenderRow = (userKey: string, slots: FreeSlot[], entry: ScheduleEntry) => React.ReactNode;
+/**
+ * A block in the week that opens a card: the admin week's debates, the pinned row's lobbies. Its
+ * fill, border and layout are the caller's.
+ */
+export const CALENDAR_BLOCK_CLASS_NAME =
+  'flex w-full min-w-0 rounded-md border px-2 text-left text-footnote transition-shadow hover:shadow-inner-text data-[state=open]:shadow-inner-text';
+/** The compact block's one line, for a cell holding more than one. */
+export const CALENDAR_COMPACT_BLOCK_CLASS_NAME = 'items-center gap-1 py-0.5';
+/** "+N more" under a cell's blocks, opening everything in it. */
+export const CALENDAR_MORE_BUTTON_CLASS_NAME =
+  'self-start rounded-md px-1 text-footnoteMedium text-grey-04 transition-colors hover:bg-grey-01 hover:text-text';
+
+type RenderRow = (
+  userKey: string,
+  slots: FreeSlot[],
+  entry: ScheduleEntry,
+  options?: { insidePopover?: boolean }
+) => React.ReactNode;
 
 type Props = {
   /** Eight local midnights: the week's seven days and the one that closes it. */
@@ -57,20 +77,25 @@ type Props = {
   slotsByUser: ReadonlyMap<string, FreeSlot[]>;
   opponentName: (userId: string | null) => string | null;
   renderRow: RenderRow;
-  onBook: (userKey: string, opener: HTMLElement | null, entry: ScheduleEntry, initialStart?: string) => void;
   now: number;
+  /** A row pinned under the day headers, such as the week's debate lobbies (GEO-3268). */
+  pinnedRow?: PinnedRow;
 };
 
 type Card = { key: string; userKey: string; slots: FreeSlot[] };
+
+/** A labelled row under the day headers, with something drawn for each day. */
+export type PinnedRow = { label: string; renderDay: (date: Date, day: number) => React.ReactNode };
 
 /**
  * The week as a grid (GEO-3152): a column per day, a row per hour, and in each cell the faces of
  * everyone free for some of that hour, most matches first.
  *
- * - A face opens that person's row as a card on hover (or tap); clicking it books their first
- *   half-hour in that cell, through the same modal as the People tab, with the time picked.
- * - The cell itself opens everyone free then. It is also how the keyboard gets in: arrows move
- *   between hours, Enter opens the one in focus.
+ * - A face opens that person's row as a card on mouse hover. It is not a click target of its
+ *   own: the faces are small and packed, so a click on one, like anywhere else in the cell,
+ *   opens everyone free then, as People tab rows.
+ * - The cell is also how the keyboard gets in: arrows move between hours, Enter opens the one
+ *   in focus.
  * - The viewer's own debates are blocks in their hour: solid booked, dashed requested.
  */
 export function CalendarWeek({
@@ -82,11 +107,9 @@ export function CalendarWeek({
   slotsByUser,
   opponentName,
   renderRow,
-  onBook,
   now,
+  pinnedRow,
 }: Props) {
-  const scrollRef = React.useRef<HTMLDivElement>(null);
-  const rowRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const cellRefs = React.useRef(new Map<string, HTMLDivElement>());
 
   const debatesByCell = React.useMemo(() => {
@@ -101,28 +124,7 @@ export function CalendarWeek({
   }, [days, debates]);
 
   const nowCell = cellOf(now, days);
-  const todayIndex = nowCell?.day ?? -1;
-  const nowHour = nowCell?.hour ?? null;
-
-  // This week opens on the current time, a third of the way down, like a wall calendar: the hours
-  // before it are spent. Other weeks open at their first busy hour, since most of a week is the
-  // middle of the night. Once per week shown, so new data landing does not yank the grid away from
-  // where it was read, and the minute tick does not drag it along.
   const firstBusy = firstBusyHour(cells, debates, days);
-  const weekKey = days[0].getTime();
-  const scrolledFor = React.useRef<number | null>(null);
-  React.useLayoutEffect(() => {
-    if (scrolledFor.current === weekKey) return;
-    const container = scrollRef.current;
-    const row = rowRefs.current[nowHour ?? firstBusy ?? new Date(now).getHours()];
-    if (!container || !row) return;
-    scrolledFor.current = weekKey;
-    const rowTop = row.offsetTop - container.offsetTop;
-    container.scrollTop = Math.max(
-      0,
-      nowHour === null ? rowTop - 8 : rowTop + hourProgress(now) * row.offsetHeight - container.clientHeight / 3
-    );
-  }, [firstBusy, now, nowHour, weekKey]);
 
   // The keyboard enters where the grid opened, so the first Tab does not scroll it away.
   const [focused, setFocused] = React.useState(() =>
@@ -193,14 +195,202 @@ export function CalendarWeek({
     }
   };
 
+  return (
+    <CalendarWeekFrame
+      days={days}
+      now={now}
+      firstBusy={firstBusy}
+      role="grid"
+      ariaLabel="Who is free each hour this week"
+      pinnedRow={pinnedRow}
+      renderCell={(date, day, hour) => {
+        const key = cellKey(day, hour);
+        const people = cells.get(key) ?? [];
+        const own = debatesByCell.get(key) ?? [];
+        const start = hourStart(days, day, hour);
+        const shaded = viewerFreeCells?.has(key) ?? false;
+        const past = start + 60 * 60_000 <= now;
+        const isNowCell = nowCell?.day === day && nowCell.hour === hour;
+        return (
+          <Popover.Root key={key} open={openHour === key} onOpenChange={open => setOpenHour(open ? key : null)}>
+            <Popover.Anchor asChild>
+              <div
+                ref={element => {
+                  if (element) cellRefs.current.set(key, element);
+                  else cellRefs.current.delete(key);
+                }}
+                role="gridcell"
+                tabIndex={focused.day === day && focused.hour === hour ? 0 : -1}
+                aria-label={cellLabel(date, hour, people, peopleByUser, shaded)}
+                aria-haspopup={people.length > 0 ? 'dialog' : undefined}
+                onFocus={() => setFocused({ day, hour })}
+                onKeyDown={event => onCellKeyDown(event, day, hour)}
+                // Anywhere in the cell opens the hour, faces included. Only a block of the
+                // viewer's own does something else: it opens Requests and stops the click.
+                onClick={() => openHourAt(key)}
+                className={cx(
+                  'relative flex min-h-16 min-w-0 flex-col justify-center gap-1 border-r border-grey-01 px-2 py-1.5 outline-none last:border-r-0 focus-visible:ring-2 focus-visible:ring-ctaPrimary focus-visible:ring-inset',
+                  shaded ? 'bg-green/10' : past ? 'bg-grey-01/50' : 'bg-white',
+                  people.length > 0 && 'cursor-pointer hover:bg-grey-01',
+                  openHour === key && 'ring-1 ring-text ring-inset'
+                )}
+              >
+                {isNowCell ? <NowLine now={now} /> : null}
+                {own.map(debate => (
+                  <DebateBlock key={debate.requestId} debate={debate} opponentName={opponentName} />
+                ))}
+                {people.length > 0 ? (
+                  <div className="flex items-center">
+                    {people.slice(0, FACES_PER_CELL).map(({ userKey, slots }) => {
+                      const person = peopleByUser.get(userKey);
+                      if (!person) return null;
+                      return (
+                        <Face
+                          key={userKey}
+                          person={person}
+                          onHover={anchor => showCard({ key, userKey, slots }, anchor, CARD_OPEN_DELAY_MS)}
+                          onLeave={hideCard}
+                        />
+                      );
+                    })}
+                    {people.length > FACES_PER_CELL ? (
+                      <span
+                        aria-hidden
+                        className={cx(
+                          FACE_CLASS_NAME,
+                          'flex items-center justify-center bg-grey-02 text-footnoteMedium text-grey-04'
+                        )}
+                      >
+                        +{people.length - FACES_PER_CELL}
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </Popover.Anchor>
+            {openHour === key ? (
+              <Popover.Portal>
+                <Popover.Content
+                  side="right"
+                  align="start"
+                  sideOffset={8}
+                  collisionPadding={16}
+                  aria-label={`Free ${date.toLocaleDateString(undefined, { weekday: 'long' })} at ${hourLabel(hour)}`}
+                  className="z-100 flex max-h-[min(36rem,calc(100vh-6rem))] w-[420px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-xl border border-grey-02 bg-white shadow-lg"
+                >
+                  <HourPeople
+                    date={date}
+                    hour={hour}
+                    people={people}
+                    renderRow={renderRow}
+                    onClose={() => setOpenHour(null)}
+                  />
+                </Popover.Content>
+              </Popover.Portal>
+            ) : null}
+          </Popover.Root>
+        );
+      }}
+    >
+      <Popover.Root
+        open={card !== null}
+        onOpenChange={open => {
+          if (!open) setCard(null);
+        }}
+      >
+        <Popover.Anchor virtualRef={cardAnchor as React.RefObject<HTMLElement>} />
+        {card ? (
+          <Popover.Portal>
+            <Popover.Content
+              side="bottom"
+              align="start"
+              sideOffset={6}
+              collisionPadding={16}
+              // A hover card: reading it should not take focus from where the viewer was.
+              onOpenAutoFocus={event => event.preventDefault()}
+              onPointerEnter={clearCardTimer}
+              onPointerLeave={hideCard}
+              aria-label={peopleByUser.get(card.userKey) ? speakerLabel(peopleByUser.get(card.userKey)!) : 'Person'}
+              className="z-100 w-[360px] max-w-[calc(100vw-32px)] rounded-xl border border-grey-02 bg-white px-3 shadow-lg"
+            >
+              <ul>
+                {renderRow(
+                  card.userKey,
+                  card.slots.length > 0 ? card.slots : (slotsByUser.get(card.userKey) ?? []),
+                  'calendar_card',
+                  { insidePopover: true }
+                )}
+              </ul>
+            </Popover.Content>
+          </Popover.Portal>
+        ) : null}
+      </Popover.Root>
+    </CalendarWeekFrame>
+  );
+}
+
+/**
+ * The week grid's frame, shared by the availability week and the admin week (GEO-2943): the head
+ * row with the zone offset and the days, an hour row per hour, and where the grid opens.
+ *
+ * This week opens on the current time, a third of the way down, like a wall calendar: the hours
+ * before it are spent. Other weeks open at their first busy hour, since most of a week is the
+ * middle of the night. Once per week shown, so new data landing does not yank the grid away from
+ * where it was read, and the minute tick does not drag it along.
+ */
+export function CalendarWeekFrame({
+  days,
+  now,
+  firstBusy,
+  role,
+  ariaLabel,
+  renderCell,
+  pinnedRow,
+  children,
+}: {
+  /** Eight local midnights: the week's seven days and the one that closes it. */
+  days: Date[];
+  now: number;
+  firstBusy: number | null;
+  /** `grid` where the cells take the keyboard, `table` where only what is in them does. */
+  role: 'grid' | 'table';
+  ariaLabel: string;
+  /** One cell, carrying its own key. */
+  renderCell: (date: Date, day: number, hour: number) => React.ReactNode;
+  /** Drawn under the day headers, outside the hours' scroll, so it stays in view as they move. */
+  pinnedRow?: PinnedRow;
+  /** Rendered after the grid, inside its frame: a card anchored somewhere in it. */
+  children?: React.ReactNode;
+}) {
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const rowRefs = React.useRef<(HTMLDivElement | null)[]>([]);
+  const nowCell = cellOf(now, days);
+  const todayIndex = nowCell?.day ?? -1;
+  const nowHour = nowCell?.hour ?? null;
+
+  const weekKey = days[0].getTime();
+  const scrolledFor = React.useRef<number | null>(null);
+  React.useLayoutEffect(() => {
+    if (scrolledFor.current === weekKey) return;
+    const container = scrollRef.current;
+    const row = rowRefs.current[nowHour ?? firstBusy ?? new Date(now).getHours()];
+    if (!container || !row) return;
+    scrolledFor.current = weekKey;
+    const rowTop = row.offsetTop - container.offsetTop;
+    container.scrollTop = Math.max(
+      0,
+      nowHour === null ? rowTop - 8 : rowTop + hourProgress(now) * row.offsetHeight - container.clientHeight / 3
+    );
+  }, [firstBusy, now, nowHour, weekKey]);
+
   const offsets = weekOffsetLabels(days);
 
   return (
     <div className="overflow-x-auto rounded-lg border border-grey-02">
       <div
-        role="grid"
-        aria-label="Who is free each hour this week"
-        aria-rowcount={HOURS_IN_DAY + 1}
+        role={role}
+        aria-label={ariaLabel}
+        aria-rowcount={role === 'grid' ? HOURS_IN_DAY + 1 + (pinnedRow ? 1 : 0) : undefined}
         className="min-w-[900px]"
       >
         <div role="row" className={cx('grid border-b border-grey-02 bg-white', GRID_COLUMNS)}>
@@ -236,6 +426,23 @@ export function CalendarWeek({
           ))}
         </div>
 
+        {pinnedRow ? (
+          <div role="row" className={cx('grid border-b border-grey-02 bg-white', GRID_COLUMNS)}>
+            <div role="rowheader" className="border-r border-grey-01 px-2 py-1.5 text-footnote text-grey-04">
+              {pinnedRow.label}
+            </div>
+            {days.slice(0, DAYS_IN_WEEK).map((date, day) => (
+              <div
+                key={date.getTime()}
+                role={role === 'grid' ? 'gridcell' : 'cell'}
+                className="flex min-w-0 flex-col gap-1 border-r border-grey-01 px-1.5 py-1.5 last:border-r-0"
+              >
+                {pinnedRow.renderDay(date, day)}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         <div ref={scrollRef} className="max-h-[max(24rem,calc(100vh-22rem))] overflow-y-auto" role="rowgroup">
           {Array.from({ length: HOURS_IN_DAY }, (_, hour) => (
             <div
@@ -249,142 +456,12 @@ export function CalendarWeek({
               <div role="rowheader" className="border-r border-grey-01 px-2 py-1.5 text-footnote text-grey-04">
                 {hourLabel(hour)}
               </div>
-              {days.slice(0, DAYS_IN_WEEK).map((date, day) => {
-                const key = cellKey(day, hour);
-                const people = cells.get(key) ?? [];
-                const own = debatesByCell.get(key) ?? [];
-                const start = hourStart(days, day, hour);
-                const shaded = viewerFreeCells?.has(key) ?? false;
-                const past = start + 60 * 60_000 <= now;
-                const isNowCell = nowCell?.day === day && nowCell.hour === hour;
-                return (
-                  <Popover.Root key={key} open={openHour === key} onOpenChange={open => setOpenHour(open ? key : null)}>
-                    <Popover.Anchor asChild>
-                      <div
-                        ref={element => {
-                          if (element) cellRefs.current.set(key, element);
-                          else cellRefs.current.delete(key);
-                        }}
-                        role="gridcell"
-                        tabIndex={focused.day === day && focused.hour === hour ? 0 : -1}
-                        aria-label={cellLabel(date, hour, people, peopleByUser, shaded)}
-                        aria-haspopup={people.length > 0 ? 'dialog' : undefined}
-                        onFocus={() => setFocused({ day, hour })}
-                        onKeyDown={event => onCellKeyDown(event, day, hour)}
-                        // Anywhere in the cell opens the hour. A face books instead and a block of
-                        // the viewer's own opens Requests; both stop the click on their way out.
-                        onClick={() => openHourAt(key)}
-                        className={cx(
-                          'relative flex min-h-16 min-w-0 flex-col justify-center gap-1 border-r border-grey-01 px-2 py-1.5 outline-none last:border-r-0 focus-visible:ring-2 focus-visible:ring-ctaPrimary focus-visible:ring-inset',
-                          shaded ? 'bg-green/10' : past ? 'bg-grey-01/50' : 'bg-white',
-                          people.length > 0 && 'cursor-pointer hover:bg-grey-01',
-                          openHour === key && 'ring-1 ring-text ring-inset'
-                        )}
-                      >
-                        {isNowCell ? <NowLine now={now} /> : null}
-                        {own.map(debate => (
-                          <DebateBlock key={debate.requestId} debate={debate} opponentName={opponentName} />
-                        ))}
-                        {people.length > 0 ? (
-                          <div className="flex items-center">
-                            {people.slice(0, FACES_PER_CELL).map(({ userKey, slots }) => {
-                              const person = peopleByUser.get(userKey);
-                              if (!person) return null;
-                              return (
-                                <Face
-                                  key={userKey}
-                                  person={person}
-                                  onHover={anchor => showCard({ key, userKey, slots }, anchor, CARD_OPEN_DELAY_MS)}
-                                  onLeave={hideCard}
-                                  onTap={anchor => showCard({ key, userKey, slots }, anchor, 0)}
-                                  onBook={anchor => {
-                                    clearCardTimer();
-                                    setCard(null);
-                                    onBook(userKey, anchor, 'calendar_slot', new Date(slots[0].start).toISOString());
-                                  }}
-                                />
-                              );
-                            })}
-                            {people.length > FACES_PER_CELL ? (
-                              <button
-                                type="button"
-                                tabIndex={-1}
-                                aria-label={`Everyone free then: ${people.length} people`}
-                                {...debateActionAnalyticsAttributes('calendar', 'More people', 'open_calendar_hour')}
-                                onClick={event => {
-                                  // Like a face or a debate block: the cell around it opens the hour too, and once is enough.
-                                  event.stopPropagation();
-                                  openHourAt(key);
-                                }}
-                                className="-ml-2 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-grey-02 text-footnoteMedium text-grey-04 ring-2 ring-white"
-                              >
-                                +{people.length - FACES_PER_CELL}
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    </Popover.Anchor>
-                    {openHour === key ? (
-                      <Popover.Portal>
-                        <Popover.Content
-                          side="right"
-                          align="start"
-                          sideOffset={8}
-                          collisionPadding={16}
-                          aria-label={`Free ${date.toLocaleDateString(undefined, { weekday: 'long' })} at ${hourLabel(hour)}`}
-                          className="z-100 flex max-h-[min(36rem,calc(100vh-6rem))] w-[420px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-xl border border-grey-02 bg-white shadow-lg"
-                        >
-                          <HourPeople
-                            date={date}
-                            hour={hour}
-                            people={people}
-                            renderRow={renderRow}
-                            onClose={() => setOpenHour(null)}
-                          />
-                        </Popover.Content>
-                      </Popover.Portal>
-                    ) : null}
-                  </Popover.Root>
-                );
-              })}
+              {days.slice(0, DAYS_IN_WEEK).map((date, day) => renderCell(date, day, hour))}
             </div>
           ))}
         </div>
       </div>
-
-      <Popover.Root
-        open={card !== null}
-        onOpenChange={open => {
-          if (!open) setCard(null);
-        }}
-      >
-        <Popover.Anchor virtualRef={cardAnchor as React.RefObject<HTMLElement>} />
-        {card ? (
-          <Popover.Portal>
-            <Popover.Content
-              side="bottom"
-              align="start"
-              sideOffset={6}
-              collisionPadding={16}
-              // A hover card: reading it should not take focus from where the viewer was.
-              onOpenAutoFocus={event => event.preventDefault()}
-              onPointerEnter={clearCardTimer}
-              onPointerLeave={hideCard}
-              aria-label={peopleByUser.get(card.userKey) ? speakerLabel(peopleByUser.get(card.userKey)!) : 'Person'}
-              className="z-100 w-[360px] max-w-[calc(100vw-32px)] rounded-xl border border-grey-02 bg-white px-3 shadow-lg"
-            >
-              <ul>
-                {renderRow(
-                  card.userKey,
-                  card.slots.length > 0 ? card.slots : (slotsByUser.get(card.userKey) ?? []),
-                  'calendar_card'
-                )}
-              </ul>
-            </Popover.Content>
-          </Popover.Portal>
-        ) : null}
-      </Popover.Root>
+      {children}
     </div>
   );
 }
@@ -393,7 +470,7 @@ export function CalendarWeek({
  * Where the clock is, as a red line across today's column, like a wall calendar's. It sits in the
  * current hour's cell, as far down it as the hour has gone; `now` ticks each minute, so it moves.
  */
-function NowLine({ now }: { now: number }) {
+export function NowLine({ now }: { now: number }) {
   return (
     <div
       aria-hidden
@@ -429,56 +506,40 @@ function cellLabel(
 }
 
 /**
- * One face in a cell. A mouse hover opens the card and a click books; a touch has no hover, so a
- * tap opens the card instead, and the card's own chips and buttons book.
+ * One face in a cell. A mouse hover opens the person's card; it is not a control, so a click (or a
+ * tap, which has no hover) falls through to the cell, which opens the hour. The cell's label
+ * already names who is free, so the face stays out of the accessibility tree.
  */
 function Face({
   person,
   onHover,
   onLeave,
-  onTap,
-  onBook,
 }: {
   person: DebatePerson;
   onHover: (anchor: HTMLElement) => void;
   onLeave: () => void;
-  onTap: (anchor: HTMLElement) => void;
-  onBook: (anchor: HTMLElement) => void;
 }) {
-  const pointerType = React.useRef<string>('mouse');
-  const name = speakerLabel(person);
   const away = Boolean(person.away);
   const live = person.online && !away && !person.in_debate;
   return (
-    <button
-      type="button"
-      tabIndex={-1}
-      aria-label={`${name}${live ? ', online now' : away ? ', away' : person.in_debate ? ', in a debate' : ''}. Book a time`}
-      {...debateActionAnalyticsAttributes('calendar', 'Face', 'open_peer_availability')}
-      onPointerDown={event => {
-        pointerType.current = event.pointerType;
-      }}
+    <span
+      aria-hidden
+      data-testid="calendar-face"
       onPointerEnter={event => {
         if (event.pointerType === 'mouse') onHover(event.currentTarget);
       }}
       onPointerLeave={event => {
         if (event.pointerType === 'mouse') onLeave();
       }}
-      onFocus={event => onHover(event.currentTarget)}
-      onBlur={onLeave}
-      onClick={event => {
-        event.stopPropagation();
-        if (pointerType.current === 'touch') onTap(event.currentTarget);
-        else onBook(event.currentTarget);
-      }}
       className={cx(
-        'relative h-[30px] w-[30px] shrink-0 overflow-hidden rounded-full ring-2 ring-white not-first:-ml-2',
+        FACE_CLASS_NAME,
+        'relative overflow-hidden',
         live && 'outline-2 outline-offset-2 outline-green',
         away && 'opacity-45'
       )}
     >
       <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={30} />
-    </button>
+    </span>
   );
 }
 
@@ -515,7 +576,9 @@ function HourPeople({
       </div>
       <ul className="min-h-0 overflow-y-auto px-4">
         {people.map(({ userKey, slots }) => (
-          <React.Fragment key={userKey}>{renderRow(userKey, slots, 'calendar_hour')}</React.Fragment>
+          <React.Fragment key={userKey}>
+            {renderRow(userKey, slots, 'calendar_hour', { insidePopover: true })}
+          </React.Fragment>
         ))}
       </ul>
     </>
@@ -532,12 +595,20 @@ function DebateBlock({
 }) {
   const { open } = useDebatesHub();
   const name = opponentName(debate.opponentUserId);
+  // A match the Geo team arranged says so while it is pending, whoever has answered so far, so it
+  // does not read as the other debater having asked (GEO-3229).
+  const pendingLead =
+    debate.state === 'asked'
+      ? debate.arrangedByAdmin
+        ? 'Geo team invite'
+        : 'Asked'
+      : debate.arrangedByAdmin
+        ? 'Arranged by the Geo team'
+        : 'Requested';
   const label =
     debate.state === 'booked'
       ? `Booked${name ? ` · Debate with ${name}` : ''}`
-      : debate.state === 'asked'
-        ? `Asked${name ? ` · ${name}` : ''}`
-        : `Requested${name ? ` · ${name}` : ''}`;
+      : `${pendingLead}${name ? ` · ${name}` : ''}`;
   return (
     <button
       type="button"

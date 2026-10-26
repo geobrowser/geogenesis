@@ -5,6 +5,7 @@ import * as React from 'react';
 import { type AnalyticsProperties } from '~/core/analytics';
 import { onSignInAbandoned } from '~/core/auth/sign-in-abandoned';
 import { useTrackedLogin } from '~/core/hooks/use-tracked-login';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { usePrepareOnboarding } from './use-prepare-onboarding';
 
@@ -66,6 +67,12 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
   const optionsRef = React.useRef(options);
   optionsRef.current = options;
 
+  // Signed in already: nothing to open, and no onboarding to clear (GEO-3245). `useTrackedLogin`
+  // refuses too; checked here as well so the onboarding state is left alone.
+  const { authenticated } = usePrivy();
+  const authenticatedRef = React.useRef(authenticated);
+  authenticatedRef.current = authenticated;
+
   // useTrackedLogin owns attempt scoping for both completion and dismissal.
   const { login } = useTrackedLogin({
     onComplete: () => onCompleteRef.current?.(),
@@ -77,6 +84,7 @@ export function usePrivySignIn(onComplete?: () => void, options?: UsePrivySignIn
 
   return React.useCallback<PrivySignIn>(
     (properties, callOptions) => {
+      if (authenticatedRef.current) return undefined;
       prepareOnboarding({ returnTo: callOptions?.redirectTo ?? optionsRef.current?.redirectTo });
       const configured = optionsRef.current?.analytics;
       const attempt = login(

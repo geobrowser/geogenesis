@@ -1,0 +1,83 @@
+import '@testing-library/jest-dom/vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+
+import { afterEach, describe, expect, it } from 'vitest';
+
+import { DebateVideoTile } from './debate-video-tile';
+
+afterEach(cleanup);
+
+describe('DebateVideoTile', () => {
+  it.each([false, true])(
+    'never shows a speaker still finishing past the buzzer as muted (GEO-3407, Open rounds: %s)',
+    openRounds => {
+      const view = render(
+        <DebateVideoTile
+          participantPosition={null}
+          active={false}
+          inactive
+          inactiveIndicatorId="remote"
+          openRounds={openRounds}
+        >
+          <div />
+        </DebateVideoTile>
+      );
+      const tile = view.container.querySelector('section')!;
+      expect(tile.querySelector('[data-muted-indicator]')).toBeInTheDocument();
+      expect(tile).not.toHaveAttribute('data-turn-finishing');
+
+      view.rerender(
+        <DebateVideoTile
+          participantPosition={null}
+          active={false}
+          inactive
+          inactiveIndicatorId="remote"
+          openRounds={openRounds}
+          finishingSince={Date.now()}
+        >
+          <div />
+        </DebateVideoTile>
+      );
+      expect(screen.getByRole('img', { name: 'Microphone still open' })).toBeInTheDocument();
+      expect(tile.querySelector('[data-muted-indicator]')).not.toBeInTheDocument();
+      expect(tile).toHaveAttribute('data-turn-finishing', 'true');
+      // Still outlined as the one being heard.
+      expect(tile.className).toContain('outline-[3px]');
+    }
+  );
+
+  it('shows the second speaker finishing over the round transition that forces the muted icon (GEO-3407)', () => {
+    const view = render(
+      <DebateVideoTile
+        participantPosition={null}
+        active={false}
+        inactiveIndicatorId="remote"
+        openRounds
+        showMutedIndicator
+        finishingSince={Date.now()}
+      >
+        <div />
+      </DebateVideoTile>
+    );
+    expect(screen.getByRole('img', { name: 'Microphone still open' })).toBeInTheDocument();
+    expect(view.container.querySelector('[data-muted-indicator]')).not.toBeInTheDocument();
+  });
+
+  it('keeps its outline and badges in a stacking context of their own, under the vote card (GEO-3407)', () => {
+    // The outline is z-50 inside the tile and the vote card z-40 across both tiles; without the
+    // tile's own context the outline of a speaker finishing into the vote painted over the card.
+    const view = render(
+      <DebateVideoTile
+        participantPosition={null}
+        active={false}
+        inactiveIndicatorId="remote"
+        openRounds
+        finishingSince={Date.now()}
+      >
+        <div />
+      </DebateVideoTile>
+    );
+    expect(view.container.querySelector('section')).toHaveClass('isolate');
+    expect(view.container.querySelector('[data-room-speaker-outline]')).toHaveClass('z-50');
+  });
+});

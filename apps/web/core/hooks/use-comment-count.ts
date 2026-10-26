@@ -1,10 +1,9 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { commentsQueryOptions } from '~/core/hooks/comments-query-options';
 import { commentsFetchedQueryKey } from '~/core/io/query-keys';
-
-import type { CommentEntity } from '~/partials/comments/types';
 
 /**
  * The comment count as the client currently knows it, seeded by a server-rendered one.
@@ -73,18 +72,21 @@ export function useCommentCount(
     commentsInSeed?: number;
   } = {}
 ): number {
-  // Whether the list has ever been fetched, rather than merely written to. Same disabled-subscription
-  // shape as the list below, for the same reason: this reads what another hook owns.
+  const queryClient = useQueryClient();
+
+  // Whether the list has ever been fetched, rather than merely written to. A disabled subscription to
+  // what another hook owns; `skipToken` because only `useComments` writes this flag.
   const { data: hasFetchedList } = useQuery<boolean>({
     queryKey: commentsFetchedQueryKey(entityId),
-    enabled: false,
+    queryFn: skipToken,
   });
 
-  const { data, dataUpdatedAt } = useQuery<CommentEntity[]>({
-    queryKey: ['comments', entityId],
+  const { data, dataUpdatedAt } = useQuery({
     // A cache subscription, not a second reader of the list — `useComments` owns the fetching, and
     // this hook is rendered on surfaces (cards, feed rows) where fetching every count would be a
-    // request per row for a number.
+    // request per row for a number. Carries the list's `queryFn` so a refetch works whichever
+    // observer rendered last.
+    ...commentsQueryOptions(queryClient, entityId),
     enabled: false,
   });
 

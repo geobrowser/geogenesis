@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
-import { topicFeedFilter, topicFeedPopulationScopes } from '~/core/topics/browse/topic-feed-filter';
+import { topicFeedFilter } from '~/core/topics/browse/topic-feed-filter';
 
 import type { Debate } from '../api';
 import { buildDebatePublishDraft } from '../debate-publish-draft';
@@ -231,6 +230,9 @@ describe('loadDebatePublishSource media gating', () => {
         isContestable: false,
         timing: { startMs: 0, endMs: 9_000 },
         highlightScore: null,
+        relevanceScore: null,
+        qualityScore: null,
+        controversyScore: null,
         stance: 'supports',
       },
       {
@@ -243,6 +245,9 @@ describe('loadDebatePublishSource media gating', () => {
         isContestable: false,
         timing: null,
         highlightScore: null,
+        relevanceScore: null,
+        qualityScore: null,
+        controversyScore: null,
         stance: null,
       },
     ]);
@@ -310,14 +315,11 @@ describe('loadDebatePublishSource media gating', () => {
       .filter(relation => relation.fromEntity.id === draft.debateEntityId && relation.spaceId === input.spaceId)
       .map(relation => ({ typeId: { is: relation.type.id }, toEntityId: { is: relation.toEntity.id } }));
 
-    // New/Top and topic facets use the entity predicate; Best/composition also use the relation
-    // entry point. Both must be satisfied by edges on the Debate itself, not its extracted claims.
+    // Top and topic facets use the entity predicate. It must be satisfied by edges on the Debate
+    // itself, not its extracted claims.
     const filter = topicFeedFilter(topicId, [selectedTopicId]);
     expect(filter.and).toHaveLength(2);
     expect(publishedPredicates).toEqual(expect.arrayContaining(filter.and!.map(clause => clause.relations!.some)));
-    const scopes = topicFeedPopulationScopes(topicId, [selectedTopicId], [DEBATE_TYPE_ID]);
-    expect(scopes).toHaveLength(1);
-    expect(publishedPredicates).toContainEqual(scopes[0].relationFilter);
   });
 
   it('falls back to the raw transcript with no claims when geo-chat reports none', async () => {

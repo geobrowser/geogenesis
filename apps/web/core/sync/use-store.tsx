@@ -181,7 +181,7 @@ export function useHydrateEntities({ ids, enabled = true, spaceId }: HydrateEnti
     queryFn: async () => {
       if (normalizedIds.length === 0) return [];
 
-      const { merged, remote } = await E.syncMany({
+      const { merged, remote, confirmedAbsentEntityIds } = await E.syncMany({
         store,
         cache,
         where: { id: { in: normalizedIds } },
@@ -189,11 +189,12 @@ export function useHydrateEntities({ ids, enabled = true, spaceId }: HydrateEnti
         spaceId,
       });
 
-      if (merged.length > 0) {
+      if (merged.length > 0 || confirmedAbsentEntityIds?.length) {
         stream.emit({
           type: GeoEventStream.ENTITIES_SYNCED,
           entities: merged,
           remoteEntities: remote,
+          ...(confirmedAbsentEntityIds?.length ? { confirmedAbsentEntityIds } : {}),
         });
       }
 
@@ -362,7 +363,7 @@ export function useQueryEntities({
     placeholderData,
     queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null, orderBy ?? null],
     queryFn: async () => {
-      const { merged, remote, endCursor, hasNextPage } = await E.syncMany({
+      const { merged, remote, endCursor, hasNextPage, confirmedAbsentEntityIds } = await E.syncMany({
         store,
         cache,
         where,
@@ -372,7 +373,12 @@ export function useQueryEntities({
         sort,
         orderBy,
       });
-      stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
+      stream.emit({
+        type: GeoEventStream.ENTITIES_SYNCED,
+        entities: merged,
+        remoteEntities: remote,
+        ...(confirmedAbsentEntityIds?.length ? { confirmedAbsentEntityIds } : {}),
+      });
       return { ids: merged.map(e => e.id), endCursor, hasNextPage };
     },
   });
@@ -403,6 +409,9 @@ export function useQueryEntities({
           type: GeoEventStream.ENTITIES_SYNCED,
           entities: result.merged,
           remoteEntities: result.remote,
+          ...(result.confirmedAbsentEntityIds?.length
+            ? { confirmedAbsentEntityIds: result.confirmedAbsentEntityIds }
+            : {}),
         });
         return { ids: result.merged.map(e => e.id), endCursor: result.endCursor, hasNextPage: result.hasNextPage };
       },
@@ -432,8 +441,10 @@ export function useQueryEntities({
       // Position) and surface newly-created entities immediately. The
       // single-key gate is load-bearing — with extra clauses (e.g. a name
       // filter) `store.getEntity` would return every id regardless, so we
-      // must fall through to the server-filtered `data.ids`.
-      if (where?.id?.in && !sort && Object.keys(where).length === 1) {
+      // must fall through to the server-filtered `data.ids`. A server `sort`
+      // or `orderBy` falls through for the same reason: the page order is the
+      // server's, not the caller's.
+      if (where?.id?.in && !sort && !orderBy && Object.keys(where).length === 1) {
         const ids = where.id.in;
         const entities = ids.map(id => store.getEntity(id)).filter(isMaterializedEntity);
         return first !== undefined ? entities.slice(0, first) : entities;
@@ -545,7 +556,14 @@ export function useQueryAllEntities({
             includeEmptyNames,
             signal,
           });
-          stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: page.merged, remoteEntities: page.remote });
+          stream.emit({
+            type: GeoEventStream.ENTITIES_SYNCED,
+            entities: page.merged,
+            remoteEntities: page.remote,
+            ...(page.confirmedAbsentEntityIds?.length
+              ? { confirmedAbsentEntityIds: page.confirmedAbsentEntityIds }
+              : {}),
+          });
 
           return {
             items: page.merged.map(entity => entity.id),

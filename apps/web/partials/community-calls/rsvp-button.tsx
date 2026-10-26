@@ -1,15 +1,16 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { privyUserEmail } from '~/core/auth/privy-email';
 import { getSubscriptionStatus, subscribeToCall } from '~/core/community-calls/api';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { useToast } from '~/core/hooks/use-toast';
 import { useReportError } from '~/core/state/status-bar-store';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { SmallButton } from '~/design-system/button';
 
@@ -54,7 +55,7 @@ export function RsvpButton({ call, className }: Props) {
   const [confirming, setConfirming] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
 
-  const email = user?.email?.address;
+  const email = privyUserEmail(user);
 
   const { data: status } = useQuery({
     queryKey: ['community-call-rsvp-status', call.spaceId, call.callId],

@@ -207,6 +207,8 @@ export type OwnDebate = {
   state: 'booked' | 'requested' | 'asked';
   /** The other side, whose name labels the block. */
   opponentUserId: string | null;
+  /** The Geo team set this debate up (GEO-3229): neither debater asked the other. */
+  arrangedByAdmin: boolean;
 };
 
 /**
@@ -237,6 +239,7 @@ export function ownDebates(
       end,
       state: request.status === 'accepted' ? 'booked' : request.viewer_must_answer ? 'asked' : 'requested',
       opponentUserId: opponentOf(request, viewerUserId),
+      arrangedByAdmin: request.created_by_admin,
     });
   }
   return debates.sort((left, right) => left.start - right.start);
@@ -254,6 +257,13 @@ export function firstBusyHour(cells: ReadonlyMap<string, unknown>, debates: OwnD
     if (cell && (first === null || cell.hour < first)) first = cell.hour;
   }
   return first;
+}
+
+/** A day list's heading: `Thu 8`, or `Today, Thu 8`. */
+export function dayListLabel(date: Date, today: Date): string {
+  // Composed rather than formatted together: en-US writes the pair as `8 Thu`.
+  const label = `${date.toLocaleDateString(undefined, { weekday: 'short' })} ${date.getDate()}`;
+  return date.toDateString() === today.toDateString() ? `Today, ${label}` : label;
 }
 
 /** `5 – 11 Oct 2026`, `Oct 5 – 11, 2026`: however the viewer's locale writes a range of days. */

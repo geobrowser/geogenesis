@@ -2,6 +2,7 @@ import type { CallSeries } from '~/core/community-calls/types';
 
 import { SpaceOverviewSidePanel } from './space-overview-side-panel';
 import { fetchOverviewSubspaces } from '~/app/space/[id]/(space)/space-sidebar';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 type Props = {
   spaceId: string;
@@ -20,9 +21,20 @@ type Props = {
  * Mirrors {@link RootExploreSidePanelContainer}, which already streams the root rail this way.
  */
 export async function SpaceOverviewSidePanelContainer({ spaceId, communityCalls }: Props) {
-  const subspaces = await fetchOverviewSubspaces(spaceId);
+  // `cachedFetchSpace` is `cache()`d and the page already awaits it, so this adds no request. The
+  // name only feeds the Join conversion, so a failed lookup drops it rather than the rail.
+  const [subspaces, space] = await Promise.all([
+    fetchOverviewSubspaces(spaceId),
+    cachedFetchSpace(spaceId).catch(() => null),
+  ]);
 
   return (
-    <SpaceOverviewSidePanel spaceId={spaceId} dailyActivities communityCalls={communityCalls} subspaces={subspaces} />
+    <SpaceOverviewSidePanel
+      spaceId={spaceId}
+      spaceName={space?.entity?.name ?? undefined}
+      dailyActivities
+      communityCalls={communityCalls}
+      subspaces={subspaces}
+    />
   );
 }

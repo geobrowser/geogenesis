@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Entity } from '../types';
-import { useQueryAllEntities } from './use-store';
+import { useHydrateEntities, useQueryAllEntities, useQueryEntities } from './use-store';
 
 const entity = {
   id: 'entity-1',
@@ -48,6 +48,39 @@ describe('useQueryAllEntities', () => {
     mocks.getEntity.mockReset();
     mocks.emit.mockReset();
     mocks.getEntity.mockReturnValue(entity);
+  });
+
+  it('emits confirmed absence from explicit hydration even without merged entities', async () => {
+    mocks.syncMany.mockResolvedValue({ merged: [], remote: [], confirmedAbsentEntityIds: ['missing'] });
+    const { result } = renderHook(() => useHydrateEntities({ ids: ['missing'] }), { wrapper });
+    await waitFor(() => expect(result.current.isFetched).toBe(true));
+    expect(mocks.emit).toHaveBeenCalledWith(expect.objectContaining({ confirmedAbsentEntityIds: ['missing'] }));
+  });
+
+  it('carries confirmed absence through exhaustive id-list reads', async () => {
+    mocks.syncMany.mockResolvedValue({
+      merged: [],
+      remote: [],
+      confirmedAbsentEntityIds: ['missing'],
+      endCursor: null,
+      hasNextPage: false,
+    });
+    const { result } = renderHook(() => useQueryAllEntities({ where: { id: { in: ['missing'] } } }), { wrapper });
+    await waitFor(() => expect(result.current.isFetched).toBe(true));
+    expect(mocks.emit).toHaveBeenCalledWith(expect.objectContaining({ confirmedAbsentEntityIds: ['missing'] }));
+  });
+
+  it('carries confirmed absence through a bounded id-list read', async () => {
+    mocks.syncMany.mockResolvedValue({
+      merged: [],
+      remote: [],
+      confirmedAbsentEntityIds: ['missing'],
+      endCursor: null,
+      hasNextPage: false,
+    });
+    const { result } = renderHook(() => useQueryEntities({ where: { id: { in: ['missing'] } } }), { wrapper });
+    await waitFor(() => expect(result.current.isFetched).toBe(true));
+    expect(mocks.emit).toHaveBeenCalledWith(expect.objectContaining({ confirmedAbsentEntityIds: ['missing'] }));
   });
 
   it('passes empty-name inclusion and the React Query cancellation signal through every page', async () => {
@@ -136,10 +169,6 @@ describe('useQueryAllEntities', () => {
     const { result } = renderHook(() => useQueryAllEntities({ where: {} }), { wrapper: automaticRetryWrapper });
     await waitFor(() => expect(result.current.isFetched).toBe(true));
 
-    expect(mocks.syncMany.mock.calls.map(([options]) => options.after)).toEqual([
-      undefined,
-      'cursor-a',
-      'cursor-a',
-    ]);
+    expect(mocks.syncMany.mock.calls.map(([options]) => options.after)).toEqual([undefined, 'cursor-a', 'cursor-a']);
   });
 });

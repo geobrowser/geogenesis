@@ -37,6 +37,14 @@ function manualTimers() {
         await flush();
       }
     },
+    /** Runs the oldest pending callback only. */
+    async runNext() {
+      const entry = pending.entries().next().value;
+      if (!entry) return;
+      pending.delete(entry[0]);
+      entry[1]();
+      await flush();
+    },
     get size() {
       return pending.size;
     },
@@ -124,16 +132,18 @@ describe('debate recording streaming', () => {
       expect(wire.putPart).toHaveBeenCalledTimes(2);
     });
 
-    it('sends nothing while the call is struggling, and catches up once it recovers', async () => {
+    it('opens the upload but sends no part while the call is struggling, and catches up once it recovers', async () => {
       const timers = manualTimers();
       const wire = transport();
       let poor = true;
       const streamer = new stream.RecordingPartStreamer({ ...wire, ...timers, shouldPause: () => poor });
 
       streamer.append(new Blob(['0123456789abcdefXYZ']));
-      await timers.drain();
-      // Paused: re-checking on a timer, but not so much as opening the upload.
-      expect(wire.startMultipart).not.toHaveBeenCalled();
+      // A few rechecks: well inside the longest pause, so nothing is sent.
+      for (let round = 0; round < 5; round += 1) await timers.runNext();
+      // Opening the upload is one small request, never held back for the call (GEO-3171).
+      expect(wire.startMultipart).toHaveBeenCalledOnce();
+      expect(wire.putPart).not.toHaveBeenCalled();
 
       poor = false;
       await timers.drain();
@@ -141,16 +151,103 @@ describe('debate recording streaming', () => {
       await streamer.finish();
     });
 
+    // GEO-3171. One debater's call read as struggling from the first second to the last. The pause
+    // was checked before the upload was even opened, so it never was: `streaming: 'never_started'`,
+    // `paused_ms` the whole debate, and the whole recording left to one upload afterwards.
+    it('streams through a pause that never lifts, a part per stretch, and says why it paused', async () => {
+      const timers = manualTimers();
+      const wire = transport();
+      const stalls: unknown[] = [];
+      const streamer = new stream.RecordingPartStreamer({
+        ...wire,
+        ...timers,
+        shouldPause: () => 'connection_poor',
+        onStall: stall => stalls.push(stall),
+      });
+
+      streamer.append(new Blob(['0123456789abcdefXYZ']));
+      await timers.drain();
+
+      // Both whole parts went out, each after a full stretch of standing down.
+      expect(wire.sent.map(part => part.partNumber)).toEqual([1, 2]);
+      const stats = streamer.stats();
+      expect(stats).toMatchObject({
+        streaming: 'on',
+        parts_uploaded_live: 2,
+        parts_sent_through_pause: 2,
+        paused_connection_poor_ms: 2 * stream.MAX_CONTINUOUS_PAUSE_MS,
+        paused_room_not_connected_ms: 0,
+        paused_offline_ms: 0,
+      });
+      expect(stats.paused_ms).toBe(2 * stream.MAX_CONTINUOUS_PAUSE_MS);
+      // It streamed, so it never stalled.
+      expect(stalls).toEqual([]);
+      expect((await streamer.finish())?.uploadedPartNumbers).toEqual([1, 2]);
+    });
+
+    it('keeps trying to open the upload, and reports the stall with why', async () => {
+      const timers = manualTimers();
+      const wire = transport();
+      wire.startMultipart.mockRejectedValue(new Error('network down'));
+      const stalls: RecordingStream.RecordingStreamStall[] = [];
+      const streamer = new stream.RecordingPartStreamer({
+        ...wire,
+        ...timers,
+        shouldPause: () => 'offline',
+        onStall: stall => stalls.push(stall),
+      });
+
+      streamer.append(new Blob(['0123456789abcdef']));
+      await timers.drain();
+
+      // Past the three attempts that used to switch streaming off for the rest of the debate.
+      expect(wire.startMultipart.mock.calls.length).toBeGreaterThan(5);
+      expect(stalls).toEqual([
+        expect.objectContaining({ reason: 'start_failed', pause_reason: 'offline', bytes_recorded: 16 }),
+      ]);
+      expect(await streamer.finish()).toBeNull();
+      expect(streamer.stats()).toMatchObject({ streaming: 'never_started', parts_uploaded_live: 0 });
+      // Reported once, not again at the end.
+      expect(stalls).toHaveLength(1);
+    });
+
+    it('reports a recording that never streamed when it stops, if the stall check had not come round', async () => {
+      const timers = manualTimers();
+      const wire = transport();
+      wire.startMultipart.mockRejectedValue(new GeoChatRequestError('404 Not Found', null, 404));
+      const stalls: RecordingStream.RecordingStreamStall[] = [];
+      const streamer = new stream.RecordingPartStreamer({
+        ...wire,
+        ...timers,
+        shouldPause: () => false,
+        onStall: stall => stalls.push(stall),
+      });
+
+      streamer.append(new Blob(['0123']));
+      await timers.runNext();
+      await streamer.finish();
+
+      expect(stalls).toEqual([expect.objectContaining({ reason: 'routes_missing', pause_reason: null })]);
+    });
+
     it('retries a failed part rather than skipping it', async () => {
       const timers = manualTimers();
       const wire = transport();
       wire.putPart.mockRejectedValueOnce(new Error('network down'));
-      const streamer = new stream.RecordingPartStreamer({ ...wire, ...timers, shouldPause: () => false });
+      const streamer = new stream.RecordingPartStreamer({
+        ...wire,
+        ...timers,
+        shouldPause: () => false,
+        telemetry: { debate_id: 'd', recording_started_at_ms: 123, upload_phase: 'live' },
+      });
 
       streamer.append(new Blob(['01234567']));
       await timers.drain();
 
       expect(wire.putPart).toHaveBeenCalledTimes(2);
+      const attempts = analytics.capture.mock.calls.filter(([name]) => name === 'debate_recording_part_upload');
+      expect(attempts.map(([, properties]) => properties.phase)).toEqual(['started', 'failed', 'started', 'completed']);
+      expect(attempts.every(([, properties]) => properties.part_number === 1 && properties.bytes === 8)).toBe(true);
       expect((await streamer.finish())?.uploadedPartNumbers).toEqual([1]);
     });
 
@@ -258,7 +355,9 @@ describe('debate recording streaming', () => {
       shouldPause: () => false,
     });
     live.append(new Blob(['0123456789ab']), 2_000);
-    await new Promise(resolve => setTimeout(resolve, 20));
+    // Both whole parts out before the hand-over, however slowly this run is going: a fixed 20 ms
+    // sleep stopped the recorder before the second had gone out when the machine was busy.
+    await vi.waitFor(() => expect(wire.sent).toHaveLength(2), { timeout: 10_000 });
 
     await live.finish();
 
@@ -272,6 +371,37 @@ describe('debate recording streaming', () => {
         total_parts: 3,
         saved_locally: true,
       })
+    );
+  });
+
+  it('reports a recording that is not streaming as an upload fallback, with the reason', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const wire = transport();
+    wire.startMultipart.mockRejectedValue(new Error('network down'));
+    const live = stream.startLiveRecordingStream({
+      id: 'user-a:debate-1:1',
+      metadata: metadata(),
+      transport: wire,
+      shouldPause: () => 'connection_poor',
+    });
+    live.append(new Blob(['0123456789ab']), 2_000);
+    await vi.waitFor(() => expect(wire.startMultipart).toHaveBeenCalled());
+
+    await live.finish();
+
+    expect(analytics.capture).toHaveBeenCalledWith(
+      'debate_recording_upload_fallback',
+      expect.objectContaining({
+        debate_id: 'debate-1',
+        reason: 'stream_not_started',
+        stall_reason: 'start_failed',
+        pause_reason: 'connection_poor',
+        bytes_recorded: 12,
+      })
+    );
+    expect(analytics.capture).toHaveBeenCalledWith(
+      'debate_recording_stream_finished',
+      expect.objectContaining({ streaming: 'never_started', start_failures: 1 })
     );
   });
 
@@ -316,7 +446,7 @@ describe('debate recording streaming', () => {
     await stream.uploadRemainingParts(
       new Blob(['0123456789abcdefXYZ']),
       { filename: 'rec/1.local.webm', uploadId: 'upload-1', partSize: PART, uploadedPartNumbers: [1] },
-      wire,
+      { ...wire, telemetry: { debate_id: 'd', recording_started_at_ms: 123, upload_phase: 'queued' } },
       (_partNumber, uploadedBytes) => {
         progress.push(uploadedBytes);
       }
@@ -327,6 +457,13 @@ describe('debate recording streaming', () => {
       { partNumber: 3, body: 'XYZ' },
     ]);
     expect(progress).toEqual([16, 19]);
+    const completed = analytics.capture.mock.calls
+      .filter(([name, properties]) => name === 'debate_recording_part_upload' && properties.phase === 'completed')
+      .map(([, properties]) => properties);
+    expect(completed).toEqual([
+      expect.objectContaining({ part_number: 2, bytes: 8, upload_phase: 'queued' }),
+      expect.objectContaining({ part_number: 3, bytes: 3, upload_phase: 'queued' }),
+    ]);
   });
 
   it('keeps timeslices in recording order in IndexedDB, and clears them with the stream', async () => {

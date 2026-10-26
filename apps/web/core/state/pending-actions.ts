@@ -7,11 +7,14 @@ import { selectAtom } from 'jotai/utils';
 
 import { type ActionComponent, withActionContext } from '../action-context';
 import { useActionContext } from '../action-context-provider';
+import type { AnalyticsProperties } from '../analytics';
 
 /**
  * Queue of actions a user took before their account was ready
  */
 export type PendingActionRequirement = 'auth' | 'personalSpace';
+
+export type SignedOutOutcome = { prompt: AnalyticsProperties } | (() => void);
 
 export type PendingAction = {
   id: string;
@@ -34,6 +37,7 @@ export type PendingAction = {
    * otherwise forget what it was pressed for.
    */
   intent?: string;
+  onSignedOut?: SignedOutOutcome;
 };
 
 /** A queued action as the runner sees it: always runnable. */
@@ -227,13 +231,14 @@ export function useQueuedAction({
   );
 
   const queue = useCallback(
-    (nextIntent: string = 'queued') =>
+    (nextIntent: string = 'queued', options: { onSignedOut?: SignedOutOutcome } = {}) =>
       enqueue({
         id,
         label,
         requires,
         intent: nextIntent,
         run: liveOnly ? undefined : isCurrent => runRef.current(nextIntent, { live: false, isCurrent }),
+        onSignedOut: options.onSignedOut,
       }),
     [enqueue, id, label, requires, liveOnly]
   );

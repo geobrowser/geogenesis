@@ -107,6 +107,23 @@ export function listening(): Debate {
   };
 }
 
+/**
+ * The opening as in 8.1, on a debate with one required rebuttal round (GEO-3258): round 1 is
+ * appended from the start, and its pick is the first.
+ */
+export function requiredRoundListening(overrides: Partial<DebateOpenRounds> = {}): Debate {
+  const debate = listening();
+  return {
+    ...debate,
+    turn_durations_ms: [60_000, 60_000, 45_000, 45_000],
+    open_rounds: block({
+      required_rebuttal_rounds: 1,
+      turn_roles: ['opening', 'opening', 'rebuttal', 'rebuttal'],
+      ...overrides,
+    }),
+  };
+}
+
 /** 8.2: deciding, neither picked. 8.3 and 8.4 differ only in `my_pick` / `opponent_has_picked`. */
 export function deciding(overrides: Partial<DebateOpenRounds> = {}): Debate {
   return {

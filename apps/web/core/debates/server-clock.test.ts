@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createLocalServerClock, selectBestServerTimeSample, synchronizeServerClock } from './server-clock';
+import {
+  createLocalServerClock,
+  keepServerClockSynchronized,
+  selectBestServerTimeSample,
+  synchronizeServerClock,
+} from './server-clock';
 
 describe('debate server clock', () => {
   it('selects the lowest round-trip sample and advances from a monotonic anchor', () => {
@@ -55,5 +60,62 @@ describe('debate server clock', () => {
     await vi.advanceTimersByTimeAsync(50);
     await rejection;
     vi.useRealTimers();
+  });
+
+  describe('keepServerClockSynchronized (GEO-3407)', () => {
+    const flush = () => vi.advanceTimersByTimeAsync(0);
+
+    it('settles on the first attempt, then retries a failed sync until one succeeds', async () => {
+      vi.useFakeTimers();
+      try {
+        const fetchServerTime = vi.fn().mockRejectedValue(new Error('offline'));
+        const onSynchronized = vi.fn();
+        const onFirstAttemptSettled = vi.fn();
+        keepServerClockSynchronized(fetchServerTime, {
+          isCurrent: () => true,
+          onSynchronized,
+          onFirstAttemptSettled,
+          retryDelaysMs: [1_000, 2_000],
+        });
+        await flush();
+        expect(onFirstAttemptSettled).toHaveBeenCalledOnce();
+        expect(onSynchronized).not.toHaveBeenCalled();
+        expect(fetchServerTime).toHaveBeenCalledTimes(3);
+
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(fetchServerTime).toHaveBeenCalledTimes(6);
+
+        fetchServerTime.mockResolvedValue({ server_time_ms: 5_000 });
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(onSynchronized).toHaveBeenCalledOnce();
+        expect(onFirstAttemptSettled).toHaveBeenCalledOnce();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('reports a sync that never succeeds, and stops retrying once the room has moved on', async () => {
+      vi.useFakeTimers();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        const fetchServerTime = vi.fn().mockRejectedValue(new Error('offline'));
+        let current = true;
+        const options = { onSynchronized: vi.fn(), onFirstAttemptSettled: vi.fn(), retryDelaysMs: [1_000] };
+        keepServerClockSynchronized(fetchServerTime, { ...options, isCurrent: () => true });
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(fetchServerTime).toHaveBeenCalledTimes(6);
+        expect(warn).toHaveBeenCalledOnce();
+
+        fetchServerTime.mockClear();
+        keepServerClockSynchronized(fetchServerTime, { ...options, isCurrent: () => current });
+        await flush();
+        current = false;
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(fetchServerTime).toHaveBeenCalledTimes(3);
+      } finally {
+        warn.mockRestore();
+        vi.useRealTimers();
+      }
+    });
   });
 });

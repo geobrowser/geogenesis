@@ -10,6 +10,23 @@ import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubSwap } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 
+/** The button an empty hub list offers in place of a dead end. */
+export type HubEmptyAction = { label: string; onClick: () => void };
+
+/**
+ * "Explore claims", for an empty list with nothing to undo (GEO-2840).
+ *
+ * Shared because it is one action out of one kind of dead end — the hub's Lobby, Matches and People
+ * and the rematch page's tabs all reach for it — and two names for one button is a difference that
+ * implies something. Takes any tab setter that knows Explore, which both surfaces' do.
+ *
+ * Undefined without `onTabChange`: in the workspace rail there is no tab to change to, and the
+ * claims list is already on screen beside it.
+ */
+export function exploreClaimsAction(onTabChange?: (tab: 'explore') => void): HubEmptyAction | undefined {
+  return onTabChange ? { label: 'Explore claims', onClick: () => onTabChange('explore') } : undefined;
+}
+
 /**
  * geo-chat ships the matchmaking endpoints separately from this UI, so a 404 is an expected
  * "not deployed yet" state rather than a failure worth surfacing as an error.
@@ -86,7 +103,7 @@ type HubQueryStateProps = {
    */
   emptyNote?: React.ReactNode;
   /** Offered alongside `emptyMessage` — an empty tab should say what to do next. */
-  emptyAction?: { label: string; onClick: () => void };
+  emptyAction?: HubEmptyAction;
   /** Enables a retry on the error state. */
   onRetry?: () => void;
   /** Offered when the list is only reachable signed in. See {@link isSignInRequired}. */

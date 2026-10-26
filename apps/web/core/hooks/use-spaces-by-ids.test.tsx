@@ -21,7 +21,15 @@ function wrapper({ children }: { children: ReactNode }) {
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
-/** Ids are sorted before the request, so pad them to keep string order predictable. */
+/** One client shared across renders, for tests about what is already cached. */
+function sharedWrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+}
+
+/** Padded so the ids read in a predictable order. */
 const ids = (count: number) => Array.from({ length: count }, (_, index) => `space-${String(index).padStart(4, '0')}`);
 
 beforeEach(() => {
@@ -70,5 +78,57 @@ describe('useSpacesByIds', () => {
     renderHook(() => useSpacesByIds(ids(150), false), { wrapper });
 
     await waitFor(() => expect(mocks.getSpaces).not.toHaveBeenCalled());
+  });
+
+  it('fetches only the new id when the set grows, keeping the resolved ones on screen', async () => {
+    const [a, b, c] = ids(3);
+    const { result, rerender } = renderHook(({ set }) => useSpacesByIds(set), {
+      wrapper,
+      initialProps: { set: [a, b] },
+    });
+    await waitFor(() => expect(result.current.spaces).toHaveLength(2));
+
+    rerender({ set: [a, b, c] });
+    expect(result.current.spacesById.has(a)).toBe(true);
+    expect(result.current.isLoading).toBe(true);
+    await waitFor(() => expect(result.current.spaces).toHaveLength(3));
+
+    expect(requestedBatches()).toEqual([[a, b], [c]]);
+  });
+
+  it('asks once for overlapping sets mounted together, and not again for a subset', async () => {
+    const [a, b, c] = ids(3);
+    const shared = sharedWrapper();
+    const { result } = renderHook(() => [useSpacesByIds([a, b]), useSpacesByIds([b, c]), useSpacesByIds([a, b, c])], {
+      wrapper: shared,
+    });
+    await waitFor(() => expect(result.current[2].spaces).toHaveLength(3));
+
+    const later = renderHook(() => useSpacesByIds([c, a]), { wrapper: shared });
+    expect(later.result.current.spaces.map(space => space.id)).toEqual([c, a]);
+    expect(requestedBatches()).toEqual([[a, b, c]]);
+  });
+
+  it('asks again on the next mount for a space it could not find', async () => {
+    const [a] = ids(1);
+    mocks.getSpaces.mockImplementationOnce(() => Effect.succeed([]));
+    const shared = sharedWrapper();
+    const first = renderHook(() => useSpacesByIds([a]), { wrapper: shared });
+    await waitFor(() => expect(first.result.current.isLoading).toBe(false));
+    expect(first.result.current.spaces).toHaveLength(0);
+    first.unmount();
+
+    const second = renderHook(() => useSpacesByIds([a]), { wrapper: shared });
+    await waitFor(() => expect(second.result.current.spaces).toHaveLength(1));
+    expect(requestedBatches()).toEqual([[a], [a]]);
+  });
+
+  it('keeps its result identity across renders that ask for the same ids', async () => {
+    const { result, rerender } = renderHook(() => useSpacesByIds(ids(2)), { wrapper });
+    await waitFor(() => expect(result.current.spaces).toHaveLength(2));
+    const before = result.current;
+
+    rerender();
+    expect(result.current.spacesById).toBe(before.spacesById);
   });
 });

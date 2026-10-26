@@ -70,6 +70,17 @@ const mocks = vi.hoisted(() => ({
   personProfileOpened: vi.fn(),
 }));
 
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({
+  FollowButton: (props: { target: { id: string }; variant?: string }) => (
+    <span data-testid="follow" data-id={props.target.id} data-variant={props.variant} />
+  ),
+}));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+}));
+
 vi.mock('~/core/analytics', () => ({ personProfileOpened: mocks.personProfileOpened, capture: mocks.capture }));
 
 // The real one reaches for the sync engine and the router; a plain anchor is what the assertions
@@ -151,9 +162,23 @@ vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
 });
 
 // Reaches for a query client this suite does not stand up, and booking has its own coverage.
+// Booking reads room completion only when moving a scheduled request.
+vi.mock('../rooms/request-room', () => ({
+  useRequestRoom: () => ({
+    requests: { isLoading: false },
+    rooms: { isLoading: false },
+    request: undefined,
+    room: null,
+    finished: false,
+  }),
+}));
+
 vi.mock('../rooms/scheduling-hooks', () => ({
   useCreateScheduledDebate: () => mocks.propose,
   useRescheduleScheduledDebate: () => mocks.propose,
+  // The week reads these only when moving a request (GEO-3429), which the People tab never does.
+  useScheduledDebates: () => ({ data: undefined }),
+  useNoTimeWorks: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
 }));
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
@@ -196,7 +221,22 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => mocks.promptSignIn,
 }));
 
-const { PeopleTab } = await import('./people-tab');
+const { PeopleTab, formatSlot } = await import('./people-tab');
+
+describe('formatSlot', () => {
+  // Wednesday 7 Oct 2026, 10:00 local.
+  const now = new Date(2026, 9, 7, 10, 0);
+  const slot = (day: number) => new Date(2026, 9, day, 18, 0).toISOString();
+
+  it('names a day by weekday within the coming week, and adds the date beyond it', () => {
+    expect(formatSlot(slot(7), now)).toMatch(/^Today /);
+    expect(formatSlot(slot(8), now)).toMatch(/^Tomorrow /);
+    expect(formatSlot(slot(9), now)).not.toMatch(/9/);
+    // Next Thursday is not this one: the calendar offers two weeks (GEO-3220).
+    expect(formatSlot(slot(15), now)).toContain('15');
+    expect(formatSlot(slot(15), now)).not.toBe(formatSlot(slot(8), now).replace('Tomorrow', 'Thu'));
+  });
+});
 const { PERSON_SPACE_ICON_CAP } = await import('./person-space-icons');
 
 /** A real space id shape. `profile-user-them` is not one, and the profile link is gated on it. */
@@ -369,6 +409,19 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 afterEach(cleanup);
 
 describe('PeopleTab', () => {
+  it('offers Follow on each face, by personal space, and not on rows without one (GEO-3236, GEO-3310)', () => {
+    mocks.people = [person('user-them', 'Arturas'), person('user-without-space', 'Nameless')];
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const follows = screen.getAllByTestId('follow');
+    expect(follows.map(follow => follow.getAttribute('data-id'))).toEqual([PROFILE_SPACE_IDS['user-them']]);
+    expect(follows[0].getAttribute('data-variant')).toBe('avatar');
+    // On the face, not in the name's row.
+    expect(follows[0].parentElement?.querySelector('.overflow-hidden.rounded-full')).not.toBeNull();
+    expect(within(follows[0].parentElement as HTMLElement).queryByText('Arturas')).toBeNull();
+  });
+
   it('keeps malformed roster IDs out of the shared position query', () => {
     mocks.people = [person('user-them', 'Arturas'), person('user-without-space', 'Nameless')];
 
@@ -420,6 +473,10 @@ describe('PeopleTab', () => {
 
     expect(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' })).toHaveTextContent('2 matches');
     expect(screen.queryByRole('button', { name: /View 0 matching claims/ })).not.toBeInTheDocument();
+    // The hub's trigger keeps the unlabelled click it had; only the calendar labels its own (GEO-3220).
+    expect(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' })).not.toHaveAttribute(
+      'data-geo-analytics-label'
+    );
   });
 
   it('uses singular copy for one matching claim', () => {
@@ -1329,6 +1386,7 @@ describe('PeopleTab filters', () => {
     expect(row).not.toHaveTextContent('Active in…');
 
     const trigger = within(row).getByRole('button', { name: 'View 2 active spaces' });
+    expect(trigger).not.toHaveAttribute('data-geo-analytics-label');
     fireEvent.click(trigger);
 
     const list = await screen.findByRole('list', { name: 'Active spaces' });

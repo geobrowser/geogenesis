@@ -11,6 +11,8 @@ import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
   CLAIM_ADDRESSES_PROPERTY_ID,
+  CLAIM_AXIS_SCORE_FIELDS,
+  CLAIM_AXIS_SCORE_PROPERTY_IDS,
   CLAIM_END_OFFSET_PROPERTY_ID,
   CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_OPPOSES_PROPERTY_ID,
@@ -137,6 +139,14 @@ export type DebateClaimInput = {
    */
   highlightScore?: number | null;
   /**
+   * The three axis scores the same scoring run returns — geo-chat's `relevance_score`,
+   * `quality_score`, `controversy_score`, each 0–1. Written beside the highlight score on the
+   * block → claim relation entity, each only when present; null or absent writes nothing.
+   */
+  relevanceScore?: number | null;
+  qualityScore?: number | null;
+  controversyScore?: number | null;
+  /**
    * GEO-3142: the claim's stance toward the debated claim, written as one Supports / Opposes /
    * Addresses relation from the claim to `claimEntityId`. Null/absent writes none: payloads from
    * before the classification, a verdict the extractor could not give, and a claim the stance
@@ -199,6 +209,10 @@ export type DebatePublishDraft = {
 };
 
 type BuildOptions = {
+  /**
+   * Mint ids with this instead of deriving them from the debate. Tests use it to get readable ids;
+   * production leaves it unset, so every id in the edit is derived ({@link debatePublishId}).
+   */
   createEntityId?: () => string;
   createPosition?: () => string;
 };
@@ -212,7 +226,6 @@ type BuildOptions = {
  * `Publish.prepareLocalDataForPublishing` to get `Op[]`.
  */
 export function buildDebatePublishDraft(input: DebatePublishInput, options: BuildOptions = {}): DebatePublishDraft {
-  const createEntityId = options.createEntityId ?? ID.createEntityId;
   const createPosition = options.createPosition ?? Position.generate;
 
   const claimText = input.claimText.trim();
@@ -220,6 +233,23 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   if (input.participants.length === 0) throw new Error('A debate needs participants to publish.');
 
   const debateEntityId = ID.uuidToHex(input.debateId);
+
+  // Every id this edit mints is derived from the debate and what the id names, so publishing the
+  // same debate twice writes the same entities and relations again rather than second copies (the
+  // indexer upserts relations on id, and value ids are already per entity and property). The sweep
+  // decides "already published" by finding the Debate entity in the graph, so while the indexer
+  // lags it publishes again; on 2026-10-05 that left 11 to 16 copies of three debates' Transcript,
+  // Video and share card, and of every relation on the Debate. A key repeated within one edit gets
+  // its occurrence appended, so ids stay unique however the input repeats itself.
+  const keyOccurrences = new Map<string, number>();
+  const derivedId = (key: string) => {
+    const occurrence = keyOccurrences.get(key) ?? 0;
+    keyOccurrences.set(key, occurrence + 1);
+    return debatePublishId(debateEntityId, occurrence === 0 ? key : `${key}#${occurrence}`);
+  };
+  const mintEntityId = (key: string) =>
+    options.createEntityId ? options.createEntityId() : derivedId(`entity:${key}`);
+
   const bySlot = [...input.participants].sort((a, b) => a.participantSlot - b.participantSlot);
   const nameFor = (p: DebatePublishParticipant) => (p.displayName?.trim() ? p.displayName.trim() : 'Anonymous');
   // "<claim> | <A> vs. <B>": the motion leads, the matchup follows. Names are read in
@@ -276,9 +306,12 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
      */
     stable?: boolean;
   }): { id: string; name: string | null } => {
+    const edge = `${normalizeId(fromEntity.id)}:${normalizeId(propertyId)}:${normalizeId(toEntityId)}`;
     const ids = stable
       ? stableClaimRelationIds(fromEntity.id, propertyId, toEntityId)
-      : { id: createEntityId(), entityId: createEntityId() };
+      : options.createEntityId
+        ? { id: options.createEntityId(), entityId: options.createEntityId() }
+        : { id: derivedId(`relation:${edge}`), entityId: derivedId(`relation-entity:${edge}`) };
     const entityId = ids.entityId;
     relations.push(
       makeRelation({
@@ -351,7 +384,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   // hangs off the debate rather than the Video because it describes the debate, and because it is
   // generated once at publish time and never revisited.
   if (input.ogImageUrl) {
-    const ogImageId = createEntityId();
+    const ogImageId = mintEntityId('og-image');
     const ogImageName = derivedName('share card');
     const ogImageRef = { id: ogImageId, name: ogImageName };
     setText(ogImageId, ogImageName, NAME_PROPERTY_ID, ogImageName);
@@ -372,7 +405,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
 
   // --- Video entity (+ its Key frame Image) ---
   if (input.videoUrl) {
-    const videoId = createEntityId();
+    const videoId = mintEntityId('video');
     const videoName = derivedName('video');
     const videoRef = { id: videoId, name: videoName };
     setText(videoId, videoName, NAME_PROPERTY_ID, videoName);
@@ -394,7 +427,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     });
 
     if (input.keyframeUrl) {
-      const keyframeId = createEntityId();
+      const keyframeId = mintEntityId('keyframe');
       const keyframeName = derivedName('keyframe');
       const keyframeRef = { id: keyframeId, name: keyframeName };
       setText(keyframeId, keyframeName, NAME_PROPERTY_ID, keyframeName);
@@ -417,7 +450,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   // --- Transcript entity + per-turn text blocks ---
   const turns = input.transcriptTurns.filter(turn => turn.text.trim().length > 0);
   if (turns.length > 0) {
-    const transcriptId = createEntityId();
+    const transcriptId = mintEntityId('transcript');
     const transcriptName = derivedName('transcript');
     const transcriptRef = { id: transcriptId, name: transcriptName };
     setText(transcriptId, transcriptName, NAME_PROPERTY_ID, transcriptName);
@@ -459,7 +492,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
 
     turns.forEach(turn => {
       const speakerName = turn.speakerName?.trim() ? turn.speakerName.trim() : 'Anonymous';
-      const blockId = createEntityId();
+      const blockId = mintEntityId(`block:${turn.turnIndex}`);
       const blockName = `${speakerName} — ${claimText}`;
       const blockRef = { id: blockId, name: blockName };
       setText(blockId, blockName, NAME_PROPERTY_ID, blockName);
@@ -507,7 +540,8 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // A reference wins; otherwise geo-chat's stable id (D1), which anything that requested
         // this claim before it published already holds; otherwise, for older payloads, a fresh id.
         const stableClaimId = existingClaimId === null ? claim.stableEntityId?.trim() || null : null;
-        const claimId = existingClaimId ?? stableClaimId ?? createEntityId();
+        const claimId =
+          existingClaimId ?? stableClaimId ?? mintEntityId(`claim:${turn.turnIndex}:${claimEntityText.toLowerCase()}`);
         const claimRef = { id: claimId, name: claimEntityText };
         // GEO-2870 option A: a claim under geo-chat's stable id may already be on the graph, put
         // there by the early claims publish (`buildDebateClaimsDraft`) minutes after extraction. The
@@ -539,7 +573,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // The Debate tag is what makes a claim a candidate motion in the picker, so it
         // goes on contestable claims only — minted or reused alike, once per entity.
         // Reused entities and geo-chat's stable ids (D1) key on the id. A fresh id cannot,
-        // because `createEntityId` returns a new one per claim, so keying on it would
+        // because `mintEntityId` returns a new one per statement, so keying on it would
         // dedupe nothing: two verbatim extractions from an older payload therefore mint two
         // entities (the long-standing behaviour) but yield a single motion. Near-duplicates
         // that differ in wording still slip through — matching upstream is what catches those.
@@ -587,9 +621,15 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
           // the FIRST extraction's for this (block, claim): two extractions in one turn that
           // resolve to one entity share one relation, and the later one's score is not consulted
           // even when the first had none.
-          const highlightScore = publishableHighlightScore(claim.highlightScore);
+          const highlightScore = publishableScore(claim.highlightScore);
           if (highlightScore !== null) {
             setFloat(statement.id, CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID, highlightScore);
+          }
+          // The axes come from the same run and follow the same rules, each on its own: one the
+          // scorer did not report is simply not written, the others still are.
+          for (const field of CLAIM_AXIS_SCORE_FIELDS) {
+            const axisScore = publishableScore(claim[field]);
+            if (axisScore !== null) setFloat(statement.id, CLAIM_AXIS_SCORE_PROPERTY_IDS[field], axisScore);
           }
           const timing = publishableTiming(claim.timing);
           if (timing) {
@@ -627,6 +667,21 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
 }
 
 /**
+ * The UUIDv5 namespace for every other id the full debate publish mints. Fixed forever, like the
+ * one below: changing it would re-derive the ids, and a republish would add second copies.
+ */
+const DEBATE_PUBLISH_ID_NAMESPACE = 'b8f4e0a2-5c1d-4e7a-9f3b-6d2c8a1e4f70';
+
+/**
+ * The id of one thing the full debate publish writes, derived from the Debate entity id and a key
+ * naming the thing within that debate (`entity:transcript`, `relation:<from>:<property>:<to>`).
+ * Same debate, same key, same id — which is what makes a republish an update rather than a copy.
+ */
+export function debatePublishId(debateEntityId: string, key: string): string {
+  return normalizeId(uuidv5(`${normalizeId(debateEntityId)}:${key}`, DEBATE_PUBLISH_ID_NAMESPACE));
+}
+
+/**
  * The UUIDv5 namespace for the relations that describe a claim minted under geo-chat's stable id.
  * Fixed forever: changing it would re-derive every id, and the next publish would add second copies
  * of relations the graph already holds.
@@ -643,8 +698,8 @@ const STABLE_CLAIM_RELATION_NAMESPACE = '6f1d2c8e-3b0a-4f57-9a61-2e870a0c1a1d';
  * from (from, property, to) makes the second write an update of the first. It also makes an early
  * publish that ran twice (an overlapping sweep, a retry after an unconfirmed receipt) harmless.
  *
- * Only these relations: everything else in the debate edit is written once, by the full publish,
- * which is itself idempotent on the Debate entity.
+ * Only these relations: everything else in the debate edit is written by the full publish alone,
+ * under ids derived from the debate ({@link debatePublishId}).
  */
 export function stableClaimRelationIds(
   fromEntityId: string,
@@ -831,11 +886,11 @@ export function publishableTiming(timing: DebateClaimInput['timing']): { startMs
 }
 
 /**
- * A claim's highlight score if it is a finite number in [0, 1], else null. Same stance as
- * {@link publishableTiming}: the decoder refuses anything else already, and the publisher refuses
- * it again because a bad value here is ranked by, and nothing downstream can demote it.
+ * A claim's highlight score or axis score if it is a finite number in [0, 1], else null. Same
+ * stance as {@link publishableTiming}: the decoder refuses anything else already, and the publisher
+ * refuses it again because a bad value here is ranked by, and nothing downstream can demote it.
  */
-export function publishableHighlightScore(score: DebateClaimInput['highlightScore']): number | null {
+export function publishableScore(score: number | null | undefined): number | null {
   if (typeof score !== 'number' || !Number.isFinite(score)) return null;
   if (score < 0 || score > 1) return null;
   return score;

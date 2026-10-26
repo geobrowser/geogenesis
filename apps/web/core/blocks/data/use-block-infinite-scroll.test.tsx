@@ -19,7 +19,7 @@ vi.mock('./use-data-block', () => ({
   useDataBlockInstance: () => ({ entityId: BLOCK_ENTITY_ID, spaceId: SPACE_ID, relationId: instance.relationId }),
 }));
 
-vi.mock('~/core/state/editor/use-editor', () => ({
+vi.mock('~/core/state/editor/use-editor-blocks', () => ({
   useEditorStoreLite: () => ({
     blockRelations: blockRelations.current,
     initialBlockEntities: [{ id: RELATION_ENTITY_ID, values: snapshotValues.current }],

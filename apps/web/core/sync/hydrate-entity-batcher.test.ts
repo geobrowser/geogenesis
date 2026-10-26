@@ -112,6 +112,19 @@ describe('hydrateEntityBatched', () => {
     });
   });
 
+  it('propagates confirmed absence when the entire batch has no merged entities', async () => {
+    mocks.syncMany.mockResolvedValue({ merged: [], remote: [], confirmedAbsentEntityIds: ['missing'] });
+    expect(await hydrateEntityBatched({ id: 'missing', store, cache, stream })).toBeNull();
+    expect(emitted).toEqual([
+      {
+        type: GeoEventStream.ENTITIES_SYNCED,
+        entities: [],
+        remoteEntities: [],
+        confirmedAbsentEntityIds: ['missing'],
+      },
+    ]);
+  });
+
   it('does not query by space, leaving the engine to filter as it receives events', async () => {
     mocks.syncMany.mockResolvedValue({ merged: [entity('a')], remote: [] });
 
