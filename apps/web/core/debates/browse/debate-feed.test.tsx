@@ -320,7 +320,7 @@ describe('DebatesBrowseFeed header links', () => {
   );
 
   // Truncation runs parent -> anchor -> text, and an anchor at its default `min-width: auto` would
-  // refuse to shrink, pushing the topics off the row instead of ellipsing the name.
+  // refuse to shrink, overflowing the row instead of ellipsing the name.
   it('keeps the space link shrinkable so the name still truncates', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
