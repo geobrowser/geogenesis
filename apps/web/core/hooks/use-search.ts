@@ -174,6 +174,13 @@ export function useSearch({
           if (filterByTypes?.length && !searchResultMatchesAllowedTypes(merged, filterByTypes)) {
             return emptySearchPage(pageParam);
           }
+
+          if (filterBySpace) {
+            const wantedSpaceId = filterBySpace.replace(/-/g, '');
+            if (!merged.spaces.some(space => space.spaceId.replace(/-/g, '') === wantedSpaceId)) {
+              return emptySearchPage(pageParam);
+            }
+          }
           return { rows: [merged], offset: pageParam, serverCount: 1, total: 1, succeeded: true };
         }
 
