@@ -24,6 +24,7 @@ import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { type ProposalVotingMode, usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useToast } from '~/core/hooks/use-toast';
 import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
@@ -41,6 +42,7 @@ import {
   getDeselectionBlockers,
   selectOpsForPublish,
 } from '~/core/review/publish-selection';
+import { useNetChanges } from '~/core/review/use-net-changes';
 import { useDiff } from '~/core/state/diff-store';
 import { isPendingPersonalSpaceId, usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store';
@@ -74,6 +76,7 @@ import {
   isBountyTypeRelation,
 } from './bounty-linking';
 import type { Bounty } from './bounty-linking/types';
+import { useReviewSpace } from './use-review-space';
 import {
   clearPersonalProfileSessionDismissStorage,
   editorContentVersionAtom,
@@ -118,6 +121,7 @@ export const ReviewChanges = () => {
     isReviewOpen,
     setIsReviewOpen,
     reviewVersion,
+    reviewTargetVersion,
     activeSpace: diffPreferredSpaceId,
     setActiveSpace: setDiffPreferredSpaceId,
   } = useDiff();
@@ -138,56 +142,30 @@ export const ReviewChanges = () => {
   const { profile } = useGeoProfile(address);
   const personalPageEntityId = profile?.id ?? null;
 
+  const currentSpaceId = useSpaceId();
+
   const [proposals, setProposals] = React.useState<Proposals>({});
   const [isPublishing, setIsPublishing] = React.useState(false);
   const [spaces, setSpaces] = React.useState<Space[]>([]);
   const [isBountyLinkingOpen, setIsBountyLinkingOpen] = React.useState(false);
   const [selectedBountyIds, setSelectedBountyIds] = React.useState<Set<string>>(new Set());
 
-  const valuesWithChanges = useValues({
-    selector: t => t.hasBeenPublished === false && t.isLocal === true,
-    includeDeleted: true,
-  });
-
-  const relationsWithChanges = useRelations({
-    selector: r => r.hasBeenPublished === false && r.isLocal === true,
-    includeDeleted: true,
-  });
-
-  const dedupedSpacesWithActions = React.useMemo(() => {
-    const valueSpaceIds = valuesWithChanges.map(t => t.spaceId);
-    const relationSpaceIds = relationsWithChanges.map(r => r.spaceId);
-
-    return [...new Set([...valueSpaceIds, ...relationSpaceIds])];
-  }, [valuesWithChanges, relationsWithChanges]);
+  const { spaceIds: dedupedSpacesWithActions } = useNetChanges();
 
   const spacesKey = [...dedupedSpacesWithActions].sort().join(',');
-  const [activeSpace, setActiveSpace] = React.useState<string>('');
-  const appliedPreferredSpaceForVersion = React.useRef<number | null>(null);
+  const { activeSpace, setActiveSpace } = useReviewSpace({
+    spaceIds: dedupedSpacesWithActions,
+    isReviewOpen,
+    preferredSpaceVersion: reviewTargetVersion,
+    preferredSpaceId: diffPreferredSpaceId,
+    currentSpaceId,
+  });
 
   React.useEffect(() => {
     if (!isReviewOpen) {
       setDiffPreferredSpaceId('');
-      appliedPreferredSpaceForVersion.current = null;
     }
   }, [isReviewOpen, setDiffPreferredSpaceId]);
-
-  React.useEffect(() => {
-    const shouldApplyPreferred =
-      reviewVersion !== appliedPreferredSpaceForVersion.current &&
-      Boolean(diffPreferredSpaceId) &&
-      dedupedSpacesWithActions.includes(diffPreferredSpaceId);
-
-    if (shouldApplyPreferred) {
-      appliedPreferredSpaceForVersion.current = reviewVersion;
-      setActiveSpace(diffPreferredSpaceId);
-      return;
-    }
-
-    if (activeSpace === '' && dedupedSpacesWithActions[0]) {
-      setActiveSpace(dedupedSpacesWithActions[0]);
-    }
-  }, [spacesKey, activeSpace, diffPreferredSpaceId, dedupedSpacesWithActions, reviewVersion]);
 
   React.useEffect(() => {
     // Don't clear spaces metadata when dedupedSpacesWithActions becomes empty (e.g. after
@@ -222,14 +200,6 @@ export const ReviewChanges = () => {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
       }
-
-      if (dedupedSpacesWithActions.length > 0 && !dedupedSpacesWithActions.includes(activeSpace)) {
-        const next =
-          diffPreferredSpaceId && dedupedSpacesWithActions.includes(diffPreferredSpaceId)
-            ? diffPreferredSpaceId
-            : (dedupedSpacesWithActions[0] ?? '');
-        setActiveSpace(next);
-      }
     }
 
     return () => {
@@ -240,7 +210,7 @@ export const ReviewChanges = () => {
     };
     // `spacesKey` again stands in for `dedupedSpacesWithActions`; see the effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spacesKey, activeSpace, diffPreferredSpaceId, statusBarState.reviewState, setIsReviewOpen]);
+  }, [spacesKey, statusBarState.reviewState, setIsReviewOpen]);
 
   const rawProposalName = proposals[activeSpace]?.name ?? '';
   const proposalName = rawProposalName.trim();
@@ -1004,21 +974,23 @@ export const ReviewChanges = () => {
     });
   }, [bountyIdSet, selectedBountyIds.size]);
 
-  const spaceOptions = spaces.map(space => ({
-    label: (
-      <div className="flex items-center gap-2">
-        {space.entity.image && (
-          <div className="h-5 w-5 overflow-hidden rounded">
-            <NativeGeoImage value={space.entity.image} alt="" className="h-full w-full object-cover" />
-          </div>
-        )}
-        <span>{space.entity.name ?? space.id}</span>
-      </div>
-    ),
-    value: space.id,
-    disabled: false,
-    onClick: () => setActiveSpace(space.id),
-  }));
+  const spaceOptions = spaces
+    .filter(space => dedupedSpacesWithActions.includes(space.id))
+    .map(space => ({
+      label: (
+        <div className="flex items-center gap-2">
+          {space.entity.image && (
+            <div className="h-5 w-5 overflow-hidden rounded">
+              <NativeGeoImage value={space.entity.image} alt="" className="h-full w-full object-cover" />
+            </div>
+          )}
+          <span>{space.entity.name ?? space.id}</span>
+        </div>
+      ),
+      value: space.id,
+      disabled: false,
+      onClick: () => setActiveSpace(space.id),
+    }));
 
   return (
     <>

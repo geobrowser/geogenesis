@@ -27,6 +27,10 @@ const claim = {
   blockId: 'block',
   spaceId: 'space',
   publishedTiming: null,
+  highlightScore: null,
+  relevanceScore: null,
+  qualityScore: null,
+  controversyScore: null,
   relationEntityId: 'relation',
   restated: false,
 } satisfies TranscriptClaim;

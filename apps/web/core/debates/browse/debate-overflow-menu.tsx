@@ -40,15 +40,14 @@ export function useCanRemoveDebate(debate: Debate): boolean {
 
 /**
  * The "…" beside a debate's actions. Holds only what a few viewers can do — removing the debate
- * (GEO-2785) — so it is not drawn at all for everyone else, and the bar reads as it always has.
+ * (GEO-2785) — so its host draws it only where {@link useCanRemoveDebate} says so, and the row reads
+ * as it always has for everyone else. The host asks rather than this, because the row makes room
+ * for the menu on the same answer, and two answers could disagree.
  */
-export function DebateOverflowMenu({ debate, variant }: { debate: Debate; variant: 'circle' | 'pill' }) {
-  const canRemove = useCanRemoveDebate(debate);
+export function DebateOverflowMenu({ debate }: { debate: Debate }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
-
-  if (!canRemove) return null;
 
   const trigger = (
     <button
@@ -57,11 +56,7 @@ export function DebateOverflowMenu({ debate, variant }: { debate: Debate; varian
       aria-label="More debate options"
       data-geo-analytics-label="Debate options"
       data-geo-analytics-intent="debate_action"
-      className={
-        variant === 'circle'
-          ? 'grid size-9 place-items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text'
-          : cx(PILL_ACTION_CLASS, 'w-7 justify-center px-0')
-      }
+      className={cx(PILL_ACTION_CLASS, 'w-7 justify-center px-0')}
     >
       <Ellipsis />
     </button>

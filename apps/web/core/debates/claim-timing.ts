@@ -79,7 +79,7 @@ export function isAssertableMoment(timing: ClaimTiming | null): timing is ClaimT
 const USABLE_TIMING_CONFIDENCE = 0.35;
 
 /** How many consecutive segments a claim may span. Whisper segments here run 1–3 seconds. */
-const MAX_WINDOW_SEGMENTS = 6;
+export const MAX_CLAIM_WINDOW_SEGMENTS = 6;
 
 /**
  * Words carrying no identifying signal, dropped before scoring.
@@ -382,7 +382,7 @@ export function matchClaimWindow(
   for (let start = window.startIndex; start <= window.endIndex; start += 1) {
     let text = '';
 
-    for (let end = start; end <= Math.min(start + MAX_WINDOW_SEGMENTS - 1, window.endIndex); end += 1) {
+    for (let end = start; end <= Math.min(start + MAX_CLAIM_WINDOW_SEGMENTS - 1, window.endIndex); end += 1) {
       text = text.length === 0 ? segments[end].text : `${text} ${segments[end].text}`;
       const confidence = scoreWindow(claimWords, text);
 

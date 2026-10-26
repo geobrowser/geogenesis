@@ -27,6 +27,7 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { checkEntityExists, getDebateVoteEntities } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { pushMarketingEvent } from '~/core/marketing-events';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -468,6 +469,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
         outcomeProperties.user_operation_hash = result.right;
         operation.outcome('vote_cast', 'submitted', outcomeProperties);
+        pushMarketingEvent('geo_vote', { debate_id: debate.id, target_id: debate.id, vote_kind: 'debate_winner' });
         setToast(<span>Vote published!</span>);
       } finally {
         setVoteInFlight(debateEntityId, false);

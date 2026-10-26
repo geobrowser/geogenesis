@@ -90,11 +90,7 @@ export function HubFacetRail({
               count={space.count}
               selected={spaceIds.includes(space.id)}
               onSelect={() => onSpaceToggle(space.id)}
-              leading={
-                <span className="block size-4 shrink-0 overflow-hidden rounded-sm bg-grey-02">
-                  <Avatar avatarUrl={label?.image ?? null} value={space.id} size={16} />
-                </span>
-              }
+              leading={<SpaceThumb spaceId={space.id} image={label?.image ?? null} />}
             />
           );
         })}
@@ -141,6 +137,15 @@ export function HubFacetRail({
         )}
       </FacetGroup>
     </div>
+  );
+}
+
+/** A space's 16px thumbnail, its generated avatar where it has no image: the rail's rows and the space pills. */
+export function SpaceThumb({ spaceId, image }: { spaceId: string; image: string | null }) {
+  return (
+    <span className="block size-4 shrink-0 overflow-hidden rounded-sm bg-grey-02">
+      <Avatar avatarUrl={image} value={spaceId} size={16} />
+    </span>
   );
 }
 

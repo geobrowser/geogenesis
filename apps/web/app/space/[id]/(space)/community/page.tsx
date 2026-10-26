@@ -13,6 +13,8 @@ import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-side
 import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
 import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
 
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
+
 type Props = {
   params: Promise<{ id: string }>;
 };
@@ -40,6 +42,10 @@ export default async function CommunityPage(props: Props) {
     ) : (
       <SpaceOverviewSidePanel
         spaceId={spaceId}
+        spaceName={
+          (await resolveWithin(() => cachedFetchSpace(spaceId).catch(() => null), SIDE_RAIL_FETCH_TIMEOUT_MS, null))
+            ?.entity?.name ?? undefined
+        }
         // Bounded like the layout's copy. `fetchCommunityCalls` is `cache()`d, so this awaits the
         // *same promise* the layout started — and a memoised promise that never settles is not made
         // safe by the layout having given up on it.

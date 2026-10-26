@@ -30,21 +30,33 @@ import { DebateTileChip, tileChipSurface } from './debate-video-tile';
  * this is the value it wants.
  */
 const recordingRed = '#991200';
-export function DebateRecordingStatusPill({ recording }: { recording: boolean }) {
+export function DebateRecordingStatusPill({
+  recording,
+  openRounds = false,
+}: {
+  recording: boolean;
+  openRounds?: boolean;
+}) {
   return (
     <DebateTileChip
       role="status"
       aria-live="polite"
-      style={recording ? { color: recordingRed } : undefined}
+      openRounds={openRounds}
+      style={{ ...(recording ? { color: recordingRed } : undefined), ...(openRounds ? { gap: 0 } : undefined) }}
       className={cx(tileChipSurface, !recording && 'text-text')}
     >
-      <span
-        aria-hidden
-        className={cx(
-          'size-1.5 shrink-0 rounded-full border border-current',
-          recording ? 'bg-current motion-safe:animate-pulse' : 'bg-transparent'
-        )}
-      />
+      {openRounds ? (
+        <span aria-hidden>{recording ? '●\u00a0' : '○\u00a0'}</span>
+      ) : (
+        <span
+          aria-hidden
+          className={cx(
+            'shrink-0 rounded-full border border-current',
+            'size-1.5',
+            recording ? 'bg-current motion-safe:animate-pulse' : 'bg-transparent'
+          )}
+        />
+      )}
       {recording ? 'Recording' : 'Not recording'}
     </DebateTileChip>
   );

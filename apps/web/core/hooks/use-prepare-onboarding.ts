@@ -1,11 +1,11 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
+
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
   avatarAtom,
@@ -14,8 +14,9 @@ import {
   spaceIdAtom,
   stepAtom,
   topicIdAtom,
-} from '~/partials/onboarding/dialog';
+} from '~/partials/onboarding/onboarding-atoms';
 
+import { NO_HELD_FEED_TOPICS, feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 /**
@@ -47,6 +48,7 @@ export function usePrepareOnboarding() {
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
   const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
+  const setFeedTopics = useSetAtom(feedTopicsAtom);
 
   /**
    * Where to land once onboarding finishes, which the callers want three different things from.
@@ -86,12 +88,14 @@ export function usePrepareOnboarding() {
       setSpaceId('');
       setStep('start');
       setSelectedTopicIds([]);
+      setFeedTopics(NO_HELD_FEED_TOPICS);
     },
     [
       authenticated,
       pathname,
       searchParams,
       setAvatar,
+      setFeedTopics,
       setName,
       setPostOnboardingRedirect,
       setSelectedTopicIds,

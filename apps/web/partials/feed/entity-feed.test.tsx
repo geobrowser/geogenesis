@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -11,12 +11,18 @@ import {
   EXPLORE_ENTITY_TYPE_IDS,
   PAPER_TYPE_ID,
 } from '~/core/explore/explore-constants';
+import { PUBLIC_BEST_FEED_PATH } from '~/core/explore/explore-feed-params';
 
-import { EntityFeed } from './entity-feed';
+import { EntityFeed, buildFeedQuery, leadFirst } from './entity-feed';
 
 const mocks = vi.hoisted(() => ({
   queryOptions: null as Record<string, unknown> | null,
   facetQueryOptions: null as Record<string, unknown> | null,
+  /** The public first page a signed-in reader paints from while their own page loads. */
+  publicQueryOptions: null as Record<string, unknown> | null,
+  publicPage: null as { items: Record<string, unknown>[]; nextCursor?: string | null } | null,
+  /** Whether the infinite query reports its data as a placeholder. */
+  isPlaceholderData: false,
   facetData: null as { topics: Array<{ id: string; name: string | null; count: number }> } | null,
   /** Every key the feed has subscribed under, so a test can see what it asked for *first*. */
   queryKeys: [] as unknown[][],
@@ -25,6 +31,8 @@ const mocks = vi.hoisted(() => ({
   pages: null as { items: Record<string, unknown>[] }[] | null,
   /** Props the last rendered card received. */
   cardProps: null as Record<string, unknown> | null,
+  /** The item each feed position last rendered. */
+  itemAt: {} as Record<number, Record<string, unknown>>,
   /** The error the infinite query reports, so the failed-feed message can be rendered. */
   error: null as Error | null,
   /** What the browse sidebar's cache holds — the space menu's options. */
@@ -34,6 +42,18 @@ const mocks = vi.hoisted(() => ({
     memberOf: { id: string; name: string }[];
     featuredError?: boolean;
   } | null,
+  /** The smart-account address `useSmartAccount` reports; null until Privy restores the wallet. */
+  accountAddress: null as string | null,
+  /** The identity token Privy has restored; null until it has. */
+  identityToken: null as string | null,
+}));
+
+vi.mock('~/core/wallet/auth-hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/wallet/auth-hooks')>()),
+  useIdentityToken: () => ({ identityToken: mocks.identityToken }),
+  // Privy still restoring, which is what a reader with a wallet cookie sees on first paint. The
+  // facade's own signed-out value reports `ready: true`, which ends these waits at once.
+  usePrivy: () => ({ ready: false, authenticated: false }),
 }));
 
 vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
@@ -49,12 +69,17 @@ vi.mock('@tanstack/react-query', () => ({
       data: mocks.pages ? { pages: mocks.pages } : undefined,
       isLoading: false,
       isFetchingNextPage: false,
+      isPlaceholderData: mocks.isPlaceholderData,
       fetchNextPage: vi.fn(),
       hasNextPage: false,
       error: mocks.error,
     };
   },
   useQuery: (options: Record<string, unknown>) => {
+    if ((options.queryKey as unknown[])[1] === 'public') {
+      mocks.publicQueryOptions = options;
+      return { data: options.enabled ? (mocks.publicPage ?? undefined) : undefined };
+    }
     mocks.facetQueryOptions = options;
     return {
       data: mocks.facetData ?? undefined,
@@ -66,7 +91,9 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: null }),
+  useSmartAccount: () => ({
+    smartAccount: mocks.accountAddress ? { account: { address: mocks.accountAddress } } : null,
+  }),
 }));
 
 vi.mock('~/design-system/menu', () => ({
@@ -86,6 +113,7 @@ vi.mock('~/design-system/menu', () => ({
 vi.mock('~/partials/explore/explore-feed-card', () => ({
   ExploreFeedCard: (props: Record<string, unknown>) => {
     mocks.cardProps = props;
+    mocks.itemAt[props.itemPosition as number] = props.item as Record<string, unknown>;
     return null;
   },
 }));
@@ -93,12 +121,17 @@ vi.mock('~/partials/explore/explore-feed-card', () => ({
 beforeEach(() => {
   mocks.queryOptions = null;
   mocks.facetQueryOptions = null;
+  mocks.publicQueryOptions = null;
+  mocks.publicPage = null;
+  mocks.isPlaceholderData = false;
   mocks.facetData = null;
   mocks.pages = null;
   mocks.cardProps = null;
+  mocks.itemAt = {};
   mocks.queryKeys = [];
   mocks.error = null;
   mocks.browseSidebar = null;
+  mocks.accountAddress = null;
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [], nextCursor: null }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -648,5 +681,304 @@ describe('EntityFeed more filters', () => {
     render(<EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showSortFilter />);
 
     expect(screen.queryByRole('button', { name: 'More filters' })).toBeNull();
+  });
+});
+
+// A signed-in reader's account is null for the first renders, until Privy restores the wallet and
+// ZeroDev builds the account. Keyed on that address, the feed used to fetch anonymously, render,
+// blank and fetch again (2026-10-16); #2890 made it wait for the account instead, which held the
+// first card back by a second or two. The server reads the same cookie, so the feed keys on it.
+describe('EntityFeed for a reader with a wallet cookie', () => {
+  const ADDRESS = '0x00000000000000000000000000000000000000aa';
+
+  function renderFeed(walletAddress: string | null) {
+    return render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="best"
+        showTimeFilter={false}
+        walletAddress={walletAddress}
+      />
+    );
+  }
+
+  function renderForYou() {
+    return render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="for-you"
+        showTimeFilter={false}
+        sendIdentityToken
+        followedTopicIds={[]}
+        walletAddress={ADDRESS}
+      />
+    );
+  }
+
+  afterEach(() => {
+    mocks.identityToken = null;
+    vi.useRealTimers();
+  });
+
+  it('sends the first request at once, keyed on the cookie, before the account resolves', () => {
+    const { rerender } = renderFeed(ADDRESS);
+    expect(mocks.queryOptions?.enabled).toBe(true);
+    expect((mocks.queryOptions?.queryKey as unknown[]).at(-1)).toBe(ADDRESS);
+    const firstKey = mocks.queryOptions?.queryKey;
+
+    mocks.accountAddress = ADDRESS;
+    rerender(
+      <EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showTimeFilter={false} walletAddress={ADDRESS} />
+    );
+    // The same key, so the account arriving does not refetch.
+    expect(mocks.queryOptions?.queryKey).toEqual(firstKey);
+  });
+
+  it('holds a request that carries an identity token until Privy restores the token', () => {
+    const { rerender } = renderForYou();
+    expect(mocks.queryOptions?.enabled).toBe(false);
+    expect(screen.queryByText('No entities match these filters yet.')).toBeNull();
+
+    mocks.identityToken = 'token';
+    rerender(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="for-you"
+        showTimeFilter={false}
+        sendIdentityToken
+        followedTopicIds={[]}
+        walletAddress={ADDRESS}
+      />
+    );
+    expect(mocks.queryOptions?.enabled).toBe(true);
+    expect((mocks.queryOptions?.queryKey as unknown[]).at(-1)).toBe(ADDRESS);
+  });
+
+  it('gives up waiting for the token after five seconds, so a stale cookie cannot hold the feed', () => {
+    vi.useFakeTimers();
+    renderForYou();
+    expect(mocks.queryOptions?.enabled).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(mocks.queryOptions?.enabled).toBe(true);
+  });
+
+  it('does not wait for a reader with no wallet cookie', () => {
+    renderFeed(null);
+    expect(mocks.queryOptions?.enabled).toBe(true);
+    expect((mocks.queryOptions?.queryKey as unknown[]).at(-1)).toBeNull();
+  });
+
+  it('keeps the cards up across a change of account, but not a change of filter', () => {
+    renderFeed(null);
+    const placeholderData = mocks.queryOptions?.placeholderData as (
+      previous: unknown,
+      previousQuery: { queryKey: unknown[] } | undefined
+    ) => unknown;
+    const key = mocks.queryOptions?.queryKey as unknown[];
+    const previous = { pages: [] };
+
+    expect(placeholderData(previous, { queryKey: [...key.slice(0, -1), ADDRESS] })).toBe(previous);
+    expect(placeholderData(previous, { queryKey: [key[0], 'new', ...key.slice(2)] })).toBeUndefined();
+    expect(placeholderData(previous, undefined)).toBeUndefined();
+  });
+});
+
+describe('EntityFeed pending onboarding follows', () => {
+  it('sends the pending-follow signal only for For you', async () => {
+    render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="for-you"
+        sortOptions={['for-you', 'best']}
+        showSortFilter
+        followedTopicIds={['topic-a']}
+        pendingTopicFollows
+      />
+    );
+    expect(new URL(await requestedUrl(), 'http://localhost').searchParams.get('pendingTopicFollows')).toBe('1');
+
+    pickOption('Best');
+    const best = new URL(await requestedUrl(), 'http://localhost');
+    expect(best.searchParams.get('pendingTopicFollows')).toBeNull();
+    expect(best.searchParams.get('followedTopicIds')).toBeNull();
+  });
+
+  it('refetches when pending follows clear without changing the topic ids', () => {
+    const props = {
+      apiEndpoint: '/api/explore/feed',
+      initialSort: 'for-you' as const,
+      followedTopicIds: ['topic-a'],
+    };
+    const { rerender } = render(<EntityFeed {...props} pendingTopicFollows />);
+    const pendingKey = mocks.queryOptions?.queryKey;
+
+    rerender(<EntityFeed {...props} pendingTopicFollows={false} />);
+
+    expect(mocks.queryOptions?.queryKey).not.toEqual(pendingKey);
+  });
+});
+
+// The CDN ignores cookies, so only the plain signed-out first Best page may use the cacheable URL.
+describe('EntityFeed cacheable first page', () => {
+  function renderFeed(props: Partial<React.ComponentProps<typeof EntityFeed>> = {}) {
+    return render(
+      <EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showSortFilter cdnFirstPage {...props} />
+    );
+  }
+
+  it('uses the public URL for a signed-out reader, matching the preload exactly', async () => {
+    renderFeed();
+
+    expect(await requestedUrl()).toBe(PUBLIC_BEST_FEED_PATH);
+  });
+
+  it('keeps the personal URL when a wallet cookie is present', async () => {
+    renderFeed({ walletAddress: '0xabc' });
+
+    expect(await requestedUrl()).toBe('/api/explore/feed?sort=best');
+  });
+
+  it('keeps the personal URL once a smart account has resolved', async () => {
+    mocks.accountAddress = '0xabc';
+    renderFeed();
+
+    expect(await requestedUrl()).toBe('/api/explore/feed?sort=best');
+  });
+
+  it('keeps the personal URL for other sorts', async () => {
+    renderFeed({ initialSort: 'new' });
+
+    expect(await requestedUrl()).not.toContain('public=');
+  });
+
+  it('stays off unless the feed opts in', async () => {
+    renderFeed({ cdnFirstPage: false });
+
+    expect(await requestedUrl()).toBe('/api/explore/feed?sort=best');
+  });
+
+  it('never marks a later page, a filter or a scoped feed', () => {
+    const base = {
+      sort: 'best' as const,
+      time: undefined,
+      spaceIds: [],
+      typeIds: undefined,
+      topicIds: [],
+      followedTopicIds: [],
+      fixedParams: {},
+      cursor: undefined,
+      anonymous: true,
+    };
+    expect(buildFeedQuery(base)).toBe('sort=best&public=1');
+    expect(buildFeedQuery({ ...base, cursor: 'abc' })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, typeIds: ['a'] })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, spaceIds: ['a'] })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, time: 'month' })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, fixedParams: { topicId: 't' } })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, sort: 'top' })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, anonymous: false })).toBe('sort=best');
+  });
+});
+
+// A signed-in reader's own Best page takes most of a second to build, so it paints from the public
+// page the route preloaded, and the swap keeps the playing lead on top.
+describe('EntityFeed signed-in first paint', () => {
+  const ADDRESS = '0x00000000000000000000000000000000000000aa';
+
+  function renderFeed(props: Partial<React.ComponentProps<typeof EntityFeed>> = {}) {
+    return render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="best"
+        showSortFilter
+        cdnFirstPage
+        walletAddress={ADDRESS}
+        {...props}
+      />
+    );
+  }
+
+  type Placeholder = (previous: unknown, previousQuery: { queryKey: unknown[] } | undefined) => unknown;
+
+  it('fetches the public page from the preloaded URL', async () => {
+    renderFeed();
+    expect(mocks.publicQueryOptions?.enabled).toBe(true);
+
+    await (mocks.publicQueryOptions?.queryFn as () => Promise<unknown>)();
+    expect(mocks.fetch.mock.calls.at(-1)?.[0]).toBe(PUBLIC_BEST_FEED_PATH);
+    expect(mocks.fetch.mock.calls.at(-1)?.[1]).toEqual({ credentials: 'include' });
+  });
+
+  it('shows the public page while the personal one loads', () => {
+    const publicPage = { items: [], nextCursor: 'p' };
+    mocks.publicPage = publicPage;
+    renderFeed();
+
+    const placeholderData = mocks.queryOptions?.placeholderData as Placeholder;
+    expect(placeholderData(undefined, undefined)).toEqual({ pages: [publicPage], pageParams: [undefined] });
+  });
+
+  it('prefers the previous account’s cards when only the account changed', () => {
+    mocks.publicPage = { items: [] };
+    renderFeed();
+
+    const placeholderData = mocks.queryOptions?.placeholderData as Placeholder;
+    const key = mocks.queryOptions?.queryKey as unknown[];
+    const previous = { pages: [] };
+    expect(placeholderData(previous, { queryKey: [...key.slice(0, -1), null] })).toBe(previous);
+  });
+
+  it('is off for a signed-out reader, who fetches the public page directly', () => {
+    mocks.publicPage = { items: [] };
+    renderFeed({ walletAddress: null });
+
+    expect(mocks.publicQueryOptions?.enabled).toBe(false);
+    expect((mocks.queryOptions?.placeholderData as Placeholder)(undefined, undefined)).toBeUndefined();
+  });
+
+  it('is off for other sorts and unless the feed opts in', () => {
+    renderFeed({ initialSort: 'new' });
+    expect(mocks.publicQueryOptions?.enabled).toBe(false);
+    cleanup();
+
+    renderFeed({ cdnFirstPage: false });
+    expect(mocks.publicQueryOptions?.enabled).toBe(false);
+  });
+
+  it('pins the placeholder’s lead on top of the personal page', () => {
+    const card = (entityId: string) => ({ entityId, spaceId: 's', name: entityId });
+    mocks.publicPage = { items: [card('lead'), card('b')] };
+    mocks.pages = [mocks.publicPage];
+    mocks.isPlaceholderData = true;
+    const { rerender } = renderFeed();
+
+    mocks.pages = [{ items: [card('member'), card('b'), card('lead')] }];
+    mocks.isPlaceholderData = false;
+    rerender(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="best"
+        showSortFilter
+        cdnFirstPage
+        walletAddress={ADDRESS}
+      />
+    );
+    expect([1, 2, 3].map(position => mocks.itemAt[position]?.entityId)).toEqual(['lead', 'member', 'b']);
+  });
+});
+
+describe('leadFirst', () => {
+  const items = [{ entityId: 'a' }, { entityId: 'b' }, { entityId: 'c' }];
+
+  it('moves the lead to the front, keeping the rest in order', () => {
+    expect(leadFirst(items, 'c').map(i => i.entityId)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('leaves the list alone when the lead is absent, already first, or unset', () => {
+    expect(leadFirst(items, 'z')).toBe(items);
+    expect(leadFirst(items, 'a')).toBe(items);
+    expect(leadFirst(items, null)).toBe(items);
   });
 });

@@ -35,7 +35,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => <div data-testid="avatar" /> }));
 
-vi.mock('~/core/claims/browse/use-claim-response-state', () => ({
+vi.mock('~/core/claims/browse/use-claim-response-state', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/claims/browse/use-claim-response-state')>()),
   useClaimResponseState: () => ({
     responseKind: mocks.responseKind,
     isResponseKindResolved: true,
@@ -109,6 +110,10 @@ function claim(overrides: Partial<TimedClaim> = {}): TimedClaim {
     spaceId: CLAIM_SPACE,
     blockId: 'block-1',
     publishedTiming: null,
+    highlightScore: null,
+    relevanceScore: null,
+    qualityScore: null,
+    controversyScore: null,
     relationEntityId: 'relation-1',
     restated: false,
     timing: { startMs: 134_600, endMs: 143_140, confidence: 1, source: 'published' },

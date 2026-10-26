@@ -21,7 +21,16 @@ import * as React from 'react';
 export function useNearViewport({
   rootMargin = '800px',
   sticky = true,
-}: { rootMargin?: string; sticky?: boolean } = {}) {
+  rootSelector,
+}: {
+  rootMargin?: string;
+  sticky?: boolean;
+  /**
+   * The scroll container to measure against, found from the element, as in
+   * `useInfiniteScrollSentinel`. A selector that matches nothing falls back to the viewport.
+   */
+  rootSelector?: string;
+} = {}) {
   const [container, setContainer] = React.useState<HTMLElement | null>(null);
   const [nearViewport, setNearViewport] = React.useState(false);
 
@@ -50,11 +59,11 @@ export function useNearViewport({
           observer.disconnect();
         }
       },
-      { rootMargin }
+      { root: rootSelector ? container.closest(rootSelector) : null, rootMargin }
     );
     observer.observe(container);
     return () => observer.disconnect();
-  }, [container, rootMargin, sticky]);
+  }, [container, rootMargin, rootSelector, sticky]);
 
   /** The watched element, its callback ref, and whether it is currently/has ever been in range. */
   return { element: container, ref: setContainer, nearViewport };

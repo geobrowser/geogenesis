@@ -2,18 +2,24 @@
 
 import * as React from 'react';
 
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+
 import { Avatar } from '~/design-system/avatar';
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 import type { DebateChallenge, DebateParticipantSummary } from './api';
+import { debateChallengeMediaSessionKey } from './media-session';
+import type { DebateJoinChoice, DebateJoinState } from './request-join-state';
+import { DebateRequestMediaPreview } from './request-media-preview';
 import { useScrollLock } from './use-scroll-lock';
 
 type DebateChallengeDialogProps = {
   challenge: DebateChallenge;
   busy: boolean;
   error: string | null;
-  onAccept: () => void;
+  /** Called with the state the card shows, which can run ahead of the devices still opening. */
+  onAccept: (chosen: DebateJoinChoice) => void;
   /** Rejects the challenge for good. */
   onReject: () => void;
   /** Closes this popup and nothing else. The challenge stays live in the hub's Requests tab. */
@@ -44,6 +50,23 @@ export function DebateChallengeDialog({
 
   useScrollLock();
 
+  const shownJoinState = React.useRef<DebateJoinState>({ micOn: false, cameraOn: false });
+  const rememberShownJoinState = React.useCallback((state: DebateJoinState) => {
+    shownJoinState.current = state;
+  }, []);
+
+  /*
+   * Deliberately no hand-off here, unlike `DebateRequestDialog`.
+   *
+   * Accepting a challenge does not lead to a room: it drops both people into the claim picker,
+   * which has no media surface of its own — it reads this session only to choose devices, and opens
+   * its own `getUserMedia` for voice. Nothing calls `beginSession` on that route, so devices held
+   * open here would stay open, unowned and with nothing on screen to explain the camera light,
+   * until the debate room finally claims the session and stops them.
+   *
+   * So this card always releases on the way out, and what cannot be obtained later without
+   * interrupting a call — the permission itself — stays granted for the pre-join screen to use.
+   */
   return (
     <div className="max-sm:items-end max-sm:p-0 fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm">
       <section
@@ -60,8 +83,14 @@ export function DebateChallengeDialog({
           </h2>
         </header>
 
-        <div className="grid h-24 grid-cols-[1fr_auto_1fr] items-center rounded-lg border border-grey-02 bg-white">
-          <ChallengeParticipant participant={you} label="You" />
+        <div className="grid min-h-24 grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg border border-grey-02 bg-white p-3">
+          <DebateRequestMediaPreview
+            sessionKey={debateChallengeMediaSessionKey(challenge.id)}
+            avatarCid={you.avatar_cid}
+            avatarValue={you.profile_space_id}
+            fallback={<ChallengeParticipant participant={you} label="You" />}
+            onJoinStateChange={rememberShownJoinState}
+          />
           <div className="relative grid w-7 place-items-center">
             <span
               aria-hidden="true"
@@ -86,11 +115,18 @@ export function DebateChallengeDialog({
               type="button"
               onClick={onNotNow}
               disabled={busy}
+              {...debateActionAnalyticsAttributes('challenge-dialog', 'Not now')}
               className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
             >
               Not now
             </button>
-            <button type="button" onClick={onAccept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+            <button
+              type="button"
+              onClick={() => onAccept(shownJoinState.current)}
+              disabled={busy}
+              {...debateActionAnalyticsAttributes('challenge-dialog', 'Explore claims')}
+              className={DIALOG_ACTION_BUTTON_CLASS_NAME}
+            >
               Explore claims
             </button>
           </div>
@@ -98,6 +134,7 @@ export function DebateChallengeDialog({
             type="button"
             onClick={onReject}
             disabled={busy}
+            {...debateActionAnalyticsAttributes('challenge-dialog', 'Reject')}
             className="mx-auto -mt-3 px-4 py-1 text-metadata text-grey-04 underline hover:text-text disabled:opacity-50"
           >
             Reject request

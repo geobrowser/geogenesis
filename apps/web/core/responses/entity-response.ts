@@ -91,6 +91,12 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
 export const RESPONSE_CONFIRMING_COPY = 'Response submitted. Waiting for confirmation.';
 
 /**
+ * A signed-out vote kept on this device until it is saved with an account (GEO-3214). One sentence
+ * for the pills and the arrows alike, for the same reason as the line above.
+ */
+export const RESPONSE_LOCAL_ONLY_COPY = 'Only on this device. Save it to count.';
+
+/**
  * Whether the viewer's response is still on its way to the bundler — the only part of a write the
  * UI waits on (GEO-2889).
  *
@@ -173,7 +179,9 @@ export function getEntityResponseKind({ isClaim }: { isClaim: boolean }): Respon
  * the Types relation is read across every space the entity lives in, which is what lets a claim
  * collected into another space still draw the claim controls.
  */
-export function resolveEntityResponseKind(entity: Pick<Entity, 'relations' | 'values'> | null | undefined): ResponseKind {
+export function resolveEntityResponseKind(
+  entity: Pick<Entity, 'relations' | 'values'> | null | undefined
+): ResponseKind {
   const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
 
   const isClaim = activeRelations.some(
@@ -220,6 +228,47 @@ export function responseKindToVoteKind(kind: ResponseKind): ResponseVoteKind {
 
 export function getResponseActionMethod(kind: ResponseKind, direction: ResponseDirection): ResponseActionMethod {
   return RESPONSE_ACTION_METHOD[kind][direction];
+}
+
+/**
+ * The fields every vote's analytics carries: which way, how it changed the viewer's side, and the
+ * vocabulary it was cast in (`response_action`: agree/disagree, upvote/downvote).
+ *
+ * One builder for a vote published from an account and a vote kept on the device before sign-up
+ * (GEO-3243), so the two can be compared field for field. They drifted once: device votes carried
+ * `vote_direction` alone, and read as blank to anything that splits votes by `response_action`.
+ */
+export function voteOutcomeProperties({
+  responseKind,
+  direction,
+  previousResponse,
+  entityId,
+  spaceId,
+}: {
+  responseKind: ResponseKind;
+  direction: ResponseDirection;
+  /** The side held before this vote, or none. */
+  previousResponse: ActiveResponseDirection | null | undefined;
+  entityId: string;
+  spaceId: string;
+}) {
+  const previousDirection =
+    previousResponse === 'positive' ? 'up' : previousResponse === 'negative' ? 'down' : undefined;
+  const voteDirection = direction === 'positive' ? 'up' : direction === 'negative' ? 'down' : 'none';
+  const voteAction =
+    direction === 'clear' ? 'remove' : previousDirection && previousDirection !== voteDirection ? 'switch' : 'cast';
+  return {
+    vote_direction: voteDirection,
+    vote_kind: voteDirection,
+    mutation_kind: voteAction,
+    vote_action: voteAction,
+    previous_vote_direction: previousDirection,
+    response_kind: responseKind,
+    response_action: getResponseActionMethod(responseKind, direction),
+    entity_id: entityId,
+    space_id: spaceId,
+    object_type: 0,
+  };
 }
 
 export function decodeActiveResponseDirection(voteType: unknown): ActiveResponseDirection | null {

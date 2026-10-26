@@ -15,6 +15,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'debateDeviceSwitchRecording',
+    label: 'Debate recording: device switching experiment',
+    description:
+      'Record through canvas and Web Audio to follow device changes. Pending iPhone and background-tab validation (GEO-3404).',
+    enabledByDefault: false,
+  },
+  {
     id: 'debateFormatSelector',
     label: 'Debate format selector',
     description: 'Allow the first matched debater to choose a format before accepting.',
@@ -50,6 +57,40 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'lobbyHosting',
+    label: 'Debate lobbies: hosting',
+    description: 'Open a lobby or schedule one for later.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'spaceCalls',
+    label: 'Space calls',
+    description:
+      'Start a call from a space you edit, and join a space’s live call from its page (GEO-3419). Needs geo-chat with space calls.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'googleSignIn',
+    label: 'Google sign-in',
+    description:
+      'Offer Google in every sign-in prompt (GEO-3139). Google redirects, so an action queued before signing in is dropped. Google must also be enabled in the Privy dashboard.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'googleCalendar',
+    label: 'Google Calendar',
+    description:
+      'Connect Google Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Google Calendar configured.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'microsoftCalendar',
+    label: 'Outlook Calendar',
+    description:
+      'Connect Outlook Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Microsoft Calendar configured.',
+    enabledByDefault: false,
+  },
+  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
@@ -60,10 +101,13 @@ export const featureFlagDefinitions = [
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
 export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // Claims and debates shipped to everyone, so `questionsTab` (and `debatesTab`, the id it was
-// renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too. All three
-// are still sitting in browsers' stored flag objects; normalizing drops them on the next write
-// rather than reading them back.
-type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability', boolean>>;
+// renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too, nor
+// `lobbyJoining`, since finding and joining lobbies did (GEO-3306), nor `debateVideo`, since video in
+// the claim picker and lobbies did (GEO-3414). All of them are still sitting in browsers' stored flag
+// objects; normalizing drops them on the next write rather than reading them back.
+type StoredFeatureFlags = Partial<
+  Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability' | 'lobbyJoining' | 'debateVideo', boolean>
+>;
 
 /**
  * Both of these are derived from the definitions above rather than written out beside them.

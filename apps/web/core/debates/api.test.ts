@@ -8,10 +8,13 @@ import {
   blockDebateUser,
   clearClaimNotInterested,
   completeLocalRecordingUpload,
+  connectCalendar,
   createDebateRequest,
   createScheduledDebate,
+  disconnectCalendar,
   dismissDebateRequest,
   endDebateTurn,
+  getCalendarBusy,
   getDebateActivity,
   getGeoChatSession,
   getRematchLiveKitToken,
@@ -19,13 +22,18 @@ import {
   isAccountWarmingUp,
   joinDebateQueue,
   listDebateClaims,
+  listDebateLobbies,
+  listDebateLobbyCalendar,
   listDebatePeople,
   listMatchmakingClaims,
   listNotInterestedClaims,
+  listUpcomingDebateRooms,
   markClaimNotInterested,
   notifyClaimResponseIndexed,
+  refreshCalendar,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
+  saveOpenRoundPick,
   unhideDebate,
   updateDebateAvailability,
 } from './api';
@@ -199,6 +207,125 @@ describe('debate availability', () => {
         },
         body: JSON.stringify({ available_to_debate: false }),
       })
+    );
+  });
+});
+
+describe('upcoming debate rooms', () => {
+  it('asks for reminded lobbies alongside debate rooms', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ rooms: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+
+    await listUpcomingDebateRooms(vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/me/debate-rooms?include=lobbies', expect.anything());
+  });
+});
+
+// GEO-3300. The calendar's week reads geo-chat's date range (GEO-3271).
+describe('calendar', () => {
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+
+  it('connects with the return URL and the browser-binding cookie', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(json({ authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth?x=1' }));
+    vi.stubGlobal('fetch', fetch);
+
+    const result = await connectCalendar('google', 'https://www.geobrowser.io/space/abc?tab=x', vi.fn(), 'user-a');
+
+    expect(result.authorization_url).toBe('https://accounts.google.com/o/oauth2/v2/auth?x=1');
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe('http://localhost:8080/me/calendar/google/connect');
+    expect(init).toMatchObject({ method: 'POST', credentials: 'include' });
+    expect(JSON.parse(init.body)).toEqual({ return_to: 'https://www.geobrowser.io/space/abc?tab=x' });
+  });
+
+  it('surfaces a refresh refusal with its code and Retry-After', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'rate_limited', message: 'Slow down' } }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json', 'Retry-After': '30' },
+        })
+      )
+    );
+
+    const error = await refreshCalendar('google', vi.fn(), 'user-a').catch(caught => caught);
+
+    expect(error).toBeInstanceOf(GeoChatRequestError);
+    expect(error).toMatchObject({ status: 429, code: 'rate_limited', retryAfterMs: 30_000 });
+  });
+
+  it('disconnects with a DELETE that answers no body', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(disconnectCalendar('google', vi.fn(), 'user-a')).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/me/calendar/google',
+      expect.objectContaining({ method: 'DELETE' })
+    );
+  });
+
+  it('puts the provider in each Outlook route', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json({ authorization_url: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize' })
+      )
+      .mockResolvedValueOnce(json({ google: null, microsoft: null }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetch);
+
+    await connectCalendar('microsoft', 'https://www.geobrowser.io/', vi.fn(), 'user-a');
+    await refreshCalendar('microsoft', vi.fn(), 'user-a');
+    await disconnectCalendar('microsoft', vi.fn(), 'user-a');
+
+    expect(fetch.mock.calls.map(([url, init]) => [url, init.method])).toEqual([
+      ['http://localhost:8080/me/calendar/microsoft/connect', 'POST'],
+      ['http://localhost:8080/me/calendar/microsoft/refresh', 'POST'],
+      ['http://localhost:8080/me/calendar/microsoft', 'DELETE'],
+    ]);
+  });
+
+  it('asks for busy time with encoded bounds', async () => {
+    const fetch = vi.fn().mockResolvedValue(json({ intervals: [] }));
+    vi.stubGlobal('fetch', fetch);
+
+    await getCalendarBusy({ from: '2026-10-19T04:00:00.000Z', to: '2026-12-19T04:00:00.000Z' }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/me/calendar-busy?from=2026-10-19T04%3A00%3A00.000Z&to=2026-12-19T04%3A00%3A00.000Z',
+      expect.anything()
+    );
+  });
+});
+
+describe('debate lobby calendar', () => {
+  it('asks for the week as RFC 3339 bounds, encoded', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ lobbies: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+
+    await listDebateLobbyCalendar(
+      { from: new Date('2026-10-11T07:00:00Z'), to: new Date('2026-10-18T07:00:00Z') },
+      vi.fn(),
+      'user-a'
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debate-lobbies/calendar?from=2026-10-11T07%3A00%3A00.000Z&to=2026-10-18T07%3A00%3A00.000Z',
+      expect.anything()
     );
   });
 });
@@ -503,6 +630,40 @@ describe('matchmaking read authentication', () => {
   });
 });
 
+// GEO-3289 (geo-chat GEO-3291): the lobby list opens to signed-out visitors the same way.
+describe('lobby list authentication', () => {
+  beforeEach(() => {
+    resetGeoChatSession();
+    window.localStorage.removeItem('geo:chat-session');
+  });
+
+  it('lists lobbies anonymously when nobody is signed in', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ lobbies: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn();
+
+    await expect(listDebateLobbies(getPrivyIdentityToken, null)).resolves.toEqual({ lobbies: [] });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/debate-lobbies'),
+      expect.objectContaining({ headers: {} })
+    );
+    expect(getPrivyIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('does not downgrade a signed-in lobby list to anonymous when the token exchange fails', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
+
+    await expect(listDebateLobbies(getPrivyIdentityToken, 'user-a')).rejects.toThrow('Identity token unavailable');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('debate claim hydration authentication', () => {
   it('does not silently downgrade a signed-in claim request to anonymous access', async () => {
     resetGeoChatSession();
@@ -769,6 +930,50 @@ describe('turn yields', () => {
         body: JSON.stringify({ ended_at_ms: 1_784_542_272_505 }),
       })
     );
+  });
+});
+
+describe('open round picks (GEO-3175)', () => {
+  it('puts the pick to the addressed round and returns the debate built for the caller', async () => {
+    const debate = { id: 'debate-1', status: 'in_progress', open_rounds: { round_index: 0, my_pick: 'extend' } };
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(debate), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(saveOpenRoundPick('debate-1', 0, 'extend', vi.fn(), 'user-a')).resolves.toEqual(debate);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debates/debate-1/rounds/0/pick',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: {
+          Authorization: 'Bearer access-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pick: 'extend' }),
+      })
+    );
+  });
+
+  it('surfaces the contract’s refusal codes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'round_already_resolved', message: 'Round 0 has resolved.' } }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    await expect(saveOpenRoundPick('debate-1', 0, 'end', vi.fn(), 'user-a')).rejects.toMatchObject({
+      code: 'round_already_resolved',
+      status: 409,
+    });
   });
 });
 

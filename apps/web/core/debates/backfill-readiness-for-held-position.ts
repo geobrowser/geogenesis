@@ -1,11 +1,14 @@
 'use client';
 
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 
 import { type MatchmakingReadiness, notifyClaimResponseIndexed } from './api';
+import { readinessQueryPrefixes } from './claim-response-indexed-notifier';
 import { useGeoChatAuth } from './hooks';
 
 /**
@@ -26,6 +29,24 @@ export function trustedIndexedPosition(
 
 /** Keeps a session from re-sending for the same claim, and from growing without bound. */
 const MAX_TRACKED = 256;
+
+/** Backfills settling together in one space refresh its readiness reads once. */
+const REFRESH_COALESCE_MS = 250;
+const pendingRefreshes = new WeakMap<QueryClient, Set<string>>();
+
+function scheduleReadinessRefresh(queryClient: QueryClient, accountKey: string, spaceId: string) {
+  const key = `${accountKey}:${spaceId}`;
+  let pending = pendingRefreshes.get(queryClient);
+  if (!pending) pendingRefreshes.set(queryClient, (pending = new Set()));
+  if (pending.has(key)) return;
+  pending.add(key);
+  setTimeout(() => {
+    pending.delete(key);
+    for (const queryKey of readinessQueryPrefixes(accountKey, spaceId)) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
+  }, REFRESH_COALESCE_MS);
+}
 
 /**
  * Tells geo-chat about a position the viewer already holds, so readiness catches up.
@@ -55,8 +76,9 @@ const MAX_TRACKED = 256;
  * can. Without this a viewer who withdrew and re-answered, and whose re-answer's notification never
  * landed, holds a position every surface draws and cannot send a request on it (`intent_missing`).
  *
- * Once per claim per session, and it stops firing as soon as the write lands, because the next
- * read reports `viewer_debate_ready`. The endpoint is rate limited per user/space/claim besides.
+ * Once per claim per session unless it fails, and it stops firing as soon as the write lands,
+ * because the readiness reads it then refetches report `viewer_debate_ready`. The endpoint is rate
+ * limited per user/space/claim besides.
  *
  * No user intent is overridden: `user_disabled` rows were flipped by migration 0038, and with the
  * toggle gone there is no way to be deliberately not-ready on a claim you hold a position on.
@@ -94,6 +116,7 @@ export function useBackfillReadinessForHeldPosition({
   indexedPosition?: boolean | null;
 }) {
   const { ready, authenticated, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const queryClient = useQueryClient();
   const sent = React.useRef(new Set<string>());
   const sentOrder = React.useRef<string[]>([]);
 
@@ -125,9 +148,8 @@ export function useBackfillReadinessForHeldPosition({
     }
 
     const controller = new AbortController();
-    // Nothing on screen depends on the outcome: the row already renders the position, and readiness
-    // is not drawn any more. A failure means the next visit tries again, which is the right amount
-    // of effort for a backfill.
+    // Readiness gates requests, so the reads that draw it refetch once the write lands. A failure
+    // frees the key: the next change to this claim's readiness tries again.
     void notifyClaimResponseIndexed(
       spaceId,
       entityId,
@@ -136,7 +158,12 @@ export function useBackfillReadinessForHeldPosition({
       getPrivyIdentityToken,
       accountKey,
       controller.signal
-    ).catch(() => {});
+    ).then(
+      () => scheduleReadinessRefresh(queryClient, accountKey, spaceId),
+      () => {
+        sent.current.delete(key);
+      }
+    );
 
     return () => controller.abort();
   }, [
@@ -147,6 +174,7 @@ export function useBackfillReadinessForHeldPosition({
     getPrivyIdentityToken,
     hasReadiness,
     position,
+    queryClient,
     ready,
     retaken,
     spaceId,

@@ -7,6 +7,8 @@ import { Pending } from '~/design-system/pending';
 
 type ExploreJoinSpaceButtonProps = {
   spaceId: string;
+  /** Shown on the pending-membership entry and sent with the join conversion. */
+  spaceName?: string;
   hasRequestedSpaceMembership: boolean;
   /**
    * Render style.
@@ -21,11 +23,16 @@ type ExploreJoinSpaceButtonProps = {
 
 export function ExploreJoinSpaceButton({
   spaceId,
+  spaceName,
   hasRequestedSpaceMembership,
   variant = 'text',
   label = 'Join space',
 }: ExploreJoinSpaceButtonProps) {
-  const { join: handleJoin, status, optimisticRequested } = useJoinSpace({ spaceId });
+  const {
+    join: handleJoin,
+    status,
+    optimisticRequested,
+  } = useJoinSpace({ spaceId, space: spaceName ? { name: spaceName } : undefined });
 
   // Durable + persisted pending state so a request made anywhere (space page,
   // the "Join spaces" pills) flips every card for this space to "Membership

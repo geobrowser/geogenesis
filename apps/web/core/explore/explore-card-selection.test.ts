@@ -39,7 +39,7 @@ describe('documents built from it', () => {
     await expect(import('./explore-entities-document')).resolves.toBeDefined();
     await expect(import('./explore-best-by-type-document')).resolves.toBeDefined();
     await expect(import('./explore-entities-by-property-document')).resolves.toBeDefined();
-    await expect(import('./explore-complete-index-document')).resolves.toBeDefined();
+    await expect(import('./explore-topic-feed-document')).resolves.toBeDefined();
     await expect(import('./fetch-explore-feed')).resolves.toBeDefined();
   });
 });

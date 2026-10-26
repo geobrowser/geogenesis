@@ -64,6 +64,8 @@ const CANONICAL_OUTCOME_FIELDS = new Set([
   'object_type',
   'user_operation_hash',
   'vote_id',
+  'local_vote_count',
+  'drop_reason',
   'winner_id',
   'previous_winner_id',
   'ranking_id',
@@ -99,6 +101,18 @@ export function snapshotAnalyticsRevision(): () => boolean {
   };
   const contextRevision = readRevision();
   return () => readRevision() === contextRevision;
+}
+
+/**
+ * GEO-3311. The lobby fields of the attribution, which the detail events (`vote_cast`) carry as well,
+ * so a vote in a lobby or in answer to its room vote counts without a join through `operation_id`.
+ */
+function lobbyAttribution(attribution: ActionContext | undefined) {
+  if (!attribution?.lobby_id) return {};
+  return {
+    lobby_id: attribution.lobby_id,
+    ...(attribution.room_vote_id ? { room_vote_id: attribution.room_vote_id } : {}),
+  };
 }
 
 /** One logical client attempt; transport retries reuse the SDK's immutable event ID. */
@@ -140,7 +154,7 @@ export function observeOperation(
               auth_attempt_id: attribution?.auth_attempt_id ?? authAttempt?.id,
               action_context_version: 'v1',
             }
-          : {}),
+          : lobbyAttribution(attribution)),
       });
     } catch {
       /* Never fail a product action. */

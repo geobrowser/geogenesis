@@ -60,9 +60,15 @@ describe('FeatureFlagsDialog', () => {
         playbackDiagnostics: false,
         debugDebatesPage: true,
         debateDebugging: true,
+        debateDeviceSwitchRecording: false,
         debateFormatSelector: true,
         exploreSidePanel: false,
         forYouFeed: false,
+        lobbyHosting: false,
+        spaceCalls: false,
+        googleSignIn: false,
+        googleCalendar: false,
+        microsoftCalendar: false,
         bountiesTab: true,
       });
     });
