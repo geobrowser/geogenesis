@@ -172,8 +172,12 @@ export function MatchesList({
    * beside it.
    */
   const passesSpace = React.useCallback(
-    (match: MatchmakingMatch) => spaceIds.length === 0 || spaceIds.includes(match.claim.space_id),
-    [spaceIds]
+    // The panel's picks are AND (GEO-3463); a match sits in one space, so it has to be every one picked.
+    // Full screen keeps "any of these".
+    (match: MatchmakingMatch) =>
+      spaceIds.length === 0 ||
+      (panelMode ? spaceIds.every(id => id === match.claim.space_id) : spaceIds.includes(match.claim.space_id)),
+    [panelMode, spaceIds]
   );
   const passesTopics = React.useCallback(
     (match: MatchmakingMatch) =>

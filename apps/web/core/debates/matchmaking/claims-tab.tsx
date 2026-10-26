@@ -12,6 +12,7 @@ import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sent
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { normId } from '~/core/utils/norm-id';
 
 import { Input } from '~/design-system/input';
 
@@ -526,8 +527,19 @@ export function ClaimsTab({
       eligibleSpaceIds,
       excludeAnsweredBy,
       order: panelFilters?.graphOrder,
+      // In the panel spaces narrow like topics, AND, with the pills counting co-occurrence — the
+      // debate again picker's arrangement (GEO-3223). Full screen keeps "any of these".
+      spaceMatch: panelMode ? 'all' : undefined,
     }),
-    [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, excludeAnsweredBy, panelFilters?.graphOrder, spaceIds]
+    [
+      debouncedSearch,
+      debouncedTopicIds,
+      eligibleSpaceIds,
+      excludeAnsweredBy,
+      panelFilters?.graphOrder,
+      panelMode,
+      spaceIds,
+    ]
   );
 
   // Held while the space gates are still resolving: they pass everything until they land, so asking
@@ -713,7 +725,10 @@ export function ClaimsTab({
     // panel and reopening it would re-seed the member spaces over a filter the viewer had cleared
     // on purpose — deciding they meant something other than what they asked for, which is the one
     // thing GEO-2789 says a default must never do.
-    seedSpent: spaceSeedSpent,
+    //
+    // The panel never seeds (GEO-3463): every pick there narrows (AND), so a default of all the
+    // viewer's spaces would be a filter nobody set that empties the list. It opens on All.
+    seedSpent: panelMode || spaceSeedSpent,
     onSeedSpend: () => setSpaceSeedSpent(true),
   });
 
@@ -879,9 +894,15 @@ export function ClaimsTab({
     clientSort === 'best' || clientSort === 'newest'
   );
   const visibleClaims = React.useMemo(() => {
-    const kept = keepClaim ? collapsedClaims.filter(keepClaim) : collapsedClaims;
+    // geo-chat's lists take spaces as "any of these", and each of their rows sits in one space. The
+    // panel's picks are AND, so a row has to be in every one picked.
+    const inEverySpace =
+      panelMode && !graphSourced && spaceIds.length > 1
+        ? collapsedClaims.filter(entry => spaceIds.every(id => normId(id) === normId(entry.claim.space_id)))
+        : collapsedClaims;
+    const kept = keepClaim ? inEverySpace.filter(keepClaim) : inEverySpace;
     return clientSort ? sortClaimRows(kept, clientSort, orderFacts) : kept;
-  }, [clientSort, collapsedClaims, keepClaim, orderFacts]);
+  }, [clientSort, collapsedClaims, graphSourced, keepClaim, orderFacts, panelMode, spaceIds]);
 
   // The topic menu, from the server's count over the tag. It describes every claim the current
   // filters allow rather than the pages loaded so far — which is what a client-side version could
@@ -1148,6 +1169,8 @@ export function ClaimsTab({
             onSpacesClear={onSpacesClear}
             onTopicIdsChange={setTopicIds}
             listedCount={hasNextPage ? 0 : visibleClaims.length}
+            // A tagged claim can sit in several spaces, so the others stay on offer after a pick.
+            spacesAreExclusive={!graphSourced}
             resultCount={hasNextPage ? null : visibleClaims.length}
             countsPending={!keepClaim && countsPending}
           />

@@ -14,6 +14,7 @@ import {
   debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubHideMyPositionsAtom,
+  debatesHubPositionsSpaceIdsAtom,
   lobbyExploreSearchAtom,
 } from '~/atoms';
 
@@ -2929,5 +2930,34 @@ describe('in the side panel', () => {
     render(<ClaimsTab variant="positions" atomsFrom="explore" panelFilters={panelFilters()} />, store);
 
     expect(screen.getByRole('textbox', { name: 'Search claims' })).toHaveValue('nuclear');
+  });
+  // 26 Oct (Preston): spaces and topics share the pill row, so both narrow (AND), and the panel opens
+  // on All rather than on the viewer's own spaces.
+  it('opens on All rather than seeding the viewer’s spaces', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    // What the seed is drawn from: claims in both spaces, and the facet naming them.
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.sidebarData = sidebarData();
+    mocks.claims = [
+      claim('claim-a', 'One space', false, false, SPACE_ID, []),
+      claim('claim-b', 'The other space', false, false, OTHER_SPACE_ID, []),
+    ];
+    const view = renderMine(<ClaimsTab variant="positions" panelFilters={panelFilters()} />);
+    await showIndexedClaims();
+
+    // The full-screen list narrows to the member space here ("opens on the spaces the viewer belongs
+    // to"); past the selection's debounce, the panel's is still every eligible space.
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect(view.store.get(debatesHubPositionsSpaceIdsAtom)).toEqual([]);
+    expect(mocks.lastQuery).not.toMatchObject({ spaceIds: [SPACE_ID] });
+  });
+
+  it('asks the graph for claims in every picked space, not any', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    render(<ClaimsTab panelFilters={panelFilters()} />);
+    await showAllClaims();
+
+    expect(mocks.taggedFiltersAskedFor.at(-1)).toMatchObject({ spaceMatch: 'all' });
   });
 });

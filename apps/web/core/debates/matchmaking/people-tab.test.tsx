@@ -528,7 +528,9 @@ describe('PeopleTab', () => {
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.queryByText(/matches?/)).not.toBeInTheDocument();
+    // Arturas is the viewer here (`currentUserId`). Other rows may say "No matches"; this one says nothing.
+    const viewerRow = screen.getByText('Arturas').closest('li') as HTMLElement;
+    expect(within(viewerRow).queryByText(/matches?/)).not.toBeInTheDocument();
   });
 
   it('sorts the people with the most matches first and preserves roster order for ties', () => {
@@ -2404,12 +2406,14 @@ describe('panel row (GEO-3463)', () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   });
 
-  it('gives an online person their matches and Debate now, and one with none "Online now"', () => {
+  // 26 Oct: the green dot says "online", so the line is the matches — "No matches" when there are none.
+  it('gives an online person their matches and Debate now, and one with none "No matches"', () => {
     oneMatchWithArturas();
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(within(fact('Arturas')).getByRole('button', { name: 'View 1 matching claim with Arturas' })).toBeVisible();
-    expect(fact('Vytautas')).toHaveTextContent('Online now');
+    expect(fact('Vytautas')).toHaveTextContent('No matches');
+    expect(fact('Vytautas')).not.toHaveTextContent('Online now');
     expect(within(rowOf('Arturas')).getByRole('button', { name: 'Debate now' })).toBeEnabled();
     // The record moved into the hover card: the row itself carries one fact.
     expect(within(rowOf('Arturas')).queryByText(/On Geo since/)).not.toBeInTheDocument();

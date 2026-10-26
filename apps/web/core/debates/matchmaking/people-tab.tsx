@@ -978,6 +978,7 @@ function PanelPersonRow({
   disabledReason,
   onRequireSignIn,
   onSeeTimes,
+  matchesBySpace,
   now = Date.now(),
 }: Omit<PersonRowProps, 'layout'>) {
   // The panel's one copy of the open ask (`HubAskProvider`), rather than a `useOutgoingAsk` per row
@@ -1049,14 +1050,16 @@ function PanelPersonRow({
       }
     />
   ) : null;
-  // The status's own fact. Online with matches needs none: the link is the useful thing to say.
+  // The status's own fact. Online needs none: the green dot on the face says it, so the line is left to
+  // the matches. With none, it says so once the comparison has answered (`matchesBySpace` is only
+  // passed then), rather than "Online now", which repeated the dot.
   const fact =
     status === 'debating'
       ? 'In a debate'
       : status === 'online'
-        ? hasMatches
+        ? hasMatches || matchesBySpace === undefined
           ? null
-          : 'Online now'
+          : 'No matches'
         : status === 'away'
           ? nextFree
             ? `Away · ${nextFree}`

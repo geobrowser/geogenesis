@@ -776,4 +776,21 @@ describe('MatchesList in the panel', () => {
     const titles = screen.getAllByText(/better than/).map(node => node.textContent);
     expect(titles).toEqual(['Tea is better than coffee', 'Chips are better than fries']);
   });
+
+  // 26 Oct (Preston): picks narrow (AND). A match sits in one space, so two picked spaces leave none.
+  it('keeps only matches in every picked space', () => {
+    const store = createStore();
+    store.set(debatesHubLobbySpaceIdsAtom, [SPACE_ID, OTHER_SPACE_ID]);
+    render(<MatchesList panelFilters={panelFilters()} />, store);
+
+    expect(screen.queryByText('Chips are better than fries')).not.toBeInTheDocument();
+  });
+
+  it('still lists matches in any picked space in full screen', () => {
+    const store = createStore();
+    store.set(debatesHubLobbySpaceIdsAtom, [SPACE_ID, OTHER_SPACE_ID]);
+    render(<MatchesList layout="workspace" />, store);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+  });
 });
