@@ -1,4 +1,5 @@
 import { uuidToHex } from '~/core/id/normalize';
+import { toHexId } from '~/core/utils/hex-id';
 import { isValidId } from '~/core/utils/space-url';
 
 export const SHARE_METHODS = ['copy_link', 'x', 'linkedin', 'reddit', 'native_share'] as const;
@@ -55,8 +56,7 @@ function hexToBase64Url(hex: string): string {
 }
 
 function base64UrlToHex(value: string): string {
-  const binary = atob(value.replace(/-/g, '+').replace(/_/g, '/'));
-  return [...binary].map(char => char.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+  return toHexId(Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), char => char.charCodeAt(0)));
 }
 
 /**
@@ -90,7 +90,7 @@ export function createShareLink(
   const url = withoutCampaign(destination);
   // The short form recovers the content ID from the path; a destination that does not end in it
   // keeps the long tags rather than losing its content.
-  if (shareUuid(lastPathSegment(url)) !== content) return { url: taggedUrl(destination, attribution), attribution };
+  if (shareUuid(lastPathSegment(url)) !== content) return { url: taggedUrl(url, attribution), attribution };
   url.searchParams.set(SHORT_SHARE_PARAM, `${METHOD_CODES[method]}${CONTENT_CODES[kind]}${hexToBase64Url(id)}`);
   return { url: url.toString(), attribution };
 }
@@ -101,10 +101,8 @@ function parseShortCode(url: URL): ShareAttribution | null {
   const method = SHARE_METHODS.find(m => METHOD_CODES[m] === match[1]);
   const kind = SHARE_CONTENT_TYPES.find(k => CONTENT_CODES[k] === match[2]);
   const content = shareUuid(lastPathSegment(url));
-  let id: string | null = null;
-  try {
-    id = shareUuid(base64UrlToHex(match[3]));
-  } catch {}
+  // SHORT_CODE admits only 22 base64url characters, which always decode to the 16 bytes of a UUID.
+  const id = shareUuid(base64UrlToHex(match[3]));
   if (!method || !kind || !content || !id) return null;
   return { share_id: id, share_content_type: kind, share_content_id: content, method };
 }

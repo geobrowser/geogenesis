@@ -4,8 +4,9 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { publishedDebatePath } from '~/core/debates/server/published-debate-path';
+import { createShareLink } from '~/core/sharing/share-link';
 
-import proxy from './proxy';
+import proxy, { config } from './proxy';
 
 vi.mock('~/core/debates/server/published-debate-path', () => ({ publishedDebatePath: vi.fn() }));
 
@@ -180,21 +181,41 @@ describe('debate recording links', () => {
 });
 
 describe('short share links (GEO-3485)', () => {
-  const CODE = 'xdIiIiIiIiQiKCIiIiIiIiIg';
+  const SHARE_ID = '22222222222242228222222222222222';
+  /** The path and query of the link a share control copies. */
+  const shared = (...args: Parameters<typeof createShareLink>) => {
+    const url = new URL(createShareLink(...args).url);
+    return url.pathname + url.search;
+  };
 
   it('redirects a short debate link to the tagged landing the warehouse reads', async () => {
-    const response = await proxy(request(`/space/${VALID_SPACE}/${VALID_ENTITY}?si=${CODE}`, { headers: NAVIGATION }));
+    const response = await proxy(
+      request(
+        shared(`https://www.geobrowser.io/space/${VALID_SPACE}/${VALID_ENTITY}`, 'debate', VALID_ENTITY, 'x', SHARE_ID),
+        { headers: NAVIGATION }
+      )
+    );
 
     expect(response.status).toBe(307);
     const landing = new URL(response.headers.get('location')!);
     expect(landing.pathname).toBe(`/space/${VALID_SPACE}/${VALID_ENTITY}`);
     expect(landing.searchParams.has('si')).toBe(false);
     expect(landing.searchParams.get('utm_source')).toBe('x');
-    expect(landing.searchParams.get('utm_content')).toBe(`v1:debate:${VALID_ENTITY}:22222222222242228222222222222222`);
+    expect(landing.searchParams.get('utm_content')).toBe(`v1:debate:${VALID_ENTITY}:${SHARE_ID}`);
   });
 
   it('redirects a short lobby link, keeping its other parameters', async () => {
-    const response = await proxy(request(`/debate/${VALID_ENTITY}?via=lobby&si=cl${CODE.slice(2)}`));
+    const response = await proxy(
+      request(
+        shared(
+          `https://www.geobrowser.io/debate/${VALID_ENTITY}?via=lobby`,
+          'lobby',
+          VALID_ENTITY,
+          'copy_link',
+          SHARE_ID
+        )
+      )
+    );
 
     expect(response.status).toBe(307);
     const landing = new URL(response.headers.get('location')!);
@@ -210,8 +231,7 @@ describe('short share links (GEO-3485)', () => {
     expect(response.headers.get('location')).toBeNull();
   });
 
-  it('only routes /debate through the proxy when it carries a short code', async () => {
-    const { config } = await import('./proxy');
+  it('only routes /debate through the proxy when it carries a short code', () => {
     expect(config.matcher).toContainEqual({ source: '/debate/:path*', has: [{ type: 'query', key: 'si' }] });
   });
 });
