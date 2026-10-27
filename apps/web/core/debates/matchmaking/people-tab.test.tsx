@@ -189,9 +189,23 @@ vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
 });
 
 // Reaches for a query client this suite does not stand up, and booking has its own coverage.
+// Booking reads room completion only when moving a scheduled request.
+vi.mock('../rooms/request-room', () => ({
+  useRequestRoom: () => ({
+    requests: { isLoading: false },
+    rooms: { isLoading: false },
+    request: undefined,
+    room: null,
+    finished: false,
+  }),
+}));
+
 vi.mock('../rooms/scheduling-hooks', () => ({
   useCreateScheduledDebate: () => mocks.propose,
   useRescheduleScheduledDebate: () => mocks.propose,
+  // The week reads these only when moving a request (GEO-3429), which the People tab never does.
+  useScheduledDebates: () => ({ data: undefined }),
+  useNoTimeWorks: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
 }));
 
 vi.mock('../use-current-geo-chat-user-id', () => ({

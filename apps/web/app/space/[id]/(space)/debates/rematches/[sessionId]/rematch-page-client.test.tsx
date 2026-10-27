@@ -22,6 +22,9 @@ import type { DebateRoomPresence, DebateRoomPresenceState } from '~/core/debates
 
 import { DebateRematchPageClient, resolveLandingTab } from './rematch-page-client';
 
+/** Where a scheduled room's Leave goes (GEO-3428). */
+const PEOPLE_TAB = '/explore?modal=debates&modalTarget=people';
+
 const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, NAME_PROPERTY } = vi.hoisted(() => ({
   SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
   SPACE_2: '019fedae-72b6-7ab2-927a-df044d57c567',
@@ -6127,14 +6130,15 @@ describe('inside a debate room', () => {
     </DebateRoomProvider>
   );
 
-  it('keeps Leave when the room exits to Explore despite a stored lobby', () => {
+  // GEO-3428: a scheduled room's Leave opens the People tab, who is free to debate now.
+  it('keeps Leave when the room exits to the People tab despite a stored lobby', () => {
     rememberLobbyReturnDestination('lobby-1');
     render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
 
     expect(screen.queryByRole('button', { name: 'Back to lobby' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
-    expect(mocks.push).toHaveBeenCalledWith('/explore');
+    expect(mocks.push).toHaveBeenCalledWith(PEOPLE_TAB);
     expect(mocks.leaveMutate).not.toHaveBeenCalled();
   });
 
@@ -6180,14 +6184,14 @@ describe('inside a debate room', () => {
       }
     );
 
-    it('leaves for Explore once confirmed', async () => {
+    it('leaves for the People tab once confirmed', async () => {
       render(withPresence('waiting', <DebateRematchPageClient sessionId="rematch-1" />));
 
       fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
       const dialog = await screen.findByRole('dialog', { name: 'Leave the room?' });
       fireEvent.click(within(dialog).getByRole('button', { name: 'Leave room' }));
 
-      expect(mocks.push).toHaveBeenCalledWith('/explore');
+      expect(mocks.push).toHaveBeenCalledWith(PEOPLE_TAB);
       expect(mocks.leaveMutate).not.toHaveBeenCalled();
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     });
@@ -6264,7 +6268,7 @@ describe('inside a debate room', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
       expect(screen.queryByRole('dialog')).toBeNull();
-      expect(mocks.push).toHaveBeenCalledWith('/explore');
+      expect(mocks.push).toHaveBeenCalledWith(PEOPLE_TAB);
     });
 
     it('labels Leave and both answers for analytics', async () => {

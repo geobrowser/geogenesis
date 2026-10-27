@@ -14,7 +14,7 @@ import {
   type ResponseKind,
   getResponseActionMethod,
 } from '~/core/responses/entity-response';
-import { clearLocalVotes, readLocalVotes, toggleLocalVote } from '~/core/state/local-votes';
+import { clearLocalVotes, readLocalVotes } from '~/core/state/local-votes';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 import { closeSaveVotesPrompt, readSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
@@ -1051,7 +1051,7 @@ describe('a side picked before the account can publish', () => {
   );
 
   // GEO-3214: a signed-out press is kept on this device, with no sign-in in the way. The sheet asks
-  // to save once there are a few; nothing reaches the queue until a save prompt signs them in.
+  // to save after the first vote; nothing reaches the queue until a save prompt signs them in.
   it('keeps a signed-out press on this device instead of opening sign-in', () => {
     mocks.isConnected = false;
     mocks.authenticated = false;
@@ -1065,8 +1065,7 @@ describe('a side picked before the account can publish', () => {
     expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveTextContent('not counted yet');
     expect(screen.getByText(/Not counted yet/)).toBeInTheDocument();
-    // One vote on a feed is not yet the ask.
-    expect(readSaveVotesPrompt()).toBeNull();
+    expect(readSaveVotesPrompt()).toBe('threshold');
   });
 
   // What the feed does on a reload: draw a fresh card for the same claim.
@@ -1108,21 +1107,15 @@ describe('a side picked before the account can publish', () => {
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('opens the save sheet on the second vote', () => {
+  it('opens the save sheet on the first vote', () => {
     mocks.isConnected = false;
     mocks.authenticated = false;
-    toggleLocalVote({
-      responseKind: 'stance',
-      entityId: 'other-claim',
-      spaceId: claim.space_id,
-      direction: 'positive',
-      title: 'Another claim',
-    });
     renderCard(signedOutCard());
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
 
     expect(readSaveVotesPrompt()).toBe('threshold');
+    expect(readLocalVotes().votes).toHaveLength(1);
   });
 
   it('opens the save sheet from the note under the pill', () => {

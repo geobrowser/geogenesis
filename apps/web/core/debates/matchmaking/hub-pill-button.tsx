@@ -109,3 +109,17 @@ export function HubPillButton({
     </button>
   );
 }
+
+/**
+ * The quiet, underlined text button beside a stack of pills: a step's way sideways (GEO-3427's
+ * "Only running late"), or back (GEO-3429's "Back to times").
+ */
+export function HubQuietButton(props: React.ComponentProps<'button'>) {
+  return (
+    <button
+      type="button"
+      className="self-center px-3 py-2 text-metadata text-text underline underline-offset-2 hover:opacity-70"
+      {...props}
+    />
+  );
+}

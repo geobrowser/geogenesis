@@ -65,11 +65,23 @@ const mocks = vi.hoisted(() => ({
   matches: [] as unknown[],
 }));
 
+// Booking reads room completion only when moving a scheduled request.
+vi.mock('../rooms/request-room', () => ({
+  useRequestRoom: () => ({
+    requests: { isLoading: false },
+    rooms: { isLoading: false },
+    request: undefined,
+    room: null,
+    finished: false,
+  }),
+}));
+
 vi.mock('../rooms/scheduling-hooks', () => ({
   useScheduledDebates: () => ({ data: mocks.scheduledRequests ? { requests: mocks.scheduledRequests } : undefined }),
   // The People tab's booking modal; booking has its own coverage.
   useCreateScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useRescheduleScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useNoTimeWorks: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
 }));
 
 // The strip, the nudge and the Requests schedule have their own suites; here it only matters that
@@ -138,6 +150,8 @@ vi.mock('../hooks', () => ({
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
+  // The People tab's week reads it when moving a request (GEO-3429); nothing here moves one.
+  usePeerSchedule: () => ({ schedule: undefined }),
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   useDebateActivity: () => ({
     data: {

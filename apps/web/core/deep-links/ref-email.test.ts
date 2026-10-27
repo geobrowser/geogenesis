@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { arrivedFromEmail, noteEmailArrival, readRefEmail } from './ref-email';
+import { arrivedFromEmail, noteEmailArrival, readEmailClick, readRefEmail } from './ref-email';
 
 const params = (search: string) => new URLSearchParams(search);
+
+const SEND = '3b0c2c8e-9a51-4d7e-8f43-2f1c6a0d9e11';
 
 describe('readRefEmail', () => {
   it('keeps a slug and drops anything that could carry text or an address', () => {
@@ -29,5 +31,18 @@ describe('email arrival', () => {
 
   it('answers from the URL itself before anything has noted it', () => {
     expect(arrivedFromEmail('?ref_email=welcome')).toBe(true);
+  });
+});
+
+describe('readEmailClick', () => {
+  it('takes a send id and a link slug, and nothing that could carry text', () => {
+    expect(readEmailClick(params(`ref_email=digest&ref_send=${SEND.toUpperCase()}&ref_link=main`))).toEqual({
+      sendId: SEND,
+      link: 'main',
+    });
+    expect(readEmailClick(params(`ref_send=${SEND}&ref_link=Two%20words`))).toEqual({ sendId: SEND, link: null });
+    expect(readEmailClick(params('ref_send=not-a-send&ref_link=main'))).toBeNull();
+    expect(readEmailClick(params('ref_email=digest'))).toBeNull();
+    expect(readEmailClick(null)).toBeNull();
   });
 });

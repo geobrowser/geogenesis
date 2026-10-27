@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
@@ -11,6 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { clearLocalVotes, readLocalVotes, toggleLocalVote } from '~/core/state/local-votes';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 import { closeSaveVotesPrompt, readSaveVotesPrompt } from '~/core/state/save-votes-prompt';
+
+import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
 
@@ -42,6 +44,7 @@ vi.mock('~/core/analytics', () => ({
   upvoted: vi.fn(),
   voteCast: vi.fn(),
 }));
+vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => vi.fn() }));
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponse: () => ({
     submitResponse: vi.fn(),
@@ -78,7 +81,10 @@ function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <JotaiProvider store={store}>
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      <QueryClientProvider client={client}>
+        <PendingActionsRunner />
+        {children}
+      </QueryClientProvider>
     </JotaiProvider>
   );
 }
@@ -117,19 +123,31 @@ describe('a vote from a signed-out visitor', () => {
     ]);
     expect(queued()).toHaveLength(0);
     expect(upvote()).toHaveAttribute('title', 'Only on this device. Save it to count.');
+    expect(readSaveVotesPrompt()).toBe('threshold');
     // 2 up, 1 down: still 1, because a vote on this device isn't counted until it is saved.
     expect(screen.getByText('1')).toBeInTheDocument();
   });
 
-  // Copilot on #2785: before Privy has restored a session, signed out is not known yet.
-  it('drops a press while a session is still being restored', () => {
+  it('holds a press while a session is still being restored, then keeps it once signed out is known', async () => {
     mocks.authReady = false;
-    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, { wrapper });
+    const view = render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, {
+      wrapper,
+    });
+
+    expect(await screen.findByText('1')).toBeInTheDocument();
 
     fireEvent.click(upvote());
 
     expect(readLocalVotes().votes).toEqual([]);
+    expect(queued()).toEqual([expect.objectContaining({ intent: 'positive' })]);
+    expect(screen.getByText('1')).toBeInTheDocument();
+
+    mocks.authReady = true;
+    view.rerender(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />);
+
+    await waitFor(() => expect(readLocalVotes().votes).toHaveLength(1));
     expect(queued()).toHaveLength(0);
+    expect(screen.getByText('1')).toBeInTheDocument();
   });
 
   it('switches and takes back, like the arrows do signed in', () => {

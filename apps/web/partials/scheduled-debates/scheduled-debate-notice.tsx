@@ -16,22 +16,24 @@ import { useGeoChatAuth } from '~/core/debates/hooks';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '~/core/debates/matchmaking/hub-analytics';
-import { HubPillButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
+import { HubPillButton, HubQuietButton, hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { formatDebateTime, formatTime } from '~/core/debates/matchmaking/scheduled-debate-format';
 import { useGeoChatUserSummaries } from '~/core/debates/matchmaking/use-geo-chat-user-summaries';
 import { useRequestRoom } from '~/core/debates/rooms/request-room';
-import { SCHEDULED_NOTICE_COPY as COPY } from '~/core/debates/rooms/room-copy';
+import { SCHEDULED_NOTICE_COPY as COPY, ROOM_NUDGE_POPUP } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, useRequestOpponent } from '~/core/debates/rooms/room-opponent';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { startOffset } from '~/core/debates/rooms/room-time';
 import {
   DEFAULT_LATE_MINUTES,
   NOTICE_NOTE_MAX,
+  type ScheduledNoticeAnswer,
   type ScheduledNoticeStep,
   noticeNote,
   noticeRequestState,
   otherDebaterWaiting,
 } from '~/core/debates/rooms/scheduled-notice';
+import { useHoldScheduledNotice } from '~/core/debates/rooms/scheduled-notice-open';
 import { useCantMakeIt, useReportRunningLate } from '~/core/debates/rooms/scheduling-hooks';
 import { noticeFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
@@ -73,6 +75,12 @@ type Props = {
    * swaps this dialog for the calendar the link would otherwise have opened.
    */
   onReschedule?: () => void;
+  /**
+   * Where the answer stands, as it changes: `open` on the opening screen (again after Back),
+   * `answering` once a choice is being made, `sent` once it went. The nudge popup (GEO-3428) holds
+   * itself up only while `answering`, so neither a half-written note nor an incoming request is lost.
+   */
+  onAnswerChange?: (answer: ScheduledNoticeAnswer) => void;
   /** Drawn in place of the step, for a viewer who has to sign in first. */
   children?: React.ReactNode;
 };
@@ -95,6 +103,7 @@ export function ScheduledDebateNoticeDialog({
   onClose,
   onSent,
   onReschedule,
+  onAnswerChange,
   children,
 }: Props) {
   const [step, setStep] = React.useState<ScheduledNoticeStep>(initialStep);
@@ -104,6 +113,8 @@ export function ScheduledDebateNoticeDialog({
     setMoved(true);
     setStep(next);
   };
+  // The nudge popup steps aside for any other notice dialog (GEO-3428); it is not one itself.
+  useHoldScheduledNotice(open && initialStep !== 'nudge');
   const [outcome, setOutcome] = React.useState<Outcome | null>(null);
   // Every outcome is something sent; `onSent` hears of it as the confirmation replaces the step.
   const sent = (next: Outcome) => {
@@ -112,8 +123,16 @@ export function ScheduledDebateNoticeDialog({
   };
   // Can't make it's "Suggest another time" hands over to the week, carrying the note.
   const [suggesting, setSuggesting] = React.useState<{ note: string | undefined } | null>(null);
-  // Board 3 and its Back belong to arriving through board 2; an email's button lands on board 1b.
-  const fromDecide = initialStep === 'decide';
+  // Can't make it's note, held here so it survives the step unmounting: going to the week and back
+  // (GEO-3429's close warning), or to Running late and back.
+  const [cantNote, setCantNote] = React.useState('');
+  const answer: ScheduledNoticeAnswer = outcome ? 'sent' : step === initialStep && !suggesting ? 'open' : 'answering';
+  React.useEffect(() => {
+    onAnswerChange?.(answer);
+  }, [answer, onAnswerChange]);
+  // Board 3 and its Back belong to arriving through board 2, or the nudge popup (board 6c) that
+  // offers the same choices; an email's button lands on board 1b.
+  const fromDecide = initialStep === 'decide' || initialStep === 'nudge';
 
   const { authenticated } = useGeoChatAuth();
   // A debate that already happened stays listed as joinable until its room is swept: it is over,
@@ -135,6 +154,9 @@ export function ScheduledDebateNoticeDialog({
         rescheduleRequestId={request.request_id}
         rescheduleNote={suggesting.note}
         entry="cant_make_it"
+        // Its close warning's Can't make it comes back here, note and all, rather than opening a
+        // second one.
+        onCantMakeIt={() => setSuggesting(null)}
         onClose={onClose}
       />
     );
@@ -217,20 +239,23 @@ export function ScheduledDebateNoticeDialog({
 
   // Back to the choices, from a step reached through them; its heading takes focus on the way in,
   // since the button that was pressed is gone.
-  const back = fromDecide && step !== 'decide' ? () => go('decide') : undefined;
+  const back = fromDecide && step !== initialStep ? () => go(initialStep) : undefined;
 
   switch (step) {
     case 'decide':
+    case 'nudge':
       return shell(
         title,
         <DecideStep
+          variant={step}
           name={name}
           opponent={opponent}
           startsAt={request.scheduled_start_at}
           room={room}
           onLate={() => go('late')}
           onCant={() => go('cant')}
-          onReschedule={onReschedule}
+          // Board 2's alone: a nudge is answered by coming, being late, or not coming.
+          onReschedule={step === 'decide' ? onReschedule : undefined}
           onJoin={onClose}
           focusHeading={moved}
         />,
@@ -270,6 +295,8 @@ export function ScheduledDebateNoticeDialog({
           requestId={request.request_id}
           name={name}
           focusHeading={moved}
+          note={cantNote}
+          onNoteChange={setCantNote}
           onLate={() => go('late')}
           onSuggest={note => setSuggesting({ note })}
           onSent={() => sent({ message: COPY.cant.sent(name), joinRoomId: null })}
@@ -279,7 +306,14 @@ export function ScheduledDebateNoticeDialog({
   }
 }
 
+/**
+ * The three-way choice. As `decide` it is board 2, the reschedule link once the room is open. As
+ * `nudge` it is board 6c, the popup a nudge from the waiting debater puts on screen (GEO-3428): who is
+ * waiting and since when, with Running late and Can't make it side by side and nothing else. Either
+ * way the last two go on in this dialog, so nobody is taken off the page they were on to answer.
+ */
 function DecideStep({
+  variant,
   name,
   opponent,
   startsAt,
@@ -290,6 +324,7 @@ function DecideStep({
   onJoin,
   focusHeading,
 }: {
+  variant: 'decide' | 'nudge';
   name: string;
   opponent: DebateParticipantSummary | null;
   startsAt: string;
@@ -302,38 +337,73 @@ function DecideStep({
 }) {
   // Re-read each minute, so "started 3 minutes ago" keeps up while the dialog is open.
   const now = useMinuteNow();
+  const offset = startOffset(new Date(startsAt).getTime() - now);
+  const nudge = variant === 'nudge';
+  const late = (
+    <HubPillButton
+      size="large"
+      className="w-full"
+      onClick={onLate}
+      {...pill(nudge ? 'Nudge running late' : 'Running late', 'open_running_late')}
+    >
+      {nudge ? ROOM_NUDGE_POPUP.late : COPY.decide.late}
+    </HubPillButton>
+  );
+  const cant = (
+    <HubPillButton
+      size="large"
+      className="w-full"
+      onClick={onCant}
+      {...pill(nudge ? 'Nudge cant make it' : 'Cant make it', 'open_cant_make_it')}
+    >
+      {nudge ? ROOM_NUDGE_POPUP.cant : COPY.decide.cant}
+    </HubPillButton>
+  );
 
   return (
     <>
       <div className="flex flex-col items-center gap-3.5 text-center">
-        <OpponentAvatar opponent={opponent} name={name} size={64} />
+        <OpponentAvatar opponent={opponent} name={name} size={nudge ? 52 : 64} />
         <Heading focus={focusHeading}>
-          {COPY.decide.heading(name, startOffset(new Date(startsAt).getTime() - now))}
+          {nudge ? ROOM_NUDGE_POPUP.heading(name) : COPY.decide.heading(name, offset)}
         </Heading>
-        {otherDebaterWaiting(room) && (
-          <span className="inline-flex items-center gap-2 rounded-full border border-grey-02 px-3 py-1.5 text-metadata">
-            <span aria-hidden className="size-2 rounded-full bg-green" />
-            {COPY.decide.waiting(name)}
-          </span>
+        {nudge ? (
+          <Text as="p" variant="metadata" color="grey-04">
+            {ROOM_NUDGE_POPUP.lead(name, formatTime(startsAt), offset)}
+          </Text>
+        ) : (
+          otherDebaterWaiting(room) && (
+            <span className="inline-flex items-center gap-2 rounded-full border border-grey-02 px-3 py-1.5 text-metadata">
+              <span aria-hidden className="size-2 rounded-full bg-green" />
+              {COPY.decide.waiting(name)}
+            </span>
+          )
         )}
       </div>
       <div className="flex flex-col gap-2.5">
         {room?.joinable && <JoinRoom roomId={room.room_id} onJoin={onJoin} label="Join now" />}
-        <HubPillButton size="large" className="w-full" onClick={onLate} {...pill('Running late', 'open_running_late')}>
-          {COPY.decide.late}
-        </HubPillButton>
-        <HubPillButton size="large" className="w-full" onClick={onCant} {...pill('Cant make it', 'open_cant_make_it')}>
-          {COPY.decide.cant}
-        </HubPillButton>
+        {nudge ? (
+          <div className="grid grid-cols-2 gap-2.5">
+            {late}
+            {cant}
+          </div>
+        ) : (
+          <>
+            {late}
+            {cant}
+          </>
+        )}
       </div>
-      <Text as="p" variant="footnote" color="grey-04" className="text-center">
-        {COPY.decide.explainer(name)}
-      </Text>
+      {!nudge && (
+        <Text as="p" variant="footnote" color="grey-04" className="text-center">
+          {COPY.decide.explainer(name)}
+        </Text>
+      )}
       {onReschedule && (
         <Actions>
-          <QuietButton onClick={onReschedule} {...analytics('Reschedule instead', 'reschedule_scheduled_debate')}>
+          <HubQuietButton onClick={onReschedule} {...analytics('Reschedule instead', 'reschedule_scheduled_debate')}>
             {COPY.decide.reschedule}
-          </QuietButton>
+          </HubQuietButton>
         </Actions>
       )}
     </>
@@ -376,9 +446,9 @@ function LateStep({
   const sent = noticeNote(note);
 
   const cantInstead = fromEmail && (
-    <QuietButton onClick={onCant} {...analytics('Cant make it at all', 'open_cant_make_it')}>
+    <HubQuietButton onClick={onCant} {...analytics('Cant make it at all', 'open_cant_make_it')}>
       {COPY.late.cantInstead}
-    </QuietButton>
+    </HubQuietButton>
   );
 
   return (
@@ -463,6 +533,8 @@ function CantStep({
   requestId,
   name,
   focusHeading,
+  note,
+  onNoteChange,
   onLate,
   onSuggest,
   onSent,
@@ -470,11 +542,13 @@ function CantStep({
   requestId: string;
   name: string;
   focusHeading: boolean;
+  /** Held by the dialog, so leaving the step and coming back keeps it. */
+  note: string;
+  onNoteChange: (note: string) => void;
   onLate: () => void;
   onSuggest: (note: string | undefined) => void;
   onSent: () => void;
 }) {
-  const [note, setNote] = React.useState('');
   const cancel = useCantMakeIt();
   const noteId = React.useId();
 
@@ -486,7 +560,7 @@ function CantStep({
           {COPY.cant.lead(name)}
         </Text>
       </div>
-      <NoteField id={noteId} label={COPY.cant.noteLabel(name)} rows={3} value={note} onChange={setNote} />
+      <NoteField id={noteId} label={COPY.cant.noteLabel(name)} rows={3} value={note} onChange={onNoteChange} />
       {cancel.isError && <ErrorLine>{noticeFailureMessage(cancel.error, 'cant')}</ErrorLine>}
       <Actions>
         <HubPillButton
@@ -512,9 +586,9 @@ function CantStep({
         <Text as="p" variant="footnote" color="grey-04" className="text-center">
           {COPY.cant.suggestHint(name)}
         </Text>
-        <QuietButton onClick={onLate} {...analytics('Only running late', 'open_running_late')}>
+        <HubQuietButton onClick={onLate} {...analytics('Only running late', 'open_running_late')}>
           {COPY.cant.lateInstead}
-        </QuietButton>
+        </HubQuietButton>
       </Actions>
     </>
   );
@@ -621,17 +695,6 @@ function JoinRoom({
     >
       {label === 'Join now' ? COPY.decide.join : COPY.late.join}
     </Link>
-  );
-}
-
-/** The step's way sideways: to the other choice, or to the calendar. */
-function QuietButton(props: React.ComponentProps<'button'>) {
-  return (
-    <button
-      type="button"
-      className="self-center px-3 py-2 text-metadata text-text underline underline-offset-2 hover:opacity-70"
-      {...props}
-    />
   );
 }
 

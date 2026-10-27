@@ -11,6 +11,8 @@ import {
   claimResponseTargetKey,
   isClaimResponseSummaryQueryKey,
 } from '~/core/responses/claim-response-summary-query-keys';
+import type { SpaceCallsResponse } from '~/core/space-calls/api';
+import { parseSpaceCallPatch, withSpaceCallPatch } from '~/core/space-calls/space-calls-patch';
 
 import {
   type DebateLobbiesResponse,
@@ -86,6 +88,8 @@ type DebateEventPayload = {
   lobby_claim_lists?: unknown;
   /** On `debate.lobby_guests_changed`: visitors without an account. */
   guest_count?: unknown;
+  /** On `debate.space_calls_changed`: the call's list row; see `parseSpaceCallPatch`. */
+  space_call?: unknown;
   claim_entity_ids?: string[];
   sections?: MatchmakingSection[];
 };
@@ -627,6 +631,21 @@ export class DebateGatewayClient {
         );
         break;
       }
+      // GEO-3419. To the space scope: a call started, ended or closed (no row: refetch the list),
+      // or its people or hosts changed (a row, patched in place when newer).
+      case 'debate.space_calls_changed': {
+        if (!identifiers.space_id) break;
+        const listKey = ['debates', 'space-calls', dashlessId(identifiers.space_id)];
+        const patch = parseSpaceCallPatch(identifiers.space_call);
+        if (!patch || patch.status !== 'live') {
+          this.queueQuery(listKey);
+          break;
+        }
+        this.queryClient.setQueriesData<SpaceCallsResponse>({ queryKey: listKey }, list =>
+          list ? withSpaceCallPatch(list, patch) : list
+        );
+        break;
+      }
     }
   }
 
@@ -732,6 +751,7 @@ export class DebateGatewayClient {
     if (scope.scope === 'space') {
       this.queueQuery(['debates', 'claims', scope.space_id]);
       this.queueQuery(['debates', 'space', scope.space_id]);
+      this.queueQuery(['debates', 'space-calls', dashlessId(scope.space_id)]);
       return;
     }
     if (scope.scope === 'matchmaking') {

@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { useActionContext } from '~/core/action-context-provider';
 import { runObservedAction } from '~/core/analytics-operations';
 import { tileChipSurface } from '~/core/debates/debate-video-tile';
+import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -15,7 +16,6 @@ import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useFollowEntities } from '~/core/topics/use-follow-topics';
 import { useFollowedEntities } from '~/core/topics/use-followed-topics';
 import { normId } from '~/core/utils/norm-id';
-import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { CreateSmall } from '~/design-system/icons/create-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
@@ -132,7 +132,8 @@ export function FollowButton({
   const targetId = normId(target.id);
   const { follow, unfollow, isPending } = useFollowEntities({ kind: target.kind });
   const { topicIds: followedIds, isLoading: isLoadingFollows } = useFollowedEntities({ kind: target.kind });
-  const { ready: authReady, authenticated } = usePrivy();
+
+  const authResolving = useAuthResolving();
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId: anyPersonalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace } = usePersonalSpaceId();
   // A follow is an Interested cast from the personal space on chain, so one not yet registered
@@ -218,9 +219,6 @@ export function FollowButton({
 
   const shownFollowed = followed || queuedFollow.isQueued;
   const signedIn = Boolean(smartAccount);
-  // Not yet known to be signed out: Privy still starting, or signed in with the account still
-  // loading. A press then would open sign-in for someone already signed in, so it waits instead.
-  const authResolving = !authReady || (authenticated && !signedIn);
   const noPersonalSpace =
     signedIn && !personalSpaceId && !isLoadingPersonalSpace && !isAccountSetupPending && !queuedFollow.isQueued;
   // Until the viewer's own space is known, a person button can't tell whether it is their own row.

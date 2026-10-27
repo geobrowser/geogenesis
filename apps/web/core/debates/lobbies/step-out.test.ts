@@ -204,6 +204,8 @@ describe('every debate entry steps out of a lobby', () => {
     'core/debates/lobbies/open-lobby-dialog.tsx',
     'core/claims/browse/claim-end-slot.tsx',
     'app/debate/[roomId]/room-page-client.tsx',
+    // GEO-3419: a lobby id opened as a space call goes to the lobby's own page.
+    'core/space-calls/space-call-page.tsx',
     'app/space/[id]/(space)/debug-debate-rooms/debug-debate-rooms-page-client.tsx',
     // The debate room itself, prefetching or leaving for the picker afterwards.
     'app/space/[id]/(space)/debates/[debateId]/debate-room-page-client.tsx',
