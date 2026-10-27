@@ -29,7 +29,7 @@ import { useToast } from '~/core/hooks/use-toast';
 import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
-import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import { getAllEntities, getEntityNames, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import {
   buildIsNewEntity,
@@ -85,6 +85,8 @@ import {
 } from '~/atoms';
 
 type Proposals = Record<string, { name: string; description: string }>;
+
+const EMPTY_ID_SET: ReadonlySet<string> = new Set();
 
 function orderVisibleEntitiesStable(
   entities: EntityDiff[],
@@ -490,9 +492,47 @@ export const ReviewChanges = () => {
     includeDeleted: true,
   });
 
-  const isNewEntity = React.useMemo(
+  const storeIsNewEntity = React.useMemo(
     () => buildIsNewEntity(candidateValues, candidateRelations),
     [candidateValues, candidateRelations]
+  );
+
+  // Relation targets with no review row that the store still reads as new.
+  const unresolvedLinkTargetIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const relation of relationsFromSpace) {
+      const targetId = relation.toEntity.id;
+      if (ownershipIndex.ownerOf.has(targetId)) continue; // has a row, or folds into one
+      if (!storeIsNewEntity(targetId)) continue; // store already knows it exists
+      ids.add(targetId);
+    }
+    return [...ids].sort();
+  }, [relationsFromSpace, ownershipIndex, storeIsNewEntity]);
+
+  const hasUnresolvedLinkTargets = isReviewOpen && unresolvedLinkTargetIds.length > 0;
+
+  const {
+    data: confirmedOnGraphIds = EMPTY_ID_SET,
+    isPending: isLinkTargetLookupPending,
+    isError: linkTargetLookupErrored,
+    refetch: retryLinkTargetLookup,
+  } = useQuery({
+    queryKey: ['review-link-target-existence', unresolvedLinkTargetIds.join(',')],
+    enabled: hasUnresolvedLinkTargets,
+    staleTime: 30_000,
+    queryFn: async ({ signal }) => {
+      const entities = await Effect.runPromise(getEntityNames(unresolvedLinkTargetIds, signal));
+      return new Set(entities.map(entity => entity.id));
+    },
+  });
+
+  const isResolvingLinkTargets = hasUnresolvedLinkTargets && isLinkTargetLookupPending;
+
+  const linkTargetLookupFailed = hasUnresolvedLinkTargets && linkTargetLookupErrored;
+
+  const isNewEntity = React.useMemo(
+    () => buildIsNewEntity(candidateValues, candidateRelations, confirmedOnGraphIds),
+    [candidateValues, candidateRelations, confirmedOnGraphIds]
   );
 
   const deselectionBlockers = React.useMemo(
@@ -729,6 +769,8 @@ export const ReviewChanges = () => {
   const handleSubmit = React.useCallback(async () => {
     if (!activeSpace) return;
     if (!isReadyToPublish) return;
+    if (isResolvingLinkTargets) return;
+    if (linkTargetLookupFailed) return;
 
     const dangling = findDanglingDependencies(ownershipIndex, selectedEntityIds, relationsFromSpace, isNewEntity);
     if (dangling.length > 0) {
@@ -930,6 +972,8 @@ export const ReviewChanges = () => {
     getPublishContext,
     activeSpace,
     isReadyToPublish,
+    isResolvingLinkTargets,
+    linkTargetLookupFailed,
     makeProposal,
     relationsFromSpace,
     publishSelection,
@@ -950,8 +994,10 @@ export const ReviewChanges = () => {
   useKeyboardShortcuts(
     React.useMemo(
       () =>
-        isReviewOpen && isReadyToPublish && !isPublishing ? [{ key: 'Enter', callback: () => handleSubmit() }] : [],
-      [isReviewOpen, isReadyToPublish, isPublishing, handleSubmit]
+        isReviewOpen && isReadyToPublish && !isPublishing && !isResolvingLinkTargets && !linkTargetLookupFailed
+          ? [{ key: 'Enter', callback: () => handleSubmit() }]
+          : [],
+      [isReviewOpen, isReadyToPublish, isPublishing, isResolvingLinkTargets, linkTargetLookupFailed, handleSubmit]
     )
   );
 
@@ -1065,10 +1111,22 @@ export const ReviewChanges = () => {
                     isFastPathRestricted={isFastPathRestricted}
                   />
                 )}
+                {linkTargetLookupFailed && (
+                  <div className="flex items-center gap-2 text-metadataMedium text-grey-04">
+                    <span>Couldn’t verify linked edits</span>
+                    <SmallButton onClick={() => void retryLinkTargetLookup()}>Retry</SmallButton>
+                  </div>
+                )}
                 <Button
                   variant="primary"
                   onClick={handleSubmit}
-                  disabled={!isReadyToPublish || isPublishing || isPublishGatedByPendingSetup}
+                  disabled={
+                    !isReadyToPublish ||
+                    isPublishing ||
+                    isPublishGatedByPendingSetup ||
+                    isResolvingLinkTargets ||
+                    linkTargetLookupFailed
+                  }
                 >
                   <Pending isPending={isPublishing}>{publishButtonLabel}</Pending>
                 </Button>

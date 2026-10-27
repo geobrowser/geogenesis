@@ -44,7 +44,7 @@ export function useDebateClaimResponse({
 }: {
   claimId: string;
   spaceId: string;
-  /** Where the save sheet's first ask comes; see `SavePromptSurface`. */
+  /** The save ask's surface, for analytics; see `SavePromptSurface`. */
   savePromptSurface?: SavePromptSurface;
   /** geo-chat's row, where it has one. Null in the spaces it does not index, and before it answers. */
   row: DebateClaim | null;
