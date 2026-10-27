@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
   status: 'idle' as 'idle' | 'saved' | 'failed',
   capture: vi.fn(),
+  spaceCalls: true,
 }));
 
 vi.mock('~/core/notifications/hooks', () => ({
@@ -26,6 +27,7 @@ vi.mock('~/core/notifications/hooks', () => ({
   useSaveEmailSwitch: () => ({ save: mocks.save, status: mocks.status }),
 }));
 vi.mock('~/core/analytics', () => ({ capture: (...args: unknown[]) => mocks.capture(...args) }));
+vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.spaceCalls }));
 
 const { EmailSettingsDialog } = await import('./email-settings-dialog');
 
@@ -53,6 +55,7 @@ beforeEach(() => {
   mocks.save = vi.fn();
   mocks.status = 'idle';
   mocks.capture = vi.fn();
+  mocks.spaceCalls = true;
 });
 afterEach(() => cleanup());
 
@@ -77,6 +80,13 @@ describe('EmailSettingsDialog', () => {
     }
     expect(screen.getByText(/Space proposals are set in each space's settings\./)).toBeInTheDocument();
     expect(mocks.capture).toHaveBeenCalledWith('email_settings_opened', { entry: 'account_menu' });
+  });
+
+  it('leaves out call reminders with Community calls off', () => {
+    mocks.spaceCalls = false;
+    render(<EmailSettingsDialog entry="account_menu" onClose={() => {}} />);
+    expect(screen.queryByRole('switch', { name: 'Community call reminders' })).not.toBeInTheDocument();
+    expect(toggle('Your debates')).toBeInTheDocument();
   });
 
   it('saves a group as it changes, and says how saving went', async () => {

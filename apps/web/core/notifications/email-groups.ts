@@ -19,6 +19,11 @@ export type EmailGroup = (typeof EMAIL_GROUPS)[number];
 
 export type EmailGroupSettings = Record<EmailGroup, boolean>;
 
+/** The groups settings show: call reminders only with Community calls on, as calls ship behind it. */
+export function shownEmailGroups(spaceCalls: boolean): readonly EmailGroup[] {
+  return spaceCalls ? EMAIL_GROUPS : EMAIL_GROUPS.filter(group => group !== 'community_calls');
+}
+
 export const EMAIL_GROUP_COPY: Record<EmailGroup, { name: string; description: string; shortDescription: string }> = {
   invites: {
     name: 'Debate invites and reminders',
@@ -64,11 +69,15 @@ export const INVITES_OFF_WARNING =
  * while geo-notifications does not report groups yet (before GEO-3372 ships it only knows the all-email
  * switch).
  */
-export function emailSettingsSummary(emailEnabled: boolean, groups: EmailGroupSettings | null | undefined): string {
+export function emailSettingsSummary(
+  emailEnabled: boolean,
+  groups: EmailGroupSettings | null | undefined,
+  shown: readonly EmailGroup[] = EMAIL_GROUPS
+): string {
   if (!emailEnabled) return 'Off';
   if (!groups) return 'On';
-  const on = EMAIL_GROUPS.filter(group => groups[group]).length;
-  return `${on} of ${EMAIL_GROUPS.length} on`;
+  const on = shown.filter(group => groups[group]).length;
+  return `${on} of ${shown.length} on`;
 }
 
 /**

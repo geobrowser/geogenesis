@@ -13,11 +13,12 @@ type State = {
   preferences: { isError: boolean; data?: { email_enabled: boolean; email_groups?: EmailGroupSettings } };
 };
 
-const mocks = vi.hoisted(() => ({ state: null as unknown as State }));
+const mocks = vi.hoisted(() => ({ state: null as unknown as State, spaceCalls: true }));
 
 vi.mock('~/core/notifications/hooks', () => ({
   useNotificationPreferences: () => mocks.state,
 }));
+vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.spaceCalls }));
 
 const { EmailSettingsMenuItem } = await import('./email-settings-menu-item');
 
@@ -41,6 +42,7 @@ const ready = (
 
 beforeEach(() => {
   mocks.state = ready(true);
+  mocks.spaceCalls = true;
 });
 afterEach(() => cleanup());
 
@@ -55,6 +57,13 @@ describe('EmailSettingsMenuItem', () => {
     expect(row()).toHaveTextContent('5 of 6 on');
     await userEvent.setup().click(row());
     expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts call reminders only with Community calls on', () => {
+    mocks.spaceCalls = false;
+    mocks.state = ready(true, { ...allOn, digest: false });
+    render(<EmailSettingsMenuItem onOpen={vi.fn()} />);
+    expect(row()).toHaveTextContent('4 of 5 on');
   });
 
   it('says Off when every email is off, whatever the groups hold', () => {
