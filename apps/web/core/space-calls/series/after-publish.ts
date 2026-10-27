@@ -46,9 +46,8 @@ export function seriesSynced(list: Pick<SpaceCallsResponse, 'series'> | undefine
 }
 
 /**
- * After a schedule publish (GEO-3420): refreshes geo-chat if the proposal executed and returns the
- * Calls tab href. A failed refresh is left to geo-chat's sweep; a 403 (not an editor, or series off on
- * the server) means this viewer's list will not catch up, so the tab opens without the note.
+ * After a schedule publish (GEO-3420): refreshes geo-chat if executed and returns the Calls tab href.
+ * Other failures are left to the sweep; a 403 means the list won't catch up, so no note.
  */
 export function useAfterSeriesPublish(spaceId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
