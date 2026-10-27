@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   dismissEnded: vi.fn(),
   close: vi.fn(),
   remind: vi.fn(),
+  reminded: false,
 }));
 
 vi.mock('./hub-ask-context', () => ({
@@ -35,7 +36,7 @@ vi.mock('next/navigation', () => ({
 }));
 // RSVP has its own suite; here it only matters that the strip offers it.
 vi.mock('../lobbies/lobby-reminder-press', () => ({
-  useLobbyReminderPress: () => ({ reminded: false, pending: false, error: null, press: mocks.remind }),
+  useLobbyReminderPress: () => ({ reminded: mocks.reminded, pending: false, error: null, press: mocks.remind }),
   LobbyReminderError: () => null,
 }));
 
@@ -89,6 +90,7 @@ const EMPTY: LobbyLineup = { live: [], soon: null, later: [] };
 beforeEach(() => {
   mocks.ask = null;
   mocks.ended = null;
+  mocks.reminded = false;
 });
 
 afterEach(() => {
@@ -121,6 +123,17 @@ describe('HubLiveStrip', () => {
     expect(strip).toHaveTextContent('AI policy night');
     fireEvent.click(screen.getByRole('button', { name: 'RSVP' }));
     expect(mocks.remind).toHaveBeenCalled();
+  });
+
+  // Review: the strip drew its own RSVP with the calendar's look inverted. It is the calendar's pill.
+  it('draws RSVP outlined and Going black, as the calendar does', () => {
+    const later = lobby({ open: false, scheduled: true });
+    const { rerender } = render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
+    expect(screen.getByRole('button', { name: 'RSVP' })).not.toHaveClass('bg-text');
+
+    mocks.reminded = true;
+    rerender(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
+    expect(screen.getByRole('button', { name: 'Going' })).toHaveClass('bg-text', 'text-white');
   });
 
   // 26 Oct (Preston): black means live. A lobby on Tuesday is not.

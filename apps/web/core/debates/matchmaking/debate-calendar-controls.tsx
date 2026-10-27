@@ -108,7 +108,6 @@ export function SegmentedControl<T extends string>({
   onChange,
   variant = 'outline',
   size = 'default',
-  className,
   optionAttributes,
 }: {
   label: string;
@@ -122,8 +121,6 @@ export function SegmentedControl<T extends string>({
   variant?: 'outline' | 'tinted';
   /** `tinted` only: `large` is the phone sheet's 32px track with 16px words; desktop is 26px and 14px. */
   size?: 'default' | 'large';
-  /** On the track. `tinted` fills its row unless told a width (Requests' All / Needs you is 220px). */
-  className?: string;
   /** Per-option attributes, for a surface that labels each choice's clicks (analytics). */
   optionAttributes?: (option: { value: T; label: string }) => Record<string, string | undefined>;
 }) {
@@ -143,8 +140,7 @@ export function SegmentedControl<T extends string>({
       aria-label={label}
       className={cx(
         'flex rounded-full p-0.5',
-        variant === 'tinted' ? 'w-full bg-grey-01' : 'border border-grey-02',
-        className
+        variant === 'tinted' ? 'w-full bg-grey-01' : 'border border-grey-02'
       )}
     >
       {options.map((option, index) => (

@@ -100,6 +100,7 @@ describe('PanelMatchesTab', () => {
     expect(filters?.sort.options.map(option => option.label)).toEqual(['Best', 'Newest', 'Most people']);
     expect(filters?.clientSort).toBe('best');
     expect(filters?.toggles?.[0]).toMatchObject({ label: 'Include people who are offline', checked: false });
+    expect(seen.matchesList?.atomsFrom).toBe('panelMatches');
     expect(seen.claimsTab).toBeNull();
   });
 
@@ -109,7 +110,7 @@ describe('PanelMatchesTab', () => {
     act(() => seen.matchesList?.panelFilters?.toggles?.[0]?.onChange(true));
 
     expect(store.get(debatesHubMatchesIncludeOfflineAtom)).toBe(true);
-    expect(seen.claimsTab).toMatchObject({ variant: 'positions', atomsFrom: 'lobby' });
+    expect(seen.claimsTab).toMatchObject({ variant: 'positions', atomsFrom: 'panelMatches' });
     const keep = seen.claimsTab!.keepClaim!;
     // Someone offline disagrees: kept, and the card offers Schedule.
     expect(keep(claim(true, { total: 1, now: 0 }, { total: 2, now: 0 }))).toBe(true);
@@ -129,7 +130,7 @@ describe('PanelMatchesTab empty and unavailable', () => {
     seen.matches = [];
     const store = renderTab(<PanelMatchesTab onTabChange={vi.fn()} />);
 
-    expect(seen.claimsTab).toMatchObject({ variant: 'positions', atomsFrom: 'lobby' });
+    expect(seen.claimsTab).toMatchObject({ variant: 'positions', atomsFrom: 'panelMatches' });
     expect(screen.getByTestId('matches-nobody-online')).toHaveTextContent('Nobody who disagrees with you is online');
     expect(store.get(debatesHubMatchesIncludeOfflineAtom)).toBe(false);
   });
@@ -179,7 +180,7 @@ describe('PanelExploreTab', () => {
   it('browses the Debate tag by default: Not answered, ranked server-side', () => {
     renderTab(<PanelExploreTab onTabChange={vi.fn()} />);
 
-    expect(seen.claimsTab).toMatchObject({ variant: 'explore', atomsFrom: 'explore', keepClaim: undefined });
+    expect(seen.claimsTab).toMatchObject({ variant: 'explore', atomsFrom: 'panelExplore', keepClaim: undefined });
     expect(seen.claimsTab?.panelFilters?.choice).toMatchObject({ heading: 'Show', value: 'unanswered' });
     expect(seen.claimsTab?.panelFilters?.graphOrder).toBe('best');
     expect(seen.claimsTab?.panelFilters?.choice?.options.map(option => option.label)).toEqual([
@@ -194,7 +195,7 @@ describe('PanelExploreTab', () => {
 
     act(() => store.set(debatesHubExploreShowAtom, 'mine'));
 
-    expect(seen.claimsTab).toMatchObject({ variant: 'positions', atomsFrom: 'explore' });
+    expect(seen.claimsTab).toMatchObject({ variant: 'positions', atomsFrom: 'panelExplore' });
     expect(seen.claimsTab?.panelFilters?.clientSort).toBe('best');
   });
 
@@ -207,7 +208,7 @@ describe('PanelExploreTab', () => {
     // a filter that drops it on the next refetch.
     expect(seen.claimsTab).toMatchObject({
       variant: 'lobby',
-      atomsFrom: 'explore',
+      atomsFrom: 'panelExplore',
       keepClaim: undefined,
       collapsesAnswered: true,
     });
@@ -260,7 +261,7 @@ describe('PanelExploreTab', () => {
   it('warms with the panel’s own settings, so it never seeds a selection', () => {
     renderTab(<PanelExploreTab onTabChange={vi.fn()} warm />);
 
-    expect(seen.claimsTab).toMatchObject({ warm: true, variant: 'explore', atomsFrom: 'explore' });
+    expect(seen.claimsTab).toMatchObject({ warm: true, variant: 'explore', atomsFrom: 'panelExplore' });
     expect(seen.claimsTab?.panelFilters).toBeDefined();
   });
 });

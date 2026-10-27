@@ -12,12 +12,10 @@ import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sent
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { normId } from '~/core/utils/norm-id';
 
 import { Input } from '~/design-system/input';
 
 import type { MatchmakingClaim, MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
-import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import {
@@ -31,7 +29,6 @@ import {
 } from '../tagged-claims';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
-import { useClaimOrderFacts } from './claim-order-facts';
 import { claimRowKey } from './claim-row-key';
 import { fromClaimsFilterSearch } from './claims-filter-params';
 import { type AnsweredState, useCollapseAnswered } from './collapse-answered';
@@ -40,7 +37,7 @@ import { useDebateRequests } from './hooks';
 import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubFacetRail } from './hub-facet-rail';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
-import { PanelFiltersBar, type PanelListFilters, sortClaimRows } from './hub-filters';
+import { PanelFiltersBar, type PanelListFilters } from './hub-filters';
 import { HubCardList } from './hub-motion';
 import { useHubScrollSelector } from './hub-scroll';
 import { HubQueryState, HubSkeleton, exploreClaimsAction } from './hub-states';
@@ -54,20 +51,12 @@ import {
   rowsByPlacedClaim,
   taggedClaimEntry,
 } from './tagged-claim-entry';
-import {
-  claimTopicsById,
-  countBy,
-  keepSelectableTopics,
-  keepSelectedVisible,
-  orderFacetOptions,
-  toggleId,
-  topicsFor,
-} from './topic-facets';
+import { countBy, inEverySpace, keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
+import { useClaimRowTopics, useHeldClaimRows, useRowTopicFacet } from './use-claim-rows';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
-import { useStableListOrder } from './use-stable-list-order';
 import {
   type DebatesHubTab,
   debatesHubExploreSearchAtom,
@@ -79,6 +68,14 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubPanelExploreSearchAtom,
+  debatesHubPanelExploreSpaceIdsAtom,
+  debatesHubPanelExploreSpaceSeedSpentAtom,
+  debatesHubPanelExploreTopicIdsAtom,
+  debatesHubPanelMatchesSearchAtom,
+  debatesHubPanelMatchesSpaceIdsAtom,
+  debatesHubPanelMatchesSpaceSeedSpentAtom,
+  debatesHubPanelMatchesTopicIdsAtom,
   debatesHubPositionsSearchAtom,
   debatesHubPositionsSpaceIdsAtom,
   debatesHubPositionsSpaceSeedSpentAtom,
@@ -193,13 +190,13 @@ export type ClaimsLayout = 'panel' | 'workspace';
 /**
  * `workspace`: facet rail + list; panel menus are the narrow fallback.
  *
- * Within a session nothing has to be passed: the atoms above are keyed by variant rather than by
- * surface, so narrowing in the panel and expanding to the workspace arrives at the same list.
+ * Keyed by variant, and these are full screen's. The side panel reads its own (`PANEL_ATOMS`), since
+ * it narrows by every pick where full screen takes any of them and seeds member spaces (GEO-3463).
  *
- * The expand link carries the selection in the URL regardless, and the workspace seeds from it on
- * mount, because a link is the one way onto this surface with no session behind it — a shared or
- * reopened `/matchmaking?…` meets those atoms at their defaults. The workspace writes changes back
- * to the URL (GEO-3298) so the address bar stays a link to what is on screen; the panel does not.
+ * So the expand link is how a panel selection reaches the workspace: it carries it in the URL, and
+ * the workspace seeds from it on mount — the same way a shared or reopened `/matchmaking?…` arrives.
+ * The workspace writes changes back to the URL (GEO-3298) so the address bar stays a link to what is
+ * on screen; the panel does not.
  */
 export const VARIANT_ATOMS = {
   explore: {
@@ -229,6 +226,32 @@ export const VARIANT_ATOMS = {
     seedSpent: lobbyExploreSpaceSeedSpentAtom,
   },
 } as const satisfies Record<ClaimsListVariant, unknown>;
+
+/**
+ * The side panel's selections, one per tab (GEO-3463): Matches' and Explore's, each kept across the
+ * lists that tab swaps between. Apart from full screen's above, which read picks differently.
+ */
+export const PANEL_ATOMS = {
+  panelMatches: {
+    spaceIds: debatesHubPanelMatchesSpaceIdsAtom,
+    topicIds: debatesHubPanelMatchesTopicIdsAtom,
+    search: debatesHubPanelMatchesSearchAtom,
+    seedSpent: debatesHubPanelMatchesSpaceSeedSpentAtom,
+  },
+  panelExplore: {
+    spaceIds: debatesHubPanelExploreSpaceIdsAtom,
+    topicIds: debatesHubPanelExploreTopicIdsAtom,
+    search: debatesHubPanelExploreSearchAtom,
+    seedSpent: debatesHubPanelExploreSpaceSeedSpentAtom,
+  },
+} as const;
+
+export type PanelAtomsKey = keyof typeof PANEL_ATOMS;
+
+/** Whose search and selection a list reads: a list's own, or a panel tab's. */
+export type FilterAtomsKey = ClaimsListVariant | PanelAtomsKey;
+
+export const FILTER_ATOMS = { ...VARIANT_ATOMS, ...PANEL_ATOMS } as const satisfies Record<FilterAtomsKey, unknown>;
 
 /**
  * Where each list reports, and whether it hides the viewer's answered claims. `lobbyExplore` reads the
@@ -267,9 +290,10 @@ export function ClaimsTab({
   /**
    * Whose search and space/topic selection this list reads, when not its own variant's (GEO-3463).
    * The panel's Explore swaps between three lists under its Show control and Matches between two,
-   * and what the viewer typed or picked should not change when the list under it does.
+   * and what the viewer typed or picked should not change when the list under it does — so each
+   * panel tab reads its own (`PANEL_ATOMS`), never full screen's.
    */
-  atomsFrom?: ClaimsListVariant;
+  atomsFrom?: FilterAtomsKey;
   /**
    * The side panel's one search field and Filters button in place of the menus row (GEO-3463), with
    * this tab's Sort and switches. Panel layout only; the workspace keeps its rail.
@@ -328,7 +352,7 @@ export function ClaimsTab({
   scopePicker?: React.ReactNode;
 } = {}) {
   const isLobby = variant === 'lobby';
-  const atoms = VARIANT_ATOMS[atomsFrom ?? variant];
+  const atoms = FILTER_ATOMS[atomsFrom ?? variant];
   const { analyticsSurface, hidesAnswered } = LIST_SURFACE[variant];
   const workspace = layout === 'workspace';
   const panelMode = panelFilters !== undefined && !workspace;
@@ -761,7 +785,12 @@ export function ClaimsTab({
   const keyedSpaceIds = graphSourced ? spaceIds : debouncedSpaceIds;
   const listKey = `${debouncedSearch}|${keyedSpaceIds.join(',')}|${debouncedTopicIds.join(',')}|${filter}|${eligibleSpaceIds === null ? 'any' : eligibleSpaceIds.join(',')}|${taggedFilters.order ?? 'best'}`;
 
-  const claims = useStableListOrder(graphSourced ? taggedEntries : serverClaims, claimRowKey, listKey);
+  // The panel's Sort, for lists geo-chat orders its own way (GEO-3463). Sorted before the hold, so a
+  // page arriving or a live count changing does not move rows already placed; see `useHeldClaimRows`.
+  const clientSort = panelFilters?.clientSort;
+  const claims = useHeldClaimRows(graphSourced ? taggedEntries : serverClaims, clientSort, listKey, {
+    appendNew: true,
+  });
 
   /**
    * Explore hides the claims the viewer has already answered (GEO-2863).
@@ -885,24 +914,16 @@ export function ClaimsTab({
     classifying: answersInFlight,
   });
 
-  // The panel's own narrowing and Sort on top of the source's (GEO-3463). The predicate covers what
-  // the source cannot be asked for, and the client sort covers lists the server orders its own way
-  // (geo-chat's), where the whole list is small enough to be in hand.
-  const clientSort = panelFilters?.clientSort;
-  const { facts: orderFacts } = useClaimOrderFacts(
-    React.useMemo(() => collapsedClaims.map(entry => entry.claim.claim_entity_id), [collapsedClaims]),
-    clientSort === 'best' || clientSort === 'newest'
-  );
+  // The panel's own narrowing on top of the source's (GEO-3463): what the source cannot be asked for.
   const visibleClaims = React.useMemo(() => {
     // geo-chat's lists take spaces as "any of these", and each of their rows sits in one space. The
     // panel's picks are AND, so a row has to be in every one picked.
-    const inEverySpace =
+    const inPickedSpaces =
       panelMode && !graphSourced && spaceIds.length > 1
-        ? collapsedClaims.filter(entry => spaceIds.every(id => normId(id) === normId(entry.claim.space_id)))
+        ? collapsedClaims.filter(entry => inEverySpace(spaceIds, entry.claim.space_id))
         : collapsedClaims;
-    const kept = keepClaim ? inEverySpace.filter(keepClaim) : inEverySpace;
-    return clientSort ? sortClaimRows(kept, clientSort, orderFacts) : kept;
-  }, [clientSort, collapsedClaims, graphSourced, keepClaim, orderFacts, panelMode, spaceIds]);
+    return keepClaim ? inPickedSpaces.filter(keepClaim) : inPickedSpaces;
+  }, [collapsedClaims, graphSourced, keepClaim, panelMode, spaceIds]);
 
   // The topic menu, from the server's count over the tag. It describes every claim the current
   // filters allow rather than the pages loaded so far — which is what a client-side version could
@@ -936,31 +957,17 @@ export function ClaimsTab({
   // hand, so they are counted here instead: spaces off the rows, topics off the claim entities, as
   // the matches list counts its own.
   const keptRows = keepClaim ? visibleClaims : NO_KEPT_ROWS;
-  const { entities: keptEntities } = useClaimEntitiesByIds(
-    React.useMemo(() => keptRows.map(entry => entry.claim.claim_entity_id), [keptRows])
-  );
-  const keptTopicsById = React.useMemo(() => claimTopicsById(keptEntities), [keptEntities]);
+  const { topicsByClaimId: keptTopicsById } = useClaimRowTopics(keptRows);
+  const keptFacetTopics = useRowTopicFacet(keptRows, keptTopicsById, topicIds);
   const panelFacetSpaces = React.useMemo(
     () => (keepClaim ? countBy(keptRows.map(entry => ({ id: entry.claim.space_id, name: null }))) : facetSpaces),
     [facetSpaces, keepClaim, keptRows]
   );
-  const panelFacetTopics = React.useMemo(
-    () =>
-      keepClaim
-        ? orderFacetOptions(
-            keepSelectedVisible(
-              countBy(
-                keptRows.flatMap(
-                  entry => topicsFor(keptTopicsById, entry.claim.claim_entity_id, entry.claim.space_id) ?? []
-                )
-              ),
-              topicIds
-            ),
-            topicIds
-          )
-        : facetTopics,
-    [facetTopics, keepClaim, keptRows, keptTopicsById, topicIds]
-  );
+  const panelFacetTopics = keepClaim ? keptFacetTopics : facetTopics;
+  // Whether those counts describe the rows on screen, which is what "does this pill still narrow"
+  // compares them with. The source's facets count the rows before the client folded any away (the
+  // answered ones, or a row outside one of the picked spaces), so then the listed count is unknown.
+  const facetsCountListedRows = Boolean(keepClaim) || visibleClaims.length === claims.length;
 
   const countsPending =
     searchSettling || indexedCountsPending || (graphSourced && (topicsSettling || spacesSettling || !facetsSettled));
@@ -1168,7 +1175,7 @@ export function ClaimsTab({
             onSpaceToggle={onSpaceToggle}
             onSpacesClear={onSpacesClear}
             onTopicIdsChange={setTopicIds}
-            listedCount={hasNextPage ? 0 : visibleClaims.length}
+            listedCount={hasNextPage || !facetsCountListedRows ? 0 : visibleClaims.length}
             // A tagged claim can sit in several spaces, so the others stay on offer after a pick.
             spacesAreExclusive={!graphSourced}
             resultCount={hasNextPage ? null : visibleClaims.length}

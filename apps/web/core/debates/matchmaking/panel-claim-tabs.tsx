@@ -8,9 +8,11 @@ import type { MatchmakingClaim } from '../api';
 import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
 import { type ClaimsListVariant, ClaimsTab } from './claims-tab';
 import { useMatchmakingMatches } from './hooks';
+import { otherSideHeld } from './hub-claim-end-slot';
 import type { HubSortOption, PanelListFilters } from './hub-filters';
 import { HubPillButton } from './hub-pill-button';
 import { MatchesList } from './matches-list';
+import { opposingPositions } from './opposing-positions';
 import {
   type DebatesHubExploreShow,
   type DebatesHubExploreSort,
@@ -42,13 +44,12 @@ const EXPLORE_SHOWS: HubSortOption<DebatesHubExploreShow>[] = [
 
 /** The side the viewer is not on, for a claim they hold. */
 function opposingSides(entry: MatchmakingClaim) {
-  const viewerSide = entry.viewer_response?.position;
-  return viewerSide === undefined ? [] : entry.positions.filter(position => position.position !== viewerSide);
+  return opposingPositions(entry.positions, entry.viewer_response?.position);
 }
 
 /** A claim where the viewer holds a side and someone holds the other, online or not. */
 function hasSomeoneOnTheOtherSide(entry: MatchmakingClaim) {
-  return opposingSides(entry).some(position => position.total_count > 0);
+  return otherSideHeld(entry.positions, entry.viewer_response?.position);
 }
 
 /**
@@ -126,14 +127,14 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
   return showsOffline ? (
     <ClaimsTab
       variant="positions"
-      atomsFrom="lobby"
+      atomsFrom="panelMatches"
       panelFilters={filters}
       keepClaim={hasSomeoneOnTheOtherSide}
       notice={notice}
       onTabChange={onTabChange}
     />
   ) : (
-    <MatchesList onTabChange={onTabChange} panelFilters={filters} notice={notice} />
+    <MatchesList atomsFrom="panelMatches" onTabChange={onTabChange} panelFilters={filters} notice={notice} />
   );
 }
 
@@ -239,7 +240,7 @@ export function PanelExploreTab({
     <ClaimsTab
       key={variant}
       variant={variant}
-      atomsFrom="explore"
+      atomsFrom="panelExplore"
       panelFilters={filters}
       keepClaim={keepClaim}
       // `debate_now` keeps the claims you have answered. Under Not answered they fold away the way

@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateChallenge, DebateRequest, DebateRequestParty } from '../api';
+import { EMPTY_SCHEDULED } from './requests-fixtures';
 import { RequestsTab } from './requests-tab';
 import type { ScheduledContent } from './scheduled-debates-section';
 
@@ -396,16 +397,6 @@ describe('RequestsTab rail', () => {
 /**
  * Dense is the workspace rail.
  */
-const EMPTY_SCHEDULED: ScheduledContent = {
-  answerable: [],
-  upcoming: [],
-  lobbies: [],
-  people: [],
-  requestsError: null,
-  roomsError: null,
-  lobbiesError: null,
-  loading: false,
-};
 
 describe('dense (workspace rail) visibility', () => {
   beforeEach(() => {

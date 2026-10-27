@@ -362,13 +362,11 @@ function ClaimHeader({
 
   return (
     <>
-      {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. No
-          reserved height: the slot is now the height of the chip beside it, so the row does not grow
-          when the match lookup answers. */}
       {/* On one text baseline, not centred: the space (11px), Controversial (14px) and the slot's
           Schedule (13px) are three sizes, and centring their boxes left each sitting at a different
           height (27 Oct). The baseline is also what keeps the chip on the slot's first line when the
-          slot stacks a blocked reason under it. */}
+          slot stacks a blocked reason under it. Here rather than in the utility, which Explore's
+          meta row also uses: Tailwind emits `items-baseline` after it, so this wins. */}
       <div className="claim-card-panel-header items-baseline">
         <span className="flex min-w-0 items-baseline gap-1.5" data-testid="claim-card-eyebrow">
           <SpaceChip spaceId={claim.space_id} />

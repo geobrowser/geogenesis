@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -39,7 +38,6 @@ import { useDebatePeople } from './hooks';
 import { type DebateAnalyticsSurface, debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
-import { HUB_STICKY_CONTROLS_SELECTOR, scrollToSection, useHubScrollSelector } from './hub-scroll';
 import { RequestParties } from './request-parties';
 import { RequestSection } from './request-section';
 import { formatDebateSlot, formatDebateTime, formatTime } from './scheduled-debate-format';
@@ -55,32 +53,8 @@ export { formatDebateSlot, formatDebateTime } from './scheduled-debate-format';
  * Scheduled debates in the Requests tab (GEO-2939, GEO-2940). Answering and joining both happen
  * here, so neither depends on an email arriving or a popup being caught.
  */
-export function ScheduledDebatesSection({
-  content,
-  focusedRequestId = null,
-}: {
-  content: ScheduledContent;
-  /** A scheduled request a link asked to see (GEO-3431): outlined, and scrolled to once. */
-  focusedRequestId?: string | null;
-}) {
+export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
   const { answerable, upcoming, lobbies, people, requestsError, roomsError, lobbiesError } = content;
-  // Not until every read has landed: a section that loads above it would push the card back out of
-  // view after the scroll.
-  const { focusedId, isFocused, linkGone } = useLinkedScheduledRequest(focusedRequestId, content);
-  const hubScrollSelector = useHubScrollSelector();
-  React.useEffect(() => {
-    if (!focusedId) return;
-    // Only the hub's box, the way the lobby's sections jump: `scrollIntoView` scrolls every ancestor.
-    // Clear of the Requests tab's filter bar, pinned to the top of that box.
-    const node = document.querySelector<HTMLElement>(FOCUSED_CARD);
-    if (!node) return;
-    const scroller = hubScrollSelector ? node.closest<HTMLElement>(hubScrollSelector) : null;
-    const stickyBar = scroller?.querySelector<HTMLElement>(HUB_STICKY_CONTROLS_SELECTOR);
-    scrollToSection(node, scroller, stickyBar?.getBoundingClientRect().height ?? 0);
-    // And focus, for a keyboard or screen reader: the hub is not modal, so focus is still on the page.
-    node.focus({ preventScroll: true });
-  }, [focusedId, hubScrollSelector]);
-  const linkGoneNotice = linkGone && <LinkGoneNotice state={linkGone} />;
   const { answer, busy, error: conflict } = useScheduledDebateAnswer();
   const viewerId = useCurrentGeoChatUserId();
   const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0, people);
@@ -89,11 +63,10 @@ export function ScheduledDebatesSection({
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
 
-  if (!hasScheduledContent(content)) return linkGoneNotice || null;
+  if (!hasScheduledContent(content)) return null;
 
   return (
     <>
-      {linkGoneNotice}
       {(upcoming.length > 0 || roomsError) && (
         <RequestSection label="Upcoming debates">
           {upcoming.map(({ room, opponentUserId, scheduledEndAt, requestId }) => (
@@ -104,11 +77,10 @@ export function ScheduledDebatesSection({
               scheduledEndAt={scheduledEndAt}
               opponent={lookUp(opponentUserId)}
               viewer={viewer}
-              focused={isFocused(requestId)}
               onReschedule={reschedulerFor(requestId, opponentUserId, 'requests_reschedule')}
             />
           ))}
-          {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
+          {roomsError && <ReadFailed>{READ_FAILURE_COPY.rooms(roomsError)}</ReadFailed>}
         </RequestSection>
       )}
 
@@ -119,13 +91,13 @@ export function ScheduledDebatesSection({
             <UpcomingLobbyRowCard key={row.lobbyId} row={row} />
           ))}
           {/* The lobbies the viewer hosts come only from this read, so a failure is not "none". */}
-          {lobbiesError && <ReadFailed>Could not read your lobbies: {lobbiesError.message}</ReadFailed>}
+          {lobbiesError && <ReadFailed>{READ_FAILURE_COPY.lobbies(lobbiesError)}</ReadFailed>}
         </RequestSection>
       )}
 
       {(answerable.length > 0 || requestsError) && (
         <RequestSection label="Scheduled">
-          {requestsError && <ReadFailed>Could not read your scheduled debates: {requestsError.message}</ReadFailed>}
+          {requestsError && <ReadFailed>{READ_FAILURE_COPY.requests(requestsError)}</ReadFailed>}
           {/* The instant cards' list, so one that expires folds away the way theirs do. */}
           <HubCardList>
             {answerable.map(request => {
@@ -137,7 +109,6 @@ export function ScheduledDebatesSection({
                   opponent={lookUp(opponentUserId)}
                   viewer={viewer}
                   viewerId={viewerId}
-                  focused={isFocused(request.request_id)}
                   busy={busy}
                   onAnswer={answer}
                   onReschedule={reschedulerFor(
@@ -165,8 +136,24 @@ export function ScheduledDebatesSection({
   );
 }
 
-/** The card a link asked for (`ScheduleCard`'s `data-focused`), which the section scrolls to. */
-const FOCUSED_CARD = '[data-focused]';
+/**
+ * What a failed read says: one failing must not read as an empty schedule. The same words on the
+ * section and on the panel's timeline (GEO-3463), which lists them together above its now-line.
+ */
+export const READ_FAILURE_COPY = {
+  rooms: (error: Error) => `Could not read your upcoming debates: ${error.message}`,
+  requests: (error: Error) => `Could not read your scheduled debates: ${error.message}`,
+  lobbies: (error: Error) => `Could not read your lobbies: ${error.message}`,
+};
+
+/** Every read that failed, in the timeline's order. */
+export function readFailureMessages(content: Pick<ScheduledContent, 'roomsError' | 'requestsError' | 'lobbiesError'>) {
+  return [
+    content.roomsError && READ_FAILURE_COPY.rooms(content.roomsError),
+    content.requestsError && READ_FAILURE_COPY.requests(content.requestsError),
+    content.lobbiesError && READ_FAILURE_COPY.lobbies(content.lobbiesError),
+  ].filter((message): message is string => Boolean(message));
+}
 
 /** A debate being moved: whose week to open, the request it moves, and which button asked. */
 type Rescheduling = { requestId: string; opponentUserId: string; opponentName: string | null; entry: ScheduleEntry };
@@ -419,12 +406,9 @@ function UpcomingRow({
   scheduledEndAt,
   opponent,
   viewer,
-  focused,
   onReschedule,
 }: {
   room: UpcomingDebateRoom;
-  /** A link asked for this debate's request (GEO-3431): accepted since the email went out. */
-  focused: boolean;
   requestId: string | null;
   scheduledEndAt: string | null;
   opponent: DebateParticipantSummary | null;
@@ -432,13 +416,8 @@ function UpcomingRow({
   /** Opens the other debater's week to move this debate. Null when it cannot be offered. */
   onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
-  const cancellable = roomCancellable({ room, requestId });
-  const router = useRouter();
-  const roomPath = debateRoomPath(room.room_id);
-
   return (
     <ScheduleCard
-      focused={focused}
       parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={
         room.due
@@ -450,32 +429,7 @@ function UpcomingRow({
       status={roomStatusLabel(room, opponent)}
       urgent={room.others_present}
       actions={
-        (room.joinable || cancellable) && (
-          <div className="flex flex-col gap-2">
-            {room.joinable && (
-              <Link
-                href={roomPath}
-                onClick={debateEntryClick(() => router.push(roomPath))}
-                className={JOIN_PILL}
-                {...hubAnalyticsAttributes('Join scheduled debate', 'join_scheduled_debate')}
-              >
-                Join debate
-              </Link>
-            )}
-            {/* Moving it is refused on exactly the same rule, and needs the other debater's week. */}
-            {cancellable && onReschedule && (
-              <HubPillButton
-                className="w-full"
-                analyticsLabel="Debate hub Reschedule scheduled debate"
-                analyticsIntent="reschedule_scheduled_debate"
-                onClick={event => onReschedule(event.currentTarget)}
-              >
-                Reschedule
-              </HubPillButton>
-            )}
-            {cancellable && requestId && <CancelScheduled requestId={requestId} kind="debate" opponent={opponent} />}
-          </div>
-        )
+        <BookedDebateActions room={room} requestId={requestId} opponent={opponent} onReschedule={onReschedule} />
       }
     />
   );
@@ -490,11 +444,8 @@ export function ScheduledRow({
   onAnswer,
   onReschedule,
   ref,
-  focused = false,
   analyticsSurface = 'hub',
 }: {
-  /** A link asked for this request (GEO-3431). */
-  focused?: boolean;
   /** From `HubCardList`, whose `popLayout` measures the card on its way out. */
   ref?: React.Ref<HTMLElement>;
   analyticsSurface?: DebateAnalyticsSurface;
@@ -508,11 +459,10 @@ export function ScheduledRow({
   onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
   const expiry = useScheduledExpiry(request.scheduled_start_at);
-  const { proposedByViewer, viewerAccepted, withdrawable } = scheduledRequestRoles(request, viewerId);
+  const { viewerAccepted } = scheduledRequestRoles(request, viewerId);
   return (
     <ScheduleCard
       ref={ref}
-      focused={focused}
       parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
       status={`${
@@ -534,30 +484,165 @@ export function ScheduledRow({
             analyticsSurface={analyticsSurface}
           />
         ) : (
-          withdrawable && (
-            <div className="flex flex-col gap-2">
-              {viewerAccepted && onReschedule && (
-                <HubPillButton
-                  className="w-full"
-                  analyticsSurface={analyticsSurface}
-                  analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Reschedule scheduled request')}
-                  analyticsIntent="reschedule_scheduled_request"
-                  onClick={event => onReschedule(event.currentTarget)}
-                >
-                  Reschedule
-                </HubPillButton>
-              )}
-              <CancelScheduled
-                requestId={request.request_id}
-                kind={proposedByViewer ? 'request' : 'debate'}
-                opponent={opponent}
-                analyticsSurface={analyticsSurface}
-              />
-            </div>
-          )
+          <WaitingInviteActions
+            request={request}
+            opponent={opponent}
+            viewerId={viewerId}
+            onReschedule={onReschedule}
+            analyticsSurface={analyticsSurface}
+          />
         )
       }
     />
+  );
+}
+
+/**
+ * The line the Requests timeline's actions sit on (GEO-3463), its pills sized to their words.
+ * Nothing at all when every action on it has stepped aside, such as Cancel for its confirm step.
+ */
+export function CompactActionRow({ children }: { children: React.ReactNode }) {
+  if (React.Children.toArray(children).length === 0) return null;
+  return <div className="flex flex-nowrap items-center gap-1.5">{children}</div>;
+}
+
+/**
+ * A booked debate's actions: Join once the room opens, and Reschedule or Cancel until anyone has been
+ * in it. The section's card stacks them full width. `compact` is the panel's timeline (GEO-3463): one
+ * line, where Join holds its place, dimmed, until the room opens, and Cancel's confirm step opens
+ * under the line rather than squeezing into it.
+ */
+export function BookedDebateActions({
+  room,
+  requestId,
+  opponent,
+  onReschedule,
+  compact = false,
+}: {
+  room: UpcomingDebateRoom;
+  requestId: string | null;
+  opponent: DebateParticipantSummary | null;
+  /** Opens the other debater's week to move this debate. Null when it cannot be offered. */
+  onReschedule: ((opener: HTMLElement) => void) | null;
+  compact?: boolean;
+}) {
+  const router = useRouter();
+  const roomPath = debateRoomPath(room.room_id);
+  const cancellable = roomCancellable({ room, requestId });
+  const cancel = useCancelScheduled({ requestId: cancellable ? requestId : null, kind: 'debate', opponent, compact });
+
+  const join = room.joinable ? (
+    <Link
+      href={roomPath}
+      onClick={debateEntryClick(() => router.push(roomPath))}
+      className={compact ? hubPillClassName('primary', undefined, 'compact') : JOIN_PILL}
+      {...hubAnalyticsAttributes('Join scheduled debate', 'join_scheduled_debate')}
+    >
+      {compact ? 'Join' : 'Join debate'}
+    </Link>
+  ) : compact ? (
+    <span aria-disabled className={hubPillClassName('secondary', 'opacity-40', 'compact')}>
+      Join
+    </span>
+  ) : null;
+  // Moving it is refused on exactly the same rule, and needs the other debater's week.
+  const reschedule =
+    cancellable && onReschedule ? (
+      <HubPillButton
+        className={compact ? undefined : 'w-full'}
+        size={compact ? 'compact' : 'default'}
+        analyticsLabel="Debate hub Reschedule scheduled debate"
+        analyticsIntent="reschedule_scheduled_debate"
+        onClick={event => onReschedule(event.currentTarget)}
+      >
+        Reschedule
+      </HubPillButton>
+    ) : null;
+
+  if (compact) {
+    return (
+      <>
+        <CompactActionRow>
+          {join}
+          {reschedule}
+          {cancel.button}
+        </CompactActionRow>
+        {cancel.panel}
+      </>
+    );
+  }
+  if (!room.joinable && !cancellable) return null;
+  return (
+    <div className="flex flex-col gap-2">
+      {join}
+      {reschedule}
+      {cancel.button}
+      {cancel.panel}
+    </div>
+  );
+}
+
+/**
+ * An invite waiting on the other debater, from a viewer who may still withdraw it: Reschedule once
+ * they have accepted it, and Cancel. Nothing for one they may not. `compact` as on
+ * {@link BookedDebateActions}.
+ */
+export function WaitingInviteActions({
+  request,
+  opponent,
+  viewerId,
+  onReschedule,
+  analyticsSurface = 'hub',
+  compact = false,
+}: {
+  request: ScheduledDebateRequest;
+  opponent: DebateParticipantSummary | null;
+  viewerId: string | null;
+  onReschedule: ((opener: HTMLElement) => void) | null;
+  analyticsSurface?: DebateAnalyticsSurface;
+  compact?: boolean;
+}) {
+  const { proposedByViewer, viewerAccepted, withdrawable } = scheduledRequestRoles(request, viewerId);
+  const cancel = useCancelScheduled({
+    requestId: withdrawable ? request.request_id : null,
+    kind: proposedByViewer ? 'request' : 'debate',
+    opponent,
+    analyticsSurface,
+    compact,
+  });
+  if (!withdrawable) return null;
+
+  const reschedule =
+    viewerAccepted && onReschedule ? (
+      <HubPillButton
+        className={compact ? undefined : 'w-full'}
+        size={compact ? 'compact' : 'default'}
+        analyticsSurface={analyticsSurface}
+        analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Reschedule scheduled request')}
+        analyticsIntent="reschedule_scheduled_request"
+        onClick={event => onReschedule(event.currentTarget)}
+      >
+        Reschedule
+      </HubPillButton>
+    ) : null;
+
+  if (compact) {
+    return (
+      <>
+        <CompactActionRow>
+          {reschedule}
+          {cancel.button}
+        </CompactActionRow>
+        {cancel.panel}
+      </>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      {reschedule}
+      {cancel.button}
+      {cancel.panel}
+    </div>
   );
 }
 
@@ -584,83 +669,68 @@ export function ScheduledAnswerButtons({
   layout?: 'stacked' | 'inline';
 }) {
   const { answerOnce, releaseAnswer } = useAnswerOnce();
-  if (layout === 'inline') {
+  const inline = layout === 'inline';
+  const size = inline ? 'compact' : 'default';
+
+  // Labelled apart from the instant request cards' Accept and Decline, which would otherwise share
+  // their labels and could not be told from these in the data.
+  const accept = (
+    <HubPillButton
+      variant="primary"
+      size={size}
+      analyticsSurface={analyticsSurface}
+      analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Accept scheduled debate')}
+      analyticsIntent="accept_scheduled_debate"
+      onClick={() => answerOnce(() => onAnswer(requestId, true, releaseAnswer.onError))}
+      disabled={busy}
+    >
+      Accept
+    </HubPillButton>
+  );
+  const decline = (
+    <HubPillButton
+      size={size}
+      analyticsSurface={analyticsSurface}
+      analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Decline scheduled debate')}
+      analyticsIntent="decline_scheduled_debate"
+      onClick={() => answerOnce(() => onAnswer(requestId, false, releaseAnswer.onError))}
+      disabled={busy}
+    >
+      Decline
+    </HubPillButton>
+  );
+  // The scheduling email's third answer (GEO-3232): a time that does not suit is moved, and the
+  // other side asked again, rather than declined. The timeline's line has room for fewer words.
+  const newTime = onReschedule ? (
+    <HubPillButton
+      size={size}
+      className={inline ? undefined : 'col-span-2'}
+      analyticsSurface={analyticsSurface}
+      analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Choose different time for scheduled request')}
+      analyticsIntent="choose_different_time_scheduled_request"
+      onClick={event => onReschedule(event.currentTarget)}
+      disabled={busy}
+    >
+      {inline ? 'Suggest a time' : 'Choose different time'}
+    </HubPillButton>
+  ) : null;
+
+  if (inline) {
     return (
-      <>
-        <HubPillButton
-          size="compact"
-          variant="primary"
-          analyticsSurface={analyticsSurface}
-          analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Accept scheduled debate')}
-          analyticsIntent="accept_scheduled_debate"
-          onClick={() => answerOnce(() => onAnswer(requestId, true, releaseAnswer.onError))}
-          disabled={busy}
-        >
-          Accept
-        </HubPillButton>
-        <HubPillButton
-          size="compact"
-          analyticsSurface={analyticsSurface}
-          analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Decline scheduled debate')}
-          analyticsIntent="decline_scheduled_debate"
-          onClick={() => answerOnce(() => onAnswer(requestId, false, releaseAnswer.onError))}
-          disabled={busy}
-        >
-          Decline
-        </HubPillButton>
-        {onReschedule ? (
-          <HubPillButton
-            size="compact"
-            analyticsSurface={analyticsSurface}
-            analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Choose different time for scheduled request')}
-            analyticsIntent="choose_different_time_scheduled_request"
-            onClick={event => onReschedule(event.currentTarget)}
-            disabled={busy}
-          >
-            Suggest a time
-          </HubPillButton>
-        ) : null}
-      </>
+      <CompactActionRow>
+        {accept}
+        {decline}
+        {newTime}
+      </CompactActionRow>
     );
   }
   return (
-    // Decline first, Accept primary on the right: the order every other request card uses.
-    // Under them, the scheduling email's third answer in its words (GEO-3232): a time that
-    // does not suit is moved, and the other side asked again, rather than declined.
+    // Decline first, Accept primary on the right: the order every other request card uses, with
+    // the new time under them in the email's words.
     <div className="grid grid-cols-2 gap-2">
-      {/* Labelled apart from the instant request cards' Accept and Decline, which would
-          otherwise share their labels and could not be told from these in the data. */}
-      <HubPillButton
-        analyticsSurface={analyticsSurface}
-        analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Decline scheduled debate')}
-        analyticsIntent="decline_scheduled_debate"
-        onClick={() => answerOnce(() => onAnswer(requestId, false, releaseAnswer.onError))}
-        disabled={busy}
-      >
-        Decline
-      </HubPillButton>
-      <HubPillButton
-        variant="primary"
-        analyticsSurface={analyticsSurface}
-        analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Accept scheduled debate')}
-        analyticsIntent="accept_scheduled_debate"
-        onClick={() => answerOnce(() => onAnswer(requestId, true, releaseAnswer.onError))}
-        disabled={busy}
-      >
-        Accept
-      </HubPillButton>
-      {onReschedule && (
-        <HubPillButton
-          className="col-span-2"
-          analyticsSurface={analyticsSurface}
-          analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Choose different time for scheduled request')}
-          analyticsIntent="choose_different_time_scheduled_request"
-          onClick={event => onReschedule(event.currentTarget)}
-          disabled={busy}
-        >
-          Choose different time
-        </HubPillButton>
-      )}
+      {decline}
+      {accept}
+      {newTime}
     </div>
   );
 }
@@ -700,44 +770,69 @@ const CANCEL_COPY = {
  * Calling a scheduled debate off (GEO-3093), behind a confirm step: an accepted debate is an
  * agreement with someone else, and one press should not be able to undo it.
  */
-export function CancelScheduled({
-  requestId,
-  kind,
-  opponent,
-  analyticsSurface = 'hub',
-  compact = false,
-}: {
+export function CancelScheduled(props: CancelScheduledOptions & { requestId: string }) {
+  const { button, panel } = useCancelScheduled(props);
+  return (
+    <div className="flex flex-col gap-2">
+      {button}
+      {panel}
+    </div>
+  );
+}
+
+type CancelScheduledOptions = {
+  /** Null when there is nothing the viewer may cancel; both parts are then empty. */
+  requestId: string | null;
+  kind: keyof typeof CANCEL_COPY;
+  opponent: DebateParticipantSummary | null;
   analyticsSurface?: DebateAnalyticsSurface;
   /**
    * The Requests timeline's one-line actions (GEO-3463): the pill sizes to its label rather than the
    * card, and the confirm step keeps its two buttons on one line under the question.
    */
   compact?: boolean;
-  requestId: string;
-  kind: keyof typeof CANCEL_COPY;
-  opponent: DebateParticipantSummary | null;
-}) {
+};
+
+/**
+ * Cancel in two parts, for a layout that puts them in different places: the `button` that starts
+ * it, and the `panel` for everything after the press — the confirm step, a refusal, "Cancelled".
+ * The timeline keeps the button in its one-line row and opens the panel under it; the card stacks
+ * the two. The button steps aside while the panel asks.
+ */
+function useCancelScheduled({
+  requestId,
+  kind,
+  opponent,
+  analyticsSurface = 'hub',
+  compact = false,
+}: CancelScheduledOptions): { button: React.ReactNode; panel: React.ReactNode } {
   const cancel = useCancelScheduledDebate();
   const [confirming, setConfirming] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const copy = CANCEL_COPY[kind];
   const [label, intent] = copy.analytics;
+  const size = compact ? 'compact' : 'default';
+
+  if (requestId === null) return { button: null, panel: null };
 
   // Gone from the list once the refetch lands; until then the card must not offer it again.
   if (cancel.isSuccess) {
-    return (
-      <Text as="p" variant="footnote" color="grey-04">
-        Cancelled
-      </Text>
-    );
+    return {
+      button: null,
+      panel: (
+        <Text as="p" variant="footnote" color="grey-04">
+          Cancelled
+        </Text>
+      ),
+    };
   }
 
   if (!confirming) {
-    return (
-      <div className="flex flex-col gap-2">
+    return {
+      button: (
         <HubPillButton
           className={compact ? undefined : 'w-full'}
-          size={compact ? 'compact' : 'default'}
+          size={size}
           analyticsSurface={analyticsSurface}
           analyticsLabel={debateAnalyticsLabel(analyticsSurface, label)}
           analyticsIntent={intent}
@@ -748,56 +843,59 @@ export function CancelScheduled({
         >
           {compact ? 'Cancel' : copy.action}
         </HubPillButton>
-        {error && (
-          <Text as="p" variant="footnote" color="red-01">
-            {error}
-          </Text>
-        )}
-      </div>
-    );
+      ),
+      panel: error ? (
+        <Text as="p" variant="footnote" color="red-01">
+          {error}
+        </Text>
+      ) : null,
+    };
   }
 
-  return (
-    <div className="flex flex-col gap-2">
-      <Text as="p" variant="footnote">
-        {copy.question(opponentName(opponent))}
-      </Text>
-      <div className={compact ? 'flex flex-nowrap gap-1.5' : 'grid grid-cols-2 gap-2'}>
-        <HubPillButton
-          size={compact ? 'compact' : 'default'}
-          analyticsSurface={analyticsSurface}
-          analyticsLabel={debateAnalyticsLabel(analyticsSurface, `Keep ${kind}`)}
-          analyticsIntent={`keep_scheduled_${kind}`}
-          onClick={() => setConfirming(false)}
-          disabled={cancel.isPending}
-        >
-          Keep it
-        </HubPillButton>
-        <HubPillButton
-          variant="primary"
-          size={compact ? 'compact' : 'default'}
-          analyticsSurface={analyticsSurface}
-          analyticsLabel={debateAnalyticsLabel(analyticsSurface, `Confirm ${label}`)}
-          analyticsIntent={`confirm_${intent}`}
-          pending={cancel.isPending}
-          pendingLabel="Cancelling…"
-          onClick={() =>
-            cancel.mutate(
-              { requestId },
-              {
-                onError: failure => {
-                  setConfirming(false);
-                  setError(cancelFailureMessage(failure));
-                },
-              }
-            )
-          }
-        >
-          {copy.action}
-        </HubPillButton>
+  return {
+    button: null,
+    panel: (
+      <div className="flex flex-col gap-2">
+        <Text as="p" variant="footnote">
+          {copy.question(opponentName(opponent))}
+        </Text>
+        <div className={compact ? 'flex flex-nowrap gap-1.5' : 'grid grid-cols-2 gap-2'}>
+          <HubPillButton
+            size={size}
+            analyticsSurface={analyticsSurface}
+            analyticsLabel={debateAnalyticsLabel(analyticsSurface, `Keep ${kind}`)}
+            analyticsIntent={`keep_scheduled_${kind}`}
+            onClick={() => setConfirming(false)}
+            disabled={cancel.isPending}
+          >
+            Keep it
+          </HubPillButton>
+          <HubPillButton
+            variant="primary"
+            size={size}
+            analyticsSurface={analyticsSurface}
+            analyticsLabel={debateAnalyticsLabel(analyticsSurface, `Confirm ${label}`)}
+            analyticsIntent={`confirm_${intent}`}
+            pending={cancel.isPending}
+            pendingLabel="Cancelling…"
+            onClick={() =>
+              cancel.mutate(
+                { requestId },
+                {
+                  onError: failure => {
+                    setConfirming(false);
+                    setError(cancelFailureMessage(failure));
+                  },
+                }
+              )
+            }
+          >
+            {copy.action}
+          </HubPillButton>
+        </div>
       </div>
-    </div>
-  );
+    ),
+  };
 }
 
 /**
@@ -830,11 +928,8 @@ function ScheduleCard({
   actions,
   ref,
   testId,
-  focused = false,
 }: {
   ref?: React.Ref<HTMLElement>;
-  /** A link asked for this card (GEO-3431): outlined. `ScheduledDebatesSection` scrolls to it. */
-  focused?: boolean;
   /** Who it is with: the "You vs Them" strip for a debate, the lobby's name and host for a lobby. */
   parties: React.ReactNode;
   testId?: string;
@@ -849,15 +944,8 @@ function ScheduleCard({
     <motion.article
       ref={ref}
       {...hubCardMotion}
-      className={cx(
-        'flex w-full flex-col gap-3 rounded-lg border bg-white p-3',
-        // The border is the marker; the browser's ring for a focus set from code would be a second one.
-        focused ? 'border-text outline-none' : 'border-grey-02'
-      )}
+      className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
       data-testid={testId}
-      data-focused={focused || undefined}
-      aria-current={focused || undefined}
-      tabIndex={focused ? -1 : undefined}
     >
       {/* The time on its own line, with where things stand under it: side by side, a slot and a
           sentence crowd each other out at this width, and it was the status that lost. */}
@@ -906,13 +994,7 @@ function DebateParties({
 function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
   // From the clock, not from the reads: an empty lobby sends nothing when its start passes.
   const now = useMinuteNow();
-  const path = debateRoomPath(row.lobbyId);
   const hosts = hostsLabel(row.hosts);
-  const [action, analyticsLabel, analyticsIntent] = row.open
-    ? row.onRoster
-      ? LOBBY_ACTIONS.open
-      : LOBBY_ACTIONS.join
-    : LOBBY_ACTIONS.view;
 
   return (
     <ScheduleCard
@@ -934,27 +1016,58 @@ function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
           )}
         </div>
       }
-      actions={
-        // Lobby to lobby, like the side panel card's links: marked so the join it leads to is
-        // attributed here, with no step-out, which is for entering a 1:1.
-        <Link
-          href={path}
-          onClick={() => markLobbyEntry(row.lobbyId, 'requests')}
-          className={row.open && !row.onRoster ? JOIN_PILL : hubPillClassName('secondary', 'w-full')}
-          {...hubAnalyticsAttributes(analyticsLabel, analyticsIntent)}
-        >
-          {action}
-        </Link>
-      }
+      actions={<LobbyRowAction row={row} />}
     />
   );
 }
 
-/** The card's one button: its words, and its analytics label and intent. */
-export const LOBBY_ACTIONS = {
-  view: ['View lobby', 'View scheduled lobby', 'view_scheduled_lobby'],
-  join: ['Join lobby', 'Join scheduled lobby', 'join_scheduled_lobby'],
-  open: ['Open lobby', 'Open scheduled lobby', 'open_scheduled_lobby'],
+/**
+ * A lobby row's one button: View before it opens, then Join, or Open for someone already on its
+ * roster. Lobby to lobby, like the side panel card's links: marked so the join it leads to is
+ * attributed to Requests, with no step-out, which is for entering a 1:1. `compact` is the panel's
+ * timeline (GEO-3463), where the pill says only the verb; its clicks read the same as the card's.
+ */
+export function LobbyRowAction({ row, compact = false }: { row: UpcomingLobbyRow; compact?: boolean }) {
+  const action = LOBBY_ACTIONS[row.open ? (row.onRoster ? 'open' : 'join') : 'view'];
+  const primary = row.open && !row.onRoster;
+  return (
+    <Link
+      href={debateRoomPath(row.lobbyId)}
+      onClick={() => markLobbyEntry(row.lobbyId, 'requests')}
+      className={
+        compact
+          ? hubPillClassName(primary ? 'primary' : 'secondary', undefined, 'compact')
+          : primary
+            ? JOIN_PILL
+            : hubPillClassName('secondary', 'w-full')
+      }
+      {...hubAnalyticsAttributes(action.analyticsLabel, action.analyticsIntent)}
+    >
+      {compact ? action.verb : action.label}
+    </Link>
+  );
+}
+
+/** A lobby row's button: its words, the verb alone for the timeline, and its analytics label and intent. */
+const LOBBY_ACTIONS = {
+  view: {
+    label: 'View lobby',
+    verb: 'View',
+    analyticsLabel: 'View scheduled lobby',
+    analyticsIntent: 'view_scheduled_lobby',
+  },
+  join: {
+    label: 'Join lobby',
+    verb: 'Join',
+    analyticsLabel: 'Join scheduled lobby',
+    analyticsIntent: 'join_scheduled_lobby',
+  },
+  open: {
+    label: 'Open lobby',
+    verb: 'Open',
+    analyticsLabel: 'Open scheduled lobby',
+    analyticsIntent: 'open_scheduled_lobby',
+  },
 } as const;
 
 /** Stands in until the graph or roster names them; its empty space id keeps it unlinked. */

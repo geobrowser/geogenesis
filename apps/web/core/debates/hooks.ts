@@ -92,7 +92,7 @@ import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { lobbyDebateRequested } from './lobbies/lobby-analytics';
-import { markAskWithdrawn } from './matchmaking/ask-withdrawals';
+import { markAskWithdrawn, unmarkAskWithdrawn } from './matchmaking/ask-withdrawals';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -1440,10 +1440,12 @@ export function useRejectDebateChallenge() {
 
   return useMutation({
     mutationFn: (challengeId: string) => rejectDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
-    onSuccess: (_result, challengeId) => {
-      // The requester taking theirs back is not "nobody took it" (GEO-3463). A recipient's own reject
-      // is recorded too, harmlessly: only the viewer's outgoing asks are ever looked up.
-      markAskWithdrawn(challengeId);
+    // The requester taking theirs back is not "nobody took it" (GEO-3463), and is marked on the press
+    // so a poll that drops it first still reads that way. A recipient's own reject is recorded too,
+    // harmlessly: only the viewer's outgoing asks are ever looked up.
+    onMutate: challengeId => markAskWithdrawn(challengeId),
+    onError: (_error, challengeId) => unmarkAskWithdrawn(challengeId),
+    onSuccess: () => {
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
         current ? { ...current, challenge: null } : current
       );

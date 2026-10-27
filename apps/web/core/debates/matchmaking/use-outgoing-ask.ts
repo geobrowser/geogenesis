@@ -11,7 +11,7 @@ import type { DebateClaimSummary } from '../api';
 import { useDebateActivity, useGeoChatAuth, useRejectDebateChallenge } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
-import { consumeAskWithdrawn } from './ask-withdrawals';
+import { askWasWithdrawn } from './ask-withdrawals';
 import { useDebateRequests, useWithdrawDebateRequest } from './hooks';
 import { useLiveRequest, useRequestCountdown } from './use-request-countdown';
 
@@ -118,18 +118,23 @@ export function useOutgoingAsk() {
   //
   // Not while signed out (the ask went because the viewer did), and not for one the viewer took back
   // from anywhere (`markAskWithdrawn`).
-  const previousRef = React.useRef<OutgoingAsk | null>(null);
+  //
+  // Remembered per account: switching accounts without a sign-out would otherwise stamp the last
+  // account's ask, gone from the new account's reads, as the new account's ended one.
+  const previousRef = React.useRef<{ ask: OutgoingAsk | null; accountKey: string | null }>({
+    ask: null,
+    accountKey: null,
+  });
   const tiedUp = hasActiveDebateFlow(activity);
   React.useEffect(() => {
-    const previous = previousRef.current;
-    previousRef.current = ask;
+    const previous = previousRef.current.accountKey === accountKey ? previousRef.current.ask : null;
+    previousRef.current = { ask, accountKey };
     if (ask) {
       setEnded(null);
       return;
     }
     if (!previous) return;
-    const withdrawn = consumeAskWithdrawn(previous.id);
-    if (!authenticated || !accountKey || tiedUp || withdrawn) return;
+    if (!authenticated || !accountKey || tiedUp || askWasWithdrawn(previous.id)) return;
     setEnded({ ask: previous, accountKey, endedAt: Date.now() });
   }, [accountKey, ask, authenticated, setEnded, tiedUp]);
 

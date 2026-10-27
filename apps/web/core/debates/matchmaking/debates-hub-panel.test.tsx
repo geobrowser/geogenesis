@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -28,6 +28,14 @@ import {
   debatesHubMatchesIncludeOfflineAtom,
   debatesHubMatchesOnlyAtom,
   debatesHubMatchesSortAtom,
+  debatesHubPanelExploreSearchAtom,
+  debatesHubPanelExploreSpaceIdsAtom,
+  debatesHubPanelExploreSpaceSeedSpentAtom,
+  debatesHubPanelExploreTopicIdsAtom,
+  debatesHubPanelMatchesSearchAtom,
+  debatesHubPanelMatchesSpaceIdsAtom,
+  debatesHubPanelMatchesSpaceSeedSpentAtom,
+  debatesHubPanelMatchesTopicIdsAtom,
   debatesHubPeopleOnlineOnlyAtom,
   debatesHubPeopleSortAtom,
   debatesHubPeopleSpaceIdsAtom,
@@ -39,6 +47,8 @@ import {
 import * as atomsModule from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
+  /** What the panel handed its warming Explore, so the test can tell it apart from a bare `ClaimsTab`. */
+  warmClaimsTab: null as { atomsFrom?: string; panelFilters?: unknown } | null,
   promptSignIn: vi.fn(),
   ready: true,
   authenticated: true,
@@ -189,7 +199,13 @@ vi.mock('./claims-tab', async () => {
     //
     // The real warming instance renders null; this draws a marker because that is the only way a
     // test can see it at all.
-    ClaimsTab: ({ warm = false }: { warm?: boolean }) => <div data-testid={warm ? 'claims-tab-warm' : 'claims-tab'} />,
+    //
+    // The warming one also records what it was handed: it has to be the panel's Explore, with the
+    // panel's filters, not a bare `ClaimsTab warm` running full screen's settings.
+    ClaimsTab: (props: { warm?: boolean; atomsFrom?: string; panelFilters?: unknown }) => {
+      if (props.warm) mocks.warmClaimsTab = props;
+      return <div data-testid={props.warm ? 'claims-tab-warm' : 'claims-tab'} />;
+    },
   };
 });
 
@@ -238,6 +254,7 @@ function renderOpen(tab: DebatesHubTab = 'requests') {
 }
 
 beforeEach(() => {
+  mocks.warmClaimsTab = null;
   lineup.live = [];
   mocks.ready = true;
   mocks.authenticated = true;
@@ -285,6 +302,45 @@ const FILTER_ATOMS = [
   { name: 'debatesHubLobbyTopicIdsAtom', atom: debatesHubLobbyTopicIdsAtom, dirty: ['topic-a'], cleared: [] },
   { name: 'debatesHubLobbySearchAtom', atom: debatesHubLobbySearchAtom, dirty: 'nuclear', cleared: '' },
   { name: 'debatesHubLobbySpaceSeedSpentAtom', atom: debatesHubLobbySpaceSeedSpentAtom, dirty: true, cleared: false },
+  // GEO-3463: the panel's own selections, apart from full screen's.
+  {
+    name: 'debatesHubPanelMatchesSpaceIdsAtom',
+    atom: debatesHubPanelMatchesSpaceIdsAtom,
+    dirty: ['space-a'],
+    cleared: [],
+  },
+  {
+    name: 'debatesHubPanelMatchesTopicIdsAtom',
+    atom: debatesHubPanelMatchesTopicIdsAtom,
+    dirty: ['topic-a'],
+    cleared: [],
+  },
+  { name: 'debatesHubPanelMatchesSearchAtom', atom: debatesHubPanelMatchesSearchAtom, dirty: 'nuclear', cleared: '' },
+  {
+    name: 'debatesHubPanelMatchesSpaceSeedSpentAtom',
+    atom: debatesHubPanelMatchesSpaceSeedSpentAtom,
+    dirty: true,
+    cleared: false,
+  },
+  {
+    name: 'debatesHubPanelExploreSpaceIdsAtom',
+    atom: debatesHubPanelExploreSpaceIdsAtom,
+    dirty: ['space-a'],
+    cleared: [],
+  },
+  {
+    name: 'debatesHubPanelExploreTopicIdsAtom',
+    atom: debatesHubPanelExploreTopicIdsAtom,
+    dirty: ['topic-a'],
+    cleared: [],
+  },
+  { name: 'debatesHubPanelExploreSearchAtom', atom: debatesHubPanelExploreSearchAtom, dirty: 'nuclear', cleared: '' },
+  {
+    name: 'debatesHubPanelExploreSpaceSeedSpentAtom',
+    atom: debatesHubPanelExploreSpaceSeedSpentAtom,
+    dirty: true,
+    cleared: false,
+  },
   { name: 'debatesHubPeopleSpaceIdsAtom', atom: debatesHubPeopleSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
   { name: 'debatesHubPeopleOnlineOnlyAtom', atom: debatesHubPeopleOnlineOnlyAtom, dirty: true, cleared: false },
   // GEO-3463: the panel's Sort and its tab-specific filters are session state like the rest.
@@ -853,6 +909,16 @@ describe('warming Explore', () => {
     expect(screen.getByTestId('claims-tab-warm')).toBeInTheDocument();
   });
 
+  // 26 Oct: a bare `ClaimsTab warm` ran with full screen's settings and seeded the viewer's spaces.
+  it('warms the panel’s Explore, with the panel’s filters and selection', () => {
+    renderOpen('people');
+
+    expect(mocks.warmClaimsTab).toMatchObject({
+      atomsFrom: 'panelExplore',
+      panelFilters: expect.objectContaining({ sort: expect.objectContaining({ value: 'best' }) }),
+    });
+  });
+
   // Or the selection atoms and geo-chat's space scopes would have two owners, and the tab the
   // viewer is looking at would be competing with a copy of itself.
   it('drops the warming mount once Explore is the tab on screen', () => {
@@ -1007,7 +1073,7 @@ describe('the filters the expand link carries', () => {
   it('carries no scope, which the workspace has no way to honour', () => {
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'explore' });
-    store.set(debatesHubExploreSearchAtom, 'nuclear');
+    store.set(debatesHubPanelExploreSearchAtom, 'nuclear');
 
     render(
       <Provider store={store}>
@@ -1022,9 +1088,11 @@ describe('the filters the expand link carries', () => {
   it('carries the tab’s narrowing into the URL', () => {
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'explore' });
-    store.set(debatesHubExploreSearchAtom, 'nuclear');
-    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
-    store.set(debatesHubExploreTopicIdsAtom, ['topic-a', 'topic-b']);
+    store.set(debatesHubPanelExploreSearchAtom, 'nuclear');
+    store.set(debatesHubPanelExploreSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubPanelExploreTopicIdsAtom, ['topic-a', 'topic-b']);
+    // Full screen's own selection is not what the panel is showing.
+    store.set(debatesHubExploreSearchAtom, 'climate');
 
     render(
       <Provider store={store}>
@@ -1042,11 +1110,11 @@ describe('the filters the expand link carries', () => {
     expect(params.get('topics')).toBe('topic-a,topic-b');
   });
 
-  it('carries Lobby’s narrowing, not Explore’s', () => {
+  it('carries Matches’ narrowing, not Explore’s', () => {
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'lobby' });
-    store.set(debatesHubLobbySearchAtom, 'climate');
-    store.set(debatesHubExploreSearchAtom, 'nuclear');
+    store.set(debatesHubPanelMatchesSearchAtom, 'climate');
+    store.set(debatesHubPanelExploreSearchAtom, 'nuclear');
 
     render(
       <Provider store={store}>
@@ -1056,6 +1124,28 @@ describe('the filters the expand link carries', () => {
 
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
     expect(new URLSearchParams(href.split('?')[1] ?? '').get('q')).toBe('climate');
+  });
+
+  // The panel wants every picked space, full screen any of them: several would open a wider list.
+  it('leaves several picked spaces behind, and carries one', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    store.set(debatesHubPanelExploreSpaceIdsAtom, ['space-a', 'space-b']);
+    store.set(debatesHubPanelExploreTopicIdsAtom, ['topic-a']);
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const link = screen.getByRole('link', { name: /open full screen/i });
+    const params = () => new URLSearchParams(link.getAttribute('href')?.split('?')[1] ?? '');
+    expect(params().get('spaces')).toBeNull();
+    expect(params().get('topics')).toBe('topic-a');
+
+    act(() => store.set(debatesHubPanelExploreSpaceIdsAtom, ['space-a']));
+    expect(params().get('spaces')).toBe('space-a');
   });
 });
 

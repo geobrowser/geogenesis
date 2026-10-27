@@ -24,6 +24,7 @@ import { FacetFilterPills, type FacetPillOption } from './facet-filter-pills';
 import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import type { HubEmptyAction } from './hub-states';
+import { opposingPositions } from './opposing-positions';
 import { narrowingOptions, orderFacetOptions, toggleId } from './topic-facets';
 
 /**
@@ -107,18 +108,20 @@ export type PanelListFilters = {
 
 export type ClaimRowSort = 'best' | 'newest' | 'people';
 
-type SortableClaimRow = {
+export type SortableClaimRow = {
   claim: { claim_entity_id: string };
   positions: DebateClaimPositionSummary[];
   viewer_response?: { position: boolean } | null;
 };
 
 /** People who could take the other side right now, the "Most people" sort's measure. */
+/** A viewer holding no side could take either, so every side counts. */
 export function opposingPeopleCount(row: SortableClaimRow) {
   const viewerSide = row.viewer_response?.position;
-  return row.positions
-    .filter(position => viewerSide === undefined || position.position !== viewerSide)
-    .reduce((sum, position) => sum + position.available_now_count, 0);
+  return (viewerSide === undefined ? row.positions : opposingPositions(row.positions, viewerSide)).reduce(
+    (sum, position) => sum + position.available_now_count,
+    0
+  );
 }
 
 /**
@@ -223,7 +226,7 @@ export function HubFiltersBar<S extends string, C extends string>({
       {activeCount > 0 ? (
         <span
           aria-hidden
-          className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-white px-1 text-browseSection leading-none text-text"
+          className="inline-flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-white px-1 text-browseSection leading-none text-text"
         >
           {activeCount}
         </span>
@@ -370,7 +373,7 @@ function FiltersPopover({
             sideOffset={8}
             collisionPadding={16}
             aria-label="Filters"
-            className="z-100 flex w-[368px] max-w-[calc(100vw-32px)] flex-col gap-3.5 rounded-xl border border-grey-02 bg-white p-3.5 shadow-[0_8px_25px_rgba(0,0,0,0.12)]"
+            className="z-100 flex w-[368px] max-w-[calc(100vw-32px)] flex-col gap-3.5 rounded-xl border border-grey-02 bg-white p-3.5 shadow-popover"
           >
             {children}
           </Popover.Content>
@@ -550,7 +553,7 @@ function CheckBox({ checked }: { checked: boolean }) {
     <span
       aria-hidden
       className={cx(
-        'inline-flex size-3.5 shrink-0 items-center justify-center rounded-[4px] border',
+        'inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
         checked ? 'border-text bg-text text-white' : 'border-grey-03 bg-white'
       )}
     >
@@ -566,7 +569,7 @@ function CheckBox({ checked }: { checked: boolean }) {
 function FilterSection({ heading, children }: { heading: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col">
-      <h3 className="mb-2 text-footnoteMedium tracking-[0.2px] text-grey-04 uppercase">{heading}</h3>
+      <h3 className="mb-2 text-footnoteMedium tracking-eyebrow text-grey-04 uppercase">{heading}</h3>
       {children}
     </section>
   );

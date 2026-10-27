@@ -15,15 +15,21 @@ import type { DebateLobbySummary } from '../api';
 import { useDebateLobby } from '../lobbies/hooks';
 import type { LobbyLineup } from '../lobbies/live-lobbies';
 import { markLobbyEntry } from '../lobbies/lobby-analytics';
-import { hereLabel, lobbyDateLabel, lobbyTimeLabel, notYetOpenLabel, rsvpLabel } from '../lobbies/lobby-format';
+import { hereLabel, lobbyDateLabel, lobbyTimeLabel, notYetOpenLabel } from '../lobbies/lobby-format';
 import { usePreOpenHosts } from '../lobbies/lobby-host-lobbies';
 import { LobbyClaimListNames, LobbyGoing, LobbyHostedBy } from '../lobbies/lobby-pre-open-details';
 import { LobbyReminderError, useLobbyReminderPress } from '../lobbies/lobby-reminder-press';
-import { LOBBY_DARK_SURFACE_CLASS_NAME, LiveDot, joinLabel } from '../lobbies/lobby-spotlight';
+import {
+  LOBBY_DARK_SURFACE_CLASS_NAME,
+  LiveDot,
+  SPOTLIGHT_SECONDARY_PILL_CLASS_NAME,
+  joinLabel,
+} from '../lobbies/lobby-spotlight';
+import { LobbyRsvpPill } from '../lobbies/upcoming-lobbies';
 import { useMinuteNow } from '../lobbies/use-minute-now';
 import { debateRoomPath } from '../rooms/room-routes';
 import { claimCalendarPicks, personCalendarPicks } from './debate-calendar-route';
-import { hubAnalyticsAttributes } from './hub-analytics';
+import { debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { useHubAskState } from './hub-ask-context';
 import { hubPillClassName } from './hub-pill-button';
 import { useCalendarHref } from './use-calendar-href';
@@ -102,7 +108,7 @@ function AskStrip({ ask, onCancel, cancelling }: { ask: OutgoingAsk; onCancel: (
         onClick={onCancel}
         disabled={cancelling}
         {...hubAnalyticsAttributes('Strip cancel request', 'withdraw_debate_request')}
-        className={cx(STRIP_PILL_CLASS_NAME, 'border border-white/30 text-white hover:bg-white/10 disabled:opacity-50')}
+        className={cx(SPOTLIGHT_SECONDARY_PILL_CLASS_NAME, 'disabled:opacity-50 md:h-8')}
       >
         {cancelling ? 'Cancelling…' : 'Cancel'}
       </button>
@@ -197,22 +203,16 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
   const portal = useElevatedPopoverPortal();
   const [open, setOpen] = React.useState(false);
 
+  // The calendar's RSVP, Going black, on the strip's light surface. One press for both copies of it.
   const rsvp = (
-    <button
-      type="button"
-      {...hubAnalyticsAttributes(remind.reminded ? 'Lobby spotlight reminded' : 'Lobby spotlight remind me')}
-      aria-pressed={remind.reminded}
-      aria-busy={remind.pending || undefined}
-      disabled={remind.pending}
-      onClick={remind.press}
-      className={cx(
-        STRIP_PILL_CLASS_NAME,
-        remind.reminded ? 'border border-grey-02 text-text hover:bg-grey-01' : 'bg-text text-white hover:bg-text/90',
-        'disabled:opacity-50'
+    <LobbyRsvpPill
+      remind={remind}
+      analyticsLabel={debateAnalyticsLabel(
+        'hub',
+        remind.reminded ? 'Lobby spotlight reminded' : 'Lobby spotlight remind me'
       )}
-    >
-      {rsvpLabel(remind.reminded)}
-    </button>
+      className="md:h-8"
+    />
   );
 
   return (

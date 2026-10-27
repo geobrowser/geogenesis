@@ -58,11 +58,19 @@ export function useDebateHistory(enabled: boolean) {
   return {
     items,
     // Only when nothing has loaded. A later page failing (TanStack keeps the pages it has and still
-    // reports an error) leaves the history standing; the next time the top comes into view retries.
+    // reports an error) leaves the history standing, and is `loadMoreFailed` instead.
     unavailable: query.isError && !query.data,
     isLoading: query.isLoading,
     hasMore: query.hasNextPage,
     loadingMore: query.isFetchingNextPage,
+    /**
+     * The last page asked for failed: a bad cursor (#299 refuses one with a 400) or an outage. Paging
+     * stops here until the viewer asks again with `loadMore`. `hasMore` still says yes after a failure,
+     * and the scroll sentinel re-arms on every fetch, so left alone it re-requested the page at
+     * round-trip speed for as long as the top was in view. Stays set while a retry is in flight, and
+     * clears when one succeeds.
+     */
+    loadMoreFailed: query.isFetchNextPageError,
     loadMore: query.fetchNextPage,
   };
 }

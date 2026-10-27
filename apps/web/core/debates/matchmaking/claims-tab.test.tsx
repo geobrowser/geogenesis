@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from './hub-scroll';
+import { panelFilters } from './panel-filters-fixtures';
 import {
   debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
@@ -2838,11 +2839,6 @@ describe('claims the viewer has already answered', () => {
 // it the tab's own Sort and narrowing.
 describe('in the side panel', () => {
   const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
-  const panelFilters = (overrides = {}) => ({
-    sort: { options: [{ value: 'best', label: 'Best' }], value: 'best', onChange: vi.fn() },
-    toggles: [],
-    ...overrides,
-  });
 
   it('swaps the menus row for a search field and a Filters button', async () => {
     mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
@@ -2922,6 +2918,59 @@ describe('in the side panel', () => {
       .getAllByRole('button', { name: /^Space/ })
       .map(pill => pill.textContent);
     expect(counts).toEqual(['Space1', 'Space1']);
+  });
+
+  // Review: the Sort ran after the hold, so a high-ranked claim on page 2 jumped in above the rows
+  // being read. Sorted before the hold, a page's rows go after the ones already placed.
+  it('places a new page’s rows after the sorted rows already on screen', async () => {
+    const withPeople = (entry: MatchmakingClaim, availableNow: number) => ({
+      ...entry,
+      positions: [
+        {
+          position: true,
+          position_label: 'Agree',
+          total_count: 9,
+          available_now_count: availableNow,
+          participants: [],
+        },
+      ],
+    });
+    mocks.claims = [
+      withPeople(claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44a1', 'Few people', false), 1),
+      withPeople(claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44a2', 'Some people', false), 2),
+      withPeople(claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44a3', 'Most people', false), 9),
+    ] as MatchmakingClaim[];
+    mocks.pageSize = 2;
+    const view = render(<ClaimsTab variant="positions" panelFilters={panelFilters({ clientSort: 'people' })} />);
+    await showIndexedClaims();
+    const titles = () => screen.getAllByText(/people$/).map(node => node.textContent);
+    await waitFor(() => expect(titles()).toEqual(['Some people', 'Few people']));
+
+    mocks.pageSize = null;
+    view.rerender(<ClaimsTab variant="positions" panelFilters={panelFilters({ clientSort: 'people' })} />);
+
+    await waitFor(() => expect(titles()).toEqual(['Some people', 'Few people', 'Most people']));
+  });
+
+  // Review: the pills compared the server's counts with the rows left after the answered ones folded
+  // away, and dropped a space that would still have narrowed the list.
+  it('keeps a space on offer that narrows the rows left after the answered ones fold', async () => {
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.claims = [
+      claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44b1', 'Answered one', true),
+      claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44b2', 'Answered two', true),
+      claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44b3', 'Open here', false),
+      claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44b4', 'Open elsewhere', false, false, OTHER_SPACE_ID),
+    ];
+    render(<ClaimsTab variant="lobby" atomsFrom="panelExplore" collapsesAnswered panelFilters={panelFilters()} />);
+    await showIndexedClaims();
+    expect(await screen.findByText('Open here')).toBeInTheDocument();
+    expect(screen.queryByText('Answered one')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const filters = await screen.findByRole('dialog', { name: 'Filters' });
+
+    expect(within(filters).getAllByRole('button', { name: /^Space/ })).toHaveLength(2);
   });
 
   it('reads the selection of the list it is told to, not its own variant’s', async () => {

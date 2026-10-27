@@ -83,7 +83,8 @@ export function untilLabel(iso: string, now: number) {
   return `in ${days} days`;
 }
 
-function startOfLocalDay(ms: number) {
+/** Local midnight on the day of `ms`, as epoch ms: what anything grouped or counted by day keys on. */
+export function startOfLocalDay(ms: number) {
   const day = new Date(ms);
   day.setHours(0, 0, 0, 0);
   return day.getTime();

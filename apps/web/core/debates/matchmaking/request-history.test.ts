@@ -6,6 +6,7 @@ import * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DebateHistoryItem, DebateHistoryResponse } from '../api';
+import { historyItem } from './requests-fixtures';
 
 const mocks = vi.hoisted(() => ({ list: vi.fn() }));
 
@@ -29,21 +30,15 @@ const {
   useDebateHistory,
 } = await import('./request-history');
 
-function item(overrides: Partial<DebateHistoryItem>): DebateHistoryItem {
-  return {
-    id: 'claim_request:1',
-    kind: 'claim_request',
+// The shared item, made plain: no claim, no one named, at a fixed time, and simply expired.
+const item = (overrides: Partial<DebateHistoryItem>) =>
+  historyItem({
     occurred_at: '2026-10-22T12:00:00Z',
-    direction: 'outgoing',
     outcome: 'expired',
     other_user_ids: [],
     claim: null,
-    debate_id: null,
-    lobby: null,
-    scheduled_start_at: null,
     ...overrides,
-  };
-}
+  });
 
 const person = (id: string, name: string) => ({
   user_id: id,
@@ -201,5 +196,29 @@ describe('useDebateHistory', () => {
 
     expect(result.current.unavailable).toBe(false);
     expect(result.current.items).toHaveLength(1);
+  });
+
+  // `hasMore` still says yes after a failed page, so the timeline needs this to stop paging until
+  // the viewer asks again, and to know a retry that worked lets it carry on.
+  it('says a later page failed until a retry of it succeeds', async () => {
+    const first: DebateHistoryResponse = { items: [item({ id: 'a' })], next_cursor: 'next' };
+    const second: DebateHistoryResponse = { items: [item({ id: 'b' })], next_cursor: null };
+    mocks.list
+      .mockReset()
+      .mockResolvedValueOnce(first)
+      .mockRejectedValueOnce(new Error('400 bad cursor'))
+      .mockResolvedValueOnce(second);
+    const { result } = renderHistory();
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    expect(result.current.loadMoreFailed).toBe(false);
+
+    await result.current.loadMore();
+    await waitFor(() => expect(result.current.loadMoreFailed).toBe(true));
+    expect(result.current.hasMore).toBe(true);
+
+    await result.current.loadMore();
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    expect(result.current.loadMoreFailed).toBe(false);
+    expect(result.current.hasMore).toBe(false);
   });
 });

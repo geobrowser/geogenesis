@@ -1,6 +1,6 @@
 'use client';
 
-import { CancelledError, type Query, type QueryClient, type QueryKey } from '@tanstack/react-query';
+import { CancelledError, type InfiniteData, type Query, type QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -520,6 +520,8 @@ export class DebateGatewayClient {
       case 'debate.state_changed':
         if (identifiers.debate_id) this.queueQuery(['debates', 'detail', dashlessId(identifiers.debate_id)]);
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
+        // A debate ending is when its "Debated · Watch" row joins the Requests timeline's past.
+        this.queueAccountQuery('history');
         this.queueAccountActivity();
         break;
       case 'debate.rematch_changed':
@@ -558,10 +560,10 @@ export class DebateGatewayClient {
         const patch = parseLobbyCardPatch(identifiers.lobby_card);
         const lobbyId = identifiers.lobby_id ? dashlessId(identifiers.lobby_id) : null;
         if (!patch) {
-          // Card-less: a lobby was created, opened or closed.
+          // Card-less: a lobby was created, opened or closed. Any lobby, so not history: this goes to
+          // every matchmaking subscriber, and one the viewer was in reaches them as
+          // `debate.my_lobby_changed` too, which does refresh it.
           this.queueAccountQuery('lobbies');
-          // A closed lobby the viewer joined belongs in their history now.
-          this.queueAccountQuery('history');
           if (lobbyId) this.queueAccountQuery('lobby', lobbyId);
         } else {
           this.holdLobbyPatch(patch);
@@ -574,6 +576,7 @@ export class DebateGatewayClient {
       case 'debate.my_lobby_changed':
         this.queueAccountQuery('lobbies');
         this.queueAccountQuery('my-lobby');
+        // A lobby the viewer joined closing belongs in their history now.
         this.queueAccountQuery('history');
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
@@ -790,6 +793,25 @@ export class DebateGatewayClient {
     );
   }
 
+  /**
+   * The Requests timeline's past (GEO-3463) is an infinite query, and refetching one re-requests every
+   * page it holds, one after the other. While nobody is looking at it, the pages past the first are
+   * dropped, so the panel opening next asks for one page and the rest load again, from that page's
+   * cursor, as the viewer scrolls back. While it is on screen it keeps them all: trimming then would
+   * pull the rows the viewer is reading out from under them on every request that changes. Replacing
+   * the first page and keeping the rest would be cheaper but wrong: new items push older ones off it,
+   * and the old second page's cursor starts after them, so they would fall into a gap no page covers.
+   *
+   * After the cancel, so a page still in flight cannot land on top and bring the rest back.
+   */
+  private keepFirstHistoryPage(queryKey: QueryKey) {
+    const query = this.queryClient.getQueryCache().find({ queryKey, exact: true });
+    if (!query || query.getObserversCount() > 0) return;
+    this.queryClient.setQueryData<InfiniteData<unknown, unknown>>(queryKey, data =>
+      data && data.pages.length > 1 ? { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) } : data
+    );
+  }
+
   private queueClaims(spaceId: string, claimEntityIds?: string[]) {
     if (!claimEntityIds?.length) {
       this.queueQuery(['debates', 'claims', spaceId]);
@@ -897,6 +919,7 @@ export class DebateGatewayClient {
           predicate: query =>
             query.state.data !== undefined && !isRematchClaimsQueryKey(query.queryKey) && matches(query),
         });
+        if (isAccountHistoryQueryKey(queryFilters.queryKey)) this.keepFirstHistoryPage(queryFilters.queryKey);
         // `cancelRefetch: false`: a refetch of a query still fetching joins that request instead
         // of aborting it. Everything this flush meant to cancel has been cancelled above.
         //
@@ -1443,6 +1466,17 @@ function isLobbyCalendarQueryKey(queryKey: readonly unknown[], accountKey: strin
     queryKey[2] === accountKey &&
     queryKey[3] === 'lobbies' &&
     queryKey[4] === 'calendar'
+  );
+}
+
+/** An account's history list (`debateQueryKeys.history`), whose refetch is held to its first page. */
+function isAccountHistoryQueryKey(queryKey: QueryKey | undefined): queryKey is QueryKey {
+  return (
+    Array.isArray(queryKey) &&
+    queryKey.length === 4 &&
+    queryKey[0] === 'debates' &&
+    queryKey[1] === 'account' &&
+    queryKey[3] === 'history'
   );
 }
 

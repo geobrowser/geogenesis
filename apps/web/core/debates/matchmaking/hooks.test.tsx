@@ -7,11 +7,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type Debate, GeoChatRequestError, GeoChatSessionError } from '../api';
 import { clearEnteringDebate, useEnteringDebateId } from '../debate-entry-intent';
-import { useAcceptDebateRequest, useDebatePeople, useMatchmakingMatches } from './hooks';
+import { askWasWithdrawn } from './ask-withdrawals';
+import { useAcceptDebateRequest, useDebatePeople, useMatchmakingMatches, useWithdrawDebateRequest } from './hooks';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   acceptDebateRequest: vi.fn(),
+  withdrawDebateRequest: vi.fn(),
   listMatchmakingMatches: vi.fn(),
   listDebatePeople: vi.fn(),
   accountKey: 'user-a' as string | null,
@@ -28,6 +30,7 @@ vi.mock('../api', async importOriginal => {
   return {
     ...actual,
     acceptDebateRequest: mocks.acceptDebateRequest,
+    withdrawDebateRequest: mocks.withdrawDebateRequest,
     listMatchmakingMatches: mocks.listMatchmakingMatches,
     listDebatePeople: mocks.listDebatePeople,
   };
@@ -70,6 +73,7 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   mocks.push.mockReset();
   mocks.acceptDebateRequest.mockReset();
+  mocks.withdrawDebateRequest.mockReset();
   mocks.listMatchmakingMatches.mockReset();
   mocks.listDebatePeople.mockReset();
   mocks.accountKey = 'user-a';
@@ -147,6 +151,27 @@ describe('useAcceptDebateRequest', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mocks.push).not.toHaveBeenCalled();
+  });
+});
+
+// A poll can drop the request before the withdraw's response lands; it must already read as taken back.
+describe('useWithdrawDebateRequest', () => {
+  it('marks the request withdrawn on the press, and unmarks it if the withdraw fails', async () => {
+    let fail!: (error: Error) => void;
+    mocks.withdrawDebateRequest.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      })
+    );
+
+    const { result } = renderHook(() => useWithdrawDebateRequest(), { wrapper });
+    result.current.mutate('request-withdrawn-1');
+
+    await waitFor(() => expect(askWasWithdrawn('request-withdrawn-1')).toBe(true));
+
+    fail(new Error('500'));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(askWasWithdrawn('request-withdrawn-1')).toBe(false);
   });
 });
 

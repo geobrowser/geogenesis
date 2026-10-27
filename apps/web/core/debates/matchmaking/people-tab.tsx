@@ -74,6 +74,7 @@ import { PersonRecordLine } from './person-record-line';
 import { PersonSpaceIcons } from './person-space-icons';
 import { RequestingPill } from './requesting-pill';
 import { INLINE_SLOTS, SharedTimes } from './shared-times';
+import { inEverySpace } from './topic-facets';
 import { useLiveRequestBlock } from './use-live-request-block';
 import { askIsForPerson } from './use-outgoing-ask';
 import { usePersonFacts } from './use-person-facts';
@@ -368,8 +369,7 @@ export function PeopleTab({
     (person: DebatePerson, wantedIds: string[]) => {
       if (wantedIds.length === 0) return true;
       const theirs = debateSpacesByPerson.get(person.profile_space_id) ?? [];
-      const wanted = wantedIds.map(normId);
-      return panelMode ? wanted.every(id => theirs.includes(id)) : wanted.some(id => theirs.includes(id));
+      return panelMode ? inEverySpace(wantedIds, theirs) : wantedIds.some(id => theirs.includes(normId(id)));
     },
     [debateSpacesByPerson, panelMode]
   );
@@ -762,6 +762,24 @@ export function PersonRow({ layout = 'default', ...props }: PersonRowProps) {
   return layout === 'panel' ? <PanelPersonRow {...props} /> : <DefaultPersonRow {...props} />;
 }
 
+/**
+ * What both row layouts do with a person: open their times (or the sign-in prompt, signed out), and
+ * link to their profile when their id is a real space.
+ */
+function personRowActions({
+  person,
+  onRequireSignIn,
+  onSeeTimes,
+  entry,
+}: Pick<PersonRowProps, 'person' | 'onRequireSignIn' | 'onSeeTimes' | 'entry'>) {
+  const openTimes = (opener: HTMLElement | null, rowEntry: ScheduleEntry) =>
+    onRequireSignIn
+      ? onRequireSignIn({ target_id: person.profile_space_id, target_type: 'space', auth_control: 'see_times' })
+      : onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, entry ?? rowEntry);
+  const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
+  return { openTimes, profileHref };
+}
+
 function DefaultPersonRow({
   person,
   matches,
@@ -792,10 +810,7 @@ function DefaultPersonRow({
   const offersSchedule = Boolean(schedule) || (away && canScheduleAway);
   // Reached only when Schedule is not offered: someone who cannot take a live request right now.
   const unrequestable = person.in_debate || away;
-  const openTimes = (opener: HTMLElement | null, rowEntry: ScheduleEntry) =>
-    onRequireSignIn
-      ? onRequireSignIn({ target_id: person.profile_space_id, target_type: 'space', auth_control: 'see_times' })
-      : onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, entry ?? rowEntry);
+  const { openTimes, profileHref } = personRowActions({ person, onRequireSignIn, onSeeTimes, entry });
   const openSchedule = (opener: HTMLElement | null) =>
     onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, entry ?? 'people_schedule');
   const chips = schedule ?? times;
@@ -803,7 +818,6 @@ function DefaultPersonRow({
   // from the hub's. The hub, and the lobby that borrows this row, keep the unlabelled triggers they had.
   const popupAnalytics = (action: string) =>
     analyticsSurface === 'calendar' ? debateActionAnalyticsAttributes(analyticsSurface, action) : undefined;
-  const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
   const followers = usePersonFollowerCount(person.profile_space_id, { enabled: profileHref !== null });
   const activeSpaces =
     spaceIds.length > 0 ? (
@@ -1008,13 +1022,8 @@ function PanelPersonRow({
   const closeMatches = React.useCallback(() => setMatchesWanted(false), []);
   const free = schedule ?? times;
   const nextFree = nextFreeLabel(free, new Date(now));
-  const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
   const askedHere = askIsForPerson(ask, person.profile_space_id) ? ask : null;
-
-  const openTimes = (opener: HTMLElement | null, rowEntry: ScheduleEntry) =>
-    onRequireSignIn
-      ? onRequireSignIn({ target_id: person.profile_space_id, target_type: 'space', auth_control: 'see_times' })
-      : onSeeTimes({ userId: person.user_id, name }, opener, entry ?? rowEntry);
+  const { openTimes, profileHref } = personRowActions({ person, onRequireSignIn, onSeeTimes, entry });
 
   const spaceNames = spaceIds
     .map(spaceId => spaceLabel(labelsById, spaceId)?.name?.trim())

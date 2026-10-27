@@ -16,13 +16,15 @@ const mocks = vi.hoisted(() => ({
       }
     | undefined,
   scheduledEnabled: [] as boolean[],
+  /** When the cached scheduled list was read. */
+  scheduledUpdatedAt: 0,
   viewerId: 'user-me' as string | null,
 }));
 
 vi.mock('../rooms/scheduling-hooks', () => ({
   useScheduledDebates: (enabled: boolean) => {
     mocks.scheduledEnabled.push(enabled);
-    return { data: mocks.scheduled };
+    return { data: mocks.scheduled, dataUpdatedAt: mocks.scheduledUpdatedAt };
   },
 }));
 
@@ -48,6 +50,7 @@ function count(input: {
   activity?: Partial<DebateActivity>;
   requests?: { outbound: unknown; incoming: unknown[] };
   fetchScheduled?: boolean;
+  activityUpdatedAt?: number;
 }) {
   const { result } = renderHook(() =>
     useRequestsTabCount({
@@ -55,6 +58,7 @@ function count(input: {
       activity: input.activity as DebateActivity | undefined,
       requests: input.requests as DebateRequestsResponse | undefined,
       fetchScheduled: input.fetchScheduled,
+      activityUpdatedAt: input.activityUpdatedAt,
     })
   );
   return result.current;
@@ -63,6 +67,7 @@ function count(input: {
 afterEach(() => {
   mocks.scheduled = undefined;
   mocks.scheduledEnabled = [];
+  mocks.scheduledUpdatedAt = 0;
   mocks.viewerId = 'user-me';
 });
 
@@ -138,6 +143,34 @@ describe('the Requests tab count', () => {
   it('does not fetch the scheduled list for the navbar', () => {
     count({ fetchScheduled: false });
     expect(mocks.scheduledEnabled.every(enabled => enabled === false)).toBe(true);
+  });
+
+  // The navbar's observer is disabled with the panel closed, so nothing refetches the list it holds:
+  // an invite arriving after the panel closed is in activity's count and not in the list.
+  it('counts from activity, not a cached list older than it, for the navbar', () => {
+    mocks.scheduled = { requests: [{ status: 'pending', room_id: null, viewer_must_answer: true }] };
+    mocks.scheduledUpdatedAt = 1_000;
+
+    expect(
+      count({ fetchScheduled: false, activityUpdatedAt: 2_000, activity: { scheduled_awaiting_answer_count: 2 } })
+    ).toBe(2);
+  });
+
+  it('counts from a cached list newer than activity, for the navbar', () => {
+    mocks.scheduled = { requests: [{ status: 'pending', room_id: null, viewer_must_answer: true }] };
+    mocks.scheduledUpdatedAt = 3_000;
+
+    expect(
+      count({ fetchScheduled: false, activityUpdatedAt: 2_000, activity: { scheduled_awaiting_answer_count: 2 } })
+    ).toBe(1);
+  });
+
+  // Read live, the list is what the panel's rows come from, so it is what "Needs you (N)" counts.
+  it('counts from the list it reads itself, however fresh activity is', () => {
+    mocks.scheduled = { requests: [{ status: 'pending', room_id: null, viewer_must_answer: true }] };
+    mocks.scheduledUpdatedAt = 1_000;
+
+    expect(count({ activityUpdatedAt: 2_000, activity: { scheduled_awaiting_answer_count: 2 } })).toBe(1);
   });
 
   it('counts nothing signed out, whatever a stale cache says', () => {

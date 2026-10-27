@@ -7,13 +7,32 @@
  * those has to count. A module of its own, with no imports, so the hooks that write it and the hook
  * that reads it can both depend on it without depending on each other.
  */
-const withdrawn = new Set<string>();
+const withdrawnAt = new Map<string, number>();
 
+/**
+ * How long a mark is believed. Long enough to outlast the refetch that drops the ask, short enough
+ * that the map never grows: an ask lives for minutes, and nothing asks about one after it has gone.
+ */
+export const ASK_WITHDRAWN_TTL_MS = 2 * 60_000;
+
+/** Marked when the press goes out, not when it lands: a poll can drop the ask before the response. */
 export function markAskWithdrawn(id: string) {
-  withdrawn.add(id);
+  withdrawnAt.set(id, Date.now());
 }
 
-/** Whether `id` was taken back by the viewer. Forgets it as it answers, so the set stays small. */
-export function consumeAskWithdrawn(id: string) {
-  return withdrawn.delete(id);
+/** The withdraw failed, so the ask is still out and may yet end unanswered. */
+export function unmarkAskWithdrawn(id: string) {
+  withdrawnAt.delete(id);
+}
+
+/**
+ * Whether `id` was taken back by the viewer. Read without forgetting: the panel and full screen each
+ * mount a `HubAskProvider`, and the first to ask must not leave the second reading "nobody took it".
+ */
+export function askWasWithdrawn(id: string) {
+  const now = Date.now();
+  for (const [key, at] of withdrawnAt) {
+    if (now - at > ASK_WITHDRAWN_TTL_MS) withdrawnAt.delete(key);
+  }
+  return withdrawnAt.has(id);
 }

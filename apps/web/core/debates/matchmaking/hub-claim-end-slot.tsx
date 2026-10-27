@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import { ClaimEndSlot, WatchLiveLink } from '~/core/claims/browse/claim-end-slot';
+import { ClaimEndSlot, WatchLiveLink, matchContradictsViewerSide } from '~/core/claims/browse/claim-end-slot';
 import { useClaimMatchup } from '~/core/claims/browse/use-claim-matchup';
 import { useRematchPanelContext } from '~/core/debates/rematch-panel-context';
 
@@ -16,6 +16,7 @@ import { WATCH_LIVE_ENABLED } from '../watch-live';
 import { claimCalendarPicks } from './debate-calendar-route';
 import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes } from './hub-analytics';
 import { useHubAsk } from './hub-ask-context';
+import { opposingPositions } from './opposing-positions';
 import { RequestingPill } from './requesting-pill';
 import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
@@ -32,8 +33,7 @@ export function otherSideHeld(
   positions: readonly { position: boolean; total_count: number }[],
   viewerPosition: boolean | null | undefined
 ) {
-  if (typeof viewerPosition !== 'boolean') return false;
-  return positions.some(position => position.position !== viewerPosition && position.total_count > 0);
+  return opposingPositions(positions, viewerPosition).some(position => position.total_count > 0);
 }
 
 /**
@@ -77,9 +77,7 @@ export function HubClaimEndSlot({
 
   // The same contradiction `ClaimEndSlot` withdraws its offer on: a match computed for the side the
   // viewer has since stepped off names someone standing on their own side now.
-  const matchedSide = match ? (match.viewer_response?.position ?? match.viewer_position) : null;
-  const contradictsViewerSide =
-    matchedSide !== null && matchedSide !== undefined && viewerPosition !== undefined && matchedSide !== viewerPosition;
+  const contradictsViewerSide = matchContradictsViewerSide(match, viewerPosition);
   // Signed out there is no one to schedule as, and a device-only vote is not a side anyone can
   // debate — so Schedule waits for an account and for someone actually on the other side.
   const offersSchedule = authenticated && typeof viewerPosition === 'boolean' && heldOpposite;

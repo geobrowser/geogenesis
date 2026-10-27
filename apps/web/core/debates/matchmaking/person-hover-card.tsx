@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { FollowButton } from '~/core/follows/follow-button';
 import { useHoverIntent } from '~/core/hooks/use-hover-intent';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 
 import { Avatar } from '~/design-system/avatar';
 import { OnlineDot } from '~/design-system/online-dot';
@@ -34,17 +35,6 @@ export function personStatusLabel(status: PersonStatus) {
       : status === 'debating'
         ? 'In a debate'
         : 'Offline';
-}
-
-/**
- * Whether this device has a pointer that hovers. Touch screens never get the card (GEO-3463): a tap
- * there keeps following the name to the profile, as it always has. Read once per mount rather than
- * subscribed: a device does not grow a mouse mid-session often enough to pay a listener per row.
- */
-function canHover() {
-  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
-    ? window.matchMedia('(hover: hover)').matches
-    : false;
 }
 
 /**
@@ -109,11 +99,18 @@ export function PersonHoverCard({
     setOpen(false);
   }, [cancel, suppressed]);
 
-  const restingMouse = (event: React.PointerEvent) => event.pointerType === 'mouse' && !suppressed && canHover();
+  // Touch screens never get the card (GEO-3463): a tap there keeps following the name to the profile.
+  const canHover = useMediaQuery('(hover: hover)');
+  const restingMouse = (event: React.PointerEvent) => event.pointerType === 'mouse' && !suppressed && canHover;
 
   // Entering and moving both (re)start the wait: only a pointer that stops on the name opens it.
+  // Already open, coming back onto the name keeps it: the close the pointer left behind is cancelled.
   const waitToOpen = (event: React.PointerEvent) => {
-    if (!restingMouse(event) || open) return;
+    if (!restingMouse(event)) return;
+    if (open) {
+      intent.cancel();
+      return;
+    }
     intent.openSoon(() => setOpen(true));
   };
   const closeSoon = () => intent.closeSoon(() => setOpen(false));

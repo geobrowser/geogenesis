@@ -252,6 +252,28 @@ export const debatesHubPositionsTopicIdsAtom = atom<string[]>([]);
 export const debatesHubPositionsSearchAtom = atom('');
 
 /**
+ * The side panel's own search and picks for its Matches and Explore tabs (GEO-3463), apart from full
+ * screen's lists above.
+ *
+ * The two surfaces read a selection differently. In the panel every pick narrows (spaces AND, like
+ * topics) and nothing is seeded; full screen reads spaces as "any of these" and seeds the viewer's
+ * member spaces. Sharing one selection let full screen's seed of three spaces empty the panel's
+ * Matches, since no claim sits in three spaces at once. Each panel tab keeps one selection across the
+ * lists it swaps between (Matches' offline switch, Explore's Show), so changing those keeps it.
+ *
+ * The seed markers exist to give the panel's lists the same shape as full screen's; the panel never
+ * seeds, so nothing spends them.
+ */
+export const debatesHubPanelMatchesSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubPanelMatchesTopicIdsAtom = atom<string[]>([]);
+export const debatesHubPanelMatchesSearchAtom = atom('');
+export const debatesHubPanelMatchesSpaceSeedSpentAtom = atom(false);
+export const debatesHubPanelExploreSpaceIdsAtom = atom<string[]>([]);
+export const debatesHubPanelExploreTopicIdsAtom = atom<string[]>([]);
+export const debatesHubPanelExploreSearchAtom = atom('');
+export const debatesHubPanelExploreSpaceSeedSpentAtom = atom(false);
+
+/**
  * The People tab's spaces filter (GEO-2944).
  *
  * Its own selection rather than any other tab's, for the reason Lobby and Positions have theirs:
@@ -396,6 +418,14 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(lobbyExploreTopicIdsAtom, []);
   set(lobbyExploreSearchAtom, '');
   set(lobbyExploreSpaceSeedSpentAtom, false);
+  set(debatesHubPanelMatchesSpaceIdsAtom, []);
+  set(debatesHubPanelMatchesTopicIdsAtom, []);
+  set(debatesHubPanelMatchesSearchAtom, '');
+  set(debatesHubPanelMatchesSpaceSeedSpentAtom, false);
+  set(debatesHubPanelExploreSpaceIdsAtom, []);
+  set(debatesHubPanelExploreTopicIdsAtom, []);
+  set(debatesHubPanelExploreSearchAtom, '');
+  set(debatesHubPanelExploreSpaceSeedSpentAtom, false);
   set(debatesHubPeopleSpaceIdsAtom, []);
   set(debatesHubPeopleOnlineOnlyAtom, false);
   set(debatesHubPeopleSortAtom, 'online');

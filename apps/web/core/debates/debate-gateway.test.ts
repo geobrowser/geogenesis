@@ -1,4 +1,4 @@
-import { CancelledError, QueryClient, QueryObserver } from '@tanstack/react-query';
+import { CancelledError, InfiniteQueryObserver, QueryClient, QueryObserver } from '@tanstack/react-query';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -209,6 +209,8 @@ describe('DebateGatewayClient', () => {
       [
         ['debates', 'detail', 'debate1'],
         ['debates', 'space', 'space-1'],
+        // GEO-3463: a debate ending is when its "Debated · Watch" row joins the timeline's past.
+        ['debates', 'account', 'user-a', 'history'],
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
       ],
@@ -259,11 +261,12 @@ describe('DebateGatewayClient', () => {
       ],
     ],
     [
+      // Any lobby's, sent to every matchmaking subscriber: not the viewer's history, which their own
+      // lobby closing refreshes through `debate.my_lobby_changed`.
       'lobby list',
       { event_type: 'debate.lobbies_changed', payload: { lobby_id: 'abc' } },
       [
         ['debates', 'account', 'user-a', 'lobbies'],
-        ['debates', 'account', 'user-a', 'history'],
         ['debates', 'account', 'user-a', 'lobby', 'abc'],
       ],
     ],
@@ -314,6 +317,62 @@ describe('DebateGatewayClient', () => {
       expectInvalidated(invalidateQueries, { queryKey, refetchType: 'active' });
     }
     expect(invalidateQueries).toHaveBeenCalledTimes(expectedKeys.length);
+  });
+
+  // An infinite query's refetch asks for every page it holds. What an event changes is the newest
+  // end, so history nobody is looking at is cut back to its first page.
+  it('cuts history nobody is looking at back to its first page', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', 'c3'), page('c', null)],
+      pageParams: [null, 'c2', 'c3'],
+    });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    invalidateQueries.mockClear();
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-event', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expectInvalidated(invalidateQueries, { queryKey: historyKey, refetchType: 'active' });
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
+  });
+
+  // On screen, the pages stay: cutting them would pull the rows being read out from under the viewer.
+  it('keeps every page of history the timeline is showing', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    const held = { pages: [page('a', 'c2'), page('b', null)], pageParams: [null, 'c2'] };
+    queryClient.setQueryData(historyKey, held);
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn: () => new Promise<never>(() => {}),
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      enabled: false,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-shown', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expect(queryClient.getQueryData(historyKey)).toEqual(held);
+    unsubscribe();
   });
 
   describe('lobby card patches', () => {

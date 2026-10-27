@@ -7,6 +7,9 @@ import * as React from 'react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ResizeObserverStub } from '../resize-observer-fixtures';
+import { historyItem, invite } from './requests-fixtures';
+
 /**
  * The Requests timeline over geo-chat-shaped responses, with only the network stubbed (26 Oct).
  *
@@ -21,28 +24,10 @@ const iso = (offsetMinutes: number) => new Date(now + offsetMinutes * 60_000).to
 const ME = 'user-me';
 const THEM = 'user-them';
 
-function invite(id: string, startOffset: number, mine: boolean, overrides: Record<string, unknown> = {}) {
-  return {
-    request_id: id,
-    status: 'pending',
-    scheduled_start_at: iso(startOffset),
-    scheduled_end_at: iso(startOffset + 30),
-    invited_by_user_id: mine ? ME : THEM,
-    created_by_admin: false,
-    proposed_by_user_id: mine ? ME : THEM,
-    reschedule_count: 0,
-    room_id: null,
-    participants: [
-      { user_id: ME, accepted: mine ? true : null, responded_at: mine ? iso(-60) : null },
-      { user_id: THEM, accepted: mine ? null : true, responded_at: mine ? null : iso(-60) },
-    ],
-    viewer_must_answer: !mine,
-    ...overrides,
-  };
-}
-
 const api = vi.hoisted(() => ({
+  // Until geo-chat#299 deploys, the history route is a 404; flipped for the case after it has.
   history404: true,
+  history: [] as unknown[],
 }));
 
 vi.mock('../api', async importOriginal => {
@@ -69,18 +54,19 @@ vi.mock('../api', async importOriginal => {
     listScheduledDebates: () =>
       Promise.resolve({
         requests: [
-          invite('accepted-room', -43, true, {
+          invite('accepted-room', false, {
+            startsInMinutes: -43,
             status: 'accepted',
             room_id: 'room-1',
             viewer_must_answer: false,
             participants: [
-              { user_id: ME, accepted: true, responded_at: iso(-120) },
-              { user_id: THEM, accepted: true, responded_at: iso(-110) },
+              { user_id: ME, accepted: true },
+              { user_id: THEM, accepted: true },
             ],
           }),
-          invite('mine-pending', 30, true),
-          invite('theirs-a', 3 * 24 * 60, false),
-          invite('theirs-b', 3 * 24 * 60, false),
+          invite('mine-pending', false, { startsInMinutes: 30 }),
+          invite('theirs-a', true, { startsInMinutes: 3 * 24 * 60 }),
+          invite('theirs-b', true, { startsInMinutes: 3 * 24 * 60 }),
         ],
         availability_requests: [],
       }),
@@ -104,7 +90,7 @@ vi.mock('../api', async importOriginal => {
     listDebateHistory: () =>
       api.history404
         ? Promise.reject(new actual.GeoChatRequestError('Not found', null, 404))
-        : Promise.resolve({ items: [], next_cursor: null }),
+        : Promise.resolve({ items: api.history, next_cursor: null }),
   };
 });
 
@@ -157,11 +143,6 @@ vi.mock('~/partials/availability/peer-availability-booking-modal', () => ({
 const { RequestsSchedule } = await import('./requests-schedule');
 const { HubAskProvider } = await import('./hub-ask-context');
 
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 vi.stubGlobal(
   'IntersectionObserver',
@@ -175,7 +156,11 @@ vi.stubGlobal(
   }
 );
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  api.history404 = true;
+  api.history = [];
+});
 
 function renderTab() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -201,5 +186,17 @@ describe('the Requests timeline over real hooks', () => {
     // History is a 404 until geo-chat#299 deploys: the past is the viewer's debates, not an error.
     expect(screen.getByText('An older debate')).toBeInTheDocument();
     expect(screen.queryByText(/Something went wrong/)).not.toBeInTheDocument();
+  });
+
+  // Once geo-chat#299 is deployed: the past is geo-chat's own history, and the graph is not asked.
+  it('draws geo-chat’s history above the line once the route answers, and not the stand-in', async () => {
+    api.history404 = false;
+    api.history = [historyItem({ occurred_at: iso(-24 * 60) })];
+    renderTab();
+
+    expect(await screen.findByTestId('requests-history', {}, { timeout: 3000 })).toHaveTextContent(
+      'Stablecoins should be regulated · Nobody took it'
+    );
+    expect(screen.queryByText('An older debate')).not.toBeInTheDocument();
   });
 });

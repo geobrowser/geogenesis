@@ -20,6 +20,7 @@ import {
 } from '../api';
 import type { ClaimPickerEntity } from '../claim-picker-page';
 import type { ParticipantPositionsByClaim } from '../participant-positions';
+import { ResizeObserverStub } from '../resize-observer-fixtures';
 import type { PersonRecord } from './person-record';
 import { debatesHubPeopleSortAtom, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
@@ -412,11 +413,6 @@ function expectSpaceMetrics(option: HTMLElement, expected: { debates: string; cl
 }
 
 // Radix's menu measures its content; jsdom has no observer to measure with.
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
 afterEach(cleanup);
@@ -2679,6 +2675,25 @@ describe('panel row (GEO-3463)', () => {
       await new Promise(resolve => setTimeout(resolve, 200));
       expect(screen.queryByRole('dialog', { name: 'About Arturas' })).not.toBeInTheDocument();
       expect(await screen.findByRole('dialog', { name: 'About Arturas' })).toBeInTheDocument();
+    });
+
+    // Review: the pointer slipping off the name and straight back left the close running, and the
+    // card shut under it.
+    it('stays open when the pointer comes back to the name inside the grace', async () => {
+      canHover(true);
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'mouse' });
+      await screen.findByRole('dialog', { name: 'About Arturas' });
+
+      fireEvent.pointerLeave(nameOf('Arturas'), { pointerType: 'mouse' });
+      await new Promise(resolve => setTimeout(resolve, 50));
+      fireEvent.pointerEnter(nameOf('Arturas'), { pointerType: 'mouse' });
+      await new Promise(resolve => setTimeout(resolve, 250));
+
+      // Queried directly: once the pointer has left, jsdom's popper hides the wrapper, which a role
+      // query would read as "not open" either way.
+      expect(document.querySelector('[aria-label="About Arturas"]')).toHaveAttribute('data-state', 'open');
     });
 
     it('stays shut while the matches list is open', async () => {

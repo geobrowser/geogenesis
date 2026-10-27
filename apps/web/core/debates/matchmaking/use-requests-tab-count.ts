@@ -16,18 +16,25 @@ import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
  * directions on the tab and only the incoming half on the navbar; what you sent is now on the strip
  * above the tabs, and the badge means "you have something to answer".
  *
- * `fetchScheduled` is off for the navbar, which mounts on every page: it reads the scheduled list
- * only if something else already loaded it, and stands in with activity's "awaiting your answer"
- * count otherwise — the same fallback the tab uses until its list lands.
+ * `fetchScheduled` is off for the navbar while the panel is closed, since it mounts on every page.
+ * Its observer is then disabled, and a disabled observer is skipped by every refetch — the gateway's
+ * invalidation, the interval, focus — while still keeping the cached list alive. So a list left by
+ * the panel goes stale under the badge: one invite answered there, a second arriving after it
+ * closed, and the badge said 1 while activity, and the panel on reopening, said 2. The cached list
+ * counts only while it is newer than activity (`activityUpdatedAt`); otherwise activity's "awaiting
+ * your answer" count stands in — the same fallback the tab uses until its list lands.
  */
 export function useRequestsTabCount({
   authenticated,
   activity,
+  activityUpdatedAt = 0,
   requests,
   fetchScheduled = true,
 }: {
   authenticated: boolean;
   activity: DebateActivity | undefined;
+  /** When `activity` was read (react-query's `dataUpdatedAt`): what a cached scheduled list must beat. */
+  activityUpdatedAt?: number;
   requests: DebateRequestsResponse | undefined;
   fetchScheduled?: boolean;
 }) {
@@ -44,7 +51,11 @@ export function useRequestsTabCount({
   // A challenge counts only once it is known to be addressed to the viewer: one they sent is theirs
   // to wait on, not to answer.
   const challengeToViewer = challenge && viewerId !== null && sameId(challenge.recipient.user_id, viewerId) ? 1 : 0;
-  const scheduledToAnswer = scheduled.data
+  // Fetched here, it is kept current like any read on screen. Only from cache, it counts while it is
+  // the newer of the two.
+  const listIsCurrent =
+    scheduled.data !== undefined && (fetchScheduled || scheduled.dataUpdatedAt >= activityUpdatedAt);
+  const scheduledToAnswer = listIsCurrent
     ? openScheduled.filter(request => request.viewer_must_answer).length
     : (activity?.scheduled_awaiting_answer_count ?? 0);
 

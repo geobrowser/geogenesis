@@ -33,6 +33,10 @@
   --color-deleted: #ffdad3;
   --color-added: #c5f7e0;
 
+  /* Letter Spacing */
+  /* Small uppercase eyebrows over a group of controls, such as the debates panel's filter headings. */
+  --tracking-eyebrow: 0.2px;
+
   /* Border Radius */
   --radius-*: initial;
   --radius-none: 0;
@@ -55,6 +59,8 @@
   --shadow-light: 0px 1px 2px #f0f0f0;
   --shadow-big: 0 1px 21px #dbdbdb;
   --shadow-lg: 0 8px 25px rgba(0, 0, 0, 0.09);
+  /* The debates panel's Filters popover: `shadow-lg`'s spread, a touch darker to lift it off the list. */
+  --shadow-popover: 0 8px 25px rgba(0, 0, 0, 0.12);
   --shadow-inner: inset 0 0 0 1px;
   --shadow-inner-transparent: inset 0 0 0 1px transparent;
   --shadow-inner-grey-02: inset 0 0 0 1px #dbdbdb;

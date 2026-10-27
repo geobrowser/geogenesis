@@ -19,7 +19,39 @@ export function lobbyBadgeTime(iso: string) {
     : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-/** RSVP, or Going once set: black, so a lobby the viewer is going to stands out in a row of them. */
+/**
+ * RSVP, or Going once set: black, so a lobby the viewer is going to stands out in a row of them. The
+ * pill alone, for a host that holds the press itself (the side panel's lobby strip, which draws it
+ * twice and says a failure under the strip); {@link LobbyRsvpButton} is the pill with its error.
+ */
+export function LobbyRsvpPill({
+  remind,
+  analyticsLabel,
+  analyticsSurface = 'hub',
+  className,
+}: {
+  remind: Pick<ReturnType<typeof useLobbyReminderPress>, 'reminded' | 'pending' | 'press'>;
+  /** As given: HubPillButton does not prefix an explicit label with the surface. */
+  analyticsLabel: string;
+  analyticsSurface?: DebateAnalyticsSurface;
+  className?: string;
+}) {
+  return (
+    <HubPillButton
+      variant={remind.reminded ? 'primary' : 'secondary'}
+      analyticsSurface={analyticsSurface}
+      analyticsLabel={analyticsLabel}
+      aria-pressed={remind.reminded}
+      pending={remind.pending}
+      onClick={remind.press}
+      className={className}
+    >
+      {rsvpLabel(remind.reminded)}
+    </HubPillButton>
+  );
+}
+
+/** {@link LobbyRsvpPill} with its own press, and the failure under it. */
 export function LobbyRsvpButton({
   lobby,
   analyticsSurface = 'hub',
@@ -35,21 +67,15 @@ export function LobbyRsvpButton({
   const remind = useLobbyReminderPress(lobby);
   return (
     <div className={cx('flex flex-col items-end gap-1', className)}>
-      <HubPillButton
-        variant={remind.reminded ? 'primary' : 'secondary'}
+      <LobbyRsvpPill
+        remind={remind}
         analyticsSurface={analyticsSurface}
-        // Prefixed here: HubPillButton takes an explicit label as given, so the surface would not reach it.
         analyticsLabel={debateAnalyticsLabel(
           analyticsSurface,
           `${analyticsLabelPrefix} ${remind.reminded ? 'Going' : 'RSVP'}`
         )}
-        aria-pressed={remind.reminded}
-        pending={remind.pending}
-        onClick={remind.press}
         className="w-full"
-      >
-        {rsvpLabel(remind.reminded)}
-      </HubPillButton>
+      />
       <LobbyReminderError error={remind.error} className="text-right" />
     </div>
   );

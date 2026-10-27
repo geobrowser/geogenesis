@@ -33,7 +33,8 @@ vi.mock('./use-request-countdown', async importOriginal => ({
 
 const { askIsForClaim, askIsForPerson, ENDED_ASK_TTL_MS, useOutgoingAsk } = await import('./use-outgoing-ask');
 const { HubAskProvider, useHubAskState } = await import('./hub-ask-context');
-const { markAskWithdrawn } = await import('./ask-withdrawals');
+const { ASK_WITHDRAWN_TTL_MS, askWasWithdrawn, markAskWithdrawn, unmarkAskWithdrawn } =
+  await import('./ask-withdrawals');
 const { formatCountdownClock } = await import('./use-request-countdown');
 
 const inAMinute = () => new Date(Date.now() + 60_000).toISOString();
@@ -70,7 +71,7 @@ function renderAsk(store = createStore()) {
 }
 
 beforeEach(() => {
-  // A successful withdraw or reject records itself, as the real mutations do on success.
+  // A withdraw or reject records itself when pressed, as the real mutations do in `onMutate`.
   mocks.withdraw.mockImplementation((id: string) => markAskWithdrawn(id));
   mocks.reject.mockImplementation((id: string) => markAskWithdrawn(id));
 });
@@ -214,6 +215,18 @@ describe('useOutgoingAsk', () => {
     expect(result.current.ended).toBeNull();
   });
 
+  // Account A's ask is gone from B's reads, which is not A's ask ending.
+  it('does not hand the previous account’s ask to a new account as ended', () => {
+    mocks.requests = { outbound: claimRequest(uniqueId('req')), incoming: [] };
+    const { result, rerender } = renderAsk();
+
+    mocks.accountKey = 'user-b';
+    mocks.requests = { outbound: null, incoming: [] };
+    rerender();
+
+    expect(result.current.ended).toBeNull();
+  });
+
   it('lets "nobody took it" go after a few minutes', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     mocks.requests = { outbound: claimRequest(uniqueId('req')), incoming: [] };
@@ -247,5 +260,55 @@ describe('HubAskProvider', () => {
 
     expect(result.current.strip.ended).toBeNull();
     expect(result.current.row.ended).toBeNull();
+  });
+
+  // The panel and full screen each mount one. Cancel from either, and neither may say nobody took it.
+  it('reads a cancel as taken back in every provider mounted', () => {
+    mocks.requests = { outbound: claimRequest(uniqueId('req')), incoming: [] };
+    const store = createStore();
+    const panel = renderHook(() => useHubAskState(), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <Provider store={store}>
+          <HubAskProvider>{children}</HubAskProvider>
+        </Provider>
+      ),
+    });
+    const workspace = renderHook(() => useHubAskState(), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <Provider store={store}>
+          <HubAskProvider>{children}</HubAskProvider>
+        </Provider>
+      ),
+    });
+
+    act(() => panel.result.current.cancel());
+    mocks.requests = { outbound: null, incoming: [] };
+    panel.rerender();
+    workspace.rerender();
+
+    expect(panel.result.current.ended).toBeNull();
+    expect(workspace.result.current.ended).toBeNull();
+  });
+});
+
+describe('ask withdrawals', () => {
+  it('answers the same for every reader, until the mark expires', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const id = uniqueId('req');
+    markAskWithdrawn(id);
+
+    expect(askWasWithdrawn(id)).toBe(true);
+    expect(askWasWithdrawn(id)).toBe(true);
+
+    vi.advanceTimersByTime(ASK_WITHDRAWN_TTL_MS + 1);
+    expect(askWasWithdrawn(id)).toBe(false);
+  });
+
+  it('forgets a withdraw that failed', () => {
+    const id = uniqueId('req');
+    markAskWithdrawn(id);
+    unmarkAskWithdrawn(id);
+
+    expect(askWasWithdrawn(id)).toBe(false);
   });
 });

@@ -439,14 +439,20 @@ function CalendarButton() {
 
 /**
  * The way out to the full-screen hub, carrying the list on this tab and what narrows it. Explore on
- * My positions is full screen's positions list, which still has a list of its own there.
+ * My positions is full screen's positions list, which still has a list of its own there. Several
+ * picked spaces stay behind, since full screen would read them as any of them — see
+ * `useWorkspaceQuery`.
  */
 function ExpandToWorkspaceLink({ activeTab }: { activeTab: DebatesHubTab }) {
   const { close } = useDebatesHub();
   const { authenticated } = useGeoChatAuth();
   const show = useAtomValue(debatesHubExploreShowAtom);
   const list = activeTab === 'explore' && authenticated && show === 'mine' ? 'positions' : activeTab;
-  const query = useWorkspaceQuery(isWorkspaceList(list) ? list : null);
+  // The panel tab's own selection, which is what is on screen (GEO-3463).
+  const query = useWorkspaceQuery(
+    isWorkspaceList(list) ? list : null,
+    activeTab === 'lobby' ? 'panelMatches' : 'panelExplore'
+  );
 
   return (
     <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">

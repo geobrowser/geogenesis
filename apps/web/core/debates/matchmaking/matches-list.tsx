@@ -7,38 +7,29 @@ import { useAtom } from 'jotai';
 import { Input } from '~/design-system/input';
 
 import type { MatchmakingMatch } from '../api';
-import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity } from '../hooks';
-import { useClaimOrderFacts } from './claim-order-facts';
 import { claimRowKey } from './claim-row-key';
-import { type ClaimsLayout, HubListColumns, HubStickyControls, SpaceTopicFilters } from './claims-tab';
+import {
+  type ClaimsLayout,
+  FILTER_ATOMS,
+  type FilterAtomsKey,
+  HubListColumns,
+  HubStickyControls,
+  SpaceTopicFilters,
+} from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubFacetRail } from './hub-facet-rail';
-import { PanelFiltersBar, type PanelListFilters, sortClaimRows } from './hub-filters';
+import { PanelFiltersBar, type PanelListFilters } from './hub-filters';
 import { HubCardList } from './hub-motion';
 import { HubQueryState, exploreClaimsAction } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import {
-  carriesEveryTopic,
-  claimTopicsById,
-  countBy,
-  keepSelectedVisible,
-  orderFacetOptions,
-  toggleId,
-  topicsFor,
-} from './topic-facets';
+import { carriesEveryTopic, countBy, inEverySpace, toggleId, topicsFor } from './topic-facets';
+import { useClaimRowTopics, useHeldClaimRows, useRowTopicFacet } from './use-claim-rows';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
-import { useStableListOrder } from './use-stable-list-order';
-import {
-  type DebatesHubTab,
-  debatesHubLobbySearchAtom,
-  debatesHubLobbySpaceIdsAtom,
-  debatesHubLobbySpaceSeedSpentAtom,
-  debatesHubLobbyTopicIdsAtom,
-} from '~/atoms';
+import type { DebatesHubTab } from '~/atoms';
 
 /**
  * Claims where you're ready to debate and someone holding the opposite response is online and
@@ -59,12 +50,15 @@ export function MatchesList({
   layout = 'panel',
   panelFilters,
   notice,
+  atomsFrom = 'lobby',
 }: {
   /**
    * The side panel's search and Filters button in place of the menus row (GEO-3463). Panel only:
    * full screen keeps Lobby's toggle and its rail.
    */
   panelFilters?: PanelListFilters;
+  /** Whose search and selection this reads: Lobby's, or the panel Matches tab's (`PANEL_ATOMS`). */
+  atomsFrom?: FilterAtomsKey;
   /** Above the list, under the filters: what the panel wants said about this list (GEO-3463). */
   notice?: React.ReactNode;
   /** Only reached from the empty state's action, so the rail need not pass one. */
@@ -78,26 +72,27 @@ export function MatchesList({
 }) {
   const workspace = layout === 'workspace';
   const panelMode = panelFilters !== undefined && !workspace;
+  const atoms = FILTER_ATOMS[atomsFrom];
   // Lobby's one selection, shared with its toggled-off state (GEO-2861) — the toggle narrows the
   // list, and would be a strange place to also change which spaces the viewer had picked.
   //
   // Session-scoped, like Explore's: the hub closes on an outside pointer-down, so a click-away to
   // dismiss the dropdown unmounted this list and took the selection with it (GEO-2850).
-  const [spaceIds, setSpaceIds] = useAtom(debatesHubLobbySpaceIdsAtom);
+  const [spaceIds, setSpaceIds] = useAtom(atoms.spaceIds);
   // The marker that says the membership default has been spent or forfeited, shared with Lobby's
   // other list for the same reason the selection is. This list never seeds — it did not on master
   // and a confirmed match is not a browse surface — but it edits the selection the *other* list
   // seeds, so a space picked here has to forfeit the default there. Without it, choosing a space
   // with "Matches only" on and then toggling it off mounted `ClaimsTab` with the seed still armed,
   // and the default landed on top of a choice the viewer had just made.
-  const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(debatesHubLobbySpaceSeedSpentAtom);
+  const [spaceSeedSpent, setSpaceSeedSpent] = useAtom(atoms.seedSpent);
   // Shared with Lobby's other list too, so narrowing survives the switch rather than being undone
   // by it.
-  const [topicIds, setTopicIds] = useAtom(debatesHubLobbyTopicIdsAtom);
+  const [topicIds, setTopicIds] = useAtom(atoms.topicIds);
   // And the search with them. Flipping the toggle unmounts one of Lobby's two lists and mounts the
   // other, so a search held in either one's `useState` was cleared by a switch that presents itself
   // as narrowing what is on screen.
-  const [search, setSearch] = useAtom(debatesHubLobbySearchAtom);
+  const [search, setSearch] = useAtom(atoms.search);
   const { value: debouncedSearch } = useDebouncedSearch(search);
 
   const matchesQuery = useMatchmakingMatches(true);
@@ -108,8 +103,11 @@ export function MatchesList({
   const serverMatches = React.useMemo(() => matchesQuery.data?.matches ?? [], [matchesQuery.data]);
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
 
-  // Same hold as Explore's list: standing down from one claim shouldn't reshuffle the rest.
-  const matches = useStableListOrder(serverMatches, claimRowKey, spaceIds.join(','));
+  // Same hold as Explore's list: standing down from one claim shouldn't reshuffle the rest. The
+  // panel's Sort (GEO-3463) is applied under it, so a count changing does not move rows either;
+  // "Best" is Explore's ranking, looked up for these claims, rather than geo-chat's order.
+  const clientSort = panelMode ? panelFilters?.clientSort : undefined;
+  const matches = useHeldClaimRows(serverMatches, clientSort, spaceIds.join(','));
 
   // Topics are Knowledge Graph data that `/matchmaking/matches` does not carry — `match.topics` is
   // empty on every row, the same way `MatchmakingClaim.topics` is — and there is no facet beside it
@@ -119,13 +117,7 @@ export function MatchesList({
   // Safe to count and filter client-side here in a way it would not be for a paged list: this whole
   // list is in hand, so the rows *are* the complete answer (see `facetSpaces` above for the same
   // reasoning about spaces).
-  const claimEntityIds = React.useMemo(() => serverMatches.map(match => match.claim.claim_entity_id), [serverMatches]);
-  const {
-    entities: claimEntities,
-    isLoading: topicsLoading,
-    error: topicsError,
-  } = useClaimEntitiesByIds(claimEntityIds);
-  const topicsByClaimId = React.useMemo(() => claimTopicsById(claimEntities), [claimEntities]);
+  const { topicsByClaimId, isLoading: topicsLoading, error: topicsError } = useClaimRowTopics(serverMatches);
 
   /**
    * Whether the topic filter can be honoured yet, and what to do when it cannot.
@@ -175,8 +167,9 @@ export function MatchesList({
     // The panel's picks are AND (GEO-3463); a match sits in one space, so it has to be every one picked.
     // Full screen keeps "any of these".
     (match: MatchmakingMatch) =>
-      spaceIds.length === 0 ||
-      (panelMode ? spaceIds.every(id => id === match.claim.space_id) : spaceIds.includes(match.claim.space_id)),
+      panelMode
+        ? inEverySpace(spaceIds, match.claim.space_id)
+        : spaceIds.length === 0 || spaceIds.includes(match.claim.space_id),
     [panelMode, spaceIds]
   );
   const passesTopics = React.useCallback(
@@ -225,33 +218,11 @@ export function MatchesList({
     onSeedSpend: () => setSpaceSeedSpent(true),
   });
 
-  const facetTopics = React.useMemo(
-    () =>
-      orderFacetOptions(
-        keepSelectedVisible(
-          countBy(
-            matches
-              .filter(match => passesSpace(match) && passesSearch(match) && passesTopics(match))
-              .flatMap(match => topicsFor(topicsByClaimId, match.claim.claim_entity_id, match.claim.space_id) ?? [])
-          ),
-          topicIds
-        ),
-        topicIds
-      ),
-    [matches, passesSearch, passesSpace, passesTopics, topicIds, topicsByClaimId]
+  const filtered = React.useMemo(
+    () => matches.filter(match => passesSpace(match) && passesTopics(match) && passesSearch(match)),
+    [matches, passesSearch, passesSpace, passesTopics]
   );
-
-  // The panel's Sort (GEO-3463). The whole list is in hand, so it sorts here; "Best" is Explore's
-  // ranking, looked up for these claims, rather than geo-chat's order.
-  const clientSort = panelFilters?.clientSort;
-  const { facts: orderFacts } = useClaimOrderFacts(
-    claimEntityIds,
-    panelMode && (clientSort === 'best' || clientSort === 'newest')
-  );
-  const filtered = React.useMemo(() => {
-    const kept = matches.filter(match => passesSpace(match) && passesTopics(match) && passesSearch(match));
-    return panelMode && clientSort ? sortClaimRows(kept, clientSort, orderFacts) : kept;
-  }, [clientSort, matches, orderFacts, panelMode, passesSearch, passesSpace, passesTopics]);
+  const facetTopics = useRowTopicFacet(filtered, topicsByClaimId, topicIds);
 
   // The viewer's own filters emptied a list that has something in it — the one empty state here
   // they can undo, and the one `serverMatches.length === 0` is false for.

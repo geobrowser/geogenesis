@@ -20,31 +20,34 @@ import {
  */
 vi.mock('./claims-tab', async () => {
   const atoms = await import('~/atoms');
+  const variantAtoms = {
+    explore: {
+      spaceIds: atoms.debatesHubExploreSpaceIdsAtom,
+      topicIds: atoms.debatesHubExploreTopicIdsAtom,
+      search: atoms.debatesHubExploreSearchAtom,
+      seedSpent: atoms.debatesHubExploreSpaceSeedSpentAtom,
+    },
+    positions: {
+      spaceIds: atoms.debatesHubPositionsSpaceIdsAtom,
+      topicIds: atoms.debatesHubPositionsTopicIdsAtom,
+      search: atoms.debatesHubPositionsSearchAtom,
+      seedSpent: atoms.debatesHubPositionsSpaceSeedSpentAtom,
+    },
+    lobby: {
+      spaceIds: atoms.debatesHubLobbySpaceIdsAtom,
+      topicIds: atoms.debatesHubLobbyTopicIdsAtom,
+      search: atoms.debatesHubLobbySearchAtom,
+      seedSpent: atoms.debatesHubLobbySpaceSeedSpentAtom,
+    },
+  };
   return {
     // The list a URL means when it names none, so the workspace can follow a bare `/matchmaking`
     // back to Lobby. Mirrored because this file mocks the module wholesale.
     DEFAULT_WORKSPACE_LIST: 'lobby',
     CLAIMS_TAB_VARIANTS: ['explore', 'lobby', 'positions'],
-    VARIANT_ATOMS: {
-      explore: {
-        spaceIds: atoms.debatesHubExploreSpaceIdsAtom,
-        topicIds: atoms.debatesHubExploreTopicIdsAtom,
-        search: atoms.debatesHubExploreSearchAtom,
-        seedSpent: atoms.debatesHubExploreSpaceSeedSpentAtom,
-      },
-      positions: {
-        spaceIds: atoms.debatesHubPositionsSpaceIdsAtom,
-        topicIds: atoms.debatesHubPositionsTopicIdsAtom,
-        search: atoms.debatesHubPositionsSearchAtom,
-        seedSpent: atoms.debatesHubPositionsSpaceSeedSpentAtom,
-      },
-      lobby: {
-        spaceIds: atoms.debatesHubLobbySpaceIdsAtom,
-        topicIds: atoms.debatesHubLobbyTopicIdsAtom,
-        search: atoms.debatesHubLobbySearchAtom,
-        seedSpent: atoms.debatesHubLobbySpaceSeedSpentAtom,
-      },
-    },
+    VARIANT_ATOMS: variantAtoms,
+    // `useWorkspaceQuery` reads through this one; full screen only ever names a variant.
+    FILTER_ATOMS: variantAtoms,
     readUrlSeed: (variant: string, query: string) => {
       const params = new URLSearchParams(query);
       const list = params.get('list') ?? 'lobby';

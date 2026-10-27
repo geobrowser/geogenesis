@@ -3,7 +3,9 @@ import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within }
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateHistoryItem, DebateRequest, DebateRequestParty, ScheduledDebateRequest } from '../api';
+import type { DebateHistoryItem, DebateRequest, DebateRequestParty } from '../api';
+import { ResizeObserverStub, activeResizeObservers, fireResize } from '../resize-observer-fixtures';
+import { EMPTY_SCHEDULED, historyItem, invite } from './requests-fixtures';
 import type { ScheduledContent } from './scheduled-debates-section';
 
 const mocks = vi.hoisted(() => ({
@@ -19,6 +21,7 @@ const mocks = vi.hoisted(() => ({
     isLoading: false,
     hasMore: false,
     loadingMore: false,
+    loadMoreFailed: false,
     loadMore: vi.fn(),
   },
   pastDebates: [] as { entityId: string; spaceId: string; title: string; createdAtSec: number; debateClaim: null }[],
@@ -111,17 +114,6 @@ const { RequestsSchedule } = await import('./requests-schedule');
 const { HubAskProvider } = await import('./hub-ask-context');
 const render = (ui: import('react').ReactElement) => rtlRender(ui, { wrapper: HubAskProvider });
 
-const EMPTY_SCHEDULED: ScheduledContent = {
-  answerable: [],
-  upcoming: [],
-  lobbies: [],
-  people: [],
-  requestsError: null,
-  roomsError: null,
-  lobbiesError: null,
-  loading: false,
-};
-
 function party(userId: string, name: string): DebateRequestParty {
   return {
     user_id: userId,
@@ -150,71 +142,73 @@ function liveRequest(id: string, claim: string, requester = party('user-them', '
   };
 }
 
-function invite(id: string, mustAnswer: boolean): ScheduledDebateRequest {
-  const start = Date.now() + 2 * 86_400_000;
-  return {
-    request_id: id,
-    status: 'pending',
-    scheduled_start_at: new Date(start).toISOString(),
-    scheduled_end_at: new Date(start + 30 * 60_000).toISOString(),
-    invited_by_user_id: mustAnswer ? 'user-them' : 'user-me',
-    created_by_admin: false,
-    proposed_by_user_id: mustAnswer ? 'user-them' : 'user-me',
-    reschedule_count: 0,
-    room_id: null,
-    participants: [
-      { user_id: 'user-me', accepted: mustAnswer ? null : true, responded_at: null },
-      { user_id: 'user-them', accepted: mustAnswer ? true : null, responded_at: null },
-    ] as unknown as ScheduledDebateRequest['participants'],
-    viewer_must_answer: mustAnswer,
-  };
-}
+const box = (top: number, height = 0) =>
+  ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
 
-function historyItem(overrides: Partial<DebateHistoryItem>): DebateHistoryItem {
-  return {
-    id: 'claim_request:1',
-    kind: 'claim_request',
-    occurred_at: new Date(Date.now() - 86_400_000).toISOString(),
-    direction: 'outgoing',
-    outcome: 'passed_by_everyone',
-    other_user_ids: ['user-them'],
-    claim: {
-      id: 'c1',
-      space_id: 's1',
-      claim_entity_id: 'e1',
-      claim: 'Stablecoins should be regulated',
-      description: null,
-    },
-    debate_id: null,
-    lobby: null,
-    scheduled_start_at: null,
-    ...overrides,
-  };
-}
+const restoreLayouts: (() => void)[] = [];
 
 /**
- * A browser's layout for the timeline: the now-line `lineTop` px down the content, the content ending
- * at the spacer's bottom, both moving with the scroll; the pinned filter row 52px tall at the top.
- * Everything else at 0. A container that stayed put while the line scrolled would be a layout no
- * browser draws, and the spacer and the pin would chase each other through it.
+ * A browser's layout for the timeline, in the panel's box: `clientHeight` tall, scrolling only as far
+ * as its content, and clamping `scrollTop` to it as a browser does — when the content shrinks under
+ * it too. The now-line sits `lineTop()` px down the content with `below` px of rows under it before
+ * the spacer; a linked row, when there is one, at `focusedTop()`. Everything inside moves with the
+ * scroll, and the pinned filter row is 52px tall at the top. Anything else measures 0.
+ *
+ * A container that stayed put while the line scrolled would be a layout no browser draws, and the
+ * spacer and the pin would chase each other through it.
  */
-function timelineLayout(scrollerOf: (el: Element) => HTMLElement | null, lineTop: () => number) {
-  const box = (top: number, height = 0) =>
-    ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
-  return function (this: Element) {
-    const scroller = scrollerOf(this);
-    const scrollTop = scroller?.scrollTop ?? 0;
-    if (this.hasAttribute('data-requests-now-line')) return box(lineTop() - scrollTop);
+function fakeScroller({
+  lineTop = () => 600,
+  below = 0,
+  focusedTop,
+  clientHeight = 800,
+}: { lineTop?: () => number; below?: number; focusedTop?: () => number; clientHeight?: number } = {}) {
+  let scrollTop = 0;
+  const scroller = document.createElement('div');
+  scroller.setAttribute('data-debates-hub-scroll', '');
+  const line = () => scroller.querySelector('[data-requests-now-line]');
+  const spacer = () =>
+    parseFloat(scroller.querySelector<HTMLElement>('[data-requests-spacer]')?.style.height ?? '') || 0;
+  // With the timeline swapped out (an empty state), there is next to nothing to scroll.
+  const contentHeight = () => (line() ? lineTop() + below + spacer() : 0);
+  const maxScroll = () => Math.max(0, contentHeight() - clientHeight);
+  Object.defineProperties(scroller, {
+    clientHeight: { get: () => clientHeight },
+    scrollTop: {
+      get: () => (scrollTop = Math.min(scrollTop, maxScroll())),
+      set: (value: number) => {
+        scrollTop = Math.max(0, Math.min(value, maxScroll()));
+      },
+    },
+  });
+  document.body.appendChild(scroller);
+
+  const original = Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect = function (this: Element) {
+    if (this === scroller) return box(0, clientHeight);
+    const top = scroller.scrollTop;
+    const nowLine = line();
+    if (this.hasAttribute('data-requests-now-line')) return box(lineTop() - top);
     if (this.hasAttribute('data-hub-sticky-controls')) return box(0, 52);
-    const line = scroller?.querySelector('[data-requests-now-line]');
-    if (scroller && this !== scroller && line && this.contains(line)) {
-      const spacer = Math.max(
-        0,
-        ...[...scroller.querySelectorAll<HTMLElement>('div[aria-hidden]')].map(el => parseFloat(el.style.height) || 0)
-      );
-      return box(-scrollTop, lineTop() + spacer);
-    }
+    if (focusedTop && this.hasAttribute('data-focused')) return box(focusedTop() - top);
+    if (nowLine && this.contains(nowLine)) return box(-top, contentHeight());
     return box(0);
+  };
+  restoreLayouts.push(() => {
+    Element.prototype.getBoundingClientRect = original;
+    scroller.remove();
+  });
+
+  return {
+    scroller,
+    render: (ui: import('react').ReactElement = <RequestsSchedule />) =>
+      rtlRender(ui, { container: scroller, wrapper: HubAskProvider }),
+    /** The viewer scrolling the box themselves: the input that ends the pin, then the scroll it makes. */
+    scrollBy(delta: number) {
+      fireEvent.wheel(scroller);
+      scroller.scrollTop += delta;
+      fireEvent.scroll(scroller);
+    },
   };
 }
 
@@ -222,7 +216,16 @@ beforeEach(() => {
   mocks.incoming = [];
   mocks.outbound = null;
   mocks.scheduled = { ...EMPTY_SCHEDULED };
-  mocks.history = { ...mocks.history, items: [], unavailable: false, hasMore: false };
+  mocks.history = {
+    ...mocks.history,
+    items: [],
+    unavailable: false,
+    isLoading: false,
+    hasMore: false,
+    loadingMore: false,
+    loadMoreFailed: false,
+  };
+  mocks.history.loadMore.mockReset();
   mocks.pastDebates = [];
   mocks.pastDebatesEnabled = [];
   mocks.accept.mockReset();
@@ -237,7 +240,9 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  for (const restore of restoreLayouts.splice(0)) restore();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 const nowLine = () => screen.getByRole('separator', { name: 'Now' });
@@ -434,123 +439,30 @@ describe('RequestsSchedule', () => {
     expect(within(item).getByRole('link', { name: 'Join' })).toBeInTheDocument();
   });
 
-  // The design's landing: the now-line just under the filter row, whatever is above it.
-  it('opens with the now-line just under the pinned filter row', () => {
-    mocks.history = { ...mocks.history, items: [historyItem({})] };
-    const original = Element.prototype.getBoundingClientRect;
-    Element.prototype.getBoundingClientRect = timelineLayout(
-      el => el.closest<HTMLElement>('[data-debates-hub-scroll]'),
-      () => 600
-    );
-    try {
-      render(
-        <div data-debates-hub-scroll>
-          <RequestsSchedule />
-        </div>
-      );
-      const scroller = document.querySelector('[data-debates-hub-scroll]') as HTMLElement;
-      // 600 down, less the 52px filter row and the 8px gap under it.
-      expect(scroller.scrollTop).toBe(540);
-    } finally {
-      Element.prototype.getBoundingClientRect = original;
-    }
-  });
+  // The design's landing: the now-line just under the filter row, whatever is above it. 26 Oct: with
+  // nothing upcoming, the box cannot scroll that far until the spacer below the line has rendered, a
+  // pass after the first anchor. It used to settle short, on past days.
+  it('opens with the now-line just under the pinned filter row, once the spacer makes room', () => {
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    const layout = fakeScroller();
+    layout.render();
 
-  // 26 Oct: with nothing upcoming, the box cannot scroll the line to the top until the spacer below it
-  // has rendered, a pass after the first anchor. It used to settle short, on past days.
-  it('still lands on the now-line when only the spacer makes room for it', () => {
-    mocks.history = { ...mocks.history, items: [historyItem({})] };
-    let scrollTop = 0;
-    const rect = (top: number, height = 0) =>
-      ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
-    const original = Element.prototype.getBoundingClientRect;
-    // A real box: 800px tall, scrolling only as far as its content, which the past rows make 200px
-    // longer than the box until the spacer adds its own height.
-    const scroller = document.createElement('div');
-    scroller.setAttribute('data-debates-hub-scroll', '');
-    const spacer = () =>
-      Math.max(
-        0,
-        ...[...scroller.querySelectorAll<HTMLElement>('div[aria-hidden]')].map(el => parseFloat(el.style.height) || 0)
-      );
-    Object.defineProperties(scroller, {
-      clientHeight: { get: () => 800 },
-      scrollTop: {
-        get: () => scrollTop,
-        set: (value: number) => {
-          scrollTop = Math.min(value, 200 + spacer());
-        },
-      },
-    });
-    document.body.appendChild(scroller);
-    // Laid out as a browser would: the line 600px down the content, the content ending at the spacer's
-    // bottom, both moving with the scroll; the pinned filter row 52px tall at the top.
-    Element.prototype.getBoundingClientRect = function (this: Element) {
-      if (this.hasAttribute('data-requests-now-line')) return rect(600 - scrollTop);
-      if (this.hasAttribute('data-hub-sticky-controls')) return rect(0, 52);
-      const line = scroller.querySelector('[data-requests-now-line]');
-      if (this !== scroller && line && this.contains(line)) return rect(-scrollTop, 600 + spacer());
-      return rect(0);
-    };
-    try {
-      rtlRender(<RequestsSchedule />, { container: scroller, wrapper: HubAskProvider });
-
-      expect(scrollTop).toBe(540);
-    } finally {
-      Element.prototype.getBoundingClientRect = original;
-      scroller.remove();
-    }
+    // 600 down, less the 52px filter row and the 8px gap under it.
+    expect(layout.scroller.scrollTop).toBe(540);
   });
 
   it('lands on the now-line when the past arrives after the tab opened empty', async () => {
     // 27 Oct: nothing upcoming and no past yet is the empty state. When the past lands, the timeline
     // (the line with it) mounts only after that state animates out, after the effects have run.
-    mocks.history = { ...mocks.history, items: [] };
-    let scrollTop = 0;
-    const rect = (top: number, height = 0) =>
-      ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
-    const original = Element.prototype.getBoundingClientRect;
-    // A real box: 800px tall, scrolling only as far as its content, which the past rows make 200px
-    // longer than the box until the spacer adds its own height.
-    const scroller = document.createElement('div');
-    scroller.setAttribute('data-debates-hub-scroll', '');
-    const spacer = () =>
-      Math.max(
-        0,
-        ...[...scroller.querySelectorAll<HTMLElement>('div[aria-hidden]')].map(el => parseFloat(el.style.height) || 0)
-      );
-    Object.defineProperties(scroller, {
-      clientHeight: { get: () => 800 },
-      scrollTop: {
-        get: () => scrollTop,
-        set: (value: number) => {
-          scrollTop = Math.min(value, 200 + spacer());
-        },
-      },
-    });
-    document.body.appendChild(scroller);
-    // Laid out as a browser would: the line 600px down the content, the content ending at the spacer's
-    // bottom, both moving with the scroll; the pinned filter row 52px tall at the top.
-    Element.prototype.getBoundingClientRect = function (this: Element) {
-      if (this.hasAttribute('data-requests-now-line')) return rect(600 - scrollTop);
-      if (this.hasAttribute('data-hub-sticky-controls')) return rect(0, 52);
-      const line = scroller.querySelector('[data-requests-now-line]');
-      if (this !== scroller && line && this.contains(line)) return rect(-scrollTop, 600 + spacer());
-      return rect(0);
-    };
-    try {
-      const view = rtlRender(<RequestsSchedule />, { container: scroller, wrapper: HubAskProvider });
-      expect(screen.queryByTestId('requests-history')).not.toBeInTheDocument();
+    const layout = fakeScroller();
+    const view = layout.render();
+    expect(screen.queryByTestId('requests-history')).not.toBeInTheDocument();
 
-      mocks.history = { ...mocks.history, items: [historyItem({})] };
-      view.rerender(<RequestsSchedule />);
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    view.rerender(<RequestsSchedule />);
 
-      await waitFor(() => expect(screen.getByTestId('requests-history')).toBeInTheDocument());
-      await waitFor(() => expect(scrollTop).toBe(540));
-    } finally {
-      Element.prototype.getBoundingClientRect = original;
-      scroller.remove();
-    }
+    await waitFor(() => expect(screen.getByTestId('requests-history')).toBeInTheDocument());
+    await waitFor(() => expect(layout.scroller.scrollTop).toBe(540));
   });
 
   // The section's rule: one failed read must not take the others' rows with it.
@@ -621,14 +533,7 @@ describe('RequestsSchedule', () => {
 
   it('keeps Block requester in the incoming request’s menu', () => {
     // The menu is a Radix popper, which measures itself; jsdom ships no observer.
-    vi.stubGlobal(
-      'ResizeObserver',
-      class {
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      }
-    );
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     mocks.incoming = [liveRequest('r1', 'A claim')];
     render(<RequestsSchedule />);
 
@@ -678,20 +583,72 @@ describe('RequestsSchedule', () => {
     expect(screen.getByText('Debate with Mia')).toBeInTheDocument();
   });
 
-  // Today's date sits once, on its first section. With nothing of today above the line, that is below.
-  it('dates today below the line when nothing of today is above it', () => {
-    const start = Date.now() + 60_000;
-    if (new Date(start).toDateString() !== new Date().toDateString()) return;
+  // Saying "Any debate requests…" under a failure contradicts it; over history still loading, it shows
+  // for a moment and then swaps out for the timeline, taking the now-line with it.
+  it('does not call the tab empty when a read failed or the past is still loading', () => {
+    const empty = () => screen.queryByText('Any debate requests you’ll receive will appear here.');
+
+    mocks.requestsError = new Error('geo-chat is down');
+    const view = render(<RequestsSchedule />);
+    expect(empty()).not.toBeInTheDocument();
+
+    mocks.requestsError = null;
+    mocks.scheduled = { ...EMPTY_SCHEDULED, roomsError: new Error('rooms are down') };
+    view.rerender(<RequestsSchedule />);
+    expect(screen.getByText('Could not read your upcoming debates: rooms are down')).toBeInTheDocument();
+    expect(empty()).not.toBeInTheDocument();
+    // There may well be something coming up: the failure says so, not "Nothing coming up".
+    expect(screen.queryByTestId('requests-nothing-ahead')).not.toBeInTheDocument();
+
+    mocks.scheduled = { ...EMPTY_SCHEDULED };
+    mocks.history = { ...mocks.history, isLoading: true };
+    view.rerender(<RequestsSchedule />);
+    expect(empty()).not.toBeInTheDocument();
+  });
+
+  // The action row is one line that does not wrap. The confirm step's question and its two pills
+  // squeezed into it beside Join and Reschedule, the question wrapping a word a line.
+  it('opens Cancel’s confirm step under the action row, not in it', () => {
+    const start = new Date(Date.now() + 86_400_000).toISOString();
     mocks.scheduled = {
       ...EMPTY_SCHEDULED,
-      answerable: [
+      upcoming: [
         {
-          ...invite('s1', true),
-          scheduled_start_at: new Date(start).toISOString(),
-          scheduled_end_at: new Date(start + 30 * 60_000).toISOString(),
+          room: {
+            room_id: 'room-1',
+            starts_at: start,
+            opens_at: start,
+            joinable: false,
+            due: false,
+            others_present: false,
+            rematch_session_id: null,
+          } as ScheduledContent['upcoming'][number]['room'],
+          opponentUserId: 'user-them',
+          scheduledEndAt: null,
+          requestId: 'request-1',
         },
       ],
     };
+    render(<RequestsSchedule />);
+
+    const row = screen.getByRole('button', { name: 'Reschedule' }).parentElement!;
+    fireEvent.click(within(row).getByRole('button', { name: 'Cancel' }));
+
+    const question = screen.getByText(/^Cancel your debate with Mia\?/);
+    expect(row).not.toContainElement(question);
+    // The row keeps what it had, less Cancel, which the step under it now speaks for.
+    expect(within(row).getByRole('button', { name: 'Reschedule' })).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    expect(row.nextElementSibling).toContainElement(question);
+    expect(row.nextElementSibling).toContainElement(screen.getByRole('button', { name: 'Keep it' }));
+  });
+
+  // Today's date sits once, on its first section. With nothing of today above the line, that is below.
+  // At a fixed local noon, so an invite a minute out is always today, whenever the suite runs.
+  it('dates today below the line when nothing of today is above it', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 27, 12, 0));
+    mocks.scheduled = { ...EMPTY_SCHEDULED, answerable: [invite('s1', true, { startsInMinutes: 1 })] };
     render(<RequestsSchedule />);
 
     expect(screen.getByText('TODAY')).toBeInTheDocument();
@@ -757,41 +714,162 @@ describe('RequestsSchedule scrolling', () => {
     expect(document.activeElement).toBe(screen.getByText('Mia invited you').closest('[data-focused]'));
   });
 
-  it('holds the now-line still when something above it changes height', () => {
-    mocks.history = { ...mocks.history, items: [historyItem({})] };
-    let observed: (() => void) | null = null;
-    const originalObserver = globalThis.ResizeObserver;
-    globalThis.ResizeObserver = class {
-      constructor(callback: () => void) {
-        observed = callback;
-      }
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    } as unknown as typeof ResizeObserver;
+  /** The observer whose content holds `node`: what a row above the line growing would fire. */
+  const observerAround = (node: Element) =>
+    activeResizeObservers().find(observer => [...observer.targets].some(target => target.contains(node)));
+
+  // While pinned (the viewer has not touched the box), a change above the line re-pins it.
+  it('keeps the now-line pinned under the filter row when something above it grows', () => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    mocks.history = { ...mocks.history, items: [historyItem()] };
     let lineTop = 600;
-    const original = Element.prototype.getBoundingClientRect;
-    Element.prototype.getBoundingClientRect = timelineLayout(
-      el => el.closest<HTMLElement>('[data-debates-hub-scroll]'),
-      () => lineTop
+    const layout = fakeScroller({ lineTop: () => lineTop });
+    layout.render();
+    expect(layout.scroller.scrollTop).toBe(540);
+
+    // A notice lands above the line and pushes it 40px down.
+    lineTop = 640;
+    act(() => fireResize());
+
+    expect(layout.scroller.scrollTop).toBe(580);
+  });
+
+  // Once the viewer has scrolled, their place is what is kept: the line stays where they left it on
+  // screen. Re-pinning would put it back under the filter row (580 here), not where they were (340).
+  it('holds the viewer’s own place, not the pin, once they have scrolled', () => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    let lineTop = 600;
+    const layout = fakeScroller({ lineTop: () => lineTop });
+    layout.render();
+    expect(layout.scroller.scrollTop).toBe(540);
+
+    // Up into the past: the line is now 300px down the box.
+    layout.scrollBy(-240);
+    expect(layout.scroller.scrollTop).toBe(300);
+
+    lineTop = 640;
+    act(() => fireResize());
+
+    expect(layout.scroller.scrollTop).toBe(340);
+  });
+
+  // A past row can grow with no key changing: a name that resolves late and wraps, "Couldn't open
+  // it" under Watch, a font arriving. The observer has to be watching the past for that to be held.
+  it('holds the line when a past row grows without anything else changing', () => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    let lineTop = 600;
+    const layout = fakeScroller({ lineTop: () => lineTop });
+    layout.render();
+
+    const observer = observerAround(screen.getByTestId('requests-history'));
+    expect(observer).toBeDefined();
+
+    lineTop = 630;
+    act(() => observer!.fire());
+
+    expect(layout.scroller.scrollTop).toBe(570);
+  });
+
+  // A link from an email to an invite further down (GEO-3431). The spacer used to make room only for
+  // the line, so the linked row sat past the end of the scroll and the anchor never landed: no focus,
+  // no paging, no hold.
+  it('lands on a linked request further down, with room made below it', () => {
+    mocks.scheduled = { ...EMPTY_SCHEDULED, answerable: [invite('s1', true)] };
+    // The line 600px down, the linked invite 300px under it, and 100px of the list after that.
+    const layout = fakeScroller({ below: 400, focusedTop: () => 900 });
+    layout.render(<RequestsSchedule focusedRequestId="s1" />);
+
+    // 900 down, less the filter row and the gap.
+    expect(layout.scroller.scrollTop).toBe(840);
+    expect(document.activeElement).toBe(screen.getByText('Mia invited you').closest('[data-focused]'));
+  });
+
+  // The tab's and the empty state's `HubSwap` slide their content up 4px as it fades in. Pinned
+  // mid-slide, the line ended 4px off once the slide finished, and nothing moved it back.
+  it('ends on the line once an entrance animation has finished moving it', async () => {
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    let slide = 4;
+    const layout = fakeScroller({ lineTop: () => 600 + slide });
+    layout.render();
+    expect(layout.scroller.scrollTop).toBe(544);
+
+    slide = 0;
+
+    await waitFor(() => expect(layout.scroller.scrollTop).toBe(540));
+  });
+
+  // 27 Oct's bug again, by another road: an empty "Needs you" swaps the timeline out, and "All" brings
+  // it back only after the effects for the new rows have run. It landed at the top of the past.
+  it('comes back to the now-line from an empty Needs you', async () => {
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    const layout = fakeScroller();
+    layout.render();
+    expect(layout.scroller.scrollTop).toBe(540);
+
+    // Pressing a segment is the viewer's own input, which ends the pin.
+    const press = (name: RegExp) => {
+      const segment = screen.getByRole('radio', { name });
+      fireEvent.pointerDown(segment);
+      fireEvent.click(segment);
+    };
+    press(/Needs you/);
+    await screen.findByText('Nothing needs your answer right now.');
+    expect(layout.scroller.scrollTop).toBe(0);
+
+    press(/^All$/);
+    await screen.findByRole('separator', { name: 'Now' });
+
+    // Held in the commit that brings the line back, before the first paint: not a frame later.
+    expect(layout.scroller.scrollTop).toBe(540);
+  });
+
+  it('pages history in when the top comes into view', () => {
+    stubIntersecting();
+    mocks.history = { ...mocks.history, items: [historyItem()], hasMore: true };
+    render(
+      <div data-debates-hub-scroll>
+        <RequestsSchedule />
+      </div>
     );
-    try {
-      render(
-        <div data-debates-hub-scroll>
-          <RequestsSchedule />
-        </div>
-      );
-      const scroller = document.querySelector('[data-debates-hub-scroll]') as HTMLElement;
-      expect(scroller.scrollTop).toBe(540);
 
-      // A notice lands above the line and pushes it 40px down.
-      lineTop = 640;
-      act(() => observed?.());
+    expect(mocks.history.loadMore).toHaveBeenCalled();
+  });
 
-      expect(scroller.scrollTop).toBe(580);
-    } finally {
-      Element.prototype.getBoundingClientRect = original;
-      globalThis.ResizeObserver = originalObserver;
-    }
+  // #299 refuses a bad cursor with a 400, and an outage fails the same way. `hasMore` still says yes,
+  // and the sentinel used to ask again at round-trip speed for as long as the top was in view.
+  it('stops paging after a page fails, and offers the retry instead', () => {
+    stubIntersecting();
+    mocks.history = { ...mocks.history, items: [historyItem()], hasMore: true, loadMoreFailed: true };
+    render(
+      <div data-debates-hub-scroll>
+        <RequestsSchedule />
+      </div>
+    );
+
+    expect(mocks.history.loadMore).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('Couldn’t load earlier · Try again');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.history.loadMore).toHaveBeenCalledTimes(1);
   });
 });
+
+/** An observer that reports everything it watches as in view at once, as the top of a short list is. */
+function stubIntersecting() {
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(private readonly callback: IntersectionObserverCallback) {}
+      observe(target: Element) {
+        this.callback([{ isIntersecting: true, target } as IntersectionObserverEntry], this as never);
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    }
+  );
+}

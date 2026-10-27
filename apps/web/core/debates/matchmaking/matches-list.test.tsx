@@ -12,11 +12,14 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 
 import type { MatchmakingMatch } from '../api';
 import { MatchesList } from './matches-list';
+import { PanelMatchesTab } from './panel-claim-tabs';
+import { panelFilters } from './panel-filters-fixtures';
 import {
   debatesHubLobbySearchAtom,
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubPanelMatchesSpaceIdsAtom,
 } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
@@ -81,6 +84,7 @@ vi.mock('../hooks', () => ({
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
+  useUpdateDebateAvailability: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -740,14 +744,8 @@ describe('MatchesList', () => {
 // GEO-3463. The side panel's Matches: one search and one Filters button, its Sort, and empty states
 // that offer what would fill the tab.
 describe('MatchesList in the panel', () => {
-  const panelFilters = (clientSort: 'best' | 'newest' | 'people' = 'best') => ({
-    sort: { options: [{ value: 'best', label: 'Best' }], value: clientSort, onChange: vi.fn() },
-    toggles: [],
-    clientSort,
-  });
-
   it('swaps the menus row for a search field and a Filters button', () => {
-    render(<MatchesList panelFilters={panelFilters()} />);
+    render(<MatchesList panelFilters={panelFilters({ clientSort: 'best' })} />);
 
     expect(screen.getByRole('textbox', { name: 'Search claims' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
@@ -771,7 +769,7 @@ describe('MatchesList in the panel', () => {
     } as Partial<MatchmakingMatch>);
     mocks.matches = [fewer, more];
 
-    render(<MatchesList panelFilters={panelFilters('people')} />);
+    render(<MatchesList panelFilters={panelFilters({ clientSort: 'people' })} />);
 
     const titles = screen.getAllByText(/better than/).map(node => node.textContent);
     expect(titles).toEqual(['Tea is better than coffee', 'Chips are better than fries']);
@@ -780,10 +778,22 @@ describe('MatchesList in the panel', () => {
   // 26 Oct (Preston): picks narrow (AND). A match sits in one space, so two picked spaces leave none.
   it('keeps only matches in every picked space', () => {
     const store = createStore();
-    store.set(debatesHubLobbySpaceIdsAtom, [SPACE_ID, OTHER_SPACE_ID]);
-    render(<MatchesList panelFilters={panelFilters()} />, store);
+    store.set(debatesHubPanelMatchesSpaceIdsAtom, [SPACE_ID, OTHER_SPACE_ID]);
+    render(<MatchesList atomsFrom="panelMatches" panelFilters={panelFilters({ clientSort: 'best' })} />, store);
 
     expect(screen.queryByText('Chips are better than fries')).not.toBeInTheDocument();
+  });
+
+  // Review: full screen seeds the viewer's member spaces and reads them as any of them. Shared with
+  // the panel, which needs every one, that seed emptied Matches.
+  it('does not read full screen’s spaces, seeded or picked', () => {
+    mocks.matches = [match()];
+    const store = createStore();
+    store.set(debatesHubLobbySpaceIdsAtom, [SPACE_ID, OTHER_SPACE_ID]);
+    store.set(debatesHubLobbySpaceSeedSpentAtom, true);
+    render(<PanelMatchesTab onTabChange={vi.fn()} />, store);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
 
   it('still lists matches in any picked space in full screen', () => {

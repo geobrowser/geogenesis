@@ -22,7 +22,7 @@ vi.mock('~/core/io/graphql-client', () => ({
     }),
 }));
 
-const { useClaimOrderFacts } = await import('./claim-order-facts');
+const { CLAIM_ORDER_FACTS_CHUNK, useClaimOrderFacts } = await import('./claim-order-facts');
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -50,5 +50,36 @@ describe('useClaimOrderFacts', () => {
     expect(result.current.facts.get('aa')).toMatchObject({ rankingScore: 10 });
     graphql.release?.();
     await waitFor(() => expect(result.current.facts.size).toBe(3));
+  });
+
+  // Review: each page re-requested the facts of every claim already loaded.
+  it('asks about a new page, not about every claim again', async () => {
+    const ids = (count: number) => Array.from({ length: count }, (_, index) => `c${String(index).padStart(3, '0')}`);
+    const { result, rerender } = renderHook(({ ids }) => useClaimOrderFacts(ids), {
+      wrapper,
+      initialProps: { ids: ids(CLAIM_ORDER_FACTS_CHUNK) },
+    });
+    await waitFor(() => expect(result.current.facts.size).toBe(CLAIM_ORDER_FACTS_CHUNK));
+
+    rerender({ ids: ids(CLAIM_ORDER_FACTS_CHUNK + 5) });
+    await waitFor(() => expect(graphql.calls).toHaveLength(2));
+    graphql.release?.();
+
+    expect(graphql.calls[1]).toEqual(ids(CLAIM_ORDER_FACTS_CHUNK + 5).slice(CLAIM_ORDER_FACTS_CHUNK));
+    await waitFor(() => expect(result.current.facts.size).toBe(CLAIM_ORDER_FACTS_CHUNK + 5));
+  });
+
+  // The sorted lists memo on it, so a fresh map per render would re-sort them every render.
+  it('hands back the same facts across renders that change nothing', async () => {
+    const { result, rerender } = renderHook(({ ids }) => useClaimOrderFacts(ids), {
+      wrapper,
+      initialProps: { ids: ['aa', 'bb'] },
+    });
+    await waitFor(() => expect(result.current.facts.size).toBe(2));
+    const facts = result.current.facts;
+
+    rerender({ ids: ['aa', 'bb'] });
+
+    expect(result.current.facts).toBe(facts);
   });
 });

@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyClaim, DebateLobbyClaimParticipant, DebateLobbyClaims, DebateLobbyMember } from '../api';
+import { ResizeObserverStub } from '../resize-observer-fixtures';
 import type { LobbyPageView } from './lobby-view';
 
 const mocks = vi.hoisted(() => ({
@@ -63,11 +64,6 @@ vi.mock('../matchmaking/hooks', () => ({
 }));
 
 // The menu's placement hook observes the trigger, and JSDOM has no ResizeObserver.
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
 window.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
 
 const { LobbyDisagreementsTrigger, lobbyDisagreements } = await import('./lobby-disagreements');
