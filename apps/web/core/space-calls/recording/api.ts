@@ -98,6 +98,8 @@ export type PastCall = {
   /** The call's, end minus start. */
   duration_seconds: number | null;
   started_by: DebateLobbyPerson | null;
+  /** The series that scheduled it; `null` for a call started on the spot. Absent from older geo-chat. */
+  series?: { series_id: string; name: string } | null;
   /** Set only when published and ready. */
   recording: {
     duration_seconds: number | null;

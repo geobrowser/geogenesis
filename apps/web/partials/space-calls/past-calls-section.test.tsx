@@ -63,6 +63,22 @@ describe('PastCallsSection', () => {
     expect(mocks.fetchNextPage).toHaveBeenCalled();
   });
 
+  it('names the series under a call it scheduled, unless the names match', () => {
+    pages(
+      [
+        call({ series: { series_id: 's1', name: 'Crypto Community Call' } }),
+        call({ call_id: 'c2', name: 'Same', series: { series_id: 's2', name: 'Same' } }),
+        call({ call_id: 'c3', name: 'On the spot', series: null }),
+      ],
+      null
+    );
+    render(<PastCallsSection spaceId="space1" />);
+    const rows = screen.getAllByTestId('calls-tab-past-row');
+    expect(rows[0]).toHaveTextContent('Crypto Community Call');
+    expect(rows[1]?.textContent?.match(/Same/g)).toHaveLength(1);
+    expect(rows[2]).toHaveTextContent('On the spot');
+  });
+
   it('says when there are none, with no Show more', () => {
     pages([], null);
     render(<PastCallsSection spaceId="space1" />);

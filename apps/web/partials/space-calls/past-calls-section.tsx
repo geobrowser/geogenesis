@@ -49,6 +49,8 @@ export function PastCallsSection({ spaceId }: { spaceId: string }) {
             .filter(Boolean)
             .join(' · ');
           const length = callDurationLabel(call.duration_seconds);
+          // As on upcoming rows: the series, when it names the call differently.
+          const series = call.series?.name && call.series.name !== call.name ? call.series.name : null;
           return (
             <li
               key={call.call_id}
@@ -64,6 +66,11 @@ export function PastCallsSection({ spaceId }: { spaceId: string }) {
                     {call.name}
                   </Text>
                 </Link>
+                {series ? (
+                  <Text as="span" variant="footnote" color="grey-04" className="truncate">
+                    {series}
+                  </Text>
+                ) : null}
               </div>
               {call.recording ? (
                 <span className="shrink-0 rounded bg-grey-01 px-2 py-1 text-footnote text-grey-04">
