@@ -16,7 +16,10 @@ import { NavbarClientActions } from './navbar-client-actions';
 vi.mock('next/dynamic', () => ({
   default: (loader: () => Promise<unknown>) => {
     const name = String(loader);
-    if (name.includes('navbar-actions')) return () => <div data-testid="navbar-actions" />;
+    if (name.includes('navbar-account-actions'))
+      return ({ compact }: { compact?: boolean }) => (
+        <div data-testid="navbar-actions" data-compact={String(compact)} />
+      );
     if (name.includes('create-entity-dropdown')) return () => <div data-testid="create-entity" />;
     return () => <div data-testid="debates-hub" />;
   },
@@ -61,5 +64,17 @@ describe('NavbarClientActions', () => {
     render(<NavbarClientActions onSearchClick={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
+  });
+
+  it('switches to compact controls without remounting the account subtree', () => {
+    const { rerender } = render(<NavbarClientActions onSearchClick={vi.fn()} />);
+    const account = screen.getByTestId('navbar-actions');
+
+    rerender(<NavbarClientActions compact onSearchClick={vi.fn()} />);
+
+    expect(screen.getByTestId('navbar-actions')).toBe(account);
+    expect(account).toHaveAttribute('data-compact', 'true');
+    expect(screen.queryByRole('button', { name: 'Search' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('create-entity')).not.toBeInTheDocument();
   });
 });

@@ -28,6 +28,7 @@ import { Text } from '~/design-system/text';
 import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
+import { EXPLORE_CARD_TITLE_CLASS_NAME } from './explore-card-title';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
 
@@ -299,7 +300,8 @@ export function ClaimExploreFeedCard({
         >
           <h2
             className={cx(
-              'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline',
+              EXPLORE_CARD_TITLE_CLASS_NAME,
+              'text-pretty group-hover/title:underline',
               matchesDebatePanelOnMobile && 'md:claim-card-panel-title!'
             )}
           >
@@ -320,6 +322,7 @@ export function ClaimExploreFeedCard({
             entityId={item.entityId}
             spaceId={item.spaceId}
             positions={control.optimisticPositions}
+            showParticipants={false}
             responseKind={responseKind}
             viewerPosition={control.viewerPosition}
             onRespond={control.respond}

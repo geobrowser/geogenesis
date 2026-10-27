@@ -235,7 +235,7 @@ describe('ProfileActivitySection', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('reserves the Activity section with a skeleton while both kinds are loading', () => {
+  it('starts on Debates with stable pills while both kinds are loading', () => {
     render(
       <ProfileActivitySection
         kinds={[
@@ -245,17 +245,17 @@ describe('ProfileActivitySection', () => {
       />
     );
 
-    const loading = screen.getByRole('region', { name: 'Loading activity' });
+    const loading = screen.getByRole('status', { name: 'Loading activity' });
 
     expect(loading).toHaveAttribute('aria-busy', 'true');
-    // No tabs to draw until a kind arrives.
-    expect(screen.queryByRole('button', { name: /Debates|Claims/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'false');
     /*
      * Only the chrome the loaded section actually has: two pills and the gallery. The skeleton used
      * to add a ruled "see all" footer that moved into the header long ago, which made it ~85px
      * taller than what replaced it — so everything below Activity jumped up once the rows landed.
      */
-    expect(loading.querySelectorAll('.animate-pulse')).toHaveLength(3);
+    expect(loading.querySelectorAll('.animate-pulse')).toHaveLength(1);
     expect(loading.querySelector('.border-t')).toBeNull();
     // The title is in the tree before the rows are, not only after them.
     expect(screen.getByRole('heading', { name: 'Activity' })).toHaveClass('sr-only');
@@ -280,7 +280,7 @@ describe('ProfileActivitySection', () => {
       />
     );
 
-    const loading = screen.getByRole('region', { name: 'Loading activity' });
+    const loading = screen.getByRole('status', { name: 'Loading activity' });
     const skeletonGallery = verticalPadding(loading.querySelector('.animate-pulse.h-44')?.parentElement);
 
     cleanup();
@@ -311,27 +311,71 @@ describe('ProfileActivitySection', () => {
     );
 
     expect(screen.getByTestId('card')).toHaveTextContent('d1');
-    expect(screen.queryByRole('region', { name: 'Loading activity' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Loading activity' })).not.toBeInTheDocument();
   });
 
   /*
    * GEO-3021. The two kinds are separate requests, so which one lands first is a
    * race — and a default committed to the winner is a default decided by the
    * network. Debates are the lead kind on every surface that renders this, so
-   * they win the default as soon as they have anything to show, however late.
+   * they stay selected while loading rather than switching from whichever response won the race.
    */
-  it('moves to debates when they arrive after claims', () => {
+  it('keeps Debates selected when claims arrive first', () => {
     const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
     const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [], isLoading: true }), claims]} />);
 
-    // Claims alone until the debates land: better the record that has arrived
-    // than a skeleton over one that may turn out to be empty.
-    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByTestId('card')).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Loading activity' })).toBeInTheDocument();
 
     rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1')] }), claims]} />);
 
     expect(screen.getByTestId('card')).toHaveTextContent('d1');
     expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps the same toggle buttons as claims and debates finish loading', () => {
+    const pendingDebates = kind({ rows: [], total: 0, isLoading: true });
+    const pendingClaims = kind({ key: 'claims', label: 'Claims', rows: [], total: 0, isLoading: true });
+    const { rerender } = render(<ProfileActivitySection kinds={[pendingDebates, pendingClaims]} />);
+    const debatesButton = screen.getByRole('button', { name: /Debates/ });
+    const claimsButton = screen.getByRole('button', { name: /Claims/ });
+    expect(debatesButton).toHaveTextContent('…');
+
+    const claims = { ...pendingClaims, rows: [row('c1')], total: 1, isLoading: false };
+    rerender(<ProfileActivitySection kinds={[pendingDebates, claims]} />);
+    expect(screen.getByRole('button', { name: /Debates/ })).toBe(debatesButton);
+    expect(screen.getByRole('button', { name: /Claims/ })).toBe(claimsButton);
+    expect(debatesButton).toHaveAttribute('aria-pressed', 'true');
+
+    rerender(<ProfileActivitySection kinds={[kind(), claims]} />);
+    expect(screen.getByRole('button', { name: /Debates/ })).toBe(debatesButton);
+    expect(screen.getByRole('button', { name: /Claims/ })).toBe(claimsButton);
+    expect(debatesButton).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('preserves an explicit Claims selection made while Debates is loading', () => {
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [], isLoading: true }), claims]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+    rerender(<ProfileActivitySection kinds={[kind(), claims]} />);
+
+    expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+  });
+
+  it('falls back to Claims only once Debates is confirmed empty', () => {
+    const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[kind({ rows: [], isLoading: true }), claims]} />);
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+
+    rerender(<ProfileActivitySection kinds={[kind({ rows: [] }), claims]} />);
+    expect(screen.queryByRole('button', { name: /Debates/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('card')).toHaveTextContent('c1');
   });
 
   it('leaves a reader who picked claims there while the debates keep loading in', () => {
@@ -368,7 +412,7 @@ describe('ProfileActivitySection', () => {
     expect(screen.getByRole('button', { name: /Claims/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('waits for the debates to settle before handing them the default', () => {
+  it('keeps Debates selected while waiting for their ranking to settle', () => {
     const claims = kind({ key: 'claims', label: 'Claims', rows: [row('c1')] });
     // Rows in, order still out — `useEntityScores` answers a round trip behind the
     // rows, and the caller reports that wait as `isLoading`.
@@ -376,13 +420,30 @@ describe('ProfileActivitySection', () => {
       <ProfileActivitySection kinds={[kind({ rows: [row('d2'), row('d1')], isLoading: true }), claims]} />
     );
 
-    // Not yet: taking the default here would paint an unranked row and reshuffle it.
-    expect(screen.getByTestId('card')).toHaveTextContent('c1');
+    expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByTestId('card')).not.toBeInTheDocument();
 
     rerender(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2')] }), claims]} />);
 
     expect(screen.getAllByTestId('card')[0]).toHaveTextContent('d1');
     expect(screen.getByRole('button', { name: /Debates/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps a visible gallery mounted while rankings refresh for newly arrived debates', () => {
+    const debates = kind({ rows: [row('d1'), row('d2')] });
+    const { rerender } = render(<ProfileActivitySection kinds={[debates]} />);
+    const gallery = screen.getByTestId('playback-gate');
+    const cards = screen.getAllByTestId('card');
+    fireEvent.click(cards[1]);
+    expect(gallery).toHaveAttribute('data-allowed-id', 'd2');
+
+    // A new debate changes useEntityScores' query key, so ranking is loading again.
+    rerender(<ProfileActivitySection kinds={[{ ...debates, rows: [...debates.rows, row('d3')], isLoading: true }]} />);
+
+    expect(screen.queryByRole('status', { name: 'Loading activity' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('playback-gate')).toBe(gallery);
+    expect(screen.getAllByTestId('card')[1]).toBe(cards[1]);
+    expect(gallery).toHaveAttribute('data-allowed-id', 'd2');
   });
 
   it('keeps a pick through a render where both kinds blank together', () => {
@@ -465,7 +526,10 @@ describe('ProfileActivitySection', () => {
 
     const cards = screen.getAllByTestId('card');
     expect(cards).toHaveLength(2);
-    expect(cards[0]?.parentElement).toHaveClass('w-[min(260px,84cqw)]');
+    expect(cards[0]?.parentElement).toHaveClass('w-[min(300px,84cqw)]');
+    // The playable card owns its frame and its 12px inset. A second frame squeezed the pills.
+    expect(cards[0]?.parentElement).not.toHaveClass('border');
+    expect(cards[0]?.parentElement).not.toHaveClass('px-3');
 
     const gate = screen.getByTestId('playback-gate');
     expect(gate).toHaveAttribute('data-allowed-id', 'd1');

@@ -57,6 +57,7 @@ import {
   otherLobbyIdFrom,
 } from './lobby-format';
 import { readGuestSecret } from './lobby-guest-secret';
+import { useLobbyRoomNoun } from './lobby-purpose';
 import { carryLobbyJoinChoice, forgetLobbyDevices, registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
@@ -318,12 +319,19 @@ export function useEndDebateLobby(lobbyId: string) {
   const store = useStoreLobbyView();
 
   return useMutation({
-    mutationFn: () => endDebateLobby(lobbyId, getPrivyIdentityToken, accountKey),
+    mutationFn: (options: { publishRecording?: boolean } | void) =>
+      endDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, options ?? {}),
     onSuccess: view => {
       store(view);
-      lobbyEnded(view.lobby_id, { scheduled: view.scheduled, opensAt: view.opens_at });
+      if (view.purpose !== 'call') lobbyEnded(view.lobby_id, { scheduled: view.scheduled, opensAt: view.opens_at });
     },
   });
+}
+
+/** The lobby, or the call (GEO-3419), a `moved` heartbeat went to. */
+function otherRoomId(heartbeat: DebateLobbyHeartbeat) {
+  const id = heartbeat.current_lobby_id ?? heartbeat.current_call_id;
+  return id ? dashlessId(id) : null;
 }
 
 export type LobbyPresenceState =
@@ -365,6 +373,7 @@ export function useLobbyPresence(
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
   const connectionId = useConnectionId();
+  const room = useLobbyRoomNoun();
   const [state, setRenderedState] = React.useState<LobbyPresenceState>({ status: 'idle' });
   // Current as of the last update rather than the last render, so `stepOut` sees a server
   // step-out that landed in the same tick as the routing.
@@ -433,8 +442,9 @@ export function useLobbyPresence(
         store(view);
         // A lobby that would not admit answers with its view; the page renders its access.
         joinedRef.current = view.viewer.connected;
-        // A reconnect in the same visit is not a new session; `lobbyJoined` tells them apart.
-        if (view.viewer.connected) {
+        // A reconnect in the same visit is not a new session; `lobbyJoined` tells them apart. A
+        // space call has no lobby session: the warehouse's lobby events are lobbies only.
+        if (view.viewer.connected && view.purpose !== 'call') {
           lobbyJoined(lobbyId, {
             isNewcomer: view.viewer.newcomer ?? null,
             role: view.viewer.role,
@@ -461,10 +471,13 @@ export function useLobbyPresence(
           });
           return;
         }
-        setState({ status: 'failed', message: lobbyErrorMessage(error, 'Could not join this lobby. Try again.') });
+        setState({
+          status: 'failed',
+          message: lobbyErrorMessage(error, `Could not join this ${room}. Try again.`, room),
+        });
       }
     },
-    [accountKey, connectionId, enqueue, lobbyId, setState, store]
+    [accountKey, connectionId, enqueue, lobbyId, room, setState, store]
   );
 
   const sendLeave = React.useCallback(
@@ -598,7 +611,7 @@ export function useLobbyPresence(
           lobbyLeft(lobbyId, 'unknown');
           stopWithout({
             status: 'moved',
-            otherLobbyId: heartbeat.current_lobby_id ? dashlessId(heartbeat.current_lobby_id) : null,
+            otherLobbyId: otherRoomId(heartbeat),
           });
           return;
         case 'stepped_out':

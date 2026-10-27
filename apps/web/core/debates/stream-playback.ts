@@ -127,6 +127,8 @@ export function loadHls(): Promise<HlsModule> {
  * `autoStartLoad: false` is the HLS spelling of `preload="metadata"`: hls.js otherwise ignores
  * `preload` and buffers 30 seconds of a card nobody has reached. The first `play` starts it.
  *
+ * `playOnAttach` calls `play()` after the source is attached: attaching restarts the load.
+ *
  * Buffering is capped at `HLS_MAX_BUFFER_SECONDS` ahead. hls.js's own target is the larger of 30
  * seconds and 60 MB at the current bitrate, so a 720p rendition of a few Mbit/s asks for around
  * four minutes: measured in Firefox, ~100 MB in the first 17 seconds of the feed, with both playing
@@ -137,18 +139,26 @@ export function attachStreamSource(
   url: string,
   {
     autoStartLoad = true,
+    playOnAttach = false,
     onFatalError,
     nativeHls = canPlayNativeHls(),
     load = loadHls,
   }: {
     autoStartLoad?: boolean;
+    playOnAttach?: boolean;
     onFatalError?: () => void;
     nativeHls?: boolean;
     load?: () => Promise<HlsModule>;
   } = {}
 ): AttachedStream {
+  // A refusal leaves the element paused, for its own controls.
+  const play = () => {
+    if (playOnAttach) void video.play().catch(() => undefined);
+  };
+
   if (nativeHls) {
     if (video.getAttribute('src') !== url) video.setAttribute('src', url);
+    play();
     return { startLoad: () => {}, destroy: () => {} };
   }
 
@@ -167,11 +177,15 @@ export function attachStreamSource(
       if (destroyed) return;
       if (!Hls.isSupported()) {
         video.setAttribute('src', url);
+        play();
         return;
       }
       hls = new Hls({ autoStartLoad: started, maxMaxBufferLength: HLS_MAX_BUFFER_SECONDS });
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) onFatalError?.();
+      });
+      hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+        if (!destroyed) play();
       });
       hls.loadSource(url);
       hls.attachMedia(video);

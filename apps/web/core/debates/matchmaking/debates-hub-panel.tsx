@@ -86,7 +86,7 @@ export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
   const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
-  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheetControlsRef, sheet } = useMobileSheetDrag({
     enabled: isMobile && isOpen,
     onDismiss: close,
     peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
@@ -208,6 +208,7 @@ export function DebatesHubPanel() {
             aria-modal="true"
             aria-label="Debates"
             sheetStyle={sheetStyle}
+            sheetControlsRef={sheetControlsRef}
             sheet={sheet}
           >
             <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
@@ -247,6 +248,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
   const filtersReconciled = useHubFilterOwner(accountKey, ready);
   const tabs = tabsFor(authenticated);
   const activeTab = visibleTab(requestedTab, authenticated);
+  // GEO-3431: a link's scheduled request, which only this Requests tab (not the live rail's) shows.
+  const { focusedRequestId } = useDebatesHub();
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
 
@@ -359,7 +362,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             {activeTab === 'requests' ? null : <UpcomingLobbiesCard />}
             <HubSwap activeKey={activeTab}>
               {activeTab === 'requests' ? (
-                <RequestsTab />
+                <RequestsTab focusedRequestId={focusedRequestId} />
               ) : activeTab === 'lobby' ? (
                 <LobbyTab onTabChange={changeTab} />
               ) : activeTab === 'explore' ? (
