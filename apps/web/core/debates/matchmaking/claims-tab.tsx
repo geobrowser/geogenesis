@@ -17,6 +17,7 @@ import { Input } from '~/design-system/input';
 
 import type { MatchmakingClaim, MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
+import { DebateClaimCardSurface, type DebateClaimListId, useRecordClaimFilter } from '../debate-claim-card-surface';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import {
   type TaggedClaim,
@@ -227,6 +228,14 @@ const LIST_SURFACE: Record<ClaimsListVariant, { analyticsSurface: DebateAnalytic
   lobby: { analyticsSurface: 'hub', hidesAnswered: true },
   positions: { analyticsSurface: 'hub', hidesAnswered: true },
   lobbyExplore: { analyticsSurface: 'lobby', hidesAnswered: false },
+};
+
+/** GEO-3495. Each list, as claim card impressions, requests and filter choices name it. */
+const CLAIMS_LIST_IDS: Record<ClaimsListVariant, DebateClaimListId> = {
+  explore: 'hub_explore',
+  lobby: 'hub_lobby',
+  positions: 'hub_my_positions',
+  lobbyExplore: 'lobby_explore',
 };
 
 /** What the tab would hand its own card, for a host drawing the card itself. */
@@ -676,6 +685,26 @@ export function ClaimsTab({
     onSeedSpend: () => setSpaceSeedSpent(true),
   });
 
+  // GEO-3495. The viewer's own filter presses, by what they chose; the seed above is not one.
+  const listId = CLAIMS_LIST_IDS[variant];
+  const recordFilter = useRecordClaimFilter('debate_matchmaking');
+  const toggleSpace = (id: string) => {
+    recordFilter(listId, { kind: 'space', value: id, selected: !spaceIds.includes(id) });
+    onSpaceToggle(id);
+  };
+  const clearSpaces = () => {
+    recordFilter(listId, { kind: 'space', value: 'all', selected: false });
+    onSpacesClear();
+  };
+  const toggleTopic = (id: string) => {
+    recordFilter(listId, { kind: 'topic', value: id, selected: !topicIds.includes(id) });
+    setTopicIds(current => toggleId(current, id));
+  };
+  const clearTopics = () => {
+    recordFilter(listId, { kind: 'topic', value: 'all', selected: false });
+    setTopicIds([]);
+  };
+
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.
   // What the viewer asked for, as one value. A change to any of it is a different list: a different
@@ -1034,12 +1063,12 @@ export function ClaimsTab({
         <HubFacetRail
           facetSpaces={facetSpaces}
           spaceIds={spaceIds}
-          onSpaceToggle={onSpaceToggle}
-          onSpacesClear={onSpacesClear}
+          onSpaceToggle={toggleSpace}
+          onSpacesClear={clearSpaces}
           facetTopics={facetTopics}
           topicIds={topicIds}
-          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-          onTopicsClear={() => setTopicIds([])}
+          onTopicToggle={toggleTopic}
+          onTopicsClear={clearTopics}
         />
       }
     >
@@ -1064,11 +1093,11 @@ export function ClaimsTab({
           leading={scopePicker}
           menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
           spaceIds={spaceIds}
-          onSpaceToggle={onSpaceToggle}
-          onSpacesClear={onSpacesClear}
+          onSpaceToggle={toggleSpace}
+          onSpacesClear={clearSpaces}
           topicIds={topicIds}
-          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-          onTopicsClear={() => setTopicIds([])}
+          onTopicToggle={toggleTopic}
+          onTopicsClear={clearTopics}
           facetSpaces={facetSpaces}
           facetTopics={facetTopics}
           countsPending={countsPending}
@@ -1179,6 +1208,7 @@ export function ClaimsTab({
                       label: 'Clear filters',
                       onClick: () => {
                         setSearch('');
+                        recordFilter(listId, { kind: 'filters', value: 'all' });
                         // The menu's own clear row, so this counts as choosing the unfiltered
                         // list and the default cannot put its spaces back.
                         onSpacesClear();
@@ -1192,33 +1222,38 @@ export function ClaimsTab({
             re-ranked the tab by something the Position filter in the dropdown already covers, and
             it moved a card between two sections the moment you took a side. */}
           <HubCardList>
-            {visibleClaims.map(entry =>
-              renderClaim ? (
-                React.cloneElement(
+            {visibleClaims.map((entry, index) => (
+              // GEO-3495: the card's impression, and a request sent from it, name this list and place.
+              <DebateClaimCardSurface
+                key={claimRowKey(entry)}
+                claimId={entry.claim.claim_entity_id}
+                listId={listId}
+                position={index + 1}
+                scope={debouncedSearch ? { list_searched: true } : undefined}
+              >
+                {renderClaim ? (
                   renderClaim(entry, {
                     answersReady: taggedAnswersReadyFor(entry),
                     allowsSignedOutVotes: !authenticated,
-                  }),
-                  { key: claimRowKey(entry) }
-                )
-              ) : (
-                <MatchmakingClaimCard
-                  key={claimRowKey(entry)}
-                  claim={entry.claim}
-                  positions={entry.positions}
-                  readiness={entry}
-                  activeDebate={entry.active_debate}
-                  // The paged list is geo-chat's own, so every row carries its kind already; only the
-                  // tagged list has to wait for one — and only for the space this claim is in.
-                  answersReady={taggedAnswersReadyFor(entry)}
-                  // And where it cannot, the indexed read answers for the side, the same way the main
-                  // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
-                  // unpressable while those cards went on working.
-                  answersMayComeFromIndex
-                  allowsSignedOutVotes={!authenticated}
-                />
-              )
-            )}
+                  })
+                ) : (
+                  <MatchmakingClaimCard
+                    claim={entry.claim}
+                    positions={entry.positions}
+                    readiness={entry}
+                    activeDebate={entry.active_debate}
+                    // The paged list is geo-chat's own, so every row carries its kind already; only the
+                    // tagged list has to wait for one — and only for the space this claim is in.
+                    answersReady={taggedAnswersReadyFor(entry)}
+                    // And where it cannot, the indexed read answers for the side, the same way the main
+                    // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
+                    // unpressable while those cards went on working.
+                    answersMayComeFromIndex
+                    allowsSignedOutVotes={!authenticated}
+                  />
+                )}
+              </DebateClaimCardSurface>
+            ))}
           </HubCardList>
         </HubQueryState>
         {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside

@@ -1293,8 +1293,13 @@ export function useCreateDebateRematchRequest(sessionId: string) {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'claim', target_id: request.claim_id })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request => getContext({ target_type: 'claim', target_id: request.claim_id }),
+    undefined,
+    // GEO-3495: the rematch request geo-chat records as the debate's accepted request.
+    result => (result.request ? { request_id: result.request.id } : {})
   );
 }
 
@@ -1417,8 +1422,13 @@ export function useCreateDebateChallenge() {
       }
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'space', target_id: request.recipient_profile_space_id })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request => getContext({ target_type: 'space', target_id: request.recipient_profile_space_id }),
+    undefined,
+    // GEO-3495: geo-chat records the challenge as the origin of the debate it becomes.
+    challenge => ({ request_id: challenge.id })
   );
 }
 

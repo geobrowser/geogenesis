@@ -8,6 +8,7 @@ import { Input } from '~/design-system/input';
 
 import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
+import { DebateClaimCardSurface, useRecordClaimFilter } from '../debate-claim-card-surface';
 import { useDebateActivity } from '../hooks';
 import { claimRowKey } from './claim-row-key';
 import { type ClaimsLayout, HubListColumns, HubStickyControls, SpaceTopicFilters } from './claims-tab';
@@ -209,6 +210,25 @@ export function MatchesList({
     onSeedSpend: () => setSpaceSeedSpent(true),
   });
 
+  // GEO-3495. The viewer's own filter presses, by what they chose.
+  const recordFilter = useRecordClaimFilter('debate_matchmaking');
+  const toggleSpace = (id: string) => {
+    recordFilter('hub_matches', { kind: 'space', value: id, selected: !spaceIds.includes(id) });
+    onSpaceToggle(id);
+  };
+  const clearSpaces = () => {
+    recordFilter('hub_matches', { kind: 'space', value: 'all', selected: false });
+    onSpacesClear();
+  };
+  const toggleTopic = (id: string) => {
+    recordFilter('hub_matches', { kind: 'topic', value: id, selected: !topicIds.includes(id) });
+    setTopicIds(current => toggleId(current, id));
+  };
+  const clearTopics = () => {
+    recordFilter('hub_matches', { kind: 'topic', value: 'all', selected: false });
+    setTopicIds([]);
+  };
+
   const facetTopics = React.useMemo(
     () =>
       orderFacetOptions(
@@ -241,12 +261,12 @@ export function MatchesList({
         <HubFacetRail
           facetSpaces={facetSpaces}
           spaceIds={spaceIds}
-          onSpaceToggle={onSpaceToggle}
-          onSpacesClear={onSpacesClear}
+          onSpaceToggle={toggleSpace}
+          onSpacesClear={clearSpaces}
           facetTopics={facetTopics}
           topicIds={topicIds}
-          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-          onTopicsClear={() => setTopicIds([])}
+          onTopicToggle={toggleTopic}
+          onTopicsClear={clearTopics}
         />
       }
     >
@@ -268,11 +288,11 @@ export function MatchesList({
           leading={scopePicker}
           menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
           spaceIds={spaceIds}
-          onSpaceToggle={onSpaceToggle}
-          onSpacesClear={onSpacesClear}
+          onSpaceToggle={toggleSpace}
+          onSpacesClear={clearSpaces}
           topicIds={topicIds}
-          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-          onTopicsClear={() => setTopicIds([])}
+          onTopicToggle={toggleTopic}
+          onTopicsClear={clearTopics}
           facetSpaces={facetSpaces}
           facetTopics={facetTopics}
           trailing={trailing}
@@ -331,6 +351,7 @@ export function MatchesList({
                   label: 'Clear filters',
                   onClick: () => {
                     setSearch('');
+                    recordFilter('hub_matches', { kind: 'filters', value: 'all' });
                     // The menu's own clear row, so this counts as choosing the unfiltered list and
                     // the default cannot put its spaces back.
                     onSpacesClear();
@@ -341,8 +362,17 @@ export function MatchesList({
           }
         >
           <HubCardList>
-            {filtered.map(match => (
-              <MatchCard key={claimRowKey(match)} match={match} />
+            {filtered.map((match, index) => (
+              // GEO-3495: the card's impression, and a request sent from it, name this list and place.
+              <DebateClaimCardSurface
+                key={claimRowKey(match)}
+                claimId={match.claim.claim_entity_id}
+                listId="hub_matches"
+                position={index + 1}
+                scope={debouncedSearch ? { list_searched: true } : undefined}
+              >
+                <MatchCard match={match} />
+              </DebateClaimCardSurface>
             ))}
           </HubCardList>
         </HubQueryState>

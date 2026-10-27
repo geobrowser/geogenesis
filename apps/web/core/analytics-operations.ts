@@ -84,6 +84,9 @@ const CANONICAL_OUTCOME_FIELDS = new Set([
   'queue_wait_ms',
   'queue_depth',
   'failure_code',
+  // GEO-3495. The geo-chat id a debate request, rematch request or challenge was created with, so a
+  // request joins to the debate it produced (geo-chat stores it on the debate).
+  'request_id',
 ]);
 
 /**
@@ -199,20 +202,22 @@ export function observeOperation(
 
 /**
  * Observe an async application operation without changing its result or errors. `failureOf` names a
- * failure the result carries without throwing; the caller still receives that result.
+ * failure the result carries without throwing; the caller still receives that result. `outcomeOf`
+ * adds ids from a successful result to the completion (canonical outcome fields only).
  */
 export async function runObservedAction<T>(
   action: ActionKind,
   context: ActionContext,
   run: () => Promise<T>,
-  failureOf?: (result: T) => OperationFailureCode | null
+  failureOf?: (result: T) => OperationFailureCode | null,
+  outcomeOf?: (result: T) => Record<string, unknown>
 ): Promise<T> {
   const operation = observeOperation(action, context.target_type, context.target_id, undefined, context);
   try {
     const result = await run();
     const failure = failureOf?.(result) ?? null;
     if (failure) operation.failed(failure);
-    else operation.succeeded();
+    else operation.succeeded(outcomeOf?.(result));
     return result;
   } catch (error) {
     operation.failed(classifyOperationFailure(error));

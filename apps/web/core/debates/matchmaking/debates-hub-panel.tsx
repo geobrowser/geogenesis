@@ -22,6 +22,7 @@ import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
+import { HUB_TAB_LIST_IDS, useRecordClaimFilter } from '../debate-claim-card-surface';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useLobbyLineup } from '../lobbies/live-lobbies';
 import { UpcomingLobbiesCard } from '../lobbies/lobbies-card';
@@ -264,6 +265,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 
   // One scroll container is shared by all four tabs, so a scrolled People list would otherwise
   // leave Requests scrolled to the same offset.
+  // GEO-3495. A press onto a claim list tab, by the list it opens.
+  const recordFilter = useRecordClaimFilter('debate_matchmaking');
   const changeTab = React.useCallback(
     (tab: DebatesHubTab) => {
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
@@ -318,7 +321,13 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               {...hubAnalyticsAttributes(`${tab.label} tab`, 'navigate_debates_hub')}
               aria-current={activeTab === tab.id ? 'true' : undefined}
               data-tab-active={activeTab === tab.id ? 'true' : undefined}
-              onClick={() => changeTab(tab.id)}
+              onClick={() => {
+                const listId = HUB_TAB_LIST_IDS[tab.id];
+                if (listId && tab.id !== activeTab) {
+                  recordFilter(HUB_TAB_LIST_IDS[activeTab] ?? listId, { kind: 'tab', value: listId });
+                }
+                changeTab(tab.id);
+              }}
               className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
             >
               {tab.label}

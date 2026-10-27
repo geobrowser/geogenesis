@@ -10,6 +10,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateLobbyClaimList } from '../api';
 import { type PlacedClaimListSection, placeClaimListSections, useClaimListPage } from '../claim-list-pages';
+import { DebateClaimCardSurface } from '../debate-claim-card-surface';
 import { useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { HubStickyControls } from '../matchmaking/claims-tab';
@@ -131,6 +132,10 @@ function ClaimListSections({
       )
     );
   }, [sections, rows.claims]);
+  // GEO-3495. Where each section starts in the page's numbering.
+  const sectionOffsets = sections.map((_, index) =>
+    sections.slice(0, index).reduce((total, section) => total + section.claims.length, 0)
+  );
 
   // In page order, so a long page reads a section's room sides as it scrolls into view.
   const batches = React.useMemo(() => exploreRoomClaimBatches(entriesBySection.flat()), [entriesBySection]);
@@ -199,18 +204,22 @@ function ClaimListSections({
             </Text>
           </div>
           <HubCardList>
-            {(entriesBySection[index] ?? []).map(entry =>
-              // Keyed on the element itself, as `ClaimsTab` does: the list's popLayout measures it.
-              React.cloneElement(
-                renderRoomCard(
+            {(entriesBySection[index] ?? []).map((entry, position) => (
+              // GEO-3495: the card's impression, and a request sent from it, name this list, its
+              // section and the card's place counted down the whole page.
+              <DebateClaimCardSurface
+                key={claimRowKey(entry)}
+                claimId={entry.claim.claim_entity_id}
+                listId="lobby_list"
+                position={sectionOffsets[index] + position + 1}
+                scope={{ list_entity_id: list.entity_id, list_section_id: section.id }}
+              >
+                {renderRoomCard(
                   entry,
                   placedAnswersReady({ authenticated, accountKey }, rows.unresolvedSpaceIds, entry.claim.space_id)
-                ),
-                {
-                  key: claimRowKey(entry),
-                }
-              )
-            )}
+                )}
+              </DebateClaimCardSurface>
+            ))}
           </HubCardList>
         </section>
       ))}
