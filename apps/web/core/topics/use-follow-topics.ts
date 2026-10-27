@@ -82,6 +82,25 @@ export function useFollowEntities({ kind, source }: { kind: FollowKind; source?:
     const { spaceId } = variables;
     // Interested is an on-chain response from the personal space, which must exist on chain.
     if (!isRegistered) return false;
+    // Snapshot before the first await: a cache fetch can outlive the current account or page.
+    // The regular Follow button observes its own action. Onboarding needs one observer per topic,
+    // independent of whichever click happened to trigger this background pass.
+    const operations = new Map(
+      source === 'onboarding' && variables.kind === 'follow'
+        ? variables.topics.map(topic => {
+            const id = normId(topic.id);
+            const context = snapshotActionContext(
+              'onboarding_customize_feed',
+              'topic',
+              id,
+              {},
+              {},
+              { ignoreEventContext: true }
+            );
+            return [id, observeOperation('follow_topic', 'topic', id, undefined, context)] as const;
+          })
+        : []
+    );
     const interested = await queryClient.ensureQueryData(interestedTopicsQueryOptions(spaceId));
     const interestedKey = interestedTopicsQueryKey(spaceId);
 
@@ -93,19 +112,12 @@ export function useFollowEntities({ kind, source }: { kind: FollowKind; source?:
         followedTopicIds: interestedTopicIds(interested),
       });
       if (calls.length === 0) return true;
-      // The regular Follow button observes its own action. Onboarding has no button per topic;
-      // observe only the newly added topics, keeping the entire selection in one transaction.
-      const operations =
-        source === 'onboarding'
-          ? added.map(row => {
-              const context = snapshotActionContext('onboarding_customize_feed', 'topic', normId(row.objectId));
-              return observeOperation('follow_topic', 'topic', context.target_id, undefined, context);
-            })
-          : [];
       const sent = await sendCalls(calls);
-      for (const operation of operations) {
-        if (sent) operation.succeeded();
-        else operation.failed('unknown');
+      // Only newly written topics complete; already-followed picks produce no follow event.
+      for (const row of added) {
+        const operation = operations.get(normId(row.objectId));
+        if (sent) operation?.succeeded();
+        else operation?.failed('unknown');
       }
       if (!sent) return false;
 

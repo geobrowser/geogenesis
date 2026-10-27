@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { decodeFunctionData } from 'viem';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { enterActionContext, snapshotActionContext } from '~/core/action-context';
 import { interestedTopicsQueryKey } from '~/core/io/subgraph/fetch-interested-topics';
 import { PERMISSIONLESS_ACTIONS, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
 
@@ -287,6 +288,27 @@ describe('onboarding follow analytics (GEO-3468)', () => {
     await act(() => result.current.follow([{ id: TOPIC_A }]));
     expect(completions()).toHaveLength(1);
     expect(completions()[0][1].outcome).toBe('unknown');
+  });
+
+  it('keeps onboarding attribution when an unrelated click is still in scope', async () => {
+    const { result } = setup([], 'topic', 'onboarding');
+    enterActionContext(snapshotActionContext('topic_follow_button', 'topic', TOPIC_B));
+    await act(() => result.current.follow([{ id: TOPIC_A }]));
+    expect(completions()).toHaveLength(1);
+    expect(completions()[0][1]).toMatchObject({
+      component: 'onboarding_customize_feed',
+      target_id: TOPIC_A,
+    });
+  });
+
+  it('keeps the original analytics actor while existing follows are loading', async () => {
+    const { result } = setup([], 'topic', 'onboarding');
+    mocks.fetchInterestedTopics.mockImplementation(async () => {
+      mocks.revision++;
+      return [];
+    });
+    await act(() => result.current.follow([{ id: TOPIC_A }]));
+    expect(completions()).toEqual([]);
   });
 
   it('does not attribute a completed write to a different account after a switch', async () => {
