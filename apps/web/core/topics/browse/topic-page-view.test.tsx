@@ -65,7 +65,7 @@ vi.mock('~/partials/entity-page/entity-tabs', () => ({
     return <div data-testid="entity-tabs" />;
   },
 }));
-vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
+vi.mock('~/partials/editor/lazy-editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
 // that the description is handed to it at all, and with the shared line budget — the measuring

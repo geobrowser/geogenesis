@@ -43,13 +43,13 @@ function deferred() {
 }
 
 describe('OpenRoundPickCard (GEO-3178)', () => {
-  it('asks to keep debating with Extend, End and the seconds left', () => {
-    renderCard({ roundIndex: 1, remainingSeconds: 8 });
+  it('asks to keep debating with Extend, End and the seconds left, and no instruction line (GEO-3315)', () => {
+    const view = renderCard({ roundIndex: 1, remainingSeconds: 8 });
 
     expect(screen.getByRole('region', { name: 'Keep debating?' })).toBeInTheDocument();
-    expect(screen.getByText('Pick in secret. Two Extends unlock Round 2.')).toBeInTheDocument();
+    expect(view.container.querySelectorAll('p:not(:empty)')).toHaveLength(0);
     expect(extend()).toHaveAccessibleName(/\+45s each/);
-    expect(end()).toHaveAccessibleName(/Ends here/);
+    expect(end()).toHaveAccessibleName(/Finish here/);
     expect(extend()).toHaveAttribute('aria-pressed', 'false');
     expect(end()).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText('8 seconds to pick')).toBeInTheDocument();
@@ -61,8 +61,11 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     fireEvent.click(extend());
     expect(view.onPick).toHaveBeenLastCalledWith('extend', expect.objectContaining({ previousPick: null }));
     expect(extend()).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('heading', { name: 'Locked in' })).toBeInTheDocument();
-    expect(screen.getByText('You can change it until the reveal.')).toBeInTheDocument();
+    // The pick turns white with a check, the other dims, and the question stays.
+    expect(extend()).toHaveClass('bg-white', 'text-[#111]');
+    expect(extend()).toHaveTextContent('✓ Extend');
+    expect(end()).toHaveClass('opacity-40');
+    expect(screen.getByRole('heading', { name: 'Keep debating?' })).toBeInTheDocument();
 
     await act(async () => undefined);
     view.rerender(<OpenRoundPickCard {...view.props} savedPick="extend" />);
@@ -71,7 +74,39 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     fireEvent.click(end());
     expect(view.onPick).toHaveBeenLastCalledWith('end', expect.objectContaining({ previousPick: 'extend' }));
     expect(end()).toHaveAttribute('aria-pressed', 'true');
+    expect(end()).toHaveClass('bg-white', 'text-[#111]');
+    expect(extend()).toHaveClass('opacity-40', 'bg-black/66');
     expect(extend()).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('drains the decision ring with the room clock, including partial seconds and late joins', () => {
+    const view = renderCard({ remainingSeconds: 5, progress: 0.525 });
+    const ring = view.container.querySelector('[data-pick-countdown-progress]');
+    expect(ring).toHaveAttribute('pathLength', '1');
+    expect(ring).toHaveAttribute('stroke-dashoffset', '0.525');
+    expect(screen.getByText('5 seconds to pick')).toBeInTheDocument();
+
+    view.rerender(<OpenRoundPickCard {...view.props} remainingSeconds={3} progress={0.75} />);
+    expect(view.container.querySelector('[data-pick-countdown-progress]')).toBe(ring);
+    expect(ring).toHaveAttribute('stroke-dashoffset', '0.75');
+    expect(screen.getByText('3 seconds to pick')).toBeInTheDocument();
+
+    view.rerender(<OpenRoundPickCard {...view.props} remainingSeconds={0} progress={1} />);
+    expect(ring).toHaveAttribute('stroke-dashoffset', '1');
+    expect(extend()).toBeDisabled();
+    expect(end()).toBeDisabled();
+  });
+
+  it.each([
+    [-0.5, 0],
+    [1.5, 1],
+    [NaN, 0],
+  ])('keeps an invalid decision progress %s inside the ring', (progress, expected) => {
+    const view = renderCard({ progress });
+    expect(view.container.querySelector('[data-pick-countdown-progress]')).toHaveAttribute(
+      'stroke-dashoffset',
+      String(expected)
+    );
   });
 
   it('tells the room how long the card was open when the pick was tapped (GEO-3182)', () => {
@@ -91,6 +126,68 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
 
     fireEvent.click(end());
     expect(view.onPick).not.toHaveBeenCalled();
+  });
+
+  it('keeps a successful pick checked while props and polling still contain the previous value', async () => {
+    const view = renderCard();
+    fireEvent.click(extend());
+    await act(async () => undefined);
+
+    expect(extend()).toHaveAttribute('aria-pressed', 'true');
+    view.rerender(<OpenRoundPickCard {...view.props} remainingSeconds={7} savedPick={null} />);
+    expect(extend()).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(extend());
+    expect(view.onPick).toHaveBeenCalledTimes(1);
+
+    view.rerender(<OpenRoundPickCard {...view.props} savedPick="extend" />);
+    view.rerender(<OpenRoundPickCard {...view.props} savedPick={null} remainingSeconds={6} />);
+    expect(extend()).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps the latest successful switch selected when an older pick arrives in props', async () => {
+    const view = renderCard();
+    fireEvent.click(extend());
+    await act(async () => undefined);
+    fireEvent.click(end());
+    await act(async () => undefined);
+
+    view.rerender(<OpenRoundPickCard {...view.props} savedPick="extend" />);
+    expect(end()).toHaveAttribute('aria-pressed', 'true');
+    expect(extend()).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('does not acknowledge a pick that missed the decision deadline', async () => {
+    const view = renderCard();
+    view.onPick.mockResolvedValueOnce(null);
+    fireEvent.click(extend());
+    await act(async () => undefined);
+
+    expect(extend()).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('alert')).toBeEmptyDOMElement();
+  });
+
+  it('starts a new round without carrying over the last round’s acknowledged pick', async () => {
+    const view = renderCard();
+    fireEvent.click(extend());
+    await act(async () => undefined);
+    expect(extend()).toHaveAttribute('aria-pressed', 'true');
+
+    view.rerender(<OpenRoundPickCard {...view.props} key={1} roundIndex={1} savedPick={null} />);
+    expect(extend()).toHaveAttribute('aria-pressed', 'false');
+    expect(end()).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('restores the last acknowledged pick after a failed switch even before polling catches up', async () => {
+    const view = renderCard();
+    fireEvent.click(extend());
+    await act(async () => undefined);
+    view.onPick.mockRejectedValueOnce(new Error('offline'));
+    fireEvent.click(end());
+    await act(async () => undefined);
+
+    expect(extend()).toHaveAttribute('aria-pressed', 'true');
+    expect(end()).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('alert')).toHaveTextContent("Couldn't save your pick. Tap again.");
   });
 
   it('puts the selection back to the saved pick and asks for another tap when a save fails', async () => {
@@ -143,7 +240,7 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
   });
 
   it('stops taking picks once the window has run out', () => {
-    renderCard({ remainingSeconds: 0, progress: 1 });
+    renderCard({ remainingSeconds: 0 });
 
     expect(extend()).toBeDisabled();
     expect(end()).toBeDisabled();

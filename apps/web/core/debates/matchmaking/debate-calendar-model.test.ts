@@ -204,6 +204,24 @@ describe('ownDebates', () => {
     ]);
   });
 
+  it('carries whether the Geo team arranged the match, before and after one side accepts', () => {
+    const debates = ownDebates(
+      [
+        request({ request_id: 'peer' }),
+        request({ request_id: 'admin-asked', created_by_admin: true, viewer_must_answer: true }),
+        request({ request_id: 'admin-accepted-by-me', created_by_admin: true, proposed_by_user_id: null }),
+      ],
+      [],
+      'me'
+    );
+
+    expect(debates.map(debate => [debate.requestId, debate.arrangedByAdmin])).toEqual([
+      ['peer', false],
+      ['admin-asked', true],
+      ['admin-accepted-by-me', true],
+    ]);
+  });
+
   it('shows a request this page just sent until the list returns it, then the list wins', () => {
     const sent = request({ request_id: 'new' });
     expect(ownDebates([], [sent], 'me').map(debate => debate.state)).toEqual(['requested']);
@@ -222,7 +240,16 @@ describe('firstBusyHour', () => {
     expect(
       firstBusyHour(
         cells,
-        [{ requestId: 'x', start: at(9, 8), end: at(9, 8, 30), state: 'booked', opponentUserId: null }],
+        [
+          {
+            requestId: 'x',
+            start: at(9, 8),
+            end: at(9, 8, 30),
+            state: 'booked',
+            opponentUserId: null,
+            arrangedByAdmin: false,
+          },
+        ],
         days
       )
     ).toBe(8);

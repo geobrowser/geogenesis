@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { decodeFreshSlotCursor, encodeFreshSlotCursor } from './fresh-slot-cursor';
+import { FRESH_SLOT_AS_OF_STEP_MS, decodeFreshSlotCursor, encodeFreshSlotCursor } from './fresh-slot-cursor';
 
 const NOW = 1_790_000_000_000;
 
@@ -18,13 +18,24 @@ describe('the fresh slot cursor', () => {
     expect(decoded.pinned).toBe(true);
   });
 
-  it('reads the first page as unpinned, at now', () => {
+  it('reads the first page as unpinned, at the start of the current minute', () => {
     expect(decodeFreshSlotCursor(null, NOW)).toMatchObject({
-      asOfMs: NOW,
+      asOfMs: Math.floor(NOW / FRESH_SLOT_AS_OF_STEP_MS) * FRESH_SLOT_AS_OF_STEP_MS,
       inner: null,
       pinned: false,
       firstPage: true,
     });
+  });
+
+  it('gives every scroll that starts in the same minute the same pin, so they share one Fresh list', () => {
+    const minute = Math.floor(NOW / FRESH_SLOT_AS_OF_STEP_MS) * FRESH_SLOT_AS_OF_STEP_MS;
+    const early = decodeFreshSlotCursor(null, minute + 1).asOfMs;
+    const late = decodeFreshSlotCursor('w1:22:', minute + FRESH_SLOT_AS_OF_STEP_MS - 1).asOfMs;
+    expect(early).toBe(minute);
+    expect(late).toBe(minute);
+    expect(decodeFreshSlotCursor(null, minute + FRESH_SLOT_AS_OF_STEP_MS).asOfMs).toBe(
+      minute + FRESH_SLOT_AS_OF_STEP_MS
+    );
   });
 
   it('passes a plain window cursor through, unpinned, so that scroll stays without the slot', () => {

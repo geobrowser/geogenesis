@@ -147,13 +147,7 @@ export function ClaimSummary({
  * Height is the caller's, because that genuinely differs: 8px where the page has room for it, 6px
  * in a card. Everything else is the same everywhere and now says so.
  */
-export function ClaimSplitBar({
-  percent,
-  className,
-}: {
-  percent: number;
-  className?: string;
-}) {
+export function ClaimSplitBar({ percent, className }: { percent: number; className?: string }) {
   const copy = CLAIM_RESPONSE_COPY;
 
   return (

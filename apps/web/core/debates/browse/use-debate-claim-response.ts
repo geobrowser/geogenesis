@@ -1,6 +1,10 @@
 'use client';
 
-import { type ClaimResponseState, useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
+import {
+  type ClaimResponseState,
+  claimTitleFrom,
+  useClaimResponseState,
+} from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { SavePromptSurface } from '~/core/state/save-votes-prompt';
@@ -18,8 +22,8 @@ import type { Entity } from '~/core/types';
  * so it is written once here.
  *
  * `offersDebate: false` for every debate surface, and not a parameter. The claims panel, the card
- * over the video and the end-of-debate scorecard all sit inside a debate the viewer is already
- * watching, so offering them another one is the wrong invitation at the wrong moment — and without
+ * over the video, the debate card's footer (GEO-3454) and the end-of-debate scorecard all sit
+ * inside a debate the viewer is already watching, so offering them another one is the wrong invitation at the wrong moment — and without
  * an offer there is nothing for an account-level match's faces to be borrowed into.
  *
  * Deliberately not in `core/claims/browse` beside `useClaimResponseState`: `matchmaking-claim-card`
@@ -47,7 +51,9 @@ export function useDebateClaimResponse({
   /** The claim on the graph, which carries the factual flag geo-chat's row would otherwise report. */
   entity: Entity | null;
 }): ClaimResponseState & { control: ReturnType<typeof useClaimPositionControl> } {
-  const state = useClaimResponseState({ claimId, spaceId, row, entity });
+  // Every debate surface draws the claim itself, but a vote kept on this device is saved under this
+  // text, and the save sheet's reminder chip needs it (GEO-3437).
+  const state = useClaimResponseState({ claimId, spaceId, row, entity, title: claimTitleFrom({ entity, row }) });
 
   const control = useClaimPositionControl({
     claim: state.claim,

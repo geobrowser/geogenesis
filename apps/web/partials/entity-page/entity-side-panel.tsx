@@ -44,7 +44,7 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { CloseSidePanel } from '~/design-system/icons/close-side-panel';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Fullscreen } from '~/design-system/icons/full-screen';
-import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
+import { MobileSheetSurface } from '~/design-system/mobile-sheet-surface';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
@@ -168,7 +168,7 @@ function EntitySidePanelHeader({
       <button
         type="button"
         onClick={onClose}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01 lg:[&_svg]:rotate-90"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01 lg:hidden"
         aria-label="Close side panel"
       >
         <CloseSidePanel color="grey-04" />
@@ -184,7 +184,7 @@ function EntitySidePanelHeader({
         href={entityPageHref}
         entityId={entityId}
         spaceId={entitySpaceId}
-        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-grey-02 bg-white px-2 text-metadata font-medium text-text shadow-light transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:text-text"
+        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-grey-02 bg-white px-2 text-metadata font-medium text-text shadow-light transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:text-text lg:hidden"
         target={inRematch ? '_blank' : undefined}
         rel={inRematch ? 'noopener noreferrer' : undefined}
         aria-label={inRematch ? 'Open entity in new tab' : 'Open entity full page'}
@@ -230,7 +230,7 @@ function EntitySidePanelBody({
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-24 mobile:px-5">
         <Text variant="body" color="grey-04">
-          Could not load this entity in this space. Try opening it full page from the link in the header.
+          Could not load this entity in this space.
         </Text>
       </div>
     );
@@ -242,6 +242,7 @@ function EntitySidePanelBody({
         id={entityId}
         spaceId={entitySpaceId}
         initialBlocks={surface.blocks}
+        isLoadingBlocks={surface.isLoadingBlocks}
         initialBlockRelations={surface.blockRelations}
         initialTabs={surface.initialTabs}
         initialCollectionItems={surface.initialCollectionItems}
@@ -367,7 +368,8 @@ export function EntitySidePanelSurface({
 }
 
 // On mobile the panel opens as a bottom sheet (like the ranking compose flow) rather than a
-// full-height right-hand drawer. It starts this far below the top of the screen.
+// full-height right-hand drawer. It starts this far below the top of the screen, and an upward
+// swipe takes it full screen.
 const MOBILE_SHEET_TOP_OFFSET_PX = 200;
 
 export function EntitySidePanel() {
@@ -427,14 +429,10 @@ export function EntitySidePanel() {
     closeSidePanel();
   }, [bumpReviewVersion, closeSidePanel, createPostFlow, jotaiStore, setCreatePostFlow, setEditable, sidePanelTarget]);
 
-  const {
-    dragControls,
-    handleDragEnd: handleSheetDragEnd,
-    handlePointerDown: handleSheetPointerDown,
-    setOverlayElement,
-  } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheetControlsRef, sheet } = useMobileSheetDrag({
     enabled: isMobile && Boolean(sidePanelTarget),
     onDismiss: handleCloseSidePanel,
+    peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
   });
 
   React.useEffect(() => {
@@ -561,7 +559,6 @@ export function EntitySidePanel() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.15 }}
-        onPointerDown={handleSheetPointerDown}
       >
         <button
           type="button"
@@ -569,28 +566,18 @@ export function EntitySidePanel() {
           onClick={handleCloseSidePanel}
           aria-label="Close"
         />
-        <motion.div
+        <MobileSheetSurface
           ref={panelHostRef as React.Ref<HTMLDivElement>}
           data-entity-side-panel
-          data-mobile-sheet-surface
           role="dialog"
           aria-modal="true"
           aria-label="Entity side panel"
-          drag="y"
-          dragControls={dragControls}
-          dragListener={false}
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={0.12}
-          onDragEnd={handleSheetDragEnd}
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-          className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
-          style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
+          sheetStyle={sheetStyle}
+          sheetControlsRef={sheetControlsRef}
+          sheet={sheet}
         >
-          <MobileSheetGrabHandle />
           {panelBody}
-        </motion.div>
+        </MobileSheetSurface>
       </motion.div>,
       document.body
     );

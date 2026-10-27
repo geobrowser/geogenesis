@@ -11,9 +11,13 @@ import {
   claimResponseTargetKey,
   isClaimResponseSummaryQueryKey,
 } from '~/core/responses/claim-response-summary-query-keys';
+import type { SpaceCallsResponse } from '~/core/space-calls/api';
+import { parseSpaceCallPatch, withSpaceCallPatch } from '~/core/space-calls/space-calls-patch';
 
 import {
   type DebateLobbiesResponse,
+  type DebateLobbyCalendarResponse,
+  type DebateLobbySummary,
   type DebateLobbyView,
   GeoChatRequestError,
   type GeoChatSession,
@@ -24,7 +28,13 @@ import {
   getStoredGeoChatAccessToken,
   resetGeoChatSession,
 } from './api';
-import { type DebateLobbyCardPatch, applyLobbyCardPatch, parseLobbyCardPatch } from './lobbies/lobby-card-patch';
+import {
+  type DebateLobbyCardPatch,
+  applyLobbyCardPatch,
+  applyLobbyCardPatchToCalendar,
+  parseLobbyCardPatch,
+} from './lobbies/lobby-card-patch';
+import { parseLobbyClaimLists, withLobbyClaimLists } from './lobbies/lobby-claim-lists-state';
 import { type LobbyHighlightsState, parseLobbyHighlights, withLobbyHighlights } from './lobbies/lobby-highlights-state';
 
 export type DebateGatewaySession = GeoChatSession;
@@ -74,6 +84,12 @@ type DebateEventPayload = {
   lobby_card?: unknown;
   /** On `debate.lobby_highlights_changed`: the full state; see `parseLobbyHighlights`. */
   lobby_highlights?: unknown;
+  /** On `debate.lobby_claim_lists_changed`: the full state; see `parseLobbyClaimLists`. */
+  lobby_claim_lists?: unknown;
+  /** On `debate.lobby_guests_changed`: visitors without an account. */
+  guest_count?: unknown;
+  /** On `debate.space_calls_changed`: the call's list row; see `parseSpaceCallPatch`. */
+  space_call?: unknown;
   claim_entity_ids?: string[];
   sections?: MatchmakingSection[];
 };
@@ -159,6 +175,11 @@ export class DebateGatewayClient {
   private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
   /** The newest card patch per dashless lobby id, laid over each list GET until one catches up. */
   private readonly heldLobbyPatches = new Map<string, DebateLobbyCardPatch>();
+  /**
+   * Held patches a read has caught up with while another lobby read was still in flight, by lobby,
+   * at the `as_of` caught up with. Released once no read is in flight; see `releaseCaughtUpPatches`.
+   */
+  private readonly caughtUpPatches = new Map<string, string>();
   private unsubscribeLobbyFetches: (() => void) | null = null;
 
   private snapshot: DebateGatewaySnapshot = {
@@ -223,6 +244,15 @@ export class DebateGatewayClient {
     this.unsubscribeLobbyFetches ??= this.queryClient.getQueryCache().subscribe(event => {
       // A fetch's own success; the overlay's `setQueryData` is `manual` and does not come back here.
       if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual) return;
+      if (this.accountKey && isLobbyCalendarQueryKey(event.query.queryKey, this.accountKey)) {
+        // What the read returned, taken before the overlay rewrites the cache with patches' own
+        // `as_of`, which would make a stale week look caught up.
+        const week = event.query.state.data as DebateLobbyCalendarResponse | undefined;
+        // A calendar week read before a patch would otherwise undo it, as a list read would.
+        this.overlayHeldPatchesOnCalendars();
+        // A week holds lobbies the capped list never returns, so its reads release patches too.
+        if (week) this.releaseCaughtUpPatches(week.lobbies);
+      }
       if (this.accountKey && isLobbiesQueryKey(event.query.queryKey, this.accountKey)) {
         this.overlayHeldLobbyPatches(event.query.state.data as DebateLobbiesResponse | undefined);
       }
@@ -277,6 +307,7 @@ export class DebateGatewayClient {
     this.capabilities = EMPTY_CAPABILITIES;
     this.pendingChangedClaimsBySpace.clear();
     this.heldLobbyPatches.clear();
+    this.caughtUpPatches.clear();
     this.unsubscribeLobbyFetches?.();
     this.unsubscribeLobbyFetches = null;
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
@@ -491,7 +522,7 @@ export class DebateGatewayClient {
         }
         break;
       case 'debate.state_changed':
-        if (identifiers.debate_id) this.queueQuery(['debates', 'detail', identifiers.debate_id]);
+        if (identifiers.debate_id) this.queueQuery(['debates', 'detail', dashlessId(identifiers.debate_id)]);
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
         this.queueAccountActivity();
         break;
@@ -503,9 +534,9 @@ export class DebateGatewayClient {
         break;
       case 'debate.media_changed':
         if (identifiers.debate_id) {
-          this.queueQuery(['debates', 'media', identifiers.debate_id]);
-          this.queueQuery(['debates', 'detail', identifiers.debate_id]);
-          this.queueQuery(['debates', 'transcript', identifiers.debate_id]);
+          this.queueQuery(['debates', 'media', dashlessId(identifiers.debate_id)]);
+          this.queueQuery(['debates', 'detail', dashlessId(identifiers.debate_id)]);
+          this.queueQuery(['debates', 'transcript', dashlessId(identifiers.debate_id)]);
         }
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
         break;
@@ -546,13 +577,14 @@ export class DebateGatewayClient {
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
       // GEO-3131. Sent to the lobby's present members.
-      // `sections: ["claims"]` means only the In this room list changed.
+      // `sections: ["claims"]` means only the In this room list changed; `["people"]`, only the view
+      // (a pair's round or recording).
       case 'debate.lobby_changed': {
         if (!identifiers.lobby_id) break;
         const lobbyId = dashlessId(identifiers.lobby_id);
-        const claimsOnly = identifiers.sections?.length === 1 && identifiers.sections[0] === 'claims';
-        if (!claimsOnly) this.queueAccountQuery('lobby', lobbyId);
-        this.queueAccountQuery('lobby-claims', lobbyId);
+        const only = identifiers.sections?.length === 1 ? identifiers.sections[0] : null;
+        if (only !== 'claims') this.queueAccountQuery('lobby', lobbyId);
+        if (only !== 'people') this.queueAccountQuery('lobby-claims', lobbyId);
         break;
       }
       // GEO-3135. Full state to the roster: replaces the cached copy when newer, never refetches.
@@ -566,6 +598,43 @@ export class DebateGatewayClient {
         const shown = query !== undefined && (query.state.fetchStatus === 'fetching' || query.getObserversCount() > 0);
         this.queryClient.setQueryData<LobbyHighlightsState>(key, current =>
           current || shown ? withLobbyHighlights(current, highlights) : current
+        );
+        break;
+      }
+      // GEO-3273. Full state to the roster: laid over the cached view when newer, never refetches.
+      // Guests get the lists from their polled guest view instead.
+      case 'debate.lobby_claim_lists_changed': {
+        const lists = parseLobbyClaimLists(identifiers.lobby_claim_lists);
+        if (!lists || !this.accountKey) break;
+        this.queryClient.setQueryData<DebateLobbyView>(
+          ['debates', 'account', this.accountKey, 'lobby', dashlessId(lists.lobby_id)],
+          current => (current ? withLobbyClaimLists(current, lists) : current)
+        );
+        break;
+      }
+      // GEO-3129. Coalesced to the roster; patches the cached view, never refetches.
+      case 'debate.lobby_guests_changed': {
+        const count = identifiers.guest_count;
+        if (!identifiers.lobby_id || !this.accountKey) break;
+        if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) break;
+        this.queryClient.setQueryData<DebateLobbyView>(
+          ['debates', 'account', this.accountKey, 'lobby', dashlessId(identifiers.lobby_id)],
+          current => (current ? { ...current, guest_count: count } : current)
+        );
+        break;
+      }
+      // GEO-3419. To the space scope: a call started, ended or closed (no row: refetch the list),
+      // or its people or hosts changed (a row, patched in place when newer).
+      case 'debate.space_calls_changed': {
+        if (!identifiers.space_id) break;
+        const listKey = ['debates', 'space-calls', dashlessId(identifiers.space_id)];
+        const patch = parseSpaceCallPatch(identifiers.space_call);
+        if (!patch || patch.status !== 'live') {
+          this.queueQuery(listKey);
+          break;
+        }
+        this.queryClient.setQueriesData<SpaceCallsResponse>({ queryKey: listKey }, list =>
+          list ? withSpaceCallPatch(list, patch) : list
         );
         break;
       }
@@ -600,21 +669,57 @@ export class DebateGatewayClient {
   /** Lays held patches over the cached list. `fetched`, a GET's result, also drops those it has caught up with. */
   private overlayHeldLobbyPatches(fetched?: DebateLobbiesResponse) {
     if (!this.accountKey) return;
+    this.overlayHeldPatchesOnCalendars();
     const key = ['debates', 'account', this.accountKey, 'lobbies'];
     const list = this.queryClient.getQueryData<DebateLobbiesResponse>(key);
-    if (!list) return;
-
-    if (fetched) {
-      for (const row of fetched.lobbies) {
-        const id = dashlessId(row.lobby_id);
-        const held = this.heldLobbyPatches.get(id);
-        if (held && row.as_of && Date.parse(row.as_of) >= Date.parse(held.asOf)) this.heldLobbyPatches.delete(id);
-      }
+    if (list) {
+      let next = list;
+      for (const patch of this.heldLobbyPatches.values()) next = applyLobbyCardPatch(next, patch);
+      if (next !== list) this.queryClient.setQueryData(key, next);
     }
+    // After the overlay: a read that predates a patch needs it laid over before it can go.
+    if (fetched) this.releaseCaughtUpPatches(fetched.lobbies);
+  }
 
-    let next = list;
-    for (const patch of this.heldLobbyPatches.values()) next = applyLobbyCardPatch(next, patch);
-    if (next !== list) this.queryClient.setQueryData(key, next);
+  /**
+   * Releases the held patches a fetched read (the list, or a calendar week) has caught up with,
+   * called once that read's data has had the held patches laid over it.
+   *
+   * Not while any lobby read is still in flight: one may predate a patch, and its landing needs the
+   * patch held to lay it back over. The catch-up is remembered instead and released once the last
+   * read in flight lands, even if that read does not include the lobby. A newer patch held since
+   * then is not the one caught up with, so it stays.
+   */
+  private releaseCaughtUpPatches(rows: DebateLobbySummary[]) {
+    if (!this.accountKey) return;
+    for (const row of rows) {
+      const id = dashlessId(row.lobby_id);
+      const held = this.heldLobbyPatches.get(id);
+      if (held && row.as_of && Date.parse(row.as_of) >= Date.parse(held.asOf)) this.caughtUpPatches.set(id, held.asOf);
+    }
+    if (this.queryClient.isFetching({ queryKey: ['debates', 'account', this.accountKey, 'lobbies'] }) > 0) return;
+    for (const [id, asOf] of this.caughtUpPatches) {
+      if (this.heldLobbyPatches.get(id)?.asOf === asOf) this.heldLobbyPatches.delete(id);
+    }
+    this.caughtUpPatches.clear();
+  }
+
+  /**
+   * Lays held patches over every cached calendar week (GEO-3300), so a lobby's headcount and who is
+   * going stay current there too. A week's own row newer than a patch is left as it is.
+   */
+  private overlayHeldPatchesOnCalendars() {
+    if (!this.accountKey || this.heldLobbyPatches.size === 0) return;
+    const patches = [...this.heldLobbyPatches.values()];
+    this.queryClient.setQueriesData<DebateLobbyCalendarResponse>(
+      { queryKey: ['debates', 'account', this.accountKey, 'lobbies', 'calendar'] },
+      // `undefined` leaves a week untouched, so one no patch changes is not rewritten.
+      week => {
+        if (!week) return undefined;
+        const next = patches.reduce(applyLobbyCardPatchToCalendar, week);
+        return next === week ? undefined : next;
+      }
+    );
   }
 
   private queueMatchmakingSections(sections?: MatchmakingSection[]) {
@@ -638,6 +743,7 @@ export class DebateGatewayClient {
     if (scope.scope === 'space') {
       this.queueQuery(['debates', 'claims', scope.space_id]);
       this.queueQuery(['debates', 'space', scope.space_id]);
+      this.queueQuery(['debates', 'space-calls', dashlessId(scope.space_id)]);
       return;
     }
     if (scope.scope === 'matchmaking') {
@@ -648,9 +754,9 @@ export class DebateGatewayClient {
       this.queueAccountQuery('lobby-claims');
       return;
     }
-    this.queueQuery(['debates', 'detail', scope.debate_id]);
-    this.queueQuery(['debates', 'media', scope.debate_id]);
-    this.queueQuery(['debates', 'transcript', scope.debate_id]);
+    this.queueQuery(['debates', 'detail', dashlessId(scope.debate_id)]);
+    this.queueQuery(['debates', 'media', dashlessId(scope.debate_id)]);
+    this.queueQuery(['debates', 'transcript', dashlessId(scope.debate_id)]);
   }
 
   private queueBroadReconcile() {
@@ -1340,6 +1446,18 @@ function rateLimitRetryDelayMs(payload: unknown) {
 
 function isGatewayEnvelope(value: unknown): value is GatewayEnvelope {
   return isRecord(value) && value.v === 1 && typeof value.op === 'string' && 'payload' in value;
+}
+
+/** A calendar week of lobbies (GEO-3300): `debateQueryKeys.lobbyCalendar`, under the list's key. */
+function isLobbyCalendarQueryKey(queryKey: readonly unknown[], accountKey: string) {
+  return (
+    queryKey.length === 7 &&
+    queryKey[0] === 'debates' &&
+    queryKey[1] === 'account' &&
+    queryKey[2] === accountKey &&
+    queryKey[3] === 'lobbies' &&
+    queryKey[4] === 'calendar'
+  );
 }
 
 function isLobbiesQueryKey(queryKey: readonly unknown[], accountKey: string) {

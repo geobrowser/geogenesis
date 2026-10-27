@@ -1,7 +1,13 @@
 import { NextRequest } from 'next/server';
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { publishedDebatePath } from '~/core/debates/server/published-debate-path';
 
 import proxy from './proxy';
+
+vi.mock('~/core/debates/server/published-debate-path', () => ({ publishedDebatePath: vi.fn() }));
 
 /**
  * `proxy.ts` had no tests, which is part of why the cost of its 404 went
@@ -34,16 +40,16 @@ describe('real space URLs are left alone', () => {
     `/space/${VALID_SPACE}/${VALID_ENTITY}`,
     `/space/${VALID_SPACE}/opengraph-image`,
     '/space/pending/some-topic-id',
-  ])('passes %s through', path => {
-    const response = proxy(request(path, { headers: NAVIGATION }));
+  ])('passes %s through', async path => {
+    const response = await proxy(request(path, { headers: NAVIGATION }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('x-middleware-rewrite')).toBeNull();
   });
 
   // A crawler asking for a real page must still get the real page.
-  it('passes a valid URL through for a crawler too', () => {
-    const response = proxy(request(`/space/${VALID_SPACE}`, { headers: CRAWLER }));
+  it('passes a valid URL through for a crawler too', async () => {
+    const response = await proxy(request(`/space/${VALID_SPACE}`, { headers: CRAWLER }));
 
     expect(response.status).toBe(200);
   });
@@ -53,8 +59,8 @@ describe('impossible space URLs', () => {
   const IMPOSSIBLE = `/space/BDuZwkjCg3nPWMDshoYtpS/YQZA6HrZQTnUPxjCV8V6M9`;
 
   // The case the styled page exists for.
-  it('rewrites to the styled 404 for a browser navigation', () => {
-    const response = proxy(request(IMPOSSIBLE, { headers: NAVIGATION }));
+  it('rewrites to the styled 404 for a browser navigation', async () => {
+    const response = await proxy(request(IMPOSSIBLE, { headers: NAVIGATION }));
 
     expect(response.status).toBe(404);
     expect(response.headers.get('x-middleware-rewrite')).toContain('/_not-found');
@@ -67,8 +73,8 @@ describe('impossible space URLs', () => {
     ['a request with no hint headers at all', { method: 'GET', headers: {} }],
     ['a HEAD link check', { method: 'HEAD', headers: {} }],
     ['a HEAD link check that claims to navigate', { method: 'HEAD', headers: NAVIGATION }],
-  ])('answers %s without rendering a page', (_label, init) => {
-    const response = proxy(request(IMPOSSIBLE, init));
+  ])('answers %s without rendering a page', async (_label, init) => {
+    const response = await proxy(request(IMPOSSIBLE, init));
 
     expect(response.status).toBe(404);
     expect(response.headers.get('x-middleware-rewrite')).toBeNull();
@@ -76,16 +82,16 @@ describe('impossible space URLs', () => {
   });
 
   it('gives HEAD no body, and GET a short one', async () => {
-    const head = proxy(request(IMPOSSIBLE, { method: 'HEAD' }));
-    const get = proxy(request(IMPOSSIBLE, { method: 'GET' }));
+    const head = await proxy(request(IMPOSSIBLE, { method: 'HEAD' }));
+    const get = await proxy(request(IMPOSSIBLE, { method: 'GET' }));
 
     expect(head.body).toBeNull();
     // The styled document this replaces is ~49KB.
     await expect(get.text()).resolves.toBe('Not Found');
   });
 
-  it('lets the edge cache the rejection, since a retired id cannot come back', () => {
-    const response = proxy(request(IMPOSSIBLE, { method: 'GET' }));
+  it('lets the edge cache the rejection, since a retired id cannot come back', async () => {
+    const response = await proxy(request(IMPOSSIBLE, { method: 'GET' }));
 
     expect(response.headers.get('cache-control')).toContain('s-maxage=86400');
   });
@@ -97,10 +103,78 @@ describe('impossible space URLs', () => {
     '/space/SgjATMbm41LX6naizMqBVd/ExL8wDYWcYbTVb3zrGiJ3E',
     '/space/totally-made-up-nonsense-id/also-fake',
     `/space/${VALID_SPACE}/not-a-tab-or-an-id`,
-  ])('rejects %s cheaply', path => {
-    const response = proxy(request(path, { headers: CRAWLER }));
+  ])('rejects %s cheaply', async path => {
+    const response = await proxy(request(path, { headers: CRAWLER }));
 
     expect(response.status).toBe(404);
     expect(response.headers.get('x-middleware-rewrite')).toBeNull();
+  });
+});
+
+// GEO-3435: a recording link opens the debate's own page once the debate is on the graph. It has to
+// be a real redirect here: the recording route streams (it has a loading.tsx), so a redirect from
+// the page arrives inside a 200 after "Loading the recording…" has painted.
+describe('debate recording links', () => {
+  const RECORDING = `/space/${VALID_SPACE}/debates/${VALID_ENTITY}/recording`;
+  const lookup = vi.mocked(publishedDebatePath);
+  afterEach(() => lookup.mockReset());
+
+  it('redirects to the debate page with a 307 once the debate is published', async () => {
+    lookup.mockResolvedValue(`/space/${VALID_SPACE}/${VALID_ENTITY}?t=42`);
+
+    const response = await proxy(request(`${RECORDING}?t=42`, { headers: NAVIGATION }));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      `https://www.geobrowser.io/space/${VALID_SPACE}/${VALID_ENTITY}?t=42`
+    );
+    expect(lookup).toHaveBeenCalledWith(VALID_SPACE, VALID_ENTITY, new URLSearchParams('t=42'));
+  });
+
+  // Review of #2951: the lookup is loaded on demand, and its module can throw on load (app config
+  // checks env vars). That must fall back to the recording page, not fail the request.
+  it('lets the recording page render when the lookup itself fails', async () => {
+    lookup.mockRejectedValue(new Error('NEXT_PUBLIC_PRIVY_APP_ID is not set'));
+
+    const response = await proxy(request(RECORDING, { headers: NAVIGATION }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
+
+  it('lets the recording page render while the debate is not published', async () => {
+    lookup.mockResolvedValue(null);
+
+    const response = await proxy(request(RECORDING, { headers: NAVIGATION }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
+
+  // A crawler-shaped URL with a junk debate id must stay as cheap as the other impossible URLs above,
+  // not cost a graph round-trip.
+  it('rejects a recording link whose debate id cannot exist, without asking the graph', async () => {
+    const browser = await proxy(request(`/space/${VALID_SPACE}/debates/not-an-id/recording`, { headers: NAVIGATION }));
+    const crawler = await proxy(request(`/space/${VALID_SPACE}/debates/not-an-id/recording`, { headers: CRAWLER }));
+
+    expect(browser.status).toBe(404);
+    expect(browser.headers.get('x-middleware-rewrite')).toContain('/_not-found');
+    expect(crawler.status).toBe(404);
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  // The proxy runs on every /space request; the graph client (SDK, viem, app config that throws on a
+  // missing env var) must load only when a recording link needs it. See `core/utils/space-url.ts`.
+  it('loads the graph lookup only on demand', () => {
+    const source = fs.readFileSync(path.join(__dirname, 'proxy.ts'), 'utf8');
+    expect(source).not.toMatch(/^import[^;]*published-debate-path/m);
+    expect(source).not.toMatch(/^import[^;]*@geoprotocol\/geo-sdk/m);
+  });
+
+  it('asks the graph only for recording links', () => {
+    for (const path of [`/space/${VALID_SPACE}/${VALID_ENTITY}`, `/space/${VALID_SPACE}/debates/${VALID_ENTITY}`]) {
+      proxy(request(path, { headers: NAVIGATION }));
+    }
+    expect(lookup).not.toHaveBeenCalled();
   });
 });

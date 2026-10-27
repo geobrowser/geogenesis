@@ -5,7 +5,6 @@ import * as React from 'react';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Ellipsis } from '~/design-system/icons/ellipsis';
-import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
 import {
@@ -13,12 +12,13 @@ import {
   type DebateLobbyClaim,
   type DebateLobbyHighlight,
   type DebateLobbyRoomVote,
-  type DebateLobbyView,
   GeoChatRequestError,
 } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { moderationErrorMessage, personName } from './lobby-format';
+import { LOBBY_GUEST_COPY } from './lobby-guest';
+import { useIsLobbyGuest } from './lobby-guest-hooks';
 import {
   useEndLobbyRoomVote,
   useLobbyHighlights,
@@ -32,9 +32,11 @@ import {
   listedHighlights,
   viewerRoomVotePosition,
 } from './lobby-highlights-state';
+import { LobbyPopup, LobbyPopupMenuRow } from './lobby-popup';
 import { LobbyClaimRequest, LobbyRoomClaims, lobbyRoomClaimFrom } from './lobby-room-claims';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { type LobbyRoomClaim, LobbyRoomClaimsList, type LobbyRoomOffer } from './lobby-room-claims-list';
+import type { LobbyPageView } from './lobby-view';
 
 export const LOBBY_HIGHLIGHTS_COPY = {
   highlight: 'Highlight at the top for everyone',
@@ -48,13 +50,7 @@ export const LOBBY_HIGHLIGHTS_COPY = {
  * "In this room" with the hosts' highlights first (GEO-3135). Highlighted claims leave the list
  * below, and the voted claim shows in the room vote card instead.
  */
-export function LobbyRoomClaimsWithHighlights({
-  lobby,
-  onExplore,
-}: {
-  lobby: DebateLobbyView;
-  onExplore?: () => void;
-}) {
+export function LobbyRoomClaimsWithHighlights({ lobby, onExplore }: { lobby: LobbyPageView; onExplore?: () => void }) {
   const { data: state } = useLobbyHighlights(lobby.lobby_id);
   const hosting = lobby.viewer.hosting;
   const excludeClaimIds = React.useMemo(() => highlightedClaimIds(state), [state]);
@@ -85,7 +81,7 @@ function LobbyHighlightedClaims({
   highlights,
   renderMenu,
 }: {
-  lobby: DebateLobbyView;
+  lobby: LobbyPageView;
   highlights: DebateLobbyHighlight[];
   renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
 }) {
@@ -123,7 +119,7 @@ function HighlightedBy({ highlight }: { highlight: DebateLobbyHighlight | undefi
  * The running room vote, above the claims for everyone in the lobby. Agree and Disagree are the
  * claim card's own, so a vote is the viewer's normal position; the tally counts the room.
  */
-export function LobbyRoomVote({ lobby }: { lobby: DebateLobbyView }) {
+export function LobbyRoomVote({ lobby }: { lobby: LobbyPageView }) {
   const { data: state } = useLobbyHighlights(lobby.lobby_id);
   const vote = state?.room_vote ?? null;
   useRoomVoteHint(lobby.lobby_id, vote, lobby.viewer.connected);
@@ -136,12 +132,13 @@ function RoomVoteCard({
   vote,
   state,
 }: {
-  lobby: DebateLobbyView;
+  lobby: LobbyPageView;
   vote: DebateLobbyRoomVote;
   state: LobbyHighlightsState | undefined;
 }) {
   const roomClaims = useLobbyRoomClaimsById(lobby.lobby_id);
   const endVote = useEndLobbyRoomVote(lobby.lobby_id);
+  const guest = useIsLobbyGuest();
   const entry = lobbyClaimEntry(vote.claim, roomClaims.get(vote.claim.id), viewerRoomVotePosition(state));
   const renderOffer = React.useCallback(
     (offer: LobbyRoomOffer) => <LobbyClaimRequest lobbyId={lobby.lobby_id} offer={offer} />,
@@ -175,6 +172,11 @@ function RoomVoteCard({
       ) : null}
       <LobbyRoomClaimsList claims={[entry]} renderOffer={renderOffer} />
       <RoomVoteTally tally={vote.tally} />
+      {guest ? (
+        <Text as="p" variant="footnote" color="grey-04" className="px-1 pb-0.5">
+          {LOBBY_GUEST_COPY.voteNeedsAccount}
+        </Text>
+      ) : null}
     </section>
   );
 }
@@ -204,7 +206,7 @@ export function RoomVoteTally({ tally }: { tally: DebateLobbyRoomVote['tally'] }
 }
 
 /** Highlight and room vote controls on one claim. Rendered for hosts only. */
-function LobbyClaimHostMenu({
+export function LobbyClaimHostMenu({
   lobbyId,
   claim,
   state,
@@ -216,12 +218,10 @@ function LobbyClaimHostMenu({
   const [open, setOpen] = React.useState(false);
 
   return (
-    <Menu
+    <LobbyPopup
       open={open}
       onOpenChange={setOpen}
-      asChild
-      align="end"
-      className="max-w-[260px]"
+      title="Claim options"
       trigger={
         <button
           type="button"
@@ -233,11 +233,8 @@ function LobbyClaimHostMenu({
         </button>
       }
     >
-      {/* Remounted on each open, so a confirm or error from last time does not linger. */}
-      {open ? (
-        <LobbyClaimHostActions lobbyId={lobbyId} claim={claim} state={state} onDone={() => setOpen(false)} />
-      ) : null}
-    </Menu>
+      <LobbyClaimHostActions lobbyId={lobbyId} claim={claim} state={state} onDone={() => setOpen(false)} />
+    </LobbyPopup>
   );
 }
 
@@ -309,7 +306,8 @@ export function LobbyClaimHostActions({
         </div>
       ) : (
         <>
-          <MenuRow
+          <LobbyPopupMenuRow
+            analyticsIntent="moderate_lobby_claim"
             analyticsLabel={highlighted ? 'Lobby remove highlight' : 'Lobby highlight claim'}
             disabled={pending}
             onClick={() =>
@@ -317,15 +315,16 @@ export function LobbyClaimHostActions({
             }
           >
             {highlighted ? LOBBY_HIGHLIGHTS_COPY.removeHighlight : LOBBY_HIGHLIGHTS_COPY.highlight}
-          </MenuRow>
+          </LobbyPopupMenuRow>
           {running?.claim.id === claim.id ? null : (
-            <MenuRow
+            <LobbyPopupMenuRow
+              analyticsIntent="moderate_lobby_claim"
               analyticsLabel="Lobby ask room to vote"
               disabled={pending}
               onClick={() => (running ? setReplacing(running.claim.claim) : start(false))}
             >
               {LOBBY_HIGHLIGHTS_COPY.askRoom}
-            </MenuRow>
+            </LobbyPopupMenuRow>
           )}
         </>
       )}
@@ -335,30 +334,6 @@ export function LobbyClaimHostActions({
         </Text>
       ) : null}
     </div>
-  );
-}
-
-function MenuRow({
-  analyticsLabel,
-  disabled,
-  onClick,
-  children,
-}: {
-  analyticsLabel: string;
-  disabled: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      {...debateActionAnalyticsAttributes('hub', analyticsLabel, 'moderate_lobby_claim')}
-      onClick={onClick}
-      className="flex w-full items-center bg-white px-3 py-2.5 text-left text-button text-text hover:bg-bg disabled:opacity-50"
-    >
-      {children}
-    </button>
   );
 }
 

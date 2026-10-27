@@ -32,7 +32,6 @@ import { useSearchImagesDispatcher } from '~/core/chat/search-images-dispatcher'
 import { useWebFetchDispatcher } from '~/core/chat/web-fetch-dispatcher';
 import { ROOT_SPACE } from '~/core/constants';
 import { useInjectJob } from '~/core/hooks/use-inject-job';
-import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { useSpace } from '~/core/hooks/use-space';
 import { completeDailyUploadActivity } from '~/core/space/use-space-daily-activities';
 import {
@@ -51,28 +50,16 @@ import { useReportError } from '~/core/state/status-bar-store';
 import { reportError as captureAssistantError } from '~/core/telemetry/logger';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
+import { useHideAssistant } from './assistant-visibility';
 import { ChatPanel } from './chat-panel';
-import { debateFullscreenActiveAtom } from '~/atoms';
 
 type AssistantSuggestionSource = 'welcome' | 'follow_up';
 type AssistantPanelAction = 'opened' | 'closed';
 type AssistantMessageSource = 'typed' | 'option_click';
-
-const FULLSCREEN_CHILD_ROUTE_SUFFIXES = ['/ranking-compose'] as const;
-
-// The claim-exploration picker is its own full-screen overlay, and it parks a voice dock in the
-// bottom-right corner — exactly where the assistant's launcher floats.
-const FULLSCREEN_CHILD_ROUTE_PATTERNS = [/\/debates\/rematches\/[^/]+$/] as const;
-
-function isFullscreenChildRoute(pathname: string): boolean {
-  return (
-    FULLSCREEN_CHILD_ROUTE_SUFFIXES.some(suffix => pathname.endsWith(suffix)) ||
-    FULLSCREEN_CHILD_ROUTE_PATTERNS.some(pattern => pattern.test(pathname))
-  );
-}
 
 // Guard router.push against hallucinated id shapes.
 function validId(value: string | undefined): value is string {
@@ -200,7 +187,7 @@ function describeChatError(error: Error): string {
 
 type ChatMode = 'default' | 'ingestion';
 
-export function ChatWidget() {
+export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null }) {
   const [portalTarget, setPortalTarget] = React.useState<HTMLElement | null>(null);
   const [isOpen, setIsOpen] = useAtom(isChatOpenAtom);
   const [seed, setSeed] = useAtom(assistantSeedAtom);
@@ -216,10 +203,7 @@ export function ChatWidget() {
   const currentChatIdRef = React.useRef<string | null>(persistedCurrent?.id ?? null);
 
   const pathname = usePathname() ?? '';
-  const debateFullscreenActive = useAtomValue(debateFullscreenActiveAtom);
-  // Match the debate feed's `md:` fullscreen overlay breakpoint.
-  const isMobile = useMediaQuery('(max-width: 767px)');
-  const hideAssistant = isFullscreenChildRoute(pathname) || (isMobile && debateFullscreenActive);
+  const hideAssistant = useHideAssistant();
   const params = useParams();
 
   React.useLayoutEffect(() => {
@@ -575,6 +559,18 @@ export function ChatWidget() {
       closeAssistant('fullscreen_route');
     }
   }, [hideAssistant, isOpen, closeAssistant]);
+
+  // The launcher mounts this widget on demand, so the press that mounted it has nothing left to
+  // open the panel: it hands over how it was asked, once.
+  const openOnMountRef = React.useRef(openOnMount);
+  React.useEffect(() => {
+    const trigger = openOnMountRef.current;
+    if (trigger === null) return;
+    openOnMountRef.current = null;
+    openAssistant(trigger);
+    // Once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const trackAssistantMessage = React.useCallback(
     (text: string, source: AssistantMessageSource, suggestionSource?: AssistantSuggestionSource) => {
@@ -1169,7 +1165,7 @@ export function ChatWidget() {
           transition={{ duration: 0.15 }}
           onClick={() => openAssistant('fab')}
           aria-label="Open assistant"
-          className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
+          className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} ${Z_LAYER_CLASS.assistantLauncher} flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
         >
           <AssistantSparkle size={20} />
         </motion.button>

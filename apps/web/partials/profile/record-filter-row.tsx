@@ -44,7 +44,7 @@ export function RecordFilterRow({ sort, dimensions, end }: RecordFilterRowProps)
       />
 
       {hasDimensions || end ? (
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
           {dimensions.map(dimension => (
             <HubMultiFilterMenu
               key={dimension.key}

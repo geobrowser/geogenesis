@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -18,6 +18,13 @@ const { attribute } = vi.hoisted(() => ({ attribute: vi.fn() }));
 // import — and under Node's own webstorage, which shadows jsdom's with an object that has no
 // getItem, that import takes the whole suite down before a test runs. Mocked rather than worked
 // around in a setup file so the file stands on its own.
+// The meta row's Join/Follow offer reads the space type and the viewer (GEO-3236); both have their
+// own suites.
+vi.mock('~/core/hooks/use-is-personal-space', () => ({ useIsPersonalSpace: () => undefined }));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: null, isRegistered: false, isLoading: false }),
+}));
+
 vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
   pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
@@ -188,6 +195,9 @@ describe('ExploreFeedCard', () => {
     expect(screen.queryByText('Debate')).toBeNull();
     expect(screen.getByText('Space').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
     expect(screen.getByRole('heading', { name: 'Fast fashion should be discouraged' })).toHaveClass('line-clamp-2');
+    // The gallery no longer adds a frame, so the fallback owns one too.
+    expect(screen.getByRole('article')).toHaveClass('rounded-lg', 'border', 'p-3');
+    expect(screen.getByRole('article')).not.toHaveClass('border-b');
   });
 
   it('draws no age in either meta row', () => {
@@ -358,4 +368,117 @@ it('lets explicit card list and position override the enclosing gallery', () => 
   );
   fireEvent.click(screen.getByText('Record action'));
   expect(attribute).toHaveBeenCalledWith(expect.objectContaining({ list_id: 'ranking_entries', item_position: 2 }));
+});
+
+describe('ExploreFeedCard deferred until near the viewport', () => {
+  type Watched = { callback: IntersectionObserverCallback; element: Element | null; observer: IntersectionObserver };
+  let watched: Watched[] = [];
+
+  function stubObserver() {
+    watched = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class implements Partial<IntersectionObserver> {
+        private readonly record: Watched;
+        constructor(callback: IntersectionObserverCallback) {
+          this.record = { callback, element: null, observer: this as unknown as IntersectionObserver };
+          watched.push(this.record);
+        }
+        observe(element: Element) {
+          this.record.element = element;
+        }
+        unobserve() {}
+        disconnect() {
+          this.record.element = null;
+        }
+        takeRecords() {
+          return [];
+        }
+      }
+    );
+  }
+
+  function bringNear(element: Element) {
+    const record = watched.find(w => w.element === element);
+    if (!record) throw new Error('placeholder is not observed');
+    act(() =>
+      record.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], record.observer)
+    );
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('draws a placeholder, not the card, until the card comes near the viewport', () => {
+    stubObserver();
+    render(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    const placeholder = screen.getByTestId('explore-feed-card-placeholder');
+    expect(screen.queryByText('A claim')).toBeNull();
+
+    bringNear(placeholder);
+
+    expect(screen.getByText('A claim')).toBeInTheDocument();
+    expect(screen.queryByTestId('explore-feed-card-placeholder')).toBeNull();
+  });
+
+  it('holds a debate at roughly its player height, so the feed below does not move up', () => {
+    stubObserver();
+    const debateItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }],
+    };
+    render(<ExploreFeedCard item={debateItem} deferUntilNearViewport />);
+
+    expect(screen.getByTestId('explore-feed-card-placeholder')).toHaveClass('min-h-[600px]');
+  });
+
+  it('renders the card straight away when nothing can say it is near (no IntersectionObserver)', () => {
+    vi.stubGlobal('IntersectionObserver', undefined);
+    render(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    expect(screen.getByText('A claim')).toBeInTheDocument();
+  });
+
+  it('renders the card on the first pass when not deferred', () => {
+    stubObserver();
+    render(<ExploreFeedCard item={item} />);
+
+    expect(screen.getByText('A claim')).toBeInTheDocument();
+    expect(screen.queryByTestId('explore-feed-card-placeholder')).toBeNull();
+  });
+
+  it('keeps a card that has rendered in full when it is later marked deferred (its index moved down)', () => {
+    stubObserver();
+    const { rerender } = render(<ExploreFeedCard item={item} />);
+    const card = screen.getByText('A claim');
+
+    rerender(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    expect(screen.queryByTestId('explore-feed-card-placeholder')).toBeNull();
+    expect(screen.getByText('A claim')).toBe(card);
+  });
+
+  it('keeps a card that came near the viewport when the defer flag flips back and forth', () => {
+    stubObserver();
+    const { rerender } = render(<ExploreFeedCard item={item} deferUntilNearViewport />);
+    bringNear(screen.getByTestId('explore-feed-card-placeholder'));
+    const card = screen.getByText('A claim');
+
+    rerender(<ExploreFeedCard item={item} />);
+    rerender(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    expect(screen.queryByTestId('explore-feed-card-placeholder')).toBeNull();
+    expect(screen.getByText('A claim')).toBe(card);
+  });
+
+  it('renders a held-back card in full once it is no longer deferred (its index moved up)', () => {
+    stubObserver();
+    const { rerender } = render(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    rerender(<ExploreFeedCard item={item} />);
+    rerender(<ExploreFeedCard item={item} deferUntilNearViewport />);
+
+    expect(screen.getByText('A claim')).toBeInTheDocument();
+    expect(screen.queryByTestId('explore-feed-card-placeholder')).toBeNull();
+  });
 });

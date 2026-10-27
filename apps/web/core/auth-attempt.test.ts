@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   authAttemptForAction,
   beginAuthAttempt,
+  claimRedirectedAuthAttempt,
   completeAuthAction,
   currentAuthAttempt,
   finishAuthAttempt,
@@ -49,6 +50,35 @@ it('keeps how many device votes a save sign-in was started for, through to its e
   );
 });
 
+// GEO-3243: the personal space runner can resolve one creation twice, by design, and each reported it.
+it('reports each onboarding step once per sign-in attempt', () => {
+  const attempt = beginAuthAttempt(entry);
+  finishAuthAttempt('signed_up', attempt);
+  capture.mockClear();
+
+  trackAuthOnboarding('personal_space', 'completed');
+  trackAuthOnboarding('personal_space', 'completed');
+  trackAuthOnboarding('start', 'viewed');
+
+  const progress = capture.mock.calls.filter(([event]) => event === 'auth_onboarding_progress');
+  expect(progress.map(([, properties]) => [properties.onboarding_step, properties.outcome])).toEqual([
+    ['personal_space', 'completed'],
+    ['start', 'viewed'],
+  ]);
+});
+
+// GEO-3126: a sign-up from a lobby's shared link is counted by these fields on the completed attempt.
+it('carries a lobby sign-in’s target and link source through to the completed attempt', () => {
+  const lobby = { link_source: 'lobby', auth_control: 'join_lobby', target_type: 'debate_lobby', target_id: 'lobby1' };
+  beginAuthAttempt(lobby);
+  openAuthAttempt();
+  finishAuthAttempt('signed_up');
+
+  for (const event of ['auth_attempt_started', 'auth_prompt_viewed', 'auth_attempt_completed']) {
+    expect(capture).toHaveBeenCalledWith(event, expect.objectContaining(lobby));
+  }
+});
+
 describe('durable sign-in attempts', () => {
   it('retains an immutable entry through navigation and a new tab', () => {
     const properties = { ...entry, origin_entity_ids: ['debate-1'], email: 'not-stored@example.com' };
@@ -85,6 +115,45 @@ describe('durable sign-in attempts', () => {
       expect(capture.mock.calls.filter(([event]) => event === 'auth_action_completed')).toHaveLength(0);
     }
   );
+  // GEO-3139: a headless Google sign-in starts on one load and fails on the return's.
+  it('lets a redirect return close the attempt its start left open in this tab', async () => {
+    const attempt = beginAuthAttempt(entry);
+    vi.resetModules();
+    const returned = await import('./auth-attempt');
+
+    returned.finishAuthAttempt('closed');
+    expect(returned.currentAuthAttempt()?.endedAt).toBeUndefined();
+
+    expect(returned.claimRedirectedAuthAttempt(attempt.id)).toBe(true);
+    returned.finishAuthAttempt('closed');
+    expect(capture).toHaveBeenCalledWith(
+      'auth_attempt_completed',
+      expect.objectContaining({ auth_attempt_id: attempt.id, outcome: 'closed' })
+    );
+  });
+  it('claims nothing without an open attempt in this tab', () => {
+    expect(claimRedirectedAuthAttempt('gone')).toBe(false);
+    expect(currentAuthAttempt()).toBeUndefined();
+  });
+  it('leaves a sign-in started after the return to its own starter', async () => {
+    const returnedTo = beginAuthAttempt(entry);
+    vi.resetModules();
+    const returned = await import('./auth-attempt');
+    const newer = returned.beginAuthAttempt({ ...entry, auth_control: 'navbar' });
+    capture.mockClear();
+
+    expect(returned.claimRedirectedAuthAttempt(returnedTo.id)).toBe(false);
+    expect(returned.currentAuthAttempt()?.id).toBe(newer.id);
+    expect(returned.currentAuthAttempt()?.endedAt).toBeUndefined();
+    // Only its starter could record the replaced attempt as superseded; the return does not end it.
+    expect(returned.readAuthAttempt(returnedTo.id)?.endedAt).toBeUndefined();
+    expect(capture).not.toHaveBeenCalled();
+  });
+  it('claims nothing once the attempt has ended', () => {
+    const attempt = beginAuthAttempt(entry);
+    finishAuthAttempt('signed_in');
+    expect(claimRedirectedAuthAttempt(attempt.id)).toBe(false);
+  });
   it('does not guess between concurrent attempts when completing in a new tab', () => {
     const first = beginAuthAttempt(entry);
     localStorage.setItem('geo:auth-attempt:v1:other-tab', JSON.stringify({ ...first, id: 'other-tab' }));

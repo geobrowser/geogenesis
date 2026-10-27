@@ -4,7 +4,10 @@ import { useSignInDeepLink } from '~/core/auth/use-sign-in-deep-link';
 import { useRoomAccessDeepLink } from '~/core/debates/rooms/use-room-access-deep-link';
 import { useDebatesPanelDeepLink } from '~/core/debates/use-debates-panel-deep-link';
 
+import { GoogleCalendarReturn } from '~/partials/availability/google-calendar-return';
 import { AvailabilityDeepLink } from '~/partials/availability/shared-availability';
+import { EmailSettingsDeepLink } from '~/partials/notifications/email-settings-deep-link';
+import { ScheduledDebateNoticeDeepLink } from '~/partials/scheduled-debates/scheduled-debate-notice-deep-link';
 
 /**
  * Every deep link, at one mount point. Adding a link is a hook and a value in `DEEP_LINK_MODALS`,
@@ -14,12 +17,20 @@ import { AvailabilityDeepLink } from '~/partials/availability/shared-availabilit
  * so nothing here dispatches and no link can clear another's trigger.
  *
  * The availability link is a component rather than a bare hook because it owns a dialog, and
- * nothing app-wide holds one for it the way the debates hub or the toast does.
+ * nothing app-wide holds one for it the way the debates hub or the toast does. So are the emails'
+ * Running late and Can't make it links (GEO-3427), for the same reason.
  */
 export function DeepLinkHandler() {
   useSignInDeepLink();
   useDebatesPanelDeepLink();
   useRoomAccessDeepLink();
 
-  return <AvailabilityDeepLink />;
+  return (
+    <>
+      <AvailabilityDeepLink />
+      <GoogleCalendarReturn />
+      <EmailSettingsDeepLink />
+      <ScheduledDebateNoticeDeepLink />
+    </>
+  );
 }

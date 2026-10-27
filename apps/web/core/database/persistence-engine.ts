@@ -18,7 +18,7 @@ export class PersistenceEngine {
   private pendingRelations = new Map<string, Relation>();
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(stream: GeoEventStream) {
+  constructor(private readonly stream: GeoEventStream) {
     stream.on(GeoEventStream.VALUES_CREATED, event => {
       this.enqueue('value', event.value);
     });
@@ -44,7 +44,7 @@ export class PersistenceEngine {
     });
 
     stream.on(GeoEventStream.LOCAL_CHANGES_CLEARED, event => {
-      this.onCleared(event.spaceId);
+      this.onCleared(event.spaceId, event.valueIds, event.relationIds);
     });
   }
 
@@ -128,8 +128,18 @@ export class PersistenceEngine {
     }
   }
 
-  private async onCleared(spaceId: string) {
+  private async onCleared(spaceId: string, valueIds?: string[], relationIds?: string[]) {
+    const isTargeted = valueIds !== undefined || relationIds !== undefined;
+
     try {
+      if (isTargeted) {
+        for (const id of valueIds ?? []) this.pendingValues.delete(id);
+        for (const id of relationIds ?? []) this.pendingRelations.delete(id);
+        if (valueIds && valueIds.length > 0) await db.values.bulkDelete(valueIds);
+        if (relationIds && relationIds.length > 0) await db.relations.bulkDelete(relationIds);
+        return;
+      }
+
       await db.values.where('spaceId').equals(spaceId).delete();
       await db.relations.where('spaceId').equals(spaceId).delete();
     } catch (err) {
@@ -179,6 +189,13 @@ export class PersistenceEngine {
         });
       }
 
+      const entityIds = [
+        ...new Set([
+          ...localValues.map(value => value.entity.id),
+          ...localRelations.map(relation => relation.fromEntity.id),
+        ]),
+      ].filter(Boolean);
+      this.stream.emit({ type: GeoEventStream.HYDRATE, entities: entityIds });
       return true;
     } catch (err) {
       console.warn('[PersistenceEngine] restore failed:', err);

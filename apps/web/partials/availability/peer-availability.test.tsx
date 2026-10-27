@@ -471,9 +471,8 @@ describe('what the footer has to say', () => {
     // 16:00Z is noon in New York.
     await user.click(within(day('2026-09-21')).getByRole('button', { name: /12pm/ }));
 
-    expect(
-      screen.getByText(new Date('2026-09-21T16:00:00Z').toLocaleString(undefined, { timeZone: 'America/New_York' }))
-    ).toBeInTheDocument();
+    expect(screen.getByText('Selected time')).toBeInTheDocument();
+    expect(screen.getByText('Mon, Sep 21 · 12pm')).toBeInTheDocument();
     expect(screen.queryByText(/Ada.s time:/)).not.toBeInTheDocument();
   });
 
@@ -570,14 +569,13 @@ describe('a week with nothing in it', () => {
 describe('zone line', () => {
   const ZONE = 'Times shown in your zone, UTC. Ada is in UTC, same time as you.';
 
-  // It sits where "Pick a time above." used to, and a pick takes its place with the picked time.
-  it('fills the footer until a time is picked', async () => {
+  it('stays with the calendar when a time is picked', async () => {
     const { user } = setupBooking(booking(), { slots: [slot(16)] });
     expect(screen.getByText(ZONE)).toBeInTheDocument();
     expect(screen.queryByText('Pick a time above.')).not.toBeInTheDocument();
 
     await user.click(within(day('2026-09-21')).getByRole('button', { name: /4pm/ }));
-    expect(screen.queryByText(ZONE)).not.toBeInTheDocument();
+    expect(screen.getByText(ZONE)).toBeInTheDocument();
   });
 
   it('still shows without a footer to sit in', () => {
@@ -705,5 +703,202 @@ describe('times that have already gone', () => {
 
     expect(screen.getByRole('button', { name: 'Send request' })).toBeDisabled();
     expect(book.onRequest).not.toHaveBeenCalled();
+  });
+});
+
+// GEO-3429: moving a debate says which one, marks its time, and offers a way out when none work.
+describe('moving a debate', () => {
+  const moving = (overrides: Partial<PeerAvailabilityBooking> = {}) =>
+    booking({ mode: 'reschedule', moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true }, ...overrides });
+
+  it('names the debate and its time above the week, and what proposing does to it', () => {
+    setupBooking(moving());
+
+    const card = screen.getByRole('region', { name: 'Moving your debate with Ada' });
+    expect(card).toHaveTextContent('Currently: Tue, Sep 22, 5pm');
+    expect(card).toHaveTextContent(
+      'Proposing a new time cancels 5pm right away and tells Ada. The new time is booked once they accept.'
+    );
+    // Before the week's own heading.
+    expect(card.compareDocumentPosition(screen.getByRole('heading', { name: 'When Ada is free' }))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+  });
+
+  it('says an unanswered request is only replaced', () => {
+    setupBooking(moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: false } }));
+    expect(screen.getByRole('region', { name: 'Moving your debate with Ada' })).toHaveTextContent(
+      'Proposing a new time replaces 5pm. Nothing is booked until Ada accepts.'
+    );
+  });
+
+  it('marks the current time in its day, where it cannot be picked', () => {
+    setupBooking(moving(), { slots: [slot(16, true, 22), slot(18, true, 22)] });
+
+    const tuesday = within(day('2026-09-22'));
+    const current = tuesday.getByLabelText(/at 5pm, the current time$/);
+    expect(current.tagName).not.toBe('BUTTON');
+    expect(current).toHaveTextContent('5pm · current');
+    // In time order among the chips that can be picked.
+    expect(tuesday.getAllByText(/^(4pm|5pm|6pm)$/).map(node => node.textContent)).toEqual(['4pm', '5pm', '6pm']);
+  });
+
+  it("marks one of their free times as current rather than drawing it twice, and won't pick it", () => {
+    setupBooking(moving({ moving: { startsAt: '2026-09-22T16:00:00Z', agreed: true } }), {
+      slots: [slot(16, true, 22), slot(18, true, 22)],
+    });
+
+    const tuesday = within(day('2026-09-22'));
+    expect(tuesday.getAllByText('4pm')).toHaveLength(1);
+    expect(tuesday.queryByRole('button', { name: /at 4pm/ })).not.toBeInTheDocument();
+  });
+
+  it('says the week has nothing free when the only time is the current one', () => {
+    setupBooking(moving({ moving: { startsAt: '2026-09-22T16:00:00Z', agreed: true } }), {
+      slots: [slot(16, true, 22)],
+    });
+    expect(screen.getByText('Ada has no times free in the next 7 days.')).toBeInTheDocument();
+  });
+
+  it('marks nothing outside reschedule mode', () => {
+    setupBooking(booking({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } }));
+    expect(screen.queryByRole('region', { name: /Moving your debate/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/the current time$/)).not.toBeInTheDocument();
+  });
+
+  it('offers None of these work under the week, and under an empty one', async () => {
+    const onPress = vi.fn();
+    const { user } = setupBooking(moving({ noTimeWorks: { action: 'cancel', onPress, pending: false, error: null } }));
+
+    await user.click(screen.getByRole('button', { name: 'Cancel and ask Ada to pick a time' }));
+    expect(onPress).toHaveBeenCalledTimes(1);
+
+    cleanup();
+    setupBooking(moving({ noTimeWorks: { action: 'cancel', onPress, pending: false, error: null } }), { slots: [] });
+    expect(screen.getByRole('button', { name: 'Cancel and ask Ada to pick a time' })).toBeInTheDocument();
+  });
+
+  // Review of #2979: the time being moved never hides behind "+N more".
+  it('names the decline before asking an unanswered invite to pick a time', async () => {
+    const onPress = vi.fn();
+    const { user } = setupBooking(
+      moving({
+        moving: { startsAt: '2026-09-22T17:00:00Z', agreed: false },
+        noTimeWorks: { action: 'decline', onPress, pending: false, error: null },
+      })
+    );
+    await user.click(screen.getByRole('button', { name: 'Decline and ask Ada to pick a time' }));
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the current time among the chips before the expander', () => {
+    setupBooking(moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } }), {
+      slots: [9, 10, 11, 12, 13].map(hour => slot(hour, true, 22)),
+    });
+
+    const tuesday = within(day('2026-09-22'));
+    expect(tuesday.getByLabelText(/at 5pm, the current time$/)).toBeInTheDocument();
+    expect(tuesday.getByRole('button', { name: /^\+2 more times/ })).toBeInTheDocument();
+  });
+
+  it('opens a day on a picked slot the current time pushed past the fold', () => {
+    render(
+      <PeerAvailabilityView
+        schedule={schedule({ slots: [9, 10, 11, 12, 13].map(hour => slot(hour, true, 22)) })}
+        peerName="Ada"
+        now={NOW}
+        booking={moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } })}
+        initialSelectedStart="2026-09-22T12:00:00Z"
+      />
+    );
+
+    const tuesday = within(day('2026-09-22'));
+    expect(tuesday.getByRole('button', { name: /at 12pm/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(tuesday.getByRole('button', { name: /^Show less/ })).toBeInTheDocument();
+  });
+
+  it('opens the day when the time being moved lands after a pick and pushes it past the fold', async () => {
+    const slots = [9, 10, 11, 12, 13].map(hour => slot(hour, true, 22));
+    const view = (book: PeerAvailabilityBooking) => (
+      <PeerAvailabilityView schedule={schedule({ slots })} peerName="Ada" now={NOW} booking={book} />
+    );
+    const user = userEvent.setup();
+    const { rerender } = render(view(moving({ moving: null })));
+    await user.click(within(day('2026-09-22')).getByRole('button', { name: /at 12pm/ }));
+
+    rerender(view(moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } })));
+
+    expect(within(day('2026-09-22')).getByRole('button', { name: /at 12pm/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // Review of #2979, round 4.
+  it('will not propose a pick that turned out to be the time being moved', async () => {
+    const slots = [16, 18].map(hour => slot(hour, true, 22));
+    const view = (book: PeerAvailabilityBooking) => (
+      <PeerAvailabilityView schedule={schedule({ slots })} peerName="Ada" now={NOW} booking={book} />
+    );
+    const user = userEvent.setup();
+    const { rerender } = render(view(moving({ moving: null })));
+    await user.click(within(day('2026-09-22')).getByRole('button', { name: /at 4pm/ }));
+    expect(screen.getByRole('button', { name: 'Propose new time' })).toBeEnabled();
+
+    rerender(view(moving({ moving: { startsAt: '2026-09-22T16:00:00Z', agreed: true } })));
+
+    expect(screen.getByRole('button', { name: 'Propose new time' })).toBeDisabled();
+  });
+
+  it('still opens the day for a new pick hidden after the viewer folded it', async () => {
+    const slots = [9, 10, 11, 12, 13].map(hour => slot(hour, true, 22));
+    const view = (book: PeerAvailabilityBooking) => (
+      <PeerAvailabilityView schedule={schedule({ slots })} peerName="Ada" now={NOW} booking={book} />
+    );
+    const user = userEvent.setup();
+    const { rerender } = render(view(moving({ moving: null })));
+    const tuesday = () => within(day('2026-09-22'));
+    await user.click(tuesday().getByRole('button', { name: /^\+1 more times/ }));
+    await user.click(tuesday().getByRole('button', { name: /^Show less/ }));
+    await user.click(tuesday().getByRole('button', { name: /at 12pm/ }));
+
+    rerender(view(moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } })));
+
+    expect(tuesday().getByRole('button', { name: /at 12pm/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('keeps a day folded for the pick the viewer folded it with', async () => {
+    render(
+      <PeerAvailabilityView
+        schedule={schedule({ slots: [9, 10, 11, 12, 13].map(hour => slot(hour, true, 22)) })}
+        peerName="Ada"
+        now={NOW}
+        booking={moving({ moving: { startsAt: '2026-09-22T17:00:00Z', agreed: true } })}
+        initialSelectedStart="2026-09-22T12:00:00Z"
+      />
+    );
+    const tuesday = within(day('2026-09-22'));
+    await userEvent.setup().click(tuesday.getByRole('button', { name: /^Show less/ }));
+    expect(tuesday.queryByRole('button', { name: /at 12pm/ })).not.toBeInTheDocument();
+  });
+
+  it('holds both actions while the other is in flight', async () => {
+    const { user } = setupBooking(
+      moving({
+        disabled: true,
+        noTimeWorks: { action: 'cancel', onPress: vi.fn(), pending: false, disabled: true, error: null },
+      }),
+      { slots: [slot(16, true, 22)] }
+    );
+    await user.click(screen.getByRole('button', { name: /at 4pm/ }));
+    expect(screen.getByRole('button', { name: 'Propose new time' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel and ask Ada to pick a time' })).toBeDisabled();
+  });
+
+  it('shows it sending, and why it failed', () => {
+    setupBooking(
+      moving({
+        noTimeWorks: { action: 'cancel', onPress: vi.fn(), pending: true, error: 'This debate is no longer on.' },
+      })
+    );
+    expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled();
+    expect(screen.getByText('This debate is no longer on.')).toBeInTheDocument();
   });
 });

@@ -25,7 +25,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(mocks.search),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated }),
 }));
 
@@ -36,6 +36,9 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
     return mocks.openSignIn;
   },
 }));
+
+// Its own sign-in would overwrite the sign-in options captured above; it has its own suite.
+vi.mock('~/partials/notifications/email-settings-deep-link', () => ({ EmailSettingsDeepLink: () => null }));
 
 vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
   useDebatesHub: () => ({

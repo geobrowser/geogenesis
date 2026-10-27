@@ -2,69 +2,86 @@
 
 import * as React from 'react';
 
-import { ActionSurfaceArticle } from '~/core/action-context-provider';
+import cx from 'classnames';
+import { useSetAtom } from 'jotai';
+
+import { ActionSurfaceArticle, useActionScope } from '~/core/action-context-provider';
 import type { Debate } from '~/core/debates/api';
-import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
+import { DEBATE_CARD_WRAPS_BELOW, debateCardColumnWidth } from '~/core/debates/browse/debate-card-column-width';
+import { DebateClaimFooter } from '~/core/debates/browse/debate-claim-footer';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
-import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
+import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
+import { DebateShareDialog } from '~/core/debates/browse/lazy-share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
-import { openRebuttalRoundCount } from '~/core/debates/open-rounds';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
-import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
+import { fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
+import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
+import { useCoveredByMobileSheet } from '~/core/state/mobile-sheet-cover';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FullscreenLink } from '~/design-system/fullscreen-link';
 
 import { DebateExploreMetaRow } from './debate-explore-meta-row';
 import { ExploreCardTitle } from './explore-card-title';
+import { openExploreDebateClaimsPanelAtom } from '~/atoms';
 
-/** Visible fraction at which a card takes over playback, and the one it must fall back to
- * before it gives it up. Strictly between them the card keeps whatever state it had. */
+/** Visibility thresholds, relative to the viewport height when the card is taller than it.
+ * Strictly between them the card keeps whatever state it had. */
 const ACTIVATE_RATIO = 0.6;
 const DEACTIVATE_RATIO = 0.4;
 
 /**
- * How wide the card's column — meta row, title, media and bar — is allowed to get.
+ * How wide the card's column — the framed media, meta row, claim, pill row and split band — is
+ * allowed to get.
  *
  * Width is what sets height here, so this is really a height budget. The two tiles are
- * `aspect-480/289` with an 8px gap between them, so the media is `1.2042 × width + 8` — measured
- * at 682px against a predicted 682.3px on a 560px column. Everything else is a reserve, and
- * `calc(83dvh - 178px)` is `width ≤ (dvh − 44 − 170) / 1.2042`: the 44px app header, and ~170px
- * for the card's own chrome.
+ * `aspect-480/289` with no gap, inside the card's 1px frame, so the media is `1.2042 × (width − 2)`.
+ * Everything else is a reserve, and `calc(83dvh - 228px)` is `width ≤ (dvh − 44 − 32 − 197) / 1.2042`:
+ * the 44px app header, the article's 32px of padding, and 197px for the card's chrome under the
+ * media.
  *
- * That reserve is deliberately loose rather than exact, because the chrome is not one fixed
- * number. Measured, it is 128px with a one-line heading and 151px with the two lines the clamp
- * allows — leaving about 19px spare at the worst case the heading can reach.
+ * Measured in Chrome (GEO-3454), that chrome is 154px with a one-line claim and 177px with the two
+ * lines the clamp allows, borders included, plus 17px under a signed-out vote's "Not counted yet"
+ * note — so the worst case the card can reach still leaves a few pixels spare. The meta row carries
+ * the Join chip, which is what makes it taller here than on the full-screen card.
  *
- * Which is what absorbs a meta row that wraps. That row is `flex-wrap`, and its widest state
- * ("Membership pending" beside a long space name) does take a second line — measured at 41px
- * against the usual 24px. It only does so once the column is down at its 320px floor, where the
- * clamp has stopped binding and there is far more than 17px going spare; and even inside the
- * binding range the worst case would be 168px against the 170px reserved. Verified by measurement
- * across widths 390–1440 and heights 600–1000 with that state forced: nothing overflows.
+ * In a card narrower than 356px (a 330px row, `claim-row-end-inline`) the comments and share drop
+ * under the pills and add a 36px row the 197px does not hold, so there the card takes a budget 30px
+ * narrower that does; see `debateCardColumnWidth`.
  *
- * So the column tracks the viewport rather than sitting at a fixed 480px — 486px at an 800px
- * viewport, 403px at 700px — up to the 560px cap, which the budget clears from about an 890px
+ * So the column tracks the viewport rather than sitting at a fixed width — 519px at a 900px
+ * viewport, 436px at 800px — up to the 560px cap, which the budget clears from about a 950px
  * viewport and which is there so a tall display gets a wider card and not a different design.
- * The 320px floor gives the promise up below roughly a 600px viewport, where honouring it would
- * mean a video too small to read a face in.
+ * Under about a 704px viewport it steps down to the wrapped budget, and the 320px floor gives the
+ * promise up below about 696px, where honouring it would mean a video too small to read a face in.
  *
  * The same trick, and the same reason, as `--debate-feed-column-width` on the full-screen feed:
  * `dvh` there too, because the media has to fit the viewport it is being watched in.
  *
- * Keep the arithmetic and the layout together — a change to `py-4`, the title clamp, the bar or
- * the media gap moves the 178px, and nothing else will notice.
+ * Not on phones (`md:max-w-full`), where the card takes the feed's width. `dvh` there follows the
+ * browser's toolbars, which collapse and return as the page scrolls, so a card sized by it changed
+ * width under the reader on every scroll — 320px with Safari's toolbars up, full width with them
+ * down (GEO-3454). The phone feed scrolls freely, so there is no screen to fit a card into anyway.
+ *
+ * Compact gallery cards also use their container's width: the gallery already sets a narrow
+ * reading width, so another height budget would only squeeze the controls inside it.
+ *
+ * Keep the arithmetic and the layout together — a change to `py-4`, the claim clamp, the pill row
+ * or the split band moves the 228px, a change to the row's wrap point moves the 356px, and nothing
+ * else will notice.
  */
+const DEBATE_CARD_COLUMN_BUDGET = debateCardColumnWidth('83dvh - 228px', DEBATE_CARD_WRAPS_BELOW);
+
 const DEBATE_CARD_COLUMN_STYLE = {
-  '--debate-card-column-width': 'clamp(320px, calc(83dvh - 178px), 560px)',
+  '--debate-card-column-width': `clamp(320px, ${DEBATE_CARD_COLUMN_BUDGET}, 560px)`,
 } as React.CSSProperties;
 
 /**
@@ -73,14 +90,14 @@ const DEBATE_CARD_COLUMN_STYLE = {
  * `fullWidth` means "this column is already the reading width, don't cap it at the card's 560px" —
  * it does not mean "stop fitting the viewport". Dropping the budget outright made a debate on the
  * claim page's 840px column about 1140px tall (two `aspect-480/289` tiles at ~800px), so on a
- * 900px viewport the second debater and the interaction bar could not be seen together — which is
+ * 900px viewport the second debater and the claim under it could not be seen together — which is
  * the single thing the budget above exists to guarantee.
  *
  * `min` with `100%` rather than a larger constant: the ceiling is whatever column the card was
  * given, so this is right at 840px and at any other width a host passes.
  */
 const DEBATE_CARD_FULL_WIDTH_STYLE = {
-  '--debate-card-column-width': 'max(320px, min(calc(83dvh - 178px), 100%))',
+  '--debate-card-column-width': `max(320px, min(${DEBATE_CARD_COLUMN_BUDGET}, 100%))`,
 } as React.CSSProperties;
 
 type DebateExploreFeedCardProps = {
@@ -91,7 +108,7 @@ type DebateExploreFeedCardProps = {
   hideJoinButton?: boolean;
   /** Whether the claim title opens the side panel rather than navigating (same semantics as ExploreFeedCard). */
   titleOpensSidePanel?: boolean;
-  /** Compact title and metadata treatment used by the narrow profile Activity rail. */
+  /** Compact gallery chrome; comments and sharing are reached through the full-screen link. */
   compactChrome?: boolean;
   /**
    * Raise the column's ceiling from the card's 560px to the container's own width. For a surface
@@ -122,14 +139,14 @@ type DebateExploreFeedCardProps = {
 
 /**
  * The explore-feed rendition of a published Debate: the same two synchronized debater videos as
- * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting) over the
- * same interaction bar, framed in the explore card chrome — meta row, claim title, media sized to
- * the viewport, and a control that opens this debate at full size.
+ * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting), in the same
+ * card — the claim and the reader's side on it under the media, which is sized to the viewport —
+ * with a control that opens this debate at full size.
  *
- * Both renditions render `DebateFeedPlayer` and `DebateInteractionBar`, so everything inside the
- * debate itself — the videos, the debater identities and position chips, the winner share, the
- * vote pill and the counts — is one component in both places rather than two that look alike
- * (GEO-2912).
+ * Both renditions render `DebateFeedPlayer` and `DebateClaimFooter`, so everything about the debate
+ * itself — the videos, the debater identities and position chips, the winner share, the claim's
+ * pills and split, and the counts — is one component in both places rather than two that look
+ * alike (GEO-2912, GEO-3454).
  */
 export function DebateExploreFeedCard({
   item,
@@ -159,29 +176,83 @@ export function DebateExploreFeedCard({
   // Hysteresis, not a single ratio: this used to activate on `intersectionRatio >= 0.6` and
   // deactivate on anything less, so a card resting near that boundary toggled on every small
   // scroll delta. Unlike the full-screen feed — a snap container where exactly one full-height
-  // card can clear 0.6, and activation only ever moves — these cards are short, several are on
-  // screen at once, and nothing else holds a card active. Each toggle starts or interrupts a
+  // card can clear 0.6, and activation only ever moves — these cards scroll freely, several can be
+  // on screen at once, and nothing else holds a card active. Each toggle starts or interrupts a
   // playback attempt, which is what made scrolling feel glitchy (GEO-2895).
   //
-  // Now: reach 0.6 to activate, fall back to 0.4 to give it up, and hold whatever the card
-  // already was strictly between them. The lower edge is inclusive so that the observer's
-  // report at the 0.4 threshold deactivates rather than landing ambiguously inside the band —
-  // a ratio reported exactly at a threshold is the normal case, not an edge case.
+  // Reach 0.6 to activate, fall back to 0.4 to give it up, and hold between them. For a card taller
+  // than the viewport, measure against the viewport's height instead: a full-width landscape card
+  // cannot expose 60% of itself. Scale the observer's thresholds too, so it actually reports those
+  // crossings. Resize only the observation when the card or viewport changes, never the card.
   const [active, setActive] = React.useState(false);
+  // Any part of the card on screen. The observer reports crossing in and out of view as well as
+  // its two thresholds, so this needs no threshold of its own.
+  const [onScreen, setOnScreen] = React.useState(false);
+  React.useEffect(() => {
+    if (!container) return;
+    let observer: IntersectionObserver | undefined;
+    let observedHeight = -1;
+    let observedViewportHeight = -1;
+    const observeVisibility = () => {
+      const height = container.getBoundingClientRect().height;
+      const viewportHeight = window.innerHeight;
+      if (height === observedHeight && viewportHeight === observedViewportHeight) return;
+      observedHeight = height;
+      observedViewportHeight = viewportHeight;
+      observer?.disconnect();
+
+      // Keep the horizontal intersection in the ratio: a gallery card clipped at the rail's edge
+      // must still earn its visible width. Only the unattainable vertical fraction is removed.
+      const scale = height > 0 && viewportHeight > 0 ? Math.min(1, viewportHeight / height) : 1;
+      const activateAt = ACTIVATE_RATIO * scale;
+      const deactivateAt = DEACTIVATE_RATIO * scale;
+      observer = new IntersectionObserver(
+        entries => {
+          for (const entry of entries) {
+            setOnScreen(entry.isIntersecting);
+            setActive(current => {
+              if (!entry.isIntersecting) return false;
+              if (entry.intersectionRatio >= activateAt) return true;
+              if (entry.intersectionRatio <= deactivateAt) return false;
+              return current;
+            });
+          }
+        },
+        { threshold: [deactivateAt, activateAt] }
+      );
+      observer.observe(container);
+    };
+    observeVisibility();
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(observeVisibility);
+    resizeObserver?.observe(container);
+    window.addEventListener('resize', observeVisibility);
+    return () => {
+      observer?.disconnect();
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', observeVisibility);
+    };
+  }, [container]);
+
+  /*
+   * Whether this card is the one the viewer is scrolling towards: its top in the lower three
+   * quarters of the screen or within one screen below it, and not yet active. The player loads such a card's
+   * opening seconds (its `buffer`) so it starts the moment it is reached instead of on its clips.
+   * Ahead only — a card the viewer has scrolled past is not coming back on its own.
+   *
+   * Its own observer, on a root extended one screen down, with enough thresholds to notice a card
+   * leaving through the top as well as one arriving from below.
+   */
+  const [upNext, setUpNext] = React.useState(false);
   React.useEffect(() => {
     if (!container) return;
     const observer = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
-          setActive(current => {
-            if (!entry.isIntersecting) return false;
-            if (entry.intersectionRatio >= ACTIVATE_RATIO) return true;
-            if (entry.intersectionRatio <= DEACTIVATE_RATIO) return false;
-            return current;
-          });
+          const viewportHeight = entry.rootBounds?.height ?? window.innerHeight;
+          setUpNext(entry.isIntersecting && entry.boundingClientRect.top > viewportHeight / 4);
         }
       },
-      { threshold: [DEACTIVATE_RATIO, ACTIVATE_RATIO] }
+      { rootMargin: '0px 0px 100% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] }
     );
     observer.observe(container);
     return () => observer.disconnect();
@@ -192,6 +263,16 @@ export function DebateExploreFeedCard({
   // is this one's turn. A card that is allowed but scrolled away still stops,
   // because its own judgement above is unchanged.
   const playbackAllowed = useDebatePlaybackAllowed(debateId);
+  // A card nobody can see stops playing and lets go of its media: behind a mobile sheet (the side
+  // panel, the Debates hub), or off screen on the mobile layout. Paused video still holds its
+  // decoders and buffered frames, and on a phone that adds up to a reloaded tab. The card keeps its
+  // signed URLs, so it reattaches quickly (GEO-3067's `releaseMedia`). Cards inside a sheet, like a
+  // profile's Activity gallery, are not covered by it. Desktop keeps off-screen cards loaded so
+  // the next one starts at once.
+  const coveredBySheet = useCoveredByMobileSheet();
+  const isMobileLayout = useIsMobileLayout();
+  // The card up next keeps its media too, so what it has loaded is there when it arrives.
+  const releaseMedia = coveredBySheet || (isMobileLayout && !onScreen && !upNext);
 
   const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
@@ -213,11 +294,10 @@ export function DebateExploreFeedCard({
   /**
    * Whether this card is carrying a debate's resources at all.
    *
-   * The same window that governs the player (GEO-2963), because the controls needing a debate are
-   * part of what that window releases: leaving it drops the two video elements, and it drops the
-   * transcript-claims subscription behind the Claims count with them. A row deep in the feed keeps
-   * its votes and its comment count — neither asks geo-chat anything — and gets the rest back on
-   * the way past.
+   * The same window that governs the player (GEO-2963): leaving it drops the two video elements,
+   * and Share stands down with them. The claim footer stays drawn — its pills and split are part of
+   * the card's height, and dropping them would move everything below as a card left the window —
+   * and keeps the reads it has started, which are cheap and cached.
    */
   const mediaMounted = readyDebate != null && nearViewport && !notWatchable;
 
@@ -241,7 +321,6 @@ export function DebateExploreFeedCard({
   }, [active, debateId, mediaMounted, onPlaybackRequest]);
 
   const requestPlayback = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!onPlaybackRequest) return;
     // Clicks that are not asks to play pass straight through. A finished debate's end card is drawn
     // inside this wrapper, and its vote, its voter list and its way into the claims panel are not
     // media controls — capturing them swallowed the vote and handed playback to a debate that had
@@ -252,6 +331,13 @@ export function DebateExploreFeedCard({
     const onEndCard = target instanceof Element && target.closest('[data-debate-end-card]') !== null;
     const isReplay = target instanceof Element && target.closest('[data-end-card-replay]') !== null;
     if (onEndCard && !isReplay) return;
+    if (!onPlaybackRequest) {
+      // Let the player's handler keep the play request, but leave activation to visibility. Forcing
+      // this card active in place could play it over the previous card, and a toolbar resize would
+      // immediately undo that activation while it was still below the lower threshold.
+      if (!active) container?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      return;
+    }
     if (active && playbackAllowed) {
       pendingPlaybackRequestRef.current = false;
       onPlaybackRequest(debateId);
@@ -288,21 +374,21 @@ export function DebateExploreFeedCard({
     return () => onPlaybackAvailabilityChange(debateId, false);
   }, [debateId, mediaMounted, onPlaybackAvailabilityChange]);
 
-  // The interaction state lives on the card rather than inside the bar: the bar is shared with the
-  // full-screen feed and stays presentational, so what a control opens — the claims overlay, the
-  // share dialog, the app's comments panel — is the card's to own and to render once. Same
-  // arrangement, same reason, as `DebateFeedItem` on the full-screen feed.
-  const [claimsOpen, setClaimsOpen] = React.useState(false);
+  // The panel is drawn by `ExploreDebateClaimsPanelHost`, so the app has one of it and a card that
+  // unmounts (paging, or sitting inside the entity side panel this replaces) doesn't take it along.
+  // A ref: the merged scope is a fresh object each render.
+  const scope = useActionScope();
+  const scopeRef = React.useRef(scope);
+  React.useEffect(() => {
+    scopeRef.current = scope;
+  });
+  const setClaimsPanel = useSetAtom(openExploreDebateClaimsPanelAtom);
   // Stable, because `DebateCardVideos` is memoized and a fresh function each render would undo it.
-  const openClaims = React.useCallback(() => setClaimsOpen(true), []);
+  const openClaims = React.useCallback(() => {
+    if (readyDebate) setClaimsPanel({ debateId, debate: readyDebate, scope: scopeRef.current });
+  }, [debateId, readyDebate, setClaimsPanel]);
   const share = useDebateShareAction();
   const { commentsTarget, openComments } = useEntityCommentsPanel();
-  // Nulls read as "not enabled", which is how the count stands down with the media above. Shares a
-  // cache entry with the Claims panel, so opening the panel doesn't refetch what this loaded.
-  const { claims } = useDebateTranscriptClaims(
-    mediaMounted ? readyDebate.id : null,
-    mediaMounted ? readyDebate.claim.space_id : null
-  );
   // The feed's count is server-rendered and frozen: posting from the panel this pill opens writes
   // the new row into the comments cache and nothing re-runs that count, so the number sat one
   // behind the list it describes until a reload. This follows the cache instead, and costs no
@@ -316,107 +402,107 @@ export function DebateExploreFeedCard({
   }
 
   /**
-   * Comments and counts differ from the full-screen feed only in where they come from and where
-   * they lead, never in how they look:
+   * Comments and share differ from the full-screen feed only in where they come from and where they
+   * lead, never in how they look:
    *  - Comments open the app's global panel, as they do from every other explore card, instead of
    *    the feed's own side rail.
    *  - The comment count starts from the one the explore feed server-rendered for the card and
    *    then follows the comments cache, rather than reading a thread of its own per card.
-   *  - Claims and Share stand down until the debate is both resolved and in the media window —
-   *    votes and comments need no debate, those two do — so the footer is present from the first
-   *    paint and doesn't shift the card under the reader when the geo-chat lookups land.
+   *  - Share stands down until the debate is both resolved and in the media window — comments need
+   *    no debate, share does — so the row is present from the first paint and doesn't shift the
+   *    card under the reader when the geo-chat lookups land.
    */
-  const interactionProps = {
-    entityId: item.entityId,
-    spaceId: item.spaceId,
-    commentCount,
-    commentsPanelOpen: commentsTarget?.entityId === item.entityId,
-    onComment: () => openComments(item.entityId, item.spaceId, 'debate'),
-    claimsCount: claims.totalCount,
-    // See the prop's own note: an explore card can be a data block row listing a debate from
-    // another space, and only the lookup finds that space's votes.
-    responseKind: 'infer' as const,
-    onClaims: mediaMounted ? () => openClaims() : undefined,
-    onShare: mediaMounted ? share.onOpen : undefined,
-    shareOpen: share.open,
-    // From the debate lookup, so it arrives with Claims and Share; drawn last in the row so landing
-    // late shifts none of the controls before it.
-    rebuttalRounds: debate ? openRebuttalRoundCount(debate) : null,
-  };
+  const actions = compactChrome ? null : (
+    <DebateInteractionBar
+      commentCount={commentCount}
+      commentsPanelOpen={commentsTarget?.entityId === item.entityId}
+      onComment={() => openComments(item.entityId, item.spaceId, 'debate')}
+      onShare={mediaMounted ? share.onOpen : undefined}
+      shareOpen={share.open}
+    />
+  );
 
   return (
     <ActionSurfaceArticle
       ref={setContainer}
-      className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0"
+      className={cx('flex flex-col', !compactChrome && 'border-b border-divider py-4 last:border-b-0')}
     >
-      {/* Meta, title, media and the interaction bar share one column, capped so the whole card
-          fits the viewport it is watched in — see {@link DEBATE_CARD_COLUMN_STYLE}. A cap rather
-          than the full column width because feed columns, especially data blocks, can be much
-          wider and a full-bleed video dwarfs the card. Capping the column rather than the media
-          alone is what lines "Join a debate" up with the videos' right edge instead of the card's,
-          and what keeps the bar beneath the videos the same width as them. */}
+      {/* The card is one column, capped so the whole card fits the viewport it is watched in — see
+          {@link DEBATE_CARD_COLUMN_STYLE}. A cap rather than the full column width because feed
+          columns, especially data blocks, can be much wider and a full-bleed video dwarfs the card. */}
       <div
-        className="flex w-full max-w-[var(--debate-card-column-width)] min-w-0 flex-col gap-2"
-        style={fullWidth ? DEBATE_CARD_FULL_WIDTH_STYLE : DEBATE_CARD_COLUMN_STYLE}
+        className={cx(
+          'flex w-full min-w-0 flex-col overflow-hidden border border-grey-02 bg-white',
+          compactChrome ? 'max-w-full' : 'max-w-[var(--debate-card-column-width)] md:max-w-full',
+          compactChrome ? 'rounded-lg' : 'rounded-xl'
+        )}
+        style={compactChrome ? undefined : fullWidth ? DEBATE_CARD_FULL_WIDTH_STYLE : DEBATE_CARD_COLUMN_STYLE}
       >
-        {/* The way out of the card and into the debate at full size. This corner used to hold
-            "View all", a link to the space's whole debates list. Since GEO-2879 headed the card
-            with the claim, the entity link moved here so it says "bigger" rather than competing
-            with the claim for the heading. The shared metadata keeps fallback cards identical. */}
-        <DebateExploreMetaRow
-          item={item}
-          hideSpaceLink={hideSpaceLink}
-          hideJoinButton={hideJoinButton}
-          compact={compactChrome}
-          endSlot={
-            <div className="ml-auto flex shrink-0 items-center gap-1">
-              {endSlot}
-              <FullscreenLink
-                requiresFullPage
-                href={NavUtils.toEntity(item.spaceId, item.entityId)}
-                entityId={item.entityId}
-                spaceId={item.spaceId}
-                ariaLabel="Watch this debate full screen"
-              />
-            </div>
-          }
-        />
-
-        {/* Two lines, as the full-screen header clamps the same claim to, and what this card's
-            height budget is calculated against — a third line is 23px the viewport was not
-            promised. Only the debate card asks for it, because only the debate card has fixed
-            aspect-ratio media whose height follows from the space the title leaves it. */}
-        <ExploreCardTitle
-          item={item}
-          opensSidePanel={titleOpensSidePanel}
-          clamped
-          showFullTextOnHover={compactChrome}
-        />
-
-        <div onClickCapture={mediaMounted && onPlaybackRequest ? requestPlayback : undefined}>
+        {/* The videos first, then the claim they argue and the reader's side on it, in one frame —
+            the same card the full-screen feed draws (GEO-3454). The frame is the card's, so the
+            player and its stand-ins draw no corners of their own. */}
+        <div onClickCapture={mediaMounted ? requestPlayback : undefined}>
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
             <DebateCardVideos
               debate={readyDebate}
-              active={active && playbackAllowed}
+              stills={item.debatePosters}
+              active={active && playbackAllowed && !coveredBySheet}
+              upNext={upNext && !active && !coveredBySheet}
+              releaseMedia={releaseMedia}
               reducedOverlays={compactChrome}
               onOpenClaims={openClaims}
             />
+          ) : item.debatePosters ? (
+            <DebatePosterSkeleton debateId={debateId} posters={item.debatePosters} />
           ) : (
             <DebateVideoSkeleton />
           )}
         </div>
 
-        {/* Beneath the videos, the same width as them. Full screen carries this bar in a rail down
-            the media's right at desktop widths and moves it here at narrow ones; a card is short
-            and wide where full screen is tall, so it takes the horizontal arrangement at every
-            width. Same component, same controls, same counts — only the axis differs, and that is
-            a difference full screen already makes with itself. Wrapper carries the margin so it
-            doesn't collide with the bar's own `flex`. */}
-        <div className="mt-1">
-          <DebateInteractionBar orientation="horizontal" compact={compactChrome} {...interactionProps} />
-        </div>
+        <DebateClaimFooter
+          // On `readyDebate`, so the footer outlives the media window (see `mediaMounted`); its reads
+          // start the first time the card is in it.
+          claim={readyDebate?.claim ?? null}
+          enabled={mediaMounted}
+          // The way out of the card and into the debate at full size sits at the end of the meta
+          // row. The shared metadata keeps fallback cards' space and offer identical; the type tag
+          // is left to them, since the card's own shape says what it is.
+          meta={
+            <DebateExploreMetaRow
+              item={item}
+              hideSpaceLink={hideSpaceLink}
+              hideJoinButton={hideJoinButton}
+              hideTypeTag
+              compact={compactChrome}
+              endSlot={
+                <div className="ml-auto flex shrink-0 items-center gap-1">
+                  {endSlot}
+                  <FullscreenLink
+                    requiresFullPage
+                    href={NavUtils.toEntity(item.spaceId, item.entityId)}
+                    entityId={item.entityId}
+                    spaceId={item.spaceId}
+                    ariaLabel="Watch this debate full screen"
+                  />
+                </div>
+              }
+            />
+          }
+          // Two lines, as the full-screen title clamps the same claim to, and what this card's
+          // height budget is calculated against — a third line is 23px the viewport was not
+          // promised.
+          title={
+            <ExploreCardTitle
+              item={item}
+              opensSidePanel={titleOpensSidePanel}
+              clamped
+              showFullTextOnHover={compactChrome}
+            />
+          }
+          actions={actions}
+        />
       </div>
 
       {/* On `readyDebate`, not on `mediaMounted` like the controls that open these. What the media
@@ -424,26 +510,15 @@ export function DebateExploreFeedCard({
           is being looked at. Both of these are fixed overlays over a feed that still scrolls, so
           gating them on the window meant scrolling past the card they came from tore the panel
           away mid-read — and, because the open flags live on the card now rather than in a subtree
-          that unmounted with them, left them set, so scrolling back reopened it unasked. The
-          claims panel loads its own claims, so it does not go empty when the card's count stands
-          down beside it. */}
-      {readyDebate ? (
-        <>
-          <DebateShareDialog
-            open={share.open}
-            onOpenChange={share.onOpenChange}
-            debate={readyDebate}
-            spaceId={item.spaceId}
-            openerRef={share.openerRef}
-          />
-          {/* A right-hand overlay rather than the feed's side rail, since the explore feed has no
-              rail to put it in. The panel itself is the same component. */}
-          {claimsOpen ? (
-            <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
-              <DebateClaimsPanel debate={readyDebate} onClose={() => setClaimsOpen(false)} />
-            </div>
-          ) : null}
-        </>
+          that unmounted with them, left them set, so scrolling back reopened it unasked. */}
+      {readyDebate && !compactChrome ? (
+        <DebateShareDialog
+          open={share.open}
+          onOpenChange={share.onOpenChange}
+          debate={readyDebate}
+          spaceId={item.spaceId}
+          openerRef={share.openerRef}
+        />
       ) : null}
     </ActionSurfaceArticle>
   );
@@ -457,31 +532,81 @@ export function DebateExploreFeedCard({
 // there is no reason to re-run the whole subtree for a flag it does not read.)
 const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
+  stills,
   active,
+  upNext,
+  releaseMedia,
   reducedOverlays,
   onOpenClaims,
 }: {
   debate: Debate;
+  stills: ExploreFeedItem['debatePosters'];
   active: boolean;
+  upNext: boolean;
+  releaseMedia: boolean;
   reducedOverlays: boolean;
   onOpenClaims: () => void;
 }) {
   return (
     <DebateFeedPlayer
       debate={debate}
+      stills={stills}
       active={active}
       preload
+      buffer={upNext}
+      releaseMedia={releaseMedia}
+      holdFullPlayback={DEBATE_FEED_HOLDS_FULL_PLAYBACK}
       reducedOverlays={reducedOverlays}
+      framed
       onOpenClaims={onOpenClaims}
     />
   );
 });
 
+/**
+ * The lead debate's stills, painted from the feed response itself (GEO-3280), until the debate and
+ * its media resolve and the player takes over with the same two images. Laid out as the player is,
+ * one surface with no gap, so the handover does not move anything. A missing still leaves its tile
+ * grey, as the player does.
+ */
+function DebatePosterSkeleton({
+  debateId,
+  posters,
+}: {
+  debateId: string;
+  posters: NonNullable<ExploreFeedItem['debatePosters']>;
+}) {
+  return (
+    <div className="flex flex-col overflow-hidden" aria-hidden="true">
+      {[posters.slot1, posters.slot2].map((src, index) => (
+        <div key={index} className="relative aspect-480/289 w-full overflow-hidden bg-grey-01">
+          {src ? (
+            <img
+              src={src}
+              // The feed may hand over a presigned storage URL; a lapsed one falls back to the durable route.
+              onError={fallBackToDurableStill(speakerStillContentUrl(debateId, index === 0 ? 1 : 2))}
+              alt=""
+              data-debate-poster=""
+              draggable={false}
+              // The lead card's stills are the page's largest paint, so they go out eagerly and ahead
+              // of the other images.
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            />
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DebateVideoSkeleton() {
   return (
-    <div className="flex flex-col gap-2" aria-hidden="true">
-      <div className="aspect-480/289 w-full animate-pulse rounded-lg bg-grey-01" />
-      <div className="aspect-480/289 w-full animate-pulse rounded-lg bg-grey-01" />
+    <div className="flex flex-col" aria-hidden="true">
+      <div className="aspect-480/289 w-full animate-pulse bg-grey-01" />
+      <div className="aspect-480/289 w-full animate-pulse bg-grey-01" />
     </div>
   );
 }

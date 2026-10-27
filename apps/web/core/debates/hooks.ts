@@ -1,6 +1,5 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import {
   type Query,
   type QueryClient,
@@ -21,8 +20,10 @@ import { fromPayload, localTimezone, toPayload } from '~/core/availability/block
 import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
 import { type ScheduleEditorSurface, debateScheduleSaved } from '~/core/availability/schedule-analytics';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import {
+  type CreateDebateChallengeBody,
   type Debate,
   type DebateActivity,
   type DebateClaimsResponse,
@@ -33,6 +34,7 @@ import {
   type DebateParticipantSummary,
   type DebateRematchClaimsResponse,
   type DebateRematchParticipant,
+  type DebateRematchSession,
   type DebateScheduleResponse,
   GEO_CHAT_CLAIM_IDS_PER_REQUEST,
   GeoChatRequestError,
@@ -89,7 +91,7 @@ import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
-import type { RecordingPlaybackVariant } from './mobile-rendition';
+import { lobbyDebateRequested } from './lobbies/lobby-analytics';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -102,7 +104,9 @@ import {
   refreshRematchClaimBatches,
   rematchClaimBatchesWithClaim,
 } from './rematch-claims-query-key';
+import { markRematchAnswered } from './rematch-join-intent';
 import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
+import type { RecordingUrlVariant } from './stream-playback';
 import { withQueryData } from './with-query-data';
 
 export const debateQueryNetworkOptions = {
@@ -132,18 +136,20 @@ export const debateQueryKeys = {
   claims: (spaceId: string, claimIds: string[] | null, accountKey: string | null) =>
     ['debates', 'claims', spaceId, claimIds ?? 'all', accountKey] as const,
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
-  debate: (debateId: string) => ['debates', 'detail', debateId] as const,
-  media: (debateId: string) => ['debates', 'media', debateId] as const,
+  /** Per-debate keys are dashless: callers hold either spelling, and both must share one entry. */
+  debate: (debateId: string) => ['debates', 'detail', dashlessId(debateId)] as const,
+  media: (debateId: string) => ['debates', 'media', dashlessId(debateId)] as const,
   /** GEO-2870. geo-chat's extracted claims for one debate, with whether its media job has finished. */
-  extractedClaims: (debateId: string) => ['debates', 'extracted-claims', debateId] as const,
+  extractedClaims: (debateId: string) => ['debates', 'extracted-claims', dashlessId(debateId)] as const,
   /** Viewer-specific: whether a recording can be read at all is decided per identity. */
   recordingUrl: (
     debateId: string,
     filename: string,
     accountKey: string | null,
-    variant: RecordingPlaybackVariant | 'original' = 'original'
+    variant: RecordingUrlVariant | 'original' = 'original'
   ) => ['debates', 'recording-url', debateId, filename, accountKey, variant] as const,
-  transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
+  transcript: (debateId: string, format: TranscriptFormat) =>
+    ['debates', 'transcript', dashlessId(debateId), format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
   /** Prefix-matchable, so saving the viewer's own schedule can drop every variant at once. */
@@ -159,14 +165,28 @@ export const debateQueryKeys = {
     calendar
       ? (['debates', 'account', accountKey, 'schedulable-people', days, limit, 'calendar', spaces.join(',')] as const)
       : (['debates', 'account', accountKey, 'schedulable-people', days, limit] as const),
+  calendarConnections: (accountKey: string | null) => ['debates', 'account', accountKey, 'calendar'] as const,
+  /** Prefix-matchable, so a calendar change can drop every window at once. */
+  calendarBusyRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'calendar-busy'] as const,
+  calendarBusy: (accountKey: string | null, from: string, to: string) =>
+    ['debates', 'account', accountKey, 'calendar-busy', from, to] as const,
+  peerScheduleRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'peer-schedule'] as const,
   /** Keyed on the viewer as well as the peer: the answer is the pair, not the person. */
   peerSchedule: (accountKey: string | null, peerUserId: string, days: number) =>
     ['debates', 'account', accountKey, 'peer-schedule', peerUserId, days] as const,
   /** Viewer-specific: presence is answered from the viewer's own side of the access list. */
   room: (accountKey: string | null, roomId: string) => ['debates', 'account', accountKey, 'room', roomId] as const,
+  /** Every room view this account has read, to invalidate them together. */
+  roomRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'room'] as const,
   upcomingRooms: (accountKey: string | null) => ['debates', 'account', accountKey, 'upcoming-rooms'] as const,
   /** GEO-3133. Patched or refetched on `debate.lobbies_changed`. */
   lobbies: (accountKey: string | null) => ['debates', 'account', accountKey, 'lobbies'] as const,
+  /**
+   * GEO-3271. Under `lobbies`, so everything that refetches the list (a lobby created, opened or
+   * closed, an RSVP, a reconnect) refetches the calendar's week too. Bounds in ms.
+   */
+  lobbyCalendar: (accountKey: string | null, from: number, to: number) =>
+    ['debates', 'account', accountKey, 'lobbies', 'calendar', from, to] as const,
   /** Refetched on a card-less `debate.lobbies_changed`. */
   myLobby: (accountKey: string | null) => ['debates', 'account', accountKey, 'my-lobby'] as const,
   /** Dashless, as `debate.lobby_changed` spells it. */
@@ -186,11 +206,11 @@ export const debateQueryKeys = {
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
-  // Deliberately NOT nested under `rematch(...)`: the gateway invalidates that prefix on every
-  // `debate.rematch_changed`, and refetching here would hand `<LiveKitRoom>` a new token and tear
-  // down the live voice connection.
-  rematchLiveKit: (accountKey: string | null, sessionId: string) =>
-    ['debates', 'account', accountKey, 'rematch-livekit', sessionId] as const,
+  // Deliberately outside the `debates` root, as the lobby's voice token is. The gateway refetches
+  // that whole root on every (re)connect, and a fresh token reaching `<LiveKitRoom>` while it is
+  // Reconnecting makes livekit-client abandon the resume and rejoin from scratch (GEO-3343) — and a
+  // network blip is exactly when the socket and the call drop together.
+  rematchLiveKit: (accountKey: string | null, sessionId: string) => ['rematch-livekit', accountKey, sessionId] as const,
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
@@ -654,9 +674,12 @@ export function useDebateSchedule() {
     queryFn: () => getDebateSchedule(getPrivyIdentityToken, accountKey),
   });
 
+  // Stable across renders and unchanged refetches: the editor tells edits apart by reference.
+  const blocks = React.useMemo(() => (query.data ? fromPayload(query.data.schedule) : undefined), [query.data]);
+
   return {
     ...query,
-    blocks: query.data ? fromPayload(query.data.schedule) : undefined,
+    blocks,
     /** Whether they have ever saved one, which several surfaces gate on. */
     isSet: query.data?.is_set ?? false,
   };
@@ -691,6 +714,8 @@ export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurf
       queryClient.setQueryData(scheduleKey, saved);
       // Who shares a slot with the viewer is computed from this schedule.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+      // An admin's request for more times is answered by saving (GEO-3228).
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
     },
   });
 }
@@ -701,7 +726,7 @@ export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurf
  * The only data access behind that view. One request: the response carries their week, the
  * viewer's own flag per slot, and `viewer_has_schedule`, so nothing else has to be read.
  */
-export function usePeerSchedule(peerUserId: string | null) {
+export function usePeerSchedule(peerUserId: string | null, days: number = PEER_SCHEDULE_DAYS) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   // Viewer-scoped and authenticated, so nothing to ask signed out or without a peer. A closed
   // dialog that stays mounted passes an empty id, not null.
@@ -709,15 +734,9 @@ export function usePeerSchedule(peerUserId: string | null) {
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: debateQueryKeys.peerSchedule(accountKey, peerUserId ?? '', PEER_SCHEDULE_DAYS),
+    queryKey: debateQueryKeys.peerSchedule(accountKey, peerUserId ?? '', days),
     queryFn: ({ signal }) =>
-      getScheduleOverlaps(
-        peerUserId as string,
-        { days: PEER_SCHEDULE_DAYS },
-        getPrivyIdentityToken,
-        accountKey,
-        signal
-      ),
+      getScheduleOverlaps(peerUserId as string, { days }, getPrivyIdentityToken, accountKey, signal),
     enabled,
   });
 
@@ -1117,19 +1136,48 @@ export function useLeaveDebateRematch(sessionId: string) {
     mutationFn: () => leaveDebateRematch(sessionId, getPrivyIdentityToken, accountKey),
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
-      const activityKey = debateQueryKeys.activity(accountKey);
-      const activity = queryClient.getQueryData<DebateActivity>(activityKey);
-      if (activity) {
-        const debate = activity.debate?.id === session.source_debate_id ? null : activity.debate;
-        const rematch = activity.rematch?.id === session.id ? null : activity.rematch;
-        if (debate !== activity.debate || rematch !== activity.rematch) {
-          queryClient.setQueryData(activityKey, { ...activity, debate, rematch });
-        }
-      }
+      forgetEndedRematch(queryClient, accountKey, session);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, session.id) });
-      void queryClient.invalidateQueries({ queryKey: activityKey });
     },
   });
+}
+
+/**
+ * Drops an ended debate-again session from the viewer's cached activity, then asks again.
+ *
+ * `DebateCoordinator` routes into a picker for as long as activity says its session is browsing, and
+ * activity refreshes on its own schedule. A session the viewer has just seen end stays in it until
+ * then, so the coordinator sent them straight back into the picker they had just left, which sent
+ * them out again (GEO-3342). The same reason `useClearDebateActivityCache` drops a room's rematch.
+ *
+ * A poll already in flight is cancelled too: its answer predates the end.
+ */
+function forgetEndedRematch(queryClient: QueryClient, accountKey: string | null, session: DebateRematchSession) {
+  const activityKey = debateQueryKeys.activity(accountKey);
+  const activity = queryClient.getQueryData<DebateActivity>(activityKey);
+  if (activity) {
+    const debate = activity.debate?.id === session.source_debate_id ? null : activity.debate;
+    const rematch = activity.rematch?.id === session.id ? null : activity.rematch;
+    if (debate !== activity.debate || rematch !== activity.rematch) {
+      queryClient.setQueryData(activityKey, { ...activity, debate, rematch });
+    }
+  }
+  // Cancelled first, then asked again. An invalidation alone cancels a request in flight only when
+  // there is data to protect: with none cached yet it joins that request, whose answer predates the
+  // end and would put the session straight back. The patch above stays synchronous, ahead of this.
+  void queryClient
+    .cancelQueries({ queryKey: activityKey })
+    .then(() => queryClient.invalidateQueries({ queryKey: activityKey }));
+}
+
+/** For the picker, which learns its session ended without a Leave of its own: the other person left. */
+export function useForgetEndedRematch() {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  return React.useCallback(
+    (session: DebateRematchSession) => forgetEndedRematch(queryClient, accountKey, session),
+    [accountKey, queryClient]
+  );
 }
 
 /**
@@ -1336,9 +1384,11 @@ export function useCreateDebateChallenge() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   const mutation = useMutation({
-    mutationFn: (request: { recipient_profile_space_id: string }) =>
+    mutationFn: (request: CreateDebateChallengeBody) =>
       createDebateChallenge(request, getPrivyIdentityToken, accountKey),
-    onSuccess: challenge => {
+    // Runs even if the caller unmounted before the response.
+    onSuccess: (challenge, request) => {
+      if (request.lobby_id) lobbyDebateRequested(request.lobby_id, { kind: 'person', requestId: challenge.id });
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
         current ? { ...current, challenge } : current
       );
@@ -1370,6 +1420,7 @@ export function useAcceptDebateChallenge() {
     mutationFn: (challengeId: string) => acceptDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
     onSuccess: result => {
       if (result.session) {
+        markRematchAnswered(result.session.id);
         queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
@@ -1452,8 +1503,8 @@ export function useCompleteLocalRecordingUpload(debateId: string) {
  */
 export const RECORDING_URL_STALE_MS = 5 * 60 * 1000;
 
-/** `variant: 'mobile'` signs the recording's mobile rendition (GEO-3118) instead of the file itself. */
-type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingPlaybackVariant };
+/** `variant: 'mobile'` signs the recording's feed rendition (GEO-3118, still named `mobile`) instead of the file itself. */
+type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingUrlVariant };
 
 /**
  * The signed playback URL for one debate recording, cached.

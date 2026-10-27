@@ -1,21 +1,21 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
-import { currentAuthAttempt } from '~/core/auth-attempt';
+import { currentAuthAttempt, subscribeAuthAttempts } from '~/core/auth-attempt';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useOnSignOut } from '~/core/hooks/use-on-sign-out';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
-import { captureLocalVoteDropped, isSaveVotesSignIn } from '~/core/save-votes-analytics';
+import { captureLocalVoteDropped, saveVotesSignIn } from '~/core/save-votes-analytics';
 import { savedVotesCopy, savingVotesCopy } from '~/core/save-votes-copy';
 import {
+  LOCAL_VOTES_LIST_ID,
   type LocalVote,
   bindSaveToAccount,
   clearLocalVotes,
@@ -26,6 +26,7 @@ import {
 } from '~/core/state/local-votes';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeError } from '~/core/utils/error-diagnostics';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 /**
  * Publishes the votes a visitor cast on this device once a save prompt has signed them in
@@ -56,27 +57,34 @@ export function LocalVotesSaver() {
   /** How many votes this save started with, for the toasts. 0 while no save is under way. */
   const totalRef = React.useRef(0);
 
+  // Reactive, so a save waiting on its sign-in to complete binds the moment it does.
+  const signIn = React.useSyncExternalStore(
+    subscribeAuthAttempts,
+    () => saveVotesSignIn(currentAuthAttempt()),
+    () => 'elsewhere' as const
+  );
+
   const voteCount = state.votes.length;
   const boundTo = state.save?.accountId ?? null;
   const bound = accountId !== null && boundTo === accountId;
 
-  // Signed in: a save if the sign-in that just completed was a save prompt's, otherwise somebody
-  // else's votes — including a save bound to another account.
+  // Signed in: a save once a save prompt's sign-in has completed, otherwise somebody else's votes —
+  // including a save bound to another account.
   React.useEffect(() => {
     if (!ready || accountId === null || voteCount === 0 || bound) return;
     if (boundTo === null) {
-      const attempt = currentAuthAttempt();
-      if (isSaveVotesSignIn(attempt)) {
+      if (signIn === 'save') {
         bindSaveToAccount(accountId);
         return;
       }
-      // Signed in from another tab, which has no attempt here: that tab's saver decides, and binds or
-      // clears for both. Clearing here could beat it to the votes it is about to save.
-      if (!attempt) return;
+      // Still finishing, so the visitor can back out; backed out, and about to be signed out, with
+      // the votes theirs to save next time; or signed in from another tab, whose saver decides and
+      // binds or clears for both. Clearing in any of these could take votes that are not anyone else's.
+      if (signIn !== 'not_save') return;
     }
     state.votes.forEach(vote => captureLocalVoteDropped('other_sign_in', vote, voteCount));
     clearLocalVotes();
-  }, [accountId, bound, boundTo, ready, state, voteCount]);
+  }, [accountId, bound, boundTo, ready, signIn, state, voteCount]);
 
   // Signed out mid-save: what is left was bound to that account, so it goes, rather than waiting on
   // this device for whoever signs in next to save it as theirs. A failure was that session's too —
@@ -129,8 +137,13 @@ export function LocalVotesSaver() {
 
   if (!next) return null;
   return (
-    // Saved votes are told apart from votes cast signed in by this list id on `action_completed`.
-    <ActionContextProvider value={{ list_id: 'local_votes' }}>
+    // Saved votes are told apart from votes cast signed in by this list id on `action_completed`, and
+    // one an email's vote link cast still names that email (GEO-3374).
+    <ActionContextProvider
+      value={
+        next.refEmail ? { list_id: LOCAL_VOTES_LIST_ID, ref_email: next.refEmail } : { list_id: LOCAL_VOTES_LIST_ID }
+      }
+    >
       <LocalVoteWriter
         key={`${next.entityId}:${next.spaceId}:${next.responseKind}:${next.direction}`}
         vote={next}
@@ -197,7 +210,9 @@ function LocalVoteWriter({
         // and publishes its own side. Neither outcome below may follow: publishing would overwrite
         // the newer press, and "already held" would remove whatever is there now.
         if (!isLocalVoteCurrent(vote)) return;
-        if (held === vote.direction) {
+        // A vote an email's link cast never changes a side the account already holds (GEO-3374): it
+        // was the email's suggestion, made on a device that couldn't see the account's answer.
+        if (held === vote.direction || (vote.refEmail && held != null)) {
           latest.current.onSaved('already_held');
           return;
         }

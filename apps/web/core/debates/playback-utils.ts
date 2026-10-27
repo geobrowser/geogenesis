@@ -1,6 +1,13 @@
 import { errorName } from '~/core/utils/error-name';
 
-import type { Debate, DebateMediaResponse, DebateMediaTurnSegment, DebateParticipant, ParticipantSlot } from './api';
+import type {
+  Debate,
+  DebateMediaArtifactKind,
+  DebateMediaResponse,
+  DebateMediaTurnSegment,
+  DebateParticipant,
+  ParticipantSlot,
+} from './api';
 
 export type TurnState = {
   slot: ParticipantSlot;
@@ -38,11 +45,16 @@ export function isWatchableDebate(debate: Debate) {
 
 /** The media worker composed the two per-slot recordings into a single `final_video`. */
 export function hasProcessedVideo(media: DebateMediaResponse | undefined): boolean {
-  return media?.artifacts.some(artifact => artifact.kind === 'final_video') ?? false;
+  return hasMediaArtifact(media, 'final_video');
 }
 
 export function hasSocialVideo(media: DebateMediaResponse | undefined): boolean {
-  return media?.artifacts.some(artifact => artifact.kind === 'social_video') ?? false;
+  return hasMediaArtifact(media, 'social_video');
+}
+
+/** Whether the media worker published `kind` for this debate. Older debates lack newer kinds. */
+export function hasMediaArtifact(media: DebateMediaResponse | undefined, kind: DebateMediaArtifactKind): boolean {
+  return media?.artifacts.some(artifact => artifact.kind === kind) ?? false;
 }
 
 /**
@@ -135,16 +147,23 @@ export function turnStateFromSegments(segments: DebateMediaTurnSegment[], second
     (ms >= segments[segments.length - 1].output_end_ms ? segments[segments.length - 1] : null);
   if (!active) return null;
 
-  const countdownStartMs = Math.min(
-    Math.max(active.countdown_start_ms ?? active.output_start_ms, active.output_start_ms),
-    active.output_end_ms
-  );
-  const clockMs = Math.max(1, active.output_end_ms - countdownStartMs);
+  const { countdown_end_ms: originalEndMs, countdown_duration_ms: originalDurationMs } = active;
+  const originalClock = originalEndMs !== undefined && originalDurationMs !== undefined;
+  const countdownStartMs = originalClock
+    ? (active.countdown_start_ms ?? active.output_start_ms)
+    : Math.min(
+        Math.max(active.countdown_start_ms ?? active.output_start_ms, active.output_start_ms),
+        active.output_end_ms
+      );
+  const countdownEndMs = originalClock ? originalEndMs : active.output_end_ms;
+  const clockMs = Math.max(1, originalClock ? originalDurationMs : countdownEndMs - countdownStartMs);
+  // A paused final frame holds the value at the retained turn's end.
+  const positionMs = originalClock ? Math.max(countdownStartMs, Math.min(ms, active.output_end_ms)) : ms;
 
   return {
     slot: active.participant_slot,
-    progress: Math.max(0, Math.min(1, (ms - countdownStartMs) / clockMs)),
-    seconds: Math.max(0, (active.output_end_ms - ms) / 1_000),
+    progress: Math.max(0, Math.min(1, (positionMs - countdownStartMs) / clockMs)),
+    seconds: Math.max(0, (countdownEndMs - positionMs) / 1_000),
   };
 }
 

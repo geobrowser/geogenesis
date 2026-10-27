@@ -27,7 +27,7 @@ import {
   relationFacetByFilterDocument,
   relationFacetDocument,
 } from '~/core/io/relation-facet';
-import { POSITION_VOTE_KINDS, POSITION_VOTE_TYPES } from '~/core/profile/profile-facts';
+import { heldPositionFilter } from '~/core/profile/profile-facts';
 
 import { type TaggedClaimSearch, useTaggedClaimSearch } from './tagged-claim-search';
 
@@ -415,15 +415,7 @@ export function taggedEntityFilter(
   // An anti-join through the vote table's primary key (gaia#987), so it costs the same however
   // many positions the viewer holds — where an `id: { notIn: … }` list grew with them.
   if (filters.excludeAnsweredBy) {
-    and.push({
-      not: {
-        votedBy: {
-          userId: uuidToHex(filters.excludeAnsweredBy),
-          kinds: [...POSITION_VOTE_KINDS],
-          types: [...POSITION_VOTE_TYPES],
-        },
-      },
-    });
+    and.push({ not: heldPositionFilter(filters.excludeAnsweredBy) });
   }
 
   return { and };
@@ -443,7 +435,7 @@ export function taggedEntityFilter(
  * which of the two id comparators they reached for.
  */
 export function tagDisplaySpaceId(
-  claim: TaggedClaim,
+  claim: Pick<TaggedClaim, 'tagSpaceIds'>,
   pickedSpaceIds: string[],
   isSpaceShown: (spaceId: string) => boolean
 ): string | null {
@@ -858,16 +850,7 @@ export function useTaggedAnsweredCount(tagId: string, filters: TaggedClaimFilter
           variables: {
             claimTypeId: CLAIM_TYPE_ID,
             filter: {
-              and: [
-                ...and,
-                {
-                  votedBy: {
-                    userId: uuidToHex(userId ?? ''),
-                    kinds: [...POSITION_VOTE_KINDS],
-                    types: [...POSITION_VOTE_TYPES],
-                  },
-                },
-              ],
+              and: [...and, heldPositionFilter(userId ?? '')],
             },
           },
           signal,

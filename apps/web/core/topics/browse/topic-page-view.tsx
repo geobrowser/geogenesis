@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { readTypes } from '~/core/database/entities';
+import { TopicFollowControl } from '~/core/follows/follow-control';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useActiveTabIdForEditor, useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -21,7 +22,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { RelationsGroup as EditableRelationsGroup } from '~/partials/entity-page/editable-entity-page';
 import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
@@ -35,7 +36,6 @@ import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
-import { TopicFollowControl } from '../topic-follow-control';
 import { useTopicSpaceScope } from '../use-topic-space-scope';
 import { TopicComposition } from './topic-composition';
 import { TopicFeed } from './topic-feed';

@@ -4,9 +4,10 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyClaim, DebateLobbyClaims, DebateLobbyView } from '../api';
+import type { DebateLobbyClaim, DebateLobbyClaims } from '../api';
 import { REQUEST_PENDING_LABEL } from '../request-gate';
 import { LOBBY_ROOM_CLAIMS_COPY, LobbyRoomClaims, lobbyRoomClaimFrom } from './lobby-room-claims';
+import type { LobbyPageView } from './lobby-view';
 
 const mocks = vi.hoisted(() => ({
   data: undefined as DebateLobbyClaims | undefined,
@@ -98,7 +99,7 @@ vi.mock('../matchmaking/matchmaking-claim-card', () => ({
   ),
 }));
 
-const lobby = { lobby_id: '0192-abc' } as DebateLobbyView;
+const lobby = { lobby_id: '0192-abc' } as LobbyPageView;
 
 function row(id: string, viewerPosition: boolean | null, requestableAgainst: number): DebateLobbyClaim {
   const other = (position: boolean) => (viewerPosition === null ? position === false : position !== viewerPosition);

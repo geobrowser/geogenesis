@@ -89,6 +89,9 @@ function ProfileRows({ kind }: { kind: 'speaker' | 'author' }) {
             timing: null,
             publishedTiming: null,
             highlightScore: null,
+            relevanceScore: null,
+            qualityScore: null,
+            controversyScore: null,
             relationEntityId: null,
             restated: false,
           }}

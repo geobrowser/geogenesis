@@ -2,7 +2,8 @@
 
 import type { ActionContext } from '~/core/action-context';
 import { recordAction } from '~/core/analytics-operations';
-import type { ResponseKind } from '~/core/responses/entity-response';
+import { marketingVoteDirection, pushMarketingEvent } from '~/core/marketing-events';
+import { type ResponseKind, voteOutcomeProperties } from '~/core/responses/entity-response';
 
 import { type LocalVoteChange, type LocalVoteDirection, readLocalVotes, toggleLocalVote } from './local-votes';
 import {
@@ -37,20 +38,39 @@ export function castLocalVote({
   /** The pressed control's own action context, which also names the target. */
   attribution: ActionContext;
 }): LocalVoteChange {
-  const change = toggleLocalVote({ entityId, spaceId, responseKind, direction, title });
+  const change = toggleLocalVote({
+    entityId,
+    spaceId,
+    responseKind,
+    direction,
+    title,
+    // Cast by an email's vote link rather than a press (GEO-3374).
+    ...(attribution.ref_email ? { refEmail: attribution.ref_email } : {}),
+  });
   // The visit they voted in is not the "return visit" the sheet waits for.
   markPromptedThisSession();
   try {
     recordAction('local_vote', attribution, {
-      vote_direction: change.action === 'remove' ? 'none' : direction === 'positive' ? 'up' : 'down',
-      vote_action: change.action,
-      response_kind: responseKind,
-      entity_id: entityId,
-      space_id: spaceId,
+      // The same fields a vote published from an account carries, so the two compare directly.
+      ...voteOutcomeProperties({
+        responseKind,
+        direction: change.action === 'remove' ? 'clear' : direction,
+        previousResponse: change.previous,
+        entityId,
+        spaceId,
+      }),
       local_vote_count: change.count,
     });
   } catch {
     /* Never fail a vote over analytics. */
+  }
+  if (change.action !== 'remove') {
+    pushMarketingEvent('geo_vote_anonymous', {
+      target_id: entityId,
+      space_id: spaceId,
+      vote_kind: responseKind,
+      vote_direction: marketingVoteDirection(responseKind, direction),
+    });
   }
   // Only casts count toward an ask: removing or switching a vote doesn't make anyone more invested.
   if (change.action === 'cast') {

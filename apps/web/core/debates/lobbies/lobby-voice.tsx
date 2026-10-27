@@ -9,38 +9,69 @@ import {
   useLocalParticipantPermissions,
   useParticipants,
   useRoomContext,
+  useTracks,
 } from '@livekit/components-react';
+import type { TrackReference } from '@livekit/components-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import {
   ConnectionState,
+  DisconnectReason,
+  type LocalTrackPublication,
   MediaDeviceFailure,
   ParticipantEvent,
   type Room,
+  RoomEvent,
   type RoomOptions,
   Track,
   type TrackPublication,
+  VideoPresets,
 } from 'livekit-client';
 
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { withMediaDeviceOptions } from '~/core/media/device-options';
+import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbyView, dashlessId, getDebateLobbyVoiceToken } from '../api';
-import { MicrophoneIcon } from '../debate-room-controls';
+import { type DebateLobbyVoiceToken, dashlessId, getDebateLobbyVoiceToken } from '../api';
+import { cameraFailureMessage } from '../camera-failure';
+import { CameraIcon, MicrophoneIcon } from '../debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '../debate-room-ownership';
 import { useGeoChatAuth } from '../hooks';
+import { tokenAllowsCamera } from '../livekit-grant';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { createLobbyCamera } from './lobby-camera';
 import { lobbyErrorMessage } from './lobby-format';
+import { useLobbyRoomNoun } from './lobby-purpose';
+import { LobbySlot } from './lobby-slots';
+import type { MemberLobbyPageView } from './lobby-view';
+import { registerLobbyCapture, reportLobbyCamera, reportLobbyMic } from './step-out';
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
 
-/** Who is speaking and whose mic is on, by dashless user id (the LiveKit identity). */
-export type LobbyVoiceStates = { speaking: ReadonlySet<string>; micOn: ReadonlySet<string>; connected: boolean };
+/** Who is speaking, whose mic is on and whose camera is showing, by dashless user id (the LiveKit identity). */
+export type LobbyVoiceStates = {
+  speaking: ReadonlySet<string>;
+  micOn: ReadonlySet<string>;
+  cameras: ReadonlyMap<string, TrackReference>;
+  /** Shared screens, by sharer; only a call's room reads them (GEO-3419). */
+  screens?: ReadonlyMap<string, TrackReference>;
+  connected: boolean;
+};
 
-const NO_VOICE: LobbyVoiceStates = { speaking: new Set(), micOn: new Set(), connected: false };
+/** What a call's pre-join check settled on (GEO-3419). */
+export type LobbyVoiceJoinChoice = {
+  audioEnabled: boolean;
+  videoEnabled: boolean;
+  audioDeviceId?: string;
+  videoDeviceId?: string;
+};
+
+const NO_VOICE: LobbyVoiceStates = { speaking: new Set(), micOn: new Set(), cameras: new Map(), connected: false };
 const LobbyVoiceContext = React.createContext<LobbyVoiceStates>(NO_VOICE);
 
 /** Voice state for the roster; empty outside a connected room. */
@@ -53,15 +84,26 @@ const voiceTokenKey = (accountKey: string | null, lobbyId: string, canPublish: b
   ['lobby-voice', accountKey, dashlessId(lobbyId), canPublish] as const;
 
 /** Hosts, the acting host and speakers publish; a change needs a new token. */
-function rolePublishes(lobby: DebateLobbyView) {
+function rolePublishes(lobby: MemberLobbyPageView) {
   return lobby.viewer.hosting || lobby.viewer.role === 'host' || lobby.viewer.role === 'speaker';
 }
 
 const ROOM_OPTIONS: RoomOptions = {
   // LiveKit's default reconnect gives up after ~37s; this rides out deploys and brief drops.
   reconnectPolicy: new ExtendedReconnectPolicy(),
-  // Pinned as in the debate room: the audio armor slow connections rely on.
-  publishDefaults: { red: true, dtx: true },
+  // Up to 40 people and many cameras: only tiles on screen receive video, sized to the tile, and
+  // publishers stop encoding layers nobody watches.
+  adaptiveStream: true,
+  dynacast: true,
+  videoCaptureDefaults: { resolution: VideoPresets.h360.resolution },
+  publishDefaults: {
+    // Pinned as in the debate room: the audio armor slow connections rely on.
+    red: true,
+    dtx: true,
+    simulcast: true,
+    videoSimulcastLayers: [VideoPresets.h180],
+    videoEncoding: { maxBitrate: 300_000, maxFramerate: 20 },
+  },
 };
 
 /**
@@ -74,18 +116,46 @@ export function LobbyVoice({
   joined,
   currentUserId,
   onConnectedChange,
+  onAudible,
+  onUnavailable,
+  screenShare = false,
+  preJoin,
   children,
 }: {
-  lobby: DebateLobbyView;
+  lobby: MemberLobbyPageView;
   connectionId: string;
   /** This tab's own join has landed. */
   joined: boolean;
   currentUserId: string | null;
   onConnectedChange: (connected: boolean) => void;
+  /** Connected with playback allowed: a guest room still playing can go. */
+  onAudible?: () => void;
+  /** Voice is refused, failed or in another tab: a guest room still playing goes too. */
+  onUnavailable?: () => void;
+  /** A call: offer screen sharing when the token allows it, and show shared screens. */
+  screenShare?: boolean;
+  /** A call: a publisher's device check before first connecting; `join` connects with its choice. */
+  preJoin?: (join: (choice: LobbyVoiceJoinChoice) => void) => React.ReactNode;
   children: React.ReactNode;
 }) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const queryClient = useQueryClient();
+  const devices = useInitialMediaDevices();
+  const room = useLobbyRoomNoun();
+  // Before the first connect only: changing options later would rebuild the room.
+  const [joinChoice, setJoinChoice] = React.useState<LobbyVoiceJoinChoice | null>(null);
+  const roomOptions = React.useMemo(
+    () =>
+      withMediaDeviceOptions(
+        {
+          ...devices,
+          audioInputId: joinChoice?.audioDeviceId ?? devices.audioInputId,
+          videoInputId: joinChoice?.videoDeviceId ?? devices.videoInputId,
+        },
+        ROOM_OPTIONS
+      ),
+    [devices, joinChoice]
+  );
   const lobbyId = lobby.lobby_id;
   const canPublish = rolePublishes(lobby);
 
@@ -160,6 +230,7 @@ export function LobbyVoice({
     connectedRef.current = false;
     setConnectFailed(false);
     setMicFailure(null);
+    setCameraFailure(null);
     setEpoch(value => value + 1);
   }, [accountKey, canPublish, lobbyId, queryClient]);
 
@@ -178,10 +249,53 @@ export function LobbyVoice({
     if (listenOnly) setMicChoice(false);
   }, [listenOnly]);
 
+  // Off with a mic-only token (lobby video off on the server, GEO-3161) or a listen-only one.
+  const cameraAllowed = Boolean(data?.can_publish) && tokenAllowsCamera(data?.token ?? '');
+  // Off on join and on every promotion until the speaker turns it on.
+  const [cameraIntent, setCameraIntent] = React.useState(false);
+  const [cameraFailure, setCameraFailure] = React.useState<MediaDeviceFailure | null>(null);
+  // Also covers taking voice back from another tab: its retry clears the token first.
+  React.useEffect(() => {
+    if (!cameraAllowed) setCameraIntent(false);
+  }, [cameraAllowed]);
+  const handleCameraChoice = React.useCallback((enabled: boolean) => {
+    setCameraIntent(enabled);
+    if (enabled) setCameraFailure(null);
+  }, []);
+  const handleCameraFailure = React.useCallback((failure: MediaDeviceFailure | null) => {
+    setCameraIntent(false);
+    setCameraFailure(failure ?? MediaDeviceFailure.Other);
+  }, []);
+
+  // What stepping out to debate carries to the picker or ready room. Only devices of the viewer's own
+  // here count: a listener, or voice held by another tab, leaves the next screen at its default.
+  // Not cleared on unmount: a step-out from the server unmounts this before the route runs.
+  const lobbyMic = ownership === 'owned' && data?.can_publish ? micIntent && !micFailure : null;
+  React.useEffect(() => reportLobbyMic(lobbyMic), [lobbyMic]);
+  const lobbyCamera = ownership === 'owned' && cameraAllowed ? cameraIntent : null;
+  React.useEffect(() => reportLobbyCamera(lobbyCamera), [lobbyCamera]);
+
+  // Once connected, a promotion or reconnect never shows the device check again.
+  const [everConnected, setEverConnected] = React.useState(false);
   const handleConnected = React.useCallback(() => {
     connectedRef.current = true;
+    setEverConnected(true);
     setConnectFailed(false);
   }, []);
+  const handleJoinChoice = React.useCallback((choice: LobbyVoiceJoinChoice) => {
+    setJoinChoice(choice);
+    setMicChoice(choice.audioEnabled);
+    setCameraIntent(choice.videoEnabled);
+  }, []);
+  // Shown as voice in another tab, with "Use voice here"; it does not reconnect by itself.
+  const handleReplaced = React.useCallback(() => setOwnership('elsewhere'), []);
+  // A join dropped before it ever connected gets one fresh token by itself, then the notice.
+  const autoRetriedRef = React.useRef(false);
+  const handleNeverConnected = React.useCallback(() => {
+    if (autoRetriedRef.current) return setConnectFailed(true);
+    autoRetriedRef.current = true;
+    retry();
+  }, [retry]);
   // `<LiveKitRoom>` publishes the mic on SignalConnected, before Connected, and sends a refusal here
   // too. A blocked or missing mic leaves the room up for listening; only a connection failure doesn't.
   const handleError = React.useCallback((error: Error) => {
@@ -189,9 +303,14 @@ export function LobbyVoice({
     if (micProblem) return setMicFailure(micProblem);
     if (!connectedRef.current) setConnectFailed(true);
   }, []);
-  const handleMediaDeviceFailure = React.useCallback((failure?: MediaDeviceFailure) => {
-    setMicFailure(failure ?? null);
-  }, []);
+  // A camera failure reported here must not read as a mic problem.
+  const handleMediaDeviceFailure = React.useCallback(
+    (failure?: MediaDeviceFailure, kind?: MediaDeviceKind) => {
+      if (kind === 'videoinput') return handleCameraFailure(failure ?? null);
+      setMicFailure(failure ?? null);
+    },
+    [handleCameraFailure]
+  );
   // Unmuting tries the mic again, so a permission granted since can take effect.
   const handleMicChoice = React.useCallback((enabled: boolean) => {
     setMicChoice(enabled);
@@ -208,7 +327,7 @@ export function LobbyVoice({
     }
     if (token.error) {
       return {
-        message: lobbyErrorMessage(token.error, 'Voice is unavailable right now.'),
+        message: lobbyErrorMessage(token.error, 'Voice is unavailable right now.', room),
         actionLabel: 'Try again',
         onAction: retry,
       };
@@ -218,10 +337,25 @@ export function LobbyVoice({
     return null;
   })();
 
-  if (notice || !data) {
+  const unavailable = ownership === 'elsewhere' || Boolean(token.error) || connectFailed;
+  React.useEffect(() => {
+    if (unavailable) onUnavailable?.();
+  }, [onUnavailable, unavailable]);
+
+  if (notice || !data || !devices.ready) {
     return (
       <>
         <VoiceBar notice={notice ?? { message: 'Connecting voice…' }} />
+        {children}
+      </>
+    );
+  }
+
+  if (preJoin && data.can_publish && !joinChoice && !everConnected) {
+    return (
+      <>
+        <VoiceBar notice={{ message: 'Check your mic and camera to join' }} />
+        {preJoin(handleJoinChoice)}
         {children}
       </>
     );
@@ -235,7 +369,7 @@ export function LobbyVoice({
       connect
       audio={micIntent && !micFailure}
       video={false}
-      options={ROOM_OPTIONS}
+      options={roomOptions}
       onConnected={handleConnected}
       onError={handleError}
       onMediaDeviceFailure={handleMediaDeviceFailure}
@@ -243,11 +377,21 @@ export function LobbyVoice({
     >
       <ConnectedVoice
         canPublish={data.can_publish}
+        canShareScreen={screenShare && Boolean(data.can_share_screen)}
+        watchScreens={screenShare}
         micFailure={micFailure}
+        cameraAllowed={cameraAllowed}
+        cameraIntent={cameraIntent}
+        cameraFailure={cameraFailure}
+        onCameraChoice={handleCameraChoice}
+        onCameraFailure={handleCameraFailure}
         roomRef={roomRef}
         onMicChoice={handleMicChoice}
         onRetry={retry}
         onConnectedChange={onConnectedChange}
+        onAudible={onAudible}
+        onNeverConnected={handleNeverConnected}
+        onReplaced={handleReplaced}
       >
         {children}
       </ConnectedVoice>
@@ -264,26 +408,59 @@ function micFailureOf(error: Error): MediaDeviceFailure | null {
   return failure && failure !== MediaDeviceFailure.Other ? failure : null;
 }
 
-type VoiceNotice = { message: string; actionLabel?: string; onAction?: () => void };
+type VoiceNotice = {
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  /** Shown beside a mic control too, e.g. a mic that could not be opened. */
+  visible?: boolean;
+};
 
 function ConnectedVoice({
   canPublish,
+  canShareScreen,
+  watchScreens,
   micFailure,
+  cameraAllowed,
+  cameraIntent,
+  cameraFailure,
+  onCameraChoice,
+  onCameraFailure,
   roomRef,
   onMicChoice,
   onRetry,
   onConnectedChange,
+  onAudible,
+  onNeverConnected,
+  onReplaced,
   children,
 }: {
   canPublish: boolean;
+  canShareScreen: boolean;
+  watchScreens: boolean;
   micFailure: MediaDeviceFailure | null;
+  cameraAllowed: boolean;
+  cameraIntent: boolean;
+  cameraFailure: MediaDeviceFailure | null;
+  onCameraChoice: (enabled: boolean) => void;
+  onCameraFailure: (failure: MediaDeviceFailure | null) => void;
   roomRef: React.MutableRefObject<Room | null>;
   onMicChoice: (enabled: boolean) => void;
   onRetry: () => void;
   onConnectedChange: (connected: boolean) => void;
+  onAudible?: () => void;
+  onNeverConnected: () => void;
+  onReplaced: () => void;
   children: React.ReactNode;
 }) {
   const room = useRoomContext();
+  useRoomEnding(room, {
+    onNeverConnected,
+    // Another tab or device took this identity; reconnecting would only take it back and forth.
+    onRemoved: reason => {
+      if (reason === DisconnectReason.DUPLICATE_IDENTITY) onReplaced();
+    },
+  });
   React.useEffect(() => {
     roomRef.current = room;
     return () => {
@@ -303,18 +480,103 @@ function ConnectedVoice({
 
   // Autoplay can be blocked with no click before connecting (iOS); playback needs a user gesture.
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
-  const participants = useParticipants();
+  const { localParticipant, isMicrophoneEnabled, isScreenShareEnabled, microphoneTrack } = useLocalParticipant();
+
+  // A request card over the lobby releases this before opening its own mic. Held through a reconnect,
+  // which republishes the same track.
+  const capturedMic = (microphoneTrack as LocalTrackPublication | undefined)?.track;
+  React.useEffect(() => {
+    if (!capturedMic) return;
+    return registerLobbyCapture('audio', {
+      on: isMicrophoneEnabled,
+      release: () => {
+        onMicChoice(false);
+        void localParticipant.unpublishTrack(capturedMic, true).catch(() => undefined);
+      },
+    });
+  }, [capturedMic, isMicrophoneEnabled, localParticipant, onMicChoice]);
+  const audible = connected && canPlayAudio;
+  React.useEffect(() => {
+    if (audible) onAudible?.();
+  }, [audible, onAudible]);
 
   // A host's move to listeners revokes publishing in LiveKit at once, before the lobby refetch
   // brings the new role and a listen-only token; the mic goes down now.
   const permissions = useLocalParticipantPermissions();
   const mayPublish = canPublish && permissions?.canPublish !== false;
+  const camera = React.useMemo(() => createLobbyCamera(localParticipant), [localParticipant]);
   React.useEffect(() => {
     if (!canPublish || mayPublish) return;
     onMicChoice(false);
     void localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
-  }, [canPublish, localParticipant, mayPublish, onMicChoice]);
+    onCameraChoice(false);
+    camera.release();
+  }, [camera, canPublish, localParticipant, mayPublish, onCameraChoice, onMicChoice]);
+
+  // A call's screen share stops with publishing rights, and with the room.
+  // Phones mostly cannot capture a screen (no getDisplayMedia); they get no button.
+  const mayShareScreen = canShareScreen && mayPublish && canCaptureScreen();
+  React.useEffect(() => {
+    if (!canShareScreen || mayShareScreen) return;
+    void localParticipant.setScreenShareEnabled(false).catch(() => undefined);
+  }, [canShareScreen, localParticipant, mayShareScreen]);
+  React.useEffect(() => {
+    if (!canShareScreen) return;
+    return () => void localParticipant.setScreenShareEnabled(false).catch(() => undefined);
+  }, [canShareScreen, localParticipant]);
+  const [screenFailed, setScreenFailed] = React.useState(false);
+  const setScreenShare = (enabled: boolean) => {
+    setScreenFailed(false);
+    // A cancelled picker rejects too; only a real failure is worth a line.
+    void localParticipant.setScreenShareEnabled(enabled, { audio: true }).catch((error: unknown) => {
+      if (error instanceof Error && error.name !== 'NotAllowedError' && error.name !== 'AbortError') {
+        setScreenFailed(true);
+      }
+    });
+  };
+
+  // `<LiveKitRoom video>` only applies on connect, so the camera follows the choice from here. Off
+  // (toggled, demoted, flag off) or disconnected releases it; reconnecting keeps it.
+  const cameraOn = cameraAllowed && mayPublish && cameraIntent;
+  React.useEffect(() => {
+    if (connected && cameraOn) {
+      camera.enable().catch((error: unknown) => {
+        onCameraFailure(error instanceof Error ? (MediaDeviceFailure.getFailure(error) ?? null) : null);
+      });
+    } else if (!cameraOn || connectionState === ConnectionState.Disconnected) {
+      camera.release();
+    }
+  }, [camera, cameraOn, connected, connectionState, onCameraFailure]);
+
+  // Stepping out into a debate, or a request card opening its own camera, stops this one first.
+  // Registered the moment an acquisition starts, not once it publishes.
+  React.useEffect(() => {
+    let unregister: (() => void) | null = null;
+    const sync = () => {
+      if (camera.held() === (unregister !== null)) return;
+      if (unregister) {
+        unregister();
+        unregister = null;
+        return;
+      }
+      unregister = registerLobbyCapture('video', {
+        on: true,
+        release: () => {
+          onCameraChoice(false);
+          camera.release();
+        },
+      });
+    };
+    const unsubscribe = camera.subscribe(sync);
+    sync();
+    return () => {
+      unsubscribe();
+      unregister?.();
+    };
+  }, [camera, onCameraChoice]);
+  // A server step-out unmounts this before the route runs, and the room's disconnect only stops the
+  // camera after awaiting the network; iPhone needs the device free by the time the next screen asks.
+  React.useEffect(() => () => camera.release(), [camera]);
 
   // A host's mute arrives as a muted track; remembering it keeps a reconnect from unmuting.
   React.useEffect(() => {
@@ -327,17 +589,7 @@ function ConnectedVoice({
     };
   }, [localParticipant, onMicChoice]);
 
-  const states = React.useMemo<LobbyVoiceStates>(() => {
-    const speaking = new Set<string>();
-    const micOn = new Set<string>();
-    for (const participant of participants) {
-      const id = dashlessId(participant.identity).toLowerCase();
-      if (!participant.isMicrophoneEnabled) continue;
-      micOn.add(id);
-      if (participant.isSpeaking) speaking.add(id);
-    }
-    return { speaking, micOn, connected };
-  }, [connected, participants]);
+  const states = useParticipantVoiceStates(connected, watchScreens);
 
   const setMicrophone = (enabled: boolean) => {
     onMicChoice(enabled);
@@ -367,52 +619,366 @@ function ConnectedVoice({
           notice={{
             message: micFailure
               ? 'Your microphone isn’t available.'
-              : isMicrophoneEnabled
-                ? 'You’re on the mic'
-                : 'You’re muted',
+              : cameraFailure
+                ? cameraFailureMessage(cameraFailure)
+                : screenFailed
+                  ? 'Your screen couldn’t be shared.'
+                  : isMicrophoneEnabled
+                    ? 'You’re on the mic'
+                    : 'You’re muted',
+            visible: Boolean(micFailure || cameraFailure || screenFailed),
           }}
           mic={{ on: isMicrophoneEnabled && !micFailure, onToggle: setMicrophone }}
+          camera={cameraAllowed ? { on: cameraOn, onToggle: onCameraChoice } : undefined}
+          screen={mayShareScreen ? { on: isScreenShareEnabled, onToggle: setScreenShare } : undefined}
         />
       ) : (
-        <VoiceBar notice={{ message: 'You’re listening' }} />
+        <VoiceBar notice={{ message: 'You’re listening' }} listening />
       )}
       {children}
     </LobbyVoiceContext.Provider>
   );
 }
 
+/** Disconnects that mean this identity was taken out or taken over: never a reason to reconnect by itself. */
+const REMOVED_REASONS: ReadonlySet<DisconnectReason> = new Set([
+  DisconnectReason.PARTICIPANT_REMOVED,
+  DisconnectReason.DUPLICATE_IDENTITY,
+]);
+
+/**
+ * `onRemoved` when the server removed this identity or another tab or device joined with it;
+ * else `onNeverConnected` for a drop before connecting. LiveKit sends the reason after the state.
+ */
+function useRoomEnding(
+  room: Room,
+  handlers: { onNeverConnected: () => void; onRemoved?: (reason: DisconnectReason) => void }
+) {
+  const handlersRef = React.useRef(handlers);
+  React.useEffect(() => {
+    handlersRef.current = handlers;
+  });
+  React.useEffect(() => {
+    let attempted = room.state !== ConnectionState.Disconnected;
+    let connected = room.state === ConnectionState.Connected;
+    let removed = false;
+    const onState = (state: ConnectionState) => {
+      if (state === ConnectionState.Connected) connected = true;
+      else if (state !== ConnectionState.Disconnected) attempted = true;
+      else if (attempted && !connected) {
+        queueMicrotask(() => {
+          if (!removed) handlersRef.current.onNeverConnected();
+        });
+      }
+    };
+    const onDisconnected = (reason?: DisconnectReason) => {
+      if (reason === undefined || !REMOVED_REASONS.has(reason)) return;
+      removed = true;
+      handlersRef.current.onRemoved?.(reason);
+    };
+    room.on(RoomEvent.ConnectionStateChanged, onState);
+    room.on(RoomEvent.Disconnected, onDisconnected);
+    return () => {
+      room.off(RoomEvent.ConnectionStateChanged, onState);
+      room.off(RoomEvent.Disconnected, onDisconnected);
+    };
+  }, [room]);
+}
+
+const CAMERA_SOURCES = [Track.Source.Camera];
+const SCREEN_SOURCES = [Track.Source.ScreenShare];
+const NO_SOURCES: Track.Source[] = [];
+// Besides publish, unpublish and subscription changes; not active speakers, which change constantly.
+const CAMERA_UPDATES = { updateOnlyOn: [RoomEvent.TrackMuted, RoomEvent.TrackUnmuted] };
+
+/** Who is speaking, whose mic is on and whose camera (and, in a call, screen) shows in the room this sits in. */
+function useParticipantVoiceStates(connected: boolean, watchScreens = false) {
+  const participants = useParticipants();
+  const cameraTracks = useTracks(CAMERA_SOURCES, CAMERA_UPDATES);
+  const screenTracks = useTracks(watchScreens ? SCREEN_SOURCES : NO_SOURCES, CAMERA_UPDATES);
+  return React.useMemo<LobbyVoiceStates>(() => {
+    const speaking = new Set<string>();
+    const micOn = new Set<string>();
+    for (const participant of participants) {
+      const id = dashlessId(participant.identity).toLowerCase();
+      if (!participant.isMicrophoneEnabled) continue;
+      micOn.add(id);
+      if (participant.isSpeaking) speaking.add(id);
+    }
+    const cameras = new Map<string, TrackReference>();
+    for (const reference of cameraTracks) {
+      if (!reference.publication.track || reference.publication.isMuted) continue;
+      cameras.set(dashlessId(reference.participant.identity).toLowerCase(), reference);
+    }
+    if (!watchScreens) return { speaking, micOn, cameras, connected };
+    const screens = new Map<string, TrackReference>();
+    for (const reference of screenTracks) {
+      if (!reference.publication.track || reference.publication.isMuted) continue;
+      screens.set(dashlessId(reference.participant.identity).toLowerCase(), reference);
+    }
+    return { speaking, micOn, cameras, screens, connected };
+  }, [cameraTracks, connected, participants, screenTracks, watchScreens]);
+}
+
+/** Holds the roster's voice state; a member room inside overrides it with its own. */
+export const LobbyVoiceStatesProvider = LobbyVoiceContext.Provider;
+export { NO_VOICE as NO_LOBBY_VOICE };
+
+export const LOBBY_GUEST_VOICE_COPY = {
+  listenOnly: 'Listening only. Your mic is off until you have an account.',
+  connecting: 'Connecting voice…',
+  tapToHear: 'Tap to hear the room',
+  joinAudio: 'Join audio',
+  disconnected: 'Voice disconnected',
+} as const;
+
+/**
+ * A visitor's listen-only room (GEO-3129). A sibling of the member room, so the handover can drop
+ * it while the member room plays; speaking state goes up through `onStates`.
+ */
+export function LobbyGuestVoice({
+  token,
+  onStates,
+  onReconnect,
+  onAutoReconnect,
+  onRemoved,
+  quiet = false,
+  screenShare = false,
+}: {
+  token: DebateLobbyVoiceToken;
+  onStates: (states: LobbyVoiceStates) => void;
+  /** A full reconnect needs a fresh token on the same guest. */
+  onReconnect: () => void;
+  /**
+   * After a join dropped before connecting: reconnects if the page has an automatic retry left,
+   * and says whether it did. Kept by the page, since a fresh token remounts this room.
+   */
+  onAutoReconnect: () => boolean;
+  /** Another tab took this room's identity, or the server removed it; the page checks the session for why. */
+  onRemoved: () => void;
+  /** The member room is taking over and draws its own bar. */
+  quiet?: boolean;
+  /** A call: show shared screens. */
+  screenShare?: boolean;
+}) {
+  const [connectFailed, setConnectFailed] = React.useState(false);
+  const connectedRef = React.useRef(false);
+  const handleConnected = React.useCallback(() => {
+    connectedRef.current = true;
+    setConnectFailed(false);
+  }, []);
+  const handleError = React.useCallback(() => {
+    if (!connectedRef.current) setConnectFailed(true);
+  }, []);
+  const handleNeverConnected = React.useCallback(() => {
+    if (!onAutoReconnect()) setConnectFailed(true);
+  }, [onAutoReconnect]);
+  React.useEffect(() => () => onStates(NO_VOICE), [onStates]);
+
+  if (connectFailed) {
+    return quiet ? null : (
+      <VoiceBar notice={{ message: 'Voice could not connect.', actionLabel: 'Try again', onAction: onReconnect }} />
+    );
+  }
+
+  return (
+    <LiveKitRoom
+      token={token.token}
+      serverUrl={token.url}
+      connect
+      audio={false}
+      video={false}
+      options={ROOM_OPTIONS}
+      onConnected={handleConnected}
+      onError={handleError}
+      className="contents"
+    >
+      <ConnectedGuestVoice
+        onStates={onStates}
+        onReconnect={onReconnect}
+        onNeverConnected={handleNeverConnected}
+        onRemoved={onRemoved}
+        quiet={quiet}
+        watchScreens={screenShare}
+      />
+      <RoomAudioRenderer />
+    </LiveKitRoom>
+  );
+}
+
+function ConnectedGuestVoice({
+  onStates,
+  onReconnect,
+  onNeverConnected,
+  onRemoved,
+  quiet,
+  watchScreens,
+}: {
+  onStates: (states: LobbyVoiceStates) => void;
+  onReconnect: () => void;
+  onNeverConnected: () => void;
+  onRemoved: () => void;
+  quiet: boolean;
+  watchScreens: boolean;
+}) {
+  const room = useRoomContext();
+  // Removed by the server: no Try again, which would take the session back; the page asks why.
+  const [removed, setRemoved] = React.useState(false);
+  useRoomEnding(room, {
+    onNeverConnected,
+    onRemoved: () => {
+      setRemoved(true);
+      onRemoved();
+    },
+  });
+  const connectionState = useConnectionState();
+  const connected = connectionState === ConnectionState.Connected;
+  const [everConnected, setEverConnected] = React.useState(false);
+  React.useEffect(() => {
+    if (connected) setEverConnected(true);
+  }, [connected]);
+  // iOS blocks playback until a tap; "Join audio" is that tap.
+  const { canPlayAudio, startAudio } = useAudioPlayback(room);
+  const states = useParticipantVoiceStates(connected, watchScreens);
+  React.useEffect(() => onStates(states), [onStates, states]);
+  React.useEffect(() => () => onStates(NO_VOICE), [onStates]);
+
+  if (quiet) return null;
+  const notice: VoiceNotice = removed
+    ? { message: LOBBY_GUEST_VOICE_COPY.disconnected }
+    : connectionState === ConnectionState.Disconnected && everConnected
+      ? { message: LOBBY_GUEST_VOICE_COPY.disconnected, actionLabel: 'Try again', onAction: onReconnect }
+      : connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting
+        ? { message: 'Reconnecting…' }
+        : !connected
+          ? { message: LOBBY_GUEST_VOICE_COPY.connecting }
+          : !canPlayAudio
+            ? {
+                message: LOBBY_GUEST_VOICE_COPY.tapToHear,
+                actionLabel: LOBBY_GUEST_VOICE_COPY.joinAudio,
+                onAction: () => void startAudio(),
+              }
+            : { message: LOBBY_GUEST_VOICE_COPY.listenOnly };
+  return <VoiceBar notice={notice} />;
+}
+
+/**
+ * Mute or the listening pill, plus voice status, in the lobby's bottom bar. The status is sr-only
+ * beside a mic control, and on a phone unless it needs a tap.
+ */
 function VoiceBar({
   notice,
   mic,
+  camera,
+  screen,
+  listening = false,
 }: {
   notice: VoiceNotice;
   mic?: { on: boolean; onToggle: (enabled: boolean) => void };
+  /** A call's publisher (GEO-3419). */
+  screen?: { on: boolean; onToggle: (enabled: boolean) => void };
+  /** Only when the token allows a camera; listeners and a lobby with video off get none. */
+  camera?: { on: boolean; onToggle: (enabled: boolean) => void };
+  /** Connected without a mic: a disabled "Listening" pill stands in for Mute. */
+  listening?: boolean;
 }) {
+  const action = notice.actionLabel && notice.onAction ? notice : null;
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-grey-02 bg-white px-3 py-2">
-      {mic ? (
-        <HubPillButton
-          variant={mic.on ? 'secondary' : 'primary'}
-          analyticsLabel={mic.on ? 'Lobby mute' : 'Lobby unmute'}
-          aria-pressed={!mic.on}
-          onClick={() => mic.onToggle(!mic.on)}
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <MicrophoneIcon muted={!mic.on} />
-            {mic.on ? 'Mute' : 'Unmute'}
+    <LobbySlot name="controls">
+      <div className="flex min-w-0 items-center gap-2" data-testid="lobby-voice-bar">
+        {mic ? (
+          <HubPillButton
+            variant={mic.on ? 'secondary' : 'primary'}
+            analyticsLabel={mic.on ? 'Lobby mute' : 'Lobby unmute'}
+            aria-pressed={!mic.on}
+            onClick={() => mic.onToggle(!mic.on)}
+            className="md:h-10"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <MicrophoneIcon muted={!mic.on} />
+              {mic.on ? 'Mute' : 'Unmute'}
+            </span>
+          </HubPillButton>
+        ) : null}
+        {mic && camera ? (
+          <HubPillButton
+            variant={camera.on ? 'secondary' : 'primary'}
+            analyticsLabel={camera.on ? 'Lobby camera off' : 'Lobby camera on'}
+            aria-label={camera.on ? 'Turn camera off' : 'Turn camera on'}
+            onClick={() => camera.onToggle(!camera.on)}
+            className="md:h-10"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <CameraIcon disabled={!camera.on} />
+              <span className="md:sr-only">{camera.on ? 'Camera off' : 'Camera on'}</span>
+            </span>
+          </HubPillButton>
+        ) : null}
+        {mic && screen ? (
+          <HubPillButton
+            variant={screen.on ? 'primary' : 'secondary'}
+            analyticsLabel={screen.on ? 'Call stop sharing' : 'Call share screen'}
+            aria-label={screen.on ? 'Stop sharing your screen' : 'Share your screen'}
+            aria-pressed={screen.on}
+            onClick={() => screen.onToggle(!screen.on)}
+            className="md:h-10"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <ScreenShareIcon />
+              <span className="md:sr-only">{screen.on ? 'Stop sharing' : 'Share screen'}</span>
+            </span>
+          </HubPillButton>
+        ) : null}
+        {mic ? null : listening ? (
+          <span
+            aria-hidden
+            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-grey-01 px-3 text-metadata text-grey-03 md:h-10"
+          >
+            <MicrophoneIcon muted />
+            Listening
           </span>
-        </HubPillButton>
-      ) : null}
-      <div role="status">
-        <Text as="p" variant="footnote" color="grey-04">
-          {notice.message}
-        </Text>
+        ) : null}
+        <div
+          role="status"
+          className={cx('min-w-0', (mic || listening) && !notice.visible ? 'sr-only' : action ? '' : 'md:sr-only')}
+        >
+          <Text as="p" variant="footnote" color={notice.visible ? 'text' : 'grey-04'} className="truncate">
+            {notice.message}
+          </Text>
+        </div>
+        {action ? (
+          <HubPillButton
+            analyticsLabel={`Lobby voice ${action.actionLabel}`}
+            onClick={action.onAction}
+            className="md:h-10"
+          >
+            {action.actionLabel}
+          </HubPillButton>
+        ) : null}
       </div>
-      {notice.actionLabel && notice.onAction ? (
-        <HubPillButton analyticsLabel={`Lobby voice ${notice.actionLabel}`} onClick={notice.onAction}>
-          {notice.actionLabel}
-        </HubPillButton>
-      ) : null}
-    </div>
+    </LobbySlot>
+  );
+}
+
+function canCaptureScreen() {
+  return typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+}
+
+function ScreenShareIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="4" width="18" height="12" rx="2" />
+      <path d="M8 20h8M12 16v4M12 13V7M9 10l3-3 3 3" />
+    </svg>
   );
 }

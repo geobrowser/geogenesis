@@ -2,86 +2,72 @@
 
 import * as React from 'react';
 
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { useHydrated } from '~/core/hooks/use-hydrated';
 
-import { Text } from '~/design-system/text';
-
-import { consumeDebateReturnDestination, peekDebateReturnDestination } from '../debate-return-navigation';
+import {
+  consumeDebateReturnDestination,
+  peekDebateReturnDestination,
+  rememberLobbyReturnDestination,
+} from '../debate-return-navigation';
+import type { DebateJoinChoice } from '../request-join-state';
+import { sameId } from '../rooms/room-presence';
 import { debateRoomIdFromPath } from '../rooms/room-routes';
-import { useDebateLobby, useMyDebateLobby } from './hooks';
-import { requestLobbyRejoin } from './step-out';
+import { useMyDebateLobby } from './hooks';
+import { clearCarriedLobbyChoice, readCarriedLobbyChoice } from './step-out';
+
+/** The lobby in this tab's record of where the flow returns to, or null when it is a page. */
+function storedLobbyId(): string | null {
+  const destination = peekDebateReturnDestination();
+  return destination ? debateRoomIdFromPath(destination) : null;
+}
 
 /**
  * geo-chat's lobby to return to: the one the viewer stepped out of, from any tab, or null. Undefined
- * while it is unknown (flag off, loading, or the call failed), so callers fall back to this tab.
+ * while it is unknown (loading, or the call failed), so callers fall back to this tab.
+ *
+ * A lobby tab left open rejoins once the debate is over, which ends the step-out while this flow can
+ * still be in the picker. So the lobby is recorded as this tab's way back as soon as geo-chat names
+ * it, and stays the way back while the viewer is still on its roster; leaving it or moving on does not.
  */
 function useServerLobbyReturn(): { lobbyId: string | null } | undefined {
-  const lobbyJoining = useFeatureFlag('lobbyJoining');
-  const mine = useMyDebateLobby(lobbyJoining);
-  if (!lobbyJoining || mine.isError || !mine.data) return undefined;
-  return { lobbyId: mine.data.stepped_out ? mine.data.current_lobby_id : null };
+  const mine = useMyDebateLobby();
+  const steppedOutOf = mine.data?.stepped_out ? mine.data.current_lobby_id : null;
+  React.useEffect(() => {
+    if (steppedOutOf) rememberLobbyReturnDestination(steppedOutOf);
+  }, [steppedOutOf]);
+
+  if (mine.isError || !mine.data) return undefined;
+  const current = mine.data.current_lobby_id;
+  if (!current) return { lobbyId: null };
+  if (mine.data.stepped_out) return { lobbyId: current };
+  const recorded = storedLobbyId();
+  return { lobbyId: recorded && sameId(recorded, current) ? current : null };
 }
 
-/** The lobby this debate flow returns to; null when it did not start in one or that lobby is gone. */
-export function useRecordedLobby(): string | null {
-  const lobbyJoining = useFeatureFlag('lobbyJoining');
-  const mine = useMyDebateLobby(lobbyJoining);
-  // This tab's record, read once per mount; used only when geo-chat cannot answer.
-  const [stored] = React.useState(() => {
-    const destination = peekDebateReturnDestination();
-    return destination ? debateRoomIdFromPath(destination) : null;
-  });
-
-  if (!lobbyJoining || mine.isError) return stored;
-  return mine.data?.stepped_out ? mine.data.current_lobby_id : null;
-}
-
-/** The leave paths' `consumeDebateReturnDestination`, preferring geo-chat's lobby over this tab's. */
-export function useConsumeDebateReturnDestination() {
+/**
+ * The leave destination and its button state, preferring geo-chat's lobby over this tab's. A
+ * lobby joins on arrival by itself (GEO-3337), so nothing here asks it to.
+ */
+export function useDebateReturnNavigation() {
+  const hydrated = useHydrated();
   const lobby = useServerLobbyReturn();
   const lobbyId = lobby?.lobbyId;
   const known = lobby !== undefined;
-  return React.useCallback(
+  const consume = React.useCallback(
     () => consumeDebateReturnDestination(known ? { lobbyId: lobbyId ?? null } : undefined),
     [known, lobbyId]
   );
+  // Session storage is only visible in the browser; keep the server and first client label equal.
+  return { consume, returnsToLobby: hydrated && Boolean(known ? lobbyId : storedLobbyId()) };
 }
-
-type BackToLobbyProps = { onLeave: () => void; disabled?: boolean };
 
 /**
- * A row for the debate's end card: leaves the debate the usual way, which returns to the lobby, and
- * has the lobby join again on arrival. Hidden unless the debate started in a lobby that is still open.
+ * The mic and camera the viewer had in the lobby they stepped out of to get here, so the picker or
+ * ready room starts the same way: null when they did not come straight from one. Read once per
+ * mount and spent.
  */
-export function BackToLobbyRow(props: BackToLobbyProps) {
-  const lobbyId = useRecordedLobby();
-  return lobbyId ? <OpenLobbyRow lobbyId={lobbyId} {...props} /> : null;
-}
-
-function OpenLobbyRow({ lobbyId, onLeave, disabled = false }: BackToLobbyProps & { lobbyId: string }) {
-  const lobby = useDebateLobby(lobbyId).data;
-  // A host removed them: going back is a choice made on the lobby page, not from here.
-  if (lobby?.access.status !== 'admitted' || lobby.viewer.removed) return null;
-
-  return (
-    <>
-      <div aria-hidden className="h-px w-full shrink-0 bg-divider" />
-      <div className="flex min-h-7 items-center justify-between gap-2.5">
-        <Text as="span" variant="smallTitle" color="text">
-          Lobby still open
-        </Text>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => {
-            requestLobbyRejoin(lobbyId);
-            onLeave();
-          }}
-          className="inline-flex min-h-7 shrink-0 items-center justify-center rounded-full bg-grey-01 px-3 text-metadata text-text transition-colors hover:bg-grey-02 disabled:cursor-default disabled:opacity-50"
-        >
-          Back to the room
-        </button>
-      </div>
-    </>
-  );
+export function useCarriedLobbyChoice(): DebateJoinChoice | null {
+  const [carried] = React.useState(readCarriedLobbyChoice);
+  React.useEffect(() => clearCarriedLobbyChoice(), []);
+  return carried;
 }

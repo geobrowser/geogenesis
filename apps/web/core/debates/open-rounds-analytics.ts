@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { capture } from '~/core/analytics';
+import { captureSafely } from '~/core/analytics-capture-safely';
 
 import type { Debate, OpenRoundPick, OpenRoundResolution, OpenRoundRevealedPick, ParticipantSlot } from './api';
 import { isFinalOpenRound, isOpenRoundsDebate, openRebuttalRoundCount, openRoundRevealedPicks } from './open-rounds';
@@ -29,8 +29,9 @@ export type ResolvedOpenRound = {
 };
 
 /**
- * A round that resolved with a missing pick timed out, whatever the other pick was: the missing one
- * counted as End. Otherwise two different picks are a split.
+ * A round that resolved with a missing pick timed out, whatever the other pick was and whichever
+ * way it went: a missing pick next to an Extend extends, next to an End or another missing pick it
+ * ends. Otherwise two different picks are a split.
  */
 export function openRoundPickSplit(round: Pick<ResolvedOpenRound, 'resolution' | 'picks'>): OpenRoundPickSplit {
   const picks = round.picks.map(entry => entry.pick);
@@ -203,15 +204,6 @@ export function useOpenRoundsOutcomeAnalytics(debate: Debate | null, participant
       if (properties) sendOnce('completed', () => captureSafely('debate_completed_rounds', properties));
     }
   }, [debate, participantSlot]);
-}
-
-/** Analytics never gets in the way of the debate. */
-function captureSafely(...args: Parameters<typeof capture>) {
-  try {
-    capture(...args);
-  } catch {
-    // Dropped: the room carries on.
-  }
 }
 
 function readSessionFlag(key: string) {

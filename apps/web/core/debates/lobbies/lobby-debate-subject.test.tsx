@@ -35,7 +35,12 @@ describe('LobbyDebateSubject', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cats are better' }));
 
-    expect(store.get(entitySidePanelAtom)).toMatchObject({ entityId: 'claim-1', spaceId: 'space-1' });
+    // GEO-3332. Like every other claim in the lobby: in the space geo-chat names for it.
+    expect(store.get(entitySidePanelAtom)).toMatchObject({
+      entityId: 'claim-1',
+      spaceId: 'space-1',
+      forceRequestedSpace: true,
+    });
   });
 
   it.each([

@@ -10,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResponseKind } from '~/core/responses/entity-response';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
-import { VOTE_BUTTON_CLASS } from './vote-button-styles';
 
 /**
  * GEO-2792. Four surfaces had four answers for "this is the one you picked": curation said it with
@@ -29,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   optimisticResponse: undefined as 'positive' | 'negative' | undefined,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
   usePrivy: () => ({ authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
@@ -56,7 +55,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: {} }) }));
 
 vi.mock('~/core/io/queries', () => ({
-  getClaimResponseSummaryPage: () => Effect.succeed([]),
+  getClaimResponseSummaryPage: () => Effect.succeed({ items: [], endCursor: null, hasNextPage: false }),
   getEntityResponseCounts: () => Effect.succeed({ positive: 2, negative: 1 }),
   getEntityResponders: () => Effect.succeed([]),
   getSpaces: () => Effect.succeed([]),
@@ -148,53 +147,5 @@ describe('the selected vote treatment', () => {
 
       expect(inlineButtons().up.className.match(/(^|\s)text-/g) ?? []).toHaveLength(1);
     });
-  });
-
-  // The surface the ticket was filed about. `aria-pressed` is what tells the two apart here.
-  describe('the debates pill', () => {
-    function renderPill() {
-      render(
-        <EntityVoteButtons
-          entityId="entity-1"
-          spaceId={SPACE}
-          responseKind="curation"
-          presentation="debate-horizontal"
-        />,
-        { wrapper }
-      );
-      return {
-        pressed: screen.getByRole('button', { pressed: true }),
-        unpressed: screen.getByRole('button', { pressed: false }),
-      };
-    }
-
-    // The specific complaint: full screen rendered `ctaPrimary` for up and `red-01` for down, the
-    // only surface in the app using either for this.
-    it.each([
-      ['up', 'positive' as const],
-      ['down', 'negative' as const],
-    ])('no longer colours a picked %s blue or red', (_direction, response) => {
-      mocks.optimisticResponse = response;
-      const { pressed } = renderPill();
-
-      expect(pressed).not.toHaveClass('text-ctaPrimary');
-      expect(pressed).not.toHaveClass('text-red-01');
-      expect(pressed.className).not.toMatch(/aria-pressed:text-(ctaPrimary|red-01)/);
-    });
-
-    it('reads the same grey as every other surface, picked or not', () => {
-      mocks.optimisticResponse = 'positive';
-      const { pressed, unpressed } = renderPill();
-
-      expect(pressed).toHaveClass('text-grey-04');
-      expect(unpressed).toHaveClass('text-grey-04');
-    });
-  });
-
-  // One definition, so the greys cannot drift apart again. Pinned to the literal because the
-  // *value* is the point: `grey-03` reads 2.03:1 on white and fails WCAG 1.4.11's 3:1 for a
-  // control, which is what these icons are.
-  it('shares one class between the pill and the inline controls', () => {
-    expect(VOTE_BUTTON_CLASS).toBe('text-grey-04 hover:text-text');
   });
 });

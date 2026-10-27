@@ -174,15 +174,15 @@ describe('DebateGatewayClient', () => {
     expect(invalidateQueries.mock.calls).toEqual(
       expect.arrayContaining([
         [
-          { queryKey: ['debates', 'media', 'debate-1'], refetchType: 'active' },
+          { queryKey: ['debates', 'media', 'debate1'], refetchType: 'active' },
           { throwOnError: true, cancelRefetch: false },
         ],
         [
-          { queryKey: ['debates', 'detail', 'debate-1'], refetchType: 'active' },
+          { queryKey: ['debates', 'detail', 'debate1'], refetchType: 'active' },
           { throwOnError: true, cancelRefetch: false },
         ],
         [
-          { queryKey: ['debates', 'transcript', 'debate-1'], refetchType: 'active' },
+          { queryKey: ['debates', 'transcript', 'debate1'], refetchType: 'active' },
           { throwOnError: true, cancelRefetch: false },
         ],
         [
@@ -207,7 +207,7 @@ describe('DebateGatewayClient', () => {
       'state',
       { event_type: 'debate.state_changed', payload: { debate_id: 'debate-1', space_id: 'space-1' } },
       [
-        ['debates', 'detail', 'debate-1'],
+        ['debates', 'detail', 'debate1'],
         ['debates', 'space', 'space-1'],
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
@@ -286,6 +286,11 @@ describe('DebateGatewayClient', () => {
       'one lobby’s claims only',
       { event_type: 'debate.lobby_changed', payload: { lobby_id: 'AB-CD', sections: ['claims'] } },
       [['debates', 'account', 'user-a', 'lobby-claims', 'abcd']],
+    ],
+    [
+      'one lobby’s people only',
+      { event_type: 'debate.lobby_changed', payload: { lobby_id: 'AB-CD', sections: ['people'] } },
+      [['debates', 'account', 'user-a', 'lobby', 'abcd']],
     ],
   ])('maps %s events to their authoritative query families', async (_label, event, expectedKeys) => {
     client.start(
@@ -505,6 +510,331 @@ describe('DebateGatewayClient', () => {
       queryClient.setQueryData(lobbyKey, { viewer: { connected: false } });
       await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 5, '2026-10-07T12:00:02Z') });
       expectInvalidated(invalidateQueries, { queryKey: lobbyKey, refetchType: 'active' });
+    });
+
+    // GEO-3300. The calendar's week reads its own range, under the list's key.
+    describe('on a calendar week', () => {
+      const weekKey = [...lobbiesKey, 'calendar', 1, 2];
+      const weekRow = (
+        lobbyId: string,
+        headcount: number,
+        state: 'upcoming' | 'open' | 'ended',
+        asOf: string | null = null
+      ) => ({
+        ...row(lobbyId, headcount, asOf),
+        open: state === 'open',
+        state,
+        closed_at: state === 'ended' ? '2026-10-07T13:00:00Z' : null,
+      });
+      const weekIds = () =>
+        queryClient
+          .getQueryData<{ lobbies: { lobby_id: string; headcount: number; state: string }[] }>(weekKey)
+          ?.lobbies.map(lobby => `${lobby.lobby_id}:${lobby.headcount}:${lobby.state}`);
+
+      it('patches a lobby in the week too, keeping the week’s order and the viewer’s own fields', async () => {
+        await started();
+        queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+        queryClient.setQueryData(weekKey, {
+          lobbies: [weekRow('bb', 1, 'upcoming'), { ...weekRow('aa', 3, 'open'), viewer_reminded: true }],
+        });
+
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 7, '2026-10-07T12:00:01Z') });
+
+        expect(weekIds()).toEqual(['bb:1:upcoming', 'aa:7:open']);
+        expect(
+          queryClient.getQueryData<{ lobbies: { viewer_reminded: boolean }[] }>(weekKey)?.lobbies[1]
+        ).toMatchObject({ viewer_reminded: true });
+      });
+
+      it('patches the week even when the list is not cached', async () => {
+        await started();
+        queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open')] });
+
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 4, '2026-10-07T12:00:01Z') });
+
+        expect(weekIds()).toEqual(['aa:4:open']);
+      });
+
+      it('leaves an ended lobby ended', async () => {
+        await started();
+        queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'ended')] });
+
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 9, '2026-10-07T12:00:01Z') });
+
+        expect(weekIds()).toEqual(['aa:3:ended']);
+      });
+
+      // Copilot on #2850: the list used to drop a patch as soon as it caught up, even with a week
+      // read from before that patch still in flight, which then landed with nothing to lay over it.
+      it('keeps a patch for a week read still in flight when the list catches up first', async () => {
+        await started();
+        queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] });
+        queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+
+        // A week read that started before the patch, held open.
+        let releaseWeek!: () => void;
+        const weekRead = queryClient.fetchQuery({
+          queryKey: weekKey,
+          queryFn: () =>
+            new Promise<object>(done => {
+              releaseWeek = () => done({ lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+            }),
+        });
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+        // The list catches up with the patch before the week read lands.
+        await queryClient.fetchQuery({
+          queryKey: lobbiesKey,
+          queryFn: async () => ({ lobbies: [row('aa', 8, '2026-10-07T12:00:05Z')] }),
+        });
+        releaseWeek();
+        await weekRead;
+
+        expect(weekIds()).toEqual(['aa:8:open']);
+      });
+
+      // Copilot on #2850: a lobby the capped list never returns could only be released by the list,
+      // so its patch was held for the session and laid over every week on every update.
+      describe('releasing a calendar-only lobby’s patch', () => {
+        /** Whether `aa`'s patch is still held: a stale week row is re-patched by the next overlay. */
+        async function aaStillHeld() {
+          queryClient.setQueryData(weekKey, {
+            lobbies: [
+              weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z'),
+              weekRow('bb', 1, 'open', '2026-10-07T12:00:01Z'),
+            ],
+          });
+          await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 2, '2026-10-07T12:00:09Z') });
+          return weekIds()?.[0] === 'aa:8:open';
+        }
+
+        it('lets a week read that has caught up release it', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+
+          expect(await aaStillHeld()).toBe(false);
+        });
+
+        // Copilot on #2850: a week that caught up while the list was in flight used to forget it had,
+        // and a list landing without that lobby left the patch held for the session.
+        it('releases it once the last read in flight lands, a week having caught up meanwhile', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          let releaseList!: () => void;
+          const listRead = queryClient.fetchQuery({
+            queryKey: lobbiesKey,
+            queryFn: () => new Promise<object>(done => (releaseList = () => done({ lobbies: [] }))),
+          });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+          // The list lands last, without the lobby.
+          releaseList();
+          await listRead;
+
+          expect(await aaStillHeld()).toBe(false);
+        });
+
+        // Copilot on #2850: the week's catch-up was read after the overlay had already written the
+        // patch's own `as_of` into it, so a stale week looked caught up and released the patch.
+        it('judges a week’s catch-up by what the read returned, not by the patched cache', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+          // A week read from before the patch lands, with nothing else in flight.
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] }),
+          });
+
+          expect(await aaStillHeld()).toBe(true);
+        });
+
+        it('keeps a newer patch that arrived after the catch-up was remembered', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          let releaseList!: () => void;
+          const listRead = queryClient.fetchQuery({
+            queryKey: lobbiesKey,
+            queryFn: () => new Promise<object>(done => (releaseList = () => done({ lobbies: [] }))),
+          });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+          // A newer patch, which no read has caught up with.
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 9, '2026-10-07T12:00:07Z') });
+          releaseList();
+          await listRead;
+
+          // Still held: a stale row is re-patched to the newer count.
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 2, '2026-10-07T12:00:09Z') });
+          expect(weekIds()?.[0]).toBe('aa:9:open');
+        });
+
+        it('lays the patch over a read that predates it before releasing it', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          // A list read from before the patch, still in flight.
+          let releaseList!: () => void;
+          const listRead = queryClient.fetchQuery({
+            queryKey: lobbiesKey,
+            queryFn: () =>
+              new Promise<object>(
+                done => (releaseList = () => done({ lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] }))
+              ),
+          });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+
+          releaseList();
+          await listRead;
+
+          expect(cachedIds()).toEqual(['aa:8']);
+        });
+
+        it('keeps it while another lobby read is still in flight, which may predate it', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          let releaseList!: () => void;
+          const listRead = queryClient.fetchQuery({
+            queryKey: lobbiesKey,
+            queryFn: () => new Promise<object>(done => (releaseList = () => done({ lobbies: [] }))),
+          });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+          await queryClient.fetchQuery({
+            queryKey: [...lobbiesKey, 'calendar', 3, 4],
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+          const held = await aaStillHeld();
+          releaseList();
+          await listRead;
+
+          expect(held).toBe(true);
+        });
+      });
+
+      it('lays a held patch over a week read before it', async () => {
+        await started();
+        queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+        // A week fetched now, from a read taken before that patch.
+        await queryClient.fetchQuery({
+          queryKey: weekKey,
+          queryFn: async () => ({ lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] }),
+        });
+
+        expect(weekIds()).toEqual(['aa:8:open']);
+      });
+    });
+  });
+
+  describe('lobby guest count', () => {
+    const lobbyKey = ['debates', 'account', 'user-a', 'lobby', 'abcd'];
+
+    async function guestsChanged(payload: Record<string, unknown>) {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+      sockets[0]!.receive('EVENT', { event_id: 'guests-1', event_type: 'debate.lobby_guests_changed', payload });
+      await flushInvalidations();
+    }
+
+    it('patches the cached view’s count and never refetches', async () => {
+      queryClient.setQueryData(lobbyKey, { lobby_id: 'abcd', guest_count: 1, members: [] });
+      await guestsChanged({ lobby_id: 'AB-CD', guest_count: 4 });
+      expect(queryClient.getQueryData<{ guest_count: number }>(lobbyKey)?.guest_count).toBe(4);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['no cached view', undefined, { lobby_id: 'AB-CD', guest_count: 4 }],
+      ['an unreadable count', { lobby_id: 'abcd', guest_count: 1 }, { lobby_id: 'AB-CD', guest_count: 'x' }],
+    ])('leaves %s alone', async (_label, cached, payload) => {
+      if (cached) queryClient.setQueryData(lobbyKey, cached);
+      await guestsChanged(payload);
+      expect(queryClient.getQueryData(lobbyKey)).toEqual(cached);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('lobby claim lists', () => {
+    const lobbyKey = ['debates', 'account', 'user-a', 'lobby', 'abcd'];
+    const list = (entityId: string, position: number) => ({
+      entity_id: entityId,
+      space_id: 's1',
+      position,
+      added_by: null,
+      added_at: '2026-10-13T12:00:00Z',
+    });
+
+    async function listsChanged(payload: Record<string, unknown>) {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+      sockets[0]!.receive('EVENT', { event_id: 'lists-1', event_type: 'debate.lobby_claim_lists_changed', payload });
+      await flushInvalidations();
+    }
+
+    it('lays newer lists over the cached view and never refetches', async () => {
+      queryClient.setQueryData(lobbyKey, {
+        lobby_id: 'abcd',
+        claim_lists: [list('p1', 0)],
+        claim_lists_as_of: '2026-10-13T12:00:00.000100Z',
+      });
+      await listsChanged({
+        lobby_id: 'AB-CD',
+        lobby_claim_lists: {
+          lobby_id: 'AB-CD',
+          as_of: '2026-10-13T12:00:00.000200Z',
+          claim_lists: [list('p1', 0), list('p2', 1)],
+        },
+      });
+      expect(queryClient.getQueryData<{ claim_lists: unknown[] }>(lobbyKey)?.claim_lists).toHaveLength(2);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an older state', { lobby_id: 'AB-CD', as_of: '2026-10-13T12:00:00Z', claim_lists: [] }],
+      ['an unreadable payload', { lobby_id: 'AB-CD', claim_lists: 'x' }],
+    ])('ignores %s', async (_label, lobbyClaimLists) => {
+      queryClient.setQueryData(lobbyKey, {
+        lobby_id: 'abcd',
+        claim_lists: [list('p1', 0)],
+        claim_lists_as_of: '2026-10-13T12:00:00.000100Z',
+      });
+      await listsChanged({ lobby_id: 'AB-CD', lobby_claim_lists: lobbyClaimLists });
+      expect(queryClient.getQueryData<{ claim_lists: unknown[] }>(lobbyKey)?.claim_lists).toHaveLength(1);
+      expect(invalidateQueries).not.toHaveBeenCalled();
     });
   });
 
@@ -1255,6 +1585,27 @@ describe('DebateGatewayClient', () => {
     // failing graph refetch under the reconcile would be read as a broken socket.
     expect(predicate!(cache.find({ queryKey: ['claim-picker', 'page', '', null] })!)).toBe(false);
     expect(predicate!(cache.find({ queryKey: ['debates', 'claims', 'space-1', 'all'] })!)).toBe(true);
+  });
+
+  it('leaves the rematch voice token out of the broad reconcile', async () => {
+    queryClient.setQueryData(['rematch-livekit', 'user-a', 'rematch-1'], { token: 't', url: 'wss://x' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries']>[0]>;
+    const invalidationCalls = invalidateQueries.mock.calls as unknown as Array<[InvalidationFilters]>;
+    const predicate = invalidationCalls.map(call => call[0]).find(filters => 'predicate' in filters)?.predicate;
+    expect(predicate).toBeTypeOf('function');
+    // A fresh token landing while the call is Reconnecting restarts it from scratch, and a reconnect
+    // of this socket is when that is most likely (GEO-3343).
+    const token = queryClient.getQueryCache().find({ queryKey: ['rematch-livekit', 'user-a', 'rematch-1'] });
+    expect(predicate!(token!)).toBe(false);
   });
 
   it('ignores a refetch cancelled by a later flush instead of recycling the socket', async () => {

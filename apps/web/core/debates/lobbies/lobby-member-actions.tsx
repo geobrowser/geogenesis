@@ -4,31 +4,34 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { Ellipsis } from '~/design-system/icons/ellipsis';
-import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbyMember, DebateLobbyMemberAction, DebateLobbyView } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
-import { MEMBER_ACTION_LABEL, memberActions, moderationErrorMessage, personName } from './lobby-format';
+import {
+  MEMBER_ACTION_LABEL,
+  type MemberActionTarget,
+  memberActions,
+  moderationErrorMessage,
+  personName,
+} from './lobby-format';
+import { useIsCallRoom } from './lobby-purpose';
 import { useModerateLobbyMember } from './moderation-hooks';
 
 /** Step down rather than "Remove as host" on yourself. */
 const STEP_DOWN_LABEL = 'Step down as host';
+/** A call's editor who stepped down, on themselves (GEO-3419). */
+const HOST_AGAIN_LABEL = 'Take hosting back';
 
 /** Whether a host could act on `member` at all; the menu trigger hides otherwise. */
-export function hasMemberActions(
-  lobby: Pick<DebateLobbyView, 'viewer'>,
-  member: Pick<DebateLobbyMember, 'role' | 'creator'>,
-  isSelf: boolean
-) {
+export function hasMemberActions(lobby: Pick<DebateLobbyView, 'viewer'>, member: MemberActionTarget, isSelf: boolean) {
   return memberActions(lobby.viewer, member, isSelf).length > 0;
 }
 
 /**
- * The host actions on one person, as a list of rows: shared by the roster's menu and the phone
- * layout's per-person sheet. Renders nothing for someone the viewer may not act on.
+ * The host actions on one person, as a list of rows, in the person menu. Renders nothing for
+ * someone the viewer may not act on.
  */
 export function LobbyMemberActions({
   lobby,
@@ -46,6 +49,7 @@ export function LobbyMemberActions({
   onDone?: () => void;
 }) {
   const moderate = useModerateLobbyMember(lobby.lobby_id);
+  const call = useIsCallRoom();
   const [confirmingBan, setConfirmingBan] = React.useState(false);
   const actions = memberActions(lobby.viewer, member, isSelf).filter(action => action !== 'mute' || micOn !== false);
   if (actions.length === 0) return null;
@@ -70,7 +74,7 @@ export function LobbyMemberActions({
       {confirmingBan ? (
         <div className="flex flex-col gap-2 px-3 py-2">
           <Text as="p" variant="metadata">
-            Ban {name}? They can’t rejoin this lobby until a host unbans them.
+            Ban {name}? They can’t rejoin this {call ? 'call' : 'lobby'} until a host unbans them.
           </Text>
           <div className="flex flex-wrap gap-2">
             <HubPillButton
@@ -106,64 +110,23 @@ export function LobbyMemberActions({
               action === 'ban' || action === 'remove' ? 'text-red-01' : 'text-text'
             )}
           >
-            {isSelf && action === 'remove-host' ? STEP_DOWN_LABEL : MEMBER_ACTION_LABEL[action]}
+            {isSelf && action === 'remove-host'
+              ? STEP_DOWN_LABEL
+              : isSelf && action === 'promote'
+                ? HOST_AGAIN_LABEL
+                : call && action === 'remove'
+                  ? 'Remove from call'
+                  : call && action === 'ban'
+                    ? 'Ban from call'
+                    : MEMBER_ACTION_LABEL[action]}
           </button>
         ))
       )}
       {moderate.isError ? (
         <Text as="p" variant="footnote" color="red-01" className="px-3 pb-2">
-          {moderationErrorMessage(moderate.error)}
+          {moderationErrorMessage(moderate.error, undefined, call ? 'call' : 'lobby')}
         </Text>
       ) : null}
     </div>
-  );
-}
-
-/** The roster row's "…" menu around `LobbyMemberActions`. Hidden when there is nothing to do. */
-export function LobbyMemberMenu({
-  lobby,
-  member,
-  isSelf,
-  micOn,
-}: {
-  lobby: Pick<DebateLobbyView, 'lobby_id' | 'viewer'>;
-  member: DebateLobbyMember;
-  isSelf: boolean;
-  micOn?: boolean;
-}) {
-  const [open, setOpen] = React.useState(false);
-  if (!hasMemberActions(lobby, member, isSelf)) return null;
-
-  return (
-    <Menu
-      open={open}
-      onOpenChange={setOpen}
-      asChild
-      align="end"
-      className="max-w-[260px]"
-      trigger={
-        <button
-          type="button"
-          aria-label={`Host controls for ${personName(member)}`}
-          {...debateActionAnalyticsAttributes('hub', 'Lobby host controls', 'open_lobby_host_controls')}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
-        >
-          <Ellipsis />
-        </button>
-      }
-    >
-      {/* Remounted on each open, so a confirm or error from last time does not linger. */}
-      {open ? (
-        <div role="group" aria-label={`Host controls for ${personName(member)}`}>
-          <LobbyMemberActions
-            lobby={lobby}
-            member={member}
-            isSelf={isSelf}
-            micOn={micOn}
-            onDone={() => setOpen(false)}
-          />
-        </div>
-      ) : null}
-    </Menu>
   );
 }

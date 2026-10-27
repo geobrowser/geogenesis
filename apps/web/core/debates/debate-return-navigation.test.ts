@@ -44,6 +44,21 @@ describe('debate return navigation', () => {
     expect(peekDebateReturnDestination()).toBeNull();
   });
 
+  // GEO-3337: a lobby can stop being the way back mid-flow; the page the flow opened from is kept.
+  it('keeps the page the flow opened from behind a lobby, for when the lobby stops being the way back', () => {
+    rememberDebateReturnDestination('/space/my-space');
+    rememberLobbyReturnDestination('lobby1');
+    rememberLobbyReturnDestination('lobby1');
+
+    expect(consumeDebateReturnDestination({ lobbyId: null })).toBe('/space/my-space');
+  });
+
+  it('has nothing behind a lobby the flow started in', () => {
+    rememberLobbyReturnDestination('lobby1');
+
+    expect(consumeDebateReturnDestination({ lobbyId: null })).toBeNull();
+  });
+
   it('still never returns to a room captured from the address bar', () => {
     rememberDebateReturnDestination('/debate/room1');
 
@@ -82,5 +97,44 @@ describe('debate return navigation', () => {
     vi.advanceTimersByTime(6 * 60 * 60 * 1_000 + 1);
 
     expect(consumeDebateReturnDestination()).toBeNull();
+  });
+});
+
+describe('the last page outside the debates', () => {
+  const key = 'geo.debates.last-page-outside';
+
+  afterEach(() => {
+    window.sessionStorage.removeItem(key);
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  /** A fresh module, as a new document loads it; `navigation` is how the browser got there. */
+  async function loadDocument(navigation?: 'navigate' | 'reload' | 'back_forward') {
+    vi.resetModules();
+    vi.spyOn(performance, 'getEntriesByType').mockReturnValue(
+      navigation ? ([{ type: navigation }] as unknown as PerformanceEntryList) : []
+    );
+    return import('./debate-return-navigation');
+  }
+
+  it('forgets a page from an earlier visit when the lobby is opened straight from outside the app', async () => {
+    window.sessionStorage.setItem(key, '/space/s1/profile');
+    const nav = await loadDocument('navigate');
+    expect(nav.lastPageOutsideDebates()).toBeNull();
+    // Forgotten, so a reload of this lobby does not bring it back either.
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it('keeps the page across a reload or Back into the lobby', async () => {
+    window.sessionStorage.setItem(key, '/space/s1/profile');
+    expect((await loadDocument('reload')).lastPageOutsideDebates()).toBe('/space/s1/profile');
+    expect((await loadDocument('back_forward')).lastPageOutsideDebates()).toBe('/space/s1/profile');
+  });
+
+  it('uses a page recorded in this document, whatever loaded it', async () => {
+    const nav = await loadDocument('navigate');
+    nav.rememberLastPageOutsideDebates('/explore?tab=claims');
+    expect(nav.lastPageOutsideDebates()).toBe('/explore?tab=claims');
   });
 });

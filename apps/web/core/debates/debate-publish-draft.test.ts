@@ -20,9 +20,11 @@ import {
 import {
   AUTHORS_PROPERTY_ID,
   CLAIM_ADDRESSES_PROPERTY_ID,
+  CLAIM_CONTROVERSY_SCORE_PROPERTY_ID,
   CLAIM_END_OFFSET_PROPERTY_ID,
   CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_OPPOSES_PROPERTY_ID,
+  CLAIM_RELEVANCE_SCORE_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
   CLAIM_SUPPORTS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
@@ -924,6 +926,37 @@ describe('buildDebatePublishDraft', () => {
         { property: CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID, dataType: 'FLOAT', value: '0' },
       ]);
       expect(relationsFrom(draft, statement)).toEqual([]);
+    });
+
+    it('writes the three axis scores beside the highlight score, each only when it is a real score', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            {
+              text: 'Axis-scored claim',
+              isFactual: false,
+              turnIndex: 0,
+              highlightScore: 0.62,
+              relevanceScore: 0.8,
+              // Out of range: skipped on its own, the other axes still write.
+              qualityScore: 1.2,
+              controversyScore: 0.7,
+            },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const statement = statementOf(draft, 'Axis-scored claim');
+      expect(offsetsOn(draft, statement)).toEqual([
+        { property: CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID, dataType: 'FLOAT', value: '0.62' },
+        { property: CLAIM_RELEVANCE_SCORE_PROPERTY_ID, dataType: 'FLOAT', value: '0.8' },
+        { property: CLAIM_CONTROVERSY_SCORE_PROPERTY_ID, dataType: 'FLOAT', value: '0.7' },
+      ]);
+      // Not on the claim either: a claim reused across debates carries different axes in each.
+      const claimId = claimIdByName(draft, 'Axis-scored claim');
+      expect(
+        draft.values.some(v => v.entity.id === claimId && v.property.id === CLAIM_RELEVANCE_SCORE_PROPERTY_ID)
+      ).toBe(false);
     });
 
     it('carries the score through the real publish op pipeline as a float, exactly', async () => {

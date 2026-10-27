@@ -19,12 +19,14 @@ import { pendingActionsAtom } from '~/core/state/pending-actions';
 import { closeSaveVotesPrompt, readSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
+import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from './hub-scroll';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 
 // Claim and space ids are knowledge-graph ids, so the fixtures have to be real ones — the card
 // refuses to touch the graph for anything else. The space id is hoisted because `vi.mock` factories
 // are lifted above every module-level declaration, so a mock that reads it can't use a plain const.
 const mocks = vi.hoisted(() => ({
+  watchLive: true,
   submitResponse: vi.fn(),
   submitResponseAsync: vi.fn(),
   isConnected: true,
@@ -67,7 +69,16 @@ const mocks = vi.hoisted(() => ({
   /** Whether each render of the card's summary read was enabled, in order. */
   summaryEnabled: [] as boolean[],
   nearViewport: true,
+  rootSelectors: [] as (string | undefined)[],
   useEntityResponse: vi.fn(),
+}));
+
+// Live watching is off in the product (GEO-3334). On here so the pill's own behaviour stays covered
+// for when it ships; the off state has its own test.
+vi.mock('../watch-live', () => ({
+  get WATCH_LIVE_ENABLED() {
+    return mocks.watchLive;
+  },
 }));
 
 vi.mock('../hooks', () => ({
@@ -136,7 +147,10 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
 // Off-screen is the default state of most cards in a list, and the state where this card's reads
 // are deliberately not made. Controllable so a test can be in it.
 vi.mock('~/core/hooks/use-near-viewport', () => ({
-  useNearViewport: () => ({ ref: vi.fn(), nearViewport: mocks.nearViewport }),
+  useNearViewport: (options?: { rootSelector?: string }) => {
+    mocks.rootSelectors.push(options?.rootSelector);
+    return { ref: vi.fn(), nearViewport: mocks.nearViewport };
+  },
 }));
 
 vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
@@ -269,6 +283,7 @@ function renderCard(card: ReactElement, { smartAccount }: { smartAccount?: objec
 }
 
 beforeEach(() => {
+  mocks.watchLive = true;
   // The disabled-state tooltip uses Radix positioning, which observes its content in the browser.
   vi.stubGlobal(
     'ResizeObserver',
@@ -302,6 +317,7 @@ beforeEach(() => {
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
   mocks.nearViewport = true;
+  mocks.rootSelectors = [];
   mocks.useEntityResponse.mockReset();
 });
 
@@ -313,6 +329,24 @@ afterEach(cleanup);
  * every holder including offline ones. So a side with nobody available rendered a bare "+2" and no
  * faces, and a side with one available person out of three said "+2" when only one was reachable.
  */
+// The lobby's claims column scrolls only on a desktop, and the card stays mounted across the
+// breakpoint, so it has to follow the selector it is handed rather than assume the hub's.
+describe('scroll root', () => {
+  it('measures against the scroll box the provider names, and the viewport when it names none', () => {
+    const card = (selector: string | undefined) => (
+      <HubScrollSelectorProvider value={selector}>
+        <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />
+      </HubScrollSelectorProvider>
+    );
+    renderCard(card(HUB_SCROLL_SELECTOR));
+    expect(mocks.rootSelectors.at(-1)).toBe(HUB_SCROLL_SELECTOR);
+    cleanup();
+
+    renderCard(card(undefined));
+    expect(mocks.rootSelectors.at(-1)).toBeUndefined();
+  });
+});
+
 describe('position avatar stack', () => {
   const withCounts = (overrides: Array<Partial<DebateClaimPositionSummary>>): DebateClaimPositionSummary[] => [
     { ...positions[0], ...overrides[0] },
@@ -1355,6 +1389,20 @@ describe('MatchmakingClaimCard', () => {
       'href',
       `/space/${mocks.spaceId}/debates/debate-7`
     );
+  });
+
+  it('offers no Watch live while live watching is off', () => {
+    mocks.watchLive = false;
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness()}
+        activeDebate={{ id: 'debate-7', claim: { ...claim, space_id: mocks.spaceId } } as never}
+      />
+    );
+
+    expect(screen.queryByRole('link', { name: /Watch live/ })).toBeNull();
   });
 
   // A debate room lives under the space its *claim* came from, which is not always the space the

@@ -27,6 +27,12 @@ export type LocalVote = {
   /** The claim's sentence or the entity's name, for the save sheet's reminder chips. */
   title: string;
   votedAt: number;
+  /**
+   * The email whose vote link cast it (GEO-3374). Such a vote is the email's suggestion rather than a
+   * press, so saving it never switches a side the account already holds, and its save carries the
+   * email's attribution.
+   */
+  refEmail?: string;
 };
 
 export type LocalVotesState = {
@@ -44,6 +50,8 @@ export type LocalVotesState = {
 export const LOCAL_VOTES_STORAGE_KEY = 'geo:local-votes:v1';
 /** Past this the oldest vote is dropped. One transaction per vote on save, so this bounds that too. */
 export const LOCAL_VOTES_CAP = 50;
+/** The action-context list id of votes published from this device's signed-out votes. */
+export const LOCAL_VOTES_LIST_ID = 'local_votes';
 export const LOCAL_VOTE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const EMPTY: LocalVotesState = { votes: [], prompt: { shownCount: 0, dismissCount: 0 }, save: null };
@@ -106,7 +114,11 @@ function parse(raw: string | null, now = Date.now()): LocalVotesState {
     const votes = (Array.isArray(parsed.votes) ? parsed.votes : [])
       .map(withoutLegacyShape)
       .filter(isVote)
-      .map(vote => ({ ...vote, title: typeof vote.title === 'string' ? vote.title : '' }))
+      .map(vote => ({
+        ...vote,
+        title: typeof vote.title === 'string' ? vote.title : '',
+        refEmail: typeof vote.refEmail === 'string' ? vote.refEmail : undefined,
+      }))
       .filter(vote => now - vote.votedAt < LOCAL_VOTE_TTL_MS);
     const state: LocalVotesState = {
       votes,
@@ -205,7 +217,12 @@ export type LocalVoteKey = Pick<LocalVote, 'entityId' | 'spaceId' | 'responseKin
 const sameVote = (vote: LocalVote, key: LocalVoteKey) =>
   vote.entityId === key.entityId && vote.spaceId === key.spaceId && vote.responseKind === key.responseKind;
 
-export type LocalVoteChange = { action: 'cast' | 'switch' | 'remove'; count: number };
+export type LocalVoteChange = {
+  action: 'cast' | 'switch' | 'remove';
+  /** The side this device held before the press, or null. */
+  previous: LocalVoteDirection | null;
+  count: number;
+};
 
 /**
  * A signed-out press: the side the visitor pressed, or none if they pressed the side they hold — the
@@ -217,11 +234,11 @@ export function toggleLocalVote(next: Omit<LocalVote, 'votedAt'>): LocalVoteChan
   const others = current.votes.filter(vote => !sameVote(vote, next));
   if (held?.direction === next.direction) {
     write({ ...current, votes: others });
-    return { action: 'remove', count: others.length };
+    return { action: 'remove', previous: held.direction, count: others.length };
   }
   const votes = [...others, { ...next, votedAt: Date.now() }].slice(-LOCAL_VOTES_CAP);
   write({ ...current, votes });
-  return { action: held ? 'switch' : 'cast', count: votes.length };
+  return { action: held ? 'switch' : 'cast', previous: held?.direction ?? null, count: votes.length };
 }
 
 export function removeLocalVote(key: LocalVoteKey) {

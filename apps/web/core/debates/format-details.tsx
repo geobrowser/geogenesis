@@ -3,7 +3,7 @@
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
-import type { DebateOpenRounds } from './api';
+import type { DebateOpenRounds, DebateRequest } from './api';
 import {
   type DebateTurnRole,
   debateFormatById,
@@ -14,6 +14,7 @@ import {
   openRoundsDefaultRebuttalTurnMs,
   openRoundsOpeningTurnDurationsMs,
 } from './formats';
+import { openRoundsRequiredRebuttalRounds } from './open-rounds';
 import { speakerLabel } from './playback-utils';
 
 type FormatParticipant = {
@@ -24,16 +25,25 @@ type FormatParticipant = {
 };
 
 /** What the format box needs from a debate's `open_rounds` block. */
-export type DebateFormatOpenRounds = Pick<DebateOpenRounds, 'max_rebuttal_rounds' | 'rebuttal_turn_ms'>;
+export type DebateFormatOpenRounds = Pick<
+  DebateOpenRounds,
+  'max_rebuttal_rounds' | 'rebuttal_turn_ms' | 'required_rebuttal_rounds'
+>;
 
 /**
- * The format box's Open rounds block for a pending request. The server decides the format and cap
- * when the request is made (GEO-3201); the rebuttal turn length isn't on the request, so it uses the
- * default every Open rounds debate starts with.
+ * The format box's Open rounds block for a pending request. The server decides the format, cap and
+ * required rounds when the request is made (GEO-3201); the rebuttal turn length isn't on the
+ * request, so it uses the default every Open rounds debate starts with.
  */
-export function requestOpenRounds(maxRebuttalRounds: number | null | undefined): DebateFormatOpenRounds | null {
-  if (maxRebuttalRounds == null) return null;
-  return { max_rebuttal_rounds: maxRebuttalRounds, rebuttal_turn_ms: openRoundsDefaultRebuttalTurnMs };
+export function requestOpenRounds(
+  request: Pick<DebateRequest, 'max_rebuttal_rounds' | 'required_rebuttal_rounds'>
+): DebateFormatOpenRounds | null {
+  if (request.max_rebuttal_rounds == null) return null;
+  return {
+    max_rebuttal_rounds: request.max_rebuttal_rounds,
+    required_rebuttal_rounds: request.required_rebuttal_rounds ?? 0,
+    rebuttal_turn_ms: openRoundsDefaultRebuttalTurnMs,
+  };
 }
 
 export function DebateFormatDetails({
@@ -54,12 +64,16 @@ export function DebateFormatDetails({
   const firstParticipant = participants[0];
   if (!firstParticipant) return null;
 
-  // GEO-3173. Open rounds has two opening turns and then only the rebuttal rounds both debaters
-  // pick, so listing turns up front would promise a closing turn that never happens.
+  // GEO-3173. Open rounds has two opening turns and its required rebuttal rounds, then only the
+  // rebuttal rounds both debaters pick, so listing those up front would promise turns that may
+  // never happen.
   const isOpenRounds = Boolean(openRounds) || isOpenRoundsFormatId(formatId);
   // No id means the server default. An id this build does not know is not the default, though,
   // and showing the default's turns for it would describe a different debate.
   const fixedFormat = isOpenRounds ? null : debateFormatById(formatId || defaultDebateFormatId);
+  const rebuttalTurnMs = openRounds?.rebuttal_turn_ms ?? openRoundsDefaultRebuttalTurnMs;
+  const requiredRebuttalRounds = openRounds ? openRoundsRequiredRebuttalRounds(openRounds) : 0;
+  const maxRebuttalRounds = openRounds?.max_rebuttal_rounds ?? null;
   if (!isOpenRounds && !fixedFormat) {
     return (
       <Text as="p" variant="metadata" color="grey-04" className="px-3 py-3">
@@ -73,7 +87,13 @@ export function DebateFormatDetails({
         durationMs,
         role: debateTurnRole(index, all.length),
       }))
-    : openRoundsOpeningTurnDurationsMs.map(durationMs => ({ durationMs, role: 'opening' }));
+    : [
+        ...openRoundsOpeningTurnDurationsMs.map(durationMs => ({ durationMs, role: 'opening' as const })),
+        ...Array.from({ length: requiredRebuttalRounds * 2 }, () => ({
+          durationMs: rebuttalTurnMs,
+          role: 'rebuttal' as const,
+        })),
+      ];
 
   return (
     <div className="grid">
@@ -89,10 +109,12 @@ export function DebateFormatDetails({
           />
         );
       })}
-      {isOpenRounds && (
+      {/* A cap no higher than the required rounds leaves no round to extend into. */}
+      {isOpenRounds && (maxRebuttalRounds === null || maxRebuttalRounds > requiredRebuttalRounds) && (
         <OpenRoundsRebuttalRow
-          rebuttalTurnMs={openRounds?.rebuttal_turn_ms ?? openRoundsDefaultRebuttalTurnMs}
-          maxRebuttalRounds={openRounds?.max_rebuttal_rounds ?? null}
+          rebuttalTurnMs={rebuttalTurnMs}
+          extendableRounds={maxRebuttalRounds === null ? null : maxRebuttalRounds - requiredRebuttalRounds}
+          afterRequiredRounds={requiredRebuttalRounds > 0}
         />
       )}
     </div>
@@ -132,19 +154,23 @@ function TurnRow({
   );
 }
 
-/** The dashed row: rebuttal rounds that happen only if both debaters pick Extend. */
+/** The dashed row: rebuttal rounds that happen when one debater picks Extend and neither picks End. */
 function OpenRoundsRebuttalRow({
   rebuttalTurnMs,
-  maxRebuttalRounds,
+  extendableRounds,
+  afterRequiredRounds,
 }: {
   rebuttalTurnMs: number;
-  maxRebuttalRounds: number | null;
+  /** The cap less the required rounds, which the turn rows above already list. */
+  extendableRounds: number | null;
+  afterRequiredRounds: boolean;
 }) {
-  // The cap is snapshotted onto a debate when it is created, so only a debate knows it. Without
-  // one, naming a number would be a guess at what the server will enforce.
+  // The cap is decided with the request (GEO-3201), so a format box without one would be naming a
+  // guess at what the server will enforce.
+  const more = afterRequiredRounds ? ' more' : '';
   const cap =
-    maxRebuttalRounds !== null && maxRebuttalRounds > 0
-      ? ` Up to ${maxRebuttalRounds} ${maxRebuttalRounds === 1 ? 'round' : 'rounds'}.`
+    extendableRounds !== null && extendableRounds > 0
+      ? ` Up to ${extendableRounds}${more} ${extendableRounds === 1 ? 'round' : 'rounds'}.`
       : '';
 
   return (
@@ -157,7 +183,7 @@ function OpenRoundsRebuttalRow({
           Then extend, round by round
         </Text>
         <Text as="div" variant="metadata" color="grey-04">
-          A round happens only if you both pick Extend.{cap}
+          A round happens if one of you picks Extend and neither picks End.{cap}
         </Text>
       </div>
     </div>

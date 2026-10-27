@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   // Whether the thank-you card is on screen carrying the publish switch. It changes which opt-out
   // control is drawn, not whether the banner reports the upload — it always does.
   thankingShowsPublishControl: false,
+  thankingCancelWindowOpen: undefined as boolean | undefined,
   publishOptOutOffer: null as { debateId: string | null; busy: boolean; cancelled: boolean } | null,
   publishOptOutRequest: null as string | null,
   // Set to hold the presigned PUT open, so a test can read the banner mid-transfer and drive
@@ -92,7 +93,13 @@ vi.mock('./hooks', () => ({
   useDebateActivity: () => ({ data: mocks.activityDebate ? { debate: mocks.activityDebate } : undefined }),
 }));
 
-const setPublishOptOutOffer = (offer: { debateId: string | null; busy: boolean; cancelled: boolean }) => {
+const setPublishOptOutOffer = (offer: {
+  debateId: string | null;
+  busy: boolean;
+  cancelled: boolean;
+  upload?: 'preparing' | 'uploading' | 'uploaded' | null;
+  percent?: number | null;
+}) => {
   mocks.publishOptOutOffer = offer;
 };
 const setPublishOptOutRequest = (debateId: string | null) => {
@@ -100,6 +107,7 @@ const setPublishOptOutRequest = (debateId: string | null) => {
 };
 
 vi.mock('./thanking-debate-store', () => ({
+  EMPTY_PUBLISH_OPT_OUT_OFFER: { debateId: null, busy: false, cancelled: false, upload: null, percent: null },
   useThankingDebate: () =>
     mocks.thankingDebateId
       ? {
@@ -108,6 +116,7 @@ vi.mock('./thanking-debate-store', () => ({
           hasUploadedRecording: mocks.thankingHasUploadedRecording,
           recordingCancelled: mocks.thankingRecordingCancelled,
           showsPublishControl: mocks.thankingShowsPublishControl,
+          cancelWindowOpen: mocks.thankingCancelWindowOpen,
         }
       : null,
   // Records what the coordinator offers the card, so a case can assert the opt-out is on offer
@@ -264,6 +273,7 @@ beforeEach(() => {
   mocks.thankingHasPendingLocalRecording = false;
   mocks.thankingRecordingCancelled = false;
   mocks.thankingShowsPublishControl = false;
+  mocks.thankingCancelWindowOpen = undefined;
   mocks.publishOptOutOffer = null;
   mocks.publishOptOutRequest = null;
   mocks.holdUpload = null;
@@ -721,6 +731,30 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
+  // Copilot on #2853: the picker's card read a stopped upload as one still going.
+  it('tells the card the finished debate’s upload has stopped, and that Retry restarted it', async () => {
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingShowsPublishControl = true;
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS,
+        failedAt: Date.now() - 1_000,
+        failedReason: 'retries_exhausted',
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.publishOptOutOffer).toEqual(expect.objectContaining({ upload: 'failed' })));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(mocks.publishOptOutOffer).toEqual(expect.objectContaining({ upload: 'uploading' })));
+  });
+
   it('does not attempt a failed upload on startup until asked', async () => {
     mocks.thankingDebateId = null;
     mocks.queue = [
@@ -1160,7 +1194,36 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1'));
     expect(mocks.capture).toHaveBeenCalledWith(
       'debate_recording_upload_cancelled',
-      expect.objectContaining({ debate_id: 'debate-1', cancel_source: 'thanking_toggle' })
+      expect.objectContaining({ debate_id: 'debate-1', cancel_source: 'rematch_card' })
+    );
+  });
+
+  // GEO-3301. The claim picker carries the card past geo-chat's cancel deadline: it keeps the upload
+  // on screen, and nothing offers a cancel the server would refuse.
+  it('stops offering the cancel once the surface says the window has closed, but keeps reporting the upload', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingCancelWindowOpen = false;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.publishOptOutOffer).toEqual(expect.objectContaining({ upload: 'uploading' })));
+    expect(mocks.publishOptOutOffer).toEqual(expect.objectContaining({ debateId: null }));
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+  });
+
+  it('tells the card where the finished debate’s own upload is', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingShowsPublishControl = true;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() =>
+      expect(mocks.publishOptOutOffer).toEqual(expect.objectContaining({ debateId: 'debate-1', upload: 'uploading' }))
     );
   });
 
@@ -1205,6 +1268,30 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
     expect(await screen.findByText('Debate uploaded')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+  });
+
+  // Copilot on #2853. The claim picker keeps reporting the debate after geo-chat's window closes;
+  // "Debate uploaded" spoke for a Cancel that no longer existed, and hid other uploads' failures.
+  it('stops saying "Debate uploaded" once the window closes, and shows other failures again', async () => {
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingHasUploadedRecording = true;
+    mocks.thankingCancelWindowOpen = false;
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-2'),
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS,
+        failedAt: Date.now() - 1_000,
+        failedReason: 'retries_exhausted',
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('1 debate didn’t upload')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.queryByText('Debate uploaded')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
   });
 
   it('restores the uploaded banner from the debate snapshot after a remount', async () => {
@@ -1285,6 +1372,59 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(screen.getByRole('dialog', { name: 'Don’t want to publish?' })).toBeInTheDocument();
     expect(mocks.deleteUpload).not.toHaveBeenCalled();
     expect(mocks.queue).toHaveLength(1);
+  });
+
+  // Copilot on #2853. A prompt opened just before geo-chat's deadline used to stay live after it,
+  // and confirming sent a cancel the server refused in its own words about a screen now gone.
+  it('stops a prompt opened before the deadline from confirming after it', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingShowsPublishControl = true;
+    mocks.publishOptOutRequest = 'debate-1';
+    mocks.queue = [queuedRecording('debate-1')];
+
+    const view = render(<DebateRecordingUploadCoordinator />);
+    const confirm = await screen.findByRole('button', { name: 'Delete debate forever' });
+    expect(confirm).toBeEnabled();
+
+    mocks.thankingCancelWindowOpen = false;
+    mocks.thankingShowsPublishControl = false;
+    view.rerender(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('It’s too late to cancel. This debate is already being published.')).toBeVisible();
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(mocks.cancelRecording).not.toHaveBeenCalled();
+  });
+
+  it('says it is too late, in the app’s words, when geo-chat refuses a cancel past its deadline', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.cancelRecording.mockRejectedValue(
+      new GeoChatRequestError(
+        'recordings can only be cancelled through the end of the thank-you period',
+        'recording_not_cancellable',
+        400
+      )
+    );
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    expect(
+      await screen.findByText('It’s too late to cancel. This debate is already being published.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/thank-you period/)).toBeNull();
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
+
+    // Copilot on #2853: the refusal is terminal, so the prompt stops offering to ask again.
+    const confirm = screen.getByRole('button', { name: 'Delete debate forever' });
+    expect(confirm).toBeDisabled();
+    const requests = mocks.cancelRecording.mock.calls.length;
+    fireEvent.click(confirm);
+    expect(mocks.cancelRecording).toHaveBeenCalledTimes(requests);
   });
 
   it('keeps publication cancelled when server cancellation succeeds but local cleanup fails', async () => {

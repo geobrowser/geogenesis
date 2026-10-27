@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/debates/rematch-panel-context', () => ({ useRematchPanelContext: () => ({}) }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
   usePrivy: () => ({ authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
@@ -112,7 +112,7 @@ beforeEach(() => {
   mocks.getResponders.mockReset();
   mocks.getResponders.mockReturnValue([]);
   mocks.getSummaryPage.mockReset();
-  mocks.getSummaryPage.mockReturnValue([]);
+  mocks.getSummaryPage.mockReturnValue({ items: [], endCursor: null, hasNextPage: false });
   mocks.getViewerResponse.mockReset();
   mocks.getViewerResponse.mockReturnValue('positive');
   mocks.optimisticResponse = undefined;
@@ -165,7 +165,7 @@ describe('EntityVoteButtons claims-page batching', () => {
     expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 12 12')).toBe(true);
   });
 
-  it('renders persisted curation state in the fullscreen debate pill', () => {
+  it('renders persisted curation state from the batch', () => {
     mocks.smartAccount = {};
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(entityResponseCountsQueryKey('debate-1', 'space-1', 0, 'curation'), {
@@ -176,12 +176,7 @@ describe('EntityVoteButtons claims-page batching', () => {
 
     const view = render(
       <ClaimResponseBatchBoundary ready>
-        <EntityVoteButtons
-          entityId="debate-1"
-          spaceId="space-1"
-          responseKind="curation"
-          presentation="debate-vertical"
-        />
+        <EntityVoteButtons entityId="debate-1" spaceId="space-1" responseKind="curation" />
       </ClaimResponseBatchBoundary>,
       {
         wrapper: ({ children }: { children: ReactNode }) => (
@@ -191,7 +186,8 @@ describe('EntityVoteButtons claims-page batching', () => {
     );
 
     expect(view.getByText('7')).toBeInTheDocument();
-    expect(view.getByRole('button', { name: 'Remove upvote' })).toHaveAttribute('aria-pressed', 'true');
+    // The persisted upvote is what makes the button offer to remove it.
+    expect(view.getByRole('button', { name: 'Remove upvote' })).toBeInTheDocument();
     fireEvent.click(view.getByRole('button', { name: 'Downvote' }));
     expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative');
   });

@@ -28,6 +28,7 @@ import {
 } from '~/core/hooks/use-user-voted-entity-ids';
 import { withRetryAfterJitter } from '~/core/io/errors/retry-utils';
 import { getUserEntityResponse } from '~/core/io/queries';
+import { marketingVoteDirection, pushMarketingEvent } from '~/core/marketing-events';
 import {
   claimResponseSummariesQueryKeyPrefix,
   loadClaimResponseSummaryCaches,
@@ -43,6 +44,7 @@ import {
   isAwaitingResponseSubmission,
   responseKindToVoteKind,
   userEntityResponseQueryKey,
+  voteOutcomeProperties,
   waitForIndexedEntityResponse,
 } from '~/core/responses/entity-response';
 import {
@@ -51,6 +53,7 @@ import {
   recordFailedResponse,
 } from '~/core/responses/failed-response-retries';
 import { geo } from '~/core/sdk/geo-client';
+import { LOCAL_VOTES_LIST_ID } from '~/core/state/local-votes';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
@@ -588,29 +591,31 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
         entityName,
         personalSpaceId: votingPersonalSpaceId,
         retryKey,
+        attribution,
       };
     },
     onSuccess: (submission, { direction }, context) => {
-      const previousDirection =
-        context?.previousResponse === 'positive' ? 'up' : context?.previousResponse === 'negative' ? 'down' : undefined;
-      const voteDirection = direction === 'positive' ? 'up' : direction === 'negative' ? 'down' : 'none';
-      const voteAction =
-        direction === 'clear' ? 'remove' : previousDirection && previousDirection !== voteDirection ? 'switch' : 'cast';
       const outcomeProperties = {
-        vote_direction: voteDirection,
-        vote_kind: voteDirection,
-        mutation_kind: voteAction,
-        vote_action: voteAction,
-        previous_vote_direction: previousDirection,
-        response_kind: submission.pending.responseKind,
-        response_action: getResponseActionMethod(submission.pending.responseKind, direction),
-        entity_id: submission.pending.entityId,
+        ...voteOutcomeProperties({
+          responseKind: submission.pending.responseKind,
+          direction,
+          previousResponse: context?.previousResponse,
+          entityId: submission.pending.entityId,
+          spaceId: submission.pending.spaceId,
+        }),
         target_name: context?.entityName || undefined,
-        space_id: submission.pending.spaceId,
-        object_type: 0,
         user_operation_hash: submission.transaction,
       };
       context?.operation.outcome('vote_cast', 'submitted', outcomeProperties);
+      // A vote saved from this device's signed-out votes was already counted as anonymous when cast.
+      if (direction !== 'clear' && context?.attribution.list_id !== LOCAL_VOTES_LIST_ID) {
+        pushMarketingEvent('geo_vote', {
+          target_id: submission.pending.entityId,
+          space_id: submission.pending.spaceId,
+          vote_kind: submission.pending.responseKind,
+          vote_direction: marketingVoteDirection(submission.pending.responseKind, direction),
+        });
+      }
       submission.pending.onIndexed = () => context?.operation.outcome('vote_cast', 'indexed', outcomeProperties);
       syncVotedLists(direction, submission.pending);
       // Taking a position on a claim (agree/disagree, verify/dispute) says the user wants to

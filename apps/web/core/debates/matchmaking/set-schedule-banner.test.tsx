@@ -189,3 +189,52 @@ describe('SetScheduleBanner focus hand-off', () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 });
+
+// GEO-3268. A live lobby takes the banner's place above the panel's tabs. Copilot on #2836: the
+// schedule dialog lives in the banner, so the swap closed it mid-edit. Hidden, the banner keeps
+// the dialog and drops only the callout.
+describe('SetScheduleBanner hidden', () => {
+  function Harness({ hidden }: { hidden: boolean }) {
+    const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
+    return (
+      <>
+        <button ref={scheduleButtonRef} type="button">
+          Header calendar
+        </button>
+        <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} hidden={hidden} />
+      </>
+    );
+  }
+
+  it('keeps an open schedule dialog when hidden, and drops the callout', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<Harness hidden={false} />);
+    await user.click(await screen.findByRole('button', { name: 'Set my schedule' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+
+    const dialog = screen.getByRole('dialog');
+
+    rerender(<Harness hidden />);
+    // The same dialog, not a fresh one: a remount would reset the unsaved week inside it.
+    expect(screen.getByRole('dialog')).toBe(dialog);
+    expect(screen.queryByText('Debate schedule')).not.toBeInTheDocument();
+  });
+
+  it('hands focus to the header on close, its own button being gone', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<Harness hidden={false} />);
+    await user.click(await screen.findByRole('button', { name: 'Set my schedule' }));
+    await screen.findByRole('dialog');
+
+    rerender(<Harness hidden />);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Header calendar' })).toHaveFocus());
+  });
+
+  it('draws nothing when hidden with the dialog closed', () => {
+    render(<Harness hidden />);
+    expect(screen.queryByText('Debate schedule')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});

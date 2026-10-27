@@ -1,5 +1,9 @@
 'use client';
 
+import { isSpaceCallPath } from '~/core/space-calls/routes';
+import { currentNavigationType } from '~/core/utils/navigation-type';
+import { readSession, removeSession, writeSession } from '~/core/utils/session-storage';
+
 import { debateRoomPath, isDebateRoomPath } from './rooms/room-routes';
 
 const debateReturnDestinationKey = 'geo.debates.return-destination';
@@ -10,6 +14,8 @@ type StoredDebateReturnDestination = {
   capturedAt: number;
   /** A lobby, which shares the room path but is a place to come back to. */
   lobby?: true;
+  /** A lobby's: the page the flow opened from, for when the lobby stops being the way back. */
+  from?: string;
 };
 
 /**
@@ -23,18 +29,19 @@ export function rememberDebateReturnDestination(href = currentBrowserHref()) {
   storeDestination({ href: destination, capturedAt: Date.now() });
 }
 
-/** Remember a lobby, stepped out of to debate, as the place the flow returns to. */
+/**
+ * Remember a lobby, stepped out of to debate, as the place the flow returns to. A page recorded
+ * before it is kept behind it, so leaving the lobby mid-debate still returns there.
+ */
 export function rememberLobbyReturnDestination(lobbyId: string) {
-  storeDestination({ href: debateRoomPath(lobbyId), capturedAt: Date.now(), lobby: true });
+  const previous = readStoredDestination();
+  const from = previous ? (previous.lobby ? previous.from : previous.href) : undefined;
+  storeDestination({ href: debateRoomPath(lobbyId), capturedAt: Date.now(), lobby: true, ...(from ? { from } : {}) });
 }
 
 function storeDestination(stored: StoredDebateReturnDestination) {
-  try {
-    window.sessionStorage.setItem(debateReturnDestinationKey, JSON.stringify(stored));
-  } catch {
-    // Browser storage can be unavailable in privacy modes. Existing history
-    // and route fallbacks still handle the exit in that case.
-  }
+  // Without storage, existing history and route fallbacks still handle the exit.
+  writeSession(debateReturnDestinationKey, JSON.stringify(stored));
 }
 
 /**
@@ -46,7 +53,8 @@ export function consumeDebateReturnDestination(lobby?: { lobbyId: string | null 
   clearDebateReturnDestination();
   if (!lobby) return stored?.href ?? null;
   if (lobby.lobbyId) return debateRoomPath(lobby.lobbyId);
-  return stored && !stored.lobby ? stored.href : null;
+  if (!stored) return null;
+  return stored.lobby ? (stored.from ?? null) : stored.href;
 }
 
 /** The destination the flow will return to, left in place. */
@@ -54,13 +62,8 @@ export function peekDebateReturnDestination(): string | null {
   return readStoredDestination()?.href ?? null;
 }
 
-function readStoredDestination(): { href: string; lobby: boolean } | null {
-  let raw: string | null = null;
-  try {
-    raw = window.sessionStorage.getItem(debateReturnDestinationKey);
-  } catch {
-    return null;
-  }
+function readStoredDestination(): { href: string; lobby: boolean; from?: string } | null {
+  const raw = readSession(debateReturnDestinationKey);
   if (!raw) return null;
 
   try {
@@ -69,7 +72,11 @@ function readStoredDestination(): { href: string; lobby: boolean } | null {
     if (Date.now() - stored.capturedAt > debateReturnDestinationMaxAgeMs) return null;
     const destination = safeInternalHref(stored.href);
     if (!destination) return null;
-    if (stored.lobby === true) return isDebateRoomPath(destination) ? { href: destination, lobby: true } : null;
+    if (stored.lobby === true) {
+      if (!isDebateRoomPath(destination)) return null;
+      const from = typeof stored.from === 'string' ? safeInternalHref(stored.from) : null;
+      return { href: destination, lobby: true, ...(from && !isDebateFlowHref(from) ? { from } : {}) };
+    }
     return isDebateFlowHref(destination) ? null : { href: destination, lobby: false };
   } catch {
     return null;
@@ -77,11 +84,43 @@ function readStoredDestination(): { href: string; lobby: boolean } | null {
 }
 
 export function clearDebateReturnDestination() {
-  try {
-    window.sessionStorage.removeItem(debateReturnDestinationKey);
-  } catch {
-    // Nothing to clear when storage is unavailable.
+  removeSession(debateReturnDestinationKey);
+}
+
+const lastPageOutsideDebatesKey = 'geo.debates.last-page-outside';
+/** A page was recorded since this document loaded, so the stored one is from this visit. */
+let recordedInThisDocument = false;
+
+/**
+ * Every page that is not a debate surface, so leaving a lobby lands where it was opened from. A
+ * debate stepped out to from the lobby is skipped, so it never stands in for that page.
+ */
+export function rememberLastPageOutsideDebates(href = currentBrowserHref()) {
+  const page = safeInternalHref(href);
+  // Without storage, leaving a lobby falls back to Explore.
+  if (!page || isDebateFlowHref(page)) return;
+  writeSession(lastPageOutsideDebatesKey, page);
+  recordedInThisDocument = true;
+}
+
+/**
+ * The last page this tab was on outside the debate surfaces, or null. A lobby opened straight from
+ * outside the app (a pasted or shared link) has none: the tab's page from an earlier visit is
+ * forgotten. A reload or Back into the lobby keeps it.
+ */
+export function lastPageOutsideDebates(): string | null {
+  if (!recordedInThisDocument && !documentRestored()) {
+    removeSession(lastPageOutsideDebatesKey);
+    return null;
   }
+  const stored = readSession(lastPageOutsideDebatesKey);
+  const page = stored ? safeInternalHref(stored) : null;
+  return page && !isDebateFlowHref(page) ? page : null;
+}
+
+function documentRestored() {
+  const type = currentNavigationType();
+  return type === 'reload' || type === 'back_forward';
 }
 
 function currentBrowserHref() {
@@ -105,6 +144,8 @@ function isDebateFlowHref(href: string) {
   // A room is a debate surface like the rest: captured as a destination, it saves itself as its
   // own, and leaving lands back in it.
   if (isDebateRoomPath(pathname)) return true;
+  // A space call is left the same way, so it is never the page leaving one goes back to.
+  if (isSpaceCallPath(pathname)) return true;
 
   const segments = pathname.split('/').filter(Boolean);
   return segments[0] === 'space' && segments[2] === 'debates' && segments.length > 3;

@@ -2,9 +2,12 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { GeoChatRequestError, dashlessId, getDebateLobbyClaims } from '../api';
+import { type DebateLobbyGuestView, GeoChatRequestError, dashlessId, getDebateLobbyClaims } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { viewerReadRetryOptions } from '../matchmaking/hooks';
+import { useDebateLobbyGuestView, useIsLobbyGuest } from './lobby-guest-hooks';
+
+const guestClaims = (view: DebateLobbyGuestView) => view.claims ?? undefined;
 
 /**
  * The lobby's "In this room" claims. Refetched on `debate.lobby_changed`, after the viewer's own vote
@@ -12,18 +15,23 @@ import { viewerReadRetryOptions } from '../matchmaking/hooks';
  */
 export function useDebateLobbyClaims(lobbyId: string, enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
+  // A guest reads them off the page's guest view, which polls.
+  const guest = useIsLobbyGuest();
+  const guestQuery = useDebateLobbyGuestView(lobbyId, { enabled: enabled && guest, select: guestClaims });
 
-  return useQuery({
+  const memberQuery = useQuery({
     ...debateQueryNetworkOptions,
     ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.lobbyClaims(accountKey, lobbyId),
     queryFn: ({ signal }) => getDebateLobbyClaims(dashlessId(lobbyId), getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && Boolean(lobbyId) && ready && authenticated,
+    enabled: enabled && !guest && Boolean(lobbyId) && ready && authenticated,
   });
+
+  return guest ? guestQuery : memberQuery;
 }
 
 /** Refusals that mean the list's request offer is out of date. */
-const STALE_OFFER_CODES = new Set(['no_candidates_in_lobby', 'lobby_not_present']);
+const STALE_OFFER_CODES = new Set(['no_candidates_in_lobby', 'lobby_not_present', 'recipient_not_available']);
 
 /** A request `onError` that refetches the list when the refusal says its offer was stale. */
 export function useRefreshLobbyClaimsOnRefusal(lobbyId: string) {
@@ -35,10 +43,14 @@ export function useRefreshLobbyClaimsOnRefusal(lobbyId: string) {
   };
 }
 
+export const RECIPIENT_UNAVAILABLE_MESSAGE = 'They can’t take a request on this claim right now.';
+
 /** A refused lobby-scoped request, in the reader's terms; null to fall back to the claim's own. */
 export function lobbyClaimRequestErrorMessage(error: unknown) {
   if (!(error instanceof GeoChatRequestError)) return null;
   switch (error.code) {
+    case 'recipient_not_available':
+      return RECIPIENT_UNAVAILABLE_MESSAGE;
     case 'no_candidates_in_lobby':
       return 'Nobody here on the other side can take a request right now.';
     case 'lobby_not_present':

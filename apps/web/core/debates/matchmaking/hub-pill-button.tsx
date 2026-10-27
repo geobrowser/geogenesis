@@ -8,6 +8,7 @@ import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from '.
 
 type Props = {
   variant?: 'primary' | 'secondary';
+  size?: HubPillSize;
   /** Swapped in while a mutation is in flight, so the press has visible feedback. */
   pendingLabel?: string;
   pending?: boolean;
@@ -28,18 +29,32 @@ type Props = {
  */
 /**
  * The pill's classes, for the one place the hub needs a pill that is not a button: a link, such as
- * "Join debate". Kept here so the two cannot drift.
+ * "Join debate". Kept here so the two cannot drift. `tag` is the secondary look without its hover,
+ * for a pill that holds a value rather than acting on a press, like a picked claim list.
  */
-export function hubPillClassName(variant: 'primary' | 'secondary' = 'secondary', className?: string) {
+/**
+ * `large` is the full-width choice a dialog of its own leads with, a thumb's height on a phone: the
+ * Running late and Can't make it screens (GEO-3427). Everything else is the hub's `default`.
+ */
+export type HubPillSize = 'default' | 'large';
+
+export function hubPillClassName(
+  variant: 'primary' | 'secondary' | 'tag' = 'secondary',
+  className?: string,
+  size: HubPillSize = 'default'
+) {
   return cx(
-    // `h-7` is a fixed height, so a label that wraps to a second line spills out of the pill.
+    // A fixed height, so a label that wraps to a second line spills out of the pill.
     // nowrap is what prevents that: it makes min-content equal max-content, and a flex item's
     // default `min-width: auto` then stops the row from squeezing the pill at all — the name
     // beside it absorbs the shrinking instead, which is why rows give it `min-w-0 truncate`.
     // shrink-0 is redundant today and kept only to survive a later `min-w-0` on this button,
     // which would defeat the `min-width: auto` this leans on.
-    'inline-flex h-7 shrink-0 items-center justify-center rounded-full px-3 text-metadata whitespace-nowrap transition-colors disabled:opacity-50',
-    variant === 'primary' ? 'bg-text text-white hover:bg-text/90' : 'border border-grey-02 text-text hover:bg-grey-01',
+    'inline-flex shrink-0 items-center justify-center rounded-full whitespace-nowrap transition-colors disabled:opacity-50',
+    size === 'large' ? 'h-12 px-5 text-button' : 'h-7 px-3 text-metadata',
+    variant === 'primary'
+      ? 'bg-text text-white hover:bg-text/90'
+      : cx('border border-grey-02 text-text', variant === 'secondary' && 'hover:bg-grey-01'),
     className
   );
 }
@@ -53,6 +68,7 @@ export const HUB_ICON_BUTTON_CLASS_NAME =
 
 export function HubPillButton({
   variant = 'secondary',
+  size = 'default',
   pendingLabel,
   pending = false,
   analyticsLabel,
@@ -76,10 +92,24 @@ export function HubPillButton({
       data-geo-analytics-intent={analyticsIntent ?? surfaceAnalytics['data-geo-analytics-intent']}
       disabled={disabled || pending}
       aria-busy={pending || undefined}
-      className={hubPillClassName(variant, className)}
+      className={hubPillClassName(variant, className, size)}
       {...rest}
     >
       {pending && pendingLabel ? pendingLabel : children}
     </button>
+  );
+}
+
+/**
+ * The quiet, underlined text button beside a stack of pills: a step's way sideways (GEO-3427's
+ * "Only running late"), or back (GEO-3429's "Back to times").
+ */
+export function HubQuietButton(props: React.ComponentProps<'button'>) {
+  return (
+    <button
+      type="button"
+      className="self-center px-3 py-2 text-metadata text-text underline underline-offset-2 hover:opacity-70"
+      {...props}
+    />
   );
 }
