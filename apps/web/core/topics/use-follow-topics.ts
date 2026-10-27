@@ -32,7 +32,12 @@ function heldKey(row: InterestedTopicRow) {
 }
 
 type FollowVariables = { spaceId: string; topicIds: string[]; followKind: FollowKind } & (
-  { kind: 'follow'; topics: TopicRef[] } | { kind: 'unfollow' }
+  | {
+      kind: 'follow';
+      topics: TopicRef[];
+      operations?: ReadonlyMap<string, ReturnType<typeof observeOperation>>;
+    }
+  | { kind: 'unfollow' }
 );
 
 /**
@@ -82,25 +87,6 @@ export function useFollowEntities({ kind, source }: { kind: FollowKind; source?:
     const { spaceId } = variables;
     // Interested is an on-chain response from the personal space, which must exist on chain.
     if (!isRegistered) return false;
-    // Snapshot before the first await: a cache fetch can outlive the current account or page.
-    // The regular Follow button observes its own action. Onboarding needs one observer per topic,
-    // independent of whichever click happened to trigger this background pass.
-    const operations = new Map(
-      source === 'onboarding' && variables.kind === 'follow'
-        ? variables.topics.map(topic => {
-            const id = normId(topic.id);
-            const context = snapshotActionContext(
-              'onboarding_customize_feed',
-              'topic',
-              id,
-              {},
-              {},
-              { ignoreEventContext: true }
-            );
-            return [id, observeOperation('follow_topic', 'topic', id, undefined, context)] as const;
-          })
-        : []
-    );
     const interested = await queryClient.ensureQueryData(interestedTopicsQueryOptions(spaceId));
     const interestedKey = interestedTopicsQueryKey(spaceId);
 
@@ -115,7 +101,7 @@ export function useFollowEntities({ kind, source }: { kind: FollowKind; source?:
       const sent = await sendCalls(calls);
       // Only newly written topics complete; already-followed picks produce no follow event.
       for (const row of added) {
-        const operation = operations.get(normId(row.objectId));
+        const operation = variables.operations?.get(normId(row.objectId));
         if (sent) operation?.succeeded();
         else operation?.failed('unknown');
       }
@@ -170,10 +156,31 @@ export function useFollowEntities({ kind, source }: { kind: FollowKind; source?:
       if (free.length === 0) return false;
 
       const topicIds = [...new Set(free.map(topic => normId(topic.id)))];
+      // Snapshot at invocation: TanStack Query can defer mutationFn before its first await.
+      // The regular Follow button observes its own action. Onboarding needs one observer per topic,
+      // independent of whichever click happened to trigger this background pass.
+      const operations =
+        source === 'onboarding' && kind === 'follow'
+          ? new Map(
+              free.map(topic => {
+                const id = normId(topic.id);
+                const context = snapshotActionContext(
+                  'onboarding_customize_feed',
+                  'topic',
+                  id,
+                  {},
+                  {},
+                  { ignoreEventContext: true }
+                );
+                return [id, observeOperation('follow_topic', 'topic', id, undefined, context)] as const;
+              })
+            )
+          : undefined;
+
       try {
         const succeeded = await mutateAsync(
           kind === 'follow'
-            ? { kind, spaceId: personalSpaceId, topicIds, topics: free, followKind }
+            ? { kind, spaceId: personalSpaceId, topicIds, topics: free, followKind, operations }
             : { kind, spaceId: personalSpaceId, topicIds, followKind }
         );
         // A batch may have sent only its free topics. Callers retaining work for retry must not
@@ -184,7 +191,7 @@ export function useFollowEntities({ kind, source }: { kind: FollowKind; source?:
         return false;
       }
     },
-    [mutateAsync, personalSpaceId, queryClient, followKind]
+    [mutateAsync, personalSpaceId, queryClient, followKind, source]
   );
 
   const follow = React.useCallback((topics: readonly TopicRef[]) => run('follow', topics), [run]);

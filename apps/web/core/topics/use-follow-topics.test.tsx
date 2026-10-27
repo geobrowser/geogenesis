@@ -301,6 +301,16 @@ describe('onboarding follow analytics (GEO-3468)', () => {
     });
   });
 
+  it('keeps the original actor if the account changes before the mutation starts', async () => {
+    const { result } = setup([], 'topic', 'onboarding');
+    await act(async () => {
+      const pending = result.current.follow([{ id: TOPIC_A }]);
+      mocks.revision++;
+      await pending;
+    });
+    expect(completions()).toEqual([]);
+  });
+
   it('keeps the original analytics actor while existing follows are loading', async () => {
     const { result } = setup([], 'topic', 'onboarding');
     mocks.fetchInterestedTopics.mockImplementation(async () => {
