@@ -1,14 +1,11 @@
 'use client';
 
-import { keepPreviousData } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
 import { useAtomValue, useSetAtom, useStore } from 'jotai';
 
 import { capture } from '~/core/analytics';
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 import type { DebatePageFeedState } from '~/core/debates/debate-page-outcome';
 import { isRemovedDebateAnswer } from '~/core/debates/debate-removal';
@@ -19,7 +16,6 @@ import { useComments } from '~/core/hooks/use-comments';
 import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
-import { useQueryEntities } from '~/core/sync/use-store';
 import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { NavUtils } from '~/core/utils/utils';
@@ -211,28 +207,6 @@ export function DebatesBrowseFeed({
       pinnedCount: pinned.length,
     };
   }, [rankedDebates, pinnedIds]);
-
-  // Topics live on the claim entity (not the debates API), so resolve them once
-  // for the space and map claim entity id -> topic names.
-  const { entities: claims } = useQueryEntities({
-    where: {
-      spaces: [{ equals: spaceId }],
-      types: [{ id: { equals: CLAIM_TYPE_ID } }],
-    },
-    first: 50,
-    placeholderData: keepPreviousData,
-    includeUnpublishedLocal: true,
-  });
-  const topicsByClaimId = React.useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const claim of claims) {
-      const topics = claim.relations
-        .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
-        .map(relation => relation.toEntity.name ?? relation.toEntity.id);
-      if (topics.length > 0) map.set(claim.id, topics);
-    }
-    return map;
-  }, [claims]);
 
   // State-backed so children re-render once the scroll container mounts and can
   // observe against it as their IntersectionObserver root — a plain ref would
@@ -484,7 +458,6 @@ export function DebatesBrowseFeed({
           spaceId={spaceId}
           spaceName={space?.entity.name ?? 'Space'}
           spaceImage={space?.entity.image}
-          topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
           initialSeekSeconds={
             initialDebateId != null && ID.equals(debate.id, initialDebateId) ? initialSeekSeconds : null
@@ -585,7 +558,6 @@ function DebateFeedItem({
   spaceId,
   spaceName,
   spaceImage,
-  topics,
   active,
   initialSeekSeconds,
   preload,
@@ -604,7 +576,6 @@ function DebateFeedItem({
   spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
-  topics: string[];
   active: boolean;
   initialSeekSeconds: number | null;
   preload: boolean;
@@ -689,7 +660,7 @@ function DebateFeedItem({
             // The cards the feed is about to reach read theirs too, so a side is there to take
             // the moment one arrives.
             enabled={active || preload}
-            meta={<DebateMeta spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} topics={topics} />}
+            meta={<DebateMeta spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} />}
             title={<DebateClaimTitle claim={debate.claim} />}
             actions={
               <DebateInteractionBar
@@ -735,23 +706,21 @@ function DebateFeedItem({
  */
 const CLAIM_CLAMP_LINES = 2;
 
-/** The space the debate is in, and the claim's topics after it. */
+/** The space the debate is in. */
 function DebateMeta({
   spaceId,
   spaceName,
   spaceImage,
-  topics,
 }: {
   spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
-  topics: string[];
 }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5">
       {/* `min-w-0` again on the anchor: the truncation chain runs parent → anchor → text, and
-          a link left at its default `min-width: auto` would refuse to shrink and push the
-          topics off the row instead of ellipsing the name. */}
+          a link left at its default `min-width: auto` would refuse to shrink and overflow
+          the row instead of ellipsing the name. */}
       <Link href={NavUtils.toSpace(spaceId)} className="flex min-w-0 items-center gap-1.5 hover:underline">
         <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
           <Avatar avatarUrl={spaceImage} value={spaceName} size={16} />
@@ -760,16 +729,6 @@ function DebateMeta({
           {spaceName}
         </Text>
       </Link>
-      {topics.map(topic => (
-        <React.Fragment key={topic}>
-          <Text as="span" variant="metadata" color="grey-04" className="!leading-[13px] !tracking-[-0.35px]">
-            ·
-          </Text>
-          <Text as="span" variant="metadata" color="grey-04" className="truncate !leading-[13px] !tracking-[-0.35px]">
-            {topic}
-          </Text>
-        </React.Fragment>
-      ))}
     </div>
   );
 }
