@@ -1,8 +1,12 @@
+import { IdUtils } from '@geoprotocol/geo-sdk';
+
+import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { collectBacklinkRetargets } from './retarget-move-backlinks';
+import type { Relation } from '~/core/types';
+import { prepareLocalDataForPublishing } from '~/core/utils/publish/publish';
 
-const store = vi.hoisted(() => ({ relations: [] as any[], values: [] as any[] }));
+const store = vi.hoisted(() => ({ relations: [] as any[], values: [] as any[], written: [] as any[] }));
 
 vi.mock('~/core/sync/use-store', () => ({
   getRelations: ({ selector }: { selector?: (r: any) => boolean }) =>
@@ -11,10 +15,22 @@ vi.mock('~/core/sync/use-store', () => ({
     store.values.filter(v => (selector ? selector(v) : true)),
 }));
 
-const SOURCE = 'space-source';
-const TARGET = 'space-target';
-const OTHER = 'space-other';
-const ENTITY = 'entity-moved';
+vi.mock('~/core/sync/use-sync-engine', () => {
+  const geoStore = {
+    setRelation: (relation: any) => store.written.push({ ...relation, isLocal: true, hasBeenPublished: false }),
+    deleteRelation: (relation: any) =>
+      store.written.push({ ...relation, isDeleted: true, isLocal: true, hasBeenPublished: false }),
+  };
+  return { store: geoStore, useSyncEngine: () => ({ store: geoStore }) };
+});
+
+const { storage } = await import('~/core/sync/use-mutate');
+const { retargetMoveBacklinks } = await import('./retarget-move-backlinks');
+
+const SOURCE = IdUtils.generate();
+const TARGET = IdUtils.generate();
+const OTHER = IdUtils.generate();
+const ENTITY = IdUtils.generate();
 
 const relation = (over: Partial<Record<string, any>>) => ({
   id: over.id,
@@ -26,14 +42,18 @@ const relation = (over: Partial<Record<string, any>>) => ({
   ...over,
 });
 
-const run = () => collectBacklinkRetargets(ENTITY, SOURCE, TARGET);
+const run = () => {
+  retargetMoveBacklinks(ENTITY, SOURCE, TARGET, storage);
+  return store.written as Relation[];
+};
 
 beforeEach(() => {
   store.relations = [];
   store.values = [];
+  store.written = [];
 });
 
-describe('collectBacklinkRetargets', () => {
+describe('retargetMoveBacklinks', () => {
   it('points a source-space backlink at the destination, keeping its own id and space', () => {
     store.relations = [relation({ id: 'backlink', from: 'other-entity', to: ENTITY, toSpaceId: SOURCE })];
 
@@ -43,6 +63,20 @@ describe('collectBacklinkRetargets', () => {
     expect(retargeted?.toSpaceId).toBe(TARGET);
     expect(retargeted?.id).toBe('backlink');
     expect(retargeted?.spaceId).toBe(SOURCE);
+  });
+
+  it('publishes a published backlink as an updateRelation with the new toSpace', () => {
+    const id = IdUtils.generate();
+    store.relations = [
+      relation({ id, from: IdUtils.generate(), to: ENTITY, toSpaceId: SOURCE, typeId: IdUtils.generate() }),
+    ];
+
+    const ops = Effect.runSync(prepareLocalDataForPublishing([], run(), SOURCE));
+
+    expect(ops.map(op => op.type)).toEqual(['updateRelation']);
+    const [op] = ops as any[];
+    expect(Array.from(op.id)).toEqual(Array.from(IdUtils.toBytes(id) as Uint8Array));
+    expect(Array.from(op.toSpace)).toEqual(Array.from(IdUtils.toBytes(TARGET) as Uint8Array));
   });
 
   it('leaves a backlink held in another space alone', () => {

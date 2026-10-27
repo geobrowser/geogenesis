@@ -3,7 +3,7 @@ import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { ID } from '~/core/id';
 import type { Mutator } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
-import { Relation } from '~/core/types';
+import { Entity, Relation } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
 const SYSTEM_ENTITY_IDS = new Set(Object.values(SystemIds).map(normId));
@@ -74,9 +74,10 @@ function isMediaUrl(value: string | undefined): value is string {
  * Whether a related target is one of the kinds above — owned by someone or shared by everyone,
  * either way not a move's to copy.
  */
-function isNeverCopied(entityId: string): boolean {
+function isNeverCopied(entityId: string, loadedRelations: Relation[]): boolean {
   return (
     getRelations({
+      mergeWith: loadedRelations,
       selector: relation =>
         relation.fromEntity.id === entityId &&
         relation.type.id === SystemIds.TYPES_PROPERTY &&
@@ -121,26 +122,38 @@ export function collectHydrationTargetIds(entityId: string, sourceSpaceId: strin
   return [...new Set([...mediaEntityIds, ...relatedCandidateIds])];
 }
 
-export function cloneEntityIntoSpace(entityId: string, sourceSpaceId: string, targetSpaceId: string, storage: Mutator) {
+export function cloneEntityIntoSpace(
+  entityId: string,
+  sourceSpaceId: string,
+  targetSpaceId: string,
+  storage: Mutator,
+  loaded: Entity[] = []
+) {
   const { entityIds, relationFromIds, mediaRelations, mediaEntityIds, relatedCandidateIds } = collectCopyTargets(
     entityId,
     sourceSpaceId
   );
 
-  const relatedEntityIds = new Set(relatedCandidateIds.filter(id => !isNeverCopied(id)));
+  const loadedValues = loaded.flatMap(entity => entity.values);
+  const loadedRelations = loaded.flatMap(entity => entity.relations);
+
+  const relatedEntityIds = new Set(relatedCandidateIds.filter(id => !isNeverCopied(id, loadedRelations)));
 
   const valueEntityIds = new Set([...entityIds, ...mediaEntityIds, ...relatedEntityIds]);
   const relationSourceIds = new Set([...relationFromIds, ...mediaEntityIds]);
 
   const sourceValues = getValues({
+    mergeWith: loadedValues,
     selector: value => valueEntityIds.has(value.entity.id) && value.spaceId === sourceSpaceId,
   });
 
   const sourceRelations = [
     ...getRelations({
+      mergeWith: loadedRelations,
       selector: relation => relationSourceIds.has(relation.fromEntity.id) && relation.spaceId === sourceSpaceId,
     }),
     ...getRelations({
+      mergeWith: loadedRelations,
       selector: relation =>
         relatedEntityIds.has(relation.fromEntity.id) &&
         relation.spaceId === sourceSpaceId &&
@@ -150,12 +163,14 @@ export function cloneEntityIntoSpace(entityId: string, sourceSpaceId: string, ta
 
   const existingTargetValueIds = new Set(
     getValues({
+      mergeWith: loadedValues,
       selector: value => valueEntityIds.has(value.entity.id) && value.spaceId === targetSpaceId,
     }).map(value => value.id)
   );
 
   const existingTargetRelationSignatures = new Set(
     getRelations({
+      mergeWith: loadedRelations,
       selector: relation =>
         (relationSourceIds.has(relation.fromEntity.id) || relatedEntityIds.has(relation.fromEntity.id)) &&
         relation.spaceId === targetSpaceId,

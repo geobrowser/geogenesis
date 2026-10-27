@@ -15,6 +15,7 @@ import { E } from '~/core/sync/orm';
 import { GeoEventStream } from '~/core/sync/stream';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import type { Entity } from '~/core/types';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 import { NavUtils, hasName } from '~/core/utils/utils';
 
@@ -24,7 +25,7 @@ import { Input } from '~/design-system/input';
 
 import { cloneEntityIntoSpace, collectHydrationTargetIds } from '~/partials/versions/clone-entity-into-space';
 import { collectMoveDeletions } from '~/partials/versions/move-entity-deletions';
-import { collectBacklinkRetargets } from '~/partials/versions/retarget-move-backlinks';
+import { retargetMoveBacklinks } from '~/partials/versions/retarget-move-backlinks';
 
 type MoveEntityToSpaceProps = {
   entityId: EntityId;
@@ -74,9 +75,11 @@ export const MoveEntityToSpace = ({
   const moveEntityToSpace = async (targetSpaceId: string) => {
     if (!targetSpaceId || targetSpaceId === sourceSpaceId) return false;
 
-    // 0. Load the related targets. The copy reads the store, and a target nobody opened is not in
-    // it — so it would be copied as nothing.
+    // 0. Load the related targets. A target nobody opened is not in the store, so it would be
+    // copied as nothing. The clone reads them from `loaded`: the store only takes them in on a
+    // later microtask.
     const hydrationIds = collectHydrationTargetIds(entityId, sourceSpaceId);
+    let loaded: Entity[] = [];
 
     if (hydrationIds.length > 0) {
       try {
@@ -87,6 +90,8 @@ export const MoveEntityToSpace = ({
           first: hydrationIds.length,
         });
 
+        loaded = merged;
+
         if (merged.length > 0) {
           stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
         }
@@ -96,7 +101,7 @@ export const MoveEntityToSpace = ({
     }
 
     // 1. Clone entity into target space
-    cloneEntityIntoSpace(entityId, sourceSpaceId, targetSpaceId, storage);
+    cloneEntityIntoSpace(entityId, sourceSpaceId, targetSpaceId, storage, loaded);
 
     // 2. Delete entity from source space. The clone walked the BLOCKS/TABS
     // subtree, so tear down the same subtree here: the root always goes, and
@@ -111,9 +116,7 @@ export const MoveEntityToSpace = ({
     // 3. Point this space's backlinks at where the data went. They survive the move untouched —
     // the entity id has not changed — but a `toSpaceId` naming the source space now names a space
     // the entity's data just left.
-    collectBacklinkRetargets(entityId, sourceSpaceId, targetSpaceId).forEach(relation => {
-      storage.relations.set(relation);
-    });
+    retargetMoveBacklinks(entityId, sourceSpaceId, targetSpaceId, storage);
 
     return true;
   };

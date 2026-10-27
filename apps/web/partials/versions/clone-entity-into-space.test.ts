@@ -6,11 +6,16 @@ import { cloneEntityIntoSpace, collectHydrationTargetIds } from './clone-entity-
 
 const store = vi.hoisted(() => ({ relations: [] as any[], values: [] as any[] }));
 
+const withMerged = (rows: any[], mergeWith: any[] = []) => [
+  ...rows,
+  ...mergeWith.filter(m => !rows.some(r => r.id === m.id)),
+];
+
 vi.mock('~/core/sync/use-store', () => ({
-  getRelations: ({ selector }: { selector?: (r: any) => boolean }) =>
-    store.relations.filter(r => (selector ? selector(r) : true)),
-  getValues: ({ selector }: { selector?: (v: any) => boolean }) =>
-    store.values.filter(v => (selector ? selector(v) : true)),
+  getRelations: ({ selector, mergeWith }: { selector?: (r: any) => boolean; mergeWith?: any[] }) =>
+    withMerged(store.relations, mergeWith).filter(r => (selector ? selector(r) : true)),
+  getValues: ({ selector, mergeWith }: { selector?: (v: any) => boolean; mergeWith?: any[] }) =>
+    withMerged(store.values, mergeWith).filter(v => (selector ? selector(v) : true)),
 }));
 
 const SOURCE = 'space-source';
@@ -35,13 +40,13 @@ const value = (entityId: string, spaceId: string, id: string) => ({
   value: 'x',
 });
 
-function run() {
+function run(loaded: any[] = []) {
   const written = { values: [] as any[], relations: [] as any[] };
   const storage = {
     values: { set: (v: any) => written.values.push(v) },
     relations: { set: (r: any) => written.relations.push(r) },
   } as any;
-  cloneEntityIntoSpace(ENTITY, SOURCE, TARGET, storage);
+  cloneEntityIntoSpace(ENTITY, SOURCE, TARGET, storage, loaded);
   return written;
 }
 
@@ -262,5 +267,43 @@ describe('collectHydrationTargetIds', () => {
     store.values = [value('never-opened', SOURCE, 'fetched-v')];
 
     expect(run().values.some(v => v.entity.id === 'never-opened')).toBe(true);
+  });
+
+  it('copies a fetched target the store has not taken in yet', () => {
+    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'never-opened' })];
+    const fetched = {
+      id: 'never-opened',
+      values: [value('never-opened', SOURCE, 'fetched-v')],
+      relations: [
+        relation({ id: 'fetched-type', from: 'never-opened', to: 'a-type', typeId: SystemIds.TYPES_PROPERTY }),
+      ],
+    };
+
+    const written = run([fetched]);
+
+    expect(written.values.map(v => v.entity.id)).toContain('never-opened');
+    expect(written.relations.some(r => r.fromEntity.id === 'never-opened' && r.toEntity.id === 'a-type')).toBe(true);
+  });
+
+  it('drops a fetched target whose fetched type says it is never copied', () => {
+    store.relations = [relation({ id: 'rel', from: ENTITY, to: 'a-person' })];
+    const fetched = {
+      id: 'a-person',
+      values: [value('a-person', SOURCE, 'person-v')],
+      relations: [
+        relation({
+          id: 'person-type',
+          from: 'a-person',
+          to: SystemIds.PERSON_TYPE,
+          typeId: SystemIds.TYPES_PROPERTY,
+          spaceId: 'their-own-profile-space',
+        }),
+      ],
+    };
+
+    const written = run([fetched]);
+
+    expect(written.values.some(v => v.entity.id === 'a-person')).toBe(false);
+    expect(written.relations.some(r => r.fromEntity.id === 'a-person')).toBe(false);
   });
 });
