@@ -87,6 +87,9 @@ export async function POST(request: Request) {
   const spaceIds = (spaceFilter ?? browseSidebarVisibleSpaces(browse).map(row => row.id)).map(normId);
 
   if (spaceIds.length === 0) {
+    if (browse.featuredError) {
+      return NextResponse.json({ topics: [] }, { status: 503 });
+    }
     return NextResponse.json({ topics: [] });
   }
 

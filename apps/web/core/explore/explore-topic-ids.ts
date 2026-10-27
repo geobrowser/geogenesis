@@ -1,20 +1,11 @@
-import { IdUtils } from '@geoprotocol/geo-sdk/lite';
-
-import { normId } from '~/core/utils/norm-id';
-
-export const MAX_EXPLORE_TOPIC_SELECTIONS = 10;
+import { MAX_TOPIC_FEED_SELECTED_TOPICS, parseTopicFeedSelectedIds } from '~/core/topics/browse/topic-feed-params';
 
 /**
- * Validates, deduplicates and caps Explore topic ids from a query string or JSON body. Shared by the
- * feed and facet routes so neither takes an unbounded list. Ids come back dashless.
+ * Explore shares the Topic pages' parser and cap (see `parseTopicFeedSelectedIds`) so the two can't
+ * drift apart. Explore's only differences: it passes no page topic and takes ids back dashless.
  */
+export const MAX_EXPLORE_TOPIC_SELECTIONS = MAX_TOPIC_FEED_SELECTED_TOPICS;
+
 export function parseExploreTopicIds(raw: unknown): string[] {
-  const values = typeof raw === 'string' ? raw.split(',') : Array.isArray(raw) ? raw : [];
-  const byCanonicalId = new Map<string, string>();
-  for (const id of values) {
-    if (typeof id !== 'string' || !IdUtils.isValid(id)) continue;
-    const canonicalId = normId(id);
-    if (!byCanonicalId.has(canonicalId)) byCanonicalId.set(canonicalId, canonicalId);
-  }
-  return [...byCanonicalId.values()].slice(0, MAX_EXPLORE_TOPIC_SELECTIONS);
+  return parseTopicFeedSelectedIds(raw, { dashless: true });
 }

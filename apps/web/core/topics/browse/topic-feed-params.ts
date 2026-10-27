@@ -6,25 +6,32 @@ export const MAX_TOPIC_FEED_SPACES = 100;
 export const MAX_TOPIC_FEED_SELECTED_TOPICS = 10;
 
 /** Canonical validation and deduplication for Topic feed ids from query strings or JSON bodies. */
-export function parseTopicFeedIds(raw: unknown): string[] {
+export function parseTopicFeedIds(raw: unknown, options: { dashless?: boolean } = {}): string[] {
   const values = typeof raw === 'string' ? raw.split(',') : Array.isArray(raw) ? raw : [];
   const byCanonicalId = new Map<string, string>();
   for (const id of values) {
     if (typeof id !== 'string' || !IdUtils.isValid(id)) continue;
     const canonicalId = normId(id);
-    if (!byCanonicalId.has(canonicalId)) byCanonicalId.set(canonicalId, id);
+    if (!byCanonicalId.has(canonicalId)) byCanonicalId.set(canonicalId, options.dashless ? canonicalId : id);
   }
   return [...byCanonicalId.values()];
 }
 
 /**
- * Bounds the AND-composed Topic predicates accepted by the public Topic feed endpoints.
+ * Bounds the AND-composed Topic predicates accepted by the public Topic feed endpoints. Shared by
+ * the Topic pages and Explore so their validation and cap cannot drift apart; the two call-site
+ * differences are options:
  *
- * A topic page drops its own topic, which every row already carries. A topic space has no page
- * topic in the feed's predicate, so it passes none.
+ * - `pageTopicId`: a topic page drops its own topic, which every row already carries. A topic space
+ *   and Explore have no page topic in the predicate, so they pass none.
+ * - `dashless`: Explore returns normalized ids; the Topic pages keep the original spelling.
  */
-export function parseTopicFeedSelectedIds(raw: unknown, pageTopicId?: string): string[] {
-  const ids = parseTopicFeedIds(raw);
+export function parseTopicFeedSelectedIds(
+  raw: unknown,
+  options: { pageTopicId?: string; dashless?: boolean } = {}
+): string[] {
+  const ids = parseTopicFeedIds(raw, { dashless: options.dashless });
+  const { pageTopicId } = options;
   return (pageTopicId ? ids.filter(id => normId(id) !== normId(pageTopicId)) : ids).slice(
     0,
     MAX_TOPIC_FEED_SELECTED_TOPICS
