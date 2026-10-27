@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -91,6 +91,14 @@ async function resume(trigger: ResumeTrigger, awayMs = 5 * 60_000) {
   });
 }
 
+const originalScrollY = Object.getOwnPropertyDescriptor(window, 'scrollY');
+const originalInnerHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+
+function restore(name: 'scrollY' | 'innerHeight', descriptor: PropertyDescriptor | undefined) {
+  if (descriptor) Object.defineProperty(window, name, descriptor);
+  else Reflect.deleteProperty(window, name);
+}
+
 function scrollTo(y: number) {
   Object.defineProperty(window, 'scrollY', { configurable: true, value: y });
 }
@@ -128,6 +136,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  restore('scrollY', originalScrollY);
+  restore('innerHeight', originalInnerHeight);
   client.clear();
   focusManager.setFocused(undefined);
   onlineManager.setOnline(true);
@@ -169,6 +179,7 @@ describe('resuming an Explore feed', () => {
     await resume(trigger, 31_000);
 
     await screen.findByText('Re-ranked lead');
+    await waitFor(() => expect(screen.queryByText('Second page')).toBeNull());
     expect(fetchPage).toHaveBeenCalledTimes(3);
   });
 
@@ -199,23 +210,26 @@ describe('resuming an Explore feed', () => {
     expect(screen.queryByText('Re-ranked lead')).toBeNull();
   });
 
-  it('recovers a failed first load on focus wherever the page is scrolled', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    fetchPage.mockRejectedValue(new Error('Feed failed'));
-    mountFeed();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(4_000);
-    });
-    vi.useRealTimers();
-    await screen.findByText('Could not load the feed.');
-    expect(fetchPage).toHaveBeenCalledTimes(3);
-    scrollTo(2_000);
+  it.each<ResumeTrigger>(['focus', 'reconnect'])(
+    'recovers a failed first load on %s wherever the page is scrolled',
+    async trigger => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      fetchPage.mockRejectedValue(new Error('Feed failed'));
+      mountFeed();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_000);
+      });
+      vi.useRealTimers();
+      await screen.findByText('Could not load the feed.');
+      expect(fetchPage).toHaveBeenCalledTimes(3);
+      scrollTo(2_000);
 
-    fetchPage.mockResolvedValue(page('Recovered feed'));
-    await resume('focus');
-    await screen.findByText('Recovered feed');
-    expect(fetchPage).toHaveBeenCalledTimes(4);
-  });
+      fetchPage.mockResolvedValue(page('Recovered feed'));
+      await resume(trigger);
+      await screen.findByText('Recovered feed');
+      expect(fetchPage).toHaveBeenCalledTimes(4);
+    }
+  );
 
   it('still refreshes the activity feed on focus, which does not opt in', async () => {
     mountFeed({ apiEndpoint: '/api/activity/feed', lockedSpaceId: 'space', preserveSession: undefined });

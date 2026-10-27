@@ -39,7 +39,7 @@ import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
  */
 const EAGER_CARD_COUNT = 4;
 
-// A refetch rebuilds every loaded page from a re-ranked page one, so loaded pages are never stale.
+// A refetch rebuilds every loaded page from a re-ranked page one, so pages never go stale by age.
 // A failed first load has no data and stays stale, so focus and reconnect still retry it.
 const FEED_SESSION_OPTIONS = { staleTime: Infinity } as const;
 
@@ -108,7 +108,7 @@ const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
 type EntityFeedProps = {
   /** REST endpoint this feed fetches from (e.g. `/api/explore/feed` or `/api/activity/feed`). */
   apiEndpoint: string;
-  /** Never refetch loaded pages on focus, reconnect or remount. Explore opts in. */
+  /** Explore's resume policy: loaded pages stay put, refreshing on return only near the top. Explore opts in. */
   preserveSession?: boolean;
   /** When set, the feed is pinned to this space. */
   lockedSpaceId?: string;
@@ -558,7 +558,7 @@ export function EntityFeed({
     cdnFirstPage &&
     viewerAddress !== null &&
     buildFeedQuery({ ...feedParams, cursor: undefined, anonymous: true }).includes(`${PUBLIC_FEED_PARAM}=1`);
-  // Only a placeholder until the reader's own page lands, so it is never refreshed.
+  // Only a placeholder until the reader's own page lands, so it is never refreshed automatically.
   const publicFirstPage = useQuery({
     ...(preserveSession ? FEED_SESSION_OPTIONS : {}),
     queryKey: [apiEndpoint, PUBLIC_FEED_PARAM],
