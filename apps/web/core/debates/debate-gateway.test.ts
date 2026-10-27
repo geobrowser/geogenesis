@@ -805,11 +805,49 @@ describe('DebateGatewayClient', () => {
       });
     });
 
-    it('refetches only the list when no call is named', async () => {
+    it('refetches only the lists when no call is named', async () => {
       await spaceCallsChanged({ space_id: 'sp1' });
       expect(invalidateQueries.mock.calls.map((call: unknown[]) => call[0])).toEqual([
         { queryKey: ['debates', 'space-calls', 'sp1'], refetchType: 'active' },
+        { queryKey: ['debates', 'space-past-calls', 'sp1'], refetchType: 'active' },
       ]);
+    });
+
+    it('patches a live row into the live list and leaves the past pages alone', async () => {
+      const call = {
+        call_id: 'call1',
+        name: 'Weekly',
+        started_at: '2026-10-23T15:00:00Z',
+        started_by: null,
+        hosts: [],
+        headcount: 1,
+        avatars: [],
+        as_of: '2026-10-23T15:04:11.000001Z',
+      };
+      const liveKey = ['debates', 'space-calls', 'sp1', 'user-a'];
+      const pastKey = ['debates', 'space-past-calls', 'sp1'];
+      const past = { pages: [{ calls: [], next_cursor: null }], pageParams: [null] };
+      queryClient.setQueryData(liveKey, { space_id: 'sp1', supported: true, viewer_can_start: false, calls: [call] });
+      queryClient.setQueryData(pastKey, past);
+
+      const newer = { ...call, headcount: 3, as_of: '2026-10-23T15:04:11.000002Z' };
+      await spaceCallsChanged({ space_id: 'sp1', space_call: { status: 'live', as_of: newer.as_of, call: newer } });
+
+      expect(queryClient.getQueryData<{ calls: { headcount: number }[] }>(liveKey)?.calls[0]?.headcount).toBe(3);
+      expect(queryClient.getQueryData(pastKey)).toBe(past);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it('refetches the past calls when a call ends', async () => {
+      await spaceCallsChanged({
+        space_id: 'sp1',
+        space_call: {
+          status: 'ended',
+          as_of: '2026-10-23T16:00:00Z',
+          call: { call_id: 'call1', as_of: '2026-10-23T16:00:00Z', hosts: [], avatars: [], headcount: 0 },
+        },
+      });
+      expectInvalidated(invalidateQueries, { queryKey: ['debates', 'space-past-calls', 'sp1'], refetchType: 'active' });
     });
   });
 

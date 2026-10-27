@@ -12,6 +12,7 @@ import {
   isClaimResponseSummaryQueryKey,
 } from '~/core/responses/claim-response-summary-query-keys';
 import type { SpaceCallsResponse } from '~/core/space-calls/api';
+import { spacePastCallsQueryKey } from '~/core/space-calls/query-keys';
 import { parseSpaceCallPatch, withSpaceCallPatch } from '~/core/space-calls/space-calls-patch';
 
 import {
@@ -631,6 +632,8 @@ export class DebateGatewayClient {
         const patch = parseSpaceCallPatch(identifiers.space_call);
         if (!patch || patch.status !== 'live') {
           this.queueQuery(listKey);
+          // A call may have ended (GEO-3420).
+          this.queueQuery(spacePastCallsQueryKey(identifiers.space_id));
           // A call's own change, such as its agenda (GEO-3420): its page refetches too.
           if (!patch && identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
           break;
@@ -746,6 +749,7 @@ export class DebateGatewayClient {
       this.queueQuery(['debates', 'claims', scope.space_id]);
       this.queueQuery(['debates', 'space', scope.space_id]);
       this.queueQuery(['debates', 'space-calls', dashlessId(scope.space_id)]);
+      this.queueQuery(spacePastCallsQueryKey(scope.space_id));
       return;
     }
     if (scope.scope === 'matchmaking') {

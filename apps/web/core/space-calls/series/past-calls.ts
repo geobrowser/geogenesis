@@ -5,6 +5,8 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { type DebateLobbyPerson, dashlessId, geoChatRequest } from '~/core/debates/api';
 import { debateQueryNetworkOptions } from '~/core/debates/hooks';
 
+import { spacePastCallsQueryKey } from '../query-keys';
+
 /** An ended call of a space, recorded or not (`GET /calls/past?space_id=`, GEO-3421). */
 export type SpacePastCall = {
   call_id: string;
@@ -28,10 +30,6 @@ export async function listSpacePastCalls(spaceId: string, cursor: string | null,
   if (cursor) params.set('cursor', cursor);
   return geoChatRequest<SpacePastCallsPage>(`/calls/past?${params}`, { auth: false, signal });
 }
-
-/** Under the space's call list key, so a call ending (which refetches the list) refetches this too. */
-export const spacePastCallsQueryKey = (spaceId: string) =>
-  ['debates', 'space-calls', dashlessId(spaceId), 'past'] as const;
 
 /** A space's past calls, a page at a time (GEO-3420). */
 export function useSpacePastCalls(spaceId: string, enabled = true) {
