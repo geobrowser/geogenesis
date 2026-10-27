@@ -36,6 +36,7 @@ import {
   debatesHubPanelMatchesSpaceIdsAtom,
   debatesHubPanelMatchesSpaceSeedSpentAtom,
   debatesHubPanelMatchesTopicIdsAtom,
+  debatesHubPanelPeopleSpaceIdsAtom,
   debatesHubPeopleOnlineOnlyAtom,
   debatesHubPeopleSortAtom,
   debatesHubPeopleSpaceIdsAtom,
@@ -356,6 +357,12 @@ const FILTER_ATOMS = [
     cleared: false,
   },
   { name: 'debatesHubPeopleSpaceIdsAtom', atom: debatesHubPeopleSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
+  {
+    name: 'debatesHubPanelPeopleSpaceIdsAtom',
+    atom: debatesHubPanelPeopleSpaceIdsAtom,
+    dirty: ['space-a'],
+    cleared: [],
+  },
   { name: 'debatesHubPeopleOnlineOnlyAtom', atom: debatesHubPeopleOnlineOnlyAtom, dirty: true, cleared: false },
   // GEO-3463: the panel's Sort and its tab-specific filters are session state like the rest.
   { name: 'debatesHubPeopleSortAtom', atom: debatesHubPeopleSortAtom, dirty: 'az', cleared: 'online' },

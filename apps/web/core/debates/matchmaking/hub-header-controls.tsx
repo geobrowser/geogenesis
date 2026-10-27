@@ -19,7 +19,11 @@ import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 
 import { useDebateActivity, useDebateSchedule, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
 import { OpenLobbyDialog } from '../lobbies/open-lobby-dialog';
-import { type DebateActionAnalyticsSurface, debateActionAnalyticsAttributes } from './hub-analytics';
+import {
+  type DebateActionAnalyticsSurface,
+  debateActionAnalyticsAttributes,
+  debateActionAnalyticsAttributesKeepingHubLabel,
+} from './hub-analytics';
 import { hubPillClassName } from './hub-pill-button';
 
 /** How long "Link copied" stays before the row reads as a link again. */
@@ -173,11 +177,10 @@ function AvailabilityMenu({
               {canHost && analyticsSurface !== 'lobby' ? (
                 <button
                   type="button"
-                  {...debateActionAnalyticsAttributes(analyticsSurface, 'Open a lobby')}
                   // On the hub, the label the lobbies card's button had, so that series keeps reading
                   // the same; elsewhere the surface's own prefix, so full screen and the calendar are
                   // told apart from it.
-                  {...(analyticsSurface === 'hub' ? { 'data-geo-analytics-label': 'Open a lobby' } : {})}
+                  {...debateActionAnalyticsAttributesKeepingHubLabel(analyticsSurface, 'Open a lobby', 'Open a lobby')}
                   onClick={() => {
                     setOpen(false);
                     setOpeningLobby(true);

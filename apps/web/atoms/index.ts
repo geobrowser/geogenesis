@@ -284,6 +284,13 @@ export const debatesHubPanelExploreSpaceSeedSpentAtom = atom(false);
 export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
 
 /**
+ * The side panel People tab's spaces (GEO-3463), apart from full screen's rail above for the reason
+ * the panel's claim tabs have their own: the panel wants someone active in every picked space, the
+ * rail in any of them, so the rail's two picks would empty the panel.
+ */
+export const debatesHubPanelPeopleSpaceIdsAtom = atom<string[]>([]);
+
+/**
  * The People tab's "Online only" switch (GEO-2937). Off, the default, lists offline people with free
  * time this week alongside online ones. Outside the tab for the same reason as the
  * spaces filter above.
@@ -427,6 +434,7 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPanelExploreSearchAtom, '');
   set(debatesHubPanelExploreSpaceSeedSpentAtom, false);
   set(debatesHubPeopleSpaceIdsAtom, []);
+  set(debatesHubPanelPeopleSpaceIdsAtom, []);
   set(debatesHubPeopleOnlineOnlyAtom, false);
   set(debatesHubPeopleSortAtom, 'online');
   set(debatesHubMatchesSortAtom, 'best');

@@ -45,7 +45,7 @@ export type HubPillSize = 'default' | 'large' | 'compact';
 const PILL_SIZE: Record<HubPillSize, string> = {
   default: 'h-7 px-3 text-metadata',
   large: 'h-12 px-5 text-button',
-  compact: 'h-[26px] px-2.5 text-breadcrumb md:h-8 md:px-3',
+  compact: 'h-6.5 px-2.5 text-breadcrumb md:h-8 md:px-3',
 };
 
 export function hubPillClassName(

@@ -76,12 +76,13 @@ import { RequestingPill } from './requesting-pill';
 import { INLINE_SLOTS, SharedTimes } from './shared-times';
 import { inEverySpace } from './topic-facets';
 import { useLiveRequestBlock } from './use-live-request-block';
-import { askIsForPerson } from './use-outgoing-ask';
+import { ONE_ASK_AT_A_TIME_REASON, askIsForPerson } from './use-outgoing-ask';
 import { usePersonFacts } from './use-person-facts';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import {
   type DebatesHubPeopleSort,
   type DebatesHubTab,
+  debatesHubPanelPeopleSpaceIdsAtom,
   debatesHubPeopleOnlineOnlyAtom,
   debatesHubPeopleSortAtom,
   debatesHubPeopleSpaceIdsAtom,
@@ -321,8 +322,9 @@ export function PeopleTab({
 
   // Held outside this component so they survive it, exactly as the claim tabs' filters are: the hub
   // closes on any outside pointer-down, so dismissing a dropdown by clicking away unmounts this tab
-  // and `useState` would take the viewer's selection with it (GEO-2850).
-  const [spaceIds, setSpaceIds] = useAtom(debatesHubPeopleSpaceIdsAtom);
+  // and `useState` would take the viewer's selection with it (GEO-2850). The panel keeps its own,
+  // since it reads picks as AND where full screen's rail reads them as OR (GEO-3463).
+  const [spaceIds, setSpaceIds] = useAtom(dense ? debatesHubPeopleSpaceIdsAtom : debatesHubPanelPeopleSpaceIdsAtom);
 
   // Offline people carry spaces too. Until they land, the people in hand are a subset, and
   // reconciling against them would erase a space only offline people are active in.
@@ -635,7 +637,14 @@ export function PeopleTab({
                     labelsById={labelsById}
                     popoverPortal={popoverPortal}
                     disabled={buttonsDisabled}
-                    disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
+                    disabledReason={
+                      blockedReason ??
+                      // The panel draws no challenge card (the strip says it), so a challenge the viewer
+                      // sent pauses the rest the way any ask does there.
+                      (outboundChallenge && !dense
+                        ? ONE_ASK_AT_A_TIME_REASON
+                        : 'You have a debate request awaiting a reply.')
+                    }
                     onRequireSignIn={onRequireSignIn}
                     onSeeTimes={(peer, opener, entry, initialStart) => {
                       seeTimesOpenerRef.current = opener;
@@ -1051,7 +1060,7 @@ function PanelPersonRow({
           : {
               // Fans out like any claim request: to people on the other side, this person among them.
               pausedReason: ask
-                ? 'One request at a time. Cancel yours to ask on another claim.'
+                ? ONE_ASK_AT_A_TIME_REASON
                 : disabled
                   ? disabledReason
                   : null,
@@ -1137,6 +1146,16 @@ function PanelPersonRow({
               className={PANEL_PILL_CLASS_NAME}
             />
           )
+        ) : status === 'away' && !canScheduleAway ? (
+          // Away with no free time this week: their week would open empty, so the pill says Away until
+          // they are back, as on the full row.
+          <HubPillButton
+            disabled
+            title={`${name} is away. You can request a debate when they're back.`}
+            className={PANEL_PILL_CLASS_NAME}
+          >
+            Away
+          </HubPillButton>
         ) : (
           <SchedulePill
             person={person}

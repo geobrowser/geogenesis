@@ -87,6 +87,7 @@ export function askTitle(ask: OutgoingAsk) {
 function AskStrip({ ask, onCancel, cancelling }: { ask: OutgoingAsk; onCancel: () => void; cancelling: boolean }) {
   const { remainingMs, label } = useAskClock(ask.expiresAt);
   const share = askShareLeft(ask, remainingMs);
+  const seconds = Math.ceil(remainingMs / 1000);
 
   return (
     <section
@@ -98,9 +99,12 @@ function AskStrip({ ask, onCancel, cancelling }: { ask: OutgoingAsk; onCancel: (
         <span className="truncate text-metadataMedium">{askTitle(ask)}</span>
         {ask.kind === 'claim' ? <span className="truncate text-footnote text-grey-03">{ask.claim.claim}</span> : null}
       </div>
+      {/* A timer, as on `RequestingPill`: a role-less span's label is ignored, and a live region would
+          read out every second. */}
       <span
+        role="timer"
         className="shrink-0 text-metadata tabular-nums"
-        aria-label={`${Math.ceil(remainingMs / 1000)} seconds left`}
+        aria-label={`${seconds} ${seconds === 1 ? 'second' : 'seconds'} left`}
       >
         {label}
       </span>
@@ -113,7 +117,7 @@ function AskStrip({ ask, onCancel, cancelling }: { ask: OutgoingAsk; onCancel: (
       >
         {cancelling ? 'Cancelling…' : 'Cancel'}
       </button>
-      <span aria-hidden className="absolute inset-x-0 bottom-0 h-[3px] bg-white/15">
+      <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.75 bg-white/15">
         <span
           className="block h-full bg-green transition-[width] duration-1000 ease-linear"
           style={{ width: `${share * 100}%` }}
@@ -264,12 +268,21 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
  * The lobby's own read for what the list row leaves out: hosts, who is going, claim lists. Asked for
  * only while the details are open, and drawn from the list row until it lands.
  *
- * The count is the list row's, which the gateway patches live; the view is read once and refetched
- * only at opening. So an RSVP elsewhere, which reaches this viewer as that patch alone, refetches it
- * here for the names.
+ * The count is the list row's, which the gateway patches live; the view is read again each time the
+ * details open, since a held one is fresh for 30s whatever happened since. An RSVP elsewhere, which
+ * reaches this viewer as that patch alone, refetches it here for the names. Card broadcasts are
+ * coalesced, so one RSVP cleared and another set leave the count where it was: reopening is what
+ * catches that, and a block or a name change.
  */
 function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: number; rsvp: React.ReactNode }) {
   const { data: view, refetch } = useDebateLobby(lobby.lobby_id);
+  // Only over a view already held: with none, the query's own first read is out already.
+  const staleAtOpening = React.useRef(view !== undefined);
+  React.useEffect(() => {
+    if (!staleAtOpening.current) return;
+    staleAtOpening.current = false;
+    void refetch();
+  }, [refetch]);
   const goingCount = lobby.reminder_count;
   const readAtCount = React.useRef(goingCount);
   React.useEffect(() => {

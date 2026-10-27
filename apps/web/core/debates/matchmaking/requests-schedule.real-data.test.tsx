@@ -194,9 +194,9 @@ describe('the Requests timeline over real hooks', () => {
     api.history = [historyItem({ occurred_at: iso(-24 * 60) })];
     renderTab();
 
-    expect(await screen.findByTestId('requests-history', {}, { timeout: 3000 })).toHaveTextContent(
-      'Stablecoins should be regulated · Nobody took it'
-    );
+    const row = await screen.findByTestId('requests-history', {}, { timeout: 3000 });
+    expect(row).toHaveTextContent('Requested · people who disagree');
+    expect(row).toHaveTextContent('Stablecoins should be regulated · Nobody took it');
     expect(screen.queryByText('An older debate')).not.toBeInTheDocument();
   });
 });

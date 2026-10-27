@@ -131,7 +131,7 @@ vi.mock('../api', async importOriginal => ({
   resolveCurrentGeoChatUserId: () => Promise.resolve('user-me'),
 }));
 
-const { RequestsSchedule } = await import('./requests-schedule');
+const { RequestsSchedule, buildEntries } = await import('./requests-schedule');
 // The panel's one reading of the open ask (GEO-3463); the schedule reads it rather than asking again.
 const { HubAskProvider } = await import('./hub-ask-context');
 const render = (ui: import('react').ReactElement) => rtlRender(ui, { wrapper: HubAskProvider });
@@ -463,7 +463,13 @@ describe('RequestsSchedule', () => {
       ...mocks.history,
       items: [
         historyItem({}),
-        historyItem({ id: 'challenge:2', kind: 'challenge', direction: 'incoming', outcome: 'expired' }),
+        historyItem({
+          id: 'challenge:2',
+          kind: 'challenge',
+          direction: 'incoming',
+          outcome: 'expired',
+          other_user_ids: ['user-them'],
+        }),
       ],
     };
     mocks.incoming = [liveRequest('r1', 'Upcoming claim')];
@@ -471,6 +477,7 @@ describe('RequestsSchedule', () => {
 
     const rows = screen.getAllByTestId('requests-history');
     expect(rows).toHaveLength(2);
+    expect(screen.getByText('Requested · people who disagree')).toBeInTheDocument();
     expect(screen.getByText('Stablecoins should be regulated · Nobody took it')).toBeInTheDocument();
     expect(screen.getByText('Mia asked you')).toBeInTheDocument();
     for (const row of rows) expect(isAbove(row, nowLine())).toBe(true);
@@ -607,6 +614,17 @@ describe('RequestsSchedule', () => {
     expect(layout.scroller.scrollTop).toBe(540);
   });
 
+  // Chrome's scroll anchoring could move the box between the pin's writes and release it unseen.
+  it('turns scroll anchoring off on the box while the timeline is in it', () => {
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    const layout = fakeScroller();
+    const view = layout.render();
+    expect(layout.scroller.style.getPropertyValue('overflow-anchor')).toBe('none');
+
+    view.unmount();
+    expect(layout.scroller.style.getPropertyValue('overflow-anchor')).toBe('');
+  });
+
   it('lands on the now-line when the past arrives after the tab opened empty', async () => {
     // 27 Oct: nothing upcoming and no past yet is the empty state. When the past lands, the timeline
     // (the line with it) mounts only after that state animates out, after the effects have run.
@@ -637,8 +655,15 @@ describe('RequestsSchedule', () => {
     mocks.history = {
       ...mocks.history,
       items: [
-        historyItem({ id: 'debate:d1', kind: 'debate', direction: null, outcome: 'held', debate_id: 'd1' }),
-        historyItem({ id: 'claim_request:r1', outcome: 'accepted', debate_id: 'd1' }),
+        historyItem({
+          id: 'debate:d1',
+          kind: 'debate',
+          direction: null,
+          outcome: 'held',
+          debate_id: 'd1',
+          other_user_ids: ['user-them'],
+        }),
+        historyItem({ id: 'claim_request:r1', outcome: 'accepted', debate_id: 'd1', other_user_ids: ['user-them'] }),
       ],
     };
     render(<RequestsSchedule />);
@@ -876,7 +901,7 @@ describe('RequestsSchedule against the board', () => {
     render(<RequestsSchedule />);
 
     for (const name of ['Not now', 'Decline', 'Suggest a time']) {
-      expect(screen.getByRole('button', { name })).toHaveClass('h-[26px]', 'text-breadcrumb');
+      expect(screen.getByRole('button', { name })).toHaveClass('h-6.5', 'text-breadcrumb');
     }
   });
 
@@ -1175,3 +1200,62 @@ function stubIntersecting() {
     }
   );
 }
+
+describe('buildEntries', () => {
+  const at = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+  const request = (id: string, minutes: number) => ({ ...liveRequest(id, id), created_at: at(minutes) });
+  const room = (id: string, minutes: number) =>
+    ({
+      room: { room_id: id, starts_at: at(minutes), due: true, others_present: false },
+      opponentUserId: null,
+      scheduledEndAt: null,
+      requestId: null,
+    }) as unknown as ScheduledContent['upcoming'][number];
+  const past = (id: string, minutes: number) => historyItem({ id, occurred_at: at(minutes) });
+  const rotations = <T,>(list: T[]) => list.map((_, i) => [...list.slice(i), ...list.slice(0, i)]);
+
+  // Placement first, then needs-you within Now, then time. Comparing needs-you only when both are
+  // Now, and time otherwise, is not an order: it makes cycles, and the result then hangs on the input.
+  it('orders by placement, then needs-you, then time, whatever order the sources arrive in', () => {
+    const incoming = [request('r1', -5), request('r2', -12), request('r3', -2)];
+    const rooms = [room('a', -10), room('b', -3), room('c', -7)];
+    const history = [past('h1', -8), past('h2', -1), past('h3', -11), past('h4', -4)];
+    for (const i of rotations(incoming)) {
+      for (const r of rotations(rooms)) {
+        for (const h of rotations(history)) {
+          const keys = buildEntries({
+            now: Date.now(),
+            incoming: i,
+            incomingChallenge: null,
+            ask: null,
+            scheduled: { answerable: [], upcoming: r, lobbies: [] },
+            history: h,
+            pastDebates: [],
+            render: {
+              incoming: () => null,
+              challenge: () => null,
+              ask: () => null,
+              invite: () => null,
+              room: () => null,
+              lobby: () => null,
+              history: () => null,
+              pastDebate: () => null,
+            },
+          }).map(entry => entry.key);
+          expect(keys).toEqual([
+            'history:h3',
+            'history:h1',
+            'history:h4',
+            'history:h2',
+            'request:r2',
+            'request:r1',
+            'request:r3',
+            'room:a',
+            'room:c',
+            'room:b',
+          ]);
+        }
+      }
+    }
+  });
+});

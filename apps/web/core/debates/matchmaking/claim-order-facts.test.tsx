@@ -6,12 +6,17 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const graphql = vi.hoisted(() => ({ calls: [] as string[][], release: null as null | (() => void) }));
+const graphql = vi.hoisted(() => ({
+  calls: [] as string[][],
+  release: null as null | (() => void),
+  failing: null as string | null,
+}));
 
 vi.mock('~/core/io/graphql-client', () => ({
   graphql: ({ variables, decoder }: { variables: { ids: string[] }; decoder: (data: unknown) => unknown }) =>
     Effect.promise(async () => {
       graphql.calls.push(variables.ids);
+      if (graphql.failing && variables.ids.includes(graphql.failing)) throw new Error('graph unavailable');
       // The second request is held, so the test can look at the list while it is in flight.
       if (graphql.calls.length > 1) await new Promise<void>(resolve => (graphql.release = resolve));
       return decoder({
@@ -32,6 +37,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 afterEach(() => {
   graphql.calls = [];
   graphql.release = null;
+  graphql.failing = null;
 });
 
 describe('useClaimOrderFacts', () => {
@@ -81,5 +87,21 @@ describe('useClaimOrderFacts', () => {
     rerender({ ids: ['aa', 'bb'] });
 
     expect(result.current.facts).toBe(facts);
+  });
+
+  // Review: a failed run left its claims at the end in arrival order, under a Sort that said Best.
+  it('says so when a run has no answer, rather than leaving its claims unplaced', async () => {
+    graphql.failing = 'bb';
+    const { result } = renderHook(() => useClaimOrderFacts(['aa', 'bb']), { wrapper });
+
+    await waitFor(() => expect(result.current.failed).toBe(true));
+    expect(result.current.facts.size).toBe(0);
+  });
+
+  it('reads creation times as well as scores', async () => {
+    const { result } = renderHook(() => useClaimOrderFacts(['aa']), { wrapper });
+
+    await waitFor(() => expect(result.current.facts.get('aa')).toEqual({ rankingScore: 10, createdAtMs: null }));
+    expect(result.current.failed).toBe(false);
   });
 });

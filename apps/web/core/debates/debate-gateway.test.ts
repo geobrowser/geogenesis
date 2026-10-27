@@ -437,6 +437,101 @@ describe('DebateGatewayClient', () => {
     unsubscribe();
   });
 
+  // Refetching history re-asks every page it holds, and `requests_changed` can come faster than that.
+  // Cancelling the refetch at each flush meant a viewer paged back never saw it land.
+  it('lets the history on screen finish refetching when another event comes in', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const calls: { land: () => void; aborted: boolean }[] = [];
+    const queryFn = vi.fn(({ signal }: { signal: AbortSignal }) => {
+      const id = `page-${calls.length}`;
+      return new Promise(resolve => {
+        const call = { land: () => resolve({ items: [{ id }], next_cursor: null }), aborted: false };
+        signal.addEventListener('abort', () => (call.aborted = true));
+        calls.push(call);
+      });
+    });
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn,
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      staleTime: Infinity,
+      retry: false,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    calls[0]!.land();
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    for (const call of calls) call.land();
+    await vi.runAllTicks();
+    const before = calls.length;
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-1', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+    expect(calls).toHaveLength(before + 1);
+    const inFlight = calls[before]!;
+    sockets[0]!.receive('EVENT', { event_id: 'history-2', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    // The second flush joined the refetch in flight instead of aborting and restarting it...
+    expect(inFlight.aborted).toBe(false);
+    expect(calls).toHaveLength(before + 1);
+    inFlight.land();
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryData<{ pages: { items: { id: string }[] }[] }>(historyKey)?.pages[0]!.items).toEqual([
+        { id: `page-${before}` },
+      ])
+    );
+    // ...and asks again once it has landed, so what is on screen postdates the second event.
+    await vi.waitFor(() => expect(calls).toHaveLength(before + 2));
+    calls[before + 1]!.land();
+    unsubscribe();
+  });
+
+  // The tab closing while it pages back: the page in flight is cancelled first, then the cut, so it
+  // cannot land afterwards and bring the rest back.
+  it('cuts history to its first page once a page still loading has been cancelled', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', 'c3')],
+      pageParams: [null, 'c2'],
+    });
+    let land!: () => void;
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn: () => new Promise<ReturnType<typeof page>>(resolve => (land = () => resolve(page('c', null)))),
+      initialPageParam: null as string | null,
+      getNextPageParam: last => last.next_cursor,
+      staleTime: Infinity,
+      retry: false,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    const paging = observer.fetchNextPage().catch(() => undefined);
+    await vi.runAllTicks();
+    expect(queryClient.getQueryCache().find({ queryKey: historyKey, exact: true })!.state.fetchStatus).toBe('fetching');
+
+    unsubscribe();
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] })
+    );
+    land();
+    await paging;
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
+  });
+
   describe('lobby card patches', () => {
     const lobbiesKey = ['debates', 'account', 'user-a', 'lobbies'];
     const myLobbyKey = ['debates', 'account', 'user-a', 'my-lobby'];

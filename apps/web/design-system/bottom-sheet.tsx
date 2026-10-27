@@ -47,13 +47,18 @@ export function BottomSheet({
             GEO-3463), they sit inside its surface in the DOM, and its native touch listeners would
             otherwise take a swipe here, or on this backdrop, as a drag that moves or dismisses it. */}
         <Overlay data-no-sheet-drag className={`fixed inset-0 ${Z_LAYER_CLASS.bottomSheetBackdrop} bg-text/40`} />
+        {/* Portaled into another sheet, `fixed` is placed against that sheet, not the viewport: the
+            debates panel's surface is transformed, which makes it the containing block. So the cap is
+            that sheet's height (`max-h-full`); 85dvh of the screen is taller than a panel at peek, and
+            its overflow-hidden would clip the title and Clear all off the top with no way to scroll
+            to them. */}
         {/* `aria-modal` said outright, as Radix does not set it: a surface underneath that steps aside
             for a modal dialog (the debates panel's Escape handler) can only tell from this. */}
         <Content
           data-no-sheet-drag
           aria-modal="true"
           aria-describedby={undefined}
-          className={`fixed inset-x-0 bottom-0 ${Z_LAYER_CLASS.bottomSheet} rounded-t-2xl flex max-h-[85dvh] flex-col overflow-y-auto overscroll-contain bg-white px-4 pt-4 pb-[max(1.75rem,env(safe-area-inset-bottom))] focus:outline-hidden`}
+          className={`fixed inset-x-0 bottom-0 ${Z_LAYER_CLASS.bottomSheet} rounded-t-2xl flex ${container ? 'max-h-full' : 'max-h-[85dvh]'} flex-col overflow-y-auto overscroll-contain bg-white px-4 pt-4 pb-[max(1.75rem,env(safe-area-inset-bottom))] focus:outline-hidden`}
           data-testid="bottom-sheet"
         >
           {showTitle ? (

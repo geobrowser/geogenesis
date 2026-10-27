@@ -13,6 +13,7 @@ import { RequestSection } from './request-section';
 import { RequestsSchedule } from './requests-schedule';
 import { ScheduledDebatesSection, hasScheduledContent, useScheduledContent } from './scheduled-debates-section';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
+import { incomingChallengeFor } from './use-requests-tab-count';
 
 /**
  * The side panel's Requests tab is a schedule (GEO-3463): one timeline by day, with a now-line —
@@ -59,10 +60,8 @@ function RequestsRail() {
   const currentUserId = useCurrentGeoChatUserId();
   // Role is left undecided until the viewer's id is known — guessing files an incoming challenge
   // under Sent, where it reads as something the viewer sent and offers them "Cancel request" for it.
-  const challengeRole =
-    !challenge || !currentUserId ? null : challenge.recipient.user_id === currentUserId ? 'recipient' : 'requester';
-  const incomingChallenge = challengeRole === 'recipient' ? challenge : null;
-  const outgoingChallenge = challengeRole === 'requester' ? challenge : null;
+  const incomingChallenge = incomingChallengeFor(challenge, currentUserId);
+  const outgoingChallenge = challenge && currentUserId && !incomingChallenge ? challenge : null;
 
   const hasScheduled = hasScheduledContent(scheduled) || availabilityRequests.length > 0;
   const hasRequests = Boolean(sent || outgoingChallenge || received.length > 0 || incomingChallenge);

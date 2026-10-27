@@ -2854,6 +2854,29 @@ describe('in the side panel', () => {
     expect(screen.queryByRole('button', { name: /Any space/ })).not.toBeInTheDocument();
   });
 
+  // Review: "Show 0" on a first load, and the previous count while a change was still being asked.
+  it('leaves the count off Show until the list in hand answers what is picked', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'A tagged claim'),
+      featuredClaim(FEATURED_B, 'Another tagged claim'),
+    ];
+    mocks.featuredLoading = true;
+    const view = render(<ClaimsTab panelFilters={panelFilters()} />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const filters = await screen.findByRole('dialog', { name: 'Filters' });
+    expect(within(filters).getByRole('button', { name: 'Show' })).toBeInTheDocument();
+
+    mocks.featuredLoading = false;
+    view.rerender(<ClaimsTab panelFilters={panelFilters()} />);
+    expect(await within(filters).findByRole('button', { name: 'Show 2' })).toBeInTheDocument();
+
+    // A search still settling holds the old rows; their count is not the answer to it.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'Another' } });
+    expect(within(filters).getByRole('button', { name: 'Show' })).toBeInTheDocument();
+  });
+
   it('asks the graph for Newest when the tab sorts by it', async () => {
     mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
     render(<ClaimsTab panelFilters={panelFilters({ graphOrder: 'newest' })} />);

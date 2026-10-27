@@ -953,15 +953,17 @@ export class DebateGatewayClient {
         // trips complete; restarting every batch on every event starved the list of updates for as
         // long as the other side kept responding. A batch in flight is left to land and is then
         // asked again, so the answer on screen is never older than the event that prompted it.
-        const inFlightRematchBatches = this.queryClient.getQueryCache().findAll({
+        //
+        // History on screen is the same: its refetch re-asks every page it holds, one after another,
+        // and `requests_changed` comes faster than that for a viewer paged a few pages back.
+        const inFlightLeftToLand = this.queryClient.getQueryCache().findAll({
           ...queryFilters,
           fetchStatus: 'fetching',
-          predicate: query => isRematchClaimsQueryKey(query.queryKey) && matches(query),
+          predicate: query => isLeftToLandAtFlush(query) && matches(query),
         });
         await this.queryClient.cancelQueries({
           ...queryFilters,
-          predicate: query =>
-            query.state.data !== undefined && !isRematchClaimsQueryKey(query.queryKey) && matches(query),
+          predicate: query => query.state.data !== undefined && !isLeftToLandAtFlush(query) && matches(query),
         });
         if (isAccountHistoryQueryKey(queryFilters.queryKey)) this.keepFirstHistoryPage(queryFilters.queryKey);
         // `cancelRefetch: false`: a refetch of a query still fetching joins that request instead
@@ -973,11 +975,11 @@ export class DebateGatewayClient {
         try {
           await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true, cancelRefetch: false });
         } finally {
-          if (inFlightRematchBatches.length > 0) {
+          if (inFlightLeftToLand.length > 0) {
             await this.queryClient.refetchQueries(
               {
                 type: 'active',
-                predicate: query => inFlightRematchBatches.some(batch => batch.queryHash === query.queryHash),
+                predicate: query => inFlightLeftToLand.some(batch => batch.queryHash === query.queryHash),
               },
               { throwOnError: true, cancelRefetch: false }
             );
@@ -1521,6 +1523,18 @@ function isAccountHistoryQueryKey(queryKey: QueryKey | undefined): queryKey is Q
     queryKey[0] === 'debates' &&
     queryKey[1] === 'account' &&
     queryKey[3] === 'history'
+  );
+}
+
+/**
+ * What a flush never cancels, loaded or not: the rematch picker's batches, and history while the
+ * timeline shows it. Unwatched history is still cancelled, so a page in flight cannot land on top of
+ * the cut to its first page.
+ */
+function isLeftToLandAtFlush(query: Query) {
+  return (
+    isRematchClaimsQueryKey(query.queryKey) ||
+    (isAccountHistoryQueryKey(query.queryKey) && query.getObserversCount() > 0)
   );
 }
 

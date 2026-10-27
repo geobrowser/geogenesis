@@ -140,6 +140,7 @@ describe('historyNames', () => {
 });
 
 describe('historyTitle', () => {
+  // geo-chat#299's shapes for a sent claim request: the taker, the one recipient, or nobody.
   it('names who took an accepted claim request', () => {
     expect(historyTitle(item({ outcome: 'accepted', other_user_ids: ['a'] }), ['Ana'])).toBe('Ana took your request');
   });
@@ -148,8 +149,14 @@ describe('historyTitle', () => {
     expect(historyTitle(item({ other_user_ids: ['a'] }), ['Ana'])).toBe('You asked Ana');
   });
 
-  it('keeps the fan-out wording for a request offered to several', () => {
-    expect(historyTitle(item({ other_user_ids: ['a', 'b'] }), ['Ana', 'Ben'])).toBe('Requested · people who disagree');
+  it('keeps the fan-out wording for an untargeted request nobody took', () => {
+    const entry = item({ outcome: 'passed_by_everyone', other_user_ids: [] });
+    expect(
+      historyTitle(
+        entry,
+        historyNames(entry, () => null)
+      )
+    ).toBe('Requested · people who disagree');
   });
 
   it('calls an arranged invite a debate with them, not an invitation', () => {

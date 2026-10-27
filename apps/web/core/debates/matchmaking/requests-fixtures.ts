@@ -49,7 +49,10 @@ export function invite(
   };
 }
 
-/** A settled history item from a day ago: a claim request of the viewer's that nobody took. */
+/**
+ * A settled history item from a day ago: an untargeted claim request of the viewer's that nobody
+ * took, which geo-chat#299 sends naming nobody.
+ */
 export function historyItem(overrides: Partial<DebateHistoryItem> = {}): DebateHistoryItem {
   return {
     id: 'claim_request:1',
@@ -57,7 +60,7 @@ export function historyItem(overrides: Partial<DebateHistoryItem> = {}): DebateH
     occurred_at: new Date(Date.now() - 86_400_000).toISOString(),
     direction: 'outgoing',
     outcome: 'passed_by_everyone',
-    other_user_ids: ['user-them'],
+    other_user_ids: [],
     claim: {
       id: 'c1',
       space_id: 's1',

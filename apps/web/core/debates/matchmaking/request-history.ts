@@ -144,7 +144,8 @@ export function historyTitle(item: DebateHistoryItem, names: string[]): string {
       return item.direction === 'incoming' ? `${name} asked you` : `You asked ${name}`;
     case 'claim_request':
       if (item.direction === 'incoming') return `${name} asked you`;
-      // One person named is the one who took it, or a request that only ever went to them (GEO-3333).
+      // geo-chat#299 names the taker once it is accepted, the recipient of a targeted request
+      // (GEO-3333), and nobody for an untargeted one nobody took: that is the fan-out wording.
       if (names.length === 1) return item.outcome === 'accepted' ? `${name} took your request` : `You asked ${name}`;
       return 'Requested · people who disagree';
   }

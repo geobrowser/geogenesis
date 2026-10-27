@@ -81,6 +81,29 @@ describe('BottomSheet', () => {
     container.remove();
   });
 
+  // Inside the debates panel's transformed sheet, `fixed` is placed against that sheet, so a screen-
+  // based cap could overflow it and clip the top. On its own, the sheet keeps the screen-based cap.
+  it('caps its height to the sheet it is portaled into, and to the screen otherwise', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const { unmount } = render(
+      <BottomSheet open onOpenChange={() => {}} title="Filters" container={container}>
+        <p>Body</p>
+      </BottomSheet>
+    );
+    expect(screen.getByTestId('bottom-sheet')).toHaveClass('max-h-full');
+    expect(screen.getByTestId('bottom-sheet')).not.toHaveClass('max-h-[85dvh]');
+    unmount();
+    container.remove();
+
+    render(
+      <BottomSheet open onOpenChange={() => {}} title="Filters">
+        <p>Body</p>
+      </BottomSheet>
+    );
+    expect(screen.getByTestId('bottom-sheet')).toHaveClass('max-h-[85dvh]');
+  });
+
   it('can show its title as a heading, with Close or the action it is given beside it', () => {
     const { rerender } = render(
       <BottomSheet open onOpenChange={() => {}} title="Filters" showTitle>

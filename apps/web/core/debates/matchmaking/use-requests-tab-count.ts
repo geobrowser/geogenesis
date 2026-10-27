@@ -1,11 +1,23 @@
 'use client';
 
-import type { DebateActivity, DebateRequestsResponse } from '../api';
+import type { DebateActivity, DebateChallenge, DebateRequestsResponse } from '../api';
 import { sameId } from '../rooms/room-presence';
 import { useOpenScheduledRequests } from '../rooms/scheduled-awaiting';
 import { useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
+
+/**
+ * The challenge, when it is addressed to the viewer: one they sent is theirs to wait on, not to
+ * answer. Null until the viewer's id is known, rather than a guess. By `sameId`, since geo-chat's
+ * ids come both dashed and bare.
+ */
+export function incomingChallengeFor<T extends Pick<DebateChallenge, 'recipient'>>(
+  challenge: T | null | undefined,
+  viewerId: string | null
+): T | null {
+  return challenge && viewerId !== null && sameId(challenge.recipient.user_id, viewerId) ? challenge : null;
+}
 
 /**
  * How many things are waiting on the viewer's answer (GEO-3463): live requests sent to them, a
@@ -48,9 +60,7 @@ export function useRequestsTabCount({
   if (!authenticated) return 0;
 
   const instantIncoming = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
-  // A challenge counts only once it is known to be addressed to the viewer: one they sent is theirs
-  // to wait on, not to answer.
-  const challengeToViewer = challenge && viewerId !== null && sameId(challenge.recipient.user_id, viewerId) ? 1 : 0;
+  const challengeToViewer = incomingChallengeFor(challenge, viewerId) ? 1 : 0;
   // Fetched here, it is kept current like any read on screen. Only from cache, it counts while it is
   // the newer of the two.
   const listIsCurrent =

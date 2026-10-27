@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -189,13 +189,40 @@ describe('HubLiveStrip', () => {
     const { rerender } = render(<HubLiveStrip lineup={{ ...EMPTY, later: [later(2)] }} />);
     fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
     expect(screen.getByTestId('lobby-going')).toHaveTextContent('Ana and Ben going');
-    expect(lobbyView.refetch).not.toHaveBeenCalled();
+    // Once for opening (see the next case), and not again until the count moves.
+    expect(lobbyView.refetch).toHaveBeenCalledTimes(1);
 
     rerender(<HubLiveStrip lineup={{ ...EMPTY, later: [later(3)] }} />);
 
     expect(screen.getByTestId('lobby-going')).toHaveTextContent('Ana, Ben and 1 more going');
-    expect(lobbyView.refetch).toHaveBeenCalledTimes(1);
+    expect(lobbyView.refetch).toHaveBeenCalledTimes(2);
     lobbyView.data = undefined;
+  });
+
+  // Review, 27 Oct: one RSVP cleared and another set inside the 3s broadcast window leave the count
+  // where it was, so a held view kept naming the person who left. Opening reads it again.
+  it('reads the names again each time the details open', async () => {
+    lobbyView.data = { reminder_count: 1, going: [] };
+    render(<HubLiveStrip lineup={{ ...EMPTY, later: [lobby({ open: false, scheduled: true, reminder_count: 1 })] }} />);
+    const trigger = screen.getByRole('button', { name: /lobby details/ });
+
+    fireEvent.click(trigger);
+    expect(lobbyView.refetch).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Lobby details' }), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Lobby details' })).not.toBeInTheDocument());
+
+    fireEvent.click(trigger);
+    expect(lobbyView.refetch).toHaveBeenCalledTimes(2);
+    lobbyView.data = undefined;
+  });
+
+  // With nothing held, the query's own first read is the one out; a refetch would only restart it.
+  it('leaves a first read alone when the details open', () => {
+    lobbyView.data = undefined;
+    render(<HubLiveStrip lineup={{ ...EMPTY, later: [lobby({ open: false, scheduled: true, reminder_count: 1 })] }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
+    expect(lobbyView.refetch).not.toHaveBeenCalled();
   });
 
   it('puts your open request ahead of a live lobby, with the time left and Cancel', () => {

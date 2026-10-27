@@ -30,7 +30,6 @@ import { debateEntryClick, routeIntoDebate } from '../lobbies/step-out';
 import { useMinuteNow } from '../lobbies/use-minute-now';
 import { speakerLabel } from '../playback-utils';
 import { opponentName, opponentOf } from '../rooms/room-opponent';
-import { sameId } from '../rooms/room-presence';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { usePersonDebates } from '../use-person-debates';
 import { AvailabilityRequestNotice, useAvailabilityRequests } from './availability-request-notice';
@@ -87,9 +86,9 @@ import { type UpcomingLobbyRow, lobbyHostLine } from './upcoming-lobby-rows';
 import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
-import { useAskClock } from './use-outgoing-ask';
+import { type OutgoingAskState, useAskClock } from './use-outgoing-ask';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
-import { useRequestsTabCount } from './use-requests-tab-count';
+import { incomingChallengeFor, useRequestsTabCount } from './use-requests-tab-count';
 import { type ScheduledDebateAnswer, useScheduledDebateAnswer } from './use-scheduled-debate-answer';
 
 /**
@@ -114,8 +113,7 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const viewerId = useCurrentGeoChatUserId();
   const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
   const challenge = useLiveRequest(activity?.challenge);
-  const incomingChallenge =
-    challenge && viewerId !== null && sameId(challenge.recipient.user_id, viewerId) ? challenge : null;
+  const incomingChallenge = incomingChallengeFor(challenge, viewerId);
   const { ask } = useHubAskState();
   // The badge's own number, so "Needs you (N)" can never disagree with it.
   const needsYouCount = useRequestsTabCount({ authenticated, activity, requests: requestsQuery.data });
@@ -420,7 +418,7 @@ export function buildEntries({
   now: number;
   incoming: DebateRequest[];
   incomingChallenge: DebateChallenge | null;
-  ask: unknown;
+  ask: OutgoingAskState['ask'];
   scheduled: Pick<ScheduledContent, 'answerable' | 'upcoming' | 'lobbies'>;
   history: DebateHistoryItem[];
   pastDebates: PastDebate[];
@@ -472,8 +470,7 @@ export function buildEntries({
     add({
       key: `room:${row.room.room_id}`,
       at: row.room.starts_at,
-      // Due, or the other debater is already in: it is happening now rather than at its time.
-      when: row.room.due || row.room.others_present ? 'now' : 'upcoming',
+      when: roomIsNow(row.room) ? 'now' : 'upcoming',
       needsYou: false,
       node: render.room(row),
     });
@@ -503,13 +500,19 @@ export function buildEntries({
   }
 
   // Oldest first, so the list reads downwards into the future. What needs an answer leads the Now
-  // group, where everything shares the same moment.
+  // group, where everything shares the same moment. Placement comes first so the order is one order:
+  // needs-you only between two Now entries and time otherwise makes cycles.
   return entries
     .filter(entry => Number.isFinite(entry.at))
     .sort(
-      (a, b) => (a.when === 'now' && b.when === 'now' ? Number(b.needsYou) - Number(a.needsYou) : 0) || a.at - b.at
+      (a, b) =>
+        PLACEMENT_RANK[a.when] - PLACEMENT_RANK[b.when] ||
+        (a.when === 'now' ? Number(b.needsYou) - Number(a.needsYou) : 0) ||
+        a.at - b.at
     );
 }
+
+const PLACEMENT_RANK: Record<Placement, number> = { past: 0, now: 1, upcoming: 2 };
 
 /**
  * Entries grouped by day, each day one section with its date in the left column. Today can appear
@@ -903,6 +906,11 @@ function InviteItem({
   );
 }
 
+/** Due, or the other debater is already in: a booked debate happening now rather than at its time. */
+function roomIsNow(room: UpcomingRoomRow['room']) {
+  return room.due || room.others_present;
+}
+
 /** A booked debate: Join once the room opens, and Reschedule or Cancel until anyone is in it. */
 function RoomItem({
   row,
@@ -919,9 +927,9 @@ function RoomItem({
 
   return (
     <TimelineItem
-      dot={room.others_present || room.due ? 'live' : 'booked'}
+      dot={roomIsNow(room) ? 'live' : 'booked'}
       focused={focused}
-      time={room.due || room.others_present ? 'Now' : formatTime(room.starts_at)}
+      time={roomIsNow(room) ? 'Now' : formatTime(room.starts_at)}
       title={`Debate with ${opponentName(opponent)}`}
       sub={roomStatusLabel(room, opponent)}
       actions={
@@ -1001,20 +1009,7 @@ function WatchDebate({ debateId, claim }: { debateId: string; claim: DebateClaim
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const [state, setState] = React.useState<'idle' | 'pending' | 'failed'>('idle');
 
-  // Into a debate's page like any other way in: from a lobby, a plain click steps out of it first.
-  if (claim) {
-    const href = debatePath({ id: debateId, claim });
-    return (
-      <Link
-        href={href}
-        onClick={debateEntryClick(() => router.push(href))}
-        className={hubPillClassName('secondary', undefined, 'compact')}
-        {...hubAnalyticsAttributes(WATCH_ANALYTICS.action, WATCH_ANALYTICS.intent)}
-      >
-        Watch
-      </Link>
-    );
-  }
+  if (claim) return <WatchLink href={debatePath({ id: debateId, claim })} />;
 
   return (
     <>
@@ -1046,10 +1041,23 @@ function WatchDebate({ debateId, claim }: { debateId: string; claim: DebateClaim
 /** One Watch series, whichever way a past debate is opened: from history, or from the graph's stand-in. */
 const WATCH_ANALYTICS = { action: 'Watch past debate', intent: 'open_debate' } as const;
 
+/** Into a debate's page like any other way in: from a lobby, a plain click steps out of it first. */
+function WatchLink({ href }: { href: string }) {
+  const router = useRouter();
+  return (
+    <Link
+      href={href}
+      onClick={debateEntryClick(() => router.push(href))}
+      className={hubPillClassName('secondary', undefined, 'compact')}
+      {...hubAnalyticsAttributes(WATCH_ANALYTICS.action, WATCH_ANALYTICS.intent)}
+    >
+      Watch
+    </Link>
+  );
+}
+
 /** A debate the viewer had, from the graph: the stand-in for history until GEO-3464 ships. */
 function PastDebateRow({ row }: { row: PastDebate }) {
-  const router = useRouter();
-  const href = NavUtils.toEntity(row.spaceId, row.entityId);
   return (
     <TimelineItem
       testId="requests-past-debate"
@@ -1060,15 +1068,7 @@ function PastDebateRow({ row }: { row: PastDebate }) {
       sub="Debate · Debated"
       actions={
         <CompactActionRow>
-          {/* Into a debate like `WatchDebate`: from a lobby, a plain click steps out of it first. */}
-          <Link
-            href={href}
-            onClick={debateEntryClick(() => router.push(href))}
-            className={hubPillClassName('secondary', undefined, 'compact')}
-            {...hubAnalyticsAttributes(WATCH_ANALYTICS.action, WATCH_ANALYTICS.intent)}
-          >
-            Watch
-          </Link>
+          <WatchLink href={NavUtils.toEntity(row.spaceId, row.entityId)} />
         </CompactActionRow>
       }
     />
@@ -1326,6 +1326,22 @@ function useTimelineScroll({
     for (const name of events) scroller.addEventListener(name, release, { passive: true });
     return () => {
       for (const name of events) scroller.removeEventListener(name, release);
+    };
+  }, [hubScrollSelector]);
+
+  // CSS scroll anchoring off on the box while the timeline is in it, so the holding here is the only
+  // holding in every browser. Chrome's can move `scrollTop` in a task where `holdLine` does not run,
+  // and the scroll handler then takes that for the viewer's and releases the pin. It goes on the box:
+  // the scroll container's own `overflow-anchor` is what turns anchoring off; on the content it would
+  // only rule rows out as anchors. Put back on the way out, for the panel's other tabs.
+  React.useLayoutEffect(() => {
+    const scroller = rootRef.current?.closest<HTMLElement>(hubScrollSelector);
+    if (!scroller) return;
+    const previous = scroller.style.getPropertyValue('overflow-anchor');
+    scroller.style.setProperty('overflow-anchor', 'none');
+    return () => {
+      if (previous) scroller.style.setProperty('overflow-anchor', previous);
+      else scroller.style.removeProperty('overflow-anchor');
     };
   }, [hubScrollSelector]);
 

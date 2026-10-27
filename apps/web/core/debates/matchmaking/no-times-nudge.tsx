@@ -5,17 +5,12 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
-import { localTimezone } from '~/core/availability/blocks';
-import { hasUpcomingAvailability } from '~/core/availability/upcoming-availability';
-import { useDebateSchedule, useGeoChatAuth } from '~/core/debates/hooks';
-
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
-import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
-
 import { debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { HubPillButton } from './hub-pill-button';
+import { useSetTimesPrompt } from './set-schedule-banner';
 
 /**
  * Dismissed for good on this device. The nudge is a one-time suggestion, not a standing state: once
@@ -40,19 +35,14 @@ export function NoTimesNudge({ scheduleButtonRef }: { scheduleButtonRef?: React.
 }
 
 function Nudge({ scheduleButtonRef }: { scheduleButtonRef?: React.RefObject<HTMLButtonElement | null> }) {
-  const { authenticated } = useGeoChatAuth();
-  const { data, blocks } = useDebateSchedule();
+  // The same ask as the banner it replaced, so the same editor and focus hand-off: when saving times
+  // takes the line away, the availability pill, which edits the same times, takes focus.
+  const { noTimes, editing, openEditor, modal } = useSetTimesPrompt({ scheduleButtonRef });
   const [dismissed, setDismissed] = useAtom(noTimesNudgeDismissedAtom);
-  const [editing, setEditing] = React.useState(false);
   const openerRef = React.useRef<HTMLButtonElement | null>(null);
-  // Where the editor sends focus when it closes. The line it opened from goes once times are saved,
-  // so focus would land on nothing; the availability pill, which edits the same times, takes it —
-  // as it does for the banner this replaced.
-  const returnFocusRef = React.useRef<HTMLElement | null>(null);
 
-  const hasTimes = data !== undefined && hasUpcomingAvailability(blocks, data.schedule.timezone);
   // The modal outlives the line: saving times hides the line, and the modal must not go with it.
-  const showLine = authenticated && data !== undefined && !hasTimes && !dismissed;
+  const showLine = noTimes && !dismissed;
 
   if (!showLine && !editing) return null;
 
@@ -72,10 +62,7 @@ function Nudge({ scheduleButtonRef }: { scheduleButtonRef?: React.RefObject<HTML
             variant="primary"
             analyticsLabel={debateAnalyticsLabel('hub', 'Open schedule')}
             analyticsIntent="open_debate_schedule"
-            onClick={() => {
-              returnFocusRef.current = openerRef.current;
-              setEditing(true);
-            }}
+            onClick={() => openEditor(openerRef.current)}
           >
             Set my times
           </HubPillButton>
@@ -90,17 +77,7 @@ function Nudge({ scheduleButtonRef }: { scheduleButtonRef?: React.RefObject<HTML
           </button>
         </div>
       ) : null}
-      <OwnScheduleModal
-        open={editing}
-        onOpenChange={setEditing}
-        openerRef={returnFocusRef}
-        surface="hub_banner"
-        onSaved={saved => {
-          if (scheduleButtonRef?.current && hasUpcomingAvailability(saved, localTimezone())) {
-            returnFocusRef.current = scheduleButtonRef.current;
-          }
-        }}
-      />
+      {modal}
     </>
   );
 }

@@ -22,7 +22,7 @@ import type { ClaimPickerEntity } from '../claim-picker-page';
 import type { ParticipantPositionsByClaim } from '../participant-positions';
 import { ResizeObserverStub } from '../resize-observer-fixtures';
 import type { PersonRecord } from './person-record';
-import { debatesHubPeopleSortAtom, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
+import { debatesHubPanelPeopleSpaceIdsAtom, debatesHubPeopleSortAtom, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -328,6 +328,11 @@ function challenge(role: 'requester' | 'recipient', expiresInMs = 25 * 60_000): 
     created_at: '2026-08-05T11:00:00.000Z',
     expires_at: new Date(Date.now() + expiresInMs).toISOString(),
   };
+}
+
+/** A claim request the viewer sent, `expiresInMs` from expiring (negative: already expired). */
+function openRequest(expiresInMs: number) {
+  return { id: 'request-1', status: 'pending', expires_at: new Date(Date.now() + expiresInMs).toISOString() };
 }
 
 const awaitingText = 'You have a debate request awaiting a reply.';
@@ -925,13 +930,37 @@ describe('PeopleTab', () => {
   });
 
   it('leaves the other blocked reasons alone', () => {
-    mocks.outboundRequest = { id: 'request-1' };
+    mocks.outboundRequest = openRequest(60_000);
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
     expect(
       screen.getByText('You already have an open request — withdraw it to challenge someone else.')
     ).toBeInTheDocument();
+  });
+
+  // The strip reads the request through its expiry and says nobody took it at `expires_at`; the
+  // buttons have to come back then too, not when geo-chat next sends `requests_changed`.
+  it('lets the buttons go once the open request has expired, as the strip does', () => {
+    mocks.outboundRequest = openRequest(-1_000);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByText(/You already have an open request/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Debate now' })[0]).toBeEnabled();
+  });
+
+  // The panel draws no challenge card, so "awaiting a reply" would read as a request waiting on the
+  // viewer. A challenge they sent pauses the other rows the way any ask does in the panel.
+  it('gives the other rows the one-at-a-time reason after a challenge is sent', () => {
+    mocks.challenge = challenge('requester');
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const others = screen.getAllByRole('button', { name: 'Debate now' });
+    expect(others.length).toBeGreaterThan(0);
+    for (const button of others) {
+      expect(button).toBeDisabled();
+      expect(button).toHaveAttribute('title', 'One request at a time. Cancel yours to ask on another claim.');
+    }
   });
 
   // GEO-2725. Signed out the button is the entry to signing in, so it stays live and opens Privy
@@ -1265,6 +1294,21 @@ describe('PeopleTab filters', () => {
       expect(screen.queryByText('Ona')).not.toBeInTheDocument();
     });
 
+    // Full screen's rail reads its picks as any of them; read here as all of them, its two picks
+    // would leave only people active in both.
+    it('keeps its own spaces, apart from the ones picked on full screen', async () => {
+      // Arturas is active in Crypto, Vytautas in Health: nobody is in both.
+      const store = createStore();
+      store.set(debatesHubPeopleSpaceIdsAtom, ['spacea', 'spaceb']);
+
+      render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+      expect(await screen.findByText('Arturas')).toBeInTheDocument();
+      expect(screen.getByText('Vytautas')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+      expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual(['spacea', 'spaceb']);
+    });
+
     it('offers Online now, which asks for nobody offline and shows a chip', async () => {
       render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
@@ -1461,7 +1505,7 @@ describe('PeopleTab filters', () => {
   // swallow the "Clear filters" press as an outside-click instead of passing it to the button.
   it('blames the filters rather than the search once a space is picked too', async () => {
     const store = createStore();
-    store.set(debatesHubPeopleSpaceIdsAtom, ['spacea']);
+    store.set(debatesHubPanelPeopleSpaceIdsAtom, ['spacea']);
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
     fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'Vytautas' } });
@@ -1473,7 +1517,7 @@ describe('PeopleTab filters', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
     // Both filters are taken back, not just the one named last: the space selection is what the
     // label promises and the search is what the viewer can see in the box.
-    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([]);
+    expect(store.get(debatesHubPanelPeopleSpaceIdsAtom)).toEqual([]);
     expect((screen.getByLabelText('Search people') as HTMLInputElement).value).toBe('');
   });
 
@@ -2343,10 +2387,10 @@ describe('Online only', () => {
       refetch: vi.fn(),
     }));
     const store = createStore();
-    store.set(debatesHubPeopleSpaceIdsAtom, [offlineSpace]);
+    store.set(debatesHubPanelPeopleSpaceIdsAtom, [offlineSpace]);
     render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
 
-    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([offlineSpace]);
+    expect(store.get(debatesHubPanelPeopleSpaceIdsAtom)).toEqual([offlineSpace]);
   });
 });
 
@@ -2460,7 +2504,9 @@ describe('panel row (GEO-3463)', () => {
     expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-gone');
   });
 
-  it('says when an away person is next free, and offers Schedule even with no times', () => {
+  // Someone away off geo-chat's schedulable list has no free time this week, so Schedule would open
+  // an empty week: the pill says Away, as on the full row.
+  it('says when an away person is next free and offers Schedule, or a disabled Away with no week', () => {
     mocks.people = [
       { ...person('user-them', 'Arturas'), away: true, can_challenge: false },
       { ...person('user-other', 'Vytautas'), away: true, can_challenge: false },
@@ -2475,9 +2521,11 @@ describe('panel row (GEO-3463)', () => {
 
     expect(fact('Arturas')).toHaveTextContent(/^Away · Free /);
     expect(fact('Vytautas')).toHaveTextContent(/^Away$/);
-    for (const name of ['Arturas', 'Vytautas']) {
-      expect(within(rowOf(name)).getByRole('button', { name: `Schedule a debate with ${name}` })).toBeEnabled();
-    }
+    expect(within(rowOf('Arturas')).getByRole('button', { name: 'Schedule a debate with Arturas' })).toBeEnabled();
+    expect(
+      within(rowOf('Vytautas')).queryByRole('button', { name: 'Schedule a debate with Vytautas' })
+    ).not.toBeInTheDocument();
+    expect(within(rowOf('Vytautas')).getByRole('button', { name: 'Away' })).toBeDisabled();
   });
 
   it('keeps the calendar on a row in a debate, beside a disabled In a debate pill', async () => {

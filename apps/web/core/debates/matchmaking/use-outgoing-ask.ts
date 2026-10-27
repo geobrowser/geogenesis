@@ -39,6 +39,9 @@ export type OutgoingAsk =
       expiresAt: string;
     };
 
+/** Why a Debate now waits while the viewer's one ask is out, wherever the panel pauses one. */
+export const ONE_ASK_AT_A_TIME_REASON = 'One request at a time. Cancel yours to ask on another claim.';
+
 /**
  * An ask that ran out without anyone taking it. Kept until the viewer dismisses it or asks again, so
  * the strip can say so and offer Schedule rather than the ask silently vanishing (GEO-3463).

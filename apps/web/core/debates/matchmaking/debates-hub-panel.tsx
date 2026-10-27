@@ -324,7 +324,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             off. It scrolls instead, with a fade and an arrow on whichever side has more (GEO-3148).
             The four tabs (GEO-3463) fit the panel's 400px at the design's 18px gap with the
             Requests badge showing, so the arrows only appear on a very narrow phone. */}
-        <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate hub" className="gap-[18px]">
+        <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate hub" className="gap-4.5">
           {tabs.map(tab => (
             <button
               key={tab.id}

@@ -358,6 +358,19 @@ describe('RequestsTab rail', () => {
     expect(mocks.rejectChallenge).toHaveBeenCalledWith('challenge-1');
   });
 
+  // geo-chat's ids come dashed and bare: compared as strings, an incoming challenge read as sent.
+  it('files a challenge to the viewer under Received when their id is dashed and its is bare', () => {
+    mocks.incoming = [];
+    mocks.currentUserId = '0b9c7a52-4d1e-4f6a-9a3b-2c8e5f1d7a60';
+    const toMe = challenge('recipient');
+    mocks.challenge = { ...toMe, recipient: { ...toMe.recipient, user_id: '0b9c7a524d1e4f6a9a3b2c8e5f1d7a60' } };
+    render(<RequestsTab dense />);
+
+    expect(screen.getByRole('heading', { name: 'Received' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Sent' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
   // Guessing the role from an absent id filed the challenge under Sent, which told the person it
   // was sent *to* that they had sent it, and offered them "Cancel request" instead of accepting.
   it('waits for the viewer id before deciding which side of a challenge they are on', async () => {

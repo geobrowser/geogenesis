@@ -1063,6 +1063,10 @@ export function ClaimsTab({
   // the sentinel had fetched the rows that would have kept them here.
   const listIsLoading = spacesPending || excludePending || (graphSourced ? taggedLoading : claimsQuery.isLoading);
   const listError = graphSourced ? taggedError : claimsQuery.error;
+  // Whether the rows in hand are the answer to what is picked: not on a first load, and not while a
+  // pick's previous rows are held over (`countsPending`), or "Show" would name the old count, or 0.
+  const resultPending =
+    listIsLoading || countsPending || answeredHere.isLoading || (collapsesAnswered && !answersSettled);
   // Not when the server left the viewer's answers out: an empty list then is their backlog, not an
   // empty corpus to be moved out of.
   const settledEmpty =
@@ -1190,7 +1194,7 @@ export function ClaimsTab({
             listedCount={hasNextPage || !facetsCountListedRows ? 0 : visibleClaims.length}
             // A tagged claim can sit in several spaces, so the others stay on offer after a pick.
             spacesAreExclusive={!graphSourced}
-            resultCount={hasNextPage ? null : visibleClaims.length}
+            resultCount={resultPending || hasNextPage ? null : visibleClaims.length}
             countsPending={!keepClaim && countsPending}
           />
         ) : null}

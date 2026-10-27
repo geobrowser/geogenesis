@@ -20,7 +20,7 @@ import { opposingPositions } from './opposing-positions';
 import { RequestingPill } from './requesting-pill';
 import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
-import { type OutgoingAsk, askIsForClaim } from './use-outgoing-ask';
+import { ONE_ASK_AT_A_TIME_REASON, type OutgoingAsk, askIsForClaim } from './use-outgoing-ask';
 
 /** The end slot's pill, one step taller on a phone (Specs: h-5 desktop, h-6 phone). */
 const PILL_CLASS_NAME = cx(claimSlotPillClass('inline'), 'md:h-6');
@@ -99,7 +99,7 @@ export function HubClaimEndSlot({
           paused={paused}
           disabled={Boolean(blockedReason)}
           isRequesting={isRequesting}
-          blockedReason={paused ? 'One request at a time. Cancel yours to ask on another claim.' : blockedReason}
+          blockedReason={paused ? ONE_ASK_AT_A_TIME_REASON : blockedReason}
           requestError={requestError}
           buttonClassName="md:h-6"
           analytics={debateActionAnalyticsAttributes(analyticsSurface, 'Debate now', 'start_debate')}
