@@ -2899,6 +2899,21 @@ describe('in the side panel', () => {
     expect(screen.queryByText('Another tagged claim')).not.toBeInTheDocument();
   });
 
+  // The panel's Matches fallback explains the rows under it, so its line must know there are some.
+  it('tells a notice whether the list under it has rows', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    const notice = (listHasRows: boolean) => <p>{listHasRows ? 'Over rows' : 'Over nothing'}</p>;
+    render(<ClaimsTab panelFilters={panelFilters()} notice={notice} />);
+    await showAllClaims();
+    expect(await screen.findByText('A tagged claim')).toBeInTheDocument();
+    expect(screen.getByText('Over rows')).toBeInTheDocument();
+
+    cleanup();
+    render(<ClaimsTab panelFilters={panelFilters()} notice={notice} keepClaim={() => false} />);
+    await showAllClaims();
+    expect(await screen.findByText('Over nothing')).toBeInTheDocument();
+  });
+
   // The tab's own narrowing emptied the list: blaming "Hide my positions" would offer a switch that
   // does nothing for these rows, so the tab says what happened and offers its own way out.
   it('says what the tab’s own narrowing did when it leaves nothing', async () => {

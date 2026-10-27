@@ -1035,6 +1035,8 @@ describe('the way out to the full-screen hub', () => {
   });
 
   it('omits Lobby from the URL, which is the workspace default', () => {
+    // Someone online who disagrees: Matches is drawing geo-chat's match list, not its fallback.
+    mocks.matches = [{}];
     renderOpen('lobby');
 
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
@@ -1049,6 +1051,7 @@ describe('the way out to the full-screen hub', () => {
   });
 
   it('hands over Lobby from Lobby, not what its Matches-only toggle says', () => {
+    mocks.matches = [{}];
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'lobby' });
     store.set(debatesHubMatchesOnlyAtom, true);
@@ -1062,6 +1065,51 @@ describe('the way out to the full-screen hub', () => {
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
     // Default list is omitted; the toggle never becomes its own `list` value.
     expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
+  });
+
+  // Matches drawing offline people is drawing your positions, whether switched on or as its fallback.
+  it('opens your positions from Matches while it shows offline people', () => {
+    const listOf = () =>
+      new URLSearchParams(
+        screen
+          .getByRole('link', { name: /open full screen/i })
+          .getAttribute('href')
+          ?.split('?')[1] ?? ''
+      ).get('list');
+    mocks.matches = [{}];
+    const store = renderOpen('lobby');
+    expect(listOf()).toBeNull();
+
+    act(() => store.set(debatesHubMatchesIncludeOfflineAtom, true));
+    expect(listOf()).toBe('positions');
+
+    // Nobody who disagrees is online: the tab falls back to the same list without the switch.
+    cleanup();
+    mocks.matches = [];
+    renderOpen('lobby');
+    expect(listOf()).toBe('positions');
+  });
+
+  // Explore with Someone online draws geo-chat's list, which is full screen's default (`lobby`).
+  it('opens geo-chat’s list from Explore with Someone online, with Explore’s narrowing', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    store.set(debatesHubExploreSomeoneOnlineAtom, true);
+    store.set(debatesHubPanelExploreSearchAtom, 'nuclear');
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const params = new URLSearchParams(
+      screen
+        .getByRole('link', { name: /open full screen/i })
+        .getAttribute('href')
+        ?.split('?')[1] ?? ''
+    );
+    expect(params.get('list')).toBeNull();
+    expect(params.get('q')).toBe('nuclear');
   });
 
   /**

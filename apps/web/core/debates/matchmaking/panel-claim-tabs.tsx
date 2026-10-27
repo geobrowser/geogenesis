@@ -2,11 +2,11 @@
 
 import * as React from 'react';
 
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 
 import type { MatchmakingClaim } from '../api';
 import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
-import { type ClaimsListVariant, ClaimsTab } from './claims-tab';
+import { ClaimsTab, type ClaimsTabVariant } from './claims-tab';
 import { useMatchmakingMatches } from './hooks';
 import { otherSideHeld } from './hub-claim-end-slot';
 import type { HubSortOption, PanelListFilters } from './hub-filters';
@@ -62,6 +62,40 @@ function hasSomeoneOnlineOpposite(entry: MatchmakingClaim) {
 }
 
 /**
+ * Whether Matches draws the wider list, your positions with someone on the other side: the viewer
+ * switched offline people in, or nobody who disagrees is online and it falls back to it. Read here
+ * and by "Open full screen", which has to open the list the tab is drawing.
+ */
+export function useMatchesShowOffline(enabled = true) {
+  const includeOffline = useAtomValue(debatesHubMatchesIncludeOfflineAtom);
+  const matchesQuery = useMatchmakingMatches(enabled);
+  // Read off the last answer in hand. A first load or a failed one is not "nobody is online". A
+  // background refresh is not a new answer either: react-query keeps the previous data through it,
+  // and gating on `isFetching` swapped to the bare match list and back on every refresh, flashing
+  // that list's empty state in between (26 Oct).
+  const nobodyOnline = matchesQuery.data !== undefined && !matchesQuery.error && matchesQuery.data.matches.length === 0;
+  return { nobodyOnline, showsOffline: includeOffline || nobodyOnline };
+}
+
+/**
+ * The list the panel's Explore draws for its Show and "Someone online": also what "Open full screen"
+ * hands over, since full screen has the same three lists.
+ */
+export function panelExploreVariant({
+  authenticated,
+  show,
+  someoneOnline,
+}: {
+  authenticated: boolean;
+  show: DebatesHubExploreShow;
+  someoneOnline: boolean;
+}): ClaimsTabVariant {
+  if (!authenticated) return 'explore';
+  if (show === 'mine') return 'positions';
+  return someoneOnline ? 'lobby' : 'explore';
+}
+
+/**
  * The panel's Matches tab (GEO-3463): claims where you and someone online hold opposite sides —
  * geo-chat's own match list, and only that (decision 39).
  *
@@ -79,13 +113,7 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
   const [sort, setSort] = useAtom(debatesHubMatchesSortAtom);
   const [includeOffline, setIncludeOffline] = useAtom(debatesHubMatchesIncludeOfflineAtom);
   const { data: activity } = useDebateActivity(true);
-  const matchesQuery = useMatchmakingMatches(true);
-  // Read off the last answer in hand. A first load or a failed one is not "nobody is online". A
-  // background refresh is not a new answer either: react-query keeps the previous data through it,
-  // and gating on `isFetching` swapped to the bare match list and back on every refresh, flashing
-  // that list's empty state in between (26 Oct).
-  const nobodyOnline = matchesQuery.data !== undefined && !matchesQuery.error && matchesQuery.data.matches.length === 0;
-  const showsOffline = includeOffline || nobodyOnline;
+  const { nobodyOnline, showsOffline } = useMatchesShowOffline();
 
   const filters = React.useMemo<PanelListFilters>(
     () => ({
@@ -109,11 +137,15 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
     [includeOffline, onTabChange, setIncludeOffline, setSort, sort]
   );
 
-  const notice =
-    activity?.available_to_debate === false || (nobodyOnline && !includeOffline) ? (
+  // The fallback's line explains the rows under it, so only over rows: above "You haven't taken a
+  // position…" or "Nobody holds the other side…" it contradicted the list.
+  const notice = (listHasRows: boolean) => {
+    const notAvailable = activity?.available_to_debate === false;
+    const fallback = nobodyOnline && !includeOffline && listHasRows;
+    return notAvailable || fallback ? (
       <div className="flex flex-col gap-4">
-        {activity?.available_to_debate === false ? <NotAvailableCard /> : null}
-        {nobodyOnline && !includeOffline ? (
+        {notAvailable ? <NotAvailableCard /> : null}
+        {fallback ? (
           <div data-testid="matches-nobody-online">
             <h3 className="text-quoteMedium text-text">Nobody who disagrees with you is online</h3>
             <p className="text-breadcrumb text-grey-04">
@@ -123,6 +155,7 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
         ) : null}
       </div>
     ) : null;
+  };
 
   return showsOffline ? (
     <ClaimsTab
@@ -134,7 +167,8 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
       onTabChange={onTabChange}
     />
   ) : (
-    <MatchesList atomsFrom="panelMatches" onTabChange={onTabChange} panelFilters={filters} notice={notice} />
+    // Matches only while someone is online, so never under the fallback's line.
+    <MatchesList atomsFrom="panelMatches" onTabChange={onTabChange} panelFilters={filters} notice={notice(false)} />
   );
 }
 
@@ -190,13 +224,7 @@ export function PanelExploreTab({
   // *them* — so signed out there is only the tag to browse, and neither control is offered.
   const { authenticated } = useGeoChatAuth();
 
-  const variant: ClaimsListVariant = !authenticated
-    ? 'explore'
-    : show === 'mine'
-      ? 'positions'
-      : someoneOnline
-        ? 'lobby'
-        : 'explore';
+  const variant = panelExploreVariant({ authenticated, show, someoneOnline });
 
   const filters = React.useMemo<PanelListFilters>(
     () => ({

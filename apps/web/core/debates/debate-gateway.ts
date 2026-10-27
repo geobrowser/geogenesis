@@ -831,13 +831,25 @@ export class DebateGatewayClient {
    * and the old second page's cursor starts after them, so they would fall into a gap no page covers.
    *
    * After the cancel, so a page still in flight cannot land on top and bring the rest back.
+   *
+   * The cut is not a fetch, so it keeps the data's age and any invalidation: `setQueryData` would
+   * stamp the pages fresh and clear `isInvalidated`, and the tab opening again inside `staleTime`
+   * would then skip the refetch an ended request was waiting on. A fetch cancelled on the way here
+   * (`cancelled`) was one somebody wanted, so it leaves the query invalidated too.
    */
-  private keepFirstHistoryPage(queryKey: QueryKey) {
+  private keepFirstHistoryPage(queryKey: QueryKey, { cancelled = false }: { cancelled?: boolean } = {}) {
     const query = this.queryClient.getQueryCache().find({ queryKey, exact: true });
     if (!query || query.getObserversCount() > 0) return;
-    this.queryClient.setQueryData<InfiniteData<unknown, unknown>>(queryKey, data =>
-      data && data.pages.length > 1 ? { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) } : data
-    );
+    const stale = cancelled || query.state.isInvalidated;
+    const data = query.state.data as InfiniteData<unknown, unknown> | undefined;
+    if (data && data.pages.length > 1) {
+      this.queryClient.setQueryData<InfiniteData<unknown, unknown>>(
+        queryKey,
+        { pages: data.pages.slice(0, 1), pageParams: data.pageParams.slice(0, 1) },
+        { updatedAt: query.state.dataUpdatedAt }
+      );
+    }
+    if (stale) void this.queryClient.invalidateQueries({ queryKey, exact: true, refetchType: 'none' });
   }
 
   /**
@@ -853,7 +865,9 @@ export class DebateGatewayClient {
       this.keepFirstHistoryPage(queryKey);
       return;
     }
-    void this.queryClient.cancelQueries({ queryKey, exact: true }).then(() => this.keepFirstHistoryPage(queryKey));
+    void this.queryClient
+      .cancelQueries({ queryKey, exact: true })
+      .then(() => this.keepFirstHistoryPage(queryKey, { cancelled: true }));
   }
 
   private queueClaims(spaceId: string, claimEntityIds?: string[]) {

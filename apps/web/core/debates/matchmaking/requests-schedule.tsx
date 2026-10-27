@@ -119,9 +119,11 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const needsYouCount = useRequestsTabCount({ authenticated, activity, requests: requestsQuery.data });
 
   const history = useDebateHistory(true);
-  // A challenge answered or lapsed, or the viewer's own debate over: each joins the past.
-  useRefreshHistoryWhenLiveEnds([activity?.challenge?.id, activity?.debate?.id]);
-  const { personalSpaceId } = usePersonalSpaceId();
+  // A challenge answered or lapsed, or the viewer's own debate over: each joins the past. A debate
+  // leaves activity at `thanking`, but geo-chat lists it only once it is complete, which is when the
+  // rematch session after it ends; so that ending refreshes the past too.
+  useRefreshHistoryWhenLiveEnds([activity?.challenge?.id, activity?.debate?.id, activity?.rematch?.id]);
+  const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
   // Only once history has said it cannot answer: the graph read is a stand-in, not a second source.
   const pastDebates = usePersonDebates(personalSpaceId ?? '', history.unavailable);
 
@@ -223,7 +225,11 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const requestsTrouble = Boolean(requestsQuery.error) || requestsWarmingUp;
   // Nothing to draw yet while either live read is still on its way, unless all that is left is
   // waiting a new account's refusal out, which the requests' own state says.
-  const isLoading = shown.length === 0 && (scheduled.loading || (requestsQuery.isLoading && !requestsWarmingUp));
+  // The graph's stand-in for the past, while history cannot answer (#299 not deployed): still finding
+  // the viewer's space, or reading their debates, is the past still loading. Needs you shows no past.
+  const standInLoading = filter === 'all' && history.unavailable && (personalSpaceLoading || pastDebates.isLoading);
+  const isLoading =
+    shown.length === 0 && (scheduled.loading || (requestsQuery.isLoading && !requestsWarmingUp) || standInLoading);
   // Empty only when it is known to be: a read that failed is not "nothing", and a read still on its
   // way is not either. Saying so over a failure contradicts it, and over a loading read the message
   // shows for a moment and then swaps out for the timeline, taking the now-line with it.
@@ -233,7 +239,7 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
     failures.length === 0 &&
     !requestsTrouble &&
     !scheduled.loading &&
-    !(filter === 'all' && history.isLoading);
+    !(filter === 'all' && (history.isLoading || standInLoading));
 
   return (
     <div ref={rootRef} className="flex flex-col">
@@ -978,7 +984,8 @@ function HistoryRow({
   const title = historyTitle(item, names);
 
   // A request, challenge or debate made in a lobby says which (geo-chat#299 carries it).
-  const where = item.kind === 'lobby' ? 'Lobby' : item.lobby ? `in ${item.lobby.name}` : null;
+  // A lobby geo-chat no longer has a name for comes as "", which says nothing about where.
+  const where = item.kind === 'lobby' ? 'Lobby' : item.lobby?.name ? `in ${item.lobby.name}` : null;
   const sub = [item.kind === 'lobby' ? null : claim, where, outcome].filter(Boolean).join(' · ');
 
   return (

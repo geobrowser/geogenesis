@@ -21,7 +21,7 @@ import { LobbyClaimListNames, LobbyGoing, LobbyHostedBy } from '../lobbies/lobby
 import { LobbyReminderError, useLobbyReminderPress } from '../lobbies/lobby-reminder-press';
 import {
   LOBBY_DARK_SURFACE_CLASS_NAME,
-  LiveDot,
+  LiveMark,
   SPOTLIGHT_SECONDARY_PILL_CLASS_NAME,
   joinLabel,
 } from '../lobbies/lobby-spotlight';
@@ -32,6 +32,7 @@ import { claimCalendarPicks, personCalendarPicks } from './debate-calendar-route
 import { debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { useHubAskState } from './hub-ask-context';
 import { HUB_ICON_BUTTON_CLASS_NAME, hubPillClassName } from './hub-pill-button';
+import { AskTimer } from './requesting-pill';
 import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
 import { type EndedAsk, type OutgoingAsk, useAskClock } from './use-outgoing-ask';
@@ -87,7 +88,6 @@ export function askTitle(ask: OutgoingAsk) {
 function AskStrip({ ask, onCancel, cancelling }: { ask: OutgoingAsk; onCancel: () => void; cancelling: boolean }) {
   const { remainingMs, label } = useAskClock(ask.expiresAt);
   const share = askShareLeft(ask, remainingMs);
-  const seconds = Math.ceil(remainingMs / 1000);
 
   return (
     <section
@@ -99,15 +99,9 @@ function AskStrip({ ask, onCancel, cancelling }: { ask: OutgoingAsk; onCancel: (
         <span className="truncate text-metadataMedium">{askTitle(ask)}</span>
         {ask.kind === 'claim' ? <span className="truncate text-footnote text-grey-03">{ask.claim.claim}</span> : null}
       </div>
-      {/* A timer, as on `RequestingPill`: a role-less span's label is ignored, and a live region would
-          read out every second. */}
-      <span
-        role="timer"
-        className="shrink-0 text-metadata tabular-nums"
-        aria-label={`${seconds} ${seconds === 1 ? 'second' : 'seconds'} left`}
-      >
+      <AskTimer remainingMs={remainingMs} className="shrink-0 text-metadata">
         {label}
-      </span>
+      </AskTimer>
       <button
         type="button"
         onClick={onCancel}
@@ -185,8 +179,8 @@ function LiveLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
       )}
       className={cx(STRIP_CLASS_NAME, LOBBY_DARK_SURFACE_CLASS_NAME, 'text-white')}
     >
-      <LiveDot />
-      <span className="shrink-0 text-footnoteMedium">Live</span>
+      {/* The strip's 8px gap, not the mark's usual 6px. */}
+      <LiveMark count={1} className="inline-flex shrink-0 items-center gap-2" />
       <span className="min-w-0 truncate text-metadataMedium">{lobby.name}</span>
       <span className="shrink-0 text-breadcrumb whitespace-nowrap text-grey-03">{hereLabel(lobby.headcount)}</span>
       <span aria-hidden className={cx(STRIP_LIGHT_PILL_CLASS_NAME, 'ml-auto')}>

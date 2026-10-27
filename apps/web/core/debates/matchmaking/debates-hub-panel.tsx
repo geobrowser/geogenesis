@@ -34,7 +34,7 @@ import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
 import { HUB_ICON_BUTTON_CLASS_NAME, hubPillClassName } from './hub-pill-button';
 import { NoTimesNudge } from './no-times-nudge';
-import { PanelExploreTab, PanelMatchesTab } from './panel-claim-tabs';
+import { PanelExploreTab, PanelMatchesTab, panelExploreVariant, useMatchesShowOffline } from './panel-claim-tabs';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
 import { ScrollableTabRow } from './scrollable-tab-row';
@@ -45,7 +45,7 @@ import { useFocusTrap } from './use-focus-trap';
 import { useHubFilterOwner } from './use-hub-filter-owner';
 import { useRequestsTabCount } from './use-requests-tab-count';
 import { isWorkspaceList, useWorkspaceQuery, workspaceHref } from './use-workspace-query';
-import { type DebatesHubTab, debatesHubExploreShowAtom } from '~/atoms';
+import { type DebatesHubTab, debatesHubExploreShowAtom, debatesHubExploreSomeoneOnlineAtom } from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -440,16 +440,24 @@ function CalendarButton() {
 }
 
 /**
- * The way out to the full-screen hub, carrying the list on this tab and what narrows it. Explore on
- * My positions is full screen's positions list, which still has a list of its own there. Several
- * picked spaces stay behind, since full screen would read them as any of them — see
- * `useWorkspaceQuery`.
+ * The way out to the full-screen hub, carrying the list this tab is drawing and what narrows it:
+ * Matches showing offline people (switched on, or its fallback) is your positions, Explore's lists
+ * are whichever its Show and "Someone online" chose — My positions, geo-chat's (`lobby`) or the tag.
+ * Several picked spaces stay behind, since full screen would read them as any of them — see
+ * `useWorkspaceQuery`. Full screen has no Sort, so the panel's stays behind too.
  */
 function ExpandToWorkspaceLink({ activeTab }: { activeTab: DebatesHubTab }) {
   const { close } = useDebatesHub();
   const { authenticated } = useGeoChatAuth();
   const show = useAtomValue(debatesHubExploreShowAtom);
-  const list = activeTab === 'explore' && authenticated && show === 'mine' ? 'positions' : activeTab;
+  const someoneOnline = useAtomValue(debatesHubExploreSomeoneOnlineAtom);
+  const { showsOffline } = useMatchesShowOffline(activeTab === 'lobby');
+  const list =
+    activeTab === 'explore'
+      ? panelExploreVariant({ authenticated, show, someoneOnline })
+      : activeTab === 'lobby' && showsOffline
+        ? 'positions'
+        : activeTab;
   // The panel tab's own selection, which is what is on screen (GEO-3463).
   const query = useWorkspaceQuery(
     isWorkspaceList(list) ? list : null,

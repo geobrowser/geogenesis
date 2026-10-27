@@ -406,6 +406,48 @@ describe('DebateGatewayClient', () => {
     expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
   });
 
+  // The cut is not a fetch. Stamping the pages fresh and clearing an invalidation let the tab, opened
+  // again inside `staleTime`, skip the refetch an ended request was waiting on.
+  it('keeps history stale through the cut, so the tab opening again refetches it', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', null)],
+      pageParams: [null, 'c2'],
+    });
+    const updatedAt = queryClient.getQueryState(historyKey)!.dataUpdatedAt;
+    const queryFn = vi.fn(async () => page('a', 'c2'));
+    const observer = () =>
+      new InfiniteQueryObserver(queryClient, {
+        queryKey: historyKey,
+        queryFn,
+        initialPageParam: null as string | null,
+        getNextPageParam: last => last.next_cursor,
+        staleTime: 30_000,
+        retry: false,
+      });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    const unsubscribe = observer().subscribe(() => {});
+    expect(queryFn).not.toHaveBeenCalled();
+    // A request ended while the refetch that would have shown it was cancelled: still invalidated.
+    await queryClient.invalidateQueries({ queryKey: historyKey, refetchType: 'none' });
+    vi.advanceTimersByTime(5_000);
+
+    unsubscribe();
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
+    await vi.runAllTicks();
+    expect(queryClient.getQueryState(historyKey)).toMatchObject({ isInvalidated: true, dataUpdatedAt: updatedAt });
+
+    // Back within 30s of the data: the mount refetches rather than trusting the cut as fresh.
+    const again = observer().subscribe(() => {});
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    again();
+  });
+
   // An event is what moves something into the past; the history on screen has to be asked again.
   it('refetches the history the timeline is showing when a request changes', async () => {
     invalidateQueries.mockRestore();
@@ -527,6 +569,8 @@ describe('DebateGatewayClient', () => {
     await vi.waitFor(() =>
       expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] })
     );
+    // The page it cancelled was wanted, so the cut leaves it to be asked for again.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: historyKey, exact: true, refetchType: 'none' });
     land();
     await paging;
     expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });

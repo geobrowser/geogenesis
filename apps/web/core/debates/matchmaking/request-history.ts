@@ -96,7 +96,12 @@ export function useRefreshHistoryWhenLiveEnds(liveIds: readonly (string | null |
     const now = new Set(key ? key.split('|') : []);
     const ended = previous !== '' && previous.split('|').some(id => !now.has(id));
     if (!ended) return;
-    void queryClient.invalidateQueries({ queryKey: debateQueryKeys.history(accountKey), refetchType: 'active' });
+    // `cancelRefetch: false`: a refetch or a page already on its way is joined, not restarted. Aborting
+    // it is the starvation the gateway's flush leaves history's in-flight fetches to land to avoid.
+    void queryClient.invalidateQueries(
+      { queryKey: debateQueryKeys.history(accountKey), refetchType: 'active' },
+      { cancelRefetch: false }
+    );
   }, [accountKey, key, queryClient]);
 }
 
@@ -132,7 +137,8 @@ export function historyTitle(item: DebateHistoryItem, names: string[]): string {
     case 'debate':
       return `Debate with ${name}`;
     case 'lobby':
-      return item.lobby?.name ?? 'Debate lobby';
+      // `||`: geo-chat#299 sends a lobby it no longer has a name for as "".
+      return item.lobby?.name || 'Debate lobby';
     case 'scheduled_invite':
       // An arranged invite has no inviter (`direction` null): it is simply a debate with them.
       return item.direction === 'incoming'
@@ -163,6 +169,57 @@ function historySourceId(item: Pick<DebateHistoryItem, 'id'>) {
 }
 
 /**
+ * How long after a legacy accepted claim request its debate can be created and still be taken for
+ * it. A request lives 90 seconds and accepting it creates the debate, so the debate follows the
+ * request's creation (its `occurred_at`) by at most about that; 15 minutes leaves room for a slow
+ * accept while staying far short of the same pair arguing the same claim again.
+ */
+const LEGACY_REQUEST_DEBATE_WINDOW_MS = 15 * 60_000;
+/**
+ * Where a booked debate that never started can sit around its invite's start: from when the room
+ * opens (10 minutes before, geo-chat's `OPEN_LEAD`) to an hour after, past the longest no-show grace
+ * (20 minutes) and a room left open while one side waited.
+ */
+const MISSED_INVITE_DEBATE_BEFORE_MS = 10 * 60_000;
+const MISSED_INVITE_DEBATE_AFTER_MS = 60 * 60_000;
+
+/** The same people on both, and someone on them: a blocked or deleted partner leaves nothing to match. */
+function samePeople(a: Pick<DebateHistoryItem, 'other_user_ids'>, b: Pick<DebateHistoryItem, 'other_user_ids'>) {
+  return (
+    a.other_user_ids.length > 0 &&
+    a.other_user_ids.length === b.other_user_ids.length &&
+    a.other_user_ids.every(id => b.other_user_ids.some(other => sameId(id, other)))
+  );
+}
+
+function sameClaim(a: DebateHistoryItem['claim'], b: DebateHistoryItem['claim']) {
+  return Boolean(a && b && (sameId(a.id, b.id) || sameId(a.claim_entity_id, b.claim_entity_id)));
+}
+
+/**
+ * The listed debate an unlinked entry led to, when the rows say so closely enough. geo-chat links
+ * what it recorded (0137) and, at read time, a legacy invite through its room (#299); two cases are
+ * left with no `debate_id` and would otherwise sit beside their own debate:
+ * - a claim request accepted before 0137: `debate_matches` has no request id to join on, so the
+ *   debate on the same claim with the same person, created just after it, stands for it;
+ * - a booking whose debate never started: geo-chat links no debate that never happened, so its
+ *   `missed` invite and the `never_started` debate are one thing that didn't happen.
+ */
+function foldsInto(item: DebateHistoryItem, debate: DebateHistoryItem) {
+  if (item.debate_id || !samePeople(item, debate)) return false;
+  const debateAt = Date.parse(debate.occurred_at);
+  if (item.kind === 'claim_request' && item.outcome === 'accepted') {
+    const after = debateAt - Date.parse(item.occurred_at);
+    return sameClaim(item.claim, debate.claim) && after >= 0 && after <= LEGACY_REQUEST_DEBATE_WINDOW_MS;
+  }
+  if (item.kind === 'scheduled_invite' && item.outcome === 'missed' && debate.outcome === 'never_started') {
+    const after = debateAt - Date.parse(item.scheduled_start_at ?? item.occurred_at);
+    return after >= -MISSED_INVITE_DEBATE_BEFORE_MS && after <= MISSED_INVITE_DEBATE_AFTER_MS;
+  }
+  return false;
+}
+
+/**
  * History without what the timeline already shows. geo-chat gives every kind its own entry, so one
  * debate arrives as the request (or challenge, or invite) that led to it *and* as the debate itself;
  * the debate row stands for both. And anything still live — a booked room, an invite still open, a
@@ -172,11 +229,20 @@ export function dedupeHistory(
   items: DebateHistoryItem[],
   live: { requestIds: Iterable<string>; lobbyIds: Iterable<string> }
 ) {
-  const debateIds = items.filter(item => item.kind === 'debate' && item.debate_id).map(item => item.debate_id!);
+  const debates = items.filter(item => item.kind === 'debate' && item.debate_id);
+  const debateIds = debates.map(item => item.debate_id!);
   const liveRequests = [...live.requestIds];
   const liveLobbies = [...live.lobbyIds];
+  // Each debate stands for one unlinked entry of each kind at most, so a pair who did it twice keeps both.
+  const folded = new Set<string>();
   return items.filter(item => {
     if (item.kind !== 'debate' && item.debate_id && debateIds.some(id => sameId(id, item.debate_id!))) return false;
+    const into =
+      item.kind === 'debate' ? undefined : debates.find(d => !folded.has(`${item.kind}:${d.id}`) && foldsInto(item, d));
+    if (into) {
+      folded.add(`${item.kind}:${into.id}`);
+      return false;
+    }
     if (item.kind === 'scheduled_invite' && liveRequests.some(id => sameId(id, historySourceId(item)))) return false;
     if (item.kind === 'lobby' && item.lobby && liveLobbies.some(id => sameId(id, item.lobby!.room_id))) return false;
     return true;
@@ -199,7 +265,9 @@ export function isSettledHistoryItem(item: DebateHistoryItem, now: number) {
  * told apart (GEO-3464), and "unknown" — a request that ended before outcomes were recorded — says
  * nothing rather than guessing.
  */
-export function historyOutcomeLabel(item: Pick<DebateHistoryItem, 'kind' | 'direction' | 'outcome'>): string | null {
+export function historyOutcomeLabel(
+  item: Pick<DebateHistoryItem, 'kind' | 'direction' | 'outcome' | 'other_user_ids'>
+): string | null {
   // `direction` still decides the request and challenge wording below; invites carry their own side.
   const { kind, direction, outcome } = item;
   if (kind === 'debate') {
@@ -262,8 +330,9 @@ export function historyOutcomeLabel(item: Pick<DebateHistoryItem, 'kind' | 'dire
     case 'cancelled':
       return kind === 'challenge' ? 'You cancelled' : 'Cancelled';
     case 'expired':
-      // A challenge went to one person, so nobody "took" it; they simply did not answer.
-      return kind === 'challenge' ? 'No answer' : 'Nobody took it';
+      // A challenge, or a targeted claim request (GEO-3333), went to one person, so nobody "took" it;
+      // they simply did not answer. geo-chat#299 names that person, and nobody for a fan-out.
+      return kind === 'challenge' || item.other_user_ids.length === 1 ? 'No answer' : 'Nobody took it';
     case 'passed_by_everyone':
       return 'Nobody took it';
     default:

@@ -28,6 +28,7 @@ vi.mock('~/core/io/graphql-client', () => ({
 }));
 
 const { CLAIM_ORDER_FACTS_CHUNK, useClaimOrderFacts } = await import('./claim-order-facts');
+const { useHeldClaimRows } = await import('./use-claim-rows');
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -103,5 +104,31 @@ describe('useClaimOrderFacts', () => {
 
     await waitFor(() => expect(result.current.facts.get('aa')).toEqual({ rankingScore: 10, createdAtMs: null }));
     expect(result.current.failed).toBe(false);
+  });
+});
+
+describe('useHeldClaimRows', () => {
+  const row = (id: string) => ({ claim: { claim_entity_id: id, space_id: 'space-1' }, positions: [] });
+
+  // Under Best, a chunk whose scores failed sat at the bottom of a list labelled Best indefinitely.
+  it('keeps the source’s order while a run of facts has failed', async () => {
+    const ids = Array.from({ length: CLAIM_ORDER_FACTS_CHUNK + 1 }, (_, index) => `c${String(index).padStart(3, '0')}`);
+    // The first run, which is the first page, fails; the second, holding only the last claim, lands.
+    graphql.failing = ids[0]!;
+    const rows = ids.map(row);
+    // The facts read alongside, on the same queries, to know when both runs have settled.
+    const { result } = renderHook(
+      () => ({ held: useHeldClaimRows(rows, 'best', 'key'), facts: useClaimOrderFacts(ids) }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(graphql.release).not.toBeNull());
+    graphql.release?.();
+    await waitFor(() => {
+      expect(result.current.facts.failed).toBe(true);
+      expect(result.current.facts.facts.has(ids.at(-1)!)).toBe(true);
+    });
+
+    expect(result.current.held.map(held => held.claim.claim_entity_id)).toEqual(ids);
   });
 });

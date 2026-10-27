@@ -47,10 +47,20 @@ const person = (id: string, name: string) => ({
   avatar_cid: null,
 });
 
-const label = (kind: DebateHistoryItem['kind'], direction: DebateHistoryItem['direction'], outcome: string) =>
-  historyOutcomeLabel({ kind, direction, outcome });
+const label = (
+  kind: DebateHistoryItem['kind'],
+  direction: DebateHistoryItem['direction'],
+  outcome: string,
+  otherUserIds: string[] = []
+) => historyOutcomeLabel({ kind, direction, outcome, other_user_ids: otherUserIds });
 
 describe('historyOutcomeLabel', () => {
+  // A targeted request (GEO-3333) went to one person, as a challenge does: nobody "took" it.
+  it('says nobody answered a request that went to one person, and nobody took a fan-out', () => {
+    expect(label('claim_request', 'outgoing', 'expired', ['user-them'])).toBe('No answer');
+    expect(label('claim_request', 'outgoing', 'expired')).toBe('Nobody took it');
+  });
+
   // GEO-3464's distinction a recipient needs: passing and being beaten to it are not the same.
   it('tells a recipient who passed from one someone else beat to it', () => {
     expect(label('claim_request', 'incoming', 'declined')).toBe('You passed');
@@ -176,6 +186,83 @@ describe('dedupeHistory', () => {
   it('keeps a request whose debate is not listed', () => {
     const request = item({ id: 'claim_request:r1', outcome: 'accepted', debate_id: 'd9' });
     expect(dedupeHistory([request], { requestIds: [], lobbyIds: [] })).toEqual([request]);
+  });
+
+  // Accepted before geo-chat's 0137, a request has no `debate_id`, and nothing exact links it.
+  it('folds a legacy accepted request into the debate on its claim with the same person just after', () => {
+    const claim = historyItem().claim;
+    const held = item({
+      id: 'debate:d2',
+      kind: 'debate',
+      direction: null,
+      outcome: 'held',
+      debate_id: 'd2',
+      occurred_at: '2026-10-22T12:01:30Z',
+      other_user_ids: ['user-them'],
+      claim,
+    });
+    const legacy = { outcome: 'accepted', other_user_ids: ['USER-THEM'], claim };
+    const sent = item({ id: 'claim_request:r1', direction: 'outgoing', ...legacy });
+    const offered = item({ id: 'claim_request:r2', direction: 'incoming', ...legacy });
+    expect(dedupeHistory([held, sent], { requestIds: [], lobbyIds: [] })).toEqual([held]);
+    expect(dedupeHistory([held, offered], { requestIds: [], lobbyIds: [] })).toEqual([held]);
+  });
+
+  it('folds a missed invite into the debate that never started at its time, with the same person', () => {
+    const neverStarted = item({
+      id: 'debate:d3',
+      kind: 'debate',
+      direction: null,
+      outcome: 'never_started',
+      debate_id: 'd3',
+      occurred_at: '2026-10-22T15:05:00Z',
+      other_user_ids: ['user-them'],
+    });
+    const missed = item({
+      id: 'scheduled_invite:s2',
+      kind: 'scheduled_invite',
+      direction: 'outgoing',
+      outcome: 'missed',
+      occurred_at: '2026-10-22T15:00:00Z',
+      scheduled_start_at: '2026-10-22T15:00:00Z',
+      other_user_ids: ['user-them'],
+    });
+    expect(dedupeHistory([neverStarted, missed], { requestIds: [], lobbyIds: [] })).toEqual([neverStarted]);
+  });
+
+  it('keeps an unlinked entry that does not match its neighbouring debate', () => {
+    const claim = historyItem().claim;
+    const held = item({
+      id: 'debate:d2',
+      kind: 'debate',
+      direction: null,
+      outcome: 'held',
+      debate_id: 'd2',
+      occurred_at: '2026-10-22T12:01:30Z',
+      other_user_ids: ['user-them'],
+      claim,
+    });
+    const accepted = { outcome: 'accepted', claim, other_user_ids: ['user-them'] };
+    // Someone else, another claim, a debate an hour later, and a request that was not accepted.
+    const otherPerson = item({ id: 'claim_request:a', ...accepted, other_user_ids: ['user-else'] });
+    const otherClaim = item({
+      id: 'claim_request:b',
+      ...accepted,
+      claim: { ...claim!, id: 'c9', claim_entity_id: 'e9' },
+    });
+    const earlier = item({ id: 'claim_request:c', ...accepted, occurred_at: '2026-10-22T11:00:00Z' });
+    const notAccepted = item({ id: 'claim_request:d', ...accepted, outcome: 'expired' });
+    // A missed invite beside a debate that happened is two things, not one.
+    const missed = item({
+      id: 'scheduled_invite:s2',
+      kind: 'scheduled_invite',
+      outcome: 'missed',
+      occurred_at: '2026-10-22T12:00:00Z',
+      scheduled_start_at: '2026-10-22T12:00:00Z',
+      other_user_ids: ['user-them'],
+    });
+    const rest = [otherPerson, otherClaim, earlier, notAccepted, missed];
+    expect(dedupeHistory([held, ...rest], { requestIds: [], lobbyIds: [] })).toEqual([held, ...rest]);
   });
 
   it('drops invites and lobbies the live lists still show', () => {

@@ -42,6 +42,9 @@ const mocks = vi.hoisted(() => ({
   block: vi.fn(),
   challenge: null as unknown,
   activeDebate: null as { id: string } | null,
+  activeRematch: null as { id: string } | null,
+  personalSpaceLoading: false,
+  pastDebatesLoading: false,
   challengeError: null as Error | null,
 }));
 
@@ -56,7 +59,10 @@ vi.mock('~/partials/availability/peer-availability-booking-modal', () => ({
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  usePersonalSpaceId: () => ({ personalSpaceId: 'space-me' }),
+  usePersonalSpaceId: () =>
+    mocks.personalSpaceLoading
+      ? { personalSpaceId: null, isLoading: true }
+      : { personalSpaceId: 'space-me', isLoading: false },
 }));
 
 vi.mock('./availability-request-notice', () => ({
@@ -83,7 +89,7 @@ vi.mock('./request-history', async importOriginal => ({
 vi.mock('../use-person-debates', () => ({
   usePersonDebates: (_spaceId: string, enabled: boolean) => {
     mocks.pastDebatesEnabled.push(enabled);
-    return { rows: enabled ? mocks.pastDebates : [] };
+    return { rows: enabled ? mocks.pastDebates : [], isLoading: enabled && mocks.pastDebatesLoading };
   },
 }));
 
@@ -96,7 +102,12 @@ vi.mock('../rooms/scheduling-hooks', () => ({
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
   useDebateActivity: () => ({
-    data: { challenge: mocks.challenge, debate: mocks.activeDebate, outbound_request: null },
+    data: {
+      challenge: mocks.challenge,
+      debate: mocks.activeDebate,
+      rematch: mocks.activeRematch,
+      outbound_request: null,
+    },
   }),
   useAcceptDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: mocks.challengeError }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallenge, isPending: mocks.rejectingChallenge }),
@@ -279,6 +290,9 @@ beforeEach(() => {
   mocks.rejectingChallenge = false;
   mocks.invalidateQueries.mockReset();
   mocks.activeDebate = null;
+  mocks.activeRematch = null;
+  mocks.personalSpaceLoading = false;
+  mocks.pastDebatesLoading = false;
   mocks.block.mockReset();
   mocks.challenge = null;
   mocks.challengeError = null;
@@ -375,12 +389,29 @@ describe('RequestsSchedule', () => {
     mocks.challenge = null;
     view.rerender(<RequestsSchedule />);
     expect(mocks.invalidateQueries).toHaveBeenCalledTimes(1);
-    expect(mocks.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ['debates', 'account', 'account-a', 'history'],
-      refetchType: 'active',
-    });
+    // Joining a refetch already on its way, not restarting it: aborting one starves the list.
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith(
+      { queryKey: ['debates', 'account', 'account-a', 'history'], refetchType: 'active' },
+      { cancelRefetch: false }
+    );
 
     mocks.activeDebate = null;
+    view.rerender(<RequestsSchedule />);
+    expect(mocks.invalidateQueries).toHaveBeenCalledTimes(2);
+  });
+
+  // A debate leaves activity at `thanking`, when geo-chat does not list it yet: it is complete, and in
+  // history, only once the rematch session after it ends, about a minute later.
+  it('refreshes the past again when the rematch after the viewer’s debate ends', () => {
+    mocks.activeDebate = { id: 'd1' };
+    const view = render(<RequestsSchedule />);
+
+    mocks.activeDebate = null;
+    mocks.activeRematch = { id: 'rematch-1' };
+    view.rerender(<RequestsSchedule />);
+    expect(mocks.invalidateQueries).toHaveBeenCalledTimes(1);
+
+    mocks.activeRematch = null;
     view.rerender(<RequestsSchedule />);
     expect(mocks.invalidateQueries).toHaveBeenCalledTimes(2);
   });
@@ -495,6 +526,24 @@ describe('RequestsSchedule', () => {
     );
   });
 
+  // geo-chat#299 sends a lobby it has no name for as "": no blank title, and no bare "in".
+  it('says nothing about where for a lobby with no name', () => {
+    mocks.history = {
+      ...mocks.history,
+      items: [
+        historyItem({ lobby: { room_id: 'l1', name: '' } }),
+        historyItem({ id: 'lobby:l2', kind: 'lobby', outcome: 'joined', lobby: { room_id: 'l2', name: '' } }),
+      ],
+    };
+    render(<RequestsSchedule />);
+
+    const rows = screen.getAllByTestId('requests-history');
+    const request = rows.find(row => row.textContent?.includes('Stablecoins'))!;
+    expect(request).toHaveTextContent('Stablecoins should be regulated · Nobody took it');
+    expect(request).not.toHaveTextContent(' in ');
+    expect(rows.find(row => row !== request)).toHaveTextContent('Debate lobby');
+  });
+
   // Pending and under-way items are already drawn from the live reads at their own time.
   it('leaves still-open history out', () => {
     mocks.history = {
@@ -504,6 +553,26 @@ describe('RequestsSchedule', () => {
     render(<RequestsSchedule />);
 
     expect(screen.queryByTestId('requests-history')).not.toBeInTheDocument();
+  });
+
+  // Today's production path: #299 not deployed, so history is `unavailable` at once and the graph's
+  // stand-in, waiting on the viewer's space, is what is still loading the past.
+  it('does not call the tab empty while the graph’s stand-in for the past is loading', async () => {
+    const empty = () => screen.queryByText('Any debate requests you’ll receive will appear here.');
+    mocks.history = { ...mocks.history, unavailable: true };
+    mocks.personalSpaceLoading = true;
+    const view = render(<RequestsSchedule />);
+    expect(empty()).not.toBeInTheDocument();
+
+    mocks.personalSpaceLoading = false;
+    mocks.pastDebatesLoading = true;
+    view.rerender(<RequestsSchedule />);
+    expect(empty()).not.toBeInTheDocument();
+
+    // Out of the skeleton, which animates away first.
+    mocks.pastDebatesLoading = false;
+    view.rerender(<RequestsSchedule />);
+    expect(await screen.findByText('Any debate requests you’ll receive will appear here.')).toBeInTheDocument();
   });
 
   it('falls back to the debates the viewer has had until history can answer', () => {

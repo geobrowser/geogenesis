@@ -24,15 +24,19 @@ type PlacedClaimRow = SortableClaimRow & { claim: { space_id: string } };
  */
 export function useHeldClaimRows<T extends PlacedClaimRow>(
   rows: T[],
-  sort: ClaimRowSort | undefined,
+  requestedSort: ClaimRowSort | undefined,
   resetKey: string,
   { appendNew = false }: { appendNew?: boolean } = {}
 ): T[] {
-  const needsFacts = sort === 'best' || sort === 'newest';
-  const { facts } = useClaimOrderFacts(
+  const sortNeedsFacts = requestedSort === 'best' || requestedSort === 'newest';
+  const { facts, failed } = useClaimOrderFacts(
     React.useMemo(() => rows.map(row => row.claim.claim_entity_id), [rows]),
-    needsFacts
+    sortNeedsFacts
   );
+  // A run of facts with no answer leaves its claims nowhere to go under the Sort, so the list keeps
+  // the source's order until it is answered, rather than parking them at the end of a list called Best.
+  const sort = sortNeedsFacts && failed ? undefined : requestedSort;
+  const needsFacts = sort !== undefined && sortNeedsFacts;
 
   const { placeable, waiting } = React.useMemo(() => {
     if (!sort) return { placeable: rows, waiting: [] as T[] };

@@ -306,8 +306,12 @@ export function ClaimsTab({
    * this tab's Sort and switches. Panel layout only; the workspace keeps its rail.
    */
   panelFilters?: PanelListFilters;
-  /** Above the list, under the filters: what the panel wants said about this list (GEO-3463). */
-  notice?: React.ReactNode;
+  /**
+   * Above the list, under the filters: what the panel wants said about this list (GEO-3463). As a
+   * function, told whether the list has rows, for a line about the rows that must not sit over the
+   * list's own empty state.
+   */
+  notice?: React.ReactNode | ((listHasRows: boolean) => React.ReactNode);
   /** Leaves out rows the list's source cannot narrow by itself, e.g. claims with nobody on the other side. */
   keepClaim?: (entry: MatchmakingClaim) => boolean;
   /**
@@ -1252,7 +1256,7 @@ export function ClaimsTab({
       </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">
-        {notice}
+        {typeof notice === 'function' ? notice(visibleClaims.length > 0) : notice}
         <HubQueryState
           analyticsSurface={analyticsSurface}
           // Plus the answers, where the list hides some of them. Drawing before they land shows a

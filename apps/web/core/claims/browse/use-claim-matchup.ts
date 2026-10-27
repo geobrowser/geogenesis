@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   type DebateActivity,
   type DebateClaimPositionSummary,
+  type DebateRequest,
   type DebateRequestsResponse,
   GeoChatRequestError,
   notifyClaimResponseIndexed,
@@ -12,6 +13,7 @@ import {
 import { readinessQueryPrefixes } from '~/core/debates/claim-response-indexed-notifier';
 import { useDebateActivity, useGeoChatAuth } from '~/core/debates/hooks';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
+import { useLiveRequest } from '~/core/debates/matchmaking/use-request-countdown';
 import { ID } from '~/core/id';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 
@@ -34,12 +36,22 @@ export function debateRequestErrorMessage(error: unknown, viewerPosition: boolea
   return error.message;
 }
 
-/** Why a claim request can't be sent now, or undefined. */
-export function claimRequestBlockedReason(
-  activity: Pick<DebateActivity, 'available_to_debate' | 'outbound_request'> | undefined,
+/**
+ * The viewer's open claim request, gone once its `expires_at` passes, as the live strip counts it:
+ * geo-chat's `requests_changed` for an expiry comes later, and until then the raw read still holds it.
+ */
+export function useLiveOutboundRequest(
+  activity: Pick<DebateActivity, 'outbound_request'> | undefined,
   requests: Pick<DebateRequestsResponse, 'outbound'> | undefined
 ) {
-  const outbound = requests?.outbound ?? activity?.outbound_request ?? null;
+  return useLiveRequest(requests?.outbound ?? activity?.outbound_request ?? null);
+}
+
+/** Why a claim request can't be sent now, or undefined. `outbound` is `useLiveOutboundRequest`'s. */
+export function claimRequestBlockedReason(
+  activity: Pick<DebateActivity, 'available_to_debate'> | undefined,
+  outbound: DebateRequest | null
+) {
   // Only when the server actually says so — a missing field must not block requesting.
   if (activity?.available_to_debate === false) return 'Switch yourself to available to send a request.';
   if (outbound) return 'Withdraw your open request to send another.';
@@ -98,7 +110,8 @@ export function useClaimMatchup({
         candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
       ) ?? null);
 
-  const blockedReason = claimRequestBlockedReason(activity, requestsQuery.data);
+  const outbound = useLiveOutboundRequest(activity, requestsQuery.data);
+  const blockedReason = claimRequestBlockedReason(activity, outbound);
 
   return {
     match,

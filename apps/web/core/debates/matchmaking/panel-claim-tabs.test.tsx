@@ -17,7 +17,7 @@ type ListProps = {
   panelFilters?: PanelListFilters;
   keepClaim?: (entry: MatchmakingClaim) => boolean;
   collapsesAnswered?: boolean;
-  notice?: React.ReactNode;
+  notice?: React.ReactNode | ((listHasRows: boolean) => React.ReactNode);
 };
 
 const seen = vi.hoisted(() => ({
@@ -28,6 +28,8 @@ const seen = vi.hoisted(() => ({
   matches: [{}] as unknown[],
   matchesLoading: false,
   matchesFetching: false,
+  /** Whether the stubbed ClaimsTab has rows to draw under its notice. */
+  claimsTabHasRows: true,
   turnOn: vi.fn(),
 }));
 
@@ -49,13 +51,14 @@ vi.mock('./hooks', () => ({
 vi.mock('./claims-tab', () => ({
   ClaimsTab: (props: ListProps) => {
     seen.claimsTab = props;
-    return <div data-testid="claims-tab">{props.notice}</div>;
+    const { notice } = props;
+    return <div data-testid="claims-tab">{typeof notice === 'function' ? notice(seen.claimsTabHasRows) : notice}</div>;
   },
 }));
 vi.mock('./matches-list', () => ({
   MatchesList: (props: ListProps) => {
     seen.matchesList = props;
-    return <div data-testid="matches-list">{props.notice}</div>;
+    return <div data-testid="matches-list">{props.notice as React.ReactNode}</div>;
   },
 }));
 
@@ -90,6 +93,7 @@ afterEach(() => {
   seen.matches = [{}];
   seen.matchesLoading = false;
   seen.matchesFetching = false;
+  seen.claimsTabHasRows = true;
 });
 
 describe('PanelMatchesTab', () => {
@@ -133,6 +137,16 @@ describe('PanelMatchesTab empty and unavailable', () => {
     expect(seen.claimsTab).toMatchObject({ variant: 'positions', atomsFrom: 'panelMatches' });
     expect(screen.getByTestId('matches-nobody-online')).toHaveTextContent('Nobody who disagrees with you is online');
     expect(store.get(debatesHubMatchesIncludeOfflineAtom)).toBe(false);
+  });
+
+  // Over "You haven't taken a position…", the line saying these claims have someone opposite was false.
+  it('says nothing about the wider list when it has no rows either', () => {
+    seen.matches = [];
+    seen.claimsTabHasRows = false;
+    renderTab(<PanelMatchesTab onTabChange={vi.fn()} />);
+
+    expect(seen.claimsTab).toMatchObject({ variant: 'positions' });
+    expect(screen.queryByTestId('matches-nobody-online')).not.toBeInTheDocument();
   });
 
   // 26 Oct: every background refresh swapped to the bare match list and back, flashing its empty state.

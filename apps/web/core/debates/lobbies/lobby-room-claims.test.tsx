@@ -226,6 +226,23 @@ describe('LobbyRoomClaims', () => {
     expect(screen.getByRole('button', { name: 'Request debate' }).hasAttribute('disabled')).toBe(true);
   });
 
+  // Past its expiry the request is over, though geo-chat's `requests_changed` has not come yet.
+  it('offers a request again once the viewer’s open one has run out', () => {
+    const outbound = (expiresInMs: number) => ({
+      id: 'r-open',
+      status: 'pending',
+      expires_at: new Date(Date.now() + expiresInMs).toISOString(),
+    });
+    mocks.data = { lobby_id: '0192abc', source: 'room', claims: [row('a', true, 1)] };
+    mocks.activity = { available_to_debate: true, outbound_request: outbound(60_000) };
+    const view = render(<LobbyRoomClaims lobby={lobby} />);
+    expect(screen.getByRole('button', { name: 'Request debate' }).hasAttribute('disabled')).toBe(true);
+
+    mocks.activity = { available_to_debate: true, outbound_request: outbound(-1_000) };
+    view.rerender(<LobbyRoomClaims lobby={lobby} />);
+    expect(screen.getByRole('button', { name: 'Request debate' }).hasAttribute('disabled')).toBe(false);
+  });
+
   it('says when the list is the recently voted fallback', () => {
     mocks.data = { lobby_id: '0192abc', source: 'recent', claims: [row('a', null, 0)] };
     render(<LobbyRoomClaims lobby={lobby} />);

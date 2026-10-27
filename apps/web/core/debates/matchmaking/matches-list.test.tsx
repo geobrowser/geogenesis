@@ -61,6 +61,12 @@ vi.mock('../claim-picker-page', () => ({
   }),
 }));
 
+// A live outbound request is timed against geo-chat's clock (`useLiveRequest`); answered here.
+vi.mock('../api', async importOriginal => ({
+  ...(await importOriginal<typeof import('../api')>()),
+  getServerTime: () => Promise.resolve({ server_time_ms: Date.now() }),
+}));
+
 vi.mock('../hooks', () => ({
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
   // exercising it — the schedule itself is covered in core/availability.
@@ -389,6 +395,7 @@ describe('MatchesList', () => {
 
     mocks.outbound = {
       id: 'request-1',
+      status: 'pending',
       claim: match().claim,
       expires_at: '2099-01-01T00:00:00.000Z',
       requester: party('user-me', 'You', true, 'Agree'),
@@ -406,6 +413,7 @@ describe('MatchesList', () => {
   it('keeps a sent request and the filters in the same pinned block', () => {
     mocks.outbound = {
       id: 'request-1',
+      status: 'pending',
       claim: match().claim,
       expires_at: '2099-01-01T00:00:00.000Z',
       requester: party('user-me', 'You', true, 'Agree'),
