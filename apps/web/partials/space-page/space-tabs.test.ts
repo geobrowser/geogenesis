@@ -27,6 +27,29 @@ describe('buildSpaceTabs', () => {
     expect(tabs.find(tab => tab.label === 'Debates')).toBeUndefined();
   });
 
+  it('leads a topic space with Explore at the bare URL and moves Overview to its own route', () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [...dynamicTabs, { label: 'Explore', href: `${overviewHref}?tabId=explore` }],
+      typeIds: [SystemIds.SPACE_TYPE],
+      isProfile: false,
+      isDebugDebatesPageEnabled: false,
+      isTopicSpace: true,
+    });
+
+    expect(tabs.find(tab => tab.label === 'Overview')?.dividerBefore).toBe(true);
+    expect(tabs.filter(tab => tab.dividerBefore)).toHaveLength(1);
+    expect(tabs.map(tab => [tab.label, tab.href])).toEqual([
+      ['Explore', overviewHref],
+      ['Overview', `${overviewHref}/overview`],
+      ['Facts', `${overviewHref}?tabId=facts`],
+      ['Sources', `${overviewHref}?tabId=sources`],
+      ['Governance', `${overviewHref}/governance`],
+      ['Activity', `${overviewHref}/activity`],
+    ]);
+  });
+
   it('keeps personal spaces from showing Governance', () => {
     const tabs = buildSpaceTabs({
       spaceId,
@@ -101,10 +124,12 @@ describe('buildSpaceTabs', () => {
       'Facts',
       'Sources',
       'Debug debates',
+      'Debug rooms',
       'Governance',
       'Activity',
     ]);
     expect(tabs.find(tab => tab.label === 'Debug debates')?.href).toBe(`/space/${spaceId}/debug-debates`);
+    expect(tabs.find(tab => tab.label === 'Debug rooms')?.href).toBe(`/space/${spaceId}/debug-debate-rooms`);
   });
 
   it('shows Debug debates in personal spaces without Governance', () => {
@@ -120,6 +145,7 @@ describe('buildSpaceTabs', () => {
     expect(tabs.map(tab => tab.label)).toEqual([
       'Overview',
       'Debug debates',
+      'Debug rooms',
       'Debates',
       'Positions',
       'Proposals',
@@ -136,7 +162,7 @@ describe('buildSpaceTabs', () => {
    * a third of the navigation spent on "No proposals yet".
    */
   describe('a person whose record is partly empty', () => {
-    const personTabs = (personRecordCounts?: { debates: number; positions: number; proposals: number }) =>
+    const personTabs = (counts?: { debates: number; positions: number; proposals: number }) =>
       buildSpaceTabs({
         spaceId,
         overviewHref,
@@ -144,7 +170,7 @@ describe('buildSpaceTabs', () => {
         typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
         isProfile: true,
         isDebugDebatesPageEnabled: false,
-        personRecordCounts,
+        personRecordCounts: counts ? { ...counts, totalDebates: counts.debates } : undefined,
       })
         .map(tab => tab.label)
         .filter(label => ['Debates', 'Positions', 'Proposals'].includes(label));
@@ -159,6 +185,36 @@ describe('buildSpaceTabs', () => {
 
     it('keeps a tab holding exactly one', () => {
       expect(personTabs({ debates: 1, positions: 0, proposals: 0 })).toEqual(['Debates']);
+    });
+
+    it('keeps the owner route to debates when every debate is hidden', () => {
+      const tabs = buildSpaceTabs({
+        spaceId,
+        overviewHref,
+        dynamicTabs: [],
+        typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+        isProfile: true,
+        isDebugDebatesPageEnabled: false,
+        isOwner: true,
+        personRecordCounts: { debates: 0, totalDebates: 1, positions: 0, proposals: 0 },
+      });
+
+      expect(tabs.map(tab => tab.label)).toContain('Debates');
+    });
+
+    it('does not expose an empty public Debates route to a visitor', () => {
+      const tabs = buildSpaceTabs({
+        spaceId,
+        overviewHref,
+        dynamicTabs: [],
+        typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+        isProfile: true,
+        isDebugDebatesPageEnabled: false,
+        isOwner: false,
+        personRecordCounts: { debates: 0, totalDebates: 1, positions: 0, proposals: 0 },
+      });
+
+      expect(tabs.map(tab => tab.label)).not.toContain('Debates');
     });
 
     /*

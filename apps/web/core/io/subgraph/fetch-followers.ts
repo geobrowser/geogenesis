@@ -1,0 +1,110 @@
+import { Effect, Either } from 'effect';
+
+import { Environment } from '~/core/environment';
+import { interestedVoteCondition } from '~/core/topics/interested';
+import { normId } from '~/core/utils/norm-id';
+
+import { graphql } from './graphql';
+
+/**
+ * Follow rows read per topic or person. Enough to count every one exactly today; past it the count
+ * is the server's raw row total. It bounds a feed's request at 25 ids × this many short rows.
+ */
+const FOLLOWER_ROWS = 500;
+
+/**
+ * How many follow a topic or a person, and whether the viewer is already among them as indexed.
+ *
+ * `viewerIndexed` is what lets a control draw the viewer's own follow before the indexer has it:
+ * the count it shows is the others plus the viewer, whatever the indexer has caught up to.
+ */
+export type Followers = {
+  count: number;
+  viewerIndexed: boolean;
+  /** Who they are, as indexed: the distinct own-space followers read, up to the rows read. */
+  followerIds: string[];
+};
+
+/** A follow row: an Interested vote, by who cast it and the space it was cast in. */
+type FollowRow = { userId: string; spaceId: string };
+type Connection = { totalCount: number; nodes?: FollowRow[] };
+
+/**
+ * One aliased connection per topic or person, so a feed's worth of cards is one request, plus one
+ * viewer-scoped total per one when there is a viewer.
+ *
+ * A follow counts once per follower, and only as cast in the follower's own personal space — the
+ * space the app writes it to, and the one the viewer's own follows are read from. A follow is an
+ * Interested vote (kind 3): one person can hold several, cast in other spaces, and the
+ * permissionless action lets anyone cast one into a space of their choosing. A raw row total would
+ * let one person count many times, and no filter can compare two columns, so the rows are read and
+ * the rule applied here.
+ */
+export function followersQuery(entityIds: readonly string[], viewerId?: string): string {
+  const viewer = viewerId ? normId(viewerId) : null;
+
+  const fields = entityIds.flatMap((id, index) => {
+    const entity = normId(id);
+    const all = `t${index}: userVotesConnection(
+          condition: { ${interestedVoteCondition({ objectId: entity })} }
+          first: ${FOLLOWER_ROWS}
+        ) { totalCount nodes { userId spaceId } }`;
+    if (!viewer) return [all];
+
+    // The viewer's own-space follow, exactly: what one past the rows read can't answer.
+    const mine = `v${index}: userVotesConnection(
+          condition: { ${interestedVoteCondition({ objectId: entity, userId: viewer, spaceId: viewer })} }
+        ) { totalCount }`;
+    return [all, mine];
+  });
+
+  return `query {\n${fields.join('\n')}\n}`;
+}
+
+export function followersQueryKey(entityId: string, viewerId?: string | null) {
+  return ['followers', normId(entityId), viewerId ? normId(viewerId) : null] as const;
+}
+
+/** One entity's followers off its connections; see `followersQuery` for which rows count. */
+export function readFollowers(all: Connection | null | undefined, viewer: Connection | null | undefined): Followers {
+  const viewerIndexed = (viewer?.totalCount ?? 0) > 0;
+  if (!all) return { count: 0, viewerIndexed, followerIds: [] };
+
+  const nodes = all.nodes ?? [];
+  const followers = new Set<string>();
+  for (const row of nodes) {
+    if (normId(row.userId) === normId(row.spaceId)) followers.add(normId(row.userId));
+  }
+
+  // Past the rows read, the server's total stands in. It can't apply the rule above, so one that
+  // popular can read a little high; everything today is far short of it.
+  const count = all.totalCount > nodes.length ? all.totalCount : followers.size;
+  return { count, viewerIndexed, followerIds: [...followers] };
+}
+
+export async function fetchFollowers(
+  entityIds: readonly string[],
+  viewerId?: string,
+  signal?: AbortSignal
+): Promise<Map<string, Followers>> {
+  const result = await Effect.runPromise(
+    Effect.either(
+      graphql<Record<string, Connection | null>>({
+        query: followersQuery(entityIds, viewerId),
+        endpoint: Environment.getConfig().api,
+        signal,
+      })
+    )
+  );
+
+  if (Either.isLeft(result)) {
+    console.error('[followers] failed to fetch followers:', result.left);
+    throw new Error('Failed to fetch followers', { cause: result.left });
+  }
+
+  const followers = new Map<string, Followers>();
+  entityIds.forEach((id, index) => {
+    followers.set(normId(id), readFollowers(result.right[`t${index}`], result.right[`v${index}`]));
+  });
+  return followers;
+}

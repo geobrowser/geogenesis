@@ -5,16 +5,27 @@ import type { ReactNode } from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { zonedWallClockInstant } from '~/core/availability/peer-schedule';
+
 import { type Debate, GeoChatRequestError, GeoChatSessionError } from '../api';
 import { clearEnteringDebate, useEnteringDebateId } from '../debate-entry-intent';
-import { useAcceptDebateRequest, useDebatePeople, useMatchmakingMatches } from './hooks';
+import {
+  CALENDAR_DAYS,
+  useAcceptDebateRequest,
+  useDebatePeople,
+  useMatchmakingMatches,
+  useSchedulablePeople,
+} from './hooks';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   acceptDebateRequest: vi.fn(),
   listMatchmakingMatches: vi.fn(),
   listDebatePeople: vi.fn(),
+  listSchedulablePeople: vi.fn(),
   accountKey: 'user-a' as string | null,
+  promoteSession: vi.fn(),
+  releaseSession: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -28,6 +39,7 @@ vi.mock('../api', async importOriginal => {
     acceptDebateRequest: mocks.acceptDebateRequest,
     listMatchmakingMatches: mocks.listMatchmakingMatches,
     listDebatePeople: mocks.listDebatePeople,
+    listSchedulablePeople: mocks.listSchedulablePeople,
   };
 });
 
@@ -43,7 +55,17 @@ vi.mock('../hooks', async importOriginal => {
   };
 });
 
+vi.mock('../participant-avatars', () => ({ useParticipantAvatars: () => (person: unknown) => person }));
+
 vi.mock('../debate-gateway', () => ({ useDebateGatewayScope: vi.fn(), useMatchmakingScope: () => true }));
+
+vi.mock('../media-session', async importOriginal => ({
+  ...(await importOriginal<typeof import('../media-session')>()),
+  useOptionalDebateMediaSession: () => ({
+    promoteSession: mocks.promoteSession,
+    releaseSession: mocks.releaseSession,
+  }),
+}));
 
 const debate = {
   id: 'debate-1',
@@ -62,7 +84,10 @@ beforeEach(() => {
   mocks.acceptDebateRequest.mockReset();
   mocks.listMatchmakingMatches.mockReset();
   mocks.listDebatePeople.mockReset();
+  mocks.listSchedulablePeople.mockReset();
   mocks.accountKey = 'user-a';
+  mocks.promoteSession.mockReset();
+  mocks.releaseSession.mockReset();
   clearEnteringDebate();
 });
 
@@ -88,6 +113,43 @@ describe('useAcceptDebateRequest', () => {
     result.current.mutate({ requestId: 'request-1' });
 
     await waitFor(() => expect(intent.current).toBe('debate-1'));
+  });
+
+  it('hands the devices to the debate even after the accepting surface has gone', async () => {
+    let answer!: (response: unknown) => void;
+    mocks.acceptDebateRequest.mockReturnValue(
+      new Promise(resolve => {
+        answer = resolve;
+      })
+    );
+
+    const { result, unmount } = renderHook(() => useAcceptDebateRequest(), { wrapper });
+    result.current.mutate({ requestId: 'request-1' });
+    unmount();
+
+    answer({ request: { id: 'request-1' }, debate });
+
+    await waitFor(() =>
+      expect(mocks.promoteSession).toHaveBeenCalledWith('debate-request:request-1', 'debate:debate-1')
+    );
+  });
+
+  it('lets the devices go when the accept produced no debate, surface gone or not', async () => {
+    let answer!: (response: unknown) => void;
+    mocks.acceptDebateRequest.mockReturnValue(
+      new Promise(resolve => {
+        answer = resolve;
+      })
+    );
+
+    const { result, unmount } = renderHook(() => useAcceptDebateRequest(), { wrapper });
+    result.current.mutate({ requestId: 'request-1' });
+    unmount();
+
+    answer({ request: { id: 'request-1' }, debate: null });
+
+    await waitFor(() => expect(mocks.releaseSession).toHaveBeenCalledWith('debate-request:request-1'));
+    expect(mocks.promoteSession).not.toHaveBeenCalled();
   });
 
   it('stays put when acceptance produced no debate', async () => {
@@ -187,5 +249,42 @@ describe('viewer-relative reads and a backend catching up', () => {
 
     await waitFor(() => expect(result.current.error).toBeTruthy());
     expect(mocks.listDebatePeople).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the rolling calendar availability read', () => {
+  it('fetches fresh availability when its local date changes, but not on every render', async () => {
+    mocks.listSchedulablePeople
+      .mockResolvedValueOnce({ people: [], viewer_has_schedule: false, truncated: false })
+      .mockResolvedValueOnce({ people: [], viewer_has_schedule: true, truncated: false });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const provider = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result, rerender } = renderHook(
+      ({ calendarDate }) => useSchedulablePeople(true, { calendar: true, calendarDate }),
+      { wrapper: provider, initialProps: { calendarDate: '2026-10-07' } }
+    );
+    await waitFor(() => expect(result.current.data?.viewer_has_schedule).toBe(false));
+    rerender({ calendarDate: '2026-10-07' });
+    expect(mocks.listSchedulablePeople).toHaveBeenCalledTimes(1);
+    rerender({ calendarDate: '2026-10-08' });
+    await waitFor(() => expect(result.current.data?.viewer_has_schedule).toBe(true));
+    expect(mocks.listSchedulablePeople).toHaveBeenCalledTimes(2);
+    client.clear();
+  });
+
+  it('fetches through the end of a local fortnight even for a peer far ahead of UTC', async () => {
+    mocks.listSchedulablePeople.mockResolvedValue({ people: [], truncated: false });
+    const { result } = renderHook(() => useSchedulablePeople(true, { calendar: true }), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    const { days } = mocks.listSchedulablePeople.mock.calls[0][0];
+    // At 23:30 UTC Oct 7, a viewer in UTC+1 is already on Oct 8: their fortnight ends
+    // at 23:00 UTC Oct 21. geo-chat resolves inclusive UTC dates in each peer's zone.
+    // A peer in UTC+14 ends their Oct 21 at 10:00 UTC, thirteen hours too early.
+    const viewerWindowEnd = Date.parse('2026-10-21T23:00:00Z');
+    const peerWindowEnd = zonedWallClockInstant(Date.UTC(2026, 9, 7 + days + 1), 'Pacific/Kiritimati');
+    expect(peerWindowEnd.getTime()).toBeGreaterThanOrEqual(viewerWindowEnd);
+    expect(days).toBe(CALENDAR_DAYS);
   });
 });

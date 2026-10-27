@@ -4,27 +4,21 @@ import * as Effect from 'effect/Effect';
 
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
 import {
-  AUTHORS_PROPERTY_ID,
-  BLOCKS_PROPERTY_ID,
-  CLAIM_END_OFFSET_PROPERTY_ID,
-  CLAIM_START_OFFSET_PROPERTY_ID,
-  DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
-  DEBATE_TRANSCRIPTS_PROPERTY_ID,
-  MARKDOWN_CONTENT_PROPERTY_ID,
-  NAME_PROPERTY_ID,
   VOTE_DEBATES_PROPERTY_ID,
   VOTE_TYPE_ID,
 } from '~/core/debates/ontology';
 import { groupTranscriptClaims } from '~/core/debates/transcript-claims';
 import { getConfig } from '~/core/environment/environment';
 import {
-  EntitiesBatchForCommentsDocument,
-  type EntitiesBatchForCommentsQuery,
+  CommentEntitiesConnectionDocument,
+  type CommentEntitiesConnectionQuery,
+  EntitiesBatchForDebateVotesDocument,
+  type EntitiesBatchForDebateVotesQuery,
   EntitiesOrderBy,
-  EntityCommentReplyBacklinksPageDocument,
-  type EntityCommentReplyBacklinksPageQuery,
+  EntityCommentCountDocument,
+  type EntityCommentCountQuery,
   EntityExistsDocument,
   type EntityExistsQuery,
   type EntityFilter,
@@ -39,18 +33,20 @@ import { uuidToHex } from '~/core/id/normalize';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import {
   type ActiveResponseDirection,
+  RETIRED_VERACITY_VOTE_KIND,
   type ResponseKind,
   type ResponseObjectType,
-  type ResponseVoteKind,
   decodeActiveResponseDirection,
   entityResponseQueryVariables,
 } from '~/core/responses/entity-response';
+import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
+import { INTERESTED_VOTE_KIND } from '~/core/topics/interested';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
-import { debateTranscriptClaimsDocument } from './debate-transcript-claims-document';
+import { debateTranscriptClaimsDocument, debateTranscriptClaimsVariables } from './debate-transcript-claims-document';
 import { type DebateVoteBacklinksPageQuery, debateVoteBacklinksPageDocument } from './debate-vote-backlinks-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
@@ -59,6 +55,7 @@ import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
 import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
+import { promoteEntityIds } from './entity-id-filter';
 import { collapseOrFilter } from './filter-or-collapse';
 import { graphql } from './graphql-client';
 import {
@@ -102,6 +99,21 @@ import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsF
 // `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
 export const ENTITY_ID_BATCH_SIZE = 50;
 
+/** API rejects `first` (mapped from `limit`) above this on `entities` and `entitiesConnection`. */
+const ENTITIES_CONNECTION_MAX_FIRST = 1000;
+
+/** `ids` in consecutive batches of at most `size`, for `id: { in }` style filters. */
+export function batchEntityIds(ids: readonly string[], size = ENTITY_ID_BATCH_SIZE): string[][] {
+  // Zero or negative never advances the loop below, and a fraction slices at truncated offsets.
+  if (!Number.isInteger(size) || size < 1)
+    throw new RangeError(`batchEntityIds: size must be a positive integer, got ${size}`);
+  const batches: string[][] = [];
+  for (let start = 0; start < ids.length; start += size) {
+    batches.push(ids.slice(start, start + size));
+  }
+  return batches;
+}
+
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
 // When we querying for things on the client we want them to populate the sync store
 // automatically...
@@ -111,7 +123,10 @@ export const ENTITY_ID_BATCH_SIZE = 50;
 function getBatchEntitiesPage(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   return graphql({
     query: entitiesBatchQuery,
-    decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
+    decoder: data =>
+      data.entities
+        ?.map(entity => EntityDecoder.decodeInSpace(entity, spaceId))
+        .filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } }, spaceId },
     signal,
   });
@@ -132,7 +147,7 @@ function getBatchEntitiesPage(entityIds: string[], spaceId?: string, signal?: Ab
  * host anyway, so firing twenty of those at once trades a queue we control for one we do
  * not. Six keeps a 300-id call to a single wave.
  */
-const ENTITY_ID_BATCH_CONCURRENCY = 6;
+export const ENTITY_ID_BATCH_CONCURRENCY = 6;
 
 export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   if (entityIds.length === 0) return Effect.succeed([]);
@@ -176,17 +191,31 @@ export function getBatchEntitySpaces(entityIds: string[], signal?: AbortControll
   });
 }
 
-/** Lightweight batch fetch that returns only {id, name} for a set of entity IDs. */
+/**
+ * Lightweight batch fetch that returns only {id, name} for a set of entity IDs, however many.
+ *
+ * `entities` without a `first` silently stops at 100 rows, and rejects a `first` above 1000 — so
+ * the ids go out in batches of the most one request may name. Without that, a topic menu holding
+ * 1,413 ids named the first slice of them and drew every other row as "Topic".
+ */
 export function getEntityNames(entityIds: string[], signal?: AbortController['signal']) {
-  return graphql({
-    query: entityNamesQuery,
-    decoder: data =>
-      (data.entities ?? [])
-        .filter((e): e is { id: string; name: string | null } => e != null && typeof e.id === 'string')
-        .map(e => ({ id: e.id as string, name: (e.name as string | null) ?? null })),
-    variables: { filter: { id: { in: entityIds } } },
-    signal,
-  });
+  return Effect.map(
+    Effect.all(
+      batchEntityIds(entityIds, ENTITIES_CONNECTION_MAX_FIRST).map(batch =>
+        graphql({
+          query: entityNamesQuery,
+          decoder: data =>
+            (data.entities ?? [])
+              .filter((e): e is { id: string; name: string | null } => e != null && typeof e.id === 'string')
+              .map(e => ({ id: e.id as string, name: (e.name as string | null) ?? null })),
+          variables: { filter: { id: { in: batch } }, first: batch.length },
+          signal,
+        })
+      ),
+      { concurrency: ENTITY_ID_BATCH_CONCURRENCY }
+    ),
+    rows => rows.flat()
+  );
 }
 
 type GetAllEntitiesOptions = {
@@ -207,9 +236,6 @@ type GetAllEntitiesOptions = {
   orderBy?: EntitiesOrderBy[];
 };
 
-/** API rejects `first` (mapped from `limit`) above this on `entitiesConnection`. */
-const ENTITIES_CONNECTION_MAX_FIRST = 1000;
-
 export type EntitiesPage = {
   entities: Entity[];
   endCursor: string | null;
@@ -221,10 +247,10 @@ type EntitiesConnectionShape = {
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
 } | null;
 
-function decodeEntitiesConnectionPage(connection: EntitiesConnectionShape): EntitiesPage {
+function decodeEntitiesConnectionPage(connection: EntitiesConnectionShape, spaceId?: string): EntitiesPage {
   const entities =
     connection?.nodes
-      ?.map((n: unknown) => EntityDecoder.decode(n))
+      ?.map((n: unknown) => EntityDecoder.decodeInSpace(n, spaceId))
       .filter((e: Entity | null): e is Entity => e !== null) ?? [];
   return {
     entities,
@@ -272,7 +298,7 @@ export function getAllEntities(
       graphql({
         query: allEntitiesConnectionDocument,
         decoder: (data: { entitiesConnection?: EntitiesConnectionShape }) =>
-          decodeEntitiesConnectionPage(data.entitiesConnection ?? null),
+          decodeEntitiesConnectionPage(data.entitiesConnection ?? null, topLevelSpaceId),
         variables: { ...variablesBase, limit: pageLimit, after: pageAfter, offset: pageOffset },
         signal,
       });
@@ -389,11 +415,15 @@ export function getEntitiesOrderedByPropertyConnection(
   if (topLevelTypeIds) {
     normalizedFilter = removeTypeIdsFromFilter(normalizedFilter);
   }
+  // The connection's filter applies after the SQL function has sorted every entity carrying the
+  // property; entityIds is applied inside it. See entity-id-filter.ts.
+  const { entityIds, filter: filterWithoutIds } = promoteEntityIds(normalizedFilter);
+  normalizedFilter = filterWithoutIds;
 
   return graphql({
     query: entitiesOrderedByPropertyConnectionDocument,
     decoder: (data: { entitiesOrderedByPropertyConnection?: EntitiesConnectionShape }) =>
-      decodeEntitiesConnectionPage(data.entitiesOrderedByPropertyConnection ?? null),
+      decodeEntitiesConnectionPage(data.entitiesOrderedByPropertyConnection ?? null, topLevelSpaceId),
     variables: {
       propertyId,
       sortDirection,
@@ -402,6 +432,7 @@ export function getEntitiesOrderedByPropertyConnection(
       spaceId: topLevelSpaceId,
       spaceIds: topLevelSpaceIds,
       typeIds: topLevelTypeIds,
+      entityIds,
       limit,
       after,
       offset,
@@ -448,7 +479,12 @@ export function getEntity(entityId: string, spaceId?: string, signal?: AbortCont
       pageInfo = nextPage.pageInfo;
     }
 
-    return EntityDecoder.decode({ ...entity, relationsList: relationNodes });
+    const decoded = EntityDecoder.decodeInSpace({ ...entity, relationsList: relationNodes }, spaceId);
+    if (decoded) {
+      // A drained connection is complete even when it contains at least one full list page.
+      decoded.relationsComplete = !pageInfo.hasNextPage && decoded.relations.length === relationNodes.length;
+    }
+    return decoded;
   });
 }
 
@@ -456,7 +492,7 @@ export function getRelation(entityId: string, spaceId?: string, signal?: AbortCo
   return graphql({
     query: relationEntityQuery,
     decoder: data => {
-      return data.relation?.entity ? EntityDecoder.decode(data.relation.entity) : null;
+      return data.relation?.entity ? EntityDecoder.decodeInSpace(data.relation.entity, spaceId) : null;
     },
     variables: { id: entityId, spaceId },
     signal,
@@ -472,7 +508,8 @@ export function getRelationEntityRelations(entityId: string, spaceId: string, si
   });
 }
 
-const RELATIONS_PAGE_SIZE = 500;
+/** Rows per `relationsConnection` page. The API rejects `first: 1000`; 500 is the largest page it serves. */
+export const RELATIONS_PAGE_SIZE = 500;
 
 /**
  * Backlink rows for a set of target entities. The id list is chunked under the
@@ -566,7 +603,7 @@ export function getEntityPage(entityId: string, spaceId?: string, signal?: Abort
     decoder: data =>
       data.entity
         ? {
-            entity: EntityDecoder.decode(data.entity),
+            entity: EntityDecoder.decodeInSpace(data.entity, spaceId),
             relations: data.relations?.map(r => RelationDecoder.decode(r)).filter(r => r !== null) ?? [],
           }
         : null,
@@ -588,6 +625,7 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
 }
 
 const BACKLINKS_PAGE_SIZE = 1000;
+const COMMENT_ENTITIES_PAGE_SIZE = 1000;
 
 /**
  * Cheap "does this entity exist in the indexer yet" probe — returns true once an entity with
@@ -603,77 +641,82 @@ export function checkEntityExists(entityId: string, signal?: AbortController['si
   });
 }
 
-export function getBatchEntitiesForComments(entityIds: string[], signal?: AbortController['signal']) {
+function getBatchEntitiesForDebateVotes(entityIds: string[], signal?: AbortController['signal']) {
   return graphql({
-    query: EntitiesBatchForCommentsDocument,
-    decoder: (data: EntitiesBatchForCommentsQuery) =>
+    query: EntitiesBatchForDebateVotesDocument,
+    decoder: (data: EntitiesBatchForDebateVotesQuery) =>
       data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } } },
     signal,
   });
 }
 
-/**
- * Walks a paginated `backlinksList` query and collects the distinct source entity ids.
- * `id` is typed loosely because codegen maps the UUID scalar to `any`.
- */
-function collectBacklinkSourceIds<E>(
-  fetchPage: (offset: number) => Effect.Effect<ReadonlyArray<{ fromEntity?: { id: unknown } | null } | null>, E>
-) {
-  return Effect.gen(function* () {
-    const seen = new Set<string>();
-    const ids: string[] = [];
+function commentConnectionVariables(targetEntityId: string) {
+  return {
+    targetEntityId,
+    replyToTypeId: COMMENT_REPLY_TO_ID,
+    commentTypeId: COMMENT_TYPE_ID,
+  };
+}
 
-    for (let offset = 0; ; offset += BACKLINKS_PAGE_SIZE) {
-      const page = yield* fetchPage(offset);
-
-      for (const row of page) {
-        const id = row?.fromEntity?.id;
-        if (typeof id !== 'string' || seen.has(id)) continue;
-        seen.add(id);
-        ids.push(id);
-      }
-
-      if (page.length < BACKLINKS_PAGE_SIZE) return ids;
-    }
+/** Counts Comment entities connected to the target by a "Reply to" relation. */
+export function getEntityCommentCount(entityId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: EntityCommentCountDocument,
+    decoder: (data: EntityCommentCountQuery) => data.entitiesConnection?.totalCount ?? 0,
+    variables: commentConnectionVariables(entityId),
+    signal,
   });
 }
 
-function getCommentEntityIdsViaParentEntityReplyBacklinks(parentEntityId: string, signal?: AbortController['signal']) {
-  return collectBacklinkSourceIds(offset =>
-    graphql({
-      query: EntityCommentReplyBacklinksPageDocument,
-      decoder: (data: EntityCommentReplyBacklinksPageQuery) => data.entity?.backlinksList ?? [],
-      variables: {
-        id: parentEntityId,
-        replyToTypeId: COMMENT_REPLY_TO_ID,
-        commentTypeId: COMMENT_TYPE_ID,
-        first: BACKLINKS_PAGE_SIZE,
-        offset,
-      },
-      signal,
-    })
-  );
-}
-
-/** Counts distinct Comment entities connected to the target by incoming "Reply to" relations. */
-export function getEntityCommentCount(entityId: string, signal?: AbortController['signal']) {
-  return Effect.map(getCommentEntityIdsViaParentEntityReplyBacklinks(entityId, signal), ids => ids.length);
-}
-
 /**
- * Loads Comment entities from incoming "Reply to" backlinks on the parent entity.
- * Nested replies are included when they also backlink to the parent (same index pattern).
+ * Loads Comment entities whose "Reply to" relation targets the requested entity. Nested replies are
+ * included because each reply also relates to every ancestor. The connection nodes contain the
+ * complete entity, avoiding a separate ids-then-hydrate request.
  */
-export function getCommentEntitiesViaParentEntityReplyBacklinks(
-  parentEntityId: string,
-  signal?: AbortController['signal']
-) {
+export function getCommentEntitiesViaReplyRelations(targetEntityId: string, signal?: AbortController['signal']) {
   return Effect.gen(function* () {
-    const ids = yield* getCommentEntityIdsViaParentEntityReplyBacklinks(parentEntityId, signal);
+    const entities: Entity[] = [];
+    const seenIds = new Set<string>();
+    const seenCursors = new Set<string>();
+    let after: string | undefined;
 
-    if (ids.length === 0) return [] as Entity[];
-    return yield* getBatchEntitiesForComments(ids, signal);
+    while (true) {
+      const page = yield* graphql({
+        query: CommentEntitiesConnectionDocument,
+        decoder: (data: CommentEntitiesConnectionQuery) => ({
+          entities:
+            data.entitiesConnection?.nodes
+              .map(node => EntityDecoder.decode(node))
+              .filter((entity): entity is Entity => entity !== null) ?? [],
+          hasNextPage: data.entitiesConnection?.pageInfo.hasNextPage ?? false,
+          endCursor: data.entitiesConnection?.pageInfo.endCursor ?? null,
+        }),
+        variables: {
+          ...commentConnectionVariables(targetEntityId),
+          first: COMMENT_ENTITIES_PAGE_SIZE,
+          after,
+        },
+        signal,
+      });
+
+      for (const entity of page.entities) {
+        if (seenIds.has(entity.id)) continue;
+        seenIds.add(entity.id);
+        entities.push(entity);
+      }
+
+      if (!page.hasNextPage) return entities;
+      if (!page.endCursor) {
+        return yield* Effect.fail(new Error('Comment connection has a next page but no end cursor'));
+      }
+      if (seenCursors.has(page.endCursor)) {
+        return yield* Effect.fail(new Error('Comment connection repeated its end cursor'));
+      }
+
+      seenCursors.add(page.endCursor);
+      after = page.endCursor;
+    }
   });
 }
 
@@ -684,23 +727,42 @@ export function getCommentEntitiesViaParentEntityReplyBacklinks(
  */
 export function getDebateVoteEntities(debateEntityId: string, signal?: AbortController['signal']) {
   return Effect.gen(function* () {
-    const ids = yield* collectBacklinkSourceIds(offset =>
-      graphql({
-        query: debateVoteBacklinksPageDocument,
-        decoder: (data: DebateVoteBacklinksPageQuery) => data.entity?.backlinksList ?? [],
-        variables: {
-          id: debateEntityId,
-          votesDebatePropertyId: VOTE_DEBATES_PROPERTY_ID,
-          voteTypeId: VOTE_TYPE_ID,
-          first: BACKLINKS_PAGE_SIZE,
-          offset,
-        },
-        signal,
-      })
-    );
+    // Cursors, not offsets: the graph rejects an offset past 1000.
+    const rows = yield* Effect.tryPromise({
+      try: () =>
+        collectCursorPages(after =>
+          Effect.runPromise(
+            graphql({
+              query: debateVoteBacklinksPageDocument,
+              decoder: (data: DebateVoteBacklinksPageQuery) => ({
+                items: data.entity?.backlinks?.nodes ?? [],
+                endCursor: data.entity?.backlinks?.pageInfo.endCursor ?? null,
+                hasNextPage: data.entity?.backlinks?.pageInfo.hasNextPage ?? false,
+              }),
+              variables: {
+                id: debateEntityId,
+                votesDebatePropertyId: VOTE_DEBATES_PROPERTY_ID,
+                voteTypeId: VOTE_TYPE_ID,
+                first: BACKLINKS_PAGE_SIZE,
+                after,
+              },
+              signal,
+            })
+          )
+        ),
+      catch: error => (error instanceof Error ? error : new Error(String(error))),
+    });
 
+    // A vote can link from more than one space, so the same source can appear twice.
+    const ids = [...new Set(rows.flatMap(row => (typeof row?.fromEntity?.id === 'string' ? [row.fromEntity.id] : [])))];
     if (ids.length === 0) return [] as Entity[];
-    return yield* getBatchEntitiesForComments(ids, signal);
+
+    // `entities` without `first` returns at most 100 rows, so hydrate in id batches.
+    const pages = yield* Effect.all(
+      batchEntityIds(ids).map(batch => getBatchEntitiesForDebateVotes(batch, signal)),
+      { concurrency: ENTITY_ID_BATCH_CONCURRENCY }
+    );
+    return pages.flat();
   });
 }
 
@@ -715,17 +777,7 @@ export function getDebateTranscriptClaims(debateEntityId: string, spaceId: strin
   return graphql({
     query: debateTranscriptClaimsDocument,
     decoder: data => groupTranscriptClaims(data, spaceId),
-    variables: {
-      id: debateEntityId,
-      transcriptsPropertyId: DEBATE_TRANSCRIPTS_PROPERTY_ID,
-      blocksPropertyId: BLOCKS_PROPERTY_ID,
-      authorsPropertyId: AUTHORS_PROPERTY_ID,
-      claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
-      spaceId,
-      namePropertyId: NAME_PROPERTY_ID,
-      markdownPropertyId: MARKDOWN_CONTENT_PROPERTY_ID,
-      offsetPropertyIds: [CLAIM_START_OFFSET_PROPERTY_ID, CLAIM_END_OFFSET_PROPERTY_ID],
-    },
+    variables: debateTranscriptClaimsVariables(debateEntityId, spaceId),
     signal,
   });
 }
@@ -1003,11 +1055,12 @@ interface ResultsArgs {
    * Pass `false` to restrict results to the canonical graph plus the user's
    * scoped spaces (`additionalSpaceIds`).
    *
-   * Where that gate runs depends on whether the request scopes spaces — see
-   * `buildSearchPath`. Scoped requests gate client-side in `getResultsPage` via each
-   * result's `inCanonicalGraph` flag, so scoped-space results are never stripped
-   * before they reach us; unscoped requests gate server-side, so the canonical rows
-   * can't be pushed off the endpoint's 100-row page by non-canonical ones.
+   * Both kinds of request gate server-side — see `buildSearchPath`. A request that
+   * scopes spaces is gated by `additional_space_ids` itself, which the endpoint always
+   * reads as "canonical graph OR these spaces"; an unscoped one sends
+   * `include_non_canonical=false`. Either way the canonical rows can't be pushed off the
+   * endpoint's 100-row page by non-canonical ones. For `false`, `getResultsPage` also
+   * re-applies the gate per space as a safety net.
    */
   includeNonCanonical?: boolean;
 }
@@ -1035,7 +1088,18 @@ interface RestSearchResult {
   relevanceScore?: number;
   textMatchScore?: number;
   inCanonicalGraph?: boolean;
+  /**
+   * The entity's other matching spaces, best first. Sent once the endpoint returns one row per
+   * entity (gaia#989, GEO-2394); before that it is absent and each space arrives as its own row.
+   */
+  otherSpaces?: RestSearchResultInSpace[];
 }
+
+/** One of an entity's other spaces, as listed in `RestSearchResult.otherSpaces`. */
+type RestSearchResultInSpace = Pick<
+  RestSearchResult,
+  'space' | 'name' | 'description' | 'avatar' | 'cover' | 'types' | 'inCanonicalGraph'
+>;
 
 interface RestSearchResponse {
   results: RestSearchResult[];
@@ -1057,15 +1121,31 @@ function toUuid(hex: string): string {
 }
 
 /**
- * Groups flat per-space REST results into the SearchResult shape the app expects.
+ * Expands each row's `otherSpaces` back into per-space rows, placed directly after the row.
  *
- * The REST endpoint returns one result per (entity, space) pair. We group
- * by entityId and collect all spaceIds into a single SearchResult per entity.
+ * The endpoint used to return one row per (entity, space) pair; since gaia#989 it returns one row
+ * per entity, its best space, and lists the rest under `otherSpaces`. Expanding them restores the
+ * per-space shape, so the per-row canonical/type gate and the grouping below treat both API
+ * shapes identically. Rows without `otherSpaces` pass through unchanged.
+ */
+export function flattenRestResults(results: RestSearchResult[]): RestSearchResult[] {
+  return results.flatMap(({ otherSpaces, ...row }) => [
+    row,
+    ...(otherSpaces ?? []).map(other => ({ ...other, entityId: row.entityId })),
+  ]);
+}
+
+/**
+ * Groups per-space REST results into the SearchResult shape the app expects.
+ *
+ * Each entity may arrive as several rows, one per space, or as one row with `otherSpaces`
+ * (see `flattenRestResults`). We group by entityId and collect all spaceIds into a single
+ * SearchResult per entity.
  */
 export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
   const byEntity = new Map<string, SearchResult>();
 
-  for (const r of results) {
+  for (const r of flattenRestResults(results)) {
     const entityId = stripHyphens(r.entityId);
     const spaceId = stripHyphens(r.space.id);
 
@@ -1203,23 +1283,31 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('additional_space_ids', args.additionalSpaceIds!.map(toUuid).join(','));
   }
 
-  // Canonical filtering runs server-side only when we aren't widening to scoped spaces.
-  // The endpoint documents `additional_space_ids` as "ignored when
-  // include_non_canonical=false" and means it literally — sending both silently drops
-  // the scoped spaces, which is why #1949 stopped emitting this param and moved the
-  // gate into `shouldIncludeRestSearchResult`.
+  // `additional_space_ids` is itself a canonical gate. The endpoint turns the list into
+  // one eligibility filter, "in the canonical graph OR in a listed space" (gaia's
+  // `buildAdditionalSpacesFilter`); the root space is implicit in it. So a scoped request
+  // already gets exactly "canonical plus my spaces" without `include_non_canonical`.
   //
-  // A client-side gate can only filter the page it was handed, though, and the endpoint
-  // caps a page at 100 rows however large a `limit` you ask for. That loses badly for an
-  // unscoped caller listing a type dominated by non-canonical entities: the
-  // community-calls digest requested every Community Call, got 100 test-space rows of
-  // 382 with none canonical, and filtered down to nothing while all 8 curated calls sat
-  // past offset 100 — so the Explore panel vanished entirely (GEO-2480).
+  // Adding `include_non_canonical=false` to such a request is not a stronger version of
+  // that filter. It replaces it: the endpoint then applies the bare canonical term and
+  // skips `additional_space_ids` ("ignored when include_non_canonical=false"), so the
+  // member, editor, personal and current spaces drop out. That was the regression #1949
+  // fixed. Measured on api-testnet, 2026-09-30, "OpenAI" with root plus one non-canonical
+  // space: 17 canonical rows and 3 from the listed space without the flag; 20 canonical
+  // and 0 from the listed space with it.
   //
-  // Unscoped callers therefore filter at the source; the client-side gate stays as a
-  // no-op safety net. Search-dialog requests are unaffected — they always carry
-  // ROOT_SPACE in `additionalSpaceIds` (see buildGlobalSearchSpaceIds), so they take the
-  // branch above and emit a byte-identical URL.
+  // An unscoped request has no such gate, so it needs the flag, and it has to be sent to
+  // the server. A client-side gate can only filter the page it was handed, and the endpoint
+  // caps a page at 100 rows however large a `limit` you ask for. That loses badly for a
+  // caller listing a type dominated by non-canonical entities: the community-calls digest
+  // requested every Community Call, got 100 test-space rows of 382 with none canonical, and
+  // filtered down to nothing while all 8 curated calls sat past offset 100, so the Explore
+  // panel vanished entirely (GEO-2480).
+  //
+  // The search dialog always carries ROOT_SPACE in `additionalSpaceIds` (see
+  // buildGlobalSearchSpaceIds), so with "canonical only" on it takes the scoped branch. With
+  // it off it passes `includeNonCanonical: true` and `selectSearchAdditionalSpaceIds` drops
+  // the spaces, so neither parameter is sent and the search is unrestricted.
   if (args.includeNonCanonical === false && !scopesAdditionalSpaces) {
     params.set('include_non_canonical', 'false');
   }
@@ -1237,7 +1325,8 @@ export function getResultsPage(args: ResultsArgs, signal?: AbortController['sign
     (response): SearchResultsPage => {
       const scopedSpaceIds = new Set((args.additionalSpaceIds ?? []).map(stripHyphens));
       const canonicalOnly = args.includeNonCanonical === false;
-      const filtered = response.results.filter(result =>
+      // Gate per space, as before the endpoint collapsed spaces into `otherSpaces`.
+      const filtered = flattenRestResults(response.results).filter(result =>
         shouldIncludeRestSearchResult(result, { canonicalOnly, scopedSpaceIds })
       );
       return {
@@ -1425,15 +1514,16 @@ export function getUserEntityResponse(
 /**
  * Has this user cast a vote of any of the given kinds?
  *
- * Takes the kinds rather than assuming them: curation (0) is an entity upvote, stance (1) and
- * veracity (2) are a position on a claim, and the onboarding checklist counts those as two
- * different things a person can have done.
+ * Takes the kinds rather than assuming them: curation (0) is an entity upvote and stance (1) is a
+ * position on a claim, and the onboarding checklist counts those as two different things a person
+ * can have done.
+ *
+ * `number` rather than `ResponseVoteKind`, because this asks the vote table a *historical*
+ * question and the table holds kinds the app no longer publishes. The retired veracity kind, 2, is
+ * a real value here — the onboarding checklist still passes it, since somebody who answered a
+ * claim back when it asked Verify or Dispute has done the thing the checklist asks about.
  */
-export function getUserHasVoteOfKind(
-  userId: string,
-  voteKinds: readonly ResponseVoteKind[],
-  signal?: AbortController['signal']
-) {
+export function getUserHasVoteOfKind(userId: string, voteKinds: readonly number[], signal?: AbortController['signal']) {
   return graphql({
     query: UserHasVoteOfKindDocument,
     decoder: data => (data.userVotes?.length ?? 0) > 0,
@@ -1473,19 +1563,22 @@ export type ClaimResponseSummaryRow = {
 export function getClaimResponseSummaryPage(
   filter: UserVoteFilter,
   first: number,
-  offset: number,
+  after: string | undefined,
   signal?: AbortController['signal']
 ) {
   return graphql({
     query: claimResponseSummariesQuery,
-    decoder: data =>
-      (data.userVotes ?? []).map((vote): ClaimResponseSummaryRow => ({
+    decoder: (data): CursorPage<ClaimResponseSummaryRow> => ({
+      items: (data.userVotesConnection?.nodes ?? []).map(vote => ({
         userId: String(vote.userId),
         objectId: String(vote.objectId),
         voteType: vote.voteType,
         voteKind: vote.voteKind,
       })),
-    variables: { filter, first, offset },
+      endCursor: data.userVotesConnection?.pageInfo.endCursor ?? null,
+      hasNextPage: data.userVotesConnection?.pageInfo.hasNextPage ?? false,
+    }),
+    variables: { filter, first, after },
     signal,
   });
 }
@@ -1513,6 +1606,61 @@ export function getEntityResponders(
 export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
 
 type UserEntityVoteRow = { objectId: string; voteKind: number; votedAt: string };
+
+/**
+ * The rows a page can describe: its entity ids, and the current vote row of each.
+ *
+ * **The first row wins, not the last.** One entity can carry more than one row: a claim answered
+ * Verify before the vocabularies merged and Agree after it holds a vote of each kind, and both come
+ * back from a query that filters on direction rather than kind. Rows arrive `VOTED_AT_DESC`, so the
+ * first one is the current answer.
+ *
+ * This was `Object.fromEntries`, which gives a repeated key its *last* value — the oldest row. On
+ * the claim above that reported kind 2, and `useVoteTabEntities` drops any claim whose recorded
+ * kind is not the one it resolves to now, so the claim vanished from the Agreed tab while the
+ * person still held a live stance on it. That is the path every factual-claim responder takes once
+ * Verify is gone, so it is the common case rather than an edge.
+ *
+ * **Retired rows are skipped, not merely out-ordered.** Taking the newest row is not enough on its
+ * own: the two kinds are independent, so the Verify can be the *newer* of the pair — answer a claim
+ * Agree, have it flagged factual, answer it again Verify. Nothing resolves to kind 2 any more, so
+ * such a row can never match and can only shadow the live stance underneath it.
+ *
+ * **The ids come from the same pass**, so the page never reports one it cannot describe. Skipping a
+ * retired row in the lookups alone was not enough: `useUserVotedEntityIds` binds an id to the first
+ * page it appears on and reads its kind from the merged lookups, so a claim whose retired row ended
+ * one page and whose live stance began the next was claimed by the earlier page — which had no kind
+ * for it — and skipped as a duplicate by the later one, which did. `useVoteTabEntities` banks a page
+ * against its ids, and those did not change when the kind arrived, so the claim was never
+ * re-hydrated and stayed missing from the tab for the rest of the session. `decodeVoteOrder` keeps
+ * the same shape for the same reason: its `entityIds` are the ids a response survived for.
+ *
+ * All three are built here together so a single entity's kind and timestamp always describe the
+ * same row; read from different rows they can disagree, and the timestamp is the list's sort key.
+ */
+export function indexVoteRowsByObject(nodes: readonly UserEntityVoteRow[]): {
+  objectIds: string[];
+  voteKindByObjectId: Record<string, number>;
+  votedAtByObjectId: Record<string, string>;
+} {
+  const objectIds: string[] = [];
+  const voteKindByObjectId: Record<string, number> = {};
+  const votedAtByObjectId: Record<string, string> = {};
+
+  for (const node of nodes) {
+    if (node.voteKind === RETIRED_VERACITY_VOTE_KIND) continue;
+    // Interested (GEO-3158) is a follow, not an up or down vote or a position, and always vote type
+    // 0. Newer than an upvote on the same topic, it would shadow it exactly as a retired row does.
+    if (node.voteKind === INTERESTED_VOTE_KIND) continue;
+    const id = uuidToHex(node.objectId);
+    if (id in voteKindByObjectId) continue;
+    voteKindByObjectId[id] = node.voteKind;
+    votedAtByObjectId[id] = node.votedAt;
+    objectIds.push(node.objectId);
+  }
+
+  return { objectIds, voteKindByObjectId, votedAtByObjectId };
+}
 
 export type UserEntityVoteObjectIdsPage = {
   objectIds: string[];
@@ -1545,9 +1693,7 @@ export function getUserEntityVoteObjectIdsPage(
     });
 
     const nodes = rows.filter(node => Boolean(node.objectId));
-    const objectIds = nodes.map(node => node.objectId);
-    const voteKindByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.voteKind]));
-    const votedAtByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.votedAt]));
+    const { objectIds, voteKindByObjectId, votedAtByObjectId } = indexVoteRowsByObject(nodes);
 
     return {
       objectIds,

@@ -37,6 +37,7 @@ export function EditableHeading({
 
   return (
     <EntityPageTitle
+      entityId={entityId}
       // Browse falls back to the preview name; edit must not. A fallback in the textarea
       // reads as a stored name that isn't there, and one keystroke would commit it.
       value={isEditing ? (name ?? '') : (name ?? fallbackName ?? '')}

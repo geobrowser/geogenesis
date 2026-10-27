@@ -9,6 +9,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateRequest } from '../api';
 import { useWithdrawDebateRequest } from './hooks';
+import { hubAnalyticsAttributes } from './hub-analytics';
 import { hubCardMotion } from './hub-motion';
 import { SpaceChip } from './matchmaking-claim-card';
 import { RequestParties } from './request-parties';
@@ -58,6 +59,7 @@ export function OutboundRequestCard({ request, ref }: { request: DebateRequest; 
           type="button"
           onClick={() => withdrawRequest.mutate(request.id)}
           disabled={withdrawRequest.isPending}
+          {...hubAnalyticsAttributes('Withdraw request', 'withdraw_debate_request')}
           className="shrink-0 text-text underline transition-colors hover:text-grey-04 disabled:opacity-50"
         >
           {withdrawRequest.isPending ? 'Withdrawing…' : 'Withdraw'}

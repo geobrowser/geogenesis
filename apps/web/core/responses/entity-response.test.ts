@@ -4,8 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
 
-import { getChecked } from '~/design-system/checkbox';
-
 import {
   ENTITY_RESPONSE_COPY,
   decodeActiveResponseDirection,
@@ -18,6 +16,7 @@ import {
   hasUnpublishedClaimResponseKindEdit,
   resolveEntityResponseKind,
   responseKindToVoteKind,
+  responsePositionLabel,
   userEntityResponseQueryKey,
   waitForIndexedEntityResponse,
 } from './entity-response';
@@ -59,39 +58,47 @@ function claimEntity(factualValue?: string): ResolveEntity {
 
 describe('entity response semantics', () => {
   it.each([
-    [{ isClaim: false, isFactual: false }, 'curation'],
-    [{ isClaim: false, isFactual: true }, 'curation'],
-    [{ isClaim: true, isFactual: false }, 'stance'],
-    [{ isClaim: true, isFactual: true }, 'veracity'],
+    [{ isClaim: false }, 'curation'],
+    [{ isClaim: true }, 'stance'],
   ] as const)('selects the active response kind for %o', (input, expected) => {
     expect(getEntityResponseKind(input)).toBe(expected);
   });
 
-  it.each([
-    ['1', 'veracity'],
-    ['0', 'stance'],
-    [undefined, 'stance'],
-    ['true', 'stance'],
-    ['yes', 'stance'],
-    ['malformed', 'stance'],
-  ] as const)('uses canonical checked semantics for factual value %s', (factualValue, expected) => {
-    expect(getEntityResponseKind({ isClaim: true, isFactual: getChecked(factualValue) === true })).toBe(expected);
-  });
-
   it('resolves plain entities to curation', () => {
-    expect(resolveEntityResponseKind(plainEntity(), SPACE_ID)).toBe('curation');
-    expect(resolveEntityResponseKind(null, SPACE_ID)).toBe('curation');
+    expect(resolveEntityResponseKind(plainEntity())).toBe('curation');
+    expect(resolveEntityResponseKind(null)).toBe('curation');
   });
 
-  it.each([
-    ['1', 'veracity'],
-    ['0', 'stance'],
-    [undefined, 'stance'],
-    ['true', 'stance'],
-    ['yes', 'stance'],
-    ['malformed', 'stance'],
-  ] as const)('resolves claim factual value %s with canonical checked semantics', (factualValue, expected) => {
-    expect(resolveEntityResponseKind(claimEntity(factualValue), SPACE_ID)).toBe(expected);
+  /**
+   * The point of the change, stated directly: a claim flagged factual is answered exactly like one
+   * that is not. `'1'` is the checked value that used to select Verify/Dispute and its own vote
+   * kind, and it is the case this has to keep pinned — the others are here so a regression that
+   * reintroduced the branch on any spelling of the flag still fails.
+   */
+  it.each([['1'], ['0'], [undefined], ['true'], ['yes'], ['malformed']] as const)(
+    'answers a claim with a stance whatever its factual value (%s) says',
+    factualValue => {
+      expect(resolveEntityResponseKind(claimEntity(factualValue))).toBe('stance');
+    }
+  );
+
+  it('publishes a factual claim against the same vote kind as any other claim', () => {
+    const factual = responseKindToVoteKind(resolveEntityResponseKind(claimEntity('1')));
+    const ordinary = responseKindToVoteKind(resolveEntityResponseKind(claimEntity('0')));
+
+    // Not merely equal — equal to the *stance* kind. Both resolving to the retired veracity kind
+    // would satisfy an equality check and would be the bug.
+    expect(factual).toBe(ordinary);
+    expect(factual).toBe(responseKindToVoteKind('stance'));
+  });
+
+  it('names both sides of a factual claim Agree and Disagree', () => {
+    const copy = ENTITY_RESPONSE_COPY[resolveEntityResponseKind(claimEntity('1'))];
+
+    expect(copy.positiveAction).toBe('Agree');
+    expect(copy.negativeAction).toBe('Disagree');
+    expect(responsePositionLabel(true)).toBe('Agree');
+    expect(responsePositionLabel(false)).toBe('Disagree');
   });
 
   it('ignores factual values from other spaces when resolving kind', () => {
@@ -113,13 +120,12 @@ describe('entity response semantics', () => {
       ],
     } as unknown as ResolveEntity;
 
-    expect(resolveEntityResponseKind(entity, SPACE_ID)).toBe('stance');
+    expect(resolveEntityResponseKind(entity)).toBe('stance');
   });
 
   it.each([
     ['curation', 0],
     ['stance', 1],
-    ['veracity', 2],
   ] as const)('maps %s to backend voteKind %i', (kind, expected) => {
     expect(responseKindToVoteKind(kind)).toBe(expected);
   });
@@ -131,9 +137,6 @@ describe('entity response semantics', () => {
     ['stance', 'positive', 'agree'],
     ['stance', 'negative', 'disagree'],
     ['stance', 'clear', 'unagree'],
-    ['veracity', 'positive', 'verify'],
-    ['veracity', 'negative', 'dispute'],
-    ['veracity', 'clear', 'unverify'],
   ] as const)('routes %s/%s to geo.responses.%s', (kind, direction, expected) => {
     expect(getResponseActionMethod(kind, direction)).toBe(expected);
   });
@@ -141,7 +144,6 @@ describe('entity response semantics', () => {
   it.each([
     ['curation', 'Upvote', 'Downvote', 'No votes yet'],
     ['stance', 'Agree', 'Disagree', 'No stances yet'],
-    ['veracity', 'Verify', 'Dispute', 'No veracity responses yet'],
   ] as const)('uses semantic %s response copy', (kind, positive, negative, empty) => {
     expect(ENTITY_RESPONSE_COPY[kind]).toMatchObject({
       positiveAction: positive,
@@ -161,7 +163,12 @@ describe('entity response semantics', () => {
     expect(decodeActiveResponseDirection(voteType)).toBe(expected);
   });
 
-  it('blocks responses while an exact-space factual edit is still unpublished', () => {
+  /**
+   * The guard used to stop here, because the flag chose between two vote kinds and responding
+   * across the edit published the wrong one. The flag chooses nothing now, so blocking on it would
+   * only disable the pills on a claim whose draft cannot change how a response is published.
+   */
+  it('lets someone respond while a factual edit is still unpublished', () => {
     const entity = {
       relations: [],
       values: [
@@ -174,10 +181,31 @@ describe('entity response semantics', () => {
       ],
     } as unknown as NonNullable<Parameters<typeof hasUnpublishedClaimResponseKindEdit>[0]>;
 
+    expect(hasUnpublishedClaimResponseKindEdit(entity, SPACE_ID)).toBe(false);
+  });
+
+  /**
+   * And the half that still matters. Adding the Claim type moves an entity between curation and
+   * stance, which really are different vote kinds — so this one still has to stop a response.
+   */
+  it('still blocks responses while an unpublished Claim type edit could change the vote kind', () => {
+    const entity = {
+      values: [],
+      relations: [
+        {
+          spaceId: SPACE_ID,
+          type: { id: SystemIds.TYPES_PROPERTY },
+          toEntity: { id: CLAIM_TYPE_ID },
+          isLocal: true,
+          hasBeenPublished: false,
+        },
+      ],
+    } as unknown as NonNullable<Parameters<typeof hasUnpublishedClaimResponseKindEdit>[0]>;
+
     expect(hasUnpublishedClaimResponseKindEdit(entity, SPACE_ID)).toBe(true);
     expect(hasUnpublishedClaimResponseKindEdit(entity, OTHER_SPACE_ID)).toBe(false);
 
-    entity.values[0]!.hasBeenPublished = true;
+    entity.relations[0]!.hasBeenPublished = true;
     expect(hasUnpublishedClaimResponseKindEdit(entity, SPACE_ID)).toBe(false);
   });
 
@@ -299,13 +327,13 @@ describe('entity response query keys', () => {
       0,
       'stance',
     ]);
-    expect(userEntityResponseQueryKey('user', 'entity', 'space', 0, 'veracity')).toEqual([
+    expect(userEntityResponseQueryKey('user', 'entity', 'space', 0, 'stance')).toEqual([
       'user-entity-response',
       'user',
       'entity',
       'space',
       0,
-      'veracity',
+      'stance',
     ]);
     expect(entityRespondersQueryKey('entity', 'space', 0, 'curation')).toEqual([
       'entity-responders',

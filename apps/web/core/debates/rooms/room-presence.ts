@@ -1,0 +1,149 @@
+import type { DebateRoomNotice, DebateRoomView } from '../api';
+
+/**
+ * Indicator states (GEO-2941). Read off the server's `waiting` reason and `occupants`, so the
+ * grace periods stay one decision on the backend.
+ */
+export type DebateRoomPresenceState =
+  /** 1. In the room before the scheduled start. */
+  | 'arrived_early'
+  /** 2. Past the start, no arrival, no information about why. */
+  | 'waiting'
+  /** 2b. Past the start, and the server knows they are mid-debate elsewhere. */
+  | 'waiting_elsewhere'
+  /** 3. They are in the room. The only state that changes behaviour. */
+  | 'present'
+  /** 4. Seen in `occupants` this visit, absent now. See `sawOpponent`. */
+  | 'left'
+  /** 5. The grace period elapsed with no arrival. */
+  | 'no_show';
+
+export type DebateRoomPresence = {
+  state: DebateRoomPresenceState;
+  /** The other participant's user id. The room payload carries no name to go with it. */
+  opponentUserId: string | null;
+  /** State 3 alone: opens the mic and enables Request debate. */
+  opponentPresent: boolean;
+  /**
+   * What they said about being late (GEO-3427), while it is still the news: only in the waiting
+   * states. Once the room calls it a no-show (their estimate and its grace ran out), or they came and
+   * went, the room's own note for that state says more than a stale estimate.
+   */
+  opponentLate?: { minutes: number | null; expectedAt: string; note: string | null } | null;
+};
+
+export type DebateRoomPresenceInput = {
+  room: DebateRoomView | null | undefined;
+  /** `null` until geo-chat resolves the viewer, which is not the same as being alone. */
+  currentUserId: string | null;
+  /**
+   * Seen in `occupants` this visit. The view reports who is in the room, never who has been, so
+   * "left" and "never came" are one payload without this. Does not survive a refresh.
+   */
+  sawOpponent: boolean;
+};
+
+/**
+ * geo-chat spells uuids both ways -- `serde_uuid` fields are dashless, plain ones dashed -- so two
+ * ids for the same thing need not match as written. Compared on one form rather than trusting
+ * either.
+ */
+export function sameId(a: string, b: string) {
+  return a.replace(/-/g, '').toLowerCase() === b.replace(/-/g, '').toLowerCase();
+}
+
+/**
+ * The other participant and whether they are in the room. `null` whenever the answer would be a
+ * guess, so nothing downstream reads the viewer as their own opponent.
+ */
+export function debateRoomOpponent(room: DebateRoomView | null | undefined, currentUserId: string | null) {
+  if (!room || !currentUserId || room.access.status !== 'admitted') {
+    return { opponentUserId: null, opponentPresent: false };
+  }
+
+  const viewerIsListed = room.participants.some(userId => sameId(userId, currentUserId));
+  const opponentUserId = viewerIsListed
+    ? (room.participants.find(userId => !sameId(userId, currentUserId)) ?? null)
+    : null;
+
+  return {
+    opponentUserId,
+    opponentPresent: opponentUserId !== null && room.occupants.some(userId => sameId(userId, opponentUserId)),
+  };
+}
+
+/**
+ * The room's presence, or `null` when there is nothing to say: no room, no viewer, or a viewer who
+ * is not admitted. Only an admitted viewer is given occupancy to read.
+ */
+export function debateRoomPresence({
+  room,
+  currentUserId,
+  sawOpponent,
+}: DebateRoomPresenceInput): DebateRoomPresence | null {
+  if (!room || !currentUserId || room.access.status !== 'admitted') return null;
+
+  const { opponentUserId, opponentPresent } = debateRoomOpponent(room, currentUserId);
+  if (!opponentUserId) return null;
+
+  const state = presenceState(room, opponentPresent, sawOpponent);
+  const stillWaiting = state === 'waiting' || state === 'waiting_elsewhere' || state === 'arrived_early';
+  return {
+    state,
+    opponentUserId,
+    opponentPresent,
+    opponentLate: stillWaiting ? lateNotice(room, opponentUserId) : null,
+  };
+}
+
+/** One participant's notice of one kind (GEO-3427), or `null`. */
+export function noticeFrom(
+  notices: DebateRoomNotice[] | undefined,
+  userId: string | null,
+  kind: DebateRoomNotice['kind']
+): DebateRoomNotice | null {
+  if (!userId) return null;
+  return (notices ?? []).find(notice => notice.kind === kind && sameId(notice.user_id, userId)) ?? null;
+}
+
+function lateNotice(
+  room: DebateRoomView,
+  opponentUserId: string
+): NonNullable<DebateRoomPresence['opponentLate']> | null {
+  const notice = noticeFrom(room.notices, opponentUserId, 'running_late');
+  if (!notice?.expected_at) return null;
+  // The minutes they picked, which the notice carries as times: `expected_at` is exactly that many
+  // past the later of when they said it and the start.
+  const from = Math.max(new Date(notice.at).getTime(), new Date(room.starts_at).getTime());
+  const minutes = Math.round((new Date(notice.expected_at).getTime() - from) / 60_000);
+  return {
+    minutes: Number.isFinite(minutes) && minutes > 0 ? minutes : null,
+    expectedAt: notice.expected_at,
+    note: notice.note,
+  };
+}
+
+function presenceState(room: DebateRoomView, opponentPresent: boolean, sawOpponent: boolean): DebateRoomPresenceState {
+  if (opponentPresent) return 'present';
+  // Ahead of the server's `no_show`, which is only a clock: geo-chat reports it once the viewer has
+  // waited long enough alone, whether or not the opponent ever came.
+  if (sawOpponent) return 'left';
+
+  // `waiting` is null until the viewer has joined themselves, so there is no one-sided wait to
+  // describe yet and nothing has happened the indicator can report.
+  switch (room.waiting?.reason) {
+    case 'no_show':
+      return 'no_show';
+    case 'opponent_in_another_debate':
+      return 'waiting_elsewhere';
+    case 'not_yet_due':
+      return 'arrived_early';
+    default:
+      return 'waiting';
+  }
+}
+
+/** Whether Leave asks first: only while someone is coming or here. After they left or never came, it doesn't. */
+export function roomLeaveNeedsConfirm(state: DebateRoomPresenceState | null | undefined): boolean {
+  return state === 'arrived_early' || state === 'waiting' || state === 'waiting_elsewhere' || state === 'present';
+}

@@ -37,6 +37,8 @@ export type DebateRequestGateInput = {
    * Whether the relevant opponent condition for the current surface is satisfied.
    */
   opponentReady: boolean;
+  /** In-room presence (GEO-2941); `true` off a room. Not `opponentReady`, which drives `pending`. */
+  opponentPresent?: boolean;
   /**
    * True once the indexer has been slow enough to be worth naming differently. Only reachable after
    * the publish has landed, so it changes the label rather than the gate.
@@ -46,6 +48,11 @@ export type DebateRequestGateInput = {
 
 export type DebateRequestGate = {
   canRequest: boolean;
+  /**
+   * The offer is right and the position settled; only the room has not said the opponent is there.
+   * Rendered disabled rather than hidden, since the button is what state 3 turns on.
+   */
+  awaitingOpponent: boolean;
   /** The request is the right offer to make, but geo-chat does not agree about the position yet. */
   pending: boolean;
   /** What to call the wait, or `null` when there is nothing to wait for. */
@@ -61,6 +68,7 @@ export function debateRequestGate({
   chatPosition,
   localPosition,
   opponentReady,
+  opponentPresent = true,
   indexingDelayed = false,
 }: DebateRequestGateInput): DebateRequestGate {
   // `localPosition !== null` first: with no position at all there is nothing to agree about, and
@@ -74,7 +82,8 @@ export function debateRequestGate({
   const pending = opponentReady && held && !positionSettled;
 
   return {
-    canRequest: opponentReady && positionSettled,
+    canRequest: opponentReady && positionSettled && opponentPresent,
+    awaitingOpponent: opponentReady && positionSettled && !opponentPresent,
     pending,
     pendingLabel: pending ? (indexingDelayed ? REQUEST_PENDING_DELAYED_LABEL : REQUEST_PENDING_LABEL) : null,
   };

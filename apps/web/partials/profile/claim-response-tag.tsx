@@ -28,20 +28,18 @@ import type { ClaimResponse } from '~/core/profile/person-position-order';
  * "Susan agrees" is a fact about the claim as it stands, which is the same thing
  * the tally to the right of it reports.
  *
- * **Worded from the claim's own question.** A claim marked factual asks Verify
- * or Dispute rather than Agree or Disagree, so a tag that always said "agrees"
- * would contradict the button directly above it on exactly the claims where the
- * distinction matters. The card resolves that kind — the same claim can be
- * factual in one space and not in another — and hands it here.
+ * **One wording, because there is one question.** This used to take the claim's
+ * response kind, because a claim marked factual asked Verify or Dispute and a
+ * tag that always said "agrees" would contradict the button above it. Every
+ * claim asks the same question now, so there is nothing to resolve and nothing
+ * the card has to hand down.
  */
 export function ClaimResponseTag({
   response,
-  responseKind,
   personName,
   forPosition,
 }: {
   response: ClaimResponse | undefined;
-  responseKind: 'stance' | 'veracity';
   /** The profile's owner. Falls back to "They" where the name has not loaded. */
   personName?: string | null;
   /**
@@ -50,11 +48,10 @@ export function ClaimResponseTag({
    */
   forPosition: boolean;
 }) {
-  const side = responseKind === 'veracity' ? response?.veracity : response?.stance;
+  const side = response?.stance;
 
-  // Nothing to say: they have not answered this question, or answered the other
-  // one — a stance where the card asks about veracity. An absent tag is the
-  // honest rendering of both; a greyed one would imply a verdict never given.
+  // Nothing to say: they have not answered this claim. An absent tag is the
+  // honest rendering; a greyed one would imply a verdict never given.
   //
   // Not the retracted case, which is filtered out of the tab entirely rather
   // than rendered blank here: `decodeVoteOrder` drops a claim whose answer has
@@ -62,7 +59,7 @@ export function ClaimResponseTag({
   if (!side) return null;
   if ((side === 'agree') !== forPosition) return null;
 
-  const word = RESPONSE_WORD[responseKind][side];
+  const word = RESPONSE_WORD[side];
 
   return (
     <p className="mt-1.5 text-center text-breadcrumb text-grey-04">
@@ -89,7 +86,4 @@ export function firstName(name: string | null | undefined): string | null {
  * Taken from the same pair of verbs the response controls use, so the record and
  * the button above it cannot describe one act two ways.
  */
-const RESPONSE_WORD = {
-  stance: { agree: 'agrees', disagree: 'disagrees' },
-  veracity: { agree: 'verifies', disagree: 'disputes' },
-} as const;
+const RESPONSE_WORD = { agree: 'agrees', disagree: 'disagrees' } as const;

@@ -16,6 +16,14 @@ type TooltipProps = {
   variant?: Variant;
   /** Also opens on a touch press. Intended for read-only triggers that have no separate action. */
   openOnPress?: boolean;
+  /**
+   * How long a pointer has to rest on the trigger before the tooltip opens, in ms.
+   *
+   * The 300ms default suits triggers sitting in ordinary page content, where a pointer crossing one
+   * on its way somewhere else should not flash a tooltip. Small, deliberate targets — a hash on a
+   * video scrubber, say — are only ever hovered on purpose, and there the wait is the whole cost.
+   */
+  delayDuration?: number;
 };
 
 type Position = 'top' | 'bottom' | 'left' | 'right';
@@ -31,12 +39,13 @@ export const Tooltip = ({
   align = 'center',
   variant = 'dark',
   openOnPress = false,
+  delayDuration = 300,
 }: TooltipProps) => {
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [x, y] = originCoordinates[position];
 
   return (
-    <Provider delayDuration={300} skipDelayDuration={300}>
+    <Provider delayDuration={delayDuration} skipDelayDuration={300}>
       <Root open={isOpen} onOpenChange={setIsOpen}>
         <Trigger
           asChild

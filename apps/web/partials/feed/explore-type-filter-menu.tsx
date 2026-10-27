@@ -5,7 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { formatFacetCount } from '~/core/debates/matchmaking/topic-facets';
-import { EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
 import { exploreTypeFilterLabel } from '~/core/explore/explore-type-filter';
 
 import { CheckboxVisual } from '~/design-system/checkbox';
@@ -15,7 +14,7 @@ import { Skeleton } from '~/design-system/skeleton';
 
 type Props = {
   selectedTypeIds: readonly string[];
-  typeOptions?: readonly { id: string; label: string }[];
+  typeOptions: readonly { id: string; label: string }[];
   typeCounts?: readonly { id: string; count: number }[];
   countsPending?: boolean;
   onToggleType: (typeId: string) => void;
@@ -24,7 +23,7 @@ type Props = {
 
 export function ExploreTypeFilterMenu({
   selectedTypeIds,
-  typeOptions = EXPLORE_ENTITY_TYPES,
+  typeOptions,
   typeCounts,
   countsPending = false,
   onToggleType,

@@ -31,11 +31,13 @@ export function EntityCommentsPanel({
   spaceId,
   onClose,
   presentation = 'docked',
+  targetEntityType = 'entity',
 }: {
   entityId: string;
   spaceId: string;
   onClose: () => void;
   presentation?: 'docked' | 'overlay';
+  targetEntityType?: string;
 }) {
   // Same arguments as the host's own count query, so posting here updates it.
   const { totalCount } = useComments({ entityId, spaceId });
@@ -113,13 +115,20 @@ export function EntityCommentsPanel({
         <Text as="h2" variant="cardEntityTitle" color="text">
           Comments · {totalCount}
         </Text>
-        <button type="button" aria-label="Close" onClick={onClose} className="text-grey-04 hover:text-text">
+        <button
+          type="button"
+          data-geo-analytics-label="Close comments panel"
+          data-geo-analytics-intent="comments_panel_action"
+          aria-label="Close"
+          onClick={onClose}
+          className="text-grey-04 hover:text-text"
+        >
           <Close />
         </button>
       </header>
       <div className="no-scrollbar flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-5 pb-6">
         <ClaimCommentPositionBoundary entityId={entityId} spaceId={spaceId}>
-          <CommentSection entityId={entityId} spaceId={spaceId} variant="panel" />
+          <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType={targetEntityType} variant="panel" />
         </ClaimCommentPositionBoundary>
       </div>
     </aside>

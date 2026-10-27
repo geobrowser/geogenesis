@@ -235,6 +235,22 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('MatchesList', () => {
+  /**
+   * The workspace draws an open facet rail beside its list, and this is one of the two lists the
+   * source picker can put there.
+   */
+  it('draws the workspace facet rail, the way the claims list does', () => {
+    render(<MatchesList onTabChange={vi.fn()} layout="workspace" />);
+
+    expect(screen.getByTestId('hub-facet-rail')).toBeInTheDocument();
+  });
+
+  it('leaves the rail out of the panel', () => {
+    render(<MatchesList onTabChange={vi.fn()} />);
+
+    expect(screen.queryByTestId('hub-facet-rail')).toBeNull();
+  });
+
   it('offers exactly two response actions, labelled for the claim', () => {
     render(<MatchesList onTabChange={vi.fn()} />);
 
@@ -245,12 +261,16 @@ describe('MatchesList', () => {
     expect(screen.queryByRole('button', { name: /Upvote|Downvote|vote/i })).not.toBeInTheDocument();
   });
 
-  it('uses the veracity vocabulary for a factual claim', () => {
+  // Inverted rather than deleted: a claim geo-chat still labels `veracity` is exactly the case that
+  // has to come out Agree/Disagree now.
+  it('uses Agree and Disagree for a claim geo-chat still calls factual', () => {
     mocks.matches = [match({ response_kind: 'veracity', positions: [] })];
     render(<MatchesList onTabChange={vi.fn()} />);
 
-    expect(screen.getByRole('button', { name: /^Verify/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Dispute/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Agree/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Verify/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Dispute/ })).not.toBeInTheDocument();
   });
 
   it('publishes the opposite response when the other side is chosen', () => {
@@ -358,7 +378,10 @@ describe('MatchesList', () => {
     const { rerender } = render(<MatchesList onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Request debate' }));
-    expect(mocks.createRequestMutate).toHaveBeenCalledWith({ space_id: SPACE_ID, claim_entity_id: CLAIM_ENTITY_ID });
+    expect(mocks.createRequestMutate).toHaveBeenCalledWith(
+      { space_id: SPACE_ID, claim_entity_id: CLAIM_ENTITY_ID },
+      expect.anything()
+    );
 
     mocks.outbound = {
       id: 'request-1',

@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { ACTION_REVERTED_SELECTOR, type GovernanceRevert } from './governance-errors';
-import { classifyProposalExecutability } from './proposal-executability';
+import {
+  ACTION_REVERTED_SELECTOR,
+  type GovernanceRevert,
+  INVALID_SPACE_ID_FOR_ROLE_SELECTOR,
+  decodeGovernanceRevert,
+} from './governance-errors';
+import {
+  classifyProposalExecutability,
+  describeDeadProposal,
+  isPermanentExecuteRevert,
+} from './proposal-executability';
 
 const CAN_NOT_EXECUTE_SELECTOR = '0xdf322356';
 
@@ -55,5 +64,55 @@ describe('classifyProposalExecutability', () => {
     expect(
       classifyProposalExecutability({ existsOnChain: null, simulationRevert: revert(CAN_NOT_EXECUTE_SELECTOR) })
     ).toBe('blocked');
+  });
+
+  // GEO-2609: a proposal to remove an editor the DAO never actually granted (a
+  // phantom role left by the migration replay) reverts InvalidSpaceIdForRole on
+  // every execute. As `blocked` it refreshed back to "Pending execution" and
+  // offered Execute again forever; it has to read as permanent.
+  it('is dead when the role change contradicts the on-chain roles', () => {
+    expect(
+      classifyProposalExecutability({
+        existsOnChain: true,
+        simulationRevert: revert(INVALID_SPACE_ID_FOR_ROLE_SELECTOR),
+      })
+    ).toBe('dead');
+  });
+
+  it('classifies the real InvalidSpaceIdForRole error from the ticket as dead', () => {
+    // The exact message the smart-account execute surfaced on 2026-08-20.
+    const error = new Error('Execute failed', {
+      cause: new Error(
+        'InvalidSpaceIdForRole: The target space id is not valid for this membership role. (0x48b38022)'
+      ),
+    });
+    const decoded = decodeGovernanceRevert(error);
+    expect(decoded?.name).toBe('InvalidSpaceIdForRole');
+    expect(classifyProposalExecutability({ existsOnChain: true, simulationRevert: decoded })).toBe('dead');
+  });
+});
+
+describe('isPermanentExecuteRevert', () => {
+  it('is true only for reverts no vote or wait can clear', () => {
+    expect(isPermanentExecuteRevert(revert(ACTION_REVERTED_SELECTOR))).toBe(true);
+    expect(isPermanentExecuteRevert(revert(INVALID_SPACE_ID_FOR_ROLE_SELECTOR))).toBe(true);
+    expect(isPermanentExecuteRevert(revert(CAN_NOT_EXECUTE_SELECTOR))).toBe(false);
+    expect(isPermanentExecuteRevert(null)).toBe(false);
+  });
+});
+
+describe('describeDeadProposal', () => {
+  it('names the role mismatch, and does not tell anyone to re-propose it', () => {
+    const reason = describeDeadProposal(revert(INVALID_SPACE_ID_FOR_ROLE_SELECTOR));
+    expect(reason).toContain("doesn't match the space's on-chain roles");
+    expect(reason).toContain('Nothing needs to be re-proposed');
+  });
+
+  it('tells a broken legacy request to be recreated', () => {
+    expect(describeDeadProposal(revert(ACTION_REVERTED_SELECTOR))).toContain('need to be recreated');
+  });
+
+  it('explains a proposal the DAO has no record of', () => {
+    expect(describeDeadProposal(null)).toContain('no record of it on-chain');
   });
 });

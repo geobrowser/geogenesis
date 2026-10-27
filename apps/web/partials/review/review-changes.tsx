@@ -10,7 +10,9 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom, useStore } from 'jotai';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
+import { observeOperation } from '~/core/analytics-operations';
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
@@ -22,11 +24,12 @@ import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { type ProposalVotingMode, usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useToast } from '~/core/hooks/use-toast';
 import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
-import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import { getAllEntities, getEntityNames, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import {
   buildIsNewEntity,
@@ -39,6 +42,7 @@ import {
   getDeselectionBlockers,
   selectOpsForPublish,
 } from '~/core/review/publish-selection';
+import { useNetChanges } from '~/core/review/use-net-changes';
 import { useDiff } from '~/core/state/diff-store';
 import { isPendingPersonalSpaceId, usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store';
@@ -72,6 +76,7 @@ import {
   isBountyTypeRelation,
 } from './bounty-linking';
 import type { Bounty } from './bounty-linking/types';
+import { useReviewSpace } from './use-review-space';
 import {
   clearPersonalProfileSessionDismissStorage,
   editorContentVersionAtom,
@@ -80,6 +85,8 @@ import {
 } from '~/atoms';
 
 type Proposals = Record<string, { name: string; description: string }>;
+
+const EMPTY_ID_SET: ReadonlySet<string> = new Set();
 
 function orderVisibleEntitiesStable(
   entities: EntityDiff[],
@@ -116,6 +123,7 @@ export const ReviewChanges = () => {
     isReviewOpen,
     setIsReviewOpen,
     reviewVersion,
+    reviewTargetVersion,
     activeSpace: diffPreferredSpaceId,
     setActiveSpace: setDiffPreferredSpaceId,
   } = useDiff();
@@ -136,56 +144,30 @@ export const ReviewChanges = () => {
   const { profile } = useGeoProfile(address);
   const personalPageEntityId = profile?.id ?? null;
 
+  const currentSpaceId = useSpaceId();
+
   const [proposals, setProposals] = React.useState<Proposals>({});
   const [isPublishing, setIsPublishing] = React.useState(false);
   const [spaces, setSpaces] = React.useState<Space[]>([]);
   const [isBountyLinkingOpen, setIsBountyLinkingOpen] = React.useState(false);
   const [selectedBountyIds, setSelectedBountyIds] = React.useState<Set<string>>(new Set());
 
-  const valuesWithChanges = useValues({
-    selector: t => t.hasBeenPublished === false && t.isLocal === true,
-    includeDeleted: true,
-  });
-
-  const relationsWithChanges = useRelations({
-    selector: r => r.hasBeenPublished === false && r.isLocal === true,
-    includeDeleted: true,
-  });
-
-  const dedupedSpacesWithActions = React.useMemo(() => {
-    const valueSpaceIds = valuesWithChanges.map(t => t.spaceId);
-    const relationSpaceIds = relationsWithChanges.map(r => r.spaceId);
-
-    return [...new Set([...valueSpaceIds, ...relationSpaceIds])];
-  }, [valuesWithChanges, relationsWithChanges]);
+  const { spaceIds: dedupedSpacesWithActions } = useNetChanges();
 
   const spacesKey = [...dedupedSpacesWithActions].sort().join(',');
-  const [activeSpace, setActiveSpace] = React.useState<string>('');
-  const appliedPreferredSpaceForVersion = React.useRef<number | null>(null);
+  const { activeSpace, setActiveSpace } = useReviewSpace({
+    spaceIds: dedupedSpacesWithActions,
+    isReviewOpen,
+    preferredSpaceVersion: reviewTargetVersion,
+    preferredSpaceId: diffPreferredSpaceId,
+    currentSpaceId,
+  });
 
   React.useEffect(() => {
     if (!isReviewOpen) {
       setDiffPreferredSpaceId('');
-      appliedPreferredSpaceForVersion.current = null;
     }
   }, [isReviewOpen, setDiffPreferredSpaceId]);
-
-  React.useEffect(() => {
-    const shouldApplyPreferred =
-      reviewVersion !== appliedPreferredSpaceForVersion.current &&
-      Boolean(diffPreferredSpaceId) &&
-      dedupedSpacesWithActions.includes(diffPreferredSpaceId);
-
-    if (shouldApplyPreferred) {
-      appliedPreferredSpaceForVersion.current = reviewVersion;
-      setActiveSpace(diffPreferredSpaceId);
-      return;
-    }
-
-    if (activeSpace === '' && dedupedSpacesWithActions[0]) {
-      setActiveSpace(dedupedSpacesWithActions[0]);
-    }
-  }, [spacesKey, activeSpace, diffPreferredSpaceId, dedupedSpacesWithActions, reviewVersion]);
 
   React.useEffect(() => {
     // Don't clear spaces metadata when dedupedSpacesWithActions becomes empty (e.g. after
@@ -220,14 +202,6 @@ export const ReviewChanges = () => {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
       }
-
-      if (dedupedSpacesWithActions.length > 0 && !dedupedSpacesWithActions.includes(activeSpace)) {
-        const next =
-          diffPreferredSpaceId && dedupedSpacesWithActions.includes(diffPreferredSpaceId)
-            ? diffPreferredSpaceId
-            : (dedupedSpacesWithActions[0] ?? '');
-        setActiveSpace(next);
-      }
     }
 
     return () => {
@@ -238,7 +212,7 @@ export const ReviewChanges = () => {
     };
     // `spacesKey` again stands in for `dedupedSpacesWithActions`; see the effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spacesKey, activeSpace, diffPreferredSpaceId, statusBarState.reviewState, setIsReviewOpen]);
+  }, [spacesKey, statusBarState.reviewState, setIsReviewOpen]);
 
   const rawProposalName = proposals[activeSpace]?.name ?? '';
   const proposalName = rawProposalName.trim();
@@ -251,6 +225,10 @@ export const ReviewChanges = () => {
   const relationsFromSpace = useRelations({
     selector: r => r.spaceId === activeSpace && r.isLocal === true && r.hasBeenPublished === false,
     includeDeleted: true,
+  });
+
+  const allSpaceRelations = useRelations({
+    selector: r => r.spaceId === activeSpace,
   });
 
   const bountyTypeRelations = useRelations({
@@ -491,8 +469,8 @@ export const ReviewChanges = () => {
   }, []);
 
   const ownershipIndex = React.useMemo(
-    () => buildOwnershipIndex(visibleEntities, relationsFromSpace),
-    [visibleEntities, relationsFromSpace]
+    () => buildOwnershipIndex(visibleEntities, allSpaceRelations),
+    [visibleEntities, allSpaceRelations]
   );
 
   const selectedEntityIds = React.useMemo(
@@ -514,9 +492,47 @@ export const ReviewChanges = () => {
     includeDeleted: true,
   });
 
-  const isNewEntity = React.useMemo(
+  const storeIsNewEntity = React.useMemo(
     () => buildIsNewEntity(candidateValues, candidateRelations),
     [candidateValues, candidateRelations]
+  );
+
+  // Relation targets with no review row that the store still reads as new.
+  const unresolvedLinkTargetIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const relation of relationsFromSpace) {
+      const targetId = relation.toEntity.id;
+      if (ownershipIndex.ownerOf.has(targetId)) continue; // has a row, or folds into one
+      if (!storeIsNewEntity(targetId)) continue; // store already knows it exists
+      ids.add(targetId);
+    }
+    return [...ids].sort();
+  }, [relationsFromSpace, ownershipIndex, storeIsNewEntity]);
+
+  const hasUnresolvedLinkTargets = isReviewOpen && unresolvedLinkTargetIds.length > 0;
+
+  const {
+    data: confirmedOnGraphIds = EMPTY_ID_SET,
+    isPending: isLinkTargetLookupPending,
+    isError: linkTargetLookupErrored,
+    refetch: retryLinkTargetLookup,
+  } = useQuery({
+    queryKey: ['review-link-target-existence', unresolvedLinkTargetIds.join(',')],
+    enabled: hasUnresolvedLinkTargets,
+    staleTime: 30_000,
+    queryFn: async ({ signal }) => {
+      const entities = await Effect.runPromise(getEntityNames(unresolvedLinkTargetIds, signal));
+      return new Set(entities.map(entity => entity.id));
+    },
+  });
+
+  const isResolvingLinkTargets = hasUnresolvedLinkTargets && isLinkTargetLookupPending;
+
+  const linkTargetLookupFailed = hasUnresolvedLinkTargets && linkTargetLookupErrored;
+
+  const isNewEntity = React.useMemo(
+    () => buildIsNewEntity(candidateValues, candidateRelations, confirmedOnGraphIds),
+    [candidateValues, candidateRelations, confirmedOnGraphIds]
   );
 
   const deselectionBlockers = React.useMemo(
@@ -575,7 +591,7 @@ export const ReviewChanges = () => {
       if (wouldDangle) return;
 
       // Cascade new rows that would be left with no remaining inbound links.
-      const toDiscard = expandDiscardSet(ownershipIndex, entityIds, relationsFromSpace, isNewEntity);
+      const toDiscard = expandDiscardSet(ownershipIndex, entityIds, allSpaceRelations, isNewEntity);
       const removed = collectOpsForEntities(ownershipIndex, toDiscard, valuesFromSpace, relationsFromSpace);
       if (removed.values.length === 0 && removed.relations.length === 0) return;
 
@@ -607,6 +623,7 @@ export const ReviewChanges = () => {
     [
       activeSpace,
       ownershipIndex,
+      allSpaceRelations,
       valuesFromSpace,
       relationsFromSpace,
       deselectionBlockers,
@@ -745,9 +762,15 @@ export const ReviewChanges = () => {
     }));
   };
 
+  const getPublishContext = useActionContext('review_changes', 'space', activeSpace ?? '', {
+    component: 'review_changes',
+    overlay: 'modal',
+  });
   const handleSubmit = React.useCallback(async () => {
     if (!activeSpace) return;
     if (!isReadyToPublish) return;
+    if (isResolvingLinkTargets) return;
+    if (linkTargetLookupFailed) return;
 
     const dangling = findDanglingDependencies(ownershipIndex, selectedEntityIds, relationsFromSpace, isNewEntity);
     if (dangling.length > 0) {
@@ -760,6 +783,7 @@ export const ReviewChanges = () => {
 
     setIsPublishing(true);
     const proposalEntityId = ID.createEntityId();
+    const operation = observeOperation('publish', 'space', activeSpace, undefined, getPublishContext());
 
     let resolved = false;
     const publishSucceeded = await new Promise<boolean>(resolve => {
@@ -797,6 +821,12 @@ export const ReviewChanges = () => {
     });
 
     if (publishSucceeded) {
+      operation.succeeded({
+        content_id: proposalEntityId,
+        target_entity_ids: [...selectedEntityIds],
+        value_count: publishSelection.values.length,
+        relation_count: publishSelection.relations.length,
+      });
       publishedEdit({
         operation_id: proposalEntityId,
         publication_status: 'confirmed',
@@ -809,6 +839,8 @@ export const ReviewChanges = () => {
         relation_count: publishSelection.relations.length,
       });
     }
+
+    if (!publishSucceeded) operation.failed('unknown');
 
     if (publishSucceeded && selectedBountyIds.size > 0 && personalSpaceId) {
       const bountyLinkValues: StoreValue[] = [
@@ -937,8 +969,11 @@ export const ReviewChanges = () => {
 
     setIsPublishing(false);
   }, [
+    getPublishContext,
     activeSpace,
     isReadyToPublish,
+    isResolvingLinkTargets,
+    linkTargetLookupFailed,
     makeProposal,
     relationsFromSpace,
     publishSelection,
@@ -959,8 +994,10 @@ export const ReviewChanges = () => {
   useKeyboardShortcuts(
     React.useMemo(
       () =>
-        isReviewOpen && isReadyToPublish && !isPublishing ? [{ key: 'Enter', callback: () => handleSubmit() }] : [],
-      [isReviewOpen, isReadyToPublish, isPublishing, handleSubmit]
+        isReviewOpen && isReadyToPublish && !isPublishing && !isResolvingLinkTargets && !linkTargetLookupFailed
+          ? [{ key: 'Enter', callback: () => handleSubmit() }]
+          : [],
+      [isReviewOpen, isReadyToPublish, isPublishing, isResolvingLinkTargets, linkTargetLookupFailed, handleSubmit]
     )
   );
 
@@ -983,21 +1020,23 @@ export const ReviewChanges = () => {
     });
   }, [bountyIdSet, selectedBountyIds.size]);
 
-  const spaceOptions = spaces.map(space => ({
-    label: (
-      <div className="flex items-center gap-2">
-        {space.entity.image && (
-          <div className="h-5 w-5 overflow-hidden rounded">
-            <NativeGeoImage value={space.entity.image} alt="" className="h-full w-full object-cover" />
-          </div>
-        )}
-        <span>{space.entity.name ?? space.id}</span>
-      </div>
-    ),
-    value: space.id,
-    disabled: false,
-    onClick: () => setActiveSpace(space.id),
-  }));
+  const spaceOptions = spaces
+    .filter(space => dedupedSpacesWithActions.includes(space.id))
+    .map(space => ({
+      label: (
+        <div className="flex items-center gap-2">
+          {space.entity.image && (
+            <div className="h-5 w-5 overflow-hidden rounded">
+              <NativeGeoImage value={space.entity.image} alt="" className="h-full w-full object-cover" />
+            </div>
+          )}
+          <span>{space.entity.name ?? space.id}</span>
+        </div>
+      ),
+      value: space.id,
+      disabled: false,
+      onClick: () => setActiveSpace(space.id),
+    }));
 
   return (
     <>
@@ -1072,10 +1111,22 @@ export const ReviewChanges = () => {
                     isFastPathRestricted={isFastPathRestricted}
                   />
                 )}
+                {linkTargetLookupFailed && (
+                  <div className="flex items-center gap-2 text-metadataMedium text-grey-04">
+                    <span>Couldn’t verify linked edits</span>
+                    <SmallButton onClick={() => void retryLinkTargetLookup()}>Retry</SmallButton>
+                  </div>
+                )}
                 <Button
                   variant="primary"
                   onClick={handleSubmit}
-                  disabled={!isReadyToPublish || isPublishing || isPublishGatedByPendingSetup}
+                  disabled={
+                    !isReadyToPublish ||
+                    isPublishing ||
+                    isPublishGatedByPendingSetup ||
+                    isResolvingLinkTargets ||
+                    linkTargetLookupFailed
+                  }
                 >
                   <Pending isPending={isPublishing}>{publishButtonLabel}</Pending>
                 </Button>

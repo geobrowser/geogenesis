@@ -1,13 +1,21 @@
 'use client';
 
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
+import {
+  debateMediaSessionKey,
+  debateRequestMediaSessionKey,
+  useOptionalDebateMediaSession,
+} from '~/core/debates/media-session';
 import { useParticipantAvatars, withRowParticipantAvatars } from '~/core/debates/participant-avatars';
 import { withQueryData } from '~/core/debates/with-query-data';
+import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 
 import {
   type CreateDebateRequestBody,
@@ -28,6 +36,7 @@ import {
   listDebateRequests,
   listMatchmakingClaims,
   listMatchmakingMatches,
+  listSchedulablePeople,
   unblockDebateUser,
   withdrawDebateRequest,
 } from '../api';
@@ -40,6 +49,8 @@ import {
   invalidateDebatesOutsideRematchClaims,
   useGeoChatAuth,
 } from '../hooks';
+import { lobbyDebateRequested } from '../lobbies/lobby-analytics';
+import { routeIntoDebate } from '../lobbies/step-out';
 
 const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
 
@@ -115,7 +126,7 @@ const WARMING_UP_RETRIES = 9;
  * 404 that means matchmaking is not deployed, the 400 that means the request was malformed — and
  * asking again gets the same answer. Those still surface at once.
  */
-const viewerReadRetryOptions = (accountKey: string | null) => ({
+export const viewerReadRetryOptions = (accountKey: string | null) => ({
   retry: (failureCount: number, error: Error) => {
     // An account geo-chat has not registered yet is the long one. It refuses the session exchange
     // with a 401 and keeps refusing for a minute or two after sign-up, then simply starts working —
@@ -168,6 +179,72 @@ export function useDebatePeople(enabled: boolean) {
 
   return withQueryData(query, data);
 }
+
+/**
+ * Fixed so every caller shares one cache entry. geo-chat's range is inclusive, so this is the modal's
+ * seven days. The limit leaves room for a day of past slots, which geo-chat returned before
+ * geo-chat#165 and no longer does; kept so this works against either build.
+ */
+const SCHEDULABLE_DAYS = PEER_SCHEDULE_DAYS - 1;
+const SCHEDULABLE_SLOTS = 48 + 3;
+
+/**
+ * The calendar draws fourteen local days. geo-chat resolves inclusive UTC dates in each peer's
+ * zone, so one extra date covers the far edge even when the peer is well ahead of the viewer.
+ * The grid drops the slack outside its two visible windows.
+ */
+export const CALENDAR_DAYS = 15;
+/**
+ * Everyone with free time this week, online or not, shared slots first (GEO-2937).
+ *
+ * `calendar` is the calendar page's read (GEO-3152): a fortnight, in its own cache entry. Every person carries
+ * their whole free time as `their_windows` (geo-chat#204); the People tab reads only `slots`.
+ */
+export function useSchedulablePeople(
+  enabled: boolean,
+  {
+    calendar = false,
+    spaces = EMPTY_SPACES,
+    calendarDate,
+  }: { calendar?: boolean; spaces?: string[]; calendarDate?: string } = {}
+) {
+  const days = calendar ? CALENDAR_DAYS : SCHEDULABLE_DAYS;
+  // Only the calendar narrows on the server, and only once the unfiltered list hit its cap: below
+  // that, every candidate is already in hand and the space menu filters them where they are.
+  const serverSpaces = React.useMemo(() => (calendar ? [...spaces].sort() : EMPTY_SPACES), [calendar, spaces]);
+  // The calendar reads `their_windows`, which `limit` never caps; it only trims the shared `slots`.
+  const limit = SCHEDULABLE_SLOTS;
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const queryEnabled = enabled && authenticated;
+
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    ...viewerReadRetryOptions(accountKey),
+    queryKey: debateQueryKeys.schedulablePeople(accountKey, days, limit, calendar, serverSpaces, calendarDate),
+    queryFn: ({ signal }) =>
+      listSchedulablePeople({ days, limit, spaces: serverSpaces }, getPrivyIdentityToken, accountKey, signal),
+    // A new space selection keeps the last week drawn while the narrowed one loads.
+    placeholderData: calendar ? keepPreviousData : undefined,
+    enabled: queryEnabled,
+  });
+
+  // geo-chat's `avatar_cid` is a first-sight snapshot; see `useDebatePeople`.
+  const users = React.useMemo(() => query.data?.people.map(person => person.user) ?? EMPTY_SUMMARIES, [query.data]);
+  const withAvatar = useParticipantAvatars(users, queryEnabled);
+
+  const data = React.useMemo(
+    () =>
+      query.data
+        ? { ...query.data, people: query.data.people.map(person => ({ ...person, user: withAvatar(person.user) })) }
+        : query.data,
+    [query.data, withAvatar]
+  );
+
+  return withQueryData(query, data);
+}
+
+const EMPTY_SUMMARIES: DebateParticipantSummary[] = [];
+const EMPTY_SPACES: string[] = [];
 
 export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -327,13 +404,27 @@ export function useDebateBlocks(enabled: boolean) {
 }
 
 export function useCreateDebateRequest() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: (request: CreateDebateRequestBody) => createDebateRequest(request, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
+    // Runs even if the caller unmounted before the response.
+    onSuccess: (created, request) => {
+      if (request.lobby_id) {
+        lobbyDebateRequested(request.lobby_id, {
+          kind: 'claim',
+          requestId: created.id,
+          claimId: request.claim_entity_id,
+        });
+      }
+      void invalidateDebatesOutsideRematchClaims(queryClient);
+    },
   });
+  return useObservedMutation(mutation, 'start_debate', request =>
+    getContext({ target_type: 'claim', target_id: request.claim_entity_id })
+  );
 }
 
 export function useWithdrawDebateRequest() {
@@ -365,11 +456,14 @@ export function useDismissDebateRequest() {
  * `ready`. The other side is told by `DebateReadyPrompt` off its own activity.
  */
 export function useAcceptDebateRequest() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const router = useRouter();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mediaSession = useOptionalDebateMediaSession();
+
+  const mutation = useMutation({
     mutationFn: ({ requestId, formatId }: { requestId: string; formatId?: string }) =>
       acceptDebateRequest(requestId, getPrivyIdentityToken, accountKey, formatId),
     // Claimed before the request leaves, released when it settles. The id-keyed intent below cannot
@@ -378,19 +472,29 @@ export function useAcceptDebateRequest() {
     // socket event, mid-round-trip, and prompts us to join what we are already accepting (GEO-2604).
     onMutate: () => ({ releaseEntry: markEnteringPendingDebate() }),
     onSettled: (_result, _error, _variables, context) => context?.releaseEntry(),
-    onSuccess: result => {
+    onSuccess: (result, variables) => {
       if (result.debate) {
+        mediaSession?.promoteSession(
+          debateRequestMediaSessionKey(variables.requestId),
+          debateMediaSessionKey(result.debate.id)
+        );
         queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate);
         // Before the push, and before the invalidation below: the room is a server segment with no
         // `loading` boundary, so this page stays up while activity comes back reporting a debate
         // this tab is not yet on the path of. Without the intent the coordinator reads that as
         // someone who needs telling and reopens this very dialog as the ready prompt.
         markEnteringDebate(result.debate.id);
-        router.push(debatePath(result.debate));
+        const path = debatePath(result.debate);
+        routeIntoDebate(() => router.push(path));
+      } else {
+        mediaSession?.releaseSession(debateRequestMediaSessionKey(variables.requestId));
       }
       void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
+  return useObservedMutation(mutation, 'join_debate', request =>
+    getContext({ target_type: 'debate_request', target_id: request.requestId })
+  );
 }
 
 export function useBlockDebateUser() {

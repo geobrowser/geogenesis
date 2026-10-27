@@ -5,10 +5,13 @@ import { TAG_PROPERTY_ID } from '~/core/constants';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
+import { ENTITY_ID_BATCH_CONCURRENCY, batchEntityIds } from '~/core/io/queries';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
 import type { DebateClaimInput } from '../debate-publish-draft';
 import { readEnv } from './acceptor-config';
 import { existingClaimsDocument } from './existing-claims-document';
+import { type RelationTargetsPageFetcher, collectRelationTargets } from './relation-targets';
 
 /**
  * Find-or-create, half two: which of geo-chat's `existing_entity_id` references the publisher may
@@ -46,7 +49,12 @@ export type ExistingClaimEntity = {
 
 export type ExistingClaimLookup = (entityIds: string[], spaceId: string) => Promise<ExistingClaimEntity[]>;
 
-const lookupInGraph: ExistingClaimLookup = (entityIds, spaceId) =>
+type ExistingClaimFacts = Omit<ExistingClaimEntity, 'topicIds' | 'tagIds'>;
+
+/** One batch of the entity facts. Injectable for tests. */
+export type ExistingClaimFactsFetcher = (entityIds: string[]) => Promise<ExistingClaimFacts[]>;
+
+const fetchFactsFromGraph: ExistingClaimFactsFetcher = entityIds =>
   Effect.runPromise(
     graphql({
       query: existingClaimsDocument,
@@ -58,19 +66,57 @@ const lookupInGraph: ExistingClaimLookup = (entityIds, spaceId) =>
                   id: entity.id,
                   spaces: (entity.spaceIds ?? []).filter((id): id is string => typeof id === 'string'),
                   types: (entity.types ?? []).flatMap(type => (type ? [{ id: type.id }] : [])),
-                  topicIds: (entity.topicRelations ?? []).flatMap(relation =>
-                    relation?.toEntityId ? [relation.toEntityId] : []
-                  ),
-                  tagIds: (entity.tagRelations ?? []).flatMap(relation =>
-                    relation?.toEntityId ? [relation.toEntityId] : []
-                  ),
                 },
               ]
             : []
         ),
-      variables: { ids: entityIds, topicsPropertyId: TOPICS_PROPERTY_ID, tagPropertyId: TAG_PROPERTY_ID, spaceId },
+      variables: { ids: entityIds, first: entityIds.length },
     })
   );
+
+/**
+ * The graph-backed lookup, complete however many entities or relations there are: the ids are read
+ * in batches under the API's per-request cap (an unpaged `id: { in }` stops at 100 rows), and the
+ * Topics and Tags are paged to exhaustion.
+ *
+ * Topics and Tags are read **in the publication space** only. Relations are per-space, so a topic
+ * the entity carries only in some other space is not a duplicate here and must still be written
+ * (verified: an entity in two spaces returns 4 relations unscoped and 2 scoped).
+ *
+ * Throws when any read fails; `applyClaimReusePolicy` treats that as unverifiable.
+ */
+export async function lookupExistingClaimsInGraph(
+  entityIds: string[],
+  spaceId: string,
+  fetchFacts: ExistingClaimFactsFetcher = fetchFactsFromGraph,
+  fetchRelationPage?: RelationTargetsPageFetcher
+): Promise<ExistingClaimEntity[]> {
+  const [facts, relations] = await Promise.all([
+    mapWithConcurrency(batchEntityIds(entityIds), ENTITY_ID_BATCH_CONCURRENCY, batch => fetchFacts(batch)).then(
+      results => results.flat()
+    ),
+    collectRelationTargets(
+      { fromEntityIds: entityIds, typeIds: [TOPICS_PROPERTY_ID, TAG_PROPERTY_ID], spaceId },
+      fetchRelationPage
+    ),
+  ]);
+
+  // Grouped once by (entity, relation type), on normalized ids: the API may answer dashed or dashless.
+  const targetsByKey = new Map<string, string[]>();
+  const key = (entityId: string, typeId: string) => `${uuidToHex(entityId)}:${uuidToHex(typeId)}`;
+  for (const relation of relations) {
+    const k = key(relation.fromEntityId, relation.typeId);
+    const targets = targetsByKey.get(k);
+    if (targets) targets.push(relation.toEntityId);
+    else targetsByKey.set(k, [relation.toEntityId]);
+  }
+
+  return facts.map(entity => ({
+    ...entity,
+    topicIds: targetsByKey.get(key(entity.id, TOPICS_PROPERTY_ID)) ?? [],
+    tagIds: targetsByKey.get(key(entity.id, TAG_PROPERTY_ID)) ?? [],
+  }));
+}
 
 /**
  * A Geo entity id in either shape the SDK accepts: 32 hex chars, or the dashed UUID form.
@@ -160,7 +206,7 @@ export async function applyClaimReusePolicy(
   const existingTopicsByEntity = new Map<string, Set<string>>();
   const alreadyTaggedDebate = new Set<string>();
   try {
-    const entities = ids.length > 0 ? await (options.lookup ?? lookupInGraph)(ids, spaceId) : [];
+    const entities = ids.length > 0 ? await (options.lookup ?? lookupExistingClaimsInGraph)(ids, spaceId) : [];
     const spaceKey = uuidToHex(spaceId);
     verified = new Set(
       entities

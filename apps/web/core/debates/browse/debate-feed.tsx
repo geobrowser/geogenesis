@@ -1,62 +1,121 @@
 'use client';
 
-import { keepPreviousData } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom, useStore } from 'jotai';
 
 import { capture } from '~/core/analytics';
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
+import type { DebatePageFeedState } from '~/core/debates/debate-page-outcome';
+import { isRemovedDebateAnswer } from '~/core/debates/debate-removal';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
-import { useGeoChatAuth } from '~/core/debates/hooks';
-import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
-import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
+import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
 import { useComments } from '~/core/hooks/use-comments';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
-import { useQueryEntities } from '~/core/sync/use-store';
+import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
+import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
-import { Button } from '~/design-system/button';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
+import { EXPLORE_CARD_TITLE_CLASS_NAME } from '~/partials/explore/explore-card-title';
 
+import {
+  DEBATE_CARD_WIDE_WRAPS_BELOW,
+  DEBATE_CARD_WRAPS_BELOW,
+  debateCardColumnWidth,
+} from './debate-card-column-width';
+import { DebateClaimFooter } from './debate-claim-footer';
 import { DebateClaimsPanel } from './debate-claims-panel';
+import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
 import { DebateFeedPlayer } from './debate-feed-player';
+import { type DebateFeedSurface, debateFeedHref } from './debate-feed-url';
 import { DebateInteractionBar } from './debate-interaction-bar';
+import { DebateOverflowMenu, useCanRemoveDebate } from './debate-overflow-menu';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
+import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from './feed-full-playback';
+import { DebateShareDialog } from './lazy-share-dialog';
 import { useLineClampOverflow } from './line-clamp-overflow';
-import { DebateShareDialog } from './share-dialog';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
-import { debateFullscreenActiveAtom } from '~/atoms';
+import { debateFeedPanelAtom, debateFullscreenActiveAtom, openDebateFeedPanelAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
-const DEBATE_COLUMN_STYLE = {
-  // Grow or shrink the media with the viewport while reserving the navbar,
-  // claim title, media gap, and vertical breathing room.
-  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
-} as React.CSSProperties;
+/** How many cards past the active one open their recordings. See the `preload` prop below. */
+const PRELOAD_AHEAD = 2;
+/**
+ * How wide the debate card's column may get, which with its fixed-ratio media is really a height
+ * budget: grow or shrink the media with the viewport while reserving the navbar, the 20px above the
+ * card, and the card's chrome under the media — frame, meta row, a two-line claim, the pill row and
+ * the split band. Measured in Chrome (GEO-3454), that chrome is 169px with two claim lines and 17px
+ * more under a signed-out vote's "Not counted yet" note, so even then a 900px viewport ends the card
+ * about 15px above the fold. Where the card is narrow enough for its actions to wrap, the wrapped
+ * row is budgeted too; see `debateCardColumnWidth`.
+ *
+ * Phones get a budget of their own (`--debate-feed-phone-column-width`), since their chrome differs:
+ * the feed's own 44px bar, 12px above and below the card, and the same 169px under the media, so
+ * `width ≤ (dvh − 44 − 24 − 169 − 2) / 1.2042 + 2`, i.e. `83dvh − 197px`. `dvh` is what keeps the
+ * card inside the part of the screen a phone browser's toolbars leave. It does not reserve the
+ * signed-out note: the item scrolls, so the note is reachable. Phone actions stay on one compact
+ * row, so their budget does not subtract the desktop wrapped row. Claims open in the entity panel
+ * instead of expanding the card. Never wider than the screen less 16px a side, nor narrower than
+ * 240px, under which a face is too small to read.
+ */
+const debateColumnStyle = (wrapsBelow: number) =>
+  ({
+    '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', wrapsBelow)}), 640px)`,
+    '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 197px), calc(100cqw - 2rem))',
+  }) as React.CSSProperties;
+
+const DEBATE_COLUMN_STYLE = debateColumnStyle(DEBATE_CARD_WRAPS_BELOW);
+/** With the "…" for people who may remove the debate, whose actions wrap sooner. */
+const DEBATE_COLUMN_WIDE_ACTIONS_STYLE = debateColumnStyle(DEBATE_CARD_WIDE_WRAPS_BELOW);
 
 export function DebatesBrowseFeed({
   spaceId,
   initialDebateId,
+  initialSeekSeconds = null,
   fallback,
+  removedView,
+  surface = initialDebateId ? 'debate-page' : 'debates-tab',
 }: {
   spaceId: string;
   initialDebateId?: string;
+  /**
+   * Where to start the anchored debate, in seconds — from a link that named a moment.
+   *
+   * Only ever applied to {@link initialDebateId}: a position means nothing on the debates that
+   * happen to be scrolled to next, and carrying it down the feed would seek every card a reader
+   * passes. See `debate-timecode.ts` for the param this comes from.
+   */
+  initialSeekSeconds?: number | null;
   /** Rendered instead of the feed when {@link initialDebateId} can't be resolved in this space. */
   fallback?: React.ReactNode;
+  /**
+   * Rendered instead of {@link fallback} when geo-chat says the anchored debate was removed
+   * (GEO-2785). The entity page usually learns that on the server and never mounts the feed, but a
+   * debate removed after the page rendered — or while the server-side check failed open — lands
+   * here, and the plain entity page is the one thing a removed debate must not fall back to.
+   */
+  removedView?: React.ReactNode;
+  /**
+   * Where the feed is mounted, so the URL can follow the debate on screen. See
+   * {@link DebateFeedSurface}. Defaults to the debate page when anchored, the tab when not — the
+   * tab passes it explicitly, since it anchors too when its URL names a debate.
+   */
+  surface?: DebateFeedSurface;
 }) {
   const debatesQuery = useSpaceDebates(spaceId, true);
+  // The visit's outcome is about a debate's own page. The tab anchors too when reloaded on a
+  // `?debate=` URL, but that is still a visit to the tab.
+  const pageOutcome = useDebatePageOutcome(surface === 'debate-page' ? initialDebateId : undefined);
   const { space } = useSpace(spaceId);
 
   const listedDebates = React.useMemo(() => debatesQuery.data?.debates ?? [], [debatesQuery.data?.debates]);
@@ -100,7 +159,19 @@ export function DebatesBrowseFeed({
   // opened is what that sort would have put in front of you.
   const { rankByDebateId, isLoading: bestOrderLoading } = useDebatesBestOrder(spaceId, candidateIds.length > 0);
 
-  const debates = React.useMemo(() => {
+  // Every debate the viewer has reached, plus the ones already preloading after it, in the order they
+  // were shown. Nothing may be inserted above or among them.
+  //
+  // The feed is a mandatory snap container, and browsers keep it snapped to the *element* it was on
+  // when content changes around it. So a debate slotted in above the one on screen does not push the
+  // viewer's card down — it drags the scroll position down with it, and the viewer is carried past
+  // debates they never saw. The readiness lookups resolve one at a time and each can rank anywhere,
+  // so on a slow connection a feed opened at the top ended up a dozen cards down within seconds. A
+  // listing refetch that adds a debate does the same at any time. Below the pinned run the order is
+  // still free to settle: nothing there is on screen.
+  const [pinnedIds, setPinnedIds] = React.useState<readonly string[]>([]);
+
+  const rankedDebates = React.useMemo(() => {
     // Held back the way the media lookups hold it back — by having nothing to show yet rather than
     // by a flag, since the flag below only drives the empty and anchor states. Painting in recency
     // order first would move the next debate out from under someone already scrolling. A ranking
@@ -124,27 +195,18 @@ export function DebatesBrowseFeed({
     return [anchor, ...sorted];
   }, [candidates, processedIds, initialDebateId, rankByDebateId, bestOrderLoading]);
 
-  // Topics live on the claim entity (not the debates API), so resolve them once
-  // for the space and map claim entity id -> topic names.
-  const { entities: claims } = useQueryEntities({
-    where: {
-      spaces: [{ equals: spaceId }],
-      types: [{ id: { equals: CLAIM_TYPE_ID } }],
-    },
-    first: 50,
-    placeholderData: keepPreviousData,
-    includeUnpublishedLocal: true,
-  });
-  const topicsByClaimId = React.useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const claim of claims) {
-      const topics = claim.relations
-        .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
-        .map(relation => relation.toEntity.name ?? relation.toEntity.id);
-      if (topics.length > 0) map.set(claim.id, topics);
-    }
-    return map;
-  }, [claims]);
+  const { debates, pinnedCount } = React.useMemo(() => {
+    if (pinnedIds.length === 0) return { debates: rankedDebates, pinnedCount: 0 };
+    const byId = new Map(rankedDebates.map(debate => [debate.id, debate]));
+    // A pinned debate that has left the listing goes: there is nothing left to play. It stops
+    // counting as pinned too, or the run would stall short of the viewer — see the pin effect.
+    const pinned = pinnedIds.flatMap(id => byId.get(id) ?? []);
+    const pinnedSet = new Set(pinned.map(debate => debate.id));
+    return {
+      debates: [...pinned, ...rankedDebates.filter(debate => !pinnedSet.has(debate.id))],
+      pinnedCount: pinned.length,
+    };
+  }, [rankedDebates, pinnedIds]);
 
   // State-backed so children re-render once the scroll container mounts and can
   // observe against it as their IntersectionObserver root — a plain ref would
@@ -158,6 +220,7 @@ export function DebatesBrowseFeed({
   const lastScrollIntent = React.useRef(-Infinity);
   const activateVisibleDebate = (debateId: string) => {
     setActiveId(debateId);
+    if (initialDebateId != null && !ID.equals(debateId, initialDebateId)) pageOutcome?.movedOn();
     if (lastObservedDebate.current === debateId) return;
     const previousDebateId = lastObservedDebate.current;
     lastObservedDebate.current = debateId;
@@ -174,23 +237,24 @@ export function DebatesBrowseFeed({
       /* Navigation must work without analytics. */
     }
   };
-  // Which panel is open, not which debate it was opened from: the claims and
-  // comments panels describe the debate you're watching, so they follow the feed
-  // as you scroll rather than staying pinned to the one whose button you pressed.
-  const [openPanel, setOpenPanel] = React.useState<'claims' | 'comments' | null>(null);
-  // "Join a debate" opens the shared hub rather than a panel of this space's claims: the hub is
-  // cross-space and carries the search, filters, counts and ranking the feed's own panel never had.
-  const debatesHub = useDebatesHub();
-  // Carry the intent across the login: signing in is a detour the viewer did not ask for, so
-  // finish what they pressed rather than returning them to the feed to press it again.
-  const openPrivySignIn = usePrivySignIn(() => {
-    setOpenPanel(null);
-    debatesHub.open('lobby');
-  });
-  // Privy, not the smart account: `useSmartAccount` reports null while the account is restoring
-  // and after an initialization failure as well as when nobody is signed in, and sending a
-  // signed-in viewer back through login would wipe their half-finished onboarding.
-  const { ready: authReady, authenticated } = useGeoChatAuth();
+  /*
+   * Which panel is open — held in `debateFeedPanelAtom` rather than here, so it joins the app's one
+   * panel slot. Which panel, not which debate it was opened from: both describe the debate being
+   * watched, so they follow the feed as it scrolls rather than staying pinned to the one whose
+   * button was pressed.
+   */
+  const openPanel = useAtomValue(debateFeedPanelAtom);
+  const setFeedPanel = useSetAtom(openDebateFeedPanelAtom);
+
+  // Cleared on unmount, which `useState` did for free; otherwise the panel reopens with the next feed.
+  // Not on a pathname change: the URL follows the debate being watched as the feed scrolls.
+  const store = useStore();
+  React.useEffect(
+    () => () => {
+      if (store.get(debateFeedPanelAtom)) store.set(debateFeedPanelAtom, null);
+    },
+    [store]
+  );
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
@@ -213,6 +277,12 @@ export function DebatesBrowseFeed({
   // for a debate that is deliberately gone, so it falls through to `anchorMissing` and the
   // caller's fallback view instead.
   const anchorGone = anchorQuery.error instanceof GeoChatRequestError && anchorQuery.error.status === 404;
+  // Of those, the one that means "removed": geo-chat's own `debate_not_found` for an id it minted.
+  const anchorRemoved =
+    anchorGone &&
+    initialDebateId != null &&
+    anchorQuery.error instanceof GeoChatRequestError &&
+    isRemovedDebateAnswer(initialDebateId, anchorQuery.error.status, anchorQuery.error.code);
 
   // An anchor absent after a failed lookup is *unknown*, not missing: falling
   // back would misread a transient readiness/query error as "this debate has no
@@ -253,7 +323,8 @@ export function DebatesBrowseFeed({
   // whose route `Main` can't recognise as full-width — drops its page chrome. Not set on the
   // fallback path, where an ordinary entity page renders and does want that chrome. A layout
   // effect so the padded layout is never painted, only to snap away a frame later.
-  const rendersFeed = !(anchorMissing && fallback != null);
+  const showsRemovedView = anchorMissing && anchorRemoved && removedView != null;
+  const rendersFeed = !(anchorMissing && fallback != null) && !showsRemovedView;
   const setDebateFullscreenActive = useSetAtom(debateFullscreenActiveAtom);
   React.useLayoutEffect(() => {
     if (!rendersFeed) return;
@@ -261,11 +332,17 @@ export function DebatesBrowseFeed({
     return () => setDebateFullscreenActive(false);
   }, [rendersFeed, setDebateFullscreenActive]);
 
+  // An unanchored feed has nothing fixed at the top, so its first paint has to be its final order:
+  // painting whichever debates' readiness came back first, then ranking the rest in above them, is
+  // the drift described at `pinnedIds`. Only until something is pinned — after that the order on
+  // screen is held by the pin, and a later lookup (a refetch adding a debate) must not blank it.
+  const orderPending = initialDebateId == null && mediaLoading && pinnedIds.length === 0;
+
   // Memoised because both branches build a new array: the effect below is keyed on this, and an
   // unmemoised ternary re-ran it on every render.
   const visibleDebates = React.useMemo(
-    () => (anchorPending ? [] : debates.slice(0, visibleCount)),
-    [anchorPending, debates, visibleCount]
+    () => (anchorPending || orderPending ? [] : debates.slice(0, visibleCount)),
+    [anchorPending, orderPending, debates, visibleCount]
   );
 
   // Gated on what's actually on screen rather than on `debates`: that inherits the anchor
@@ -289,7 +366,71 @@ export function DebatesBrowseFeed({
   // -1 when nothing is active yet, which preloads nothing rather than the first item.
   const activeIndex = visibleDebates.findIndex(debate => debate.id === activeId);
 
+  // Pin through the active card and the ones preloading after it. Only ever grows, and only as the
+  // viewer moves on — what follows the pinned run is still the live ranking. See `pinnedIds`.
+  // Capped at what is rendered, or a feed shorter than the window would re-pin forever.
+  const pinThrough = activeIndex < 0 ? 0 : Math.min(activeIndex + PRELOAD_AHEAD + 1, visibleDebates.length);
+  // Compared with the pins still in the listing, not every id ever pinned: debates that dropped out
+  // would otherwise count towards a run that no longer covers the cards they were holding. Rebuilt
+  // from what is on screen, so those ids are compacted away as it extends.
+  React.useEffect(() => {
+    if (pinThrough <= pinnedCount) return;
+    setPinnedIds(visibleDebates.slice(0, pinThrough).map(debate => debate.id));
+  }, [pinThrough, pinnedCount, visibleDebates]);
+
+  // The URL follows the debate on screen, the way a short-video feed's does: reloading, copying the
+  // address bar, or coming Back lands on what was being watched rather than on whichever debate the
+  // feed was opened at. `replaceState`, not a push, so Back leaves the feed instead of stepping back
+  // through every debate scrolled past. Next keeps its router in step with direct history calls
+  // without navigating, so nothing remounts.
+  React.useEffect(() => {
+    if (!activeId || !rendersFeed) return;
+    const href = debateFeedHref(window.location, { surface, spaceId, debateId: activeId });
+    if (href == null) return;
+    window.history.replaceState(null, '', href);
+  }, [activeId, rendersFeed, spaceId, surface]);
+
+  // Where the linked debate has got to, for the visit's outcome, in the same order the render
+  // below decides what to show.
+  const anchorSource =
+    listedDebates.find(debate => initialDebateId != null && ID.equals(debate.id, initialDebateId)) ?? anchorQuery.data;
+  const pageFeedState: DebatePageFeedState = anchorMissing
+    ? {
+        kind: 'unavailable',
+        detail: anchorRemoved
+          ? 'removed'
+          : anchorGone || !anchorSource
+            ? 'not_found'
+            : !isWatchableDebate(anchorSource)
+              ? 'not_watchable'
+              : 'not_processed',
+      }
+    : anchorErrored
+      ? { kind: 'lookup_error' }
+      : anchorUnresolved
+        ? {
+            kind: 'loading',
+            stage: debatesQuery.isLoading
+              ? 'debate_list'
+              : anchorQuery.isLoading
+                ? 'anchor_lookup'
+                : mediaLoading
+                  ? 'media_readiness'
+                  : 'ranking',
+          }
+        : { kind: 'shown' };
+  // Keyed on its content, so it reports a change of state rather than every render.
+  const pageFeedStateKey = JSON.stringify(pageFeedState);
+  const latestPageFeedState = React.useRef(pageFeedState);
+  latestPageFeedState.current = pageFeedState;
+  React.useEffect(() => {
+    pageOutcome?.feed(latestPageFeedState.current);
+  }, [pageOutcome, pageFeedStateKey]);
+
   // Runs after all hooks so the early return never skips one.
+  if (showsRemovedView) {
+    return <>{removedView}</>;
+  }
   if (anchorMissing && fallback != null) {
     return <>{fallback}</>;
   }
@@ -307,7 +448,7 @@ export function DebatesBrowseFeed({
         if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', ' '].includes(event.key))
           lastScrollIntent.current = performance.now();
       }}
-      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
+      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
     >
       {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map((debate, index) => (
@@ -317,14 +458,36 @@ export function DebatesBrowseFeed({
           spaceId={spaceId}
           spaceName={space?.entity.name ?? 'Space'}
           spaceImage={space?.entity.image}
-          topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
-          // Resolve the NEXT debate's recordings while the viewer is still on this one. Each
+          initialSeekSeconds={
+            initialDebateId != null && ID.equals(debate.id, initialDebateId) ? initialSeekSeconds : null
+          }
+          // Only the linked debate's card reports: the visit's outcome is about that debate.
+          onPlaybackState={
+            initialDebateId != null && ID.equals(debate.id, initialDebateId) ? pageOutcome?.player : undefined
+          }
+          // Resolve the next debates' recordings while the viewer is still on this one. Each
           // debate needs two signed URLs, and until they land the player shows "Loading…"
           // instead of a video, which is what makes arriving at a card feel glitchy
-          // (GEO-2895). Only one ahead — the feed is vertical and one-at-a-time, so a wider
-          // window would fetch recordings most viewers never reach.
-          preload={activeIndex >= 0 && index === activeIndex + 1}
+          // (GEO-2895).
+          //
+          // Two ahead for the URLs and headers, one ahead for the data (GEO-2965). The active
+          // card now waits until both of its recordings can play, so a card reached cold is a
+          // card that waits — and a quick double swipe used to land exactly there, on a card
+          // nothing had opened. Headers are cheap; buffering is not, so only the very next card
+          // buffers, and nothing further than two ahead is touched at all.
+          preload={activeIndex >= 0 && index > activeIndex && index <= activeIndex + PRELOAD_AHEAD}
+          buffer={activeIndex >= 0 && index === activeIndex + 1}
+          // The debate a link opened is the one the viewer asked for, so it plays as before; the
+          // rest of the feed holds its full recordings until the viewer starts one.
+          holdFullPlayback={
+            DEBATE_FEED_HOLDS_FULL_PLAYBACK &&
+            !(surface === 'debate-page' && initialDebateId != null && ID.equals(debate.id, initialDebateId))
+          }
+          // Cards stay mounted as the feed grows, so everything outside one behind to the preload
+          // window ahead releases its <video> elements (GEO-3067).
+          // With no active card (a refetch dropped it), everything stays released until one is chosen.
+          releaseMedia={activeIndex < 0 || index < activeIndex - 1 || index > activeIndex + PRELOAD_AHEAD}
           root={scrollEl}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
@@ -333,62 +496,58 @@ export function DebatesBrowseFeed({
           // waiting for the scroll observer: its bar is reachable from 0%
           // visibility but activation needs 60%, so mid-scroll the panel would
           // otherwise open on the debate being scrolled away from.
-          onOpenJoin={() => {
-            setActiveId(debate.id);
-            // Decide nothing until Privy has restored the session: a press in that window is a
-            // no-op rather than a wrong answer in either direction.
-            if (!authReady) return;
-            // Everything the hub offers — taking a position, standing ready, requesting a debate —
-            // needs an account, so a signed-out viewer gets the same login voting gives them
-            // rather than a panel whose every control refuses them.
-            if (!authenticated) {
-              openPrivySignIn();
-              return;
-            }
-            // A second press closes it, the way the navbar's debate button behaves. Without this
-            // the button is a one-way door and the only way out is the panel's own close control.
-            if (debatesHub.isOpen) {
-              debatesHub.close();
-              return;
-            }
-            // The hub is its own portal, so the feed's panel state stays out of it. Closing the
-            // in-flow panel first keeps the two from stacking over the same feed.
-            setOpenPanel(null);
-            debatesHub.open('lobby');
-          }}
           onOpenClaims={() => {
             setActiveId(debate.id);
-            setOpenPanel('claims');
+            setFeedPanel('claims');
           }}
           onOpenComments={() => {
             setActiveId(debate.id);
-            setOpenPanel('comments');
+            setFeedPanel('comments');
           }}
+          onPlaybackRequest={() => setActiveId(debate.id)}
         />
       ))}
-      {!anchorPending && visibleCount < debates.length && (
+      {!anchorPending && !orderPending && visibleCount < debates.length && (
         <LoadMoreSentinel root={scrollEl} onLoadMore={() => setVisibleCount(count => count + PAGE_SIZE)} />
       )}
     </div>
   );
 
   const activeDebate = visibleDebates.find(debate => debate.id === activeId) ?? null;
-  const closePanel = () => setOpenPanel(null);
+  const closePanel = () => setFeedPanel(null);
 
   const sidePanel =
     openPanel === 'claims' && activeDebate ? (
-      <DebateClaimsPanel debate={activeDebate} onClose={closePanel} />
+      <DebateClaimsPanel
+        // Keyed, like the comments panel below, so scrolling to the next debate resets the panel —
+        // its scroll position belongs to the debate it was set on, and a reused panel carried the
+        // old offset onto the next one.
+        key={activeDebate.id}
+        debate={activeDebate}
+        onClose={closePanel}
+      />
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
       // carrying a half-typed reply across to a different debate's thread.
-      <EntityCommentsPanel key={activeDebate.id} entityId={activeDebate.id} spaceId={spaceId} onClose={closePanel} />
+      <EntityCommentsPanel
+        key={activeDebate.id}
+        entityId={activeDebate.id}
+        spaceId={spaceId}
+        targetEntityType="debate"
+        onClose={closePanel}
+      />
     ) : null;
 
   // Keep the feed in the same tree position whether or not a side panel is open, so
-  // toggling the claims/join panel doesn't remount the players and restart playback.
+  // toggling the claims/comments panel doesn't remount the players and restart playback.
   return (
     <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh md:bg-white">
-      <div className="min-w-0 flex-1">{feed}</div>
+      <div className="min-w-0 flex-1">
+        {/* Phones only. The feed covers the app navbar there, so it brings its own (GEO-3415); the
+            scroller below is the viewport less this bar's 2.75rem on every size. */}
+        <DebateFeedMobileBar />
+        {feed}
+      </div>
       {sidePanel}
     </div>
   );
@@ -399,29 +558,40 @@ function DebateFeedItem({
   spaceId,
   spaceName,
   spaceImage,
-  topics,
   active,
+  initialSeekSeconds,
   preload,
+  buffer,
+  holdFullPlayback,
+  releaseMedia,
   root,
   scrollHint,
   onActivate,
-  onOpenJoin,
   onOpenClaims,
   onOpenComments,
+  onPlaybackRequest,
+  onPlaybackState,
 }: {
   debate: Debate;
   spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
-  topics: string[];
   active: boolean;
+  initialSeekSeconds: number | null;
   preload: boolean;
+  /** Buffer the recordings too — the card after the active one. See `DebateFeedPlayer`. */
+  buffer: boolean;
+  /** Hold the full recordings until the viewer starts one. See `DebateFeedPlayer`. */
+  holdFullPlayback: boolean;
+  releaseMedia: boolean;
   root: HTMLElement | null;
   scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
-  onOpenJoin: () => void;
   onOpenClaims: () => void;
   onOpenComments: () => void;
+  /** Replay on a debate that is not the active one makes it the active one, like its other controls. */
+  onPlaybackRequest: () => void;
+  onPlaybackState?: DebatePageOutcome['player'];
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const share = useDebateShareAction();
@@ -430,9 +600,8 @@ function DebateFeedItem({
   // Same arguments as the Comments panel's own useComments, so the two share a
   // cache entry and posting there updates this count without a refetch.
   const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId });
-  // Same query key as the Claims panel's own hook, for the same reason as comments above: the
-  // badge and the panel share one cache entry, so opening the panel doesn't refetch.
-  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
+  // Only the debate's editors and debaters get the "…", and the row makes room for it only then.
+  const canRemove = useCanRemoveDebate(debate);
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -449,66 +618,73 @@ function DebateFeedItem({
     return () => observer.disconnect();
   }, [onActivate, root]);
 
-  const interactionProps = {
-    entityId: debate.id,
-    spaceId,
-    commentCount,
-    claimsCount: claims.totalCount,
-    onComment: onOpenComments,
-    onClaims: onOpenClaims,
-    onShare: share.onOpen,
-    shareOpen: share.open,
-  };
-
   return (
     <section
       ref={itemRef}
       // 20px below the navbar, per the design — the media sizing has slack to absorb it, so
-      // the claim header doesn't need to sit flush against the chrome. `md:py-3` still wins on
+      // the card doesn't need to sit flush against the chrome. `md:py-3` still wins on
       // mobile: Tailwind emits variant utilities after unprefixed ones, so no `md:pt-3` needed.
-      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:px-2 md:py-3"
+      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:py-3"
     >
-      {/* The whole debate lifts with the nudge — title, media and controls together — so the
+      {/* The whole debate lifts with the nudge — media, claim and controls together — so the
           gesture reads as the feed scrolling rather than as one element twitching. Shared
           animation props keep the card and the indicator in step. */}
       <div
-        className={cx('flex items-stretch gap-3', scrollHint?.isVisible && scrollHintBounceProps.className)}
-        style={scrollHint?.isVisible ? scrollHintBounceProps.style : undefined}
+        className={cx(
+          'relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[var(--debate-feed-phone-column-width)]',
+          scrollHint?.isVisible && scrollHintBounceProps.className
+        )}
+        style={{
+          ...(canRemove ? DEBATE_COLUMN_WIDE_ACTIONS_STYLE : DEBATE_COLUMN_STYLE),
+          ...(scrollHint?.isVisible ? scrollHintBounceProps.style : undefined),
+        }}
       >
-        <div
-          className="relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
-          style={DEBATE_COLUMN_STYLE}
-        >
-          <div className="md:mt-4">
-            <DebateTitleHeader
-              key={debate.claim.claim}
-              claim={debate.claim.claim}
-              claimEntityId={debate.claim.claim_entity_id}
-              spaceId={spaceId}
-              spaceName={spaceName}
-              spaceImage={spaceImage}
-              topics={topics}
-              onOpenJoin={onOpenJoin}
-            />
-          </div>
-          <div className="mt-6 md:mt-7">
-            <DebateFeedPlayer debate={debate} active={active} preload={preload} />
-          </div>
-          {/* Mobile: horizontal bar below the videos. Wrapper controls display so
-              it doesn't collide with the bar's own `flex`. */}
-          <div className="mt-3 hidden md:block">
-            <DebateInteractionBar orientation="horizontal" {...interactionProps} />
-          </div>
-          {/* `top-full` hangs it just below the debate without taking part in the column's
-              height, which the media sizing has no room to spare for. */}
-          {scrollHint?.isVisible && (
-            <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-4" />
-          )}
+        {/* One card: the videos, then the claim they argue and the reader's side on it (GEO-3454).
+            The frame is the card's, so the player draws none of its own. */}
+        <div className="flex flex-col overflow-hidden rounded-xl border border-grey-02 bg-white">
+          <DebateFeedPlayer
+            debate={debate}
+            active={active}
+            preload={preload}
+            buffer={buffer}
+            holdFullPlayback={holdFullPlayback}
+            releaseMedia={releaseMedia}
+            initialSeekSeconds={initialSeekSeconds}
+            framed
+            onOpenClaims={onOpenClaims}
+            onPlaybackRequest={onPlaybackRequest}
+            onPlaybackState={onPlaybackState}
+          />
+          <DebateClaimFooter
+            claim={debate.claim}
+            // The cards the feed is about to reach read theirs too, so a side is there to take
+            // the moment one arrives.
+            enabled={active || preload}
+            meta={<DebateMeta spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} />}
+            title={<DebateClaimTitle claim={debate.claim} />}
+            actions={
+              <DebateInteractionBar
+                commentCount={commentCount}
+                onComment={onOpenComments}
+                onShare={share.onOpen}
+                shareOpen={share.open}
+                overflow={
+                  canRemove ? (
+                    <span className="md:hidden">
+                      <DebateOverflowMenu debate={debate} />
+                    </span>
+                  ) : null
+                }
+              />
+            }
+            wideActions={canRemove}
+          />
         </div>
-        {/* Desktop: vertical rail to the right of the videos. */}
-        <div className="flex flex-col justify-end md:hidden">
-          <DebateInteractionBar orientation="vertical" {...interactionProps} />
-        </div>
+        {/* `top-full` hangs it just below the debate without taking part in the column's
+            height, which the media sizing has no room to spare for. */}
+        {scrollHint?.isVisible && (
+          <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-4" />
+        )}
       </div>
       <DebateShareDialog
         open={share.open}
@@ -522,7 +698,7 @@ function DebateFeedItem({
 }
 
 /**
- * Lines the claim title shows before it offers to expand.
+ * Lines the claim title shows before it is cut off.
  *
  * Must agree with the `line-clamp-2` literal on the heading below — Tailwind only emits classes it
  * can read as literals, so the class cannot be built from this and the two are kept together
@@ -530,106 +706,70 @@ function DebateFeedItem({
  */
 const CLAIM_CLAMP_LINES = 2;
 
-function DebateTitleHeader({
-  claim,
-  claimEntityId,
+/** The space the debate is in. */
+function DebateMeta({
   spaceId,
   spaceName,
   spaceImage,
-  topics,
-  onOpenJoin,
 }: {
-  claim: string;
-  claimEntityId: string;
   spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
-  topics: string[];
-  onOpenJoin: () => void;
 }) {
-  const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
-  const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      {/* `min-w-0` again on the anchor: the truncation chain runs parent → anchor → text, and
+          a link left at its default `min-width: auto` would refuse to shrink and overflow
+          the row instead of ellipsing the name. */}
+      <Link href={NavUtils.toSpace(spaceId)} className="flex min-w-0 items-center gap-1.5 hover:underline">
+        <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
+          <Avatar avatarUrl={spaceImage} value={spaceName} size={16} />
+        </span>
+        <Text as="span" variant="metadata" color="text" className="truncate !leading-[13px] !tracking-[-0.35px]">
+          {spaceName}
+        </Text>
+      </Link>
+    </div>
+  );
+}
 
-  React.useEffect(() => setIsClaimExpanded(false), [claim]);
+/**
+ * The claim being debated, as the card's title, set in the explore card's type since the two now
+ * share the rest of their anatomy. Two lines, which is what the column's height budget reserves;
+ * the whole claim is on hover when it runs longer. Opening the title shows the claim in the
+ * entity panel, which becomes a bottom sheet on phones, just like Explore.
+ */
+function DebateClaimTitle({ claim }: { claim: Debate['claim'] }) {
+  const { claim: text, claim_entity_id: claimEntityId, space_id: spaceId } = claim;
+  const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
+  const openClaim = useOpenClaimInSidePanel();
 
   const isClaimOverflowing = useLineClampOverflow(claimElement, {
     maxLines: CLAIM_CLAMP_LINES,
-    enabled: !isClaimExpanded,
-    contentKey: claim,
+    contentKey: text,
   });
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5">
-          {/* `min-w-0` again on the anchor: the truncation chain runs parent → anchor → text, and
-              a link left at its default `min-width: auto` would refuse to shrink and push the
-              topics off the row instead of ellipsing the name. */}
-          <Link href={NavUtils.toSpace(spaceId)} className="flex min-w-0 items-center gap-1.5 hover:underline">
-            <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
-              <Avatar avatarUrl={spaceImage} value={spaceName} size={16} />
-            </span>
-            <Text as="span" variant="metadata" color="text" className="truncate !leading-[13px] !tracking-[-0.35px]">
-              {spaceName}
-            </Text>
-          </Link>
-          {topics.map(topic => (
-            <React.Fragment key={topic}>
-              <Text as="span" variant="metadata" color="grey-04" className="!leading-[13px] !tracking-[-0.35px]">
-                ·
-              </Text>
-              <Text
-                as="span"
-                variant="metadata"
-                color="grey-04"
-                className="truncate !leading-[13px] !tracking-[-0.35px]"
-              >
-                {topic}
-              </Text>
-            </React.Fragment>
-          ))}
-        </div>
-        <Button
-          type="button"
-          // Exempts this button from the hub's outside-pointerdown dismissal, the same way the
-          // navbar's opener is exempt. Without it the pointerdown closed the hub and the click
-          // that followed reopened it, which read as a flicker.
-          data-debates-hub-opener
-          variant="secondary"
-          small
-          onClick={onOpenJoin}
-          className="!h-7 shrink-0 !rounded-full !px-[11px] !py-0 !text-[16px] !leading-[13px] !font-normal !tracking-[-0.35px] !shadow-none md:!px-3 md:!text-[18px] md:!leading-[22px] md:!tracking-[-0.36px]"
-        >
-          Join a debate
-        </Button>
-      </div>
-      <h2
-        ref={setClaimElement}
-        title={isClaimOverflowing ? claim : undefined}
-        className={`text-cardEntityTitle !text-[22.4px] !leading-[21px] !tracking-[-0.672px] text-text md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
-          isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
-        }`}
+    <h2
+      ref={setClaimElement}
+      title={isClaimOverflowing ? text : undefined}
+      className={cx(EXPLORE_CARD_TITLE_CLASS_NAME, 'line-clamp-2 text-pretty')}
+    >
+      <Link
+        href={NavUtils.toEntity(spaceId, claimEntityId)}
+        entityId={claimEntityId}
+        spaceId={spaceId}
+        className="hover:underline"
+        data-entity-side-panel-opener=""
+        {...observePanelNavigation(event => {
+          if (event.defaultPrevented || isModifiedClick(event)) return;
+          event.preventDefault();
+          openClaim(claim);
+        })}
       >
-        <Link
-          href={NavUtils.toEntity(spaceId, claimEntityId)}
-          entityId={claimEntityId}
-          spaceId={spaceId}
-          className="hover:underline"
-        >
-          {claim}
-        </Link>
-      </h2>
-      {isClaimOverflowing && (
-        <button
-          type="button"
-          aria-expanded={isClaimExpanded}
-          onClick={() => setIsClaimExpanded(expanded => !expanded)}
-          className="hidden self-start text-[16px] leading-5 text-grey-04 underline-offset-2 hover:underline md:inline-flex"
-        >
-          {isClaimExpanded ? 'Show less' : 'Show more'}
-        </button>
-      )}
-    </div>
+        {text}
+      </Link>
+    </h2>
   );
 }
 

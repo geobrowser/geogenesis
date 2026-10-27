@@ -19,6 +19,8 @@ describe('publication outcome instrumentation', () => {
       const context = vm.createContext({
         activeSpace: 'space',
         isReadyToPublish: true,
+        isResolvingLinkTargets: false,
+        linkTargetLookupFailed: false,
         setIsPublishing: vi.fn(),
         ID: { createEntityId: () => 'proposal' },
         findDanglingDependencies: () => [],
@@ -34,6 +36,8 @@ describe('publication outcome instrumentation', () => {
         setProposals: vi.fn(),
         activeSpaceMetadata: { type: 'PERSONAL' },
         publishedEdit,
+        getPublishContext: () => ({}),
+        observeOperation: () => ({ succeeded: vi.fn(), failed: vi.fn() }),
         makeProposal: vi.fn(
           options =>
             new Promise((resolve, reject) => {
@@ -57,4 +61,44 @@ describe('publication outcome instrumentation', () => {
       if (outcome === 'success') expect(publishedEdit.mock.calls[0][0].operation_id).toBe('proposal');
     });
   }
+
+  it('does not publish while the link-target lookup has failed', async () => {
+    const publishedEdit = vi.fn();
+    const makeProposal = vi.fn();
+    const findDanglingDependencies = vi.fn(() => []);
+    const dispatchStatusBar = vi.fn();
+    const setIsPublishing = vi.fn();
+    const context = vm.createContext({
+      activeSpace: 'space',
+      isReadyToPublish: true,
+      isResolvingLinkTargets: false,
+      linkTargetLookupFailed: true,
+      setIsPublishing,
+      ID: { createEntityId: () => 'proposal' },
+      findDanglingDependencies,
+      ownershipIndex: {},
+      selectedEntityIds: new Set(),
+      isNewEntity: () => false,
+      dispatchStatusBar,
+      publishSelection: { values: [], relations: [] },
+      relationsFromSpace: [],
+      proposalName: 'Test',
+      canChoosePath: false,
+      votingMode: undefined,
+      setProposals: vi.fn(),
+      activeSpaceMetadata: { type: 'PERSONAL' },
+      publishedEdit,
+      getPublishContext: () => ({}),
+      observeOperation: () => ({ succeeded: vi.fn(), failed: vi.fn() }),
+      makeProposal,
+    });
+    vm.runInContext(callback, context);
+    await vm.runInContext('submit()', context);
+
+    expect(findDanglingDependencies).not.toHaveBeenCalled();
+    expect(makeProposal).not.toHaveBeenCalled();
+    expect(dispatchStatusBar).not.toHaveBeenCalled();
+    expect(setIsPublishing).not.toHaveBeenCalled();
+    expect(publishedEdit).not.toHaveBeenCalled();
+  });
 });

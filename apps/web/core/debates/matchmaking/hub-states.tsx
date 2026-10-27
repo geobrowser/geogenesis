@@ -6,8 +6,26 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { GeoChatRequestError, isAccountWarmingUpQuery, isGeoChatRefusal } from '../api';
+import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubSwap } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
+
+/** The button an empty hub list offers in place of a dead end. */
+export type HubEmptyAction = { label: string; onClick: () => void };
+
+/**
+ * "Explore claims", for an empty list with nothing to undo (GEO-2840).
+ *
+ * Shared because it is one action out of one kind of dead end — the hub's Lobby, Matches and People
+ * and the rematch page's tabs all reach for it — and two names for one button is a difference that
+ * implies something. Takes any tab setter that knows Explore, which both surfaces' do.
+ *
+ * Undefined without `onTabChange`: in the workspace rail there is no tab to change to, and the
+ * claims list is already on screen beside it.
+ */
+export function exploreClaimsAction(onTabChange?: (tab: 'explore') => void): HubEmptyAction | undefined {
+  return onTabChange ? { label: 'Explore claims', onClick: () => onTabChange('explore') } : undefined;
+}
 
 /**
  * geo-chat ships the matchmaking endpoints separately from this UI, so a 404 is an expected
@@ -73,6 +91,7 @@ export function HubMessageNote({ children }: { children: React.ReactNode }) {
 }
 
 type HubQueryStateProps = {
+  analyticsSurface: DebateAnalyticsSurface;
   isLoading: boolean;
   error: unknown;
   isEmpty: boolean;
@@ -84,7 +103,7 @@ type HubQueryStateProps = {
    */
   emptyNote?: React.ReactNode;
   /** Offered alongside `emptyMessage` — an empty tab should say what to do next. */
-  emptyAction?: { label: string; onClick: () => void };
+  emptyAction?: HubEmptyAction;
   /** Enables a retry on the error state. */
   onRetry?: () => void;
   /** Offered when the list is only reachable signed in. See {@link isSignInRequired}. */
@@ -97,11 +116,14 @@ type HubQueryStateProps = {
    * watches a skeleton for all of it.
    */
   failureReason?: unknown;
+  /** What loading looks like, where the list skeleton is the wrong shape: the calendar's grid. */
+  loadingFallback?: React.ReactNode;
   children: React.ReactNode;
 };
 
 /** Shared loading / unavailable / error / empty handling for every hub tab. */
 export function HubQueryState({
+  analyticsSurface,
   isLoading,
   error,
   isEmpty,
@@ -111,6 +133,7 @@ export function HubQueryState({
   onRetry,
   signInAction,
   failureReason,
+  loadingFallback,
   children,
 }: HubQueryStateProps) {
   const needsSignIn = Boolean(signInAction) && isSignInRequired(error);
@@ -144,7 +167,13 @@ export function HubQueryState({
   return (
     <HubSwap activeKey={state}>
       {state === 'sign-in' ? (
-        <HubMessage action={<HubPillButton onClick={signInAction!.onClick}>{signInAction!.label}</HubPillButton>}>
+        <HubMessage
+          action={
+            <HubPillButton analyticsSurface={analyticsSurface} onClick={signInAction!.onClick}>
+              {signInAction!.label}
+            </HubPillButton>
+          }
+        >
           {signInAction!.message}
         </HubMessage>
       ) : state === 'warming-up' ? (
@@ -157,7 +186,13 @@ export function HubQueryState({
         // who presses it and sees no change concludes the page is broken rather than busy. Until
         // then the message is the whole state, and the reads are getting on with it.
         <HubMessage
-          action={retriesSpent && onRetry ? <HubPillButton onClick={onRetry}>Try again</HubPillButton> : null}
+          action={
+            retriesSpent && onRetry ? (
+              <HubPillButton analyticsSurface={analyticsSurface} onClick={onRetry}>
+                Try again
+              </HubPillButton>
+            ) : null
+          }
         >
           Setting up your account. Check back in a minute.
         </HubMessage>
@@ -166,18 +201,26 @@ export function HubQueryState({
           action={
             // A "not deployed yet" 404 won't resolve by retrying, so only offer it for real errors.
             isMatchmakingUnavailable(error) || !onRetry ? null : (
-              <HubPillButton onClick={onRetry}>Try again</HubPillButton>
+              <HubPillButton analyticsSurface={analyticsSurface} onClick={onRetry}>
+                Try again
+              </HubPillButton>
             )
           }
         >
           {isMatchmakingUnavailable(error) ? "Matchmaking isn't available yet." : 'Something went wrong.'}
         </HubMessage>
       ) : state === 'loading' ? (
-        <HubSkeleton />
+        (loadingFallback ?? <HubSkeleton />)
       ) : state === 'empty' ? (
         <HubMessage
           note={emptyNote}
-          action={emptyAction ? <HubPillButton onClick={emptyAction.onClick}>{emptyAction.label}</HubPillButton> : null}
+          action={
+            emptyAction ? (
+              <HubPillButton analyticsSurface={analyticsSurface} onClick={emptyAction.onClick}>
+                {emptyAction.label}
+              </HubPillButton>
+            ) : null
+          }
         >
           {emptyMessage}
         </HubMessage>

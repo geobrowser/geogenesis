@@ -30,7 +30,7 @@ import {
  *   vote on is a `Claim` — 1,166 of 1,166 — and Debates is filtered to `Debate`
  *   by construction. A menu with one row in it is a control that cannot act.
  */
-export function RecordFilterRow({ sort, dimensions }: RecordFilterRowProps) {
+export function RecordFilterRow({ sort, dimensions, end }: RecordFilterRowProps) {
   const hasDimensions = dimensions.length > 0;
 
   return (
@@ -43,8 +43,8 @@ export function RecordFilterRow({ sort, dimensions }: RecordFilterRowProps) {
         showImages={false}
       />
 
-      {hasDimensions ? (
-        <div className="ml-auto flex items-center gap-3">
+      {hasDimensions || end ? (
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-3">
           {dimensions.map(dimension => (
             <HubMultiFilterMenu
               key={dimension.key}
@@ -58,6 +58,7 @@ export function RecordFilterRow({ sort, dimensions }: RecordFilterRowProps) {
               countsPending={dimension.isPending}
             />
           ))}
+          {end}
         </div>
       ) : null}
     </div>
@@ -87,6 +88,8 @@ type RecordFilterRowProps = {
     onChange: (value: string) => void;
   };
   dimensions: RecordFilterDimension[];
+  /** A tab-specific control placed after the dimension menus on the right. */
+  end?: React.ReactNode;
 };
 
 /**

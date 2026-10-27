@@ -7,6 +7,7 @@ import {
   CLAIM_PAGE_CONTENT_MAX_WIDTH,
   ClaimPageView,
 } from '~/core/claims/browse/claim-page-view';
+import { FollowButton } from '~/core/follows/follow-button';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -21,9 +22,13 @@ import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entit
 import { Spacer } from '~/design-system/spacer';
 
 import { CommentSection } from '~/partials/comments/comments-section';
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
-import { type CustomBrowseView, customBrowseView, needsSpaceForView } from '~/partials/entity-page/custom-browse-view';
+import {
+  commentTargetEntityType,
+  customBrowseView,
+  needsSpaceForView,
+} from '~/partials/entity-page/custom-browse-view';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityBacklinks } from '~/partials/entity-page/entity-backlinks';
 import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
@@ -37,6 +42,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
 import { PersonProfileView } from '~/partials/profile/person-profile-view';
 import { PersonalSpaceHeadline } from '~/partials/profile/personal-space-profile';
+import { PersonalSpaceTagline } from '~/partials/profile/personal-space-tagline';
 
 type SharedProps = {
   entityId: string;
@@ -97,12 +103,14 @@ function EditorFooter({
   entityId,
   spaceId,
   variant,
+  targetEntityType,
   belowBodySlot,
   hideProperties = false,
 }: {
   entityId: string;
   spaceId: string;
   variant: EntityPageBodyProps['variant'];
+  targetEntityType: string;
   belowBodySlot?: React.ReactNode;
   hideProperties?: boolean;
 }) {
@@ -125,7 +133,32 @@ function EditorFooter({
       ) : null}
       <Spacer height={40} />
       <EntityBacklinks entityId={entityId} />
-      <CommentSection entityId={entityId} spaceId={spaceId} />
+      <CommentSection entityId={entityId} spaceId={spaceId} targetEntityType={targetEntityType} />
+    </>
+  );
+}
+
+/**
+ * What the claim and topic views add beneath themselves while editing.
+ *
+ * The read views leave out the generic page's "Referenced by" list; it is an editor's tool there,
+ * so it comes back in edit mode only. Unlike the property toggle it ignores `hideProperties`,
+ * matching the generic `EditorFooter`, which shows backlinks in the side panel too.
+ */
+function CustomViewEditFooter({
+  entityId,
+  spaceId,
+  hideProperties = false,
+}: {
+  entityId: string;
+  spaceId: string;
+  hideProperties?: boolean;
+}) {
+  return (
+    <>
+      {hideProperties ? null : <ToggleEntityPage id={entityId} spaceId={spaceId} />}
+      <Spacer height={40} />
+      <EntityBacklinks entityId={entityId} />
     </>
   );
 }
@@ -142,7 +175,7 @@ function EditorFooter({
  * derived across every space either way, so this is about consistency with the controls the pages
  * render rather than about reaching a type a scoped read would miss.
  */
-function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boolean): CustomBrowseView {
+function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boolean) {
   const { entity, isLoading } = useQueryEntity({ id: entityId });
 
   /*
@@ -159,20 +192,24 @@ function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boole
    */
   const { space, isLoading: isLoadingSpace } = useSpace(needsSpaceForView({ entity, isEditing }) ? spaceId : undefined);
 
-  return customBrowseView({
-    entityId,
+  return {
+    customView: customBrowseView({
+      entityId,
+      entity,
+      isLoadingEntity: isLoading,
+      space,
+      isLoadingSpace,
+      isEditing,
+    }),
     entity,
-    isLoadingEntity: isLoading,
-    space,
-    isLoadingSpace,
-    isEditing,
-  });
+  };
 }
 
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
   const isEditing = useUserIsEditing(spaceId);
-  const customView = useCustomBrowseView(entityId, spaceId, isEditing);
+  const { customView, entity } = useCustomBrowseView(entityId, spaceId, isEditing);
+  const targetEntityType = commentTargetEntityType(entity);
 
   const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
   const entityMediaUrl = useEntityMediaUrl(entityId, spaceId);
@@ -200,6 +237,9 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   // Claim and Topic both return before the generic EditorFooter, so keeping initialization there
   // makes both custom routes self-blocking. Side panels own their edit intent and do not use this.
   const routeEditInitializer = props.variant === 'route' ? <AutomaticModeToggle /> : null;
+  const customViewFooter = isEditing ? (
+    <CustomViewEditFooter entityId={entityId} spaceId={spaceId} hideProperties={props.hideProperties} />
+  ) : undefined;
 
   if (customView === 'claim') {
     const showClaimMedia = props.variant === 'sidePanel' || props.showCover !== false;
@@ -232,7 +272,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
           isEditing={isEditing}
-          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
+          footer={customViewFooter}
         />
       </>
     );
@@ -264,7 +304,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           initialTabRelations={initialTabRelations}
           tabEntities={tabEntities}
           isEditing={isEditing}
-          footer={isEditing && !props.hideProperties ? <ToggleEntityPage id={entityId} spaceId={spaceId} /> : undefined}
+          footer={customViewFooter}
         />
       </>
     );
@@ -332,12 +372,19 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     const { isRelationPage = false, previewName, previewDescription, notice, belowBodySlot, hideProperties } = props;
     const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
     const heading = <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />;
+    // A profile is followed, not voted on (GEO-3236): Follow, by the personal space this view is
+    // only ever shown for, stands where the votes were.
     const actions = (
       <EntityPageActions
         entityId={entityId}
         spaceId={spaceId}
-        isVoteable={!isRelationPage}
-        votesFirst={isPersonProfile}
+        isVoteable={!isRelationPage && !isPersonProfile}
+        compact={isPersonProfile}
+        leading={
+          isPersonProfile ? (
+            <FollowButton target={{ kind: 'person', id: spaceId, name: entity?.name ?? previewName }} />
+          ) : null
+        }
       />
     );
 
@@ -358,7 +405,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           <div>
             <div className="space-y-2">
               {isPersonProfile ? (
-                // The mobile profile keeps voting, history and the overflow
+                // The mobile profile keeps Follow, history and the overflow
                 // menu beside the name, wrapping only when space runs out.
                 <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                   <div className="min-w-0 grow">{heading}</div>
@@ -367,8 +414,28 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               ) : (
                 heading
               )}
+              {isPersonProfile && <PersonalSpaceTagline spaceId={spaceId} personEntityId={entityId} />}
               {isPersonProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={entityId} />}
-              {!isRelationPage && (
+              {/*
+               * A person's description lives in their About tab here too, not under their
+               * name — the panel renders the same About card the space route puts in its rail,
+               * and showing the bio in both left it on screen twice.
+               *
+               * Which means it comes *back* under the name in edit mode, and deliberately.
+               * `customBrowseView` returns 'generic' whenever `isEditing`
+               * (`custom-browse-view.ts:43`), so editing in the panel swaps the whole profile
+               * view — About card included — for the generic editor. That editor excludes
+               * Description from its property rows as "editable elsewhere"
+               * (`editable-entity-page.ts` SYSTEM_PROPERTIES), so this field is the only way
+               * to write a bio in that mode; suppressing it here would make the description
+               * unreachable rather than tidy. Tagline is not excluded there, so it stays
+               * editable as an ordinary row.
+               *
+               * The space route does not go through any of this: it gates on
+               * `Spaces.isPersonProfileSpace` server-side, so its profile chrome and its
+               * editable About card survive the edit toggle.
+               */}
+              {!isRelationPage && !isPersonProfile && (
                 <EntityPageInlineDescription
                   entityId={entityId}
                   spaceId={spaceId}
@@ -403,6 +470,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                       entityId={entityId}
                       spaceId={spaceId}
                       variant="sidePanel"
+                      targetEntityType={targetEntityType}
                       belowBodySlot={belowBodySlot}
                       hideProperties={hideProperties}
                     />
@@ -454,6 +522,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                 entityId={entityId}
                 spaceId={spaceId}
                 variant="route"
+                targetEntityType={targetEntityType}
                 belowBodySlot={belowBodySlot}
                 hideProperties={hideProperties}
               />

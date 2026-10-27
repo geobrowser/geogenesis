@@ -2,10 +2,23 @@
 
 import { useQuery } from '@tanstack/react-query';
 
+import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { ID } from '~/core/id';
 import { fetchPersonDebates, personDebatesQueryKey } from '~/core/io/subgraph/fetch-person-debates';
 import type { PersonDebate } from '~/core/io/subgraph/fetch-person-debates';
 import { fetchExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
+import type { HiddenProfileRelation } from '~/core/profile/profile-debate-visibility';
+import { normId } from '~/core/utils/norm-id';
+
+export type PersonDebatesQueryData = {
+  allRows: ExploreFeedRow[];
+  sideByDebateId: Map<string, PersonDebate['side']>;
+  hiddenRelationsByDebateId: Map<string, HiddenProfileRelation[]>;
+};
+
+export function personDebatesRowsQueryKey(spaceId: string) {
+  return [...personDebatesQueryKey(spaceId), 'explore-rows'] as const;
+}
 
 /**
  * Every debate a person argued, as explore cards (GEO-2859).
@@ -25,7 +38,7 @@ import { fetchExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
  */
 export function usePersonDebates(spaceId: string, enabled: boolean) {
   const query = useQuery({
-    queryKey: [...personDebatesQueryKey(spaceId), 'explore-rows'] as const,
+    queryKey: personDebatesRowsQueryKey(spaceId),
     queryFn: async ({ signal }) => {
       const listed = await fetchPersonDebates(spaceId);
 
@@ -37,12 +50,14 @@ export function usePersonDebates(spaceId: string, enabled: boolean) {
           .map(debate => [ID.uuidToHex(debate.id), [debate.spaceId]])
       );
 
+      const allRows = await fetchExploreRowsByIds(
+        listed.map(debate => debate.id),
+        signal,
+        spaceByDebateId
+      );
+
       return {
-        rows: await fetchExploreRowsByIds(
-          listed.map(debate => debate.id),
-          signal,
-          spaceByDebateId
-        ),
+        allRows,
         // Which side this person argued, by debate. Kept even though no card
         // renders it yet: it comes off the relation and nothing downstream can
         // recover it, so dropping it here would mean re-querying to add the
@@ -50,14 +65,24 @@ export function usePersonDebates(spaceId: string, enabled: boolean) {
         sideByDebateId: new Map<string, PersonDebate['side']>(
           listed.map(debate => [ID.uuidToHex(debate.id), debate.side])
         ),
-      };
+        hiddenRelationsByDebateId: new Map(
+          listed
+            .filter(debate => debate.hiddenRelations.length > 0)
+            .map(debate => [normId(debate.id), debate.hiddenRelations])
+        ),
+      } satisfies PersonDebatesQueryData;
     },
     enabled: enabled && spaceId !== '',
     staleTime: 60_000,
   });
 
+  const rows = query.data?.allRows ?? [];
+  const hiddenRelations = query.data?.hiddenRelationsByDebateId ?? new Map<string, HiddenProfileRelation[]>();
+
   return {
-    rows: query.data?.rows ?? [],
+    rows: rows.filter(row => !hiddenRelations.has(normId(row.entityId))),
+    hiddenRows: rows.filter(row => hiddenRelations.has(normId(row.entityId))),
+    hiddenRelationsByDebateId: hiddenRelations,
     sideByDebateId: query.data?.sideByDebateId ?? new Map<string, PersonDebate['side']>(),
     isLoading: query.isLoading,
     isError: query.isError,

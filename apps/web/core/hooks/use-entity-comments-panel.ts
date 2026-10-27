@@ -2,9 +2,9 @@
 
 import * as React from 'react';
 
-import { useAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 
-import { entityCommentsPanelAtom } from '~/atoms';
+import { entityCommentsPanelAtom, openEntityCommentsPanelAtom } from '~/atoms';
 
 /**
  * Opens the global comments panel for an entity. Use from any comment button
@@ -12,11 +12,13 @@ import { entityCommentsPanelAtom } from '~/atoms';
  * they are instead of navigating them to the entity.
  */
 export function useEntityCommentsPanel() {
-  const [target, setTarget] = useAtom(entityCommentsPanelAtom);
+  const target = useAtomValue(entityCommentsPanelAtom);
+  const setTarget = useSetAtom(openEntityCommentsPanelAtom);
 
   // Stable identities: the host keys a document-level listener off these.
   const openComments = React.useCallback(
-    (entityId: string, spaceId: string) => setTarget({ entityId, spaceId }),
+    (entityId: string, spaceId: string, targetEntityType = 'entity') =>
+      setTarget({ entityId, spaceId, targetEntityType }),
     [setTarget]
   );
   const closeComments = React.useCallback(() => setTarget(null), [setTarget]);

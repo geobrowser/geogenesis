@@ -55,7 +55,7 @@ export const SelectSpace = ({
   variant = 'floating',
   containerClassName = '',
 }: SelectSpaceProps) => {
-  const { isLoading: isResultLoading, query, onQueryChange, results } = useSearch();
+  const { isLoading: isResultLoading, query, onQueryChange, results } = useSearch({ analyticsSurface: false });
 
   useEffectOnce(() => {
     onQueryChange(EntityId(entityId));

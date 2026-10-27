@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { INTERESTED_IN_QUERY_KEY } from '~/core/community/use-interested-in-bounty';
+import { publishOnce } from '~/core/hooks/publish-once';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
 
@@ -17,22 +18,8 @@ import {
   groupRelationsBySpace,
 } from './interest-ops';
 import { reconcileDeletedRelations } from './reconcile-store';
-import { bountyQueryKeys } from './use-bounties';
+import { bountyQueryKeys, useInvalidateSoon } from './use-bounties';
 import type { BountyRoles } from './use-bounty-roles';
-
-/**
- * Wraps `makeProposal` (callback-style) as a promise resolving to whether the
- * publish succeeded. `usePublish` already reports failures through the status
- * bar, so callers only need the boolean.
- */
-function publishOnce(
-  makeProposal: ReturnType<typeof usePublish>['makeProposal'],
-  args: Omit<Parameters<typeof makeProposal>[0], 'onSuccess' | 'onError'>
-): Promise<boolean> {
-  return new Promise(resolve => {
-    void makeProposal({ ...args, onSuccess: () => resolve(true), onError: () => resolve(false) });
-  });
-}
 
 type ActionState = { pending: boolean; error: string | null };
 
@@ -60,11 +47,7 @@ export function useBountyInterestActions(detail: BountyDetail | null | undefined
     [queryClient]
   );
 
-  // Re-invalidate on a short schedule after a publish; one immediate refetch
-  // usually beats the indexer and misses the new row.
-  const invalidateSoon = React.useCallback(() => {
-    for (const delay of [3_000, 7_000, 12_000]) window.setTimeout(() => void invalidate(), delay);
-  }, [invalidate]);
+  const invalidateSoon = useInvalidateSoon(invalidate);
 
   const expressInterest = React.useCallback(async () => {
     if (!detail || !roles.personalSpaceId) return false;
@@ -186,17 +169,17 @@ export function useBountyAllocationActions(detail: BountyDetail | null | undefin
   );
 
   const remove = React.useCallback(
-    async (targetId: string): Promise<boolean> => {
+    async (curator: { id: string; targetIds: readonly string[] }): Promise<boolean> => {
       if (!detail) return false;
       const { bounty } = detail;
       const { relations } = buildRemoveAllocationOps({
         daoSpaceId: bounty.spaceId,
         bounty: { id: bounty.id, name: bounty.name },
-        targetId,
+        targetIds: curator.targetIds,
         existingRelations: detail.allocationRelations,
       });
       if (relations.length === 0) return false;
-      setPendingTargetId(targetId);
+      setPendingTargetId(curator.id);
       try {
         const ok = await publishOnce(makeProposal, {
           values: [],

@@ -5,16 +5,26 @@ import type { ReactNode } from 'react';
 
 import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
 import { userEntityVotesQueryKey, votedEntityIdsPendingQueryKey } from '~/core/hooks/use-user-voted-entity-ids';
 import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
-
 import {
+  resetFailedResponses,
+  retryFailedResponses,
+  useFailedResponses,
+} from '~/core/responses/failed-response-retries';
+
+import { ReceiptConfirmationTimeoutError } from '../errors';
+import { QueuedSendTimeoutError } from './smart-account-send-queue';
+import {
+  RESPONSE_FAILED_AFTER_SUBMIT_COPY,
   responseIndexingRetryDelayMs,
   useEntityResponse,
   useEntityResponseIndexingSnapshot,
   useEntityResponseIndexingState,
 } from './use-entity-vote';
 import { personalSpaceIdQueryKey } from './use-personal-space-id';
+import { useToast } from './use-toast';
 
 const PERSONAL_SPACE_ID = 'd4bee0928fb5405baba3b1513f085835';
 const TARGET_SPACE_ID = '1234567890abcdef1234567890abcdef';
@@ -43,6 +53,8 @@ const mocks = vi.hoisted(() => ({
   loadResponseSummaryCaches: vi.fn(),
   personalSpaceId: 'd4bee0928fb5405baba3b1513f085835' as string | null,
   ensureSpaceMembership: vi.fn(),
+  /** Every send the hook builds, so a test can play the bundler accepting it. */
+  tx: vi.fn<(args: { to: string; data: string; onSubmitted?: (hash: `0x${string}`) => void }) => void>(),
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
@@ -68,7 +80,13 @@ vi.mock('~/core/hooks/use-personal-space-id', async importOriginal => ({
 
 vi.mock('~/core/hooks/use-smart-account-transaction', async () => {
   const { Effect } = await import('effect');
-  return { useSmartAccountTransaction: () => () => Effect.succeed('0xtransaction') };
+  return {
+    useSmartAccountTransaction:
+      () => (args: { to: string; data: string; onSubmitted?: (hash: `0x${string}`) => void }) => {
+        mocks.tx(args);
+        return Effect.succeed('0xtransaction');
+      },
+  };
 });
 
 vi.mock('~/core/io/queries', async () => {
@@ -121,12 +139,67 @@ beforeEach(() => {
   mocks.personalSpaceId = PERSONAL_SPACE_ID;
   mocks.ensureSpaceMembership.mockReset();
   mocks.ensureSpaceMembership.mockResolvedValue(false);
+  mocks.tx.mockReset();
+  resetFailedResponses();
 });
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
 });
+
+it.each(['success', 'rejected', 'unknown'] as const)(
+  'keeps the legacy entity target for a claim vote with %s outcome',
+  async outcome => {
+    mocks.fetchResponse.mockReturnValue('positive');
+    if (outcome !== 'success')
+      mocks.runEffectEither.mockResolvedValue({
+        _tag: 'Left',
+        left: new Error(outcome === 'rejected' ? 'User rejected' : 'receipt timeout'),
+      });
+    const { wrapper: QueryWrapper } = createHarness();
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
+      {
+        wrapper: ({ children }) => (
+          <QueryWrapper>
+            <ActionContextProvider
+              value={{
+                component: 'debate_claim_ticker',
+                debate_id: 'debate',
+                target_id: 'claim-1',
+                target_type: 'claim',
+              }}
+            >
+              {children}
+            </ActionContextProvider>
+          </QueryWrapper>
+        ),
+      }
+    );
+    await act(async () => {
+      await result.current.submitResponseAsync('positive').catch(() => {});
+    });
+    const legacy = mocks.capture.mock.calls.filter(([event]) =>
+      ['vote_cast', 'action_failed', 'action_outcome_unknown'].includes(event)
+    );
+    expect(legacy.length).toBeGreaterThan(0);
+    for (const [, properties] of legacy) {
+      expect(properties).toMatchObject({ target_type: 'entity', target_id: 'claim-1' });
+      expect(properties).not.toHaveProperty('debate_id');
+      expect(properties).not.toHaveProperty('component');
+    }
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'action_completed',
+      expect.objectContaining({
+        target_type: 'claim',
+        target_id: 'claim-1',
+        debate_id: 'debate',
+        component: 'debate_claim_ticker',
+      })
+    );
+  }
+);
 
 describe('useEntityResponse indexing reconciliation', () => {
   it.each(['positive', 'negative', 'clear'] as const)(
@@ -151,6 +224,16 @@ describe('useEntityResponse indexing reconciliation', () => {
         ([name, properties]) => name === 'vote_cast' && properties.outcome_phase === 'submitted'
       );
       expect(votes).toHaveLength(1);
+      const canonical = mocks.capture.mock.calls.filter(([event]) => event === 'action_completed');
+      expect(canonical).toHaveLength(1);
+      expect(canonical[0][1]).not.toHaveProperty('target_name');
+      expect(canonical[0][1]).toMatchObject({
+        target_id: 'story-1',
+        entity_id: 'story-1',
+        space_id: TARGET_SPACE_ID,
+        response_kind: 'curation',
+        outcome: 'succeeded',
+      });
       expect(
         mocks.capture.mock.calls.filter(
           ([name, properties]) => name === 'vote_cast' && properties.outcome_phase === 'indexed'
@@ -174,7 +257,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     mocks.runEffectEither.mockResolvedValue({ _tag: 'Left', left: new Error('User rejected') });
     const { wrapper } = createHarness();
     const { result } = renderHook(
-      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'veracity' }),
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
       { wrapper }
     );
     await act(async () => {
@@ -366,7 +449,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
     const setQueryData = vi.spyOn(queryClient, 'setQueryData');
     const { result } = renderHook(
-      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'veracity' }),
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
       { wrapper }
     );
 
@@ -383,7 +466,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expectNoVotedListRefresh(invalidateQueries);
 
     expect(queryClient.getQueryData(votedEntityIdsPendingQueryKey(PERSONAL_SPACE_ID, 'down'))).toEqual({
-      added: [expect.objectContaining({ entityId: 'claim-1', voteKind: 2 })],
+      added: [expect.objectContaining({ entityId: 'claim-1', voteKind: 1 })],
       removed: [],
     });
   });
@@ -662,7 +745,7 @@ describe('useEntityResponse indexing reconciliation', () => {
 });
 
 describe('useEntityResponse claim-space membership', () => {
-  it.each(['stance', 'veracity'] as const)(
+  it.each(['stance'] as const)(
     'requests membership of the claim space after a %s response lands',
     async responseKind => {
       mocks.fetchResponse.mockReturnValue('positive');
@@ -685,7 +768,7 @@ describe('useEntityResponse claim-space membership', () => {
     mocks.fetchResponse.mockReturnValue('negative');
     const { wrapper } = createHarness();
     const { result } = renderHook(
-      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'veracity' }),
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
       { wrapper }
     );
 
@@ -748,6 +831,186 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+describe('useEntityResponse failed-vote retry', () => {
+  const queueTimeout = () =>
+    ({
+      _tag: 'Left',
+      left: new Error('Transaction failed', { cause: new QueuedSendTimeoutError(121_000, 3) }),
+    }) as const;
+
+  function renderVote(entityId = 'story-1') {
+    const { wrapper } = createHarness();
+    const vote = renderHook(() => useEntityResponse({ entityId, spaceId: TARGET_SPACE_ID, responseKind: 'curation' }), {
+      wrapper,
+    });
+    const failed = renderHook(() => useFailedResponses());
+    return { vote, failed };
+  }
+
+  let consoleError: MockInstance;
+  beforeEach(() => {
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mocks.fetchResponse.mockReturnValue('negative');
+  });
+  afterEach(() => consoleError.mockRestore());
+
+  it('offers a retry for a vote that never submitted, and Retry re-sends the same direction', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const { vote, failed } = renderVote();
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('negative')).rejects.toThrow();
+    });
+    expect(failed.result.current.count).toBe(1);
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'action_failed',
+      expect.objectContaining({ failure_code: 'unavailable', queue_wait_ms: 121_000, queue_depth: 3 })
+    );
+
+    await act(async () => {
+      await retryFailedResponses();
+    });
+    expect(mocks.runEffectEither).toHaveBeenCalledTimes(2);
+    expect(failed.result.current).toEqual({ count: 0, retrying: false });
+    expect(mocks.capture).toHaveBeenCalledWith('vote_cast', expect.objectContaining({ vote_direction: 'down' }));
+  });
+
+  it('does not offer a retry when the vote may have been submitted', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce({ _tag: 'Left', left: new Error('receipt timeout') });
+    const { vote, failed } = renderVote();
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    expect(failed.result.current.count).toBe(0);
+  });
+
+  it('drops a pending retry when a newer vote on the same entity is cast', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const { vote, failed } = renderVote();
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    expect(failed.result.current.count).toBe(1);
+
+    await act(async () => {
+      await vote.result.current.submitResponseAsync('negative');
+    });
+    expect(failed.result.current.count).toBe(0);
+  });
+
+  it('stops at a vote that times out again and keeps the rest for the next Retry', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout()).mockResolvedValueOnce(queueTimeout());
+    const first = renderVote('story-1');
+    const second = renderVote('story-2');
+
+    await act(async () => {
+      await expect(first.vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+      await expect(second.vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    expect(first.failed.result.current.count).toBe(2);
+
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    await act(async () => {
+      await retryFailedResponses();
+    });
+    // The first timed out again, so the second was never attempted.
+    expect(mocks.runEffectEither).toHaveBeenCalledTimes(3);
+    expect(first.failed.result.current.count).toBe(2);
+  });
+
+  it('does not offer a retry for an older vote that timed out after a newer one was cast', async () => {
+    const older = deferred<ReturnType<typeof queueTimeout>>();
+    const newer = deferred<{ _tag: 'Right'; right: string }>();
+    mocks.runEffectEither.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    const { vote, failed } = renderVote();
+
+    let olderVote!: Promise<unknown>;
+    let newerVote!: Promise<unknown>;
+    act(() => {
+      olderVote = vote.result.current.submitResponseAsync('positive').catch(() => undefined);
+      newerVote = vote.result.current.submitResponseAsync('negative');
+    });
+    await act(async () => {
+      older.resolve(queueTimeout());
+      await olderVote;
+      newer.resolve({ _tag: 'Right', right: '0xtransaction' });
+      await newerVote;
+    });
+
+    expect(failed.result.current.count).toBe(0);
+  });
+
+  it('lets a newer vote supersede a retry cast before the personal space resolved', async () => {
+    const { queryClient, wrapper } = createHarness();
+    queryClient.setQueryData(['smart-account', 'test'], { account: { address: '0xwriter' } });
+    queryClient.setQueryData(personalSpaceIdQueryKey('0xwriter'), {
+      personalSpaceId: PERSONAL_SPACE_ID,
+      isRegistered: true,
+    });
+    mocks.personalSpaceId = null;
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const vote = renderHook(
+      () => useEntityResponse({ entityId: 'story-1', spaceId: TARGET_SPACE_ID, responseKind: 'curation' }),
+      { wrapper }
+    );
+    const failed = renderHook(() => useFailedResponses());
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    expect(failed.result.current.count).toBe(1);
+
+    mocks.personalSpaceId = PERSONAL_SPACE_ID;
+    vote.rerender();
+    await act(async () => {
+      await vote.result.current.submitResponseAsync('negative');
+    });
+
+    expect(failed.result.current.count).toBe(0);
+  });
+
+  it('does not replay a failed vote once the control targets a different response kind', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const { wrapper } = createHarness();
+    const vote = renderHook(
+      ({ responseKind }: { responseKind: 'curation' | 'stance' }) =>
+        useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind }),
+      { wrapper, initialProps: { responseKind: 'curation' } }
+    );
+    const failed = renderHook(() => useFailedResponses());
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    vote.rerender({ responseKind: 'stance' });
+
+    await act(async () => {
+      await retryFailedResponses();
+    });
+    expect(mocks.runEffectEither).toHaveBeenCalledTimes(1);
+    expect(failed.result.current.count).toBe(0);
+  });
+
+  it('does not replay a failed vote under a different account', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce(queueTimeout());
+    const { vote, failed } = renderVote();
+
+    await act(async () => {
+      await expect(vote.result.current.submitResponseAsync('positive')).rejects.toThrow();
+    });
+    mocks.personalSpaceId = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    vote.rerender();
+
+    await act(async () => {
+      await retryFailedResponses();
+    });
+    expect(mocks.runEffectEither).toHaveBeenCalledTimes(1);
+    expect(failed.result.current.count).toBe(0);
+  });
+});
+
 function createHarness() {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -763,6 +1026,161 @@ function createHarness() {
     ),
   };
 }
+
+/**
+ * GEO-2889. A position used to read as "waiting for confirmation" for the whole of inclusion —
+ * p50 6s, p90 ~30s, p99 ~2 minutes. The bundler's acceptance is the moment it is made; inclusion
+ * still decides whether it stays.
+ */
+describe('useEntityResponse publishes on submission', () => {
+  function renderResponse() {
+    const { wrapper } = createHarness();
+    return renderHook(
+      () => ({
+        response: useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
+        snapshot: useEntityResponseIndexingSnapshot({
+          entityId: 'claim-1',
+          spaceId: TARGET_SPACE_ID,
+          responseKind: 'stance',
+        }),
+        toast: useToast()[0],
+      }),
+      { wrapper }
+    );
+  }
+
+  /** The bundler accepting the send with this index. */
+  function submit(index = 0) {
+    const onSubmitted = mocks.tx.mock.calls[index]?.[0].onSubmitted;
+    if (!onSubmitted) throw new Error(`send ${index} carries no submission callback`);
+    act(() => onSubmitted('0x00000000000000000000000000000000000000000000000000000000000000aa'));
+  }
+
+  afterEach(() => {
+    // The toast lives in a module-level atom, so it would carry into the next test.
+    const { result } = renderHook(() => useToast());
+    act(() => result.current[1](null));
+  });
+
+  it('treats the response as made once the bundler accepts it, before it is included', async () => {
+    const transaction = deferred<unknown>();
+    mocks.runEffectEither.mockReturnValueOnce(transaction.promise);
+    const { result } = renderResponse();
+
+    act(() => result.current.response.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+
+    // Pressed, not yet at the bundler: drawn on its side, but still waiting.
+    expect(result.current.response.optimisticResponse).toBe('positive');
+    expect(result.current.response.isSubmittingResponse).toBe(true);
+
+    submit();
+
+    expect(result.current.response.isSubmittingResponse).toBe(false);
+    expect(result.current.snapshot).toMatchObject({ status: 'reconciling', submitted: true });
+    // Still the same side, and still known to be landing — the index is not trusted yet.
+    expect(result.current.response.optimisticResponse).toBe('positive');
+    expect(result.current.response.isProcessingResponse).toBe(true);
+    expect(mocks.tx).toHaveBeenCalledTimes(1);
+  });
+
+  it('rolls the response back, and says so, when it fails after submission', async () => {
+    const transaction = deferred<unknown>();
+    mocks.runEffectEither.mockReturnValueOnce(transaction.promise);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { result } = renderResponse();
+    const failed = renderHook(() => useFailedResponses());
+
+    act(() => result.current.response.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+    submit();
+    expect(result.current.response.isSubmittingResponse).toBe(false);
+
+    await act(async () => {
+      transaction.resolve({
+        _tag: 'Left',
+        left: new ReceiptConfirmationTimeoutError('UserOperation 0xaa was submitted but its receipt did not arrive'),
+      });
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // Nothing left claiming the position was made.
+    expect(result.current.snapshot.status).toBe('idle');
+    expect(result.current.response.optimisticResponse).toBeUndefined();
+    expect(result.current.response.isProcessingResponse).toBe(false);
+    expect(result.current.toast?.props.children).toBe(RESPONSE_FAILED_AFTER_SUBMIT_COPY);
+    // And no one-click retry: the op may still land, so sending it again could publish twice.
+    expect(failed.result.current.count).toBe(0);
+    expect(mocks.tx).toHaveBeenCalledTimes(1);
+    consoleError.mockRestore();
+  });
+
+  it('does not announce a failure that never reached the bundler as an undone publish', async () => {
+    mocks.runEffectEither.mockResolvedValueOnce({ _tag: 'Left', left: new Error('User rejected') });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { result } = renderResponse();
+
+    act(() => result.current.response.submitResponse('positive'));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.snapshot.status).toBe('idle');
+    expect(result.current.toast).toBeNull();
+    consoleError.mockRestore();
+  });
+
+  it('does not let an older send reaching the bundler stand in for a newer press', async () => {
+    const first = deferred<unknown>();
+    const second = deferred<unknown>();
+    mocks.runEffectEither.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { result } = renderResponse();
+
+    act(() => result.current.response.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+    act(() => result.current.response.submitResponse('negative'));
+    await act(async () => Promise.resolve());
+    expect(mocks.tx).toHaveBeenCalledTimes(2);
+
+    submit(0);
+    expect(result.current.response.optimisticResponse).toBe('negative');
+    expect(result.current.response.isSubmittingResponse).toBe(true);
+
+    submit(1);
+    expect(result.current.response.isSubmittingResponse).toBe(false);
+  });
+
+  it('keeps an included response published while the index is re-checked', async () => {
+    mocks.fetchResponse.mockReturnValue(null);
+    const { result } = renderResponse();
+
+    act(() => result.current.response.submitResponse('positive'));
+    // The kernel path, which never reports submission: inclusion alone has to clear the wait.
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(result.current.response.isSubmittingResponse).toBe(false);
+
+    // Index never catches up within the first pass: `delayed`, then a re-check back to reconciling.
+    // Step in increments below the shortest first re-check delay (1s less its 20% jitter = 800ms):
+    // a larger step can swallow the whole `delayed` window, so the re-check fires inside one
+    // advance and the test only sees the next `delayed`, whose backoff (2s plus jitter) outlasts
+    // the advance below.
+    for (let i = 0; i < 400 && result.current.snapshot.status !== 'delayed'; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(500);
+      });
+    }
+    expect(result.current.snapshot.status).toBe('delayed');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(result.current.snapshot.status).toBe('reconciling');
+    expect(result.current.response.isSubmittingResponse).toBe(false);
+  });
+});
 
 /**
  * GEO-2687. This re-check is on the critical path of a two-person interaction: in the rematch
@@ -802,3 +1220,5 @@ describe('responseIndexingRetryDelayMs', () => {
     expect(responseIndexingRetryDelayMs(-1)).toBe(1_000);
   });
 });
+
+vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null }) }));

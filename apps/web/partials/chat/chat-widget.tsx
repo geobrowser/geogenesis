@@ -10,7 +10,9 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
+import { snapshotActionContext } from '~/core/action-context';
 import { capture } from '~/core/analytics';
+import { recordAction } from '~/core/analytics-operations';
 import { BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
@@ -48,27 +50,16 @@ import { useReportError } from '~/core/state/status-bar-store';
 import { reportError as captureAssistantError } from '~/core/telemetry/logger';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
+import { useHideAssistant } from './assistant-visibility';
 import { ChatPanel } from './chat-panel';
 
 type AssistantSuggestionSource = 'welcome' | 'follow_up';
 type AssistantPanelAction = 'opened' | 'closed';
 type AssistantMessageSource = 'typed' | 'option_click';
-
-const FULLSCREEN_CHILD_ROUTE_SUFFIXES = ['/ranking-compose'] as const;
-
-// The claim-exploration picker is its own full-screen overlay, and it parks a voice dock in the
-// bottom-right corner — exactly where the assistant's launcher floats.
-const FULLSCREEN_CHILD_ROUTE_PATTERNS = [/\/debates\/rematches\/[^/]+$/] as const;
-
-function isFullscreenChildRoute(pathname: string): boolean {
-  return (
-    FULLSCREEN_CHILD_ROUTE_SUFFIXES.some(suffix => pathname.endsWith(suffix)) ||
-    FULLSCREEN_CHILD_ROUTE_PATTERNS.some(pattern => pattern.test(pathname))
-  );
-}
 
 // Guard router.push against hallucinated id shapes.
 function validId(value: string | undefined): value is string {
@@ -196,7 +187,7 @@ function describeChatError(error: Error): string {
 
 type ChatMode = 'default' | 'ingestion';
 
-export function ChatWidget() {
+export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null }) {
   const [portalTarget, setPortalTarget] = React.useState<HTMLElement | null>(null);
   const [isOpen, setIsOpen] = useAtom(isChatOpenAtom);
   const [seed, setSeed] = useAtom(assistantSeedAtom);
@@ -212,7 +203,7 @@ export function ChatWidget() {
   const currentChatIdRef = React.useRef<string | null>(persistedCurrent?.id ?? null);
 
   const pathname = usePathname() ?? '';
-  const hideAssistantOnRoute = isFullscreenChildRoute(pathname);
+  const hideAssistant = useHideAssistant();
   const params = useParams();
 
   React.useLayoutEffect(() => {
@@ -564,13 +555,29 @@ export function ChatWidget() {
   );
 
   React.useEffect(() => {
-    if (hideAssistantOnRoute && isOpen) {
+    if (hideAssistant && isOpen) {
       closeAssistant('fullscreen_route');
     }
-  }, [hideAssistantOnRoute, isOpen, closeAssistant]);
+  }, [hideAssistant, isOpen, closeAssistant]);
+
+  // The launcher mounts this widget on demand, so the press that mounted it has nothing left to
+  // open the panel: it hands over how it was asked, once.
+  const openOnMountRef = React.useRef(openOnMount);
+  React.useEffect(() => {
+    const trigger = openOnMountRef.current;
+    if (trigger === null) return;
+    openOnMountRef.current = null;
+    openAssistant(trigger);
+    // Once, on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const trackAssistantMessage = React.useCallback(
     (text: string, source: AssistantMessageSource, suggestionSource?: AssistantSuggestionSource) => {
+      recordAction(
+        source === 'option_click' ? 'assistant_option' : 'assistant_message',
+        snapshotActionContext('ai_assistant', 'conversation', conversationIdRef.current)
+      );
       capture('ai_assistant_message_sent', {
         ...assistantContextProperties(),
         message_id: createTrackingId('message'),
@@ -1093,7 +1100,7 @@ export function ChatWidget() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
         // Don't hijack the shortcut mid-IME composition.
-        if (event.isComposing || hideAssistantOnRoute) return;
+        if (event.isComposing || hideAssistant) return;
         event.preventDefault();
         if (isOpen) {
           closeAssistant('keyboard_shortcut');
@@ -1104,7 +1111,7 @@ export function ChatWidget() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [closeAssistant, hideAssistantOnRoute, isBusy, isOpen, openAssistant, stopAndScrub]);
+  }, [closeAssistant, hideAssistant, isBusy, isOpen, openAssistant, stopAndScrub]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -1126,7 +1133,7 @@ export function ChatWidget() {
     return null;
   }
 
-  const ui = hideAssistantOnRoute ? null : (
+  const ui = hideAssistant ? null : (
     <AnimatePresence mode="wait">
       {isOpen ? (
         <ChatPanel
@@ -1158,7 +1165,7 @@ export function ChatWidget() {
           transition={{ duration: 0.15 }}
           onClick={() => openAssistant('fab')}
           aria-label="Open assistant"
-          className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
+          className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} ${Z_LAYER_CLASS.assistantLauncher} flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
         >
           <AssistantSparkle size={20} />
         </motion.button>

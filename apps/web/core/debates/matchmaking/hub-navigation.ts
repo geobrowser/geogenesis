@@ -20,7 +20,13 @@
  * Dismissal is unaffected and is what makes a persistent panel reasonable: the navbar toggle,
  * Escape, a click outside on desktop, a drag down on mobile.
  */
+import { isDebateRoomPath } from '../rooms/room-routes';
+
 export function hubClosesOnArrivalAt(pathname: string): boolean {
+  // The third full-screen surface, and the only one not under a space. The pair may be in it for
+  // hours, so the panel must not follow them in.
+  if (isDebateRoomPath(pathname)) return true;
+
   const segments = pathname.split('/').filter(Boolean);
 
   // Every debate surface lives under a space. Anything else — Explore, an entity, a profile — is

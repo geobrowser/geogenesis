@@ -1,84 +1,65 @@
 'use client';
 
-import { WagmiProvider, useGeoLogin } from '@geogenesis/auth';
-import { createGeoWalletConfig, createMockConfig } from '@geogenesis/auth/wallet';
+import cx from 'classnames';
 
-import * as React from 'react';
+import {
+  Button,
+  COMPACT_PILL_CLASS_NAME,
+  COMPACT_PILL_TARGET_CLASS_NAME,
+  PILL_BUTTON_CLASS_NAME,
+} from '~/design-system/button';
 
-import { Button, PILL_BUTTON_CLASS_NAME } from '~/design-system/button';
-
-import { trackPrivyAuth } from '../analytics';
-import { Environment } from '../environment';
 import { usePrepareOnboarding } from '../hooks/use-prepare-onboarding';
-import { GEOGENESIS } from './geo-chain';
+import { useTrackedLogin } from '../hooks/use-tracked-login';
+import { saveVotesNavLabel } from '../save-votes-copy';
+import { useLocalVoteCount } from '../state/local-votes';
+import { type SaveVotesPressReason, openSaveVotesPrompt } from '../state/save-votes-prompt';
 
-const isTestEnv = Environment.variables.isTestEnv;
+type ConnectButtonProps = {
+  /** The debate feed's phone bar (GEO-3415): the smaller pill, in a full 44px target. */
+  compact?: boolean;
+  /** Where the sign-in was started, for its analytics, and the save sheet's reason when votes wait. */
+  component?: SaveVotesPressReason;
+};
 
-// Chain identity comes from the shared env-driven config (see
-// ~/core/wallet/geo-chain), never a hardcoded network literal.
-const CHAIN = GEOGENESIS;
-
-const realWalletConfig = createGeoWalletConfig({
-  chain: CHAIN,
-  rpcUrl: Environment.getConfig().rpc,
-  walletConnectProjectId: Environment.variables.walletConnectProjectId,
-});
-
-const mockConfig = createMockConfig(CHAIN);
-
-const activeConfig = isTestEnv ? mockConfig : realWalletConfig;
-
-const config = activeConfig as unknown as React.ComponentProps<typeof WagmiProvider>['config'];
-
-export function WalletProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <WagmiProvider reconnectOnMount config={config}>
-      {children}
-    </WagmiProvider>
-  );
-}
-
-function PrivyConnectButton() {
+function PrivyConnectButton({ compact = false, component = 'navbar' }: ConnectButtonProps) {
   // `null` rather than the current path: this button is a sign-in from anywhere in the app, not a
   // return to anywhere in particular, and a stale path here would send the next person somewhere
   // they never were.
   const prepareOnboarding = usePrepareOnboarding();
 
-  // Reset is done on the explicit sign-in click below. Doing it here too
-  // would wipe the user's in-progress onboarding state if Privy fires
-  // onComplete on session restoration (e.g. when opening a new tab), which
-  // then syncs the cleared atoms back to the original tab via localStorage.
-  // Armed, the way `usePrivySignIn` arms its own. Privy fires `onComplete` on session restoration
-  // too — opening a second tab is enough — so tracking unconditionally reported every restore as a
-  // manual login. It also meant this button was the *only* thing recording logins started
-  // elsewhere, which hid a real gap: whenever `navbar-actions.tsx` is showing its loading skeleton
-  // instead of this button, nothing recorded them at all.
-  const requestedRef = React.useRef(false);
-
-  const { login } = useGeoLogin({
-    onComplete: args => {
-      if (!requestedRef.current) return;
-      requestedRef.current = false;
-      trackPrivyAuth(args, { auth_flow: 'manual_login' });
-    },
-    onError: () => {
-      requestedRef.current = false;
-    },
-  });
+  const { login } = useTrackedLogin({});
+  // With votes waiting on this device, this is a save prompt (GEO-3214): it names them, and opens
+  // the save sheet centred rather than Privy's own dialog, so the votes are in front of the visitor
+  // as they sign in (GEO-3400). The sheet's sign-ins save them.
+  const localVoteCount = useLocalVoteCount();
 
   const onLogin = () => {
+    if (localVoteCount > 0) {
+      openSaveVotesPrompt(component);
+      return;
+    }
     prepareOnboarding({ returnTo: null });
-    requestedRef.current = true;
-    login();
+    login({ component, auth_control: 'sign_in', auth_intent: 'sign_in' });
   };
+
+  const label = localVoteCount === 0 ? 'Log in' : saveVotesNavLabel(localVoteCount);
+
+  if (compact) {
+    return (
+      <button type="button" onClick={onLogin} className={cx(COMPACT_PILL_TARGET_CLASS_NAME, 'px-2')}>
+        <span className={cx(COMPACT_PILL_CLASS_NAME, 'bg-[#151515] px-2 text-white')}>{label}</span>
+      </button>
+    );
+  }
 
   return (
     <Button variant="primary" className={PILL_BUTTON_CLASS_NAME} onClick={onLogin}>
-      Log in
+      {label}
     </Button>
   );
 }
 
-export function GeoConnectButton() {
-  return <PrivyConnectButton />;
+export function GeoConnectButton(props: ConnectButtonProps) {
+  return <PrivyConnectButton {...props} />;
 }

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { ClaimSummary } from '~/core/claims/browse/claim-summary';
+import { ActionContextProvider, ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateClaim } from '~/core/debates/api';
 import {
   type ClaimTiming,
@@ -12,7 +12,6 @@ import {
 } from '~/core/debates/claim-timing';
 import { compareByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
-import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type TranscriptClaim, claimsForParticipant, unmatchedClaims } from '~/core/debates/transcript-claims';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
@@ -27,6 +26,7 @@ import { Close } from '~/design-system/icons/close';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
+import { DebateClaimControls } from './debate-claim-controls';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 import { WinnerVoteButton } from './winner-vote-button';
 
@@ -41,11 +41,30 @@ const COLLAPSED_CLAIM_COUNT = 3;
  * relation points at the speaker's personal space — the same `profile_space_id` these rows already
  * key on. See `core/debates/transcript-claims.ts`.
  */
-export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose: () => void }) {
+export function DebateClaimsPanel(props: Parameters<typeof DebateClaimsPanelBody>[0]) {
+  return (
+    <ActionSurface
+      className="contents"
+      value={{
+        component: 'debate_claims_panel',
+        target_id: props.debate.id,
+        target_type: 'debate',
+        debate_id: props.debate.id,
+        overlay: 'entity_side_panel',
+        overlay_entity_id: props.debate.id,
+        overlay_entity_type: 'debate',
+      }}
+    >
+      <DebateClaimsPanelBody {...props} />
+    </ActionSurface>
+  );
+}
+
+function DebateClaimsPanelBody({ debate, onClose }: { debate: Debate; onClose: () => void }) {
   const participants = orderedParticipants(debate);
   // Same query key as the player's hook, so voting in either place updates both.
   const votes = useDebateVotes(debate);
-  // Same query key as the feed's count badge, so opening the panel doesn't refetch.
+  // Same query key as the player's claim ticker, so opening the panel doesn't refetch.
   const { claims, isLoading, error } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
   // When each claim was said. Published timecodes where they exist, matched against the transcript
   // otherwise. This drives the order as well as the timecode, so the panel waits on it — see
@@ -150,7 +169,14 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
         <Text as="h2" variant="cardEntityTitle" color="text">
           Claims · {claims.totalCount}
         </Text>
-        <button type="button" aria-label="Close" onClick={onClose} className="text-grey-04 hover:text-text">
+        <button
+          type="button"
+          data-geo-analytics-label="Close debate claims panel"
+          data-geo-analytics-intent="debate_side_panel_action"
+          aria-label="Close"
+          onClick={onClose}
+          className="text-grey-04 hover:text-text"
+        >
           <Close />
         </button>
       </header>
@@ -175,9 +201,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
               />
             </div>
             <ClaimList
-              claims={
-                isOrdering ? [] : inSpokenOrder(claimsForParticipant(claims, participant.profile_space_id))
-              }
+              claims={isOrdering ? [] : inSpokenOrder(claimsForParticipant(claims, participant.profile_space_id))}
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
               timings={timings}
@@ -247,14 +271,16 @@ function ClaimList({
   return (
     <>
       <ul className="mt-4 space-y-3">
-        {visible.map(claim => (
+        {visible.map((claim, index) => (
           <li key={claim.id}>
-            <ClaimRow
-              claim={claim}
-              row={rowsByClaimId.get(claim.id) ?? null}
-              entity={entitiesByClaimId.get(claim.id) ?? null}
-              timing={timings.get(claim.id) ?? null}
-            />
+            <ActionContextProvider value={{ list_id: 'debate_claims', item_position: index + 1 }}>
+              <ClaimRow
+                claim={claim}
+                row={rowsByClaimId.get(claim.id) ?? null}
+                entity={entitiesByClaimId.get(claim.id) ?? null}
+                timing={timings.get(claim.id) ?? null}
+              />
+            </ActionContextProvider>
           </li>
         ))}
       </ul>
@@ -360,40 +386,19 @@ function PanelClaimControls({
   row: DebateClaim | null;
   entity: Entity | null;
 }) {
-  // The claim's row title is drawn by `ClaimRow` above, so nothing is passed for it here.
-  const { responseKind, summary, control } = useDebateClaimResponse({
-    claimId,
-    spaceId,
-    row,
-    entity,
-  });
+  // The claim's row title is drawn by `ClaimRow` above. The hook still names the claim for a vote kept
+  // on this device, from the same entity and row.
+  const response = useDebateClaimResponse({ claimId, spaceId, row, entity });
 
   return (
     <div className="mt-2">
-      <PositionRow
-        positions={control.optimisticPositions}
-        responseKind={responseKind}
-        viewerPosition={control.viewerPosition}
-        onRespond={control.respond}
-        disabled={!control.canRespond}
-        titleFor={control.actionTitle}
+      <DebateClaimControls
+        claimId={claimId}
+        spaceId={spaceId}
+        response={response}
+        summaryLayout="stacked"
+        summaryClassName="mt-2"
       />
-      {control.responseError ? (
-        <div role="alert" className="mt-1.5">
-          <Text as="p" variant="footnote" color="red-01">
-            {control.responseError}
-          </Text>
-        </div>
-      ) : null}
-      {summary.isLoading ? null : (
-        <ClaimSummary
-          entityId={claimId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          summary={summary}
-          className="mt-2"
-        />
-      )}
     </div>
   );
 }

@@ -3,11 +3,22 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { COMMENT_REPLY_TO_ID } from '~/core/comment-ids';
+import { useComments } from '~/core/hooks/use-comments';
+import { getCommentEntitiesViaReplyRelations } from '~/core/io/queries';
+import type { Entity } from '~/core/types';
 
 import type { CommentEntity } from '~/partials/comments/types';
 
 import { resetCommentCountSeeds, useCommentCount } from './use-comment-count';
+
+vi.mock('~/core/io/queries', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/io/queries')>()),
+  getCommentEntitiesViaReplyRelations: vi.fn(),
+}));
 
 const ENTITY_ID = 'a3f1c2d4e5b6478899aabbccddeeff00';
 
@@ -30,6 +41,17 @@ function comment(id: string, overrides: Partial<CommentEntity> = {}): CommentEnt
   } as CommentEntity;
 }
 
+/** A comment as the list query fetches it: an entity replying to `ENTITY_ID`. */
+function fetchedComment(id: string): Entity {
+  return {
+    id,
+    name: null,
+    values: [],
+    relations: [{ type: { id: COMMENT_REPLY_TO_ID }, toEntity: { id: ENTITY_ID }, toSpaceId: 'space' }],
+    spaces: [],
+  } as unknown as Entity;
+}
+
 /**
  * Writes what the list query writes: the rows, and the record that a fetch answered. Nothing in the app
  * produces server rows without that marker, so a test that omits it is testing an impossible state.
@@ -46,6 +68,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 beforeEach(() => {
+  vi.mocked(getCommentEntitiesViaReplyRelations).mockReset();
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // The seeds outlive components on purpose — see the hook — so each test starts from none.
   resetCommentCountSeeds();
@@ -64,6 +87,91 @@ describe('useCommentCount', () => {
     const { result } = renderHook(() => useCommentCount(ENTITY_ID, 5), { wrapper });
 
     expect(result.current).toBe(5);
+  });
+
+  /**
+   * The claim card's pill is an activity total — debates, extracted claims, and every comment under
+   * them. The comment list for that claim is a strict subset, and the claim page fetches it on every
+   * visit, so without this a reader who opened a claim and went back to Explore found the card's 33
+   * had become 1.
+   */
+  it('replaces only the comments part of a broader seed', async () => {
+    // Both readings of the same cache, because asserting the broader one alone cannot fail: 33 is
+    // also its answer before the list arrives, so `waitFor` would pass on the first tick whatever
+    // the list went on to say. The plain count is the control — when it drops to 1 the list has
+    // definitely replaced, and only then does the broader one holding 33 mean anything.
+    const { result } = renderHook(
+      () => ({
+        broader: useCommentCount(ENTITY_ID, 33, { commentsInSeed: 1 }),
+        plain: useCommentCount(ENTITY_ID, 33),
+      }),
+      { wrapper }
+    );
+
+    vi.setSystemTime(2_000);
+    act(() => {
+      writeFetchedList([comment('c1')]);
+    });
+
+    await waitFor(() => expect(result.current.plain).toBe(1));
+    expect(result.current.broader).toBe(33);
+  });
+
+  /**
+   * The failure a pending-row delta had: once a published row is indexed it loses `isPendingPublish`
+   * and the pill fell back to the seed — 33 → 34 → 33 with the comment still on screen. Counting the
+   * list's own share instead holds through indexing, because the row never leaves the list.
+   */
+  it('keeps a published comment counted once it is indexed and no longer flagged', async () => {
+    // The control again, and for the same reason: the expected value after indexing is the value it
+    // already held, so `waitFor` alone would pass before the re-render it is meant to observe. The
+    // plain reading moving to 2 is proof the new list landed.
+    const { result } = renderHook(
+      () => ({
+        broader: useCommentCount(ENTITY_ID, 33, { commentsInSeed: 1 }),
+        plain: useCommentCount(ENTITY_ID, 33),
+      }),
+      { wrapper }
+    );
+
+    vi.setSystemTime(2_000);
+    act(() => {
+      writeFetchedList([comment('c1'), comment('c2', { isPendingPublish: true } as Partial<CommentEntity>)]);
+    });
+    await waitFor(() => expect(result.current.broader).toBe(34));
+
+    // Indexed: the server row replaces the optimistic one and carries no pending flag.
+    vi.setSystemTime(3_000);
+    act(() => {
+      writeFetchedList([comment('c1'), comment('c2')]);
+    });
+
+    await waitFor(() => expect(result.current.plain).toBe(2));
+    expect(result.current.broader).toBe(34);
+  });
+
+  it('gives back the count when a failed publish takes its row out again', async () => {
+    const { result } = renderHook(
+      () => ({
+        broader: useCommentCount(ENTITY_ID, 33, { commentsInSeed: 1 }),
+        plain: useCommentCount(ENTITY_ID, 33),
+      }),
+      { wrapper }
+    );
+
+    vi.setSystemTime(2_000);
+    act(() => {
+      writeFetchedList([comment('c1'), comment('c2', { isPendingPublish: true } as Partial<CommentEntity>)]);
+    });
+    await waitFor(() => expect(result.current.broader).toBe(34));
+
+    vi.setSystemTime(3_000);
+    act(() => {
+      writeFetchedList([comment('c1')]);
+    });
+
+    await waitFor(() => expect(result.current.plain).toBe(1));
+    expect(result.current.broader).toBe(33);
   });
 
   it('follows the list once something has read it', async () => {
@@ -332,17 +440,61 @@ describe('useCommentCount', () => {
     expect(second.result.current).toBe(6);
   });
 
-  it('never fetches — no queryFn is configured, so an enabled query would throw', async () => {
+  it('never fetches', async () => {
     const { result } = renderHook(() => useCommentCount(ENTITY_ID, 2), { wrapper });
 
     await act(async () => {
       await Promise.resolve();
     });
 
-    // A missing queryFn surfaces as an error state the moment react-query tries to run one.
-    expect(client.getQueryState(['comments', ENTITY_ID])?.status).not.toBe('error');
+    expect(getCommentEntitiesViaReplyRelations).not.toHaveBeenCalled();
     expect(client.getQueryState(['comments', ENTITY_ID])?.fetchStatus ?? 'idle').toBe('idle');
     expect(result.current).toBe(2);
+  });
+
+  // react-query logs this in development on every render of a `useQuery` with no `queryFn`, enabled or
+  // not, which flooded the console on Explore (GEO-3418).
+  it('does not log a missing queryFn', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { rerender } = renderHook(() => useCommentCount(ENTITY_ID, 2), { wrapper });
+      rerender();
+
+      expect(consoleError.mock.calls.map(args => String(args[0]))).not.toContainEqual(
+        expect.stringContaining('No queryFn')
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  // The query runs with the options of whichever observer rendered last, here the count. Without the
+  // list's own `queryFn` that refetch (as `useCreateComment` issues after publishing) would have none.
+  it('keeps the list refetchable when the count rendered after it', async () => {
+    // Each answer lands later than the seed, as a real fetch does.
+    const answer = (...ids: string[]) =>
+      vi.mocked(getCommentEntitiesViaReplyRelations).mockReturnValue(
+        Effect.sync(() => {
+          vi.setSystemTime(Date.now() + 1_000);
+          return ids.map(fetchedComment);
+        })
+      );
+    answer('1');
+    const { result } = renderHook(
+      () => {
+        useComments({ entityId: ENTITY_ID, spaceId: 'space' });
+        return useCommentCount(ENTITY_ID, 0);
+      },
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current).toBe(1));
+
+    answer('1', '2');
+    await act(() => client.invalidateQueries({ queryKey: ['comments', ENTITY_ID] }));
+
+    await waitFor(() => expect(result.current).toBe(2));
+    expect(getCommentEntitiesViaReplyRelations).toHaveBeenCalledTimes(2);
+    expect(client.getQueryState(['comments', ENTITY_ID])?.status).toBe('success');
   });
 
   it("reads per entity, so one entity's comments do not count for another", () => {

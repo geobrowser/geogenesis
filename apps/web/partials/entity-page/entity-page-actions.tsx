@@ -26,16 +26,22 @@ interface EntityPageActionsProps {
   entityId: string;
   spaceId: string;
   isVoteable?: boolean;
-  /** Put voting before history/menu, matching the personal-profile header. */
-  votesFirst?: boolean;
+  /** Tighten the action spacing when the row shares a compact header. */
+  compact?: boolean;
+  /** The entity's own primary action, ahead of the votes — a topic's Follow, which replaces them. */
+  leading?: React.ReactNode;
+  /** The edit-mode create link. Off where the row is the entity's own controls only, as on a claim. */
+  showCreate?: boolean;
 }
 
-/** Menu, history, create, and votes — separate from type metadata */
+/** Votes, create, history, and menu — separate from type metadata */
 export function EntityPageActions({
   entityId,
   spaceId,
   isVoteable = false,
-  votesFirst = false,
+  compact = false,
+  leading,
+  showCreate = true,
 }: EntityPageActionsProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
@@ -52,14 +58,11 @@ export function EntityPageActions({
     clearDiffSelection,
   } = useEntityHistory({ entityId, spaceId, enabled: isHistoryOpen });
 
-  const voteButtons = isVoteable ? <EntityVoteButtons entityId={entityId} spaceId={spaceId} /> : null;
-
   return (
-    <div className={cx('ml-auto flex shrink-0 items-center', votesFirst ? 'gap-4' : 'gap-5')}>
-      {/* Profiles put voting first, as their mobile header does. Every other
-          surface keeps master's create, history, menu, votes order. */}
-      {votesFirst && voteButtons}
-      {editable && (
+    <div className={cx('ml-auto flex shrink-0 items-center', compact ? 'gap-4' : 'gap-5')}>
+      {leading}
+      {isVoteable && <EntityVoteButtons entityId={entityId} spaceId={spaceId} />}
+      {editable && showCreate && (
         // The label keeps this icon-only link from announcing as its bare URL. `PrefetchLink`
         // matches the space header and includes hover prefetching.
         <Link
@@ -103,7 +106,6 @@ export function EntityPageActions({
         )}
       </HistoryPanel>
       <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
-      {!votesFirst && voteButtons}
       <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
     </div>
   );

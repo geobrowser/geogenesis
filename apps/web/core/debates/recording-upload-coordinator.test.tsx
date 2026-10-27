@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from './api';
 import {
+  DEBATE_RECORDING_HELP_URL,
   DebateCancelUploadDialog,
   DebateRecordingUploadBanner,
   isPermanentRecordingUploadError,
@@ -62,7 +63,7 @@ describe('debate recording uploader', () => {
       'debate-1',
       expect.objectContaining({
         filename: 'recordings/debate-1/recording.webm',
-        byte_size: upload.blob.size,
+        byte_size: upload.byteSize,
         started_at_ms: 1_000,
         ended_at_ms: 11_000,
         framerate: 29.97,
@@ -121,6 +122,41 @@ describe('debate recording uploader', () => {
 
     expect(dependencies.markUploaded).toHaveBeenCalledOnce();
     expect(dependencies.deleteUpload).not.toHaveBeenCalled();
+  });
+
+  // GEO-3116. The bytes are read when there is something to send, not from the row.
+  it('sends the recording it reads, not the row’s own blob', async () => {
+    const stored = new Blob(['from storage'], { type: 'video/webm' });
+    const readRecording = vi.fn().mockResolvedValue(stored);
+    const dependencies = { ...uploadDependencies(), readRecording };
+
+    await processDebateRecordingUpload({ ...queuedRecording(), blob: undefined, storage: 'chunks' }, dependencies);
+
+    expect(readRecording).toHaveBeenCalledOnce();
+    expect(dependencies.putRecording).toHaveBeenCalledWith(expect.anything(), stored, 'video/webm');
+  });
+
+  it('does not read the recording to finish one already uploaded', async () => {
+    const readRecording = vi.fn();
+    const dependencies = { ...uploadDependencies(), readRecording };
+
+    await processDebateRecordingUpload(
+      { ...queuedRecording(), stage: 'uploaded', filename: 'recordings/debate-1/recording.webm' },
+      dependencies
+    );
+
+    expect(readRecording).not.toHaveBeenCalled();
+    expect(dependencies.completeUpload).toHaveBeenCalledOnce();
+  });
+
+  it('fails as blob_unreadable, sending nothing, when there is no copy to send', async () => {
+    const dependencies = uploadDependencies();
+
+    await expect(
+      processDebateRecordingUpload({ ...queuedRecording(), blob: undefined, storage: 'memory' }, dependencies)
+    ).rejects.toMatchObject({ code: 'blob_unreadable' });
+    expect(dependencies.createUpload).not.toHaveBeenCalled();
+    expect(dependencies.putRecording).not.toHaveBeenCalled();
   });
 
   describe('a recording streamed during the debate (GEO-2955)', () => {
@@ -210,6 +246,62 @@ describe('debate recording uploader', () => {
       ).toBe(false);
     });
 
+    describe('when the queue keeps only the tail the live upload had not sent', () => {
+      // Part 1 ('reco') went out live and is not kept; 'rding' is.
+      function tailOnly() {
+        return { ...streamedRecording(), blob: undefined, localFromByte: 4 };
+      }
+
+      function tailBytes() {
+        const tail = new Blob(['rding']);
+        return {
+          size: 9,
+          availableFrom: 4,
+          heldInMemory: true,
+          read: vi.fn(async (start: number, end: number) => {
+            if (start < 4) throw new Error(`byte ${start} is not kept`);
+            return tail.slice(start - 4, end - 4);
+          }),
+        };
+      }
+
+      it('sends the remaining parts from the tail, a part at a time', async () => {
+        const dependencies = streamedDependencies();
+        const bytes = tailBytes();
+        const readRecording = vi.fn();
+
+        await processDebateRecordingUpload(tailOnly(), {
+          ...dependencies,
+          readRecording,
+          readRecordingBytes: async () => bytes,
+        });
+
+        expect(bytes.read.mock.calls).toEqual([
+          [4, 8],
+          [8, 9],
+        ]);
+        expect(readRecording).not.toHaveBeenCalled();
+        expect(dependencies.completeUpload).toHaveBeenCalledWith(
+          'debate-1',
+          expect.objectContaining({ multipart_upload_id: 'upload-1', byte_size: 9 })
+        );
+      });
+
+      it('waits for the multipart routes to come back rather than sending a partial file as one PUT', async () => {
+        const dependencies = streamedDependencies();
+        dependencies.getPartUrls.mockRejectedValue(new GeoChatRequestError('404 Not Found', null, 404));
+
+        await expect(
+          processDebateRecordingUpload(tailOnly(), { ...dependencies, readRecordingBytes: async () => tailBytes() })
+        ).rejects.toMatchObject({ status: 404 });
+
+        expect(dependencies.setMultipart).not.toHaveBeenCalledWith('user-a:debate-1', null);
+        expect(dependencies.createUpload).not.toHaveBeenCalled();
+        expect(dependencies.putRecording).not.toHaveBeenCalled();
+        expect(dependencies.deleteUpload).not.toHaveBeenCalled();
+      });
+    });
+
     it('goes straight to completion once every part is out', async () => {
       const dependencies = streamedDependencies();
 
@@ -235,6 +327,87 @@ describe('debate recording uploader', () => {
 });
 
 describe('DebateRecordingUploadBanner', () => {
+  // GEO-3116: an upload that stopped retrying is shown, not dropped silently.
+  it('says a debate did not upload, with retry, help and dismiss', () => {
+    const retry = vi.fn();
+    const dismiss = vi.fn();
+    render(
+      <DebateRecordingUploadBanner
+        count={0}
+        waitingReason={null}
+        errorMessage={null}
+        failedCount={1}
+        onRetryFailed={retry}
+        onDismissFailed={dismiss}
+        canCancel={false}
+        onCancel={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('1 debate didn’t upload')).toBeInTheDocument();
+    expect(screen.queryByText('Keep browser open')).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Get help' })).toHaveAttribute('href', DEBATE_RECORDING_HELP_URL);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('offers only help when this browser lost its copy of the recording', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={0}
+        waitingReason={null}
+        errorMessage={null}
+        failedCount={1}
+        canCancel={false}
+        onCancel={() => undefined}
+      />
+    );
+
+    expect(
+      screen.getByText('1 debate didn’t upload — this browser lost its copy of the recording')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Get help' })).toBeInTheDocument();
+  });
+
+  it('reports a moving queue over an earlier failure', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={1}
+        waitingReason={null}
+        errorMessage={null}
+        failedCount={1}
+        onRetryFailed={() => undefined}
+        canCancel={false}
+        onCancel={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(screen.queryByText(/didn’t upload/)).not.toBeInTheDocument();
+  });
+
+  it('offers to retry now once a pending upload keeps failing', () => {
+    const retryNow = vi.fn();
+    render(
+      <DebateRecordingUploadBanner
+        count={1}
+        waitingReason="retry"
+        errorMessage="Load failed"
+        onRetryNow={retryNow}
+        canCancel={false}
+        onCancel={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('Waiting to upload 1 debate — Load failed. Retrying automatically.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
+    expect(retryNow).toHaveBeenCalledOnce();
+  });
+
   it('shows the upload and publishing state with determinate progress and a cancel action', () => {
     const cancel = vi.fn();
     render(
@@ -251,9 +424,22 @@ describe('DebateRecordingUploadBanner', () => {
     expect(screen.getByText('Uploading & publishing 1 debate')).toBeInTheDocument();
     const banner = screen.getByRole('status');
     const content = screen.getByText('Uploading & publishing 1 debate').parentElement;
-    expect(banner).toHaveClass('h-7', 'items-center', 'justify-center');
-    expect(content).toHaveClass('w-auto', 'items-center', 'gap-2', 'md:w-full');
-    expect(screen.getByText('Uploading & publishing 1 debate')).toHaveClass('flex-initial', 'md:flex-1');
+    // Figma's 40px, written out rather than read from the exported constant: the inset claim reads
+    // that constant too, so comparing the two would pass however far they both drifted.
+    expect(banner).toHaveStyle({ height: '40px' });
+    expect(banner).toHaveClass('items-center', 'justify-center');
+    // On desktop the bar sits in the middle column of three, so it stays centred on the viewport,
+    // with Figma's 50px either side. `md` is max-width here (767px and below): the two side columns
+    // are narrower than the labels they hold (112px each at 320px), so a phone gets a plain row
+    // where only the message gives way.
+    expect(content).toHaveClass('grid', 'grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]', 'gap-[50px]');
+    expect(content).toHaveClass('md:flex', 'md:gap-2');
+    expect(content?.children[1]).toHaveAttribute('role', 'progressbar');
+    // A grid item sizes to its content and spills out of its track unless capped, so both sides
+    // are held to their column and truncate inside it.
+    expect(screen.getByText('Uploading & publishing 1 debate')).toHaveClass('min-w-0', 'max-w-full', 'truncate');
+    expect(content?.children[2]).toHaveClass('min-w-0', 'max-w-full');
+    expect(screen.getByText('Keep browser open')).toHaveClass('min-w-0', 'truncate');
     const progress = screen.getByRole('progressbar', { name: 'Uploading and publishing 1 debate' });
     expect(progress).toHaveAttribute('aria-valuemin', '0');
     expect(progress).toHaveAttribute('aria-valuemax', '100');
@@ -414,6 +600,9 @@ describe('DebateRecordingUploadBanner', () => {
     expect(screen.getByText('Debate uploaded')).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    // No bar to centre on, so the line and its action sit together instead of in the three columns.
+    expect(screen.getByText('Debate uploaded').parentElement).toHaveClass('flex', 'justify-center');
+    expect(screen.getByText('Debate uploaded').parentElement).not.toHaveClass('grid');
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     // Nothing is on the wire any more — this line is waiting on the opt-out window.
     expect(screen.queryByText('Keep browser open')).not.toBeInTheDocument();

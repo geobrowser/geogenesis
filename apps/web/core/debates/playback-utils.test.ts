@@ -4,15 +4,17 @@ import type { DebateMediaArtifactKind, DebateMediaResponse, DebateMediaTurnSegme
 import {
   clampSeconds,
   hasProcessedVideo,
-  normalizeTurnDurationsMs,
   pairPlayhead,
   playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
   sortTurnSegments,
   timelineSecondsFor,
   timelineSecondsForSegments,
+  turnSpansForDurations,
+  turnSpansFromSegments,
   turnStateForTime,
   turnStateFromSegments,
+  usableTurnDurationsMs,
 } from './playback-utils';
 
 describe('hasProcessedVideo', () => {
@@ -38,18 +40,22 @@ describe('hasProcessedVideo', () => {
   });
 });
 
-describe('normalizeTurnDurationsMs', () => {
-  it('keeps finite positive durations', () => {
-    expect(normalizeTurnDurationsMs([30_000, 45_000])).toEqual([30_000, 45_000]);
+describe('usableTurnDurationsMs', () => {
+  it('keeps a row whose every duration is finite and positive', () => {
+    expect(usableTurnDurationsMs([30_000, 45_000])).toEqual([30_000, 45_000]);
   });
 
-  it('drops non-finite, zero, and negative values', () => {
-    expect(normalizeTurnDurationsMs([Number.NaN, -5, 0, 1_000, Infinity])).toEqual([1_000]);
+  // Dropping the bad entry would shift every later turn onto the other speaker (GEO-2956).
+  it('rejects the whole row when any duration is unusable', () => {
+    expect(usableTurnDurationsMs([Number.NaN, -5, 0, 1_000, Infinity])).toBeNull();
+    expect(usableTurnDurationsMs([60_000, 0, 45_000])).toBeNull();
   });
 
-  it('falls back to a two-turn default when nothing survives', () => {
-    expect(normalizeTurnDurationsMs([])).toEqual([30_000, 30_000]);
-    expect(normalizeTurnDurationsMs([0, -1, Number.NaN])).toEqual([30_000, 30_000]);
+  // It used to invent [30_000, 30_000] here.
+  it('does not invent a schedule for an empty or missing row', () => {
+    expect(usableTurnDurationsMs([])).toBeNull();
+    expect(usableTurnDurationsMs(undefined)).toBeNull();
+    expect(usableTurnDurationsMs(null)).toBeNull();
   });
 });
 
@@ -161,6 +167,39 @@ describe('turnStateFromSegments (GEO-2949)', () => {
     // The playhead rests on output_end_ms for the whole paused tail after playback finishes.
     expect(turnStateFromSegments(segments, 115.976)?.slot).toBe(2);
     expect(turnStateFromSegments(segments, 300)?.slot).toBe(2);
+  });
+
+  it('uses the original 2:00 clock after trimming 3s at the start and 20s at the end', () => {
+    const turn: DebateMediaTurnSegment = {
+      turn_index: 0,
+      participant_slot: 1,
+      output_start_ms: 0,
+      output_end_ms: 97_000,
+      duration_ms: 97_000,
+      countdown_start_ms: -3_000,
+      countdown_end_ms: 117_000,
+      countdown_duration_ms: 120_000,
+    };
+    expect(turnStateFromSegments([turn], 0)).toMatchObject({ seconds: 117, progress: 3 / 120 });
+    expect(turnStateFromSegments([turn], 50)).toMatchObject({ seconds: 67, progress: 53 / 120 });
+    expect(turnStateFromSegments([turn], 97)).toMatchObject({ seconds: 20, progress: 100 / 120 });
+    expect(turnStateFromSegments([turn], 200)?.seconds).toBe(20);
+  });
+
+  it('holds the original allowance before the clock starts and at zero through an overrun', () => {
+    const turn: DebateMediaTurnSegment = {
+      turn_index: 1,
+      participant_slot: 2,
+      output_start_ms: 10_000,
+      output_end_ms: 76_500,
+      duration_ms: 66_500,
+      countdown_start_ms: 15_000,
+      countdown_end_ms: 75_000,
+      countdown_duration_ms: 60_000,
+    };
+    expect(turnStateFromSegments([turn], 12)).toMatchObject({ seconds: 60, progress: 0 });
+    expect(turnStateFromSegments([turn], 45)).toMatchObject({ seconds: 30, progress: 0.5 });
+    expect(turnStateFromSegments([turn], 76)).toMatchObject({ seconds: 0, progress: 1 });
   });
 
   it('has no opinion when the render produced no segments', () => {
@@ -711,5 +750,32 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     const b = fakeVideo({ muted: false, blockUnmuted: false });
     expect(await playBothWithMutedFallback(a, b)).toBe('playing');
     expect(a.muted).toBe(false);
+  });
+});
+
+describe('turn spans', () => {
+  it('walks the allowance into alternating turns', () => {
+    expect(turnSpansForDurations(2, [30_000, 45_000])).toEqual([
+      { index: 0, slot: 2, startSeconds: 0, endSeconds: 30 },
+      { index: 1, slot: 1, startSeconds: 30, endSeconds: 75 },
+    ]);
+  });
+
+  it('spans the rendered cut, lead-in included, rather than the clock the debaters watched', () => {
+    // `countdown_start_ms` sits 5s after the cut (GEO-2754) and the span deliberately ignores it:
+    // naming a turn is about when the speaker arrives on screen, which is the cut. Timing one is a
+    // different question, and `turnStateFromSegments` answers it off the clock.
+    const spans = turnSpansFromSegments([
+      {
+        turn_index: 0,
+        participant_slot: 1,
+        output_start_ms: 0,
+        output_end_ms: 35_000,
+        duration_ms: 35_000,
+        countdown_start_ms: 5_000,
+      },
+    ]);
+
+    expect(spans[0]).toEqual({ index: 0, slot: 1, startSeconds: 0, endSeconds: 35 });
   });
 });

@@ -25,7 +25,6 @@ const ENTITY_IDS = [
 const [FIRST, SECOND, THIRD] = ENTITY_IDS;
 const SPACE_ID = '44444444-4444-4444-4444-444444444444';
 /** A space other than the one the data block is scoped to. */
-const OTHER_SPACE_ID = '55555555-5555-5555-5555-555555555555';
 const hex = (uuid: string) => ID.uuidToHex(uuid);
 
 const CURATION = 0;
@@ -288,13 +287,15 @@ describe('useVoteTabEntities', () => {
   });
 
   describe('response kinds', () => {
+    // The factual flag used to send this claim down a different branch. Both claims ask for a
+    // stance now, so both are kept on the one vote kind.
     it('keeps a claim answered with the action it still asks for', () => {
       mocks.entitiesById = new Map([
         [hex(FIRST), claimEntity(FIRST, { isFactual: true })],
         [hex(SECOND), claimEntity(SECOND, { isFactual: false })],
       ]);
       mocks.voteKindById = new Map([
-        [hex(FIRST), VERACITY],
+        [hex(FIRST), STANCE],
         [hex(SECOND), STANCE],
       ]);
       mocks.idPages = [[hex(FIRST), hex(SECOND)]];
@@ -304,26 +305,22 @@ describe('useVoteTabEntities', () => {
       expect(result.current.orderedIds).toEqual([FIRST, SECOND]);
     });
 
-    // Votes span every space the viewer has voted in, but Is Factual is only
-    // readable in the claim's own space — resolving against the block's space
-    // downgrades a verified claim to a stance and drops it.
-    it('keeps a claim verified in a space other than the block’s', () => {
-      mocks.entitiesById = new Map([[hex(FIRST), claimEntity(FIRST, { isFactual: true, spaceId: OTHER_SPACE_ID })]]);
+    /**
+     * A case that used to sit here — "keeps a claim verified in a space other than the block's" —
+     * is gone. It existed because Is Factual is only readable in the claim's own space, so
+     * resolving it against the block's space downgraded a verified claim to a stance and dropped
+     * it. Nothing reads the flag to pick a kind any more, so the space it is readable in cannot
+     * change the answer.
+     */
+    it('drops a claim answered with the retired veracity kind', () => {
+      mocks.entitiesById = new Map([[hex(FIRST), claimEntity(FIRST, { isFactual: true })]]);
       mocks.voteKindById = new Map([[hex(FIRST), VERACITY]]);
       mocks.idPages = [[hex(FIRST)]];
 
       const { result } = renderHook(() => useVoteTabEntities('up'));
 
-      expect(result.current.orderedIds).toEqual([FIRST]);
-    });
-
-    it('drops a claim whose response kind changed since the vote', () => {
-      mocks.entitiesById = new Map([[hex(FIRST), claimEntity(FIRST, { isFactual: true })]]);
-      mocks.voteKindById = new Map([[hex(FIRST), STANCE]]);
-      mocks.idPages = [[hex(FIRST)]];
-
-      const { result } = renderHook(() => useVoteTabEntities('up'));
-
+      // The claim asks for a stance now, so a vote recorded under the old kind is not an answer to
+      // the question it currently asks. Dropping it is the agreed cost of the clean break.
       expect(result.current.orderedIds).toEqual([]);
     });
 

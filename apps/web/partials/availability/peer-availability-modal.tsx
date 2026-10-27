@@ -2,19 +2,22 @@
 
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
-import type * as React from 'react';
+import * as React from 'react';
 
 import cx from 'classnames';
 
+import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Close } from '~/design-system/icons/close';
-import { Text } from '~/design-system/text';
 
-import { PeerAvailability } from './peer-availability';
+import { PeerAvailability, type PeerAvailabilityBooking } from './peer-availability';
 
 type Props = {
   open: boolean;
+  /** Absent leaves the week read-only, as on the debug page. */
+  booking?: PeerAvailabilityBooking;
   /** The person whose week is being looked at. Nothing else about them is needed. */
   userId: string;
   peerName?: string | null;
@@ -25,6 +28,18 @@ type Props = {
   onClose: () => void;
   /** Focus goes back here on close, when it is still in the document. */
   openerRef?: React.RefObject<HTMLElement | null>;
+  /**
+   * Drawn in place of the week. A shared link opens this before it knows whose week it is — the
+   * recipient may be signed out, or their profile still resolving — and says so in the same shell
+   * rather than swapping dialogs under them once it does.
+   */
+  children?: React.ReactNode;
+  /** Opens with this slot already picked. */
+  initialSelectedStart?: string | null;
+  /** What opened it, for analytics. */
+  entry?: ScheduleEntry | null;
+  /** Claims the viewer and this person disagree on, when the caller has compared them. */
+  disagreementCount?: number | null;
 };
 
 /**
@@ -38,13 +53,33 @@ type Props = {
  * than seven day columns — the same reason `availability-modal` does, and it carries that modal's
  * mobile fixes with it.
  */
-export function PeerAvailabilityModal({ open, userId, peerName, onClose, openerRef }: Props) {
+export function PeerAvailabilityModal({
+  open,
+  userId,
+  peerName,
+  onClose,
+  openerRef,
+  booking,
+  children,
+  initialSelectedStart,
+  entry = null,
+  disagreementCount = null,
+}: Props) {
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
   return (
     <Root open={open} onOpenChange={next => !next && onClose()}>
       <Portal>
         <Overlay className={cx('fixed inset-0 bg-text/20', Z_LAYER_CLASS.scheduleDialogBackdrop)} />
         <Content
+          ref={contentRef}
           aria-describedby={undefined}
+          onOpenAutoFocus={event => {
+            // Start at the dialog, so its context is read before its controls. Close stays first
+            // in the tab order without drawing a focus box over the header as soon as it opens.
+            event.preventDefault();
+            contentRef.current?.focus();
+          }}
           onCloseAutoFocus={event => {
             // The opener is a row in a live list and may have unmounted while this was open.
             // Radix's own restore is a no-op on a detached node, so hand it back only if it is
@@ -68,27 +103,40 @@ export function PeerAvailabilityModal({ open, userId, peerName, onClose, openerR
               so nothing can push the close button off a short window. */}
           <div
             data-no-sheet-drag
-            className="flex max-h-[calc(100dvh-2rem)] w-[56rem] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-hidden overscroll-none rounded-xl bg-white p-5 shadow-card md:h-dvh md:max-h-dvh md:w-screen md:max-w-none md:gap-3 md:rounded-none md:p-4"
+            className="relative flex max-h-[calc(100dvh-2rem)] w-[56rem] max-w-[calc(100vw-2rem)] flex-col gap-5 overflow-hidden overscroll-none rounded-xl bg-white p-6 shadow-card md:h-dvh md:max-h-dvh md:w-screen md:max-w-none md:gap-4 md:rounded-none md:p-4"
           >
-            <div className="flex shrink-0 items-start justify-between gap-4">
-              <Title asChild>
-                <Text as="h2" variant="smallTitle">
-                  Availability
-                </Text>
-              </Title>
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={onClose}
-                className="grid size-4 shrink-0 place-items-center text-[#151515] transition-opacity hover:opacity-70"
-              >
-                <Close />
-              </button>
-            </div>
+            {/* The week's own "When … is free" is the visible heading, so the dialog's name is for
+                assistive tech only. It is here rather than on that heading because the view also
+                renders outside a dialog (the debug page), where a Radix `Title` would throw. */}
+            <Title asChild>
+              {/* A span, not Radix's default `h2`, so it doesn't sit beside the visible one as a
+                  second heading with the same name. */}
+              <span className="sr-only">{peerName ? `When ${peerName} is free` : 'Availability'}</span>
+            </Title>
+            <button
+              type="button"
+              aria-label="Close"
+              {...debateActionAnalyticsAttributes('peer-availability', 'Close', 'close_peer_availability')}
+              onClick={onClose}
+              className="absolute top-4 right-4 z-10 grid size-9 place-items-center rounded-md text-grey-04 transition-colors hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-grey-03 md:top-2 md:right-2"
+            >
+              <Close />
+            </button>
 
             {/* Mounted only while open, so a closed dialog issues no request. It is also what keeps
                 an empty `userId` away from the hook while nobody is selected. */}
-            {open && <PeerAvailability userId={userId} peerName={peerName} className="min-h-0 flex-1" />}
+            {open &&
+              (children ?? (
+                <PeerAvailability
+                  userId={userId}
+                  peerName={peerName}
+                  className="min-h-0 flex-1"
+                  booking={booking}
+                  initialSelectedStart={initialSelectedStart}
+                  entry={entry}
+                  disagreementCount={disagreementCount}
+                />
+              ))}
           </div>
         </Content>
       </Portal>

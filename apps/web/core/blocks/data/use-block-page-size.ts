@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { useValues } from '~/core/sync/use-store';
 
 import { DATA_BLOCK_PAGE_SIZE_PROPERTY_ID, DEFAULT_DATA_BLOCK_PAGE_SIZE } from './block-ontology-ids';

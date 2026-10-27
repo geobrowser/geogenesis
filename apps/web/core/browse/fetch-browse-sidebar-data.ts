@@ -4,7 +4,7 @@ import * as Either from 'effect/Either';
 import { DOCUMENTATION_SPACE_ID, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
-import { AbortError } from '~/core/io/subgraph/errors';
+import { isAbortError } from '~/core/io/subgraph/errors';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import {
@@ -32,6 +32,26 @@ export type BrowseSidebarData = {
   personalSpaceId: string | null;
   featuredError?: boolean;
 };
+
+/**
+ * Every space a browse payload lets this reader see, once each: featured first, then the spaces
+ * they edit, then the ones they belong to. The Explore route narrows a `spaceIds` request to these
+ * rows and the feed's space menu offers them, so both read the list from here rather than each
+ * assembling it — a menu built another way could offer a space the route then silently drops.
+ */
+export function browseSidebarVisibleSpaces(
+  browse: Pick<BrowseSidebarData, 'featured' | 'editorOf' | 'memberOf'>
+): BrowseSpaceRow[] {
+  const seen = new Set<string>();
+  const rows: BrowseSpaceRow[] = [];
+  for (const row of [...browse.featured, ...browse.editorOf, ...browse.memberOf]) {
+    const key = normId(row.id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push(row);
+  }
+  return rows;
+}
 
 function toBrowseSpaceRow(space: FeaturedSpace): BrowseSpaceRow {
   return {
@@ -182,7 +202,7 @@ function resolveFeaturedSpaces(source?: FeaturedSpacesSource): Promise<ResolvedF
     error => {
       // Cancellation must keep propagating so query consumers do not replace a
       // cancelled request with a successful-but-empty sidebar response.
-      if (error instanceof AbortError || (error instanceof Error && error.name === 'AbortError')) throw error;
+      if (isAbortError(error)) throw error;
       console.error('Unable to load Featured spaces for the Browse sidebar', error);
       return { featured: [], error: true };
     }

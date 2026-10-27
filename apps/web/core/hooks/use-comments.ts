@@ -8,9 +8,9 @@ import { Effect } from 'effect';
 
 import { COMMENT_MARKDOWN_CONTENT_ID, COMMENT_REPLY_TO_ID, COMMENT_RESOLVED_ID } from '~/core/comment-ids';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { commentsQueryOptions } from '~/core/hooks/comments-query-options';
 import { uuidToHex } from '~/core/id/normalize';
-import { getCommentEntitiesViaParentEntityReplyBacklinks } from '~/core/io/queries';
-import { commentsFetchedQueryKey } from '~/core/io/query-keys';
+import { getCommentEntitiesViaReplyRelations } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Entity } from '~/core/types';
 
@@ -138,6 +138,12 @@ function buildCommentTree(comments: CommentEntity[]): CommentWithReplies[] {
 interface UseCommentsOptions {
   entityId: string;
   spaceId: string;
+  /**
+   * Skip the fetch entirely. For a caller that already knows the count is zero — the claim page's
+   * activity feed reads one aggregate for every debate on it — this is the difference between one
+   * request and one per row, for rows that would all come back empty.
+   */
+  enabled?: boolean;
 }
 
 /**
@@ -149,7 +155,7 @@ export async function fetchCommentEntitiesForTarget(
   entityId: string,
   signal?: AbortController['signal']
 ): Promise<CommentEntity[]> {
-  const loaded = await Effect.runPromise(getCommentEntitiesViaParentEntityReplyBacklinks(entityId, signal));
+  const loaded = await Effect.runPromise(getCommentEntitiesViaReplyRelations(entityId, signal));
   const targetKey = uuidToHex(entityId);
   const replyToType = uuidToHex(COMMENT_REPLY_TO_ID);
 
@@ -225,7 +231,7 @@ export function mergePendingWithServer(server: CommentEntity[], prev: CommentEnt
   return pendingOnly.length > 0 ? [...server, ...pendingOnly] : server;
 }
 
-export function useComments({ entityId }: UseCommentsOptions) {
+export function useComments({ entityId, enabled = true }: UseCommentsOptions) {
   const queryClient = useQueryClient();
 
   const {
@@ -234,19 +240,8 @@ export function useComments({ entityId }: UseCommentsOptions) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['comments', entityId],
-    // react-query passes an AbortSignal here; threading it through cancels in-flight GraphQL
-    // work when the component unmounts or the query is invalidated mid-flight.
-    queryFn: async ({ signal }) => {
-      const server = await fetchCommentEntitiesForTarget(entityId, signal);
-      const prev = queryClient.getQueryData<CommentEntity[]>(['comments', entityId]);
-      // Recorded because this entry has other writers, and an empty list from here means something
-      // different from an empty one left behind by a rolled-back optimistic row — see the key's own
-      // note. Set after the fetch resolves, so it marks an answer rather than an attempt.
-      queryClient.setQueryData(commentsFetchedQueryKey(entityId), true);
-      return mergePendingWithServer(server, prev);
-    },
-    enabled: !!entityId,
+    ...commentsQueryOptions(queryClient, entityId),
+    enabled: enabled && !!entityId,
   });
 
   const comments = React.useMemo(() => {
