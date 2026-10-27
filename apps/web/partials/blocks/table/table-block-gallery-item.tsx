@@ -138,6 +138,7 @@ export function TableBlockGalleryItem({
               )}
               alt=""
               fill
+              lqip
             />
           ) : (
             <BlockImageField
@@ -288,10 +289,9 @@ export function TableBlockGalleryItem({
               )}
               alt=""
               fill
+              lqip
             />
-          ) : isImageResolving ? // loading; dropping the placeholder in here would show every card the fallback // Still looking the image up. Leaving the frame empty reads as the card still
-          // image and then swap it for the real one.
-          null : (
+          ) : isImageResolving ? null : ( // Still looking it up — an empty frame beats flashing the fallback on every card and swapping.
             <NextImage
               src={PLACEHOLDER_SPACE_IMAGE}
               className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"

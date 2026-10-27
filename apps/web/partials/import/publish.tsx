@@ -9,9 +9,9 @@ import { useBulkPublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { Space } from '~/core/io/dto/spaces';
 import { Entities } from '~/core/utils/entity';
-import { getImagePath } from '~/core/utils/utils';
 
 import { Button, SquareButton } from '~/design-system/button';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Close } from '~/design-system/icons/close';
 import { SlideUp } from '~/design-system/slide-up';
 
@@ -75,11 +75,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
             <span className="inline-flex items-center gap-2 text-button text-text">
               {spaceAvatar ? (
                 <span className="relative h-4 w-4 overflow-hidden rounded-sm">
-                  <img
-                    src={getImagePath(spaceAvatar)}
-                    className="absolute inset-0 h-full w-full object-cover object-center"
-                    alt=""
-                  />
+                  <ThumbGeoImage value={spaceAvatar} />
                 </span>
               ) : null}
               <span>{spaceName ?? ''}</span>

@@ -1,13 +1,113 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { IPFS_GATEWAY_COUNT } from '~/core/utils/utils';
 
-import { NativeGeoImage } from './geo-image';
+import { GeoImage, NativeGeoImage, ThumbGeoImage } from './geo-image';
+
+// Only the component is replaced: `NativeGeoImage`'s `displayWidth` path needs the real `getImageProps`.
+vi.mock('next/image', async importOriginal => ({
+  ...(await importOriginal<typeof import('next/image')>()),
+  default: ({
+    src,
+    alt,
+    onError,
+    onLoad,
+    style,
+    'aria-hidden': ariaHidden,
+  }: {
+    src: string;
+    alt?: string;
+    onError?: () => void;
+    onLoad?: () => void;
+    style?: React.CSSProperties;
+    'aria-hidden'?: boolean | 'true' | 'false';
+  }) => (
+    <img
+      src={typeof src === 'string' ? src : ''}
+      alt={alt ?? ''}
+      aria-hidden={ariaHidden}
+      style={style}
+      onError={onError}
+      onLoad={onLoad}
+    />
+  ),
+}));
 
 afterEach(cleanup);
+
+describe('GeoImage progressive placeholder', () => {
+  const value = 'ipfs://bafyProgressive';
+
+  it('keeps the blurred placeholder after a stage hop', () => {
+    render(
+      <div className="relative h-40 w-40">
+        <GeoImage value={value} alt="cover" fill sizes="200px" lqip fallback={<span>fallback</span>} />
+      </div>
+    );
+
+    expect(screen.getByAltText('').getAttribute('aria-hidden')).toBe('true');
+    fireEvent.error(screen.getByAltText('cover'));
+
+    // Mid-chain unoptimized stages must not tear down the LQIP and leave a blank box.
+    expect(screen.getByAltText('').getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByAltText('cover')).toBeInTheDocument();
+    expect(screen.queryByText('fallback')).toBeNull();
+  });
+
+  it('keeps the blurred placeholder when every gateway fails', () => {
+    render(
+      <div className="relative h-40 w-40">
+        <GeoImage value={value} alt="cover" fill sizes="200px" lqip fallback={<span>fallback</span>} />
+      </div>
+    );
+
+    // Optimized + unoptimized on Filebase, then Pinata, then Lighthouse.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      fireEvent.error(screen.getByAltText('cover'));
+    }
+
+    expect(screen.getByAltText('').getAttribute('aria-hidden')).toBe('true');
+    expect(screen.queryByAltText('cover')).toBeNull();
+    expect(screen.queryByText('fallback')).toBeNull();
+  });
+});
+
+// A hidden image stays hidden in the server HTML until hydration, which delays LCP.
+describe('GeoImage fade', () => {
+  const value = 'ipfs://bafyFade';
+
+  it('fades the full image in over a placeholder once it loads', () => {
+    render(<GeoImage value={value} alt="cover" fill sizes="200px" lqip />);
+    const image = screen.getByAltText('cover');
+
+    expect(image).toHaveStyle({ opacity: '0' });
+    fireEvent.load(image);
+    expect(image).toHaveStyle({ opacity: '1' });
+  });
+
+  it('requests no placeholder and renders visible unless asked', () => {
+    render(<GeoImage value={value} alt="cover" fill />);
+
+    expect(screen.queryByAltText('')).toBeNull();
+    expect(screen.getByAltText('cover').style.opacity).toBe('');
+  });
+
+  it('renders a thumbnail visible', () => {
+    render(<ThumbGeoImage value={value} alt="thumb" />);
+
+    expect(screen.getByAltText('thumb').style.opacity).toBe('');
+  });
+
+  it('requests no placeholder for a priority image, which would be a second preload', () => {
+    render(<GeoImage value={value} alt="cover" fill sizes="200px" lqip priority />);
+
+    expect(screen.queryByAltText('')).toBeNull();
+    expect(screen.getByAltText('cover').style.opacity).toBe('');
+  });
+});
 
 /**
  * GEO-2642. An avatar whose image cannot load used to leave the browser's broken-image icon on
