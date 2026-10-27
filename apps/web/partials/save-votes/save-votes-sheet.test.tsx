@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { snapshotActionContext } from '~/core/action-context';
 import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import {
   saveVotesHeading,
@@ -13,6 +14,7 @@ import {
   savedVotesCopy,
   savingVotesCopy,
 } from '~/core/save-votes-copy';
+import { castLocalVote } from '~/core/state/cast-local-vote';
 import { clearLocalVotes, readLocalVotes, removeLocalVote, toggleLocalVote } from '~/core/state/local-votes';
 import {
   closeSaveVotesPrompt,
@@ -55,6 +57,7 @@ vi.mock('~/core/privy-auth-events', () => ({
   beginPrivyAuth: (...args: unknown[]) => mocks.beginPrivyAuth(...args),
   cancelPrivyAuth: () => mocks.cancelPrivyAuth(),
 }));
+vi.mock('~/core/analytics-operations', () => ({ recordAction: vi.fn() }));
 vi.mock('~/core/save-votes-analytics', () => ({
   captureSaveVotesImpression: (...args: unknown[]) => mocks.impression(...args),
   saveVotesSignInProperties: (auth_control: string, local_vote_count: number, prompt_reason?: string) => ({
@@ -130,6 +133,54 @@ describe('copy', () => {
 });
 
 describe('SaveVotesSheet', () => {
+  it.each([
+    ['feed', 'threshold'],
+    ['single', 'single_claim'],
+  ] as const)('asks once after the first %s vote, records one vote, and asks again at five', (surface, reason) => {
+    const cast = (entityId: string, direction: 'positive' | 'negative' = 'positive') =>
+      act(() => {
+        castLocalVote({
+          entityId,
+          spaceId: 'space-1',
+          responseKind: 'stance',
+          direction,
+          title: entityId,
+          surface,
+          attribution: snapshotActionContext('claim_position_control', 'claim', entityId),
+        });
+      });
+    const view = render(<SaveVotesSheet />);
+
+    cast('a');
+
+    expect(screen.getByText('Save your vote')).toBeInTheDocument();
+    expect(mocks.impression.mock.calls).toEqual([[reason, 1]]);
+    expect(readLocalVotes().prompt.shownCount).toBe(1);
+    view.rerender(<SaveVotesSheet />);
+    expect(mocks.impression).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    cast('a', 'negative');
+    expect(readSaveVotesPrompt()).toBeNull();
+    for (const entityId of ['b', 'c', 'd']) {
+      cast(entityId);
+      expect(readSaveVotesPrompt()).toBeNull();
+    }
+    expect(mocks.impression).toHaveBeenCalledOnce();
+
+    cast('e');
+    expect(screen.getByText('Save your 5 votes')).toBeInTheDocument();
+    expect(mocks.impression.mock.calls).toEqual([
+      [reason, 1],
+      ['repeat', 5],
+    ]);
+    expect(readLocalVotes().prompt.shownCount).toBe(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    cast('f');
+    expect(readSaveVotesPrompt()).toBeNull();
+    expect(mocks.impression).toHaveBeenCalledTimes(2);
+  });
+
   it('asks a visitor who came from one of our emails to log in, not sign up (GEO-3374)', () => {
     noteEmailArrival('?ref_email=welcome');
     vote('a', 'Couples should keep separate finances');

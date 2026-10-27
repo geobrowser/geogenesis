@@ -35,13 +35,13 @@ export function opensSaveVotesCentered(reason: SaveVotesPromptReason | null): bo
 }
 
 /**
- * Where a vote was cast. A claim page or a debate's end card has no second claim beside it to vote
- * on, so waiting for a second vote there would mean the ask never comes.
+ * Where a vote was cast. Feeds, claim pages and debate end cards all ask after the first vote;
+ * keeping the surface preserves each ask's reason in analytics.
  */
 export type SavePromptSurface = 'feed' | 'single';
 
 /** The vote counts at which the sheet opens on its own: first ask, then once more. */
-export const FIRST_ASK_AT = { feed: 2, single: 1 } as const;
+export const FIRST_ASK_AT = { feed: 1, single: 1 } as const;
 export const SECOND_ASK_AT = 5;
 
 /** Marks the browser session in which the visitor has already voted or been asked. */

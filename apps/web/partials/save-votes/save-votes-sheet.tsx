@@ -135,8 +135,8 @@ export function SaveVotesSheet() {
   const midSignIn = attempt !== null;
   const open = reason !== null && ready && !authenticated && (count > 0 || midSignIn);
 
-  // Every vote taken back: the ask was about votes that are gone, and must not reopen for the next
-  // single vote, which on a feed isn't an ask yet. Not mid-sign-in: that outlives the votes.
+  // Every vote taken back: close the ask about votes that are gone. A later cast decides afresh
+  // whether to ask. Not mid-sign-in: that outlives the votes.
   React.useEffect(() => {
     if (count === 0 && !midSignIn) closeSaveVotesPrompt();
   }, [count, midSignIn]);
