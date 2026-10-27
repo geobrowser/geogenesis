@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => ({
   highlightsEnabled: [] as boolean[],
   leave: vi.fn(),
   replace: vi.fn(),
+  /** Screens the member room reports, by sharer. */
+  screens: undefined as Map<string, unknown> | undefined,
+  voiceProps: null as Record<string, unknown> | null,
 }));
 
 vi.mock('./lobby-scheduled-requests', () => ({ LobbyScheduledRequests: () => null }));
@@ -76,23 +79,29 @@ vi.mock('./lobby-voice', async () => {
   const ReactModule = await import('react');
   const { LobbySlot } = await import('./lobby-slots');
   const NO = { speaking: new Set(), micOn: new Set(), cameras: new Map(), connected: false };
-  const Context = ReactModule.createContext(NO);
+  const Context = ReactModule.createContext<typeof NO & { screens?: Map<string, unknown> }>(NO);
   return {
     NO_LOBBY_VOICE: NO,
     LobbyVoiceStatesProvider: Context.Provider,
     useLobbyVoiceStates: () => ReactModule.useContext(Context),
     LobbyGuestVoice: () => null,
     // Draws its controls into the bar's slot, as the real room's VoiceBar does.
-    LobbyVoice: ({ children }: { children: React.ReactNode }) => (
-      <div data-testid="member-room">
-        <LobbySlot name="controls">
-          <button type="button">Mute</button>
-        </LobbySlot>
-        {children}
-      </div>
-    ),
+    LobbyVoice: ({ children, ...props }: { children: React.ReactNode }) => {
+      mocks.voiceProps = props;
+      return (
+        <Context.Provider value={{ ...NO, connected: true, screens: mocks.screens }}>
+          <div data-testid="member-room">
+            <LobbySlot name="controls">
+              <button type="button">Mute</button>
+            </LobbySlot>
+            {children}
+          </div>
+        </Context.Provider>
+      );
+    },
   };
 });
+vi.mock('../track-video', () => ({ TrackVideo: () => <video data-testid="call-screen-video" /> }));
 // Reports the scroll root its lists' observers would be handed, which is all the page decides.
 vi.mock('./lobby-claims-area', async () => {
   const { useHubScrollSelector } = await import('../matchmaking/hub-scroll');
@@ -176,6 +185,8 @@ beforeEach(() => {
   mocks.highlights = { highlights: [], room_vote: null };
   mocks.highlightsEnabled = [];
   mocks.leave.mockReset();
+  mocks.screens = undefined;
+  mocks.voiceProps = null;
 });
 
 afterEach(cleanup);
@@ -365,5 +376,44 @@ describe('DebateLobbyPage layout on a phone', () => {
   it('reads highlights for the mark only on a phone', () => {
     render(<DebateLobbyPage lobbyId="lobby1" />);
     expect(mocks.highlightsEnabled.every(enabled => !enabled)).toBe(true);
+  });
+});
+
+// GEO-3507: a host's shared screen sits above the speakers, beside the claims or above them on a phone.
+describe('DebateLobbyPage with a shared screen', () => {
+  const share = () => {
+    mocks.screens = new Map([['adam', { publication: { track: {} } }]]);
+  };
+
+  it('turns screen sharing on for the lobby’s voice room', () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(mocks.voiceProps).toMatchObject({ screenShare: true });
+  });
+
+  it('draws the share above the speakers, with the claims still beside it on desktop', () => {
+    share();
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    const people = screen.getByRole('region', { name: 'People in the lobby' });
+    const stage = within(people).getByRole('region', { name: 'Adam is sharing their screen' });
+    expect(stage).toBeVisible();
+    const speaker = within(people).getByText('Sam');
+    expect(stage.compareDocumentPosition(speaker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Claims in the room' })).toBeVisible();
+  });
+
+  it('draws the share on a phone’s People tab, with Claims a tab away', () => {
+    mocks.phone = true;
+    share();
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByRole('region', { name: 'Adam is sharing their screen' })).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: 'Claims' }));
+    expect(screen.getByTestId('claims')).toBeVisible();
+  });
+
+  it('draws nothing while nobody shares', () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.queryByTestId('call-screen-stage')).toBeNull();
   });
 });
