@@ -193,9 +193,11 @@ vi.mock('./lobby-guest-sign-in', () => ({
   useLobbySignInPrompt: (_lobbyId: string, open: boolean) => void mocks.signInPrompt.push(open),
 }));
 vi.mock('../matchmaking/hooks', () => ({ useMatchmakingScope: vi.fn() }));
+vi.mock('~/partials/space-calls/call-pre-open', () => ({ CallPreOpen: () => <div data-testid="call-pre-open" /> }));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.userId }));
 
 const { DebateLobbyPage, memberPath } = await import('./lobby-page');
+const { LobbyPurposeProvider } = await import('./lobby-purpose');
 const { readGuestSecret } = await import('./lobby-guest-secret');
 
 const adam: DebateLobbyMember = {
@@ -622,6 +624,27 @@ describe('DebateLobbyPage account prompt', () => {
       lobby: { ...lobbyFields, access: { status: 'not_yet_open', opens_at: '2099-10-06T17:50:00Z' } },
     };
     render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(mocks.signInPrompt.at(-1)).toBe(true);
+  });
+
+  it('does not ask on a scheduled call’s page before it opens, and does once it is open (GEO-3420)', () => {
+    const asCall = (node: React.ReactNode) => (
+      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+        {node}
+      </LobbyPurposeProvider>
+    );
+    mocks.guestView = {
+      ...mocks.guestView!,
+      lobby: { ...lobbyFields, access: { status: 'not_yet_open', opens_at: '2099-10-06T17:50:00Z' } },
+    };
+    render(asCall(<DebateLobbyPage lobbyId="lobby1" />));
+    expect(screen.getByTestId('call-pre-open')).toBeInTheDocument();
+    expect(mocks.signInPrompt.length).toBeGreaterThan(0);
+    expect(mocks.signInPrompt.every(open => !open)).toBe(true);
+    cleanup();
+
+    mocks.guestView = { lobby: lobbyFields, claims: null, highlights: null };
+    render(asCall(<DebateLobbyPage lobbyId="lobby1" />));
     expect(mocks.signInPrompt.at(-1)).toBe(true);
   });
 

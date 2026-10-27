@@ -147,8 +147,11 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const waitingOutside =
     !guest && lobby !== null && !lobby.viewer.connected && (admitted || lobby.access.status === 'not_yet_open');
   useMatchmakingScope(waitingOutside);
-  // Only where the page shows the guest banner, which is how a closed prompt is opened again.
-  useLobbySignInPrompt(lobbyId, signedOut && (admitted || lobby?.access.status === 'not_yet_open'));
+  // Only where the page shows the guest banner, which is how a closed prompt is opened again. A
+  // scheduled call's pre-call page has none: it asks on Remind me, or once the call is open.
+  const callRoom = useIsCallRoom();
+  const notYetOpen = lobby?.access.status === 'not_yet_open';
+  useLobbySignInPrompt(lobbyId, signedOut && (admitted || (notYetOpen && !callRoom)));
   const exitHref = useLobbyExitHref();
   const exiting = useExitLobbyWhenOut({
     lobbyId,
