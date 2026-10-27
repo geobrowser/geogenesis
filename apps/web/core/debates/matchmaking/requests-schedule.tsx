@@ -293,6 +293,18 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
               </DaySection>
             ) : null}
             <DaySections entries={upcoming} now={now} todayAbove={past.some(entry => sameDay(entry.at, now))} />
+            {/* With only the past to show, the space under the line would otherwise read as broken. */}
+            {filter === 'all' && present.length === 0 && upcoming.length === 0 ? (
+              <Text
+                as="p"
+                variant="footnote"
+                color="grey-04"
+                className="py-3 pl-12.5"
+                data-testid="requests-nothing-ahead"
+              >
+                Nothing coming up. Invites and debates you book show up here.
+              </Text>
+            ) : null}
             {/* Room for the now-line to reach the top of the box with only an item or two below it. */}
             <div aria-hidden style={{ height: spacerHeight }} />
           </div>
@@ -1084,6 +1096,9 @@ function ReadFailures({ content }: { content: ScheduledContent }) {
  * - A sentinel at the top pages history in as it comes into view, but only after the first anchor:
  *   before it, the top of a short list is always in view and would page everything at once.
  */
+/** Between the filter row and the now-line once landed, so the red line is never tucked under the row. */
+const LINE_GAP_PX = 8;
+
 function useTimelineScroll({
   ready,
   focused,
@@ -1106,7 +1121,19 @@ function useTimelineScroll({
 }) {
   const hubScrollSelector = useHubScrollSelector() ?? HUB_SCROLL_SELECTOR;
   const rootRef = React.useRef<HTMLDivElement>(null);
-  const nowLineRef = React.useRef<HTMLDivElement>(null);
+  const nowLineRef = React.useRef<HTMLDivElement | null>(null);
+  /**
+   * The line mounting, as state. With nothing upcoming and the past still loading, the tab shows its
+   * empty state, and when the past lands the timeline (the line with it) mounts only once that state
+   * has animated out — after every effect here has already run and found no line to measure. Nothing
+   * else changed then, so nothing ran again: no spacer, no anchor, and the tab sat on past days
+   * (27 Oct). The line arriving is itself the change the effects need to hear.
+   */
+  const [lineMounted, setLineMounted] = React.useState(false);
+  const attachNowLine = React.useCallback((node: HTMLDivElement | null) => {
+    nowLineRef.current = node;
+    setLineMounted(node !== null);
+  }, []);
   const aboveLineRef = React.useRef<HTMLDivElement>(null);
   const [anchored, setAnchored] = React.useState(false);
   const [spacerHeight, setSpacerHeight] = React.useState(0);
@@ -1126,8 +1153,38 @@ function useTimelineScroll({
     };
   }, [hubScrollSelector]);
 
+  /**
+   * Until the viewer scrolls the box themselves, the line (or a linked request) stays at the top, and
+   * every change in layout re-places it rather than trying to keep an offset. The rows above it, the
+   * past, mostly arrive after the first anchor, and while they push the line down the box often can't
+   * scroll far enough yet: the spacer that makes room renders a pass later. Keeping the offset then
+   * recorded that short position as the viewer's own, and the tab stayed on past days (27 Oct).
+   */
+  const pinnedRef = React.useRef(true);
+  /**
+   * Scrolls the line (or the request a link asked for) to just under the filter row. `false` when the
+   * box could not scroll that far yet — the spacer that makes room renders a pass later — so a caller
+   * knows to try again rather than settle short.
+   */
+  const pinToTarget = React.useCallback(() => {
+    const measured = measure();
+    if (!measured) return null;
+    const { scroller, stickyHeight } = measured;
+    const linked = focused ? rootRef.current?.querySelector<HTMLElement>('[data-focused]') : null;
+    const target = linked ?? measured.line;
+    const top = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    const wanted = Math.max(0, top - stickyHeight - LINE_GAP_PX);
+    if (Math.abs(scroller.scrollTop - wanted) > 1) scroller.scrollTop = wanted;
+    lineOffsetRef.current = measured.line.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    return { reached: scroller.scrollTop + 1 >= wanted, linked: linked ?? null };
+  }, [focused, measure]);
+
   // Puts the line back where it was on screen after something above it changed height.
   const holdLine = React.useCallback(() => {
+    if (pinnedRef.current) {
+      pinToTarget();
+      return;
+    }
     const measured = measure();
     if (!measured) return;
     const previous = lineOffsetRef.current;
@@ -1135,7 +1192,7 @@ function useTimelineScroll({
       measured.scroller.scrollTop += measured.lineOffset - previous;
     }
     lineOffsetRef.current = measured.line.getBoundingClientRect().top - measured.scroller.getBoundingClientRect().top;
-  }, [measure]);
+  }, [measure, pinToTarget]);
 
   // The spacer: enough below the last item for the line to reach the top of the box.
   React.useLayoutEffect(() => {
@@ -1146,7 +1203,7 @@ function useTimelineScroll({
     const below = root.getBoundingClientRect().bottom - spacerHeight - line.getBoundingClientRect().top;
     const needed = Math.max(0, Math.round(scroller.clientHeight - stickyHeight - below));
     if (needed !== spacerHeight) setSpacerHeight(needed);
-  }, [layoutKey, measure, spacerHeight, pastKey]);
+  }, [layoutKey, lineMounted, measure, spacerHeight, pastKey]);
 
   // The first anchor, and again for each request a link asks for (GEO-3431), which takes the line's
   // place. A link followed while the tab is already open must land on its request too.
@@ -1156,30 +1213,36 @@ function useTimelineScroll({
     const key = focused ? focusKey : null;
     if (anchored && anchoredForRef.current === key) return;
     if (anchored && key === null) return;
-    const measured = measure();
-    if (!measured) return;
-    const { scroller, stickyHeight } = measured;
-    const target = focused
-      ? (rootRef.current?.querySelector<HTMLElement>('[data-focused]') ?? measured.line)
-      : measured.line;
-    const top = target.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
-    const wanted = Math.max(0, top - stickyHeight);
-    scroller.scrollTop = wanted;
-    // Short of it means the box could not scroll that far yet: with nothing below the line, the
-    // spacer that makes the room renders a pass after this. Marking the anchor done then left the
-    // timeline at the top, on past days (26 Oct). Not done until the line actually got there; the
-    // spacer's render runs this again.
-    if (scroller.scrollTop + 1 < wanted) return;
-    if (focused && target !== measured.line) target.focus({ preventScroll: true });
-    lineOffsetRef.current = measured.line.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    // A new link takes the scroll back from wherever the viewer had it.
+    pinnedRef.current = true;
+    const pinned = pinToTarget();
+    // Not done until it got there: with nothing below the line, the spacer that makes the room
+    // renders a pass after this, and marking it done then left the tab on past days (26 Oct).
+    if (!pinned?.reached) return;
+    pinned.linked?.focus({ preventScroll: true });
     anchoredForRef.current = key;
     setAnchored(true);
-  }, [anchored, focusKey, focused, measure, ready, spacerHeight]);
+  }, [anchored, focusKey, focused, lineMounted, pinToTarget, ready, spacerHeight]);
 
-  // Keep the line still when rows arrive above it.
+  // Keep the line still when rows arrive above it, and re-pin once the spacer has made room.
   React.useLayoutEffect(() => {
     if (anchored) holdLine();
-  }, [anchored, holdLine, pastKey, loadingMore]);
+  }, [anchored, holdLine, pastKey, loadingMore, layoutKey, spacerHeight]);
+
+  // The viewer taking the scroll is what ends the pin: from then on their place is what is kept.
+  // Input events rather than `scroll`, which the pin's own scrolling fires too.
+  React.useEffect(() => {
+    const scroller = rootRef.current?.closest<HTMLElement>(hubScrollSelector);
+    if (!scroller) return;
+    const release = () => {
+      pinnedRef.current = false;
+    };
+    const events = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const;
+    for (const name of events) scroller.addEventListener(name, release, { passive: true });
+    return () => {
+      for (const name of events) scroller.removeEventListener(name, release);
+    };
+  }, [hubScrollSelector]);
 
   // And when anything else above it changes height — a notice landing, a failed read's line, the
   // conflict message. Safari has no CSS scroll anchoring, so nothing else would hold it.
@@ -1197,6 +1260,8 @@ function useTimelineScroll({
     const scroller = rootRef.current?.closest<HTMLElement>(hubScrollSelector);
     if (!scroller) return;
     const onScroll = () => {
+      // The pin's own scrolling is not the viewer's place.
+      if (pinnedRef.current) return;
       const line = nowLineRef.current;
       if (line) lineOffsetRef.current = line.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
     };
@@ -1214,5 +1279,5 @@ function useTimelineScroll({
     rootSelector: hubScrollSelector,
   });
 
-  return { rootRef, nowLineRef, aboveLineRef, sentinelRef, spacerHeight };
+  return { rootRef, nowLineRef: attachNowLine, aboveLineRef, sentinelRef, spacerHeight };
 }

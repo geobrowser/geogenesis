@@ -89,7 +89,7 @@ export function HubClaimEndSlot({
     // has to wait its turn.
     const paused = ask !== null;
     return (
-      <span className="flex shrink-0 items-start gap-2.5">
+      <span className="flex shrink-0 items-baseline gap-2.5">
         {/* Not while a request is out: scheduling is the other way to debate this claim, and the
             strip above is where the open request is dealt with first. */}
         {paused || !offersSchedule ? null : (

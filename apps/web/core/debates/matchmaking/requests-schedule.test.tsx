@@ -192,6 +192,32 @@ function historyItem(overrides: Partial<DebateHistoryItem>): DebateHistoryItem {
   };
 }
 
+/**
+ * A browser's layout for the timeline: the now-line `lineTop` px down the content, the content ending
+ * at the spacer's bottom, both moving with the scroll; the pinned filter row 52px tall at the top.
+ * Everything else at 0. A container that stayed put while the line scrolled would be a layout no
+ * browser draws, and the spacer and the pin would chase each other through it.
+ */
+function timelineLayout(scrollerOf: (el: Element) => HTMLElement | null, lineTop: () => number) {
+  const box = (top: number, height = 0) =>
+    ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+  return function (this: Element) {
+    const scroller = scrollerOf(this);
+    const scrollTop = scroller?.scrollTop ?? 0;
+    if (this.hasAttribute('data-requests-now-line')) return box(lineTop() - scrollTop);
+    if (this.hasAttribute('data-hub-sticky-controls')) return box(0, 52);
+    const line = scroller?.querySelector('[data-requests-now-line]');
+    if (scroller && this !== scroller && line && this.contains(line)) {
+      const spacer = Math.max(
+        0,
+        ...[...scroller.querySelectorAll<HTMLElement>('div[aria-hidden]')].map(el => parseFloat(el.style.height) || 0)
+      );
+      return box(-scrollTop, lineTop() + spacer);
+    }
+    return box(0);
+  };
+}
+
 beforeEach(() => {
   mocks.incoming = [];
   mocks.outbound = null;
@@ -411,24 +437,11 @@ describe('RequestsSchedule', () => {
   // The design's landing: the now-line just under the filter row, whatever is above it.
   it('opens with the now-line just under the pinned filter row', () => {
     mocks.history = { ...mocks.history, items: [historyItem({})] };
-    const rect = (top: number, height = 0) => ({
-      top,
-      bottom: top + height,
-      height,
-      left: 0,
-      right: 0,
-      width: 0,
-      x: 0,
-      y: top,
-      toJSON: () => ({}),
-    });
     const original = Element.prototype.getBoundingClientRect;
-    Element.prototype.getBoundingClientRect = function (this: Element) {
-      if (this.hasAttribute('data-requests-now-line'))
-        return rect(600 - (this.closest('[data-debates-hub-scroll]') as HTMLElement).scrollTop) as DOMRect;
-      if (this.hasAttribute('data-hub-sticky-controls')) return rect(0, 52) as DOMRect;
-      return rect(0) as DOMRect;
-    };
+    Element.prototype.getBoundingClientRect = timelineLayout(
+      el => el.closest<HTMLElement>('[data-debates-hub-scroll]'),
+      () => 600
+    );
     try {
       render(
         <div data-debates-hub-scroll>
@@ -436,7 +449,8 @@ describe('RequestsSchedule', () => {
         </div>
       );
       const scroller = document.querySelector('[data-debates-hub-scroll]') as HTMLElement;
-      expect(scroller.scrollTop).toBe(548);
+      // 600 down, less the 52px filter row and the 8px gap under it.
+      expect(scroller.scrollTop).toBe(540);
     } finally {
       Element.prototype.getBoundingClientRect = original;
     }
@@ -481,7 +495,58 @@ describe('RequestsSchedule', () => {
     try {
       rtlRender(<RequestsSchedule />, { container: scroller, wrapper: HubAskProvider });
 
-      expect(scrollTop).toBe(548);
+      expect(scrollTop).toBe(540);
+    } finally {
+      Element.prototype.getBoundingClientRect = original;
+      scroller.remove();
+    }
+  });
+
+  it('lands on the now-line when the past arrives after the tab opened empty', async () => {
+    // 27 Oct: nothing upcoming and no past yet is the empty state. When the past lands, the timeline
+    // (the line with it) mounts only after that state animates out, after the effects have run.
+    mocks.history = { ...mocks.history, items: [] };
+    let scrollTop = 0;
+    const rect = (top: number, height = 0) =>
+      ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    const original = Element.prototype.getBoundingClientRect;
+    // A real box: 800px tall, scrolling only as far as its content, which the past rows make 200px
+    // longer than the box until the spacer adds its own height.
+    const scroller = document.createElement('div');
+    scroller.setAttribute('data-debates-hub-scroll', '');
+    const spacer = () =>
+      Math.max(
+        0,
+        ...[...scroller.querySelectorAll<HTMLElement>('div[aria-hidden]')].map(el => parseFloat(el.style.height) || 0)
+      );
+    Object.defineProperties(scroller, {
+      clientHeight: { get: () => 800 },
+      scrollTop: {
+        get: () => scrollTop,
+        set: (value: number) => {
+          scrollTop = Math.min(value, 200 + spacer());
+        },
+      },
+    });
+    document.body.appendChild(scroller);
+    // Laid out as a browser would: the line 600px down the content, the content ending at the spacer's
+    // bottom, both moving with the scroll; the pinned filter row 52px tall at the top.
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      if (this.hasAttribute('data-requests-now-line')) return rect(600 - scrollTop);
+      if (this.hasAttribute('data-hub-sticky-controls')) return rect(0, 52);
+      const line = scroller.querySelector('[data-requests-now-line]');
+      if (this !== scroller && line && this.contains(line)) return rect(-scrollTop, 600 + spacer());
+      return rect(0);
+    };
+    try {
+      const view = rtlRender(<RequestsSchedule />, { container: scroller, wrapper: HubAskProvider });
+      expect(screen.queryByTestId('requests-history')).not.toBeInTheDocument();
+
+      mocks.history = { ...mocks.history, items: [historyItem({})] };
+      view.rerender(<RequestsSchedule />);
+
+      await waitFor(() => expect(screen.getByTestId('requests-history')).toBeInTheDocument());
+      await waitFor(() => expect(scrollTop).toBe(540));
     } finally {
       Element.prototype.getBoundingClientRect = original;
       scroller.remove();
@@ -675,9 +740,6 @@ describe('RequestsSchedule against the board', () => {
 });
 
 describe('RequestsSchedule scrolling', () => {
-  const rect = (top: number, height = 0) =>
-    ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
-
   // GEO-3431: a link followed while Requests is already open still lands on its request.
   it('scrolls to and focuses a request a link asks for after the tab is open', () => {
     mocks.scheduled = { ...EMPTY_SCHEDULED, answerable: [invite('s1', true)] };
@@ -709,13 +771,10 @@ describe('RequestsSchedule scrolling', () => {
     } as unknown as typeof ResizeObserver;
     let lineTop = 600;
     const original = Element.prototype.getBoundingClientRect;
-    Element.prototype.getBoundingClientRect = function (this: Element) {
-      if (this.hasAttribute('data-requests-now-line')) {
-        return rect(lineTop - (this.closest('[data-debates-hub-scroll]') as HTMLElement).scrollTop);
-      }
-      if (this.hasAttribute('data-hub-sticky-controls')) return rect(0, 52);
-      return rect(0);
-    };
+    Element.prototype.getBoundingClientRect = timelineLayout(
+      el => el.closest<HTMLElement>('[data-debates-hub-scroll]'),
+      () => lineTop
+    );
     try {
       render(
         <div data-debates-hub-scroll>
@@ -723,13 +782,13 @@ describe('RequestsSchedule scrolling', () => {
         </div>
       );
       const scroller = document.querySelector('[data-debates-hub-scroll]') as HTMLElement;
-      expect(scroller.scrollTop).toBe(548);
+      expect(scroller.scrollTop).toBe(540);
 
       // A notice lands above the line and pushes it 40px down.
       lineTop = 640;
       act(() => observed?.());
 
-      expect(scroller.scrollTop).toBe(588);
+      expect(scroller.scrollTop).toBe(580);
     } finally {
       Element.prototype.getBoundingClientRect = original;
       globalThis.ResizeObserver = originalObserver;

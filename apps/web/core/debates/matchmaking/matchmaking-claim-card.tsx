@@ -365,8 +365,12 @@ function ClaimHeader({
       {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. No
           reserved height: the slot is now the height of the chip beside it, so the row does not grow
           when the match lookup answers. */}
-      <div className="claim-card-panel-header">
-        <span className="flex min-w-0 items-center gap-1.5">
+      {/* On one text baseline, not centred: the space (11px), Controversial (14px) and the slot's
+          Schedule (13px) are three sizes, and centring their boxes left each sitting at a different
+          height (27 Oct). The baseline is also what keeps the chip on the slot's first line when the
+          slot stacks a blocked reason under it. */}
+      <div className="claim-card-panel-header items-baseline">
+        <span className="flex min-w-0 items-baseline gap-1.5" data-testid="claim-card-eyebrow">
           <SpaceChip spaceId={claim.space_id} />
           {isControversial ? <ControversialTag /> : null}
           {meta ? (
@@ -1385,10 +1389,12 @@ export function SpaceChip({ spaceId }: { spaceId: string }) {
     );
   }
 
+  // The name sets the baseline, so the chip sits on the line of text beside it; the thumbnail, which
+  // has none, stays centred on the name.
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className="flex min-w-0 items-baseline gap-1.5">
       {image ? (
-        <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
+        <span className="relative h-4 w-4 shrink-0 self-center overflow-hidden rounded-sm">
           <ThumbGeoImage value={image} alt="" />
         </span>
       ) : null}

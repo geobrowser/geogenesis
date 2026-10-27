@@ -144,7 +144,6 @@ function NotAvailableCard() {
     <div data-testid="matches-not-available" className="flex items-center gap-3 rounded-xl bg-grey-01 p-3.5">
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="text-metadataMedium text-text">You’re not available now</span>
-        <span className="text-breadcrumb text-grey-04">Nobody can ask you, and you can’t ask on a claim.</span>
       </div>
       <HubPillButton
         variant="primary"
