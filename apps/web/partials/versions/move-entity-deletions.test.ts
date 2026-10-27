@@ -101,6 +101,33 @@ describe('collectMoveDeletions', () => {
     expect(values).toHaveLength(0);
   });
 
+  it('keeps the children of a block that another entity still references', () => {
+    store.relations = [
+      relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS }),
+      relation({ id: 'external-ref', from: 'unrelated', to: 'block' }),
+      relation({ id: 'contains-child', from: 'block', to: 'child', typeId: SystemIds.BLOCKS }),
+      relation({ id: 'contains-grandchild', from: 'child', to: 'grandchild', typeId: SystemIds.BLOCKS }),
+    ];
+    store.values = [value('child', SOURCE, 'child-v'), value('grandchild', SOURCE, 'grandchild-v')];
+
+    const { values, relations } = collectMoveDeletions(ENTITY, SOURCE);
+
+    expect(values).toHaveLength(0);
+    expect(relations.map(r => r.id)).toEqual(['contains-block']);
+  });
+
+  it('still clears the children of a block nothing else references', () => {
+    store.relations = [
+      relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS }),
+      relation({ id: 'contains-child', from: 'block', to: 'child', typeId: SystemIds.BLOCKS }),
+    ];
+    store.values = [value('block', SOURCE, 'block-v'), value('child', SOURCE, 'child-v')];
+
+    const { values } = collectMoveDeletions(ENTITY, SOURCE);
+
+    expect(values.map(v => v.id).sort()).toEqual(['block-v', 'child-v']);
+  });
+
   it('clears a block that only another space points at', () => {
     store.relations = [
       relation({ id: 'contains-block', from: ENTITY, to: 'block', typeId: SystemIds.BLOCKS }),

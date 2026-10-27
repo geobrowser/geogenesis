@@ -17,22 +17,35 @@ export function collectMoveDeletions(
 ): { values: Value[]; relations: Relation[] } {
   const { entityIds: subtreeIds } = collectSubtree(entityId, sourceSpaceId);
 
-  const containmentRelationIds = new Set(
-    getRelations({
-      selector: r =>
-        subtreeIds.has(r.fromEntity.id) &&
-        r.spaceId === sourceSpaceId &&
-        (r.type.id === SystemIds.BLOCKS || r.type.id === SystemIds.TABS_PROPERTY),
-    }).map(r => r.id)
-  );
+  const containmentRelations = getRelations({
+    selector: r =>
+      subtreeIds.has(r.fromEntity.id) &&
+      r.spaceId === sourceSpaceId &&
+      (r.type.id === SystemIds.BLOCKS || r.type.id === SystemIds.TABS_PROPERTY),
+  });
+  const containmentRelationIds = new Set(containmentRelations.map(r => r.id));
 
-  const orphanedDescendantIds = [...subtreeIds].filter(id => {
+  const keptIds = [...subtreeIds].filter(id => {
     if (id === entityId) return false;
     const externalRefs = getRelations({
       selector: r => r.toEntity.id === id && r.spaceId === sourceSpaceId && !containmentRelationIds.has(r.id),
     });
-    return externalRefs.length === 0;
+    return externalRefs.length > 0;
   });
+
+  const keptSubtreeIds = new Set(keptIds);
+  const queue = [...keptIds];
+  while (queue.length > 0) {
+    const id = queue.pop()!;
+    for (const r of containmentRelations) {
+      if (r.fromEntity.id === id && !keptSubtreeIds.has(r.toEntity.id)) {
+        keptSubtreeIds.add(r.toEntity.id);
+        queue.push(r.toEntity.id);
+      }
+    }
+  }
+
+  const orphanedDescendantIds = [...subtreeIds].filter(id => id !== entityId && !keptSubtreeIds.has(id));
 
   const values = getValues({
     selector: value => value.entity.id === entityId && value.spaceId === sourceSpaceId,
