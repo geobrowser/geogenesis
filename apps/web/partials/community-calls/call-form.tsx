@@ -15,6 +15,12 @@ import { reconcileAutoPublish } from '~/core/community-calls/api';
 import { buildCreateCallOps, buildUpdateCallOps } from '~/core/community-calls/call-ops';
 import { CALL_SCHEMA } from '~/core/community-calls/constants';
 import { notifyScheduleChange } from '~/core/community-calls/notify-schedule-change';
+import {
+  editedSchedule,
+  repeatFromSchedule,
+  ruleFromRepeat,
+  storedScheduleFields,
+} from '~/core/community-calls/schedule-form';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePublish } from '~/core/hooks/use-publish';
@@ -25,7 +31,13 @@ import { spaceCallsTabPath } from '~/core/space-calls/routes';
 import { useAfterSeriesPublish } from '~/core/space-calls/series/after-publish';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { useFeatureFlag } from '~/core/state/feature-flags';
-import { parseSchedule, serializeSchedule, tzAbbreviation, validateSchedule } from '~/core/utils/schedule';
+import {
+  formatSchedule,
+  parseSchedule,
+  serializeSchedule,
+  tzAbbreviation,
+  validateSchedule,
+} from '~/core/utils/schedule';
 
 import { Button } from '~/design-system/button';
 import { Select } from '~/design-system/select';
@@ -56,13 +68,6 @@ export type CallFormInitial = {
 type Props =
   { mode: 'create'; spaceId: string } | { mode: 'edit'; spaceId: string; callId: string; initial: CallFormInitial };
 
-/** Repeat-select value ('none'/'DAILY'/'WEEKLY'/'BIWEEKLY'/'MONTHLY') for a parsed freq+interval. */
-function repeatFromSchedule(freq: string, interval: number): string {
-  if (!freq) return 'none';
-  if (freq === 'WEEKLY' && interval === 2) return 'BIWEEKLY';
-  return freq;
-}
-
 /** Author or edit a CommunityCall GRC-20 entity on-chain (dedicated form). */
 export function CallForm(props: Props) {
   const router = useRouter();
@@ -84,7 +89,16 @@ export function CallForm(props: Props) {
   // Every schedule this form writes carries the organizer's own zone (upgrading a legacy
   // no-TZID schedule to TZID on next save) rather than the zone it happened to be created in.
   const browserTimezone = React.useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
-  const zoneLabel = React.useMemo(() => tzAbbreviation(browserTimezone, Date.now()), [browserTimezone]);
+  // An edit keeps the stored schedule's zone (UTC for a legacy one); a schedule the fields cannot
+  // hold is shown read-only and saved unchanged.
+  const storedSchedule = initial?.schedule.trim() ? initial.schedule : null;
+  const storedFields = React.useMemo(
+    () => (storedSchedule ? storedScheduleFields(storedSchedule) : null),
+    [storedSchedule]
+  );
+  const scheduleLocked = storedSchedule !== null && storedFields === null;
+  const scheduleZone = storedSchedule ? (storedFields?.timezone ?? 'UTC') : browserTimezone;
+  const zoneLabel = React.useMemo(() => tzAbbreviation(scheduleZone, Date.now()), [scheduleZone]);
 
   const [name, setName] = React.useState(initial?.name ?? '');
   const [description, setDescription] = React.useState(initial?.description ?? '');
@@ -117,16 +131,26 @@ export function CallForm(props: Props) {
     spaceCalls && proposalId ? afterSeriesPublish({ seriesId, proposalId, schedule }) : backHref;
 
   const buildSchedule = () => {
-    const freq = repeat === 'none' ? '' : repeat === 'BIWEEKLY' ? 'WEEKLY' : repeat;
-    const interval = repeat === 'BIWEEKLY' ? 2 : 1;
-    return serializeSchedule({ startDate, startTime, endTime, freq, byDay: [], interval, timezone: browserTimezone });
+    if (storedSchedule) return editedSchedule(storedSchedule, { startDate, startTime, endTime, repeat });
+    return serializeSchedule({
+      startDate,
+      startTime,
+      endTime,
+      ...ruleFromRepeat(repeat),
+      byDay: [],
+      timezone: browserTimezone,
+    });
   };
 
   const onSubmit = async () => {
     if (!name.trim()) return setToast(<>Add a call name.</>);
 
     const schedule = buildSchedule();
-    const validation = validateSchedule(schedule, { requireFutureStart: props.mode === 'create' });
+    // An untouched schedule is saved as stored, even one this validator would not accept.
+    const validation =
+      schedule === storedSchedule
+        ? { valid: true, errors: [] }
+        : validateSchedule(schedule, { requireFutureStart: props.mode === 'create' });
     if (!validation.valid) return setToast(<>{validation.errors[0]}</>);
 
     setSubmitting(true);
@@ -248,28 +272,44 @@ export function CallForm(props: Props) {
       <div className="flex flex-col gap-4 rounded-lg border border-grey-02 p-4">
         <h3 className="text-smallTitle">Meeting Time</h3>
 
-        <Field label="Start date" chip="Ab">
-          <input
-            type="date"
-            value={startDate}
-            onChange={e => setStartDate(e.target.value)}
-            min={props.mode === 'create' ? todayDateInput(browserTimezone) : undefined}
-            className={fieldClass}
-          />
-        </Field>
+        {scheduleLocked ? (
+          <div className="flex flex-col gap-1" data-testid="call-form-schedule-locked">
+            <span className="text-metadata text-text">{formatSchedule(storedSchedule ?? '')}</span>
+            <span className="text-footnote text-grey-04">
+              This schedule uses rules this form can’t edit, so it is kept as it is.
+            </span>
+          </div>
+        ) : (
+          <>
+            <Field label="Start date" chip="Ab">
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => setStartDate(e.target.value)}
+                min={props.mode === 'create' ? todayDateInput(browserTimezone) : undefined}
+                className={fieldClass}
+              />
+            </Field>
 
-        <div className="flex gap-3">
-          <Field label={`Start time (${zoneLabel})`} className="flex-1">
-            <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={fieldClass} />
-          </Field>
-          <Field label={`End time (${zoneLabel})`} className="flex-1">
-            <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={fieldClass} />
-          </Field>
-        </div>
+            <div className="flex gap-3">
+              <Field label={`Start time (${zoneLabel})`} className="flex-1">
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={e => setStartTime(e.target.value)}
+                  className={fieldClass}
+                />
+              </Field>
+              <Field label={`End time (${zoneLabel})`} className="flex-1">
+                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={fieldClass} />
+              </Field>
+            </div>
 
-        <Field label="Repeat">
-          <Select value={repeat} onChange={setRepeat} options={REPEAT_OPTIONS} />
-        </Field>
+            <Field label="Repeat">
+              <Select value={repeat} onChange={setRepeat} options={REPEAT_OPTIONS} />
+            </Field>
+          </>
+        )}
 
         <Field label="Auto publish ahead" chip="123">
           <input

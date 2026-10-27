@@ -25,6 +25,14 @@ const DAY_NAMES: Record<string, string> = {
 
 const VALID_DAYS = new Set(Object.keys(DAY_NAMES));
 
+/** `MO`, or an RFC 5545 ordinal such as `3MO` or `-1FR`. */
+function isValidByDay(token: string): boolean {
+  if (VALID_DAYS.has(token)) return true;
+  const match = /^([+-]?\d{1,2})([A-Z]{2})$/.exec(token);
+  const n = match ? Math.abs(Number(match[1])) : 0;
+  return Boolean(match && VALID_DAYS.has(match[2]) && n >= 1 && n <= 5);
+}
+
 const ORDINAL_NAMES: Record<string, string> = {
   '1': 'first',
   '2': 'second',
@@ -196,7 +204,7 @@ function validateRRule(rrule: string): string[] {
       case 'BYDAY': {
         const days = val.split(',');
         for (const day of days) {
-          if (!VALID_DAYS.has(day)) {
+          if (!isValidByDay(day)) {
             errors.push(`Invalid day "${day}". Must be one of: ${[...VALID_DAYS].join(', ')}`);
           }
         }
