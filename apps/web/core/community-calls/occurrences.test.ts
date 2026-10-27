@@ -6,6 +6,17 @@ import { bucketOccurrences, findOccurrenceByStart, getOccurrences } from './occu
 const NOW = Date.UTC(2026, 2, 5, 17, 30); // 2026-03-05 17:30 UTC
 
 describe('getOccurrences', () => {
+  // Parity with geo-chat's `parse_time` (call_series.rs).
+  it('reads a skipped start an hour on, and a repeated one at its earlier instant', () => {
+    const skipped = getOccurrences('DTSTART;TZID=America/New_York:20260308T023000', Date.parse('2026-03-01T00:00:00Z'));
+    expect(new Date(skipped[0]!.startMs).toISOString()).toBe('2026-03-08T07:30:00.000Z');
+    const repeated = getOccurrences(
+      'DTSTART;TZID=America/New_York:20261101T013000',
+      Date.parse('2026-10-25T00:00:00Z')
+    );
+    expect(new Date(repeated[0]!.startMs).toISOString()).toBe('2026-11-01T05:30:00.000Z');
+  });
+
   it('returns a single occurrence for a non-recurring schedule in window', () => {
     const occ = getOccurrences('DTSTART:20260305T170000Z\nDTEND:20260305T180000Z', NOW);
     expect(occ).toHaveLength(1);

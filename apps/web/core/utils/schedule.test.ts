@@ -3,13 +3,50 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MAX_CALL_DURATION_MINUTES,
   MIN_CALL_DURATION_MINUTES,
+  SKIPPED_TIME_ERROR,
   formatSchedule,
+  isSkippedLocalTime,
+  localToUtcMs,
   parseSchedule,
   serializeSchedule,
   validateSchedule,
 } from './schedule';
 
+// geo-chat's `parse_time`: a repeated hour takes its earlier instant, a skipped one reads an hour on.
+describe('localToUtcMs, as geo-chat resolves wall clocks', () => {
+  const at = (iso: string) => Date.parse(iso);
+  const naive = (y: number, m: number, d: number, h: number, min: number) => Date.UTC(y, m - 1, d, h, min);
+
+  it('reads a time the clocks skip an hour on', () => {
+    expect(localToUtcMs(naive(2026, 3, 8, 2, 30), 'America/New_York')).toBe(at('2026-03-08T07:30:00Z'));
+    expect(isSkippedLocalTime(naive(2026, 3, 8, 2, 30), 'America/New_York')).toBe(true);
+  });
+
+  it('takes the earlier of a repeated hour, west and east of UTC', () => {
+    expect(localToUtcMs(naive(2026, 11, 1, 1, 30), 'America/New_York')).toBe(at('2026-11-01T05:30:00Z'));
+    expect(localToUtcMs(naive(2026, 10, 25, 1, 30), 'Europe/London')).toBe(at('2026-10-25T00:30:00Z'));
+    expect(isSkippedLocalTime(naive(2026, 11, 1, 1, 30), 'America/New_York')).toBe(false);
+  });
+
+  it('reads ordinary times on either side of a change', () => {
+    expect(localToUtcMs(naive(2026, 3, 8, 9, 0), 'America/Los_Angeles')).toBe(at('2026-03-08T16:00:00Z'));
+    expect(localToUtcMs(naive(2026, 3, 7, 9, 0), 'America/Los_Angeles')).toBe(at('2026-03-07T17:00:00Z'));
+    expect(localToUtcMs(naive(2026, 10, 26, 17, 0), 'Africa/Lagos')).toBe(at('2026-10-26T16:00:00Z'));
+    expect(localToUtcMs(naive(2026, 10, 26, 17, 0), 'Not/AZone')).toBe(at('2026-10-26T17:00:00Z'));
+  });
+});
+
 describe('validateSchedule', () => {
+  it('refuses a start or end the clocks skip', () => {
+    expect(validateSchedule('DTSTART;TZID=America/New_York:20260308T023000').errors).toContain(SKIPPED_TIME_ERROR);
+    expect(
+      validateSchedule('DTSTART;TZID=America/New_York:20260308T013000\nDTEND;TZID=America/New_York:20260308T024500')
+        .errors
+    ).toContain(SKIPPED_TIME_ERROR);
+    expect(validateSchedule('DTSTART;TZID=America/New_York:20261101T013000').valid).toBe(true);
+    expect(validateSchedule('DTSTART:20260308T023000Z').valid).toBe(true);
+  });
+
   it('accepts a valid schedule with DTSTART only', () => {
     const result = validateSchedule('DTSTART:20260305T170000Z');
     expect(result.valid).toBe(true);
