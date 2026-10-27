@@ -46,7 +46,7 @@ import { tokenAllowsCamera } from '../livekit-grant';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { createLobbyCamera } from './lobby-camera';
 import { lobbyErrorMessage } from './lobby-format';
-import { useLobbyRoomNoun } from './lobby-purpose';
+import { useIsCallRoom, useLobbyRoomNoun } from './lobby-purpose';
 import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
 import { registerLobbyCapture, reportLobbyCamera, reportLobbyMic } from './step-out';
@@ -58,7 +58,7 @@ export type LobbyVoiceStates = {
   speaking: ReadonlySet<string>;
   micOn: ReadonlySet<string>;
   cameras: ReadonlyMap<string, TrackReference>;
-  /** Shared screens, by sharer; only a call's room reads them (GEO-3419). */
+  /** Shared screens, by sharer; read by a call's or a lobby's room (GEO-3419, GEO-3507). */
   screens?: ReadonlyMap<string, TrackReference>;
   connected: boolean;
 };
@@ -86,6 +86,23 @@ const voiceTokenKey = (accountKey: string | null, lobbyId: string, canPublish: b
 /** Hosts, the acting host and speakers publish; a change needs a new token. */
 function rolePublishes(lobby: MemberLobbyPageView) {
   return lobby.viewer.hosting || lobby.viewer.role === 'host' || lobby.viewer.role === 'speaker';
+}
+
+/** In a lobby only hosts by role share a screen, not an acting host (GEO-3507); in a call any publisher. */
+function roleSharesScreen(lobby: MemberLobbyPageView, call: boolean) {
+  return call || lobby.viewer.role === 'host';
+}
+
+const SCREEN_SHARE_SOURCE = Track.sourceToProto(Track.Source.ScreenShare);
+
+/**
+ * The live grant once LiveKit has one: a lobby host change updates it in place, without a new
+ * token. The token's flag until then. An empty source list allows every source.
+ */
+function grantsScreenShare(permissions: ReturnType<typeof useLocalParticipantPermissions>, tokenAllows: boolean) {
+  if (!permissions) return tokenAllows;
+  const sources = permissions.canPublishSources;
+  return sources.length === 0 || sources.includes(SCREEN_SHARE_SOURCE);
 }
 
 const ROOM_OPTIONS: RoomOptions = {
@@ -132,7 +149,7 @@ export function LobbyVoice({
   onAudible?: () => void;
   /** Voice is refused, failed or in another tab: a guest room still playing goes too. */
   onUnavailable?: () => void;
-  /** A call: offer screen sharing when the token allows it, and show shared screens. */
+  /** Offer screen sharing when the token allows it, and show shared screens. */
   screenShare?: boolean;
   /** A call: a publisher's device check before first connecting; `join` connects with its choice. */
   preJoin?: (join: (choice: LobbyVoiceJoinChoice) => void) => React.ReactNode;
@@ -158,6 +175,8 @@ export function LobbyVoice({
   );
   const lobbyId = lobby.lobby_id;
   const canPublish = rolePublishes(lobby);
+  const call = useIsCallRoom();
+  const sharesScreen = roleSharesScreen(lobby, call);
 
   // One LiveKit identity per person: a second tab would replace this one, so tabs take turns.
   const [ownership, setOwnership] = React.useState<OwnershipState>('pending');
@@ -377,7 +396,8 @@ export function LobbyVoice({
     >
       <ConnectedVoice
         canPublish={data.can_publish}
-        canShareScreen={screenShare && Boolean(data.can_share_screen)}
+        canShareScreen={screenShare && sharesScreen}
+        tokenSharesScreen={Boolean(data.can_share_screen)}
         watchScreens={screenShare}
         micFailure={micFailure}
         cameraAllowed={cameraAllowed}
@@ -419,6 +439,7 @@ type VoiceNotice = {
 function ConnectedVoice({
   canPublish,
   canShareScreen,
+  tokenSharesScreen,
   watchScreens,
   micFailure,
   cameraAllowed,
@@ -436,7 +457,10 @@ function ConnectedVoice({
   children,
 }: {
   canPublish: boolean;
+  /** The room and role allow sharing; the grant decides the rest. */
   canShareScreen: boolean;
+  /** The token's grant, until LiveKit sends the live one. */
+  tokenSharesScreen: boolean;
   watchScreens: boolean;
   micFailure: MediaDeviceFailure | null;
   cameraAllowed: boolean;
@@ -513,9 +537,11 @@ function ConnectedVoice({
     camera.release();
   }, [camera, canPublish, localParticipant, mayPublish, onCameraChoice, onMicChoice]);
 
-  // A call's screen share stops with publishing rights, and with the room.
+  // A screen share stops with publishing or host rights, and with the room. A revoked grant also
+  // unpublishes it on the server, which `isScreenShareEnabled` follows.
   // Phones mostly cannot capture a screen (no getDisplayMedia); they get no button.
-  const mayShareScreen = canShareScreen && mayPublish && canCaptureScreen();
+  const mayShareScreen =
+    canShareScreen && mayPublish && grantsScreenShare(permissions, tokenSharesScreen) && canCaptureScreen();
   React.useEffect(() => {
     if (!canShareScreen || mayShareScreen) return;
     void localParticipant.setScreenShareEnabled(false).catch(() => undefined);
@@ -691,7 +717,7 @@ const NO_SOURCES: Track.Source[] = [];
 // Besides publish, unpublish and subscription changes; not active speakers, which change constantly.
 const CAMERA_UPDATES = { updateOnlyOn: [RoomEvent.TrackMuted, RoomEvent.TrackUnmuted] };
 
-/** Who is speaking, whose mic is on and whose camera (and, in a call, screen) shows in the room this sits in. */
+/** Who is speaking, whose mic is on and whose camera (and, when watched, screen) shows in the room this sits in. */
 function useParticipantVoiceStates(connected: boolean, watchScreens = false) {
   const participants = useParticipants();
   const cameraTracks = useTracks(CAMERA_SOURCES, CAMERA_UPDATES);
@@ -758,7 +784,7 @@ export function LobbyGuestVoice({
   onRemoved: () => void;
   /** The member room is taking over and draws its own bar. */
   quiet?: boolean;
-  /** A call: show shared screens. */
+  /** Show shared screens. */
   screenShare?: boolean;
 }) {
   const [connectFailed, setConnectFailed] = React.useState(false);
