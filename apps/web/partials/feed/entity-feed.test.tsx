@@ -339,6 +339,16 @@ describe('EntityFeed card and query wiring', () => {
       rerender(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" />);
       expect(mocks.cardProps?.claimCardVariant).toBe('feed');
     });
+
+    it('hands topic Follow to cards only when requested', () => {
+      mocks.pages = [{ items: [item] }];
+      const { rerender } = render(<EntityFeed apiEndpoint="/api/explore/feed" topicFollow />);
+
+      expect(mocks.cardProps?.topicFollow).toBe(true);
+
+      rerender(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" />);
+      expect(mocks.cardProps?.topicFollow).toBe(false);
+    });
   });
 });
 

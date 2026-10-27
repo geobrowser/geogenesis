@@ -1,6 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { countActivityForNode } from '~/core/claims/browse/claim-activity-fields';
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
@@ -32,6 +33,11 @@ export type ExploreDebateClaim = {
   name: string;
 };
 
+export type ExploreCardTopic = {
+  id: string;
+  name: string;
+};
+
 /**
  * Everything an `ExploreFeedCard` renders, and nothing about how it was found.
  *
@@ -54,6 +60,7 @@ export type ExploreFeedItem = {
   debateVideoUrls: string[];
   /** The claim this Debate argued. `null` on every non-debate, and on a debate missing the relation. */
   debateClaim: ExploreDebateClaim | null;
+  topics?: ExploreCardTopic[];
   commentCount: number;
   /**
    * Debates, extracted claims and every comment under them — what the claim page's Activity heading
@@ -158,6 +165,7 @@ export function decodeExploreCardEntity(node: unknown): ExploreCardEntity | null
 }
 
 const DEBATE_CLAIMS_RELATION = normId(DEBATE_CLAIMS_PROPERTY_ID);
+const TOPICS_RELATION = normId(TOPICS_PROPERTY_ID);
 
 /**
  * The claim behind a Debate entity, from its own `Claims` relation.
@@ -190,6 +198,22 @@ export function debateClaimFromEntity(
     return { entityId: relation.toEntity.id, name };
   }
   return null;
+}
+
+/** Named topics only, once each: an unnamed one would leave a Follow with nothing to say it follows. */
+export function topicsFromRelations(relations: Entity['relations'] | undefined): ExploreCardTopic[] {
+  const seen = new Set<string>();
+  const topics: ExploreCardTopic[] = [];
+  for (const relation of relations ?? []) {
+    if (relation.isDeleted === true) continue;
+    if (normId(relation.type.id) !== TOPICS_RELATION) continue;
+    const name = relation.toEntity.name?.trim();
+    const key = normId(relation.toEntity.id);
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    topics.push({ id: relation.toEntity.id, name });
+  }
+  return topics;
 }
 
 /**
@@ -326,6 +350,7 @@ export function buildExploreFeedRows(
       recordingUrls: getRecordingUrls(relationsInDisplaySpace),
       debateVideoUrls: getRelationVideoUrls(relationsInDisplaySpace, DEBATE_VIDEOS_PROPERTY_ID),
       debateClaim: debateClaimFromEntity(types, relationsInDisplaySpace),
+      topics: topicsFromRelations(relationsInDisplaySpace),
       commentCount: e.commentCount,
       activityCount: e.activityCount,
       activityCommentCount: e.activityCommentCount,

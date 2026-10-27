@@ -29,6 +29,7 @@ import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-a
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
 import { EXPLORE_CARD_TITLE_CLASS_NAME } from './explore-card-title';
+import { ExploreCardTopicFollow } from './explore-card-topic-follow';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
 
@@ -71,6 +72,7 @@ export function ClaimExploreFeedCard({
   titleOpensSidePanel = false,
   variant = 'feed',
   responseNote,
+  topicFollow = false,
 }: {
   item: ExploreFeedItem;
   hideSpaceLink?: boolean;
@@ -97,6 +99,7 @@ export function ClaimExploreFeedCard({
    * the only answer worth reporting is the reader's own.
    */
   responseNote?: (position: boolean) => React.ReactNode;
+  topicFollow?: boolean;
 }) {
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
@@ -277,15 +280,18 @@ export function ClaimExploreFeedCard({
           extraSegments={extraSegments}
           compactOnMobile={matchesDebatePanelOnMobile}
           endSlot={
-            <ClaimEndSlot
-              claimId={item.entityId}
-              spaceId={item.spaceId}
-              activeDebate={row?.active_debate}
-              enabled={nearViewport}
-              // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
-              viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
-              className="ml-auto"
-            />
+            <div className="flex min-w-0 flex-1 items-center justify-end">
+              {topicFollow ? <ExploreCardTopicFollow topics={item.topics} /> : null}
+              <ClaimEndSlot
+                claimId={item.entityId}
+                spaceId={item.spaceId}
+                activeDebate={row?.active_debate}
+                enabled={nearViewport}
+                // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
+                viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
+                className="ml-3 empty:ml-0"
+              />
+            </div>
           }
           className="col-start-1 row-start-1 mb-3 claim-card-narrow:mb-0"
         />

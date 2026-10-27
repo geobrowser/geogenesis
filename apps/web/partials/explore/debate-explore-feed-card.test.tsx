@@ -195,6 +195,12 @@ vi.mock('./explore-join-space-button', () => ({
 
 const CLAIM_NAME = 'Fast fashion should be discouraged with higher taxation';
 
+vi.mock('./explore-card-topic-follow', () => ({
+  ExploreCardTopicFollow: ({ topics }: { topics?: { name: string }[] }) => (
+    <div data-testid="topic-follow">{topics?.map(topic => topic.name).join(',')}</div>
+  ),
+}));
+
 const item: ExploreFeedItem = {
   entityId: 'fd51f9352063461780397b672b23364c',
   spaceId: 'space-1',
@@ -1333,5 +1339,15 @@ describe('DebateExploreFeedCard', () => {
 
       expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent(item.title);
     });
+  });
+
+  it('offers the debate’s topics beside its full-screen link only when asked to', () => {
+    const tagged = { ...item, topics: [{ id: 'topic-a', name: 'Climate' }] };
+    const { unmount } = renderCard({ item: tagged });
+    expect(screen.queryByTestId('topic-follow')).toBeNull();
+    unmount();
+
+    renderCard({ item: tagged, topicFollow: true });
+    expect(screen.getByTestId('topic-follow').textContent).toBe('Climate');
   });
 });

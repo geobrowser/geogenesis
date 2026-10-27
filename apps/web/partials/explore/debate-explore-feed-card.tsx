@@ -31,6 +31,7 @@ import { FullscreenLink } from '~/design-system/fullscreen-link';
 
 import { DebateExploreMetaRow } from './debate-explore-meta-row';
 import { ExploreCardTitle } from './explore-card-title';
+import { ExploreCardTopicFollow } from './explore-card-topic-follow';
 import { openExploreDebateClaimsPanelAtom } from '~/atoms';
 
 /** Visibility thresholds, relative to the viewport height when the card is taller than it.
@@ -129,6 +130,7 @@ type DebateExploreFeedCardProps = {
   onPlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
   /** Additional action placed beside the full-screen link. */
   endSlot?: React.ReactNode;
+  topicFollow?: boolean;
   /**
    * Rendered instead of the debate card when the debate can't be shown as a video — feature flag
    * off, the geo-chat record is missing or unwatchable, or its final video isn't processed yet.
@@ -158,6 +160,7 @@ export function DebateExploreFeedCard({
   onPlaybackRequest,
   onPlaybackAvailabilityChange,
   endSlot,
+  topicFollow = false,
   fallback,
 }: DebateExploreFeedCardProps) {
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
@@ -477,15 +480,22 @@ export function DebateExploreFeedCard({
               hideTypeTag
               compact={compactChrome}
               endSlot={
-                <div className="ml-auto flex shrink-0 items-center gap-1">
-                  {endSlot}
-                  <FullscreenLink
-                    requiresFullPage
-                    href={NavUtils.toEntity(item.spaceId, item.entityId)}
-                    entityId={item.entityId}
-                    spaceId={item.spaceId}
-                    ariaLabel="Watch this debate full screen"
-                  />
+                // The topic control shares this one meta-row line; only its topic name truncates,
+                // while Follow, the +N list and the full-screen link stay shrink-0. Keeping it on the
+                // row rather than adding one leaves the card's height budget (DEBATE_CARD_COLUMN_BUDGET)
+                // untouched.
+                <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
+                  {topicFollow ? <ExploreCardTopicFollow topics={item.topics} className="mr-1" /> : null}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {endSlot}
+                    <FullscreenLink
+                      requiresFullPage
+                      href={NavUtils.toEntity(item.spaceId, item.entityId)}
+                      entityId={item.entityId}
+                      spaceId={item.spaceId}
+                      ariaLabel="Watch this debate full screen"
+                    />
+                  </div>
                 </div>
               }
             />

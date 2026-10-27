@@ -126,6 +126,16 @@ describe('ExplorePage For you sort', () => {
     });
   });
 
+  it('offers topic Follow on the cards of both feeds', () => {
+    renderExplore();
+    expect(mocks.feedProps.at(-1)?.topicFollow).toBe(true);
+
+    cleanup();
+    mocks.flags = { forYouFeed: true };
+    renderExplore();
+    expect(mocks.feedProps.at(-1)?.topicFollow).toBe(true);
+  });
+
   function renderWithHeldPicks(owner: string) {
     const store = createStore();
     store.set(feedTopicsAtom, {

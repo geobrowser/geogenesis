@@ -37,12 +37,19 @@ vi.mock('./claim-explore-feed-card', () => ({
     item,
     titleOpensSidePanel,
     variant,
+    topicFollow,
   }: {
     item: { title: string };
     titleOpensSidePanel?: boolean;
     variant?: string;
+    topicFollow?: boolean;
   }) => (
-    <div data-testid="claim-card" data-opens-side-panel={String(titleOpensSidePanel)} data-variant={variant}>
+    <div
+      data-testid="claim-card"
+      data-opens-side-panel={String(titleOpensSidePanel)}
+      data-variant={variant}
+      data-topic-follow={String(topicFollow)}
+    >
       {item.title}
     </div>
   ),
@@ -96,14 +103,24 @@ vi.mock('./debate-explore-feed-card', () => ({
   DebateExploreFeedCard: ({
     fallback,
     titleOpensSidePanel,
+    topicFollow,
   }: {
     fallback: React.ReactNode;
     titleOpensSidePanel?: boolean;
+    topicFollow?: boolean;
   }) => (
-    <div data-testid="debate-card" data-opens-side-panel={String(titleOpensSidePanel)}>
+    <div
+      data-testid="debate-card"
+      data-opens-side-panel={String(titleOpensSidePanel)}
+      data-topic-follow={String(topicFollow)}
+    >
       {fallback}
     </div>
   ),
+}));
+
+vi.mock('./explore-card-topic-follow', () => ({
+  ExploreCardTopicFollow: () => <div data-testid="topic-follow" />,
 }));
 
 // The link's own behaviour has its own suite; here we only need to see which flag it was handed.
@@ -343,6 +360,35 @@ describe('ExploreFeedCard', () => {
     it('stays off by default, so the card keeps navigating everywhere else it is used', () => {
       render(<ExploreFeedCard item={item} />);
       expect(screen.getByTestId('card-title-link')).toHaveAttribute('data-opens-side-panel', 'false');
+    });
+  });
+
+  describe('topicFollow', () => {
+    const CLAIM = { ...item, types: [{ id: '96f859ef-a1ca-4b22-9372-c86ad58b694b', name: 'Claim' }] };
+    const DEBATE = { ...item, types: [{ id: 'fd51f935-2063-4617-be39-7b672b23364c', name: 'Debate' }] };
+
+    it('reaches the claim card', () => {
+      render(<ExploreFeedCard item={CLAIM} topicFollow />);
+      expect(screen.getByTestId('claim-card')).toHaveAttribute('data-topic-follow', 'true');
+    });
+
+    it('reaches the debate card, and its unwatchable fallback draws the topics too', () => {
+      render(<ExploreFeedCard item={DEBATE} topicFollow />);
+      expect(screen.getByTestId('debate-card')).toHaveAttribute('data-topic-follow', 'true');
+      expect(screen.getByTestId('topic-follow')).toBeInTheDocument();
+    });
+
+    it('stays off by default on every rendition', () => {
+      render(<ExploreFeedCard item={CLAIM} />);
+      render(<ExploreFeedCard item={DEBATE} />);
+      expect(screen.getByTestId('claim-card')).not.toHaveAttribute('data-topic-follow', 'true');
+      expect(screen.getByTestId('debate-card')).not.toHaveAttribute('data-topic-follow', 'true');
+      expect(screen.queryByTestId('topic-follow')).toBeNull();
+    });
+
+    it('is never drawn on a card that is neither a claim nor a debate', () => {
+      render(<ExploreFeedCard item={item} topicFollow />);
+      expect(screen.queryByTestId('topic-follow')).toBeNull();
     });
   });
 });

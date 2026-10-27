@@ -26,6 +26,7 @@ import {
   ExploreCardSurface,
 } from './explore-card-chrome';
 import { ExploreCardTitle } from './explore-card-title';
+import { ExploreCardTopicFollow } from './explore-card-topic-follow';
 import { ExploreMetaRow } from './explore-meta-row';
 import { RankingCardBody } from './explore-ranking-card-body';
 import { TopicExploreFeedCardArticle } from './topic-explore-feed-card';
@@ -57,6 +58,7 @@ type ExploreFeedCardProps = {
   onDebatePlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
   /** Profile-only owner action shown beside the debate's full-screen control. */
   debateEndSlot?: React.ReactNode;
+  topicFollow?: boolean;
   /**
    * Hold the card back until it comes near the viewport, drawing a placeholder of about its height
    * until then. For a long list whose lower cards nobody has scrolled to yet — see
@@ -181,6 +183,7 @@ function ExploreFeedCardBody(props: ExploreFeedCardProps) {
         onPlaybackRequest={props.onDebatePlaybackRequest}
         onPlaybackAvailabilityChange={props.onDebatePlaybackAvailabilityChange}
         endSlot={props.debateEndSlot}
+        topicFollow={props.topicFollow}
         fallback={<BaseExploreFeedCard {...props} />}
       />
     );
@@ -199,6 +202,7 @@ function ExploreFeedCardBody(props: ExploreFeedCardProps) {
         hideJoinButton={props.hideJoinButton}
         titleOpensSidePanel={props.titleOpensSidePanel}
         variant={props.claimCardVariant}
+        topicFollow={props.topicFollow}
       />
     );
   }
@@ -228,6 +232,7 @@ function BaseExploreFeedCard({
   titleOpensSidePanel = false,
   compactDebateChrome = false,
   debateEndSlot,
+  topicFollow = false,
 }: ExploreFeedCardProps) {
   const isCommunityCall = item.types.some(type => normId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
   const isRanking = item.types.some(type => normId(type.id) === RANKING_BLOCK_TYPE);
@@ -252,7 +257,18 @@ function BaseExploreFeedCard({
           item={item}
           hideSpaceLink={hideSpaceLink}
           hideJoinButton={hideJoinButton}
-          endSlot={isDebateEntity(item.types) ? debateEndSlot : undefined}
+          endSlot={
+            isDebateEntity(item.types) ? (
+              topicFollow ? (
+                <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+                  <ExploreCardTopicFollow topics={item.topics} />
+                  {debateEndSlot}
+                </div>
+              ) : (
+                debateEndSlot
+              )
+            ) : undefined
+          }
         />
       )}
 

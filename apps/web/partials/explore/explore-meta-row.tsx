@@ -105,7 +105,7 @@ export function ExploreMetaRow({
       key: 'types',
       showOnCompactMobile: false,
       content: (
-        <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+        <span className="inline-flex shrink-0 flex-wrap items-center gap-1">
           {types.map(type => (
             <ExploreTypeTag key={type.id} className="truncate">
               {type.name}
@@ -132,7 +132,9 @@ export function ExploreMetaRow({
         <Link
           href={NavUtils.toSpace(item.spaceId)}
           className={cx(
-            'flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline',
+            // shrink-0 so the space avatar + name always show in full; the end slot (e.g. the
+            // followed-topic control) is what shrinks instead.
+            'flex shrink-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline',
             compactOnMobile && 'md:text-footnoteMedium md:tracking-normal md:text-grey-04'
           )}
         >
