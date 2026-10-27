@@ -105,7 +105,7 @@ export function usePastCalls(enabled: boolean) {
   return useQuery({
     ...debateQueryNetworkOptions,
     queryKey: ['call-recordings', 'past', PAST_CALLS_LIMIT] as const,
-    queryFn: ({ signal }) => listPastCalls(PAST_CALLS_LIMIT, signal),
+    queryFn: ({ signal }) => listPastCalls({ limit: PAST_CALLS_LIMIT }, signal),
     enabled,
     staleTime: PAST_CALLS_STALE_MS,
     select: data => data.calls,

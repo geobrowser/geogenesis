@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { SpacePastCall } from '~/core/space-calls/series/past-calls';
+import type { PastCall } from '~/core/space-calls/recording/api';
 
 const mocks = vi.hoisted(() => ({
   query: {} as Record<string, unknown>,
@@ -19,8 +19,10 @@ afterEach(() => {
   mocks.fetchNextPage.mockReset();
 });
 
-const call = (over: Partial<SpacePastCall>): SpacePastCall => ({
+const call = (over: Partial<PastCall>): PastCall => ({
   call_id: 'c1',
+  space_id: 'space1',
+  space_name: 'Crypto',
   name: 'Weekly call',
   started_at: '2026-10-23T15:00:02Z',
   ended_at: '2026-10-23T16:31:40Z',
@@ -30,7 +32,7 @@ const call = (over: Partial<SpacePastCall>): SpacePastCall => ({
   ...over,
 });
 
-function pages(calls: SpacePastCall[], next: string | null) {
+function pages(calls: PastCall[], next: string | null) {
   mocks.query = {
     data: { pages: [{ calls, next_cursor: next }] },
     isError: false,
@@ -42,7 +44,17 @@ function pages(calls: SpacePastCall[], next: string | null) {
 
 describe('PastCallsSection', () => {
   it('lists ended calls with their length and a recording tag, and pages on', () => {
-    pages([call({}), call({ call_id: 'c2', name: 'Recorded', recording: { duration_seconds: 5310 } })], 'cur1');
+    pages(
+      [
+        call({}),
+        call({
+          call_id: 'c2',
+          name: 'Recorded',
+          recording: { duration_seconds: 5310, thumbnail_url: null, thumbnail_expires_at: null },
+        }),
+      ],
+      'cur1'
+    );
     render(<PastCallsSection spaceId="space1" />);
     expect(screen.getByRole('link', { name: 'Weekly call' })).toHaveAttribute('href', '/space/space1/calls/c1');
     expect(screen.getAllByText(/1h 32m/)).toHaveLength(2);

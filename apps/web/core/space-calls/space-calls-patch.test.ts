@@ -52,7 +52,7 @@ describe('withSpaceCallPatch', () => {
   });
 
   it('patches a scheduled row never broadcast (GEO-3420)', () => {
-    const scheduled = { ...list, calls: [{ ...row(), status: 'scheduled', as_of: null }] };
+    const scheduled = { ...list, calls: [{ ...row(), status: 'scheduled' as const, as_of: null }] };
     const opened = row({ status: 'live', as_of: '2026-10-23T16:00:00Z' });
     expect(withSpaceCallPatch(scheduled, { status: 'live', as_of: opened.as_of, call: opened }).calls).toEqual([
       opened,

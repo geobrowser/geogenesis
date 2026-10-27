@@ -2867,7 +2867,7 @@ export type DebateLobbyCallDetails = {
   /** GEO-3421; the same for every viewer. Absent from geo-chat without recording. */
   recording?: CallRecordingState | null;
   /** GEO-3420; absent from a geo-chat that predates scheduled calls. */
-  status?: 'scheduled' | 'live' | 'cancelled' | 'ended';
+  status?: SpaceCallStatus;
   /** `null` for a call started on the spot. */
   ends_at?: string | null;
   /** `null` for a call started on the spot. */
@@ -2877,6 +2877,9 @@ export type DebateLobbyCallDetails = {
   /** `null` in the guest view. Reminded about the call if either reminder is set. */
   viewer?: { can_edit_agenda: boolean; reminded: boolean; series_reminded: boolean } | null;
 };
+
+/** A space call's state (GEO-3420): `scheduled` until its room opens. */
+export type SpaceCallStatus = 'scheduled' | 'live' | 'cancelled' | 'ended';
 
 export type CallRecordingStatus = 'off' | 'recording' | 'processing' | 'ready' | 'failed';
 

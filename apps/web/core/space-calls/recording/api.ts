@@ -87,7 +87,7 @@ export async function getCallRecordingPlayback(
   });
 }
 
-/** A published, ready past call. Ids are dashless. */
+/** An ended call. Ids are dashless. Without a space, only calls with a published recording are listed. */
 export type PastCall = {
   call_id: string;
   space_id: string;
@@ -98,6 +98,7 @@ export type PastCall = {
   /** The call's, end minus start. */
   duration_seconds: number | null;
   started_by: DebateLobbyPerson | null;
+  /** Set only when published and ready. */
   recording: {
     duration_seconds: number | null;
     /** Signed, expires; `null` without Stream signing. */
@@ -108,7 +109,13 @@ export type PastCall = {
 
 export type PastCallsResponse = { calls: PastCall[]; next_cursor: string | null };
 
-/** Public, newest end first. */
-export async function listPastCalls(limit: number, signal?: AbortSignal) {
-  return geoChatRequest<PastCallsResponse>(`/calls/past?limit=${limit}`, { auth: false, signal });
+/** Public, newest end first; with `spaceId`, every ended call of that space. Pass `next_cursor` back. */
+export async function listPastCalls(
+  { limit, spaceId, cursor }: { limit: number; spaceId?: string; cursor?: string | null },
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (spaceId) params.set('space_id', dashlessId(spaceId));
+  if (cursor) params.set('cursor', cursor);
+  return geoChatRequest<PastCallsResponse>(`/calls/past?${params}`, { auth: false, signal });
 }

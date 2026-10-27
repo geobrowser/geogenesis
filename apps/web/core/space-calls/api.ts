@@ -3,6 +3,7 @@ import {
   type DebateLobbyPerson,
   type DebateLobbyView,
   type GetPrivyIdentityToken,
+  type SpaceCallStatus,
   dashlessId,
   geoChatRequest,
 } from '~/core/debates/api';
@@ -11,7 +12,7 @@ import {
 export type SpaceCallSummary = {
   call_id: string;
   /** Absent from a geo-chat that lists live calls only. `scheduled` before the room opens (GEO-3420). */
-  status?: 'live' | 'scheduled' | (string & {});
+  status?: SpaceCallStatus;
   name: string;
   started_at: string;
   /** The scheduled start; for a call started on the spot, when it started. GEO-3420. */
