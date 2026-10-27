@@ -25,6 +25,11 @@ describe('roundLabel', () => {
 });
 
 describe('roundCardAt', () => {
+  it('can mount Open rounds at zero opacity before the first playback sample advances', () => {
+    expect(roundCardAt(spans, TURNS, 0)).toBeNull();
+    expect(roundCardAt(spans, TURNS, 0, undefined, true)).toMatchObject({ opacity: 0, ageMs: 0 });
+  });
+
   it('hands the card the round and its name apart, and the badge the single line', () => {
     // Two surfaces with different room for the same fact: the card stacks them large, the badge
     // has one line beside a timer.
@@ -201,5 +206,36 @@ describe('against the rendered segments', () => {
     const early = segment(0, 1, 0, 30_000);
 
     expect(turnSpansFromSegments([late, early]).map(span => span.slot)).toEqual([1, 2]);
+  });
+});
+
+// GEO-3277. Open rounds has no closing round: every round after the opening is a rebuttal, however
+// many there were, so the cues take each turn's role from the debate instead of counting turns.
+describe('round cues for Open rounds', () => {
+  const openRoundsRoles = (turnIndex: number) => (turnIndex < 2 ? 'opening' : 'rebuttal') as 'opening' | 'rebuttal';
+
+  it('calls every round after the opening a rebuttal, never a closing', () => {
+    expect(roundLabel(0, openRoundsRoles)).toBe('Round 1 · Opening');
+    expect(roundLabel(4, openRoundsRoles)).toBe('Round 3 · Rebuttal');
+    expect(roundLabel(4, 6)).toBe('Round 3 · Closing');
+    const spans = [0, 1, 2, 3, 4, 5].map(index => ({
+      index,
+      slot: (index % 2 === 0 ? 1 : 2) as 1 | 2,
+      startSeconds: index * 45,
+      endSeconds: (index + 1) * 45,
+    }));
+    expect(roundCardAt(spans, openRoundsRoles, 180.5)?.label).toBe('Round 3 · Rebuttal');
+    expect(roundBadgeAt(spans, openRoundsRoles, 200)?.label).toBe('Round 3 · Rebuttal');
+  });
+
+  it('skips the card for a round something else already announced', () => {
+    const spans = [0, 1, 2, 3].map(index => ({
+      index,
+      slot: (index % 2 === 0 ? 1 : 2) as 1 | 2,
+      startSeconds: index * 45,
+      endSeconds: (index + 1) * 45,
+    }));
+    expect(roundCardAt(spans, 4, 90.5, round => round === 1)).toBeNull();
+    expect(roundCardAt(spans, 4, 0.5, round => round === 1)?.label).toBe('Round 1 · Opening');
   });
 });

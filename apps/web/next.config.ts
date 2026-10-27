@@ -12,6 +12,7 @@ const marketingOrigin = 'https://geo-website-livid.vercel.app';
 const marketingPaths = [
   '/',
   '/terms',
+  '/www/:path*',
   '/api/subscribe',
   '/_marketing/:path*',
   '/opengraph-image.jpg',
@@ -182,6 +183,15 @@ const nextConfig: NextConfig = {
       {
         source: '/spaces',
         destination: '/root',
+        permanent: false,
+      },
+      {
+        // GEO-3392. Every email's footer links to `/?modal=email-settings`, but `/` is the marketing
+        // site (rewritten below), which can't open the app's dialog. Redirects run before rewrites, and
+        // the query is passed through, so this lands on `/explore?modal=email-settings`.
+        source: '/',
+        has: [{ type: 'query', key: 'modal', value: 'email-settings' }],
+        destination: '/explore',
         permanent: false,
       },
 

@@ -181,7 +181,12 @@ function CardAction({
   if (isMember) return showRsvp ? <RsvpButton call={call} /> : null;
   return (
     <div className="shrink-0 whitespace-nowrap">
-      <ExploreJoinSpaceButton spaceId={call.spaceId} hasRequestedSpaceMembership={pending} variant="text" />
+      <ExploreJoinSpaceButton
+        spaceId={call.spaceId}
+        spaceName={call.spaceName}
+        hasRequestedSpaceMembership={pending}
+        variant="text"
+      />
     </div>
   );
 }

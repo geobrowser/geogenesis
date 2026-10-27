@@ -8,9 +8,9 @@ import { Relation, Value } from '~/core/types';
 
 import { Spacer } from '~/design-system/spacer';
 
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
-import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
+import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/lazy-personal-profile-bio-starter-merge';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 interface Props {

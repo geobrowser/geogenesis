@@ -17,6 +17,13 @@ function globalMediaRecorder(): MediaRecorderConstructor | undefined {
   return typeof MediaRecorder === 'undefined' ? undefined : MediaRecorder;
 }
 
+/**
+ * Pinned rather than left to the browser. Every testnet recording outside WebKit already came in
+ * at 2.5 Mbps, but WebKit defaults to 10 Mbps: ~345 MB per debater per debate, which WebKit
+ * viewers then cannot play back without dropping most frames.
+ */
+export const RECORDING_VIDEO_BITS_PER_SECOND = 2_500_000;
+
 export function preferredRecordingMimeType(Recorder: MediaRecorderConstructor | undefined = globalMediaRecorder()) {
   if (!Recorder) return '';
   for (const mimeType of ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']) {
@@ -68,16 +75,18 @@ export function recorderErrorFromEvent(event: Event): unknown {
 }
 
 /**
- * Constructs and starts a recorder, reporting rather than throwing if either step fails. `wire`
- * runs between the two so listeners are attached before any event can fire. Returns null on
+ * Prepares the input, constructs and starts a recorder, reporting failures through one path.
+ * `wire` runs before start so listeners are attached before any event can fire. Returns null on
  * failure, which leaves the caller exactly where an unsupported browser leaves it: no recorder,
  * so the pill never lights and there is nothing to persist. `report` lets the caller dedupe, since
  * the effect that starts capture re-runs whenever the debate refreshes.
  */
-export function startDebateRecorder({
+export async function startDebateRecorder({
   stream,
   debateId,
   timesliceMs,
+  prepareStream,
+  isCurrent = () => true,
   wire,
   report = reportDebateRecorderFailure,
   Recorder = globalMediaRecorder(),
@@ -85,10 +94,12 @@ export function startDebateRecorder({
   stream: MediaStream;
   debateId: string;
   timesliceMs: number;
+  prepareStream?: (source: MediaStream) => MediaStream | Promise<MediaStream>;
+  isCurrent?: () => boolean;
   wire: (recorder: MediaRecorder, mimeType: string) => void;
   report?: typeof reportDebateRecorderFailure;
   Recorder?: MediaRecorderConstructor;
-}): { recorder: MediaRecorder; mimeType: string } | null {
+}): Promise<{ recorder: MediaRecorder; mimeType: string } | null> {
   if (!Recorder) {
     report({ debateId, stage: 'unsupported', mimeType: '' });
     return null;
@@ -96,9 +107,14 @@ export function startDebateRecorder({
   const mimeType = preferredRecordingMimeType(Recorder);
   let recorder: MediaRecorder;
   try {
-    recorder = new Recorder(stream, mimeType ? { mimeType } : undefined);
+    const prepared = prepareStream ? await prepareStream(stream) : stream;
+    if (!isCurrent()) return null;
+    recorder = new Recorder(prepared, {
+      ...(mimeType ? { mimeType } : {}),
+      videoBitsPerSecond: RECORDING_VIDEO_BITS_PER_SECOND,
+    });
   } catch (error) {
-    report({ debateId, stage: 'construct', mimeType, error });
+    if (isCurrent()) report({ debateId, stage: 'construct', mimeType, error });
     return null;
   }
   recorder.addEventListener(

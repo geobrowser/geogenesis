@@ -5,6 +5,7 @@ import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY, DEBATE_TYPE }
 import { debateVisibilityCounts } from '~/core/profile/profile-debate-visibility';
 import {
   POSITION_VOTE_KINDS,
+  POSITION_VOTE_TYPES,
   type ProfileFacts,
   type ProfileSpace,
   type Verifier,
@@ -52,6 +53,9 @@ interface NetworkResult {
  * hoping. One of them is now the other.
  */
 const POSITION_KINDS = `[${POSITION_VOTE_KINDS.join(', ')}]`;
+
+/** Held positions only — a retraction is a row, not an absence. See {@link POSITION_VOTE_TYPES}. */
+const POSITION_TYPES = `[${POSITION_VOTE_TYPES.join(', ')}]`;
 
 /**
  * One side of a debate, pointed at this space.
@@ -117,7 +121,9 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
       nodes { spaceId space { topic { name } page { name } } }
     }
     proposals: proposalsConnection(filter: { proposedBy: { is: ${sp} } }) { totalCount }
-    positions: entitiesConnection(votedBy: ${sp}, votedByKinds: ${POSITION_KINDS}) { totalCount }
+    positions: entitiesConnection(votedBy: ${sp}, votedByKinds: ${POSITION_KINDS}, votedByTypes: ${POSITION_TYPES}) {
+      totalCount
+    }
     supported: ${debateSide(DEBATE_SUPPORTED_BY_PROPERTY, sp)}
     opposed: ${debateSide(DEBATE_OPPOSED_BY_PROPERTY, sp)}
     hidden: ${hiddenProfileRelationTargetsConnection(spaceId)}
@@ -199,10 +205,11 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
 
   return {
     proposals: data.proposals?.totalCount ?? 0,
-    // Claims, not vote rows. `votedBy` counts entities, so the stance and
-    // veracity votes somebody cast on the same claim are one row here — which
-    // is what the tab shows, and what `userVotesConnection.totalCount` could
-    // never say. Verified against both: 194 vote rows, 190 claims.
+    // Claims, not vote rows. `votedBy` counts entities, so a claim answered in
+    // two spaces is one here — which is what the tab shows, and what
+    // `userVotesConnection.totalCount` could never say. Positions still held
+    // only (`votedByTypes`), so this is the number the tab lists: 253 on the
+    // reference account, against 259 with the retractions counted.
     positions: data.positions?.totalCount ?? 0,
     // Distinct debates across both sides. Adding the two totals counts a debate
     // twice where it names the same person on both — and counts duplicate writes

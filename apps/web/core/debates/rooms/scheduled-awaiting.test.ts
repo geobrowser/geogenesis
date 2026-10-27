@@ -1,10 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import type { ScheduledDebateRequest } from '../api';
-
-vi.mock('~/core/state/feature-flags', () => ({ usePeerAvailabilityEnabled: () => true }));
-
-const { isOpenScheduledRequest } = await import('./scheduled-awaiting');
+import { isOpenScheduledRequest } from './scheduled-awaiting';
 
 const request = (overrides: Partial<ScheduledDebateRequest>) =>
   ({ status: 'pending', room_id: null, ...overrides }) as ScheduledDebateRequest;

@@ -6,7 +6,9 @@ import * as React from 'react';
 
 import { Duration } from 'effect';
 
-import { type SearchAnalyticsSurface, searchSubmitted } from '~/core/analytics';
+import { useActionContext } from '~/core/action-context-provider';
+import { type SearchAnalyticsSurface, searchQueryId, searchSubmitted } from '~/core/analytics';
+import { observeOperation } from '~/core/analytics-operations';
 import { dedupeSearchResultTypeTags } from '~/core/utils/search-result-types';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -23,6 +25,7 @@ import { useGlobalSearchSpaceIds } from './use-global-search-space-ids';
 interface SearchOptions {
   filterByTypes?: string[];
   filterBySpace?: string;
+  filterByTags?: string[];
   initialQuery?: string;
   waitForFilterTypes?: boolean;
   restrictToFilterTypes?: boolean;
@@ -93,20 +96,10 @@ export function searchResultMatchesAllowedTypes(
   return result.types.some(t => allowed.has(t.id) || allowed.has(normalizeTypeId(t.id)));
 }
 
-export function entityTypesMatchFilter(
-  types: { id: string }[] | undefined,
-  relationTargetTypeIds: string[] | undefined
-): boolean {
-  return searchResultMatchesAllowedTypes({ types: types ?? [] }, relationTargetTypeIds);
-}
-
-function resultMatchesFilterTypes(result: { types: { id: string }[] }, filterByTypes: string[] | undefined): boolean {
-  return searchResultMatchesAllowedTypes(result, filterByTypes);
-}
-
 export function useSearch({
   filterByTypes,
   filterBySpace,
+  filterByTags,
   initialQuery,
   waitForFilterTypes,
   restrictToFilterTypes,
@@ -132,6 +125,7 @@ export function useSearch({
   const maybeEntityId = debouncedQuery.trim();
   const cappedQuery = capSearchQuery(debouncedQuery);
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
+  const filterTagKey = React.useMemo(() => (filterByTags ? [...filterByTags].sort() : undefined), [filterByTags]);
 
   const searchBlocked =
     (Boolean(waitForFilterTypes) && !filterByTypes?.length) ||
@@ -145,6 +139,7 @@ export function useSearch({
     cappedQuery,
     filterTypeKey,
     filterBySpace,
+    filterTagKey,
     Boolean(waitForFilterTypes),
     Boolean(restrictToFilterTypes),
     additionalSpaceIds,
@@ -167,7 +162,8 @@ export function useSearch({
       try {
         const isValidEntityId = validateEntityId(maybeEntityId);
 
-        if (isValidEntityId) {
+        // Skip the direct-id shortcut when a tag filter is set
+        if (isValidEntityId && !filterByTags?.length) {
           if (pageParam > 0) return emptySearchPage(pageParam);
 
           const merged = await mergeSearchResult({
@@ -175,8 +171,15 @@ export function useSearch({
             store,
           });
           if (!merged) return emptySearchPage(pageParam);
-          if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
+          if (filterByTypes?.length && !searchResultMatchesAllowedTypes(merged, filterByTypes)) {
             return emptySearchPage(pageParam);
+          }
+
+          if (filterBySpace) {
+            const wantedSpaceId = filterBySpace.replace(/-/g, '');
+            if (!merged.spaces.some(space => space.spaceId.replace(/-/g, '') === wantedSpaceId)) {
+              return emptySearchPage(pageParam);
+            }
           }
           return { rows: [merged], offset: pageParam, serverCount: 1, total: 1, succeeded: true };
         }
@@ -204,11 +207,12 @@ export function useSearch({
           signal,
           additionalSpaceIds,
           includeNonCanonical,
+          tagIds: filterByTags?.length ? filterByTags : undefined,
         });
 
         const rows = !filterByTypes?.length
           ? page.results
-          : page.results.filter(r => resultMatchesFilterTypes(r, filterByTypes));
+          : page.results.filter(r => searchResultMatchesAllowedTypes(r, filterByTypes));
 
         return {
           rows,
@@ -287,18 +291,29 @@ export function useSearch({
     return rows;
   }, [resultPages]);
 
+  const getContext = useActionContext('search', 'search_query', searchQueryId(cappedQuery));
   const analyticsSearchKey = JSON.stringify([...searchQueryKey, analyticsSurface, shouldSearch]);
-  const analyticsAttemptRef = React.useRef({ key: '', startedAt: 0, emitted: false });
+  const analyticsAttemptRef = React.useRef<{
+    key: string;
+    startedAt: number;
+    emitted: boolean;
+    operation?: ReturnType<typeof observeOperation>;
+  }>({ key: '', startedAt: 0, emitted: false });
 
   React.useEffect(() => {
     if (analyticsAttemptRef.current.key === analyticsSearchKey) return;
 
+    const context = getContext();
     analyticsAttemptRef.current = {
       key: analyticsSearchKey,
       startedAt: searchClock(),
+      operation:
+        shouldSearch && analyticsSurface !== false && cappedQuery.trim() !== ''
+          ? observeOperation('search', 'search_query', context.target_id, undefined, context)
+          : undefined,
       emitted: false,
     };
-  }, [analyticsSearchKey]);
+  }, [analyticsSearchKey, analyticsSurface, cappedQuery, getContext, shouldSearch]);
 
   React.useEffect(() => {
     const attempt = analyticsAttemptRef.current;
@@ -312,13 +327,19 @@ export function useSearch({
       !shouldSearch ||
       isFetching ||
       shouldPumpEmptyPage ||
-      !pages?.length ||
-      pages.some(page => !page.succeeded)
+      !pages?.length
     ) {
       return;
     }
 
     attempt.emitted = true;
+    // Both canonical and legacy search events belong to the initiating actor.
+    if (!attempt.operation?.isCurrent()) return;
+    if (pages.some(page => !page.succeeded)) {
+      attempt.operation.failed('unavailable');
+      return;
+    }
+    attempt.operation.succeeded({ result_count: results.length });
     searchSubmitted({
       queryText: cappedQuery,
       resultCount: results.length,

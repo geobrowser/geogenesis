@@ -1,4 +1,5 @@
-import { debateTurnRole } from './formats';
+import { type DebateTurnRole, debateTurnRole } from './formats';
+import { openRoundNumber } from './open-rounds';
 import type { TurnSpan } from './playback-utils';
 
 /**
@@ -55,9 +56,9 @@ const HANDOVER_MS = 300;
  * `debateTurnRole` is the same function the room's countdown and the format details read, so a
  * debate recorded under the old four-turn format labels its rounds the way it always has.
  */
-export function roundParts(turnIndex: number, turnCount: number): { round: string; role: string | null } {
-  const round = `Round ${Math.floor(turnIndex / 2) + 1}`;
-  switch (debateTurnRole(turnIndex, turnCount)) {
+export function roundParts(turnIndex: number, turnCount: TurnCount): { round: string; role: string | null } {
+  const round = `Round ${openRoundNumber(Math.floor(turnIndex / 2))}`;
+  switch (typeof turnCount === 'function' ? turnCount(turnIndex) : debateTurnRole(turnIndex, turnCount)) {
     case 'opening':
       return { round, role: 'Opening' };
     case 'rebuttal':
@@ -71,7 +72,7 @@ export function roundParts(turnIndex: number, turnCount: number): { round: strin
 }
 
 /** The same fact on one line, which is the shape the badge beside the timer needs. */
-export function roundLabel(turnIndex: number, turnCount: number): string {
+export function roundLabel(turnIndex: number, turnCount: TurnCount): string {
   const { round, role } = roundParts(turnIndex, turnCount);
   return role ? `${round} · ${role}` : round;
 }
@@ -91,6 +92,8 @@ export type RoundCue = {
   role: string | null;
   /** 0–1, from the playhead. */
   opacity: number;
+  /** How far into the round card's run the playhead is, in ms. Only on the card's cue. */
+  ageMs?: number;
 };
 
 function cueFor(span: TurnSpan, turnCount: TurnCount, opacity: number): RoundCue {
@@ -105,8 +108,12 @@ function cueFor(span: TurnSpan, turnCount: TurnCount, opacity: number): RoundCue
  * allowance's — a debater who yields their last turn instantly leaves a segment short, and taking
  * the count from the spans would promote the round before it to "Closing" and caption a rebuttal
  * as one. The same number the recording room's own countdown classified turns with.
+ *
+ * Or, where the format is not a fixed one, what each turn is. Open rounds has no closing round and
+ * names its turns itself (`debateTurnRoleForDebate`), so counting turns would call its last round
+ * a closing one (GEO-3277).
  */
-type TurnCount = number;
+export type TurnCount = number | ((turnIndex: number) => DebateTurnRole);
 
 /** The turn the playhead is inside, or nothing before the first and after the last. */
 function currentSpan(spans: TurnSpan[], playheadSeconds: number) {
@@ -159,18 +166,26 @@ function roundStartSeconds(spans: TurnSpan[], round: number) {
  * Once per round and not once per turn: the window is measured from the round's start, so by the
  * time the reply begins it has long since closed. See {@link roundStartSeconds}.
  */
-export function roundCardAt(spans: TurnSpan[], turnCount: TurnCount, playheadSeconds: number): RoundCue | null {
+export function roundCardAt(
+  spans: TurnSpan[],
+  turnCount: TurnCount,
+  playheadSeconds: number,
+  /** A round something else already announced, as a condensed Open rounds break does (GEO-3277). */
+  announced?: (round: number) => boolean,
+  /** Mount a transparent start frame for smooth Open rounds playback. */
+  includeStart = false
+): RoundCue | null {
   const current = currentSpan(spans, playheadSeconds);
-  if (!current) return null;
+  if (!current || announced?.(roundOf(current))) return null;
 
   const ageMs = (playheadSeconds - roundStartSeconds(spans, roundOf(current))) * 1_000;
   if (ageMs < 0 || ageMs >= ROUND_CARD_MS) return null;
 
   const untilEnd = ROUND_CARD_MS - ageMs;
   const opacity = ageMs < FADE_IN_MS ? ageMs / FADE_IN_MS : untilEnd < FADE_OUT_MS ? untilEnd / FADE_OUT_MS : 1;
-  if (opacity <= 0) return null;
+  if (opacity <= 0 && !includeStart) return null;
 
-  return cueFor(current, turnCount, opacity);
+  return { ...cueFor(current, turnCount, opacity), ageMs };
 }
 
 /**
@@ -185,13 +200,19 @@ export function roundCardAt(spans: TurnSpan[], turnCount: TurnCount, playheadSec
  * the card was drawn. By the reply the handover is long past, so the badge is simply already up —
  * which is what it was doing before, without needing a second case to say so.
  */
-export function roundBadgeAt(spans: TurnSpan[], turnCount: TurnCount, playheadSeconds: number): RoundCue | null {
+export function roundBadgeAt(
+  spans: TurnSpan[],
+  turnCount: TurnCount,
+  playheadSeconds: number,
+  /** Keep the cue available when Open rounds owns visibility through its shared announcement clock. */
+  includeStart = false
+): RoundCue | null {
   const current = currentSpan(spans, playheadSeconds);
   if (!current) return null;
 
   const ageMs = (playheadSeconds - roundStartSeconds(spans, roundOf(current))) * 1_000;
   const opacity = Math.max(0, Math.min(1, (ageMs - (ROUND_CARD_MS - HANDOVER_MS)) / HANDOVER_MS));
-  if (opacity <= 0) return null;
+  if (opacity <= 0 && !includeStart) return null;
 
   return cueFor(current, turnCount, opacity);
 }

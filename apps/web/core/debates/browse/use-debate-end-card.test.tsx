@@ -1,13 +1,16 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { act, renderHook } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CLAIM_RESPONSE_OBJECT_TYPE } from '~/core/claims/browse/claim-response-summary';
+import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate } from '~/core/debates/api';
+import type { ClaimTiming } from '~/core/debates/claim-timing';
 import type { DebateTranscriptClaims } from '~/core/debates/transcript-claims';
-import { entityRespondersQueryKey, entityResponseCountsQueryKey } from '~/core/responses/entity-response';
+import { entityResponseCountsQueryKey, userEntityResponseQueryKey } from '~/core/responses/entity-response';
 
 import { useDebateEndCard } from './use-debate-end-card';
 
@@ -25,8 +28,11 @@ const mocks = vi.hoisted(() => ({
   transcriptError: null as unknown,
   batchCalls: [] as { spaceId: string; targets: { entityId: string }[]; enabled: boolean }[],
   claimSummary: null as unknown,
-  /** The `enabled` each entity lookup was made with. */
+  /** The `enabled` each lookup of the debated claim's entity was made with. */
   entityEnabled: [] as boolean[],
+  /** When each claim was said, and whether the timings have answered. */
+  timings: new Map() as Map<string, unknown>,
+  timingsReady: true,
   /** What the batch query reports: whether it has data yet, and whether it failed. */
   batchResult: {
     data: new Map() as unknown,
@@ -37,6 +43,8 @@ const mocks = vi.hoisted(() => ({
   },
   /** The entity each render handed the claim's own response state. */
   claimEntity: [] as unknown[],
+  /** What each render asked the next-debate suggestion with. */
+  nextDebateCalls: [] as { live: boolean }[],
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -54,10 +62,24 @@ vi.mock('~/core/responses/use-claim-response-summaries', () => ({
     return mocks.batchResult;
   },
 }));
+vi.mock('~/core/debates/use-claim-timings', () => ({
+  useClaimTimings: () => ({ timings: mocks.timings, isReady: mocks.timingsReady }),
+}));
+// Two lookups: the debated claim's own entity, and every extracted claim's for the carousel.
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: ({ enabled }: { enabled: boolean }) => {
-    mocks.entityEnabled.push(enabled);
-    return { entities: enabled ? [{ id: 'claim-entity' }] : [] };
+  useQueryEntities: ({ where, enabled }: { where: { id: { in: string[] } }; enabled: boolean }) => {
+    const ids = where.id.in;
+    if (ids.length === 1 && ids[0] === 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
+      mocks.entityEnabled.push(enabled);
+      return { entities: enabled ? [{ id: 'claim-entity' }] : [] };
+    }
+    return { entities: enabled ? ids.map(id => ({ id })) : [] };
+  },
+}));
+vi.mock('./use-next-debate', () => ({
+  useNextDebate: (_debate: unknown, live: boolean) => {
+    mocks.nextDebateCalls.push({ live });
+    return null;
   },
 }));
 vi.mock('./use-debate-claim-response', () => ({
@@ -67,7 +89,13 @@ vi.mock('./use-debate-claim-response', () => ({
   },
 }));
 
-const claim = (id: string, spaceId: string | null) => ({ id, text: id, spaceId });
+/** A claim said in `author`'s turn; the block id is the turn, and names who said it. */
+const claim = (id: string, spaceId: string | null, author = 'unknown') => ({
+  id,
+  text: `Claim ${id}`,
+  spaceId,
+  blockId: `block-${author}`,
+});
 
 /** What the batch query reports, answered and fresh unless a test says otherwise. */
 const batch = (overrides: Partial<typeof mocks.batchResult>) => ({
@@ -85,24 +113,19 @@ function transcript(byAuthor: Record<string, ReturnType<typeof claim>[]>): Debat
     all,
     byAuthorSpaceId: new Map(Object.entries(byAuthor)),
     unattributed: [],
-    blocks: [],
+    blocks: Object.keys(byAuthor).map(author => ({ id: `block-${author}`, authorSpaceId: author, text: '' })),
     totalCount: all.length,
   } as unknown as DebateTranscriptClaims;
 }
 
-let queryClient: QueryClient;
+const saidAt = (startMs: number): ClaimTiming => ({
+  startMs,
+  endMs: startMs + 1000,
+  confidence: 1,
+  source: 'published',
+});
 
-/** What the batch writes for one claim, and what a vote on it rewrites. */
-function seed(claimId: string, positive: number, negative: number, userIds: string[]) {
-  queryClient.setQueryData(entityResponseCountsQueryKey(claimId, DEBATE_SPACE_HEX, 0, 'stance'), {
-    positive,
-    negative,
-  });
-  queryClient.setQueryData(
-    entityRespondersQueryKey(claimId, DEBATE_SPACE_HEX, 0, 'stance'),
-    userIds.map(userId => ({ userId, direction: 'positive' }))
-  );
-}
+let queryClient: QueryClient;
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -130,119 +153,140 @@ describe('useDebateEndCard', () => {
     mocks.transcriptLoading = false;
     mocks.transcriptError = null;
     mocks.claims = transcript({
-      [STEVE]: [claim('s1', DEBATE_SPACE_HEX), claim('s2', DEBATE_SPACE_HEX), claim('s3', ELSEWHERE)],
-      [JONATHAN]: [claim('j1', DEBATE_SPACE_HEX), claim('j2', null)],
-    });
-    queryClient = new QueryClient();
-    seed('s1', 20, 30, ['p1', 'p2']);
-    seed('s2', 24, 26, ['p2', 'p3']);
-    // Another space's claim, seeded here only to prove it is never read.
-    seed('s3', 900, 0, ['p9']);
-    seed('j1', 71, 29, ['p4']);
-  });
-
-  it("counts only the claims published in the debate's own space", () => {
-    // s3 lives in another space, where its votes are too; asking this space about it would report
-    // zero, and counting that zero would drag Steve's share down for no reason.
-    const { result } = render(() => useDebateEndCard(debate, true));
-    const [steve] = result.current.debaters;
-
-    expect(steve.split).toMatchObject({ positive: 44, negative: 56, percent: 44 });
-    expect(mocks.batchCalls.at(-1)?.targets.map(target => target.entityId)).not.toContain('s3');
-  });
-
-  it('still counts every claim a debater made in the number the card prints', () => {
-    const { result } = render(() => useDebateEndCard(debate, true));
-    const [steve, jonathan] = result.current.debaters;
-
-    expect(steve.claimCount).toBe(3);
-    // j2 was never published at all, and is still a claim Jonathan made.
-    expect(jonathan.claimCount).toBe(2);
-  });
-
-  it('asks for the claim and every counted claim in one batch, in the debate space', () => {
-    render(() => useDebateEndCard(debate, true));
-    const call = mocks.batchCalls.at(-1)!;
-
-    expect(call.spaceId).toBe(DEBATE_SPACE_HEX);
-    expect(call.targets.map(target => target.entityId)).toEqual([CLAIM_HEX, 's1', 's2', 'j1']);
-  });
-
-  it('counts a person once however many of the claims they answered', () => {
-    const { result } = render(() => useDebateEndCard(debate, true));
-    expect(result.current.debaters[0].responderSpaceIds).toEqual(['p1', 'p2', 'p3']);
-  });
-
-  it('finds each side by the position the debater argued, not by slot', () => {
-    const { result } = render(() => useDebateEndCard(debate, true));
-
-    expect(result.current.agreeSide?.name).toBe('Steve');
-    expect(result.current.disagreeSide?.name).toBe('Jonathan');
-    expect(result.current.comparison).toMatchObject({ status: 'ready', claimPercent: 62, argumentsPercent: 38 });
-  });
-
-  it('puts the Agree-side debater first whatever slot they recorded in', () => {
-    // The card's Agree button, the green end of every bar and the Agree end of the comparison are all
-    // on the left; the debater arguing for the claim has to be too.
-    const flipped = {
-      ...debate,
-      participants: [
-        { participant_slot: 1, profile_space_id: JONATHAN, display_name: 'Jonathan', position: false },
-        { participant_slot: 2, profile_space_id: STEVE, display_name: 'Steve', position: true },
+      [STEVE]: [
+        claim('s1', DEBATE_SPACE_HEX, STEVE),
+        claim('s2', DEBATE_SPACE_HEX, STEVE),
+        claim('s3', ELSEWHERE, STEVE),
       ],
-    } as unknown as Debate;
-
-    const { result } = render(() => useDebateEndCard(flipped, true));
-    expect(result.current.debaters.map(debater => debater.name)).toEqual(['Steve', 'Jonathan']);
+      [JONATHAN]: [claim('j1', DEBATE_SPACE_HEX, JONATHAN), claim('j2', null, JONATHAN)],
+    });
+    // Graph order is random; this is the order they were said in.
+    mocks.timings = new Map([
+      ['j1', saidAt(1_000)],
+      ['s2', saidAt(2_000)],
+      ['s3', saidAt(3_000)],
+      ['s1', saidAt(4_000)],
+    ]);
+    mocks.timingsReady = true;
+    queryClient = new QueryClient();
   });
 
-  it('is not ready to report counts until every counted claim has them', () => {
-    queryClient.removeQueries({ queryKey: entityResponseCountsQueryKey('j1', DEBATE_SPACE_HEX, 0, 'stance') });
+  it('lays the extracted claims out in the order they were said, each with who said it', () => {
+    const { result } = render(() => useDebateEndCard(debate, true));
+    const { claims, speakerByClaimId } = result.current.carousel;
+
+    // j2 has no space to answer in, so its card could never take a vote; it is left out.
+    expect(claims.map(claim => claim.id)).toEqual(['j1', 's2', 's3', 's1']);
+    expect(speakerByClaimId.get('j1')?.display_name).toBe('Jonathan');
+    expect(speakerByClaimId.get('s3')?.display_name).toBe('Steve');
+  });
+
+  it('keeps a claim published in another space, which answers in its own space', () => {
+    const { result } = render(() => useDebateEndCard(debate, true));
+    expect(result.current.carousel.claims.find(claim => claim.id === 's3')?.spaceId).toBe(ELSEWHERE);
+  });
+
+  it('leaves out a claim nobody in the debate can be credited with', () => {
+    mocks.claims = transcript({
+      [STEVE]: [claim('s1', DEBATE_SPACE_HEX, STEVE)],
+      stranger: [claim('x1', DEBATE_SPACE_HEX, 'stranger')],
+    });
     const { result } = render(() => useDebateEndCard(debate, true));
 
-    expect(result.current.countsReady).toBe(false);
+    expect(result.current.carousel.claims.map(claim => claim.id)).toEqual(['s1']);
   });
 
-  it('counts a claim the API answers with no counts at all as answered, with no votes', () => {
-    // The per-claim read writes the API's own answer for a claim nobody has voted on, which is null,
-    // and the claims panel's rows run it once these caches are stale. Read as unanswered, it emptied
-    // the card whenever the panel was opened a while after the debate ended.
-    queryClient.setQueryData(entityResponseCountsQueryKey('j1', DEBATE_SPACE_HEX, 0, 'stance'), null);
+  it('draws no carousel until the timings are in, rather than reshuffling it under the viewer', () => {
+    mocks.timingsReady = false;
     const { result } = render(() => useDebateEndCard(debate, true));
 
-    expect(result.current.countsReady).toBe(true);
-    expect(result.current.debaters[1].split).toMatchObject({ total: 0, percent: null });
+    expect(result.current.carousel.claims).toEqual([]);
   });
 
-  it('picks up a vote cast on a debater claim after the card loaded', async () => {
-    // A vote refreshes the caches of the claim it was cast on and leaves the batch alone, so a card
-    // reading the batch kept the old split. It reads the caches, and moves with them.
-    const { result } = render(() => useDebateEndCard(debate, true));
-    expect(result.current.debaters[1].split.percent).toBe(71);
-
-    act(() => seed('j1', 72, 28, ['p4', 'p5']));
-
-    // React Query delivers cache changes on its own tick, not inside the write.
-    await waitFor(() => expect(result.current.debaters[1].split.percent).toBe(72));
-    expect(result.current.debaters[1].responderSpaceIds).toEqual(['p4', 'p5']);
-  });
-
-  it('reports no count and no readiness while the transcript is still saying whose claims are whose', () => {
-    // Its stand-in is an empty set, and "0 claims · No votes yet" off that would be a fact about the
-    // network presented as one about the debate.
+  it('draws no carousel while the transcript is still loading', () => {
     mocks.transcriptLoading = true;
     mocks.claims = transcript({});
     const { result } = render(() => useDebateEndCard(debate, true));
 
-    expect(result.current.debaters.map(debater => debater.claimCount)).toEqual([null, null]);
-    expect(result.current.countsReady).toBe(false);
+    expect(result.current.carousel.claims).toEqual([]);
     expect(mocks.batchCalls.at(-1)?.enabled).toBe(false);
+  });
+
+  it("asks for every extracted claim in the debate's space in one batch, but not the debated claim", () => {
+    // s3's votes live in its own space, and j2 has none; each card asks for itself there. The claim
+    // being debated is read by the debate card's footer on the same keys (GEO-3454), so batching it
+    // too would fetch it twice.
+    render(() => useDebateEndCard(debate, true));
+    const call = mocks.batchCalls.at(-1)!;
+
+    expect(call.spaceId).toBe(DEBATE_SPACE_HEX);
+    expect(call.targets.map(target => target.entityId)).toEqual(['s1', 's2', 'j1']);
+    expect(call.targets.map(target => target.entityId)).not.toContain(CLAIM_HEX);
+  });
+
+  // With nothing in the debate's own space there is nothing to batch, and the batch never runs.
+  // Waiting on it would hold a claim quoted from elsewhere back for good.
+  it("releases the carousel's entities when no claim is in the debate's space", () => {
+    mocks.claims = transcript({ [STEVE]: [claim('s3', ELSEWHERE, STEVE)] });
+    mocks.batchResult = batch({ data: undefined });
+    const { result } = render(() => useDebateEndCard(debate, true));
+
+    expect(mocks.batchCalls.at(-1)?.targets).toEqual([]);
+    expect(result.current.carousel.entitiesByClaimId.get('s3')).toEqual({ id: 's3' });
+  });
+
+  it("holds the cards' entities back until the batch has seeded their counts", () => {
+    mocks.batchResult = batch({ data: undefined });
+    const { result, rerender } = render(() => useDebateEndCard(debate, true));
+    expect(result.current.carousel.entitiesByClaimId.size).toBe(0);
+
+    mocks.batchResult = batch({ data: new Map() });
+    rerender(undefined as never);
+    expect(result.current.carousel.entitiesByClaimId.get('s1')).toEqual({ id: 's1' });
+  });
+
+  it('holds the next-debate lookup back until shortly before the debate ends, or the card shows', () => {
+    vi.useFakeTimers();
+    try {
+      const timed = { ...debate, turn_durations_ms: [60_000, 60_000] };
+      const { rerender } = render(
+        ({ enabled, shown }: { enabled: boolean; shown: boolean }) => useDebateEndCard(timed, enabled, shown),
+        { enabled: true, shown: false }
+      );
+      expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: false });
+
+      act(() => {
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: false });
+
+      act(() => {
+        vi.advanceTimersByTime(20_000);
+      });
+      expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true });
+
+      // Scrolled away with the card on screen: still live, so the suggestion doesn't vanish either.
+      rerender({ enabled: false, shown: true });
+      expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('works out the next debate at once when the card shows before the clock is up', () => {
+    const { rerender } = render(
+      ({ enabled, shown }: { enabled: boolean; shown: boolean }) => useDebateEndCard(debate, enabled, shown),
+      { enabled: true, shown: false }
+    );
+    expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: false });
+    rerender({ enabled: true, shown: true });
+    expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true });
   });
 
   it('keeps asking once the debate has been active, so scrolling past it does not empty the card', () => {
     // Scrolling makes another debate the active one while this card is still on screen. Turning the
     // reads off then emptied the entity lookup — a disabled one answers with nothing — and the
-    // comparison box vanished and came back as the viewer scrolled.
+    // card's numbers vanished and came back as the viewer scrolled.
     const { rerender } = render(({ enabled }: { enabled: boolean }) => useDebateEndCard(debate, enabled), {
       enabled: true,
     });
@@ -266,44 +310,69 @@ describe('useDebateEndCard', () => {
     expect(mocks.batchCalls.at(-1)?.enabled).toBe(false);
   });
 
-  it("holds the claim's own response reads until the batch has seeded them", () => {
-    // Handed its entity early, the claim's response state fires its two reads — counts and the
-    // viewer's side — and races the batch to the same answers on every debate that becomes active.
-    mocks.batchResult = batch({ data: undefined });
-    const { rerender } = render(() => useDebateEndCard(debate, true));
-    expect(mocks.claimEntity.at(-1)).toBeNull();
-
-    mocks.batchResult = batch({ data: new Map() });
-    rerender(undefined as never);
-    expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
-  });
-
-  it('lets the claim ask for itself if the batch fails', () => {
-    mocks.batchResult = batch({ data: undefined, isError: true });
-    render(() => useDebateEndCard(debate, true));
-
-    expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
-  });
-
-  it('lets the claim ask for itself if the transcript fails, since the batch then never starts', () => {
-    // The batch waits on the transcript to know which claims are the debaters'. The claim's own row
-    // needs none of that, and waiting on a batch that will never run left its vote disabled.
-    mocks.transcriptError = new Error('transcript unavailable');
-    mocks.claims = transcript({});
+  // The batch no longer carries this claim, so there is nothing to wait for: the footer and this
+  // control share the claim's reads, whichever asks first.
+  it("hands the claim's own control its entity without waiting on the batch", () => {
     mocks.batchResult = batch({ data: undefined });
     render(() => useDebateEndCard(debate, true));
-
-    expect(mocks.batchCalls.at(-1)?.enabled).toBe(false);
     expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
   });
 
-  it('still holds the claim back while the transcript is loading, since the batch follows it', () => {
+  it('hands it over while the transcript is still loading, too', () => {
     mocks.transcriptLoading = true;
     mocks.claims = transcript({});
     mocks.batchResult = batch({ data: undefined });
     render(() => useDebateEndCard(debate, true));
 
-    expect(mocks.claimEntity.at(-1)).toBeNull();
+    expect(mocks.claimEntity.at(-1)).toEqual({ id: 'claim-entity' });
+  });
+
+  // Copilot on #2982: the debated claim left the batch, and with it the batch's refresh, so its split
+  // could show the numbers it was read at before playback. Its two reads are refreshed here instead.
+  it("refreshes the debated claim's counts and the viewer's side when the card comes on screen", async () => {
+    const kind = resolveClaimResponseKind();
+    const countsKey = entityResponseCountsQueryKey(CLAIM_HEX, DEBATE_SPACE_HEX, CLAIM_RESPONSE_OBJECT_TYPE, kind);
+    const viewerKey = userEntityResponseQueryKey(
+      'viewer',
+      CLAIM_HEX,
+      DEBATE_SPACE_HEX,
+      CLAIM_RESPONSE_OBJECT_TYPE,
+      kind
+    );
+    const otherKey = entityResponseCountsQueryKey('other-claim', DEBATE_SPACE_HEX, CLAIM_RESPONSE_OBJECT_TYPE, kind);
+    const fetched: string[] = [];
+    const minutesAgo = Date.now() - 5 * 60_000;
+    for (const key of [countsKey, viewerKey, otherKey]) queryClient.setQueryData(key, {}, { updatedAt: minutesAgo });
+
+    // Stand in for the footer's reads: mounted, so the queries are active, and stale.
+    const { rerender } = render(
+      ({ shown }: { shown: boolean }) => {
+        for (const key of [countsKey, viewerKey, otherKey]) {
+          // eslint-disable-next-line react-hooks/rules-of-hooks -- a fixed list, the same every render
+          useQuery({
+            queryKey: key,
+            queryFn: () => {
+              fetched.push(String(key[0]) + ':' + String(key.includes('other-claim') ? 'other' : 'claim'));
+              return {};
+            },
+            staleTime: 30_000,
+            // Read before playback and mounted since; nothing has asked again on its own.
+            refetchOnMount: false,
+          });
+        }
+        return useDebateEndCard(debate, true, shown);
+      },
+      { shown: false }
+    );
+    expect(fetched).toEqual([]);
+
+    rerender({ shown: true });
+    await act(async () => {});
+
+    expect(fetched).toContain('entity-response-counts:claim');
+    expect(fetched).toContain('user-entity-response:claim');
+    // Only the debated claim's: another claim's reads are the carousel's batch's business.
+    expect(fetched).not.toContain('entity-response-counts:other');
   });
 
   it('refreshes numbers read minutes ago when the card comes on screen', () => {

@@ -2,7 +2,7 @@ import Dexie, { Table } from 'dexie';
 
 import type { StoredImportSession } from '../chat/import/session';
 import type { DebateRecordingChunk, DebateRecordingStream } from '../debates/recording-stream';
-import type { DebateRecordingUpload } from '../debates/recording-upload-queue';
+import type { DebateRecordingUpload, DebateRecordingUploadChunk } from '../debates/recording-upload-queue';
 import { Relation, Value } from '../types';
 
 const OLD_DB_NAME = 'geogenesis';
@@ -16,6 +16,12 @@ class Geo extends Dexie {
   debateRecordingStreams!: Table<DebateRecordingStream, string>;
   /** Its `MediaRecorder` timeslices, written as they arrive so a crash loses at most one. */
   debateRecordingChunks!: Table<DebateRecordingChunk, [string, number]>;
+  /**
+   * A queued recording's bytes, as fixed-size `ArrayBuffer`s rather than one `Blob` (GEO-3116).
+   * Kept apart from `debateRecordingUploads` so that updating a row's retry state never rewrites
+   * the recording: IndexedDB has no partial update, and Dexie's `update` puts the whole row back.
+   */
+  debateRecordingUploadChunks!: Table<DebateRecordingUploadChunk, [string, number]>;
   importSessions!: Table<StoredImportSession, string>;
 
   constructor() {
@@ -40,6 +46,15 @@ class Geo extends Dexie {
       debateRecordingChunks: '[streamId+seq], streamId',
     });
 
+    this.version(4).stores({
+      values: 'id, spaceId',
+      relations: 'id, spaceId',
+      debateRecordingUploads: 'id, userId, debateId, stage, nextAttemptAt, createdAt',
+      debateRecordingStreams: 'id, userId, debateId',
+      debateRecordingChunks: '[streamId+seq], streamId',
+      debateRecordingUploadChunks: '[uploadId+seq], uploadId',
+    });
+
     // An attached spreadsheet outlives a page reload. Refreshing mid-import
     // used to lose the parsed file, and the only way forward was to attach it
     // again — worse when the thing that prompted the refresh was an error
@@ -48,12 +63,13 @@ class Geo extends Dexie {
     // identifies the file rather than the upload, so re-attaching a
     // spreadsheet whose edits are still sitting unpublished can be recognised
     // instead of staging everything a second time.
-    this.version(4).stores({
+    this.version(5).stores({
       values: 'id, spaceId',
       relations: 'id, spaceId',
       debateRecordingUploads: 'id, userId, debateId, stage, nextAttemptAt, createdAt',
       debateRecordingStreams: 'id, userId, debateId',
       debateRecordingChunks: '[streamId+seq], streamId',
+      debateRecordingUploadChunks: '[uploadId+seq], uploadId',
       importSessions: 'id, spaceId, createdAt, fingerprint',
     });
   }

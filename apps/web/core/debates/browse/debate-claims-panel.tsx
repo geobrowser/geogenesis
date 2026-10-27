@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { ClaimSummary } from '~/core/claims/browse/claim-summary';
+import { ActionContextProvider, ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateClaim } from '~/core/debates/api';
 import {
   type ClaimTiming,
@@ -12,7 +12,6 @@ import {
 } from '~/core/debates/claim-timing';
 import { compareByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
-import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type TranscriptClaim, claimsForParticipant, unmatchedClaims } from '~/core/debates/transcript-claims';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
@@ -27,6 +26,7 @@ import { Close } from '~/design-system/icons/close';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
+import { DebateClaimControls } from './debate-claim-controls';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 import { WinnerVoteButton } from './winner-vote-button';
 
@@ -41,23 +41,30 @@ const COLLAPSED_CLAIM_COUNT = 3;
  * relation points at the speaker's personal space — the same `profile_space_id` these rows already
  * key on. See `core/debates/transcript-claims.ts`.
  */
-export function DebateClaimsPanel({
-  debate,
-  onClose,
-  focusParticipantSpaceId = null,
-}: {
-  debate: Debate;
-  onClose: () => void;
-  /**
-   * A debater to open at — the end card's faces beside a debater land here, on that debater's
-   * claims. Null opens at the top, as the claims pill always has.
-   */
-  focusParticipantSpaceId?: string | null;
-}) {
+export function DebateClaimsPanel(props: Parameters<typeof DebateClaimsPanelBody>[0]) {
+  return (
+    <ActionSurface
+      className="contents"
+      value={{
+        component: 'debate_claims_panel',
+        target_id: props.debate.id,
+        target_type: 'debate',
+        debate_id: props.debate.id,
+        overlay: 'entity_side_panel',
+        overlay_entity_id: props.debate.id,
+        overlay_entity_type: 'debate',
+      }}
+    >
+      <DebateClaimsPanelBody {...props} />
+    </ActionSurface>
+  );
+}
+
+function DebateClaimsPanelBody({ debate, onClose }: { debate: Debate; onClose: () => void }) {
   const participants = orderedParticipants(debate);
   // Same query key as the player's hook, so voting in either place updates both.
   const votes = useDebateVotes(debate);
-  // Same query key as the feed's count badge, so opening the panel doesn't refetch.
+  // Same query key as the player's claim ticker, so opening the panel doesn't refetch.
   const { claims, isLoading, error } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
   // When each claim was said. Published timecodes where they exist, matched against the transcript
   // otherwise. This drives the order as well as the timecode, so the panel waits on it — see
@@ -148,43 +155,6 @@ export function DebateClaimsPanel({
     [claims, participants, inSpokenOrder, isOrdering]
   );
 
-  /*
-   * Brought to the focused debater's card once the claims are in place, and held there while the
-   * rows above it finish filling in.
-   *
-   * The order settling is not the end of it: each row's pills and summary arrive after, from the
-   * row and entity lookups and the response counts, and every one of them grows a card. Scrolling
-   * once put the focused card on screen and then let the card above push it off again. So the list
-   * re-pins whenever a card changes size — until the reader scrolls, taps or keys in it themselves,
-   * after which it is theirs.
-   *
-   * The list's own `scrollTop`, not `scrollIntoView`, which scrolls every scrollable ancestor to
-   * reveal the target — including the feed behind the panel.
-   */
-  const listRef = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    if (!focusParticipantSpaceId || isOrdering) return;
-    const list = listRef.current;
-    const card = list?.querySelector<HTMLElement>(`[data-claims-participant="${focusParticipantSpaceId}"]`);
-    if (!list || !card) return;
-
-    const pin = () => {
-      list.scrollTop = card.offsetTop - list.offsetTop;
-    };
-    pin();
-    if (typeof ResizeObserver === 'undefined') return;
-
-    const observer = new ResizeObserver(pin);
-    for (const child of list.children) observer.observe(child);
-    const handBack = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const;
-    const release = () => {
-      observer.disconnect();
-      for (const type of handBack) list.removeEventListener(type, release);
-    };
-    for (const type of handBack) list.addEventListener(type, release, { passive: true });
-    return release;
-  }, [focusParticipantSpaceId, isOrdering]);
-
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -210,13 +180,9 @@ export function DebateClaimsPanel({
           <Close />
         </button>
       </header>
-      <div ref={listRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6">
         {participants.map(participant => (
-          <article
-            key={participant.user_id}
-            data-claims-participant={participant.profile_space_id}
-            className="rounded-lg border border-grey-02 bg-white p-5"
-          >
+          <article key={participant.user_id} className="rounded-lg border border-grey-02 bg-white p-5">
             <div className="flex items-center gap-3">
               <span className="block size-10 shrink-0 overflow-hidden rounded-full bg-grey-02">
                 <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={40} />
@@ -305,14 +271,16 @@ function ClaimList({
   return (
     <>
       <ul className="mt-4 space-y-3">
-        {visible.map(claim => (
+        {visible.map((claim, index) => (
           <li key={claim.id}>
-            <ClaimRow
-              claim={claim}
-              row={rowsByClaimId.get(claim.id) ?? null}
-              entity={entitiesByClaimId.get(claim.id) ?? null}
-              timing={timings.get(claim.id) ?? null}
-            />
+            <ActionContextProvider value={{ list_id: 'debate_claims', item_position: index + 1 }}>
+              <ClaimRow
+                claim={claim}
+                row={rowsByClaimId.get(claim.id) ?? null}
+                entity={entitiesByClaimId.get(claim.id) ?? null}
+                timing={timings.get(claim.id) ?? null}
+              />
+            </ActionContextProvider>
           </li>
         ))}
       </ul>
@@ -418,41 +386,19 @@ function PanelClaimControls({
   row: DebateClaim | null;
   entity: Entity | null;
 }) {
-  // The claim's row title is drawn by `ClaimRow` above, so nothing is passed for it here.
-  const { responseKind, summary, control } = useDebateClaimResponse({
-    claimId,
-    spaceId,
-    row,
-    entity,
-  });
+  // The claim's row title is drawn by `ClaimRow` above. The hook still names the claim for a vote kept
+  // on this device, from the same entity and row.
+  const response = useDebateClaimResponse({ claimId, spaceId, row, entity });
 
   return (
     <div className="mt-2">
-      <PositionRow
-        positions={control.optimisticPositions}
-        responseKind={responseKind}
-        viewerPosition={control.viewerPosition}
-        onRespond={control.respond}
-        disabled={!control.canRespond}
-        pending={control.isResponsePending}
-        titleFor={control.actionTitle}
+      <DebateClaimControls
+        claimId={claimId}
+        spaceId={spaceId}
+        response={response}
+        summaryLayout="stacked"
+        summaryClassName="mt-2"
       />
-      {control.responseError ? (
-        <div role="alert" className="mt-1.5">
-          <Text as="p" variant="footnote" color="red-01">
-            {control.responseError}
-          </Text>
-        </div>
-      ) : null}
-      {summary.isLoading ? null : (
-        <ClaimSummary
-          entityId={claimId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          summary={summary}
-          className="mt-2"
-        />
-      )}
     </div>
   );
 }

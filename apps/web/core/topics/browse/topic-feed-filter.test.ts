@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
-import { topicFeedFilter, topicFeedPopulationScopes } from './topic-feed-filter';
+import { topicFeedFilter, topicsRelationFilter } from './topic-feed-filter';
 
 describe('topicFeedFilter', () => {
   it('matches every entity type directly through Topics, including Debates', () => {
@@ -29,21 +28,14 @@ describe('topicFeedFilter', () => {
       ]).and
     ).toHaveLength(2);
   });
+});
 
-  it.each([['claim-type', DEBATE_TYPE_ID], [DEBATE_TYPE_ID], ['claim-type']])(
-    'uses one direct population query for selected types: %j',
-    (...typeIds) => {
-      expect(topicFeedPopulationScopes('topic-1', ['topic-2'], typeIds)).toEqual([
-        {
-          typeIds,
-          entityFilter: topicFeedFilter('topic-1', ['topic-2']),
-          relationFilter: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: 'topic-1' } },
-        },
-      ]);
-    }
-  );
+describe('topicsRelationFilter', () => {
+  it('is no filter at all when no topic is selected, so a space feed shows everything in it', () => {
+    expect(topicsRelationFilter([])).toBeUndefined();
+  });
 
-  it('does not query a population with no selected types', () => {
-    expect(topicFeedPopulationScopes('topic-1', [], [])).toEqual([]);
+  it('requires every selected topic', () => {
+    expect(topicsRelationFilter(['topic-2', 'topic-3'])?.and).toHaveLength(2);
   });
 });

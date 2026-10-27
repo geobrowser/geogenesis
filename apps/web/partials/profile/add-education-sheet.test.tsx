@@ -387,4 +387,12 @@ describe('AddEducationSheet — a row that was already undated', () => {
 
     expect(screen.getByRole('button', { name: 'Done' })).toBeDisabled();
   });
+
+  it('gives the footer pills a keyboard focus ring', () => {
+    renderSheet();
+
+    for (const name of ['Cancel', 'Done']) {
+      expect(screen.getByRole('button', { name })).toHaveClass('focus-visible:outline-2', 'focus-visible:outline-text');
+    }
+  });
 });

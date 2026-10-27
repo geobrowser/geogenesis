@@ -2,6 +2,9 @@ import { act, renderHook } from '@testing-library/react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
+import { runSignInAbandoned } from '~/core/auth/sign-in-abandoned';
+
 import { usePrivySignIn } from './use-privy-sign-in';
 
 const mocks = vi.hoisted(() => ({
@@ -14,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   setStep: vi.fn(),
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
   usePrivy: () => ({ authenticated: false }),
   useGeoLogin: ({
@@ -35,9 +38,11 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(''),
 }));
 
+vi.mock('~/core/auth-attempt', () => ({ currentAuthAttempt: () => ({ id: undefined }) }));
+
 vi.mock('~/core/privy-auth-events', () => ({ beginPrivyAuth: mocks.beginPrivyAuth }));
 
-vi.mock('~/partials/onboarding/dialog', async () => {
+vi.mock('~/partials/onboarding/onboarding-atoms', async () => {
   const { atom } = await import('jotai');
   return {
     nameAtom: atom(''),
@@ -96,7 +101,10 @@ describe('usePrivySignIn', () => {
     act(() => result.current());
     act(() => mocks.privyOnComplete?.({}));
     expect(mocks.beginPrivyAuth).toHaveBeenCalledOnce();
-    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(undefined);
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(
+      expect.objectContaining({ component: 'sign_in_prompt', auth_trigger: 'control' }),
+      { resume: undefined }
+    );
   });
 
   // The deep link strips its own params as it opens the dialog, so the render that sees the
@@ -136,7 +144,9 @@ describe('usePrivySignIn', () => {
     act(() => result.current());
     act(() => mocks.privyOnComplete?.({}));
 
-    expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(undefined);
+    expect(mocks.beginPrivyAuth).toHaveBeenLastCalledWith(expect.not.objectContaining({ link_source: 'marketing' }), {
+      resume: undefined,
+    });
   });
 
   // Dismissing the modal abandons the press. Staying armed would hand it to whatever completion
@@ -150,6 +160,20 @@ describe('usePrivySignIn', () => {
     act(() => mocks.privyOnComplete?.({}));
 
     expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  // A control that queued the viewer's choice at the press withdraws it if they walk away. The
+  // withdrawal is registered with the app-level attempt, so it outlives this hook — when it fires
+  // (dismissal) and when it is dropped (completion, a new attempt) is covered with the tracker.
+  it("registers a press's own cancel with the sign-in attempt", () => {
+    const onCancel = vi.fn();
+    const { result } = renderHook(() => usePrivySignIn());
+
+    act(() => result.current(undefined, { onCancel }));
+    expect(onCancel).not.toHaveBeenCalled();
+
+    act(() => runSignInAbandoned());
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 
   it('notifies the initiating surface when the modal is dismissed or fails', () => {
@@ -171,5 +195,58 @@ describe('usePrivySignIn', () => {
     act(() => mocks.privyOnError?.('exited_auth_flow'));
 
     expect(onError).not.toHaveBeenCalled();
+  });
+  it('keeps the initiating callback armed after a rejected code', () => {
+    const onComplete = vi.fn();
+    const { result } = renderHook(() => usePrivySignIn(onComplete));
+    act(() => result.current());
+    act(() => mocks.privyOnError?.('invalid_credentials'));
+    act(() => mocks.privyOnComplete?.({}));
+    expect(onComplete).toHaveBeenCalledOnce();
+  });
+  it('uses the same inherited surface as the signed-in action', () => {
+    const { result } = renderHook(
+      () =>
+        usePrivySignIn(undefined, {
+          analytics: {
+            component: 'comment_composer',
+            auth_control: 'comment',
+            target_id: 'claim',
+            target_type: 'claim',
+          },
+        }),
+      {
+        wrapper: ({ children }) => (
+          <ActionContextProvider
+            value={{
+              component: 'explore_feed_card',
+              target_id: 'claim',
+              target_type: 'claim',
+              origin_entity_ids: ['debate'],
+              item_position: 4,
+            }}
+          >
+            {children}
+          </ActionContextProvider>
+        ),
+      }
+    );
+    act(() => result.current());
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(
+      expect.objectContaining({
+        component: 'explore_feed_card',
+        auth_control: 'comment',
+        target_id: 'claim',
+        origin_entity_ids: ['debate'],
+        item_position: 4,
+      }),
+      { resume: undefined }
+    );
+  });
+  it('passes the resume option when opening the modal for an email attempt', () => {
+    const { result } = renderHook(() => usePrivySignIn(undefined, { resumeAuthAttempt: true }));
+    act(() => result.current());
+    expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(expect.any(Object), { resume: true });
+    expect(mocks.login).toHaveBeenCalledOnce();
   });
 });

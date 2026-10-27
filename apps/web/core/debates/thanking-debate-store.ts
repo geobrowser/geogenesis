@@ -8,16 +8,26 @@ export type ThankingDebate = {
   hasUploadedRecording: boolean;
   recordingCancelled: boolean;
   /**
-   * The room is showing the thank-you card, which carries the publish control itself.
+   * The surface is showing a publish control of its own: the claim picker's publishing card
+   * (GEO-3301). The room never does any more, so it always reports false.
    *
-   * Narrower than `debateId` being set: that also covers the server's thank-you window after the
-   * local countdown has run out, when the card is gone and the banner is the only thing left to
-   * report an upload. The banner defers to the card only while the card is actually on screen.
+   * Narrower than `debateId` being set: the surface can be up with nothing to cancel on screen.
+   * The banner defers to the card only while the card is actually showing its Cancel.
    */
   showsPublishControl: boolean;
+  /**
+   * Whether geo-chat still accepts a cancel for this debate. Absent means open: the room only
+   * reports a debate while its thank-you period runs, which is the window itself.
+   *
+   * The claim picker (GEO-3301) reports the debate for as long as the viewer is in it, which can
+   * outlast the window, so it says when the window has closed. The coordinator keeps reporting the
+   * upload after that; it only stops offering the cancel.
+   */
+  cancelWindowOpen?: boolean;
 };
 
-// The debate whose post-debate thank-you screen the user is currently on. The room page also
+// The debate the user has just finished, while they are still on a surface that belongs to it: the
+// room's thank-you period, then the claim picker the pair move on to (GEO-3301). That surface also
 // carries the authoritative server recording state so the global banner survives a remount after
 // IndexedDB's completed upload row has been removed.
 const thankingDebateAtom = atom<ThankingDebate | null>(null);
@@ -47,9 +57,27 @@ export type PublishOptOutOffer = {
    * keep it dropped if the refetch failed.
    */
   cancelled: boolean;
+  /**
+   * Where the debate's own recording is on its way out, for a surface that reports it beside the
+   * cancel (GEO-3301). `preparing` is still being written to this device, `uploading` is in the
+   * queue, `failed` stopped trying (retries spent, or this browser lost its copy) until the banner's
+   * Retry puts it back, `uploaded` is out; null when there is no recording here to speak for, or it
+   * was withdrawn.
+   */
+  upload: 'preparing' | 'uploading' | 'failed' | 'uploaded' | null;
+  /** That recording's own upload progress, 0-100, or null while nothing is measurable. */
+  percent: number | null;
 };
 
-const publishOptOutOfferAtom = atom<PublishOptOutOffer>({ debateId: null, busy: false, cancelled: false });
+export const EMPTY_PUBLISH_OPT_OUT_OFFER: PublishOptOutOffer = {
+  debateId: null,
+  busy: false,
+  cancelled: false,
+  upload: null,
+  percent: null,
+};
+
+const publishOptOutOfferAtom = atom<PublishOptOutOffer>(EMPTY_PUBLISH_OPT_OUT_OFFER);
 
 export const usePublishOptOutOffer = () => useAtomValue(publishOptOutOfferAtom);
 

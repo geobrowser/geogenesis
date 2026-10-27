@@ -3,7 +3,12 @@
  *
  *     /explore?modal=signin&via=marketing              GEO-2727
  *     /explore?modal=debates&modalTarget=people        GEO-2746
+ *     /explore?modal=debates&modalTarget=requests:<req>  one scheduled request   GEO-3431
  *     /space/<id>?modal=availability                   a person's bookable week
+ *     <any page>?modal=schedule                        the viewer's own schedule editor
+ *     <any page>?modal=email-settings                  the viewer's email settings (every email's footer)
+ *     /explore?modal=running-late&modalTarget=<req>    Running late, from an email   GEO-3427
+ *     /explore?modal=cant-make-it&modalTarget=<req>    Can't make it, from an email
  *
  * The rule the repo already follows, written down: **a fragment addresses a position in the
  * document, a query param triggers an action.** `buildBlockLink` puts a block id in the fragment
@@ -49,6 +54,11 @@ export const DEEP_LINK_MODALS = {
   debates: 'debates',
   roomAccess: 'room-access',
   availability: 'availability',
+  schedule: 'schedule',
+  emailSettings: 'email-settings',
+  // GEO-3427: a scheduling email's Running late and Can't make it. `modalTarget` is the request.
+  runningLate: 'running-late',
+  cantMakeIt: 'cant-make-it',
 } as const;
 
 export type ModalDeepLink = (typeof DEEP_LINK_MODALS)[keyof typeof DEEP_LINK_MODALS];
@@ -64,6 +74,11 @@ const VIA_PARAM = 'via';
  * `ReadonlyURLSearchParams`, and narrowing to the concrete class would make every caller cast.
  */
 export type ReadableParams = Pick<URLSearchParams, 'get' | 'toString'> | null | undefined;
+
+/** True when the URL asks for any deep-linked overlay at all. */
+export function requestsAnyModal(params: ReadableParams): boolean {
+  return params?.get(MODAL_PARAM) != null;
+}
 
 /** True when the URL is asking for this particular overlay. */
 export function requestsModal(params: ReadableParams, modal: ModalDeepLink): boolean {
@@ -89,21 +104,38 @@ export function modalVia(params: ReadableParams): string | null {
  * `replaceState` rewrites the whole URL, so a fragment left out here is a fragment thrown away.
  */
 export function urlWithoutModal(pathname: string, params: ReadableParams, hash = ''): string {
+  return urlWithoutParams(pathname, params, [MODAL_PARAM, MODAL_TARGET_PARAM, VIA_PARAM], hash);
+}
+
+/**
+ * The same URL with `keys` removed, every other param and the fragment kept: the clearing half of any
+ * one-shot link, `modal` or not. See `urlWithoutModal` for why the fragment has to be passed in.
+ */
+export function urlWithoutParams(pathname: string, params: ReadableParams, keys: readonly string[], hash = ''): string {
   const next = new URLSearchParams(params?.toString() ?? '');
-  next.delete(MODAL_PARAM);
-  next.delete(MODAL_TARGET_PARAM);
-  next.delete(VIA_PARAM);
+  for (const key of keys) next.delete(key);
   const search = next.toString();
   // Accepts `location.hash` as-is, which already carries the `#`, and tolerates a bare id.
   const fragment = !hash || hash === '#' ? '' : hash.startsWith('#') ? hash : `#${hash}`;
   return `${pathname}${search ? `?${search}` : ''}${fragment}`;
 }
 
-/** Builds a link. Each feature wraps this with its own modal value and default pathname. */
+/**
+ * Builds a link. Each feature wraps this with its own modal value and default pathname.
+ *
+ * `pathname` may carry a query and a fragment of its own (a page returned to with its state, as the
+ * debate calendar's Back to Debates does): the trigger merges into that query, ahead of the
+ * fragment, rather than starting a second one.
+ */
 export function toModal(options: { modal: ModalDeepLink; pathname: string; target?: string; via?: string }): string {
-  const params = new URLSearchParams();
+  const hashAt = options.pathname.indexOf('#');
+  const fragment = hashAt === -1 ? '' : options.pathname.slice(hashAt);
+  const beforeHash = hashAt === -1 ? options.pathname : options.pathname.slice(0, hashAt);
+  const queryAt = beforeHash.indexOf('?');
+  const path = queryAt === -1 ? beforeHash : beforeHash.slice(0, queryAt);
+  const params = new URLSearchParams(queryAt === -1 ? '' : beforeHash.slice(queryAt + 1));
   params.set(MODAL_PARAM, options.modal);
   if (options.target) params.set(MODAL_TARGET_PARAM, options.target);
   if (options.via) params.set(VIA_PARAM, options.via);
-  return `${options.pathname}?${params.toString()}`;
+  return `${path}?${params.toString()}${fragment}`;
 }

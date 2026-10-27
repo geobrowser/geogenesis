@@ -55,6 +55,8 @@ export const TOPIC_TYPE_ID = '5ef5a5860f274d8e8f6c59ae5b3e89e2';
 export const TAG_PROPERTY_ID = '257090341ba5406f94e4d4af90042fba';
 /** Entity that, when used as the value of TAG_PROPERTY_ID, marks a Topic as editorially curated. */
 export const CURATED_TOPIC_TAG_ID = '7f796eb5bfc5449c98649bf7d996a2ca';
+/** Tag used to prioritize Topic suggestions during onboarding. */
+export const ONBOARDING_TOPIC_TAG_ID = 'be0299ee92dd4e7ab11bfb810643b288';
 /** Entity that, when used as the value of TAG_PROPERTY_ID, marks an entity (e.g. a ranking) as featured. */
 export const FEATURED_TAG_ID = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
 /** Relation type that links a parent Topic to its immediate subtopics. */

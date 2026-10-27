@@ -17,15 +17,18 @@ import {
   positionDraftFromEntry,
 } from '~/core/profile/stage-history';
 
-import { Button, SquareButton } from '~/design-system/button';
+import { SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Warning } from '~/design-system/icons/warning';
 import { Input, inputStyles } from '~/design-system/input';
 
 import { AddEducationSheet } from './add-education-sheet';
 import { AddPositionSheet } from './add-position-sheet';
+import { DiscardEditsDialog, useDiscardEditsGuard } from './discard-edits-dialog';
 import { HistorySection } from './history-section';
 import { ProfileImageField } from './profile-image-field';
+import { profilePillClassName } from './profile-pill';
+import { useBackdropDismiss } from './use-backdrop-dismiss';
 
 const UNCHANGED: ProfileImageEdit = { kind: 'unchanged' };
 
@@ -115,9 +118,6 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   const pristineRef = React.useRef({ name: true, tagline: true, description: true });
 
   const isPublishing = status === 'publishing';
-
-  /** Where the current press began; see the backdrop handler below. */
-  const pressStartedOnBackdrop = React.useRef(false);
 
   const resetForm = React.useCallback(() => {
     pristineRef.current = { name: true, tagline: true, description: true };
@@ -274,8 +274,17 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     onOpenChange(false);
   };
 
+  /**
+   * Whether closing now would throw work away. A failed publish counts even when
+   * `hasChanges` has gone false: its rows are already in the local store, and
+   * closing is what abandons them.
+   */
+  const hasUnsavedEdits = !isPublishing && (hasChanges || hasFailed);
+
+  const unavailableNote = 'We couldn’t find your profile to edit. Try reloading the page.';
+
   const footerNote = isUnavailable
-    ? 'We couldn’t find your profile to edit. Try reloading the page.'
+    ? unavailableNote
     : isPublishing
       ? 'Publishing to your space. This usually takes about 10 seconds.'
       : hasFailed
@@ -291,6 +300,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     // back directly; there is no submit here to reach for.
     if (sheet) return;
 
+    save();
+  };
+
+  const save = () => {
     if (!canSave) return;
 
     // Save hands straight off to the status bar rather than holding the screen.
@@ -314,27 +327,37 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     onOpenChange(false);
   };
 
+  // Every way `canSave` can be false while there is still something to lose.
+  const saveBlockedReason = isNameMissing
+    ? 'Add a name to save your profile.'
+    : isUnavailable
+      ? unavailableNote
+      : isLoading
+        ? 'Your profile is still loading. Try again in a moment.'
+        : null;
+
+  const discardGuard = useDiscardEditsGuard({ hasUnsavedEdits, canSave, saveBlockedReason, discard: close, save });
+
+  /**
+   * Escape and the backdrop. On a sheet they step back to the modal, the same as
+   * its Back button, rather than taking the whole modal down from two levels in —
+   * and rather than offering a Save that would publish without the sheet's draft.
+   */
+  const dismiss = () => {
+    if (sheet) setSheet(null);
+    else discardGuard.requestClose();
+  };
+
+  const backdropDismiss = useBackdropDismiss(dismiss);
+
   return (
-    <Root open={open} onOpenChange={next => (next ? onOpenChange(true) : close())}>
+    <Root open={open} onOpenChange={next => (next ? onOpenChange(true) : dismiss())}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
-        {/* This container spans the viewport and sits above the overlay, so a click
-            on the backdrop lands here rather than "outside" the Radix content —
-            `onPointerDownOutside` never fires. Closing on a click that reached the
-            container itself restores the dismissal the design asks for.
-            
-            The press has to have *started* on the backdrop too. A click's target is
-            the common ancestor of its pointerdown and pointerup, so drag-selecting
-            text in a field and releasing past the card edge produces a click
-            targeting this container — which would have thrown away everything typed
-            with no confirmation. */}
+        {/* Spans the viewport above the overlay, so the backdrop is this container
+            itself — see `useBackdropDismiss`. */}
         <Content
-          onPointerDown={event => {
-            pressStartedOnBackdrop.current = event.target === event.currentTarget;
-          }}
-          onClick={event => {
-            if (event.target === event.currentTarget && pressStartedOnBackdrop.current) close();
-          }}
+          {...backdropDismiss}
           // `px-4` so the card clears the screen edges on a phone, where
           // `max-w-[560px]` is wider than the viewport and the dialog would
           // otherwise run edge to edge.
@@ -389,7 +412,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
               <>
                 <header className="flex items-center justify-between px-5 py-4">
                   <Title className="text-smallTitle text-text">Edit profile</Title>
-                  <SquareButton type="button" onClick={close} icon={<Close />} aria-label="Close" />
+                  <SquareButton type="button" onClick={discardGuard.requestClose} icon={<Close />} aria-label="Close" />
                 </header>
 
                 <Description className="sr-only">
@@ -539,17 +562,23 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   why Save is dead, how long the wait is, or what a failure cost. */}
                   <p className={cx('text-footnote', isUnavailable ? 'text-red-01' : 'text-grey-04')}>{footerNote}</p>
                   <div className="flex items-center gap-2">
-                    <Button type="button" variant="secondary" onClick={close}>
+                    <button
+                      type="button"
+                      onClick={discardGuard.requestClose}
+                      className={profilePillClassName('secondary')}
+                    >
                       {isPublishing ? 'Close' : 'Cancel'}
-                    </Button>
-                    <Button type="submit" disabled={!canSave}>
+                    </button>
+                    <button type="submit" disabled={!canSave} className={profilePillClassName('primary')}>
                       {isPublishing ? 'Publishing' : hasFailed ? 'Retry' : 'Save profile'}
-                    </Button>
+                    </button>
                   </div>
                 </footer>
               </>
             )}
           </form>
+
+          <DiscardEditsDialog {...discardGuard.dialogProps} />
         </Content>
       </Portal>
     </Root>

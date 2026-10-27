@@ -36,6 +36,8 @@ const mocks = vi.hoisted(() => ({
   isMobileNavbar: false,
   isSmartAccountLoading: false,
   hasSmartAccount: true,
+  authenticated: true,
+  walletStall: { stalled: false, reconnecting: false, reconnect: vi.fn() },
   dialogMounts: 0,
   shortcutCallback: null as (() => void) | null,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
@@ -46,9 +48,9 @@ const mocks = vi.hoisted(() => ({
   } as Record<string, unknown> | null,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   useLogout: () => ({ logout: mocks.logout }),
-  usePrivy: () => ({ ready: true, authenticated: true, user: mocks.privyUser }),
+  usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: mocks.privyUser }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -71,6 +73,8 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
     isLoading: mocks.isSmartAccountLoading,
   }),
 }));
+// Its timers and telemetry are covered in its own suite; here only what the navbar does with it.
+vi.mock('~/core/wallet/use-wallet-stall', () => ({ useWalletStall: () => mocks.walletStall }));
 vi.mock('~/core/hooks/use-geo-profile', () => ({
   useGeoProfile: () => ({ profile: mocks.profile, isLoading: false }),
 }));
@@ -81,8 +85,6 @@ vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => mocks.pendingPersonalSpace,
   isPendingPersonalSpaceId: (spaceId: string | null | undefined) => spaceId?.startsWith('pending:') ?? false,
 }));
-// The copy-link control in the calendar header has its own tests; off here keeps it out of the way.
-vi.mock('~/core/state/feature-flags', () => ({ usePeerAvailabilityEnabled: () => false }));
 vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => mocks.spaceId }));
 vi.mock('~/core/hooks/use-access-control', () => ({
   useAccessControl: () => ({ canEdit: mocks.canEdit, isLoading: false }),
@@ -100,10 +102,10 @@ vi.mock('~/partials/hints/edit-mode-toggle-tip', () => ({
   EditModeToggleTip: () => null,
   useEditModeToggleTip: () => ({ open: false, dismiss: vi.fn(), isActive: false }),
 }));
-vi.mock('~/partials/create-space/create-space-dialog', () => ({
+vi.mock('~/partials/create-space/create-space-state', () => ({
   useOpenCreateSpaceDialog: () => mocks.openCreateSpaceDialog,
 }));
-vi.mock('~/partials/onboarding/dialog', () => ({ avatarAtom: {} }));
+vi.mock('~/partials/onboarding/onboarding-atoms', () => ({ avatarAtom: {} }));
 // The real dialog pulls in the whole publish chain (which needs an unmocked
 // jotai). The navbar's job is only to mount it, so assert on that.
 vi.mock('~/partials/profile/edit-profile-dialog', () => ({
@@ -116,7 +118,13 @@ vi.mock('~/partials/profile/edit-profile-dialog', () => ({
     return open ? <div data-testid="edit-profile-dialog" /> : null;
   },
 }));
-vi.mock('~/core/wallet', () => ({ GeoConnectButton: () => <button>Connect</button> }));
+vi.mock('~/core/wallet', () => ({
+  GeoConnectButton: ({ compact, component }: { compact?: boolean; component?: string }) => (
+    <button data-compact={String(Boolean(compact))} data-component={component}>
+      Connect
+    </button>
+  ),
+}));
 vi.mock('~/design-system/fallback-image', () => ({
   FallbackImage: ({ value }: { value: string }) => <img src={value} alt="" />,
 }));
@@ -194,6 +202,8 @@ describe('NavbarActions profile menu', () => {
     mocks.isMobileNavbar = false;
     mocks.isSmartAccountLoading = false;
     mocks.hasSmartAccount = true;
+    mocks.authenticated = true;
+    mocks.walletStall = { stalled: false, reconnecting: false, reconnect: vi.fn() };
     mocks.dialogMounts = 0;
     mocks.shortcutCallback = null;
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
@@ -408,10 +418,114 @@ describe('NavbarActions profile menu', () => {
     await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
 
     mocks.hasSmartAccount = false;
+    mocks.authenticated = false;
     rerender(<NavbarActions />);
 
     expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open profile menu' })).not.toBeInTheDocument();
+  });
+
+  // GEO-3245: Privy says signed in, the smart account never resolves. Connect (Log in) does nothing
+  // for a signed-in user, so it must never be what they see.
+  describe('signed in without an account', () => {
+    beforeEach(() => {
+      mocks.hasSmartAccount = false;
+    });
+
+    it('holds the skeleton, not Connect, while the account is late', () => {
+      const { container } = render(<NavbarActions />);
+
+      expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument();
+      expect(container.querySelector('[class*="mobile:h-11"]')).not.toBeNull();
+    });
+
+    it('offers Reconnect once the wait counts as stalled', async () => {
+      mocks.walletStall.stalled = true;
+      const user = userEvent.setup();
+      render(<NavbarActions />);
+
+      expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Reconnect' }));
+
+      expect(mocks.walletStall.reconnect).toHaveBeenCalledOnce();
+    });
+
+    it('cannot be pressed twice while reconnecting', () => {
+      mocks.walletStall = { stalled: true, reconnecting: true, reconnect: vi.fn() };
+      render(<NavbarActions />);
+
+      expect(screen.getByRole('button', { name: 'Reconnecting…' })).toBeDisabled();
+    });
+
+    it('still shows Connect to someone who is signed out', () => {
+      mocks.authenticated = false;
+      render(<NavbarActions />);
+
+      expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    });
+  });
+
+  // GEO-3415. The debate feed's phone bar reuses these controls at its smaller size.
+  describe('compact', () => {
+    it('asks for the small Log in, attributed to whoever placed it', () => {
+      mocks.hasSmartAccount = false;
+      mocks.authenticated = false;
+      render(<NavbarActions compact signInComponent="debate_feed_bar" />);
+
+      const connect = screen.getByRole('button', { name: 'Connect' });
+      expect(connect).toHaveAttribute('data-compact', 'true');
+      expect(connect).toHaveAttribute('data-component', 'debate_feed_bar');
+    });
+
+    it('keeps the navbar’s own Log in as it was', () => {
+      mocks.hasSmartAccount = false;
+      mocks.authenticated = false;
+      render(<NavbarActions />);
+
+      const connect = screen.getByRole('button', { name: 'Connect' });
+      expect(connect).toHaveAttribute('data-compact', 'false');
+      expect(connect).not.toHaveAttribute('data-component');
+    });
+
+    // The app navbar stays mounted under the bar and owns ⌘E. A second listener toggled once but
+    // reported the switch twice.
+    it('leaves the edit mode shortcut to the app navbar', () => {
+      mocks.spaceId = 'space-1';
+      mocks.canEdit = true;
+      render(<NavbarActions compact />);
+
+      expect(mocks.shortcutCallback).toBeNull();
+    });
+
+    it('still registers the shortcut in the app navbar', () => {
+      mocks.spaceId = 'space-1';
+      mocks.canEdit = true;
+      render(<NavbarActions />);
+
+      expect(mocks.shortcutCallback).not.toBeNull();
+    });
+
+    // The navbar's phone layout starts at 639px; the bar shows up to 767px. Between the two the
+    // toggle (and its first-run tip) would otherwise sit in the bar beside the avatar.
+    it('keeps the edit mode toggle in the menu up to the bar’s edge', async () => {
+      mocks.spaceId = 'space-1';
+      mocks.isMobileNavbar = false;
+      const user = userEvent.setup();
+      render(<NavbarActions compact />);
+
+      expect(screen.queryByTestId('edit-toggle')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
+      expect(
+        within(screen.getByTestId('profile-menu')).getByRole('switch', { name: 'Edit mode off' })
+      ).toBeInTheDocument();
+    });
+
+    it('gives the avatar a 44px target at every phone width', () => {
+      render(<NavbarActions compact />);
+
+      expect(screen.getByRole('button', { name: 'Open profile menu' })).toHaveClass('h-11', 'w-11');
+    });
   });
 
   it('saves the schedule edited from the menu', async () => {

@@ -1,3 +1,4 @@
+import './src/ensure-web-storage.js';
 export {
   usePrivy,
   // App-wide observers should not wait for wallet activation before handling auth.
@@ -14,6 +15,8 @@ export {
   // wallet. Deleting it does not fall back to something; it reinstates the bug this was opened for.
   useLoginWithEmail,
   type UseLoginWithEmail,
+  // Headless Google sign-in for the app's own UI; run only in apps/web `core/wallet/privy-host.tsx`.
+  useLoginWithOAuth,
   useIdentityToken,
   getIdentityToken,
   PrivyProvider,
@@ -27,4 +30,4 @@ export { getGeoChain } from './src/chain.js';
 export { useGeoLogin } from './src/use-login.js';
 // Mounted once for the life of the app. A headless login authenticates without creating the
 // embedded wallet the modal flow creates, and nothing downstream works without one.
-export { useEnsureEmbeddedWallet } from './src/use-ensure-embedded-wallet.js';
+export { retryEmbeddedWalletSetup, useEnsureEmbeddedWallet } from './src/use-ensure-embedded-wallet.js';

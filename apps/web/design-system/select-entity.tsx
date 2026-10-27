@@ -14,6 +14,7 @@ import pluralize from 'pluralize';
 import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
+import { useSearchResultAction } from '~/core/hooks/use-search-result-action';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
@@ -158,6 +159,7 @@ export const SelectEntity = ({
   selectedEntityId,
   focusRequestKey,
 }: SelectEntityProps) => {
+  const trackSelection = useSearchResultAction();
   const [isShowingIds, setIsShowingIds] = useAtom(showingIdsAtom);
   const { storage } = useMutate();
 
@@ -331,6 +333,7 @@ export const SelectEntity = ({
     const result = results[selectedIndex];
 
     if (result) {
+      trackSelection(result, selectedIndex, 'entity_picker');
       setResult(null);
       onDone?.({
         id: result.id,
@@ -690,6 +693,7 @@ export const SelectEntity = ({
                                 <div className="p-1">
                                   <button
                                     onClick={() => {
+                                      trackSelection(result, index, 'entity_picker');
                                       setResult(null);
                                       onDone?.({
                                         id: result.id,
@@ -856,6 +860,7 @@ export const SelectEntity = ({
                           <button
                             key={index}
                             onClick={() => {
+                              trackSelection(result, index, 'entity_picker_spaces');
                               setResult(null);
                               onDone?.({
                                 id: result.id,

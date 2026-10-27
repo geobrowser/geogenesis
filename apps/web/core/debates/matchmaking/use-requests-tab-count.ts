@@ -1,9 +1,7 @@
 'use client';
 
-import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
-
 import type { DebateActivity, DebateRequestsResponse } from '../api';
-import { useOpenScheduledRequests, useScheduledAwaitingBadgeCount } from '../rooms/scheduled-awaiting';
+import { useOpenScheduledRequests } from '../rooms/scheduled-awaiting';
 import { useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
@@ -15,9 +13,9 @@ import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
  * you sent is still pending until they answer, and belongs in the count for the same reason it
  * belongs in the list.
  *
- * Scheduled requests come from the list itself when the flag is on, so the number cannot disagree
- * with the rows underneath it; until that list lands, the navbar's "awaiting your answer" count
- * stands in, which is the most the badge knew before.
+ * Scheduled requests come from the list itself, so the number cannot disagree with the rows
+ * underneath it; until that list lands, the navbar's "awaiting your answer" count stands in, which
+ * is the most the badge knew before.
  */
 export function useRequestsTabCount({
   authenticated,
@@ -28,9 +26,7 @@ export function useRequestsTabCount({
   activity: DebateActivity | undefined;
   requests: DebateRequestsResponse | undefined;
 }) {
-  const schedulingEnabled = usePeerAvailabilityEnabled();
-  const scheduled = useScheduledDebates(schedulingEnabled && authenticated);
-  const scheduledAwaiting = useScheduledAwaitingBadgeCount(activity);
+  const scheduled = useScheduledDebates(authenticated);
   const openScheduled = useOpenScheduledRequests(scheduled.data?.requests);
 
   const incoming = useUnexpiredRequests(requests?.incoming ?? []);
@@ -42,7 +38,7 @@ export function useRequestsTabCount({
   if (!authenticated) return 0;
 
   const instantIncoming = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
-  const scheduledPending = schedulingEnabled && scheduled.data ? openScheduled.length : scheduledAwaiting;
+  const scheduledPending = scheduled.data ? openScheduled.length : (activity?.scheduled_awaiting_answer_count ?? 0);
 
   return instantIncoming + (outbound ? 1 : 0) + (challenge ? 1 : 0) + scheduledPending;
 }
