@@ -160,10 +160,21 @@ export const debateQueryKeys = {
     days: number,
     limit: number,
     calendar = false,
-    spaces: string[] = []
+    spaces: string[] = [],
+    calendarDate?: string
   ) =>
     calendar
-      ? (['debates', 'account', accountKey, 'schedulable-people', days, limit, 'calendar', spaces.join(',')] as const)
+      ? ([
+          'debates',
+          'account',
+          accountKey,
+          'schedulable-people',
+          days,
+          limit,
+          'calendar',
+          spaces.join(','),
+          calendarDate,
+        ] as const)
       : (['debates', 'account', accountKey, 'schedulable-people', days, limit] as const),
   calendarConnections: (accountKey: string | null) => ['debates', 'account', accountKey, 'calendar'] as const,
   /** Prefix-matchable, so a calendar change can drop every window at once. */
