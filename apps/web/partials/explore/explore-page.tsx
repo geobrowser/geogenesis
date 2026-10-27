@@ -27,6 +27,7 @@ const FOR_YOU_SORT_OPTIONS: readonly ExplorePageSort[] = ['for-you', 'best', 'to
 // sort menu reveals both for readers who want to narrow or widen it.
 const EXPLORE_FEED_PROPS = {
   apiEndpoint: '/api/explore/feed',
+  preserveSession: true,
   initialTime: 'month',
   showSortFilter: true,
   showMoreFilters: true,
