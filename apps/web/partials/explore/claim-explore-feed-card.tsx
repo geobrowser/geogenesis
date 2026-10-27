@@ -328,6 +328,7 @@ export function ClaimExploreFeedCard({
             entityId={item.entityId}
             spaceId={item.spaceId}
             positions={control.optimisticPositions}
+            showParticipants={false}
             responseKind={responseKind}
             viewerPosition={control.viewerPosition}
             onRespond={control.respond}

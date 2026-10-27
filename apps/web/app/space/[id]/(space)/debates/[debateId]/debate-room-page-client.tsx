@@ -802,8 +802,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localSlot,
     audioMuted: audioMuted || pendingTurnYield !== null,
     msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
-    // `useTurnOverrun` ends the overrun the moment they stop, so one that is running means they are
-    // still talking.
+    // `useTurnOverrun` ends the overrun once they have paused long enough to have finished, so one
+    // that is running means they are still talking.
     stillSpeaking: localTurnEndedAt !== null,
     msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
     openRoundsPhase: countdown.openRounds?.phase ?? null,

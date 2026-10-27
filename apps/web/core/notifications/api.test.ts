@@ -4,6 +4,7 @@ import {
   NotificationsRequestError,
   geoNotificationsApiUrl,
   registerForNotifications,
+  reportEmailClick,
   updateNotificationPreferences,
 } from './api';
 
@@ -48,6 +49,22 @@ describe('geo-notifications client', () => {
     expect(url).toBe('https://n.example/preferences');
     expect(init?.method).toBe('PUT');
     expect(JSON.parse(String(init?.body))).toEqual({ email_enabled: false });
+  });
+
+  // GEO-3370: people often arrive from an email signed out, so the click carries no token, and
+  // `keepalive` lets it finish when they leave straight away.
+  it('reports an email click without a token, kept alive', async () => {
+    const fetch = respond(202, { outcome: 'counted' });
+    vi.stubGlobal('fetch', fetch);
+
+    await reportEmailClick('https://n.example', { send_id: 's1', link: 'main', signed_in: false });
+
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toBe('https://n.example/email-clicks');
+    expect(init?.method).toBe('POST');
+    expect(init?.keepalive).toBe(true);
+    expect(init?.headers as Record<string, string>).not.toHaveProperty('Authorization');
+    expect(JSON.parse(String(init?.body))).toEqual({ send_id: 's1', link: 'main', signed_in: false });
   });
 
   it("carries the service's status and message on failure", async () => {

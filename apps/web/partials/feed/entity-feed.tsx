@@ -169,6 +169,11 @@ type EntityFeedProps = {
    * the personal URL, because the CDN ignores cookies.
    */
   cdnFirstPage?: boolean;
+  /**
+   * Extra cards between the feed's own, by the index of the card they follow, for `feedLength`
+   * cards (GEO-3421's past calls). Drawn only on an unfiltered feed; pages and cursors ignore them.
+   */
+  interleave?: (feedLength: number) => ReadonlyMap<number, React.ReactNode>;
 };
 
 /**
@@ -296,6 +301,7 @@ export function EntityFeed({
   sendIdentityToken = false,
   walletAddress = null,
   cdnFirstPage = false,
+  interleave,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
@@ -625,6 +631,9 @@ export function EntityFeed({
     if (placeholderLeadId !== null) setPinnedLeadId(placeholderLeadId);
   }, [placeholderLeadId, setPinnedLeadId]);
 
+  const unfiltered = requestedSpaceIds.length === 0 && typeIds === undefined && selectedTopicIds.length === 0;
+  const interleaved = unfiltered ? interleave?.(items.length) : undefined;
+
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_LABELS[sort];
   const filterTriggerClassName = cx(
@@ -783,17 +792,19 @@ export function EntityFeed({
           <p className="text-browseMenu text-grey-04">No entities match these filters yet.</p>
         ) : (
           items.map((item, index) => (
-            <ExploreFeedCard
-              itemPosition={index + 1}
-              key={`${item.entityId}-${item.spaceId}`}
-              item={item}
-              hideSpaceLink={lockedSpaceId != null}
-              hideJoinButton={lockedSpaceId != null}
-              titleOpensSidePanel={titleOpensSidePanel}
-              claimCardVariant={claimCardVariant}
-              topicFollow={topicFollow}
-              deferUntilNearViewport={index >= EAGER_CARD_COUNT}
-            />
+            <React.Fragment key={`${item.entityId}-${item.spaceId}`}>
+              <ExploreFeedCard
+                itemPosition={index + 1}
+                item={item}
+                hideSpaceLink={lockedSpaceId != null}
+                hideJoinButton={lockedSpaceId != null}
+                titleOpensSidePanel={titleOpensSidePanel}
+                claimCardVariant={claimCardVariant}
+                topicFollow={topicFollow}
+                deferUntilNearViewport={index >= EAGER_CARD_COUNT}
+              />
+              {interleaved?.get(index)}
+            </React.Fragment>
           ))
         )}
         <div ref={sentinelRef} className="h-4 w-full" aria-hidden />

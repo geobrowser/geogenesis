@@ -143,6 +143,31 @@ describe('selectOpsForPublish', () => {
   });
 });
 
+describe('a view edit on a config entity reachable through a published BLOCKS relation', () => {
+  const containment = blocksRelation('page', 'block');
+  const viewEdit = relation('block', 'gallery-view', { typeId: 'view-property', entityId: 'view-rel' });
+
+  it('folds the config entity under its page and drops the view edit when the page is deselected', () => {
+    const index = buildOwnershipIndex([diff('page')], [containment, viewEdit]);
+
+    expect(index.ownerOf.get('block')).toBe('page');
+
+    const result = selectOpsForPublish(index, new Set(), [], [viewEdit]);
+
+    expect(result.relations).toEqual([]);
+    expect(result.unattributed.relations).toEqual([]);
+  });
+
+  it('leaks the edit as unattributed when the index omits the published containment relation', () => {
+    const index = buildOwnershipIndex([diff('page')], [viewEdit]);
+
+    const result = selectOpsForPublish(index, new Set(), [], [viewEdit]);
+
+    expect(result.relations).toEqual([viewEdit]);
+    expect(result.unattributed.relations).toEqual([viewEdit]);
+  });
+});
+
 describe('collectOpsForEntities', () => {
   it('takes a row’s folded blocks with it, so no orphan block is left behind', () => {
     const values = [value('page'), value('table-block'), value('other')];
@@ -419,6 +444,13 @@ describe('buildIsNewEntity', () => {
 
     expect(isNew('a')).toBe(true);
     expect(isNew('b')).toBe(true);
+  });
+
+  it('treats an otherwise-unknown id as established when the graph confirms it', () => {
+    const isNew = buildIsNewEntity([], [], new Set(['confirmed']));
+
+    expect(isNew('confirmed')).toBe(false);
+    expect(isNew('unconfirmed')).toBe(true);
   });
 });
 

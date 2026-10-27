@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { CallRoom } from '~/core/space-calls/call-room';
+import { EndedCallRecording } from '~/core/space-calls/recording/ended-call-recording';
 import { spaceCallPath } from '~/core/space-calls/routes';
 import { useBrowseSidebarPageDefault } from '~/core/state/browse-sidebar-state';
 import { NavUtils } from '~/core/utils/utils';
@@ -242,12 +243,15 @@ function LobbyAccess({
           lobby={lobby}
           ended={lobby.access.reason === 'ended'}
           after={
-            // Hosts can still look up who was banned and what was done.
-            isMemberView(lobby) && lobby.viewer.role === 'host' ? (
-              <div className="w-full max-w-xl">
-                <LobbyHostLists lobby={lobby} />
-              </div>
-            ) : null
+            <>
+              {purpose.purpose === 'call' ? <EndedCallRecording lobby={lobby} /> : null}
+              {/* Hosts can still look up who was banned and what was done. */}
+              {isMemberView(lobby) && lobby.viewer.role === 'host' ? (
+                <div className="w-full max-w-xl">
+                  <LobbyHostLists lobby={lobby} />
+                </div>
+              ) : null}
+            </>
           }
         />
       );

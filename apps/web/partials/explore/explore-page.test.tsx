@@ -39,6 +39,11 @@ vi.mock('./explore-welcome-banner', () => ({ ExploreWelcomeBanner: () => null })
 // shortcut it offers (GEO-2948), and this suite is about which column the layout reserves.
 vi.mock('./explore-live-lobbies-banner', () => ({ ExploreLiveLobbiesBanner: () => null }));
 vi.mock('./email-capture-popup', () => ({ ExploreEmailCapturePopup: () => null }));
+// GEO-3421: the past-call list is geo-chat's; here only what the feed is handed matters.
+const pastCallInterleave = () => new Map();
+vi.mock('~/core/space-calls/recording/explore-past-calls', () => ({
+  usePastCallInterleave: (enabled: boolean) => (enabled ? pastCallInterleave : undefined),
+}));
 vi.mock('~/partials/feed/entity-feed', () => ({
   EntityFeed: (props: Record<string, unknown>) => {
     mocks.feedProps.push(props);
@@ -185,5 +190,23 @@ describe('ExplorePage For you sort', () => {
     render(<ExplorePage sidePanel={null} walletAddress="0x00000000000000000000000000000000000000aa" />);
 
     expect(mocks.feedProps.at(-1)?.followedTopicIds).toBeNull();
+  });
+});
+
+describe('ExplorePage past calls', () => {
+  it('hands the feed nothing to interleave with the flag off', () => {
+    renderExplore();
+    expect(mocks.feedProps.at(-1)?.interleave).toBeUndefined();
+  });
+
+  it('hands it the past calls with the flag on, on either sort', () => {
+    mocks.flags = { callRecording: true };
+    const { unmount } = renderExplore();
+    expect(mocks.feedProps.at(-1)?.interleave).toBe(pastCallInterleave);
+    unmount();
+
+    mocks.flags = { callRecording: true, forYouFeed: true };
+    renderExplore();
+    expect(mocks.feedProps.at(-1)?.interleave).toBe(pastCallInterleave);
   });
 });
