@@ -86,7 +86,7 @@ export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
   const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
-  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheetControlsRef, sheet } = useMobileSheetDrag({
     enabled: isMobile && isOpen,
     onDismiss: close,
     peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
@@ -208,6 +208,7 @@ export function DebatesHubPanel() {
             aria-modal="true"
             aria-label="Debates"
             sheetStyle={sheetStyle}
+            sheetControlsRef={sheetControlsRef}
             sheet={sheet}
           >
             <ElevatedPopoverPortalContext.Provider value={popoverContainer}>

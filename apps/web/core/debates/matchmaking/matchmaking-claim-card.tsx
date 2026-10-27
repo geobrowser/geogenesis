@@ -662,7 +662,7 @@ export function useClaimPositionControl({
 
   /**
    * A signed-out press (GEO-3214). The side is kept on this device and drawn as the visitor's at
-   * once, with no sign-in in the way; the save sheet asks for an account once they have a few. It
+   * once, with no sign-in in the way; the save sheet asks for an account after their first vote. It
    * replaced opening Privy's dialog at the press, which about half of visitors closed.
    */
   const voteOnThisDevice = (position: boolean) =>

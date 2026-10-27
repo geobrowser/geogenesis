@@ -15,7 +15,7 @@ import {
 
 /**
  * A signed-out press on any vote control (GEO-3214): kept on this device and drawn as the visitor's
- * at once, with no sign-in in the way. The save sheet asks for an account once they have a few.
+ * at once, with no sign-in in the way. The save sheet asks for an account after their first vote.
  *
  * One function for the claim pills and the up/down arrows, so both count toward the same "Save N
  * votes" and report the same event.

@@ -5,8 +5,10 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import type { Tabs } from '~/core/state/editor/editor-provider';
 import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
+import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useQueryEntities, useQueryEntitiesAsync } from '~/core/sync/use-store';
 import type { Entity, Relation, TabEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
@@ -22,9 +24,14 @@ export type EntityPageSurfaceData = {
   tabRelations: Relation[];
   tabEntities: TabEntity[];
   isRelationPage: boolean;
+  isLoadingBlocks: boolean;
   isLoading: boolean;
   isReady: boolean;
 };
+
+function getBlockRelations(entity: Entity | null | undefined): Relation[] {
+  return entity?.relations.filter(relation => relation.type.id === SystemIds.BLOCKS) ?? [];
+}
 
 export function useEntityPageSurfaceData(
   entityId: string,
@@ -32,11 +39,13 @@ export function useEntityPageSurfaceData(
   entity: Entity | null,
   isLoadingEntity: boolean
 ): EntityPageSurfaceData {
+  const isEditing = useUserIsEditing(entitySpaceId);
+  const activeTabId = useEntitySidePanelActiveTab()?.activeTabId;
   const relationEntityRelations = useRelationEntityRelations(entityId, entitySpaceId);
   const isRelationPage = relationEntityRelations.length > 0;
 
   const blockRelations = React.useMemo(() => {
-    return entity?.relations?.filter(r => r.type.id === SystemIds.BLOCKS) ?? [];
+    return getBlockRelations(entity);
   }, [entity]);
 
   const blockIds = React.useMemo(() => blockRelations.map(r => r.toEntity.id), [blockRelations]);
@@ -70,11 +79,9 @@ export function useEntityPageSurfaceData(
   const nestedTabBlockIds = React.useMemo(() => {
     const ids = new Set<string>();
     for (const tabEntity of tabEntitiesOrdered) {
-      for (const relation of tabEntity.relations ?? []) {
-        if (relation.type.id === SystemIds.BLOCKS) {
-          ids.add(relation.toEntity.id);
-          if (relation.entityId) ids.add(relation.entityId);
-        }
+      for (const relation of getBlockRelations(tabEntity)) {
+        ids.add(relation.toEntity.id);
+        if (relation.entityId) ids.add(relation.entityId);
       }
     }
     return [...ids];
@@ -90,7 +97,7 @@ export function useEntityPageSurfaceData(
     const blockMap = new Map((nestedTabBlockEntities ?? []).map(e => [e.id, e]));
     const tabs: Tabs = {};
     for (const tabEntity of tabEntitiesOrdered) {
-      const blockRels = (tabEntity.relations ?? []).filter(r => r.type.id === SystemIds.BLOCKS);
+      const blockRels = getBlockRelations(tabEntity);
       const orderedIds = [...new Set(blockRels.map(r => r.toEntity.id))];
       tabs[tabEntity.id] = {
         entity: tabEntity,
@@ -140,7 +147,19 @@ export function useEntityPageSurfaceData(
     };
   }, [entity, blocks, initialTabs, loadingTabEntities, loadingNestedTabBlocks, entitySpaceId, findMany]);
 
-  const isLoading = (isLoadingEntity && !entity) || isBlocksLoading;
+  // Match the panel's editor scope: an authored tab must wait for its own blocks, while an
+  // unrelated overview/tab request must not hold up content that is already available.
+  const activeTab = activeTabId ? initialTabs[activeTabId] : undefined;
+  const activeBlockIds = activeTabId ? getBlockRelations(activeTab?.entity).map(r => r.toEntity.id) : blockIds;
+  const activeBlocks = activeTabId ? activeTab?.blocks : blocks;
+  const activeBlocksLoading = activeTabId ? loadingTabEntities || loadingNestedTabBlocks : isBlocksLoading;
+  const waitingForTab = Boolean(activeTabId && !activeTab && loadingTabEntities);
+  const availableBlockIds = new Set((activeBlocks ?? []).map(block => block.id));
+  // Editing still waits for the initial read, so cached metadata cannot seed an incomplete document.
+  const isLoadingBlocks =
+    waitingForTab || (activeBlocksLoading && (isEditing || activeBlockIds.some(id => !availableBlockIds.has(id))));
+  // Identity, custom browse views and comments do not depend on the overview's authored blocks.
+  const isLoading = isLoadingEntity && !entity;
   const isReady = Boolean(entity) && !isLoading;
 
   const avatarUrl = entity ? Entities.avatar(entity.relations) : null;
@@ -156,6 +175,7 @@ export function useEntityPageSurfaceData(
     tabRelations,
     tabEntities,
     isRelationPage,
+    isLoadingBlocks,
     isLoading,
     isReady,
   };

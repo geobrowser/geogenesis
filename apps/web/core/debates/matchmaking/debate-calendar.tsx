@@ -251,6 +251,7 @@ function DebateCalendarBody({
   const popoverPortal = useElevatedPopoverPortal();
 
   const now = useMinuteClock();
+  const today = new Date(now).toDateString();
 
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [spaceIds, setSpaceIds] = React.useState<string[]>(EMPTY_SPACE_IDS);
@@ -280,6 +281,7 @@ function DebateCalendarBody({
   const [capped, setCapped] = React.useState(false);
   const schedulableQuery = useSchedulablePeople(true, {
     calendar: true,
+    calendarDate: today,
     spaces: capped ? spaceIds : EMPTY_SPACE_IDS,
   });
   const serverNarrowed = capped && spaceIds.length > 0;
@@ -519,7 +521,6 @@ function DebateCalendarBody({
   );
 
   // `now` moves every minute, but the viewer's own slots only need resolving once a day.
-  const today = new Date(now).toDateString();
   const scheduleZone = schedule.data?.schedule.timezone;
   const viewerFree = React.useMemo(
     () => (viewerHasSchedule ? viewerFreeSlots(schedule.blocks, scheduleZone, new Date(today)) : new Set<number>()),

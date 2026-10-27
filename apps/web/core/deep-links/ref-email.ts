@@ -14,9 +14,29 @@ export const REF_EMAIL_PARAM = 'ref_email';
  */
 const REF_EMAIL_PATTERN = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
 
+/** A parameter's value when it has the shape asked for; anything else reads as absent. */
+function readShaped(params: ReadableParams, name: string, pattern: RegExp): string | null {
+  const value = params?.get(name)?.trim();
+  return value && pattern.test(value) ? value : null;
+}
+
 export function readRefEmail(params: ReadableParams): string | null {
-  const value = params?.get(REF_EMAIL_PARAM)?.trim();
-  return value && REF_EMAIL_PATTERN.test(value) ? value : null;
+  return readShaped(params, REF_EMAIL_PARAM, REF_EMAIL_PATTERN);
+}
+
+/** `ref_send`: the send an email link came from, an id geo-notifications gave that email (GEO-3370). */
+const REF_SEND_PARAM = 'ref_send';
+/** `ref_link`: which link in the email it was (`main`, `profile`, `claim`, …; GEO-3370). */
+const REF_LINK_PARAM = 'ref_link';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The shape geo-notifications accepts for `ref_link`. */
+const REF_LINK_PATTERN = /^[a-z0-9][a-z0-9_]{0,31}$/;
+
+/** The send and link an email link carries, or null when it isn't a tagged email link. */
+export function readEmailClick(params: ReadableParams): { sendId: string; link: string | null } | null {
+  const sendId = readShaped(params, REF_SEND_PARAM, UUID_PATTERN);
+  return sendId ? { sendId: sendId.toLowerCase(), link: readShaped(params, REF_LINK_PARAM, REF_LINK_PATTERN) } : null;
 }
 
 /**

@@ -87,7 +87,8 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
  *
  * Opened from the navbar's "Save N votes", it is the same card as a centred modal dialog instead
  * (GEO-3400): the visitor asked for it, so it comes forward rather than waiting in the corner. An
- * email's vote link opens it centred too (GEO-3374); see `opensSaveVotesCentered`.
+ * email's vote link (GEO-3374) and the automatic follow-up at five votes open it centred too;
+ * see `opensSaveVotesCentered`.
  */
 export function SaveVotesSheet() {
   const { ready, authenticated, isModalOpen } = usePrivy();
@@ -135,8 +136,8 @@ export function SaveVotesSheet() {
   const midSignIn = attempt !== null;
   const open = reason !== null && ready && !authenticated && (count > 0 || midSignIn);
 
-  // Every vote taken back: the ask was about votes that are gone, and must not reopen for the next
-  // single vote, which on a feed isn't an ask yet. Not mid-sign-in: that outlives the votes.
+  // Every vote taken back: close the ask about votes that are gone. A later cast decides afresh
+  // whether to ask. Not mid-sign-in: that outlives the votes.
   React.useEffect(() => {
     if (count === 0 && !midSignIn) closeSaveVotesPrompt();
   }, [count, midSignIn]);

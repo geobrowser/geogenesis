@@ -60,7 +60,7 @@ describe('UnsubscribePage', () => {
     expect(await screen.findByRole('heading', { name: 'Unsubscribe from the weekly digest?' })).toBeInTheDocument();
     expect(
       screen.getByText(
-        'jo•••@gmail.com will stop getting the Sunday digest. Debate invites, reminders and replies to your comments keep coming.'
+        'jo•••@gmail.com will stop getting the Tuesday digest. Debate invites, reminders and replies to your comments keep coming.'
       )
     ).toBeInTheDocument();
     expect(mocks.get).toHaveBeenCalledWith('https://n.example', { token: 't1', kind: 'digest', send: 's1' });
@@ -97,7 +97,7 @@ describe('UnsubscribePage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Undo' }));
     expect(await screen.findByRole('heading', { name: 'The weekly digest is back on' })).toBeInTheDocument();
-    expect(screen.getByText('Your next one arrives Sunday evening.')).toBeInTheDocument();
+    expect(screen.getByText('Your next one arrives Tuesday morning.')).toBeInTheDocument();
     expect(mocks.capture).toHaveBeenLastCalledWith('email_preference_changed', {
       group: 'digest',
       enabled: true,
