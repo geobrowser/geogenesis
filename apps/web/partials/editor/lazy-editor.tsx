@@ -5,7 +5,7 @@ import * as React from 'react';
 import dynamic from 'next/dynamic';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useEditorInstance } from '~/core/state/editor/editor-provider';
+import { useActiveTabIdForEditor, useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorServerContent } from '~/core/state/editor/use-editor-blocks';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -51,11 +51,24 @@ const DynamicEditor = dynamic<EditorProps>(() => import('./editor').then(m => m.
 });
 
 export function Editor(props: EditorProps) {
-  const { isLoadingBlocks } = useEditorInstance();
+  const { id, spaceId, isLoadingBlocks } = useEditorInstance();
+  const activeTabId = useActiveTabIdForEditor();
+
+  const documentKey = `${spaceId}:${id}:${activeTabId ?? id}`;
+  const [readiness, setReadiness] = React.useState({ documentKey, ready: !isLoadingBlocks });
+  React.useEffect(() => {
+    setReadiness(current => {
+      if (current.documentKey === documentKey && (current.ready || isLoadingBlocks)) return current;
+      return { documentKey, ready: !isLoadingBlocks };
+    });
+  }, [documentKey, isLoadingBlocks]);
+  const initialContentReady = readiness.documentKey === documentKey && readiness.ready;
 
   // The panel can show its entity while the authored body is still fetching. Do not instantiate
-  // TipTap with incomplete initial content, especially when the panel opens in edit mode.
-  if (isLoadingBlocks) {
+  // TipTap with incomplete initial content. Once initialized, keep it mounted through later reads
+  // so adding blocks cannot discard focus, undo history or uncommitted edits. Readiness resets
+  // when the editor's entity, space or resolved tab changes.
+  if (isLoadingBlocks && !initialContentReady) {
     return (
       <div role="status" aria-label="Loading content" className="flex flex-col gap-3 py-6">
         <Skeleton className="h-4 w-full" />
