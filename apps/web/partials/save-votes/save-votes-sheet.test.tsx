@@ -164,6 +164,8 @@ describe('SaveVotesSheet', () => {
     if (!alreadyMounted) render(sheet);
 
     expect(screen.getByText('Save your vote')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Save your votes' })).not.toBeInTheDocument();
     expect(mocks.impression.mock.calls).toEqual([[reason, 1]]);
     expect(readLocalVotes().prompt.shownCount).toBe(1);
     view?.rerender(sheet);
@@ -179,7 +181,8 @@ describe('SaveVotesSheet', () => {
     expect(mocks.impression).toHaveBeenCalledOnce();
 
     cast('e');
-    expect(screen.getByText('Save your 5 votes')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toHaveTextContent('Save your 5 votes');
+    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
     expect(mocks.impression.mock.calls).toEqual([
       [reason, 1],
       ['repeat', 5],
@@ -651,7 +654,7 @@ describe('SaveVotesSheet from the navbar', () => {
 
   // Copilot on #2933: the two presentations are different trees, so switching mid-code remounted the
   // code step — clearing what was typed and mailing a second code.
-  it('leaves a code step where it is when the navbar is pressed', () => {
+  it.each(['navbar', 'repeat'] as const)('leaves a code step where it is when %s opens', reason => {
     vote('a');
     vote('b');
     markPromptedThisSession();
@@ -662,7 +665,7 @@ describe('SaveVotesSheet from the navbar', () => {
     expect(mocks.accountStepMounts).toBe(1);
     mocks.impression.mockClear();
 
-    act(() => openSaveVotesPrompt('navbar'));
+    act(() => openSaveVotesPrompt(reason));
 
     expect(screen.getByRole('region', { name: 'Save your votes' })).toHaveTextContent('sam@hey.com');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -714,7 +717,7 @@ describe('SaveVotesSheet from the navbar', () => {
     opener.remove();
   });
 
-  it('takes over from the corner card rather than showing both', () => {
+  it.each(['navbar', 'repeat'] as const)('takes over from the corner card without showing both for %s', reason => {
     vote('a');
     vote('b');
     markPromptedThisSession();
@@ -722,7 +725,7 @@ describe('SaveVotesSheet from the navbar', () => {
     act(() => openSaveVotesPrompt('threshold'));
     expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
 
-    act(() => openSaveVotesPrompt('navbar'));
+    act(() => openSaveVotesPrompt(reason));
     expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Save your votes' })).toBeInTheDocument();
   });

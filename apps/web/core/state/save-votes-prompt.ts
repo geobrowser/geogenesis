@@ -28,10 +28,10 @@ export type SaveVotesPressReason = 'navbar' | 'debate_feed_bar';
  * Whether the sheet opens as a centred dialog rather than the corner card. A press on a "Save N
  * votes" button asked for it, so it comes forward (GEO-3400). So does an email's vote link (GEO-3374):
  * the reader came to vote, and logging in is the only step left, so the ask shouldn't wait in a corner
- * a screen away from the pills.
+ * a screen away from the pills. The follow-up ask at five votes also comes forward.
  */
 export function opensSaveVotesCentered(reason: SaveVotesPromptReason | null): boolean {
-  return reason === 'navbar' || reason === 'debate_feed_bar' || reason === 'email_link';
+  return reason === 'navbar' || reason === 'debate_feed_bar' || reason === 'email_link' || reason === 'repeat';
 }
 
 /**

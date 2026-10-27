@@ -87,7 +87,8 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
  *
  * Opened from the navbar's "Save N votes", it is the same card as a centred modal dialog instead
  * (GEO-3400): the visitor asked for it, so it comes forward rather than waiting in the corner. An
- * email's vote link opens it centred too (GEO-3374); see `opensSaveVotesCentered`.
+ * email's vote link (GEO-3374) and the automatic follow-up at five votes open it centred too;
+ * see `opensSaveVotesCentered`.
  */
 export function SaveVotesSheet() {
   const { ready, authenticated, isModalOpen } = usePrivy();
