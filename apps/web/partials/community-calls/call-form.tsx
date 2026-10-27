@@ -86,8 +86,7 @@ export function CallForm(props: Props) {
       Effect.runPromise(getRelationsByFromEntityId(editCallId!, SystemIds.BLOCKS, spaceId)).catch(() => []),
     enabled: Boolean(editCallId),
   });
-  // Every schedule this form writes carries the organizer's own zone (upgrading a legacy
-  // no-TZID schedule to TZID on next save) rather than the zone it happened to be created in.
+  // A new schedule, or one replacing a blank, carries the organizer's own zone.
   const browserTimezone = React.useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
   // An edit keeps the stored schedule's zone (UTC for a legacy one); a schedule the fields cannot
   // hold is shown read-only and saved unchanged.
