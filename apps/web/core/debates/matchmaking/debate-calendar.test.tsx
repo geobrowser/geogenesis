@@ -1733,9 +1733,9 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
 });
 
 describe('DebateCalendar, lobbies pinned above the hours (GEO-3268)', () => {
-  // Wednesday's lobby, in a week drawn Sunday to Saturday.
+  // Wednesday is today, the first column of the rolling window.
   const withWednesdayLobby = () => {
-    weekLobbies.byDay = [[], [], [], ['NYC Debates'], [], [], []];
+    weekLobbies.byDay = [['NYC Debates'], [], [], [], [], [], []];
   };
 
   it('pins a Lobbies row under the day headers, outside the hours', () => {
