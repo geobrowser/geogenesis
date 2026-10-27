@@ -37,7 +37,9 @@ function isPaginated(field: FieldNode): boolean {
 function pageSize(field: FieldNode, variables: Variables): number {
   if (!isPaginated(field)) return 1;
   const first = intValue(argument(field, 'first')?.value, variables);
-  return first === null ? DEFAULT_PAGE_SIZE : Math.max(0, first);
+  const last = intValue(argument(field, 'last')?.value, variables);
+  const requested = first === null ? last : last === null ? first : Math.max(first, last);
+  return requested === null ? DEFAULT_PAGE_SIZE : Math.max(0, requested);
 }
 
 class Rejected extends Error {}
@@ -63,10 +65,11 @@ function nestedList(selection: SelectionSetNode | undefined): FieldNode | null {
 }
 
 function describe(field: FieldNode): string {
-  const first = argument(field, 'first');
-  return first
-    ? `${field.name.value}(first: ${first.value.kind === Kind.INT ? first.value.value : '$…'})`
-    : field.name.value;
+  for (const name of ['first', 'last']) {
+    const bound = argument(field, name);
+    if (bound) return `${field.name.value}(${name}: ${bound.value.kind === Kind.INT ? bound.value.value : '$…'})`;
+  }
+  return field.name.value;
 }
 
 function estimate(selection: SelectionSetNode | undefined, variables: Variables, depth: number): number {

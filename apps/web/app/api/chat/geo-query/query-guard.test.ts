@@ -52,6 +52,11 @@ describe('checkQuery — the shapes the skill recommends pass', () => {
   it('reads a page size bound through variables', () => {
     expect(ok(`query ($n: Int!) { entities(spaceId: "${SPACE}", first: $n) { id } }`, { n: 7 })).toBe(7);
   });
+
+  it('reads a page bounded with last the same way', () => {
+    expect(ok(`{ entities(spaceId: "${SPACE}", last: 7) { id } }`)).toBe(7);
+    expect(ok(`query ($n: Int!) { entities(spaceId: "${SPACE}", last: $n) { id } }`, { n: 9 })).toBe(9);
+  });
 });
 
 describe('checkQuery — the documented incident shape is refused', () => {
@@ -64,6 +69,23 @@ describe('checkQuery — the documented incident shape is refused', () => {
     expect(error).toContain('1000 rows');
     expect(error).toContain('relations(first: 1000)');
     expect(error).toContain('filter');
+  });
+
+  it('refuses the incident shape written with last instead of first', () => {
+    const error = rejected(`{
+      entitiesConnection(typeId: "${TYPE}", last: 1000) {
+        nodes { id name relations(last: 1000) { nodes { type { name } toEntity { name } } } }
+      }
+    }`);
+    expect(error).toContain('1000 rows');
+    expect(error).toContain('relations(last: 1000)');
+  });
+
+  it('takes the larger bound when a page gives both first and last', () => {
+    const error = rejected(`{
+      entities(typeId: "${TYPE}", first: 5, last: 300) { id relations(first: 1) { nodes { id } } }
+    }`);
+    expect(error).toContain('300 rows');
   });
 
   it('refuses a large root page nesting a list even when that list is filtered', () => {
