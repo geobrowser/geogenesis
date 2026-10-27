@@ -37,5 +37,6 @@ describe('seriesSynced', () => {
     expect(seriesSynced({ series: [] }, params)).toBe(false);
     expect(seriesSynced({ series: [row('DTSTART:20261001T120000Z')] }, params)).toBe(false);
     expect(seriesSynced({ series: [row(schedule)] }, params)).toBe(true);
+    expect(seriesSynced({ series: [row(`  ${schedule.replace(/\n/g, '\r\n')}\n`)] }, params)).toBe(true);
   });
 });

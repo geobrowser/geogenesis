@@ -54,8 +54,8 @@ function SpaceCallsTabInner({ spaceId }: { spaceId: string }) {
   const data = callsQuery.data;
 
   const { live, upcoming } = splitCallList(data);
-  // A publish waiting on governance keeps its note: nothing will list it until the proposal passes.
-  const showScheduled = scheduled !== null && (scheduled.outcome !== 'executed' || !seriesSynced(data, scheduled));
+  // Until geo-chat lists the published schedule; a governance proposal's note stays until it passes.
+  const showScheduled = scheduled !== null && !seriesSynced(data, scheduled);
 
   if (data?.supported === false) {
     return (

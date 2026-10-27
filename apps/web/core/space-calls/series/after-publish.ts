@@ -1,6 +1,6 @@
 'use client';
 
-import { dashlessId } from '~/core/debates/api';
+import { GeoChatRequestError, dashlessId } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { sameId } from '~/core/debates/rooms/room-presence';
 
@@ -29,28 +29,42 @@ export function parseScheduledParams(params: Pick<URLSearchParams, 'get'>): Sche
   return { seriesId, outcome, schedule: params.get(SCHEDULE_PARAM) };
 }
 
+/** Line by line, trimmed: geo-chat's own check trims, and a graph read may change line endings. */
+function normalizeSchedule(schedule: string) {
+  return schedule
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
 /** geo-chat lists the series as published, so the optimistic note can go. */
 export function seriesSynced(list: Pick<SpaceCallsResponse, 'series'> | undefined, params: ScheduledParams) {
   const series = list?.series?.find(row => sameId(row.series_id, params.seriesId));
   if (!series) return false;
-  return params.schedule === null || series.schedule === params.schedule;
+  return params.schedule === null || normalizeSchedule(series.schedule) === normalizeSchedule(params.schedule);
 }
 
 /**
  * After a schedule publish (GEO-3420): refreshes geo-chat if the proposal executed and returns the
- * Calls tab href. A failed refresh is left to geo-chat's sweep.
+ * Calls tab href. A failed refresh is left to geo-chat's sweep; a 403 (not an editor, or series off on
+ * the server) means this viewer's list will not catch up, so the tab opens without the note.
  */
 export function useAfterSeriesPublish(spaceId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   return async ({ seriesId, proposalId, schedule }: { seriesId: string; proposalId: string; schedule: string }) => {
     const outcome = await readScheduleOutcome({ spaceId, proposalId });
     if (outcome === 'executed') {
-      await refreshCallSeries(
+      const forbidden = await refreshCallSeries(
         spaceId,
         { series_id: dashlessId(seriesId), schedule },
         getPrivyIdentityToken,
         accountKey
-      ).catch(() => undefined);
+      ).then(
+        () => false,
+        error => error instanceof GeoChatRequestError && error.status === 403
+      );
+      if (forbidden) return spaceCallsTabPath(spaceId);
     }
     return scheduledCallsTabHref(spaceId, { seriesId, outcome, schedule });
   };

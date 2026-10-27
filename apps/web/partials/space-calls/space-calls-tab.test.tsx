@@ -92,6 +92,28 @@ describe('SpaceCallsTab', () => {
     expect(screen.getByRole('link', { name: 'Open Governance' })).toHaveAttribute('href', '/space/space1/governance');
   });
 
+  it('drops the governance note once geo-chat lists the passed schedule', () => {
+    mocks.search = `scheduled=series1&outcome=pending&schedule=${encodeURIComponent('DTSTART:20261103T170000Z')}`;
+    mocks.calls = {
+      space_id: 'space1',
+      supported: true,
+      viewer_can_start: true,
+      calls: [],
+      series: [
+        {
+          series_id: 'series1',
+          name: 'Weekly',
+          description: null,
+          schedule: 'DTSTART:20261103T170000Z\r\n',
+          one_off: true,
+          next_call_id: null,
+        },
+      ],
+    };
+    render(<SpaceCallsTab spaceId="space1" />);
+    expect(screen.queryByTestId('calls-tab-scheduled-notice')).not.toBeInTheDocument();
+  });
+
   it('says a space without calls has none', () => {
     mocks.calls = { space_id: 'space1', supported: false, viewer_can_start: null, calls: [] };
     render(<SpaceCallsTab spaceId="space1" />);
