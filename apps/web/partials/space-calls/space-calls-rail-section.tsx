@@ -20,7 +20,7 @@ export function hasRailCall(list: SpaceCallsResponse | undefined) {
 }
 
 /**
- * The space rail's calls (GEO-3420, `callSeries`): the live call, else the next scheduled one, and a
+ * The space rail's calls (GEO-3420, `spaceCalls`): the live call, else the next scheduled one, and a
  * link to the Calls tab. Stands in for the curator-era section while the flag is on.
  */
 export function SpaceCallsRailSection({ spaceId, list }: { spaceId: string; list: SpaceCallsResponse }) {

@@ -106,15 +106,15 @@ export function CallForm(props: Props) {
   // `zd_sponsorUserOperation` calldata. That is after the edit has already been published to
   // IPFS, so the wasted round trip is real and the error is unreadable.
   const { isEditor, isLoading: accessLoading } = useAccessControl(spaceId);
-  // With call series on, the form returns to the Calls tab and says where the call landed (GEO-3420).
-  const callSeries = useFeatureFlag('callSeries');
-  const backHref = callSeries ? spaceCallsTabPath(spaceId) : `/space/${spaceId}/community`;
+  // With community calls on, the form returns to the Calls tab and says where the call landed (GEO-3420).
+  const spaceCalls = useFeatureFlag('spaceCalls');
+  const backHref = spaceCalls ? spaceCallsTabPath(spaceId) : `/space/${spaceId}/community`;
 
   const afterSeriesPublish = useAfterSeriesPublish(spaceId);
 
   /** The Calls tab once the publish confirms; the proposal may still be waiting on governance. */
   const doneHref = async (seriesId: string, proposalId: string | undefined, schedule: string) =>
-    callSeries && proposalId ? afterSeriesPublish({ seriesId, proposalId, schedule }) : backHref;
+    spaceCalls && proposalId ? afterSeriesPublish({ seriesId, proposalId, schedule }) : backHref;
 
   const buildSchedule = () => {
     const freq = repeat === 'none' ? '' : repeat === 'BIWEEKLY' ? 'WEEKLY' : repeat;
@@ -131,7 +131,7 @@ export function CallForm(props: Props) {
 
     setSubmitting(true);
     // Named up front, so the chain can be asked afterwards whether it executed.
-    const proposalId = callSeries ? ID.createEntityId() : undefined;
+    const proposalId = spaceCalls ? ID.createEntityId() : undefined;
 
     if (props.mode === 'edit') {
       const { callId } = props;
@@ -221,7 +221,7 @@ export function CallForm(props: Props) {
         </p>
         <div className="flex justify-start">
           <Button variant="secondary" onClick={() => router.push(backHref)}>
-            {callSeries ? 'Back to calls' : 'Back to community'}
+            {spaceCalls ? 'Back to calls' : 'Back to community'}
           </Button>
         </div>
       </div>

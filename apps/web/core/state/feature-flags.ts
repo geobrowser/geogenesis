@@ -64,9 +64,9 @@ export const featureFlagDefinitions = [
   },
   {
     id: 'spaceCalls',
-    label: 'Space calls',
+    label: 'Community calls',
     description:
-      'Start a call from a space you edit, and join a space’s live call from its page (GEO-3419). Needs geo-chat with space calls.',
+      'Start, schedule and join a space’s calls, the Calls tab, agenda and reminders, recording and past calls on Explore. Needs geo-chat with space calls.',
     enabledByDefault: false,
   },
   {
@@ -74,13 +74,6 @@ export const featureFlagDefinitions = [
     label: 'Call recording',
     description:
       'Record space calls, play them back on the ended call’s page and show published ones on Explore (GEO-3421). Needs geo-chat with call recording.',
-    enabledByDefault: false,
-  },
-  {
-    id: 'callSeries',
-    label: 'Call series',
-    description:
-      'A Calls tab on every DAO space, scheduled calls and series with an agenda and reminders (GEO-3420). Needs Space calls on and geo-chat with call series.',
     enabledByDefault: false,
   },
   {

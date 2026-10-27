@@ -277,7 +277,7 @@ export function SpaceTabs({
 }: SpaceTabsProps) {
   const { editable } = useEditable();
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
-  const isCallSeriesEnabled = useFeatureFlag('callSeries');
+  const isSpaceCallsEnabled = useFeatureFlag('spaceCalls');
   const { personalSpaceId } = usePersonalSpaceId();
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
@@ -324,8 +324,8 @@ export function SpaceTabs({
   const systemTabsBefore: SystemTab[] = [...leadingTabs];
   if (showCommunity) systemTabsBefore.push({ label: 'Community', href: `/space/${spaceId}/community` });
   // Calls follow Community (GEO-3420), except where geo-chat says the space has none (a personal one).
-  const callsQuery = useSpaceCalls(spaceId, showCommunity && isCallSeriesEnabled);
-  const showCalls = showCommunity && isCallSeriesEnabled && callsQuery.data?.supported !== false;
+  const callsQuery = useSpaceCalls(spaceId, showCommunity && isSpaceCallsEnabled);
+  const showCalls = showCommunity && isSpaceCallsEnabled && callsQuery.data?.supported !== false;
   const callsTab = showCalls ? [{ label: 'Calls', href: spaceCallsTabPath(spaceId) }] : [];
   systemTabsBefore.push(...callsTab);
 

@@ -42,9 +42,9 @@ export function SpaceOverviewSidePanel({
   subspaces,
 }: Props) {
   const { tasks } = useSpaceDailyActivityTasks(spaceId);
-  // With call series on, geo-chat's calls replace the curator-era section (GEO-3420).
-  const callSeries = useFeatureFlag('callSeries');
-  const spaceCalls = useSpaceCalls(spaceId, callSeries).data;
+  // With community calls on, geo-chat's calls replace the curator-era section (GEO-3420).
+  const callsEnabled = useFeatureFlag('spaceCalls');
+  const spaceCalls = useSpaceCalls(spaceId, callsEnabled).data;
 
   // Built as a list so an absent section never leaves a dangling divider behind it — with three
   // optional sections the hand-written `a && b ? <hr/> : null` pairs stop being readable.
@@ -59,7 +59,7 @@ export function SpaceOverviewSidePanel({
   if (dailyActivities && tasks.length > 0) {
     sections.push({ key: 'daily-activities', node: <SpaceDailyActivitiesSection spaceId={spaceId} tasks={tasks} /> });
   }
-  if (callSeries) {
+  if (callsEnabled) {
     if (spaceCalls && hasRailCall(spaceCalls)) {
       sections.push({ key: 'space-calls', node: <SpaceCallsRailSection spaceId={spaceId} list={spaceCalls} /> });
     }

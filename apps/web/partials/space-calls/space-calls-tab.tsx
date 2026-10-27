@@ -36,7 +36,7 @@ export function scheduleCallHref(spaceId: string) {
 
 /** A space's Calls tab (GEO-3420): live and upcoming calls, and scheduling for editors. */
 export function SpaceCallsTab({ spaceId }: { spaceId: string }) {
-  const enabled = useFeatureFlag('callSeries');
+  const enabled = useFeatureFlag('spaceCalls');
   if (!enabled) {
     return (
       <Text as="p" variant="metadata" color="grey-04">

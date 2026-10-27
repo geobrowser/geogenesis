@@ -24,7 +24,7 @@ export const SERIES_DEFAULT_AGENDA_NOTE = 'From the series description.';
  */
 export function CallPreOpen({ lobby }: { lobby: LobbyPageView }) {
   const call = lobby.call;
-  const callSeries = useFeatureFlag('callSeries');
+  const spaceCalls = useFeatureFlag('spaceCalls');
   const now = useMinuteNow();
   const saveAgenda = useSaveCallAgenda(lobby.lobby_id);
   const { isEditor } = useAccessControl(call?.space_id ?? '');
@@ -42,9 +42,9 @@ export function CallPreOpen({ lobby }: { lobby: LobbyPageView }) {
       startsAt={lobby.starts_at}
       endsAt={call.ends_at ?? null}
       spaceName={call.space_name}
-      exitHref={callSeries ? spaceCallsTabPath(call.space_id) : NavUtils.toSpace(call.space_id)}
+      exitHref={spaceCalls ? spaceCallsTabPath(call.space_id) : NavUtils.toSpace(call.space_id)}
       opensLabel={notYetOpenLabel(lobby, now)}
-      editHref={callSeries && isEditor && series ? spaceCallSeriesEditPath(call.space_id, series.series_id) : null}
+      editHref={spaceCalls && isEditor && series ? spaceCallSeriesEditPath(call.space_id, series.series_id) : null}
       remind={
         <CallRemind
           spaceId={call.space_id}
