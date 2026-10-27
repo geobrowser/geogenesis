@@ -105,16 +105,16 @@ type GeoImageProps = Omit<ImageProps, 'src' | 'onError'> & {
 
 /**
  * The single progressive image component. Resolves IPFS values through the gateway fallback
- * chain (Filebase → Pinata → Lighthouse, optimized then unoptimized), shows a blurred
- * low-quality placeholder first, and cross-fades the full image in over it on load without shifting
- * layout. Without a placeholder the image renders visible. If the full image can never load, the
+ * chain (Filebase → Pinata → Lighthouse, optimized then unoptimized). With `lqip` it shows a
+ * blurred low-quality placeholder first and cross-fades the full image in over it on load without
+ * shifting layout; otherwise the image renders visible. If the full image can never load, the
  * placeholder (or `fallback`) stays put.
  */
 export function GeoImage({
   value,
   alt = '',
   unoptimized = false,
-  lqip = true,
+  lqip = false,
   fadeMs = DEFAULT_FADE_MS,
   className,
   style,
@@ -139,6 +139,7 @@ export function GeoImage({
   const placeholderBroken = failedPlaceholderSrc === placeholderSrc;
   const wantsLqip =
     lqip &&
+    !props.priority &&
     isFill &&
     !unoptimized &&
     isHttpSrc(placeholderSrc) &&
@@ -159,7 +160,6 @@ export function GeoImage({
         sizes={LQIP_SIZES}
         className="scale-105 blur-lg"
         style={{ objectFit }}
-        priority={props.priority}
         draggable={false}
         onError={() => setFailedPlaceholderSrc(placeholderSrc)}
       />
@@ -167,7 +167,7 @@ export function GeoImage({
 
   if (failed) return placeholder ? <>{placeholder}</> : <>{fallback ?? null}</>;
 
-  const fadesIn = placeholder !== null && !props.priority;
+  const fadesIn = placeholder !== null;
 
   return (
     <>
@@ -281,8 +281,8 @@ type ThumbGeoImageProps = {
 };
 
 /**
- * Tiny space-style image. Fills a small `relative` parent through {@link GeoImage}; being below
- * the placeholder threshold it loads a single optimized request directly — fast and sharp.
+ * Tiny space-style image. Fills a small `relative` parent through {@link GeoImage} with a single
+ * optimized request — fast and sharp.
  */
 export function ThumbGeoImage({ value, alt = '', loading, fetchPriority, className, style }: ThumbGeoImageProps) {
   // next/image rejects `priority` and `loading` together — `priority` already implies eager.
@@ -293,7 +293,6 @@ export function ThumbGeoImage({ value, alt = '', loading, fetchPriority, classNa
       alt={alt}
       fill
       sizes="64px"
-      lqip={false}
       loading={priority ? undefined : loading}
       priority={priority}
       className={cn('object-cover', className)}

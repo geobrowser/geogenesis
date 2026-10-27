@@ -44,7 +44,7 @@ describe('GeoImage progressive placeholder', () => {
   it('keeps the blurred placeholder after a stage hop', () => {
     render(
       <div className="relative h-40 w-40">
-        <GeoImage value={value} alt="cover" fill sizes="200px" fallback={<span>fallback</span>} />
+        <GeoImage value={value} alt="cover" fill sizes="200px" lqip fallback={<span>fallback</span>} />
       </div>
     );
 
@@ -60,7 +60,7 @@ describe('GeoImage progressive placeholder', () => {
   it('keeps the blurred placeholder when every gateway fails', () => {
     render(
       <div className="relative h-40 w-40">
-        <GeoImage value={value} alt="cover" fill sizes="200px" fallback={<span>fallback</span>} />
+        <GeoImage value={value} alt="cover" fill sizes="200px" lqip fallback={<span>fallback</span>} />
       </div>
     );
 
@@ -80,7 +80,7 @@ describe('GeoImage fade', () => {
   const value = 'ipfs://bafyFade';
 
   it('fades the full image in over a placeholder once it loads', () => {
-    render(<GeoImage value={value} alt="cover" fill sizes="200px" />);
+    render(<GeoImage value={value} alt="cover" fill sizes="200px" lqip />);
     const image = screen.getByAltText('cover');
 
     expect(image).toHaveStyle({ opacity: '0' });
@@ -88,9 +88,10 @@ describe('GeoImage fade', () => {
     expect(image).toHaveStyle({ opacity: '1' });
   });
 
-  it('renders visible without a placeholder', () => {
-    render(<GeoImage value={value} alt="cover" fill sizes="200px" lqip={false} />);
+  it('requests no placeholder and renders visible unless asked', () => {
+    render(<GeoImage value={value} alt="cover" fill />);
 
+    expect(screen.queryByAltText('')).toBeNull();
     expect(screen.getByAltText('cover').style.opacity).toBe('');
   });
 
@@ -100,10 +101,10 @@ describe('GeoImage fade', () => {
     expect(screen.getByAltText('thumb').style.opacity).toBe('');
   });
 
-  it('renders a priority image visible, even over a placeholder', () => {
-    render(<GeoImage value={value} alt="cover" fill sizes="200px" priority />);
+  it('requests no placeholder for a priority image, which would be a second preload', () => {
+    render(<GeoImage value={value} alt="cover" fill sizes="200px" lqip priority />);
 
-    expect(screen.getByAltText('')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.queryByAltText('')).toBeNull();
     expect(screen.getByAltText('cover').style.opacity).toBe('');
   });
 });

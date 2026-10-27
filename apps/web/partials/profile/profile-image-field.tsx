@@ -101,7 +101,14 @@ export function ProfileImageField({ kind, src, disabled = false, onPick, onRemov
           isLocalPreview ? (
             <img src={src} alt="" className="h-full w-full object-cover" />
           ) : (
-            <GeoImage value={src} alt="" fill sizes={kind === 'banner' ? '100vw' : '88px'} className="object-cover" />
+            <GeoImage
+              value={src}
+              alt=""
+              fill
+              sizes={kind === 'banner' ? '100vw' : '88px'}
+              lqip={kind === 'banner'}
+              className="object-cover"
+            />
           )
         ) : (
           <button

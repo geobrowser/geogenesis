@@ -73,6 +73,7 @@ function RankingGalleryCard({
               value={imageUrl}
               className={cx('pointer-events-none', mediaImageFitClassName)}
               fill
+              lqip
               alt=""
               draggable={false}
             />
