@@ -124,7 +124,7 @@ export function PendingTopicFollowsRunner() {
   const pending = useAtomValue(pendingPersonalSpaceAtom);
   const { personalSpaceId, isRegistered, needsProfile } = usePersonalSpaceId();
   const { isLoading: isLoadingFollowed } = useFollowedTopics();
-  const { follow } = useFollowTopics();
+  const { follow } = useFollowTopics({ source: 'onboarding' });
   const queryClient = useQueryClient();
 
   const [retryTick, setRetryTick] = React.useState(0);

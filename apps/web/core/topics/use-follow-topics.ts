@@ -4,6 +4,8 @@ import { useMutation, useMutationState, useQueryClient } from '@tanstack/react-q
 
 import * as React from 'react';
 
+import { snapshotActionContext } from '~/core/action-context';
+import { observeOperation } from '~/core/analytics-operations';
 import { readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -42,8 +44,8 @@ type FollowVariables = { spaceId: string; topicIds: string[]; followKind: Follow
  * The old topic follow, a `Following` relation, is never written or read; existing ones are left
  * where they are and count for nothing.
  */
-export function useFollowTopics() {
-  return useFollowEntities({ kind: 'topic' });
+export function useFollowTopics({ source }: { source?: 'onboarding' } = {}) {
+  return useFollowEntities({ kind: 'topic', source });
 }
 
 /**
@@ -51,7 +53,7 @@ export function useFollowTopics() {
  * Interested vote either way. Every caller shares one mutation key, so a follow in flight shows as
  * saving on every control for it.
  */
-export function useFollowEntities({ kind }: { kind: FollowKind }) {
+export function useFollowEntities({ kind, source }: { kind: FollowKind; source?: 'onboarding' }) {
   const followKind = kind;
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
@@ -91,7 +93,21 @@ export function useFollowEntities({ kind }: { kind: FollowKind }) {
         followedTopicIds: interestedTopicIds(interested),
       });
       if (calls.length === 0) return true;
-      if (!(await sendCalls(calls))) return false;
+      // The regular Follow button observes its own action. Onboarding has no button per topic;
+      // observe only the newly added topics, keeping the entire selection in one transaction.
+      const operations =
+        source === 'onboarding'
+          ? added.map(row => {
+              const context = snapshotActionContext('onboarding_customize_feed', 'topic', normId(row.objectId));
+              return observeOperation('follow_topic', 'topic', context.target_id, undefined, context);
+            })
+          : [];
+      const sent = await sendCalls(calls);
+      for (const operation of operations) {
+        if (sent) operation.succeeded();
+        else operation.failed('unknown');
+      }
+      if (!sent) return false;
 
       // A refetch started before the write would land the pre-write rows, and the indexer trails the
       // write, so cancel, then write what was sent; it stands until the query goes stale normally.
