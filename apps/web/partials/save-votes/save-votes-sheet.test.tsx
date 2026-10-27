@@ -134,9 +134,11 @@ describe('copy', () => {
 
 describe('SaveVotesSheet', () => {
   it.each([
-    ['feed', 'threshold'],
-    ['single', 'single_claim'],
-  ] as const)('asks once after the first %s vote, records one vote, and asks again at five', (surface, reason) => {
+    ['feed', 'threshold', true],
+    ['feed', 'threshold', false],
+    ['single', 'single_claim', true],
+    ['single', 'single_claim', false],
+  ] as const)('asks once after the first %s vote (%s, already mounted: %s)', (surface, reason, alreadyMounted) => {
     const cast = (entityId: string, direction: 'positive' | 'negative' = 'positive') =>
       act(() => {
         castLocalVote({
@@ -149,14 +151,22 @@ describe('SaveVotesSheet', () => {
           attribution: snapshotActionContext('claim_position_control', 'claim', entityId),
         });
       });
-    const view = render(<SaveVotesSheet />);
+    // In the app the sheet is lazy-loaded after the first vote. Cover that first mount as well as
+    // a sheet already mounted, and React's effect replay, without counting a return-visit ask too.
+    const sheet = (
+      <React.StrictMode>
+        <SaveVotesSheet />
+      </React.StrictMode>
+    );
+    const view = alreadyMounted ? render(sheet) : null;
 
     cast('a');
+    if (!alreadyMounted) render(sheet);
 
     expect(screen.getByText('Save your vote')).toBeInTheDocument();
     expect(mocks.impression.mock.calls).toEqual([[reason, 1]]);
     expect(readLocalVotes().prompt.shownCount).toBe(1);
-    view.rerender(<SaveVotesSheet />);
+    view?.rerender(sheet);
     expect(mocks.impression).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));

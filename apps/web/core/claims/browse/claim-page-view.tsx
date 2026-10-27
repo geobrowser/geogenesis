@@ -703,7 +703,7 @@ function ClaimPositionSection({
     answersReady: isResponseKindResolved && isViewerResponseResolved,
     responseBlockedReason,
     allowsSignedOutVotes: true,
-    // One claim on the page, so the save sheet asks after the first vote rather than the second.
+    // Attribute the save ask to the claim's own page.
     savePromptSurface: 'single',
   });
   // A vote link from one of our emails, cast once on arrival through the same control (GEO-3374).

@@ -41,7 +41,7 @@ export function opensSaveVotesCentered(reason: SaveVotesPromptReason | null): bo
 export type SavePromptSurface = 'feed' | 'single';
 
 /** The vote counts at which the sheet opens on its own: first ask, then once more. */
-export const FIRST_ASK_AT = { feed: 1, single: 1 } as const;
+export const FIRST_ASK_AT = 1;
 export const SECOND_ASK_AT = 5;
 
 /** Marks the browser session in which the visitor has already voted or been asked. */
@@ -119,7 +119,7 @@ export function savePromptReasonAfterVote({
   shownCount: number;
 }): SaveVotesPromptReason | null {
   if (shownCount === 0) {
-    if (count < FIRST_ASK_AT[surface]) return null;
+    if (count < FIRST_ASK_AT) return null;
     return surface === 'single' ? 'single_claim' : 'threshold';
   }
   if (shownCount === 1 && count >= SECOND_ASK_AT) return 'repeat';

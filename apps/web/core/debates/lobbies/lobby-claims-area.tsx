@@ -295,7 +295,7 @@ function useTabsHeight() {
 
 /**
  * A guest's vote here opens the save sheet at once, which shows the vote and signs them up in
- * place; elsewhere it waits for a second vote. The lobby has no claim card option for it.
+ * place, with the lobby's own copy. The lobby has no claim card option for it.
  */
 function useSavePromptOnGuestVote(lobbyName: string) {
   const guest = useIsLobbyGuest();
