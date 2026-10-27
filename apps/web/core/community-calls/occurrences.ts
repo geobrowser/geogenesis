@@ -3,7 +3,7 @@
  * into live / upcoming / past. Mirrors curator's `getNextOccurrences` /
  * `isOccurrenceLive`, reusing geogenesis's existing schedule parser.
  */
-import { localToUtcMs, parseSchedule } from '~/core/utils/schedule';
+import { MIN_CALL_DURATION_MINUTES, localToUtcMs, parseSchedule } from '~/core/utils/schedule';
 
 import { LIVE_WINDOW_AFTER_MS, OCCURRENCE_MATCH_TOLERANCE_MS } from './constants';
 import { Occurrence } from './types';
@@ -71,7 +71,9 @@ export function getOccurrences(schedule: string, now = Date.now()): Occurrence[]
   // An end earlier on the clock than the start is the next day's (RFC 5545; geo-chat agrees).
   const sameDayEnd = parsed.endTime ? toMs(parsed.startDate, parsed.endTime) : null;
   const endMs = sameDayEnd !== null && sameDayEnd < baseStart ? sameDayEnd + DAY_MS : sameDayEnd;
-  const duration = endMs !== null ? Math.max(endMs - baseStart, DEFAULT_DURATION_MS) : DEFAULT_DURATION_MS;
+  // geo-chat's rule: the DTEND's length when it is at least 15 minutes, otherwise an hour.
+  const length = endMs !== null ? endMs - baseStart : null;
+  const duration = length !== null && length >= MIN_CALL_DURATION_MINUTES * 60_000 ? length : DEFAULT_DURATION_MS;
 
   const windowStart = now - PAST_WINDOW_MS;
   const windowEnd = now + FUTURE_WINDOW_MS;
