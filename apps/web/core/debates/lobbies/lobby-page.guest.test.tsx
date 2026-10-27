@@ -85,6 +85,7 @@ vi.mock('../matchmaking/hub-header-controls', () => ({
 }));
 vi.mock('./hooks', () => ({
   MAX_TIMEOUT_MS: 2_147_483_647,
+  useStoreLobbyView: () => vi.fn(),
   useDebateLobby: () => ({
     data: mocks.memberLobby,
     isError: mocks.memberError,
@@ -194,6 +195,7 @@ vi.mock('./lobby-guest-sign-in', () => ({
 }));
 vi.mock('../matchmaking/hooks', () => ({ useMatchmakingScope: vi.fn() }));
 vi.mock('~/partials/space-calls/call-pre-open', () => ({ CallPreOpen: () => <div data-testid="call-pre-open" /> }));
+vi.mock('~/core/space-calls/call-room', () => ({ CallRoom: () => <div data-testid="call-room" /> }));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.userId }));
 
 const { DebateLobbyPage, memberPath } = await import('./lobby-page');
