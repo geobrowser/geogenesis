@@ -518,7 +518,7 @@ describe('DebateCalendar', () => {
   it("shows everyone's free time to a viewer with no schedule, and nudges without blocking", async () => {
     render(<DebateCalendar />);
 
-    expect(mocks.schedulableOptions[0]).toEqual({ calendar: true, spaces: [] });
+    expect(mocks.schedulableOptions[0]).toEqual({ calendar: true, calendarDate: NOW.toDateString(), spaces: [] });
     expect(cell(/Thursday.*free: Elena/)).toBeInTheDocument();
     // The debates panel's own callout, not a calendar-only notice.
     expect(await screen.findByText('Debate schedule')).toBeInTheDocument();
@@ -538,6 +538,16 @@ describe('DebateCalendar', () => {
     const line = screen.getByTestId('calendar-now-line');
     expect(line.closest('[role="gridcell"]')).toHaveAccessibleName(/^Wednesday, October 7, 10:00 AM/);
     expect(line).toHaveStyle({ top: '0%' });
+  });
+
+  it('advances the availability read with the visible day after local midnight', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date(2026, 9, 7, 23, 59));
+    render(<DebateCalendar />);
+    expect(mocks.schedulableOptions.at(-1)).toMatchObject({ calendarDate: new Date(2026, 9, 7).toDateString() });
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getAllByRole('columnheader')[1]).toHaveTextContent(/Thu\s*8/);
+    expect(mocks.schedulableOptions.at(-1)).toMatchObject({ calendarDate: new Date(2026, 9, 8).toDateString() });
   });
 
   it('moves by seven days and returns to a range starting today', () => {
