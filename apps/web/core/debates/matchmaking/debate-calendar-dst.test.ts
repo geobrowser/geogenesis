@@ -50,6 +50,14 @@ describe('the calendar across clock changes', () => {
     expect(keys.has('4:2')).toBe(false);
   });
 
+  it('does not label a clock change on the exclusive closing day', () => {
+    const beforeFallBack = weekDays(weekStart(new Date(local(2026, 10, 25, 10)), 0));
+    const beforeSpringForward = weekDays(weekStart(new Date(local(2027, 3, 7, 10)), 0));
+
+    expect(weekOffsetLabels(beforeFallBack)).toEqual(['GMT-07']);
+    expect(weekOffsetLabels(beforeSpringForward)).toEqual(['GMT-08']);
+  });
+
   it("heads the time column with the zone's offset", () => {
     expect(weekOffsetLabels(weekDays(weekStart(new Date(local(2026, 10, 7, 10)), 0)))).toEqual(['GMT-07']);
     // A rolling window can span the Sunday clock change.

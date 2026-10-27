@@ -294,7 +294,7 @@ export function timeRangeLabel(start: number, end: number): string {
  */
 export function weekOffsetLabels(days: Date[]): string[] {
   const labels: string[] = [];
-  for (const day of days) {
+  for (const day of days.slice(0, DAYS_IN_WEEK)) {
     const noon = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12);
     const label = gmtOffsetLabel(noon);
     if (!labels.includes(label)) labels.push(label);
