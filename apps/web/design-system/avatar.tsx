@@ -1,6 +1,6 @@
 import BoringAvatar from 'boring-avatars';
 
-import { GeoImage } from './geo-image';
+import { NativeGeoImage } from './geo-image';
 import { colors } from './theme/colors';
 
 // `size` is the generated avatar's size, and several call sites omit it while the container is
@@ -39,21 +39,17 @@ export const Avatar = ({ value, avatarUrl, priority = false, alt = '', size = 12
     />
   );
 
-  // The image fills its own positioned box so `fill` works regardless of whether the caller's
-  // wrapper is `relative` (many aren't).
   return avatarUrl ? (
-    <span className="relative block h-full w-full overflow-hidden">
-      <GeoImage
-        value={avatarUrl}
-        alt={alt}
-        fill
-        sizes={`${Math.max(size, MIN_DISPLAY_WIDTH)}px`}
-        lqip={size >= 48}
-        priority={priority}
-        className="object-cover"
-        fallback={generated}
-      />
-    </span>
+    <NativeGeoImage
+      value={avatarUrl}
+      alt={alt}
+      displayWidth={Math.max(size, MIN_DISPLAY_WIDTH)}
+      className="h-full w-full object-cover"
+      loading={priority ? 'eager' : 'lazy'}
+      fetchPriority={priority ? 'high' : undefined}
+      decoding="async"
+      fallback={generated}
+    />
   ) : (
     generated
   );

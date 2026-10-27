@@ -106,8 +106,9 @@ type GeoImageProps = Omit<ImageProps, 'src' | 'onError'> & {
 /**
  * The single progressive image component. Resolves IPFS values through the gateway fallback
  * chain (Filebase → Pinata → Lighthouse, optimized then unoptimized), shows a blurred
- * low-quality placeholder first, and cross-fades the full image in on load without shifting
- * layout. If the full image can never load, the placeholder (or `fallback`) stays put.
+ * low-quality placeholder first, and cross-fades the full image in over it on load without shifting
+ * layout. Without a placeholder the image renders visible. If the full image can never load, the
+ * placeholder (or `fallback`) stays put.
  */
 export function GeoImage({
   value,
@@ -166,6 +167,8 @@ export function GeoImage({
 
   if (failed) return placeholder ? <>{placeholder}</> : <>{fallback ?? null}</>;
 
+  const fadesIn = placeholder !== null && !props.priority;
+
   return (
     <>
       {placeholder}
@@ -178,7 +181,7 @@ export function GeoImage({
         alt={alt}
         sizes={sizes}
         className={className}
-        style={{ ...style, opacity: loaded ? 1 : 0, transition: `opacity ${fadeMs}ms ease-in-out` }}
+        style={fadesIn ? { ...style, opacity: loaded ? 1 : 0, transition: `opacity ${fadeMs}ms ease-in-out` } : style}
         unoptimized={effectiveUnoptimized}
         onError={advance}
         onLoad={event => {

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { IPFS_GATEWAY_COUNT } from '~/core/utils/utils';
 
-import { GeoImage, NativeGeoImage } from './geo-image';
+import { GeoImage, NativeGeoImage, ThumbGeoImage } from './geo-image';
 
 // Only the component is replaced: `NativeGeoImage`'s `displayWidth` path needs the real `getImageProps`.
 vi.mock('next/image', async importOriginal => ({
@@ -15,18 +15,21 @@ vi.mock('next/image', async importOriginal => ({
     alt,
     onError,
     onLoad,
+    style,
     'aria-hidden': ariaHidden,
   }: {
     src: string;
     alt?: string;
     onError?: () => void;
     onLoad?: () => void;
+    style?: React.CSSProperties;
     'aria-hidden'?: boolean | 'true' | 'false';
   }) => (
     <img
       src={typeof src === 'string' ? src : ''}
       alt={alt ?? ''}
       aria-hidden={ariaHidden}
+      style={style}
       onError={onError}
       onLoad={onLoad}
     />
@@ -69,6 +72,39 @@ describe('GeoImage progressive placeholder', () => {
     expect(screen.getByAltText('').getAttribute('aria-hidden')).toBe('true');
     expect(screen.queryByAltText('cover')).toBeNull();
     expect(screen.queryByText('fallback')).toBeNull();
+  });
+});
+
+// A hidden image stays hidden in the server HTML until hydration, which delays LCP.
+describe('GeoImage fade', () => {
+  const value = 'ipfs://bafyFade';
+
+  it('fades the full image in over a placeholder once it loads', () => {
+    render(<GeoImage value={value} alt="cover" fill sizes="200px" />);
+    const image = screen.getByAltText('cover');
+
+    expect(image).toHaveStyle({ opacity: '0' });
+    fireEvent.load(image);
+    expect(image).toHaveStyle({ opacity: '1' });
+  });
+
+  it('renders visible without a placeholder', () => {
+    render(<GeoImage value={value} alt="cover" fill sizes="200px" lqip={false} />);
+
+    expect(screen.getByAltText('cover').style.opacity).toBe('');
+  });
+
+  it('renders a thumbnail visible', () => {
+    render(<ThumbGeoImage value={value} alt="thumb" />);
+
+    expect(screen.getByAltText('thumb').style.opacity).toBe('');
+  });
+
+  it('renders a priority image visible, even over a placeholder', () => {
+    render(<GeoImage value={value} alt="cover" fill sizes="200px" priority />);
+
+    expect(screen.getByAltText('')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByAltText('cover').style.opacity).toBe('');
   });
 });
 
