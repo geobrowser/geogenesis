@@ -1281,9 +1281,11 @@ describe('LobbyVoice in a space call', () => {
   });
 });
 
-// GEO-3507: in a debate lobby only a host by role shares, while LiveKit's live grant allows it.
+// GEO-3507: in a debate lobby the server grants hosts the share; the web follows LiveKit's live grant.
 describe('LobbyVoice screen share in a lobby', () => {
   beforeEach(() => withDisplayMedia());
+
+  const withShare = () => sources(Track.Source.Microphone, Track.Source.ScreenShare, Track.Source.ScreenShareAudio);
 
   function renderLobby(view: MemberLobbyPageView) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -1312,15 +1314,14 @@ describe('LobbyVoice screen share in a lobby', () => {
     expect(mocks.setScreenShareEnabled).toHaveBeenCalledWith(true, { audio: true });
   });
 
-  it('offers a speaker no share, whatever the token says', async () => {
-    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));
+  it('offers no share before the live grant when the token does not allow it', async () => {
     renderLobby(lobby('speaker'));
     await screen.findByRole('button', { name: /Unmute|Mute/ });
     expect(shareButton()).not.toBeInTheDocument();
   });
 
-  it('offers an acting host no share', async () => {
-    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));
+  it('offers an acting host no share while the grant leaves it out', async () => {
+    mocks.permissions = { canPublish: true, canPublishSources: sources(Track.Source.Microphone) };
     const view = lobby('speaker');
     renderLobby({ ...view, viewer: { ...view.viewer, hosting: true } });
     await screen.findByRole('button', { name: /Unmute|Mute/ });
@@ -1328,15 +1329,12 @@ describe('LobbyVoice screen share in a lobby', () => {
   });
 
   it('follows the live grant over the token after a promotion', async () => {
-    mocks.permissions = {
-      canPublish: true,
-      canPublishSources: sources(Track.Source.Microphone, Track.Source.ScreenShare, Track.Source.ScreenShareAudio),
-    };
-    renderLobby(lobby('host'));
+    mocks.permissions = { canPublish: true, canPublishSources: withShare() };
+    renderLobby(lobby('speaker'));
     expect(await screen.findByRole('button', { name: 'Share your screen' })).toBeInTheDocument();
   });
 
-  it('offers no share once the live grant drops it', async () => {
+  it('offers no share once the live grant drops it, whatever the token says', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));
     mocks.permissions = { canPublish: true, canPublishSources: sources(Track.Source.Microphone) };
     renderLobby(lobby('host'));
@@ -1344,11 +1342,12 @@ describe('LobbyVoice screen share in a lobby', () => {
     expect(shareButton()).not.toBeInTheDocument();
   });
 
-  it('stops the share when the viewer stops being a host', async () => {
-    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));
+  it('stops the share when a demotion drops it from the live grant', async () => {
+    mocks.permissions = { canPublish: true, canPublishSources: withShare() };
     const { rerender } = renderLobby(lobby('host'));
     await screen.findByRole('button', { name: 'Share your screen' });
     mocks.setScreenShareEnabled.mockClear();
+    mocks.permissions = { canPublish: true, canPublishSources: sources(Track.Source.Microphone) };
     rerender(lobby('speaker'));
     await waitFor(() => expect(mocks.setScreenShareEnabled).toHaveBeenCalledWith(false));
     expect(shareButton()).not.toBeInTheDocument();
