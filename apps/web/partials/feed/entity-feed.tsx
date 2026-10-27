@@ -43,6 +43,21 @@ const EAGER_CARD_COUNT = 4;
 // A failed first load has no data and stays stale, so focus and reconnect still retry it.
 const FEED_SESSION_OPTIONS = { staleTime: Infinity } as const;
 
+// A reader still within a screen of the top gets a fresh feed on return; one who has scrolled keeps theirs.
+// The age matches the app's default staleTime (`core/query-client.tsx`).
+const TOP_REFRESH_AFTER_MS = 30_000;
+function refreshAtTop(query: { state: { data: unknown; dataUpdatedAt: number } }): boolean | 'always' {
+  if (query.state.data === undefined) return true;
+  const atTop = window.scrollY < window.innerHeight;
+  return atTop && Date.now() - query.state.dataUpdatedAt > TOP_REFRESH_AFTER_MS ? 'always' : false;
+}
+
+const FEED_PAGES_SESSION_OPTIONS = {
+  ...FEED_SESSION_OPTIONS,
+  refetchOnWindowFocus: refreshAtTop,
+  refetchOnReconnect: refreshAtTop,
+} as const;
+
 function LoadingSkeleton() {
   return (
     <div className="space-y-4 rounded-lg border border-grey-02 p-4">
@@ -543,9 +558,9 @@ export function EntityFeed({
     cdnFirstPage &&
     viewerAddress !== null &&
     buildFeedQuery({ ...feedParams, cursor: undefined, anonymous: true }).includes(`${PUBLIC_FEED_PARAM}=1`);
-  const sessionOptions = preserveSession ? FEED_SESSION_OPTIONS : {};
+  // Only a placeholder until the reader's own page lands, so it is never refreshed.
   const publicFirstPage = useQuery({
-    ...sessionOptions,
+    ...(preserveSession ? FEED_SESSION_OPTIONS : {}),
     queryKey: [apiEndpoint, PUBLIC_FEED_PARAM],
     queryFn: () => fetchFeedPage(apiEndpoint, { ...feedParams, cursor: undefined, anonymous: true }),
     enabled: paintsFromPublicPage,
@@ -555,7 +570,7 @@ export function EntityFeed({
 
   const { data, isLoading, isFetchingNextPage, isPlaceholderData, fetchNextPage, hasNextPage, error } =
     useInfiniteQuery({
-      ...sessionOptions,
+      ...(preserveSession ? FEED_PAGES_SESSION_OPTIONS : {}),
       queryKey,
       queryFn: async ({ pageParam }) =>
         fetchFeedPage(apiEndpoint, {

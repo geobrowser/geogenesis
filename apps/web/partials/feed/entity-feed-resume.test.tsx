@@ -81,17 +81,23 @@ function intersect() {
 
 type ResumeTrigger = 'focus' | 'reconnect';
 
-async function resume(trigger: ResumeTrigger) {
+async function resume(trigger: ResumeTrigger, awayMs = 5 * 60_000) {
   await act(async () => {
     if (trigger === 'focus') focusManager.setFocused(false);
     else onlineManager.setOnline(false);
-    now += 5 * 60_000;
+    now += awayMs;
     if (trigger === 'focus') focusManager.setFocused(true);
     else onlineManager.setOnline(true);
   });
 }
 
+function scrollTo(y: number) {
+  Object.defineProperty(window, 'scrollY', { configurable: true, value: y });
+}
+
 beforeEach(() => {
+  scrollTo(0);
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
   // Advance the query clock without faking React's notification timers.
   now = Date.now();
   vi.spyOn(Date, 'now').mockImplementation(() => now);
@@ -131,23 +137,52 @@ afterEach(() => {
 });
 
 describe('resuming an Explore feed', () => {
-  it.each<ResumeTrigger>(['focus', 'reconnect'])('keeps loaded pages, order and card DOM on %s', async trigger => {
+  async function loadTwoPages() {
     mountFeed();
     await screen.findByText('Original lead');
     fetchPage.mockResolvedValueOnce(page('Second page'));
     intersect();
     await screen.findByText('Second page');
-    const cards = screen.getAllByRole('article');
+  }
+
+  it.each<ResumeTrigger>(['focus', 'reconnect'])(
+    'keeps loaded pages, order and card DOM once scrolled on %s',
+    async trigger => {
+      await loadTwoPages();
+      const cards = screen.getAllByRole('article');
+      scrollTo(2_000);
+
+      fetchPage.mockResolvedValue(page('Re-ranked lead'));
+      await resume(trigger);
+
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+      screen.getAllByRole('article').forEach((card, index) => expect(card).toBe(cards[index]));
+      expect(cards.map(card => card.textContent)).toEqual(['Original lead', 'Second page']);
+    }
+  );
+
+  it.each<ResumeTrigger>(['focus', 'reconnect'])('refreshes a feed read at the top after 30s on %s', async trigger => {
+    await loadTwoPages();
+    scrollTo(400);
 
     fetchPage.mockResolvedValue(page('Re-ranked lead'));
-    await resume(trigger);
+    await resume(trigger, 31_000);
 
-    expect(fetchPage).toHaveBeenCalledTimes(2);
-    screen.getAllByRole('article').forEach((card, index) => expect(card).toBe(cards[index]));
-    expect(cards.map(card => card.textContent)).toEqual(['Original lead', 'Second page']);
+    await screen.findByText('Re-ranked lead');
+    expect(fetchPage).toHaveBeenCalledTimes(3);
   });
 
-  it('keeps loaded pages when the feed remounts', async () => {
+  it.each<ResumeTrigger>(['focus', 'reconnect'])('keeps a feed read at the top within 30s on %s', async trigger => {
+    await loadTwoPages();
+
+    fetchPage.mockResolvedValue(page('Re-ranked lead'));
+    await resume(trigger, 20_000);
+
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Original lead')).toBeTruthy();
+  });
+
+  it('keeps loaded pages when the feed remounts at the top', async () => {
     const first = mountFeed();
     await screen.findByText('Original lead');
     fetchPage.mockResolvedValueOnce(page('Second page'));
@@ -164,7 +199,7 @@ describe('resuming an Explore feed', () => {
     expect(screen.queryByText('Re-ranked lead')).toBeNull();
   });
 
-  it('recovers a failed first load on focus', async () => {
+  it('recovers a failed first load on focus wherever the page is scrolled', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     fetchPage.mockRejectedValue(new Error('Feed failed'));
     mountFeed();
@@ -174,6 +209,7 @@ describe('resuming an Explore feed', () => {
     vi.useRealTimers();
     await screen.findByText('Could not load the feed.');
     expect(fetchPage).toHaveBeenCalledTimes(3);
+    scrollTo(2_000);
 
     fetchPage.mockResolvedValue(page('Recovered feed'));
     await resume('focus');
@@ -184,6 +220,7 @@ describe('resuming an Explore feed', () => {
   it('still refreshes the activity feed on focus, which does not opt in', async () => {
     mountFeed({ apiEndpoint: '/api/activity/feed', lockedSpaceId: 'space', preserveSession: undefined });
     await screen.findByText('Original lead');
+    scrollTo(2_000);
     fetchPage.mockResolvedValue(page('Updated activity'));
     await resume('focus');
     await screen.findByText('Updated activity');
