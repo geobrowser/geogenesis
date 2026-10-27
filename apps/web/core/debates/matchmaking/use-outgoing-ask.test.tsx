@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -33,7 +33,7 @@ vi.mock('./use-request-countdown', async importOriginal => ({
 
 const { askIsForClaim, askIsForPerson, ENDED_ASK_TTL_MS, useOutgoingAsk } = await import('./use-outgoing-ask');
 const { HubAskProvider, useHubAskState } = await import('./hub-ask-context');
-const { ASK_WITHDRAWN_TTL_MS, askWasWithdrawn, markAskWithdrawn, unmarkAskWithdrawn } =
+const { ASK_WITHDRAWALS_CHANNEL, ASK_WITHDRAWN_TTL_MS, askWasWithdrawn, markAskWithdrawn, unmarkAskWithdrawn } =
   await import('./ask-withdrawals');
 const { formatCountdownClock } = await import('./use-request-countdown');
 
@@ -184,6 +184,22 @@ describe('useOutgoingAsk', () => {
     expect(result.current.ended).toBeNull();
   });
 
+  // Review, 27 Oct: the marks lived in one tab, so a Cancel in another read "Nobody took it" here.
+  it('does not call an ask cancelled in another tab ended', async () => {
+    const id = uniqueId('req');
+    mocks.requests = { outbound: claimRequest(id), incoming: [] };
+    const { result, rerender } = renderAsk();
+
+    const otherTab = new BroadcastChannel(ASK_WITHDRAWALS_CHANNEL);
+    otherTab.postMessage({ type: 'mark', id });
+    await waitFor(() => expect(askWasWithdrawn(id)).toBe(true));
+    otherTab.close();
+    mocks.requests = { outbound: null, incoming: [] };
+    rerender();
+
+    expect(result.current.ended).toBeNull();
+  });
+
   it('never says nobody took it to someone who just signed out', () => {
     mocks.requests = { outbound: claimRequest(uniqueId('req')), incoming: [] };
     const { result, rerender } = renderAsk();
@@ -302,6 +318,24 @@ describe('ask withdrawals', () => {
 
     vi.advanceTimersByTime(ASK_WITHDRAWN_TTL_MS + 1);
     expect(askWasWithdrawn(id)).toBe(false);
+  });
+
+  it('tells the other tabs, and takes a failed one back there too', async () => {
+    const id = uniqueId('req');
+    const otherTab = new BroadcastChannel(ASK_WITHDRAWALS_CHANNEL);
+    const heard: unknown[] = [];
+    otherTab.onmessage = event => heard.push(event.data);
+
+    markAskWithdrawn(id);
+    unmarkAskWithdrawn(id);
+
+    await waitFor(() =>
+      expect(heard).toEqual([
+        { type: 'mark', id },
+        { type: 'unmark', id },
+      ])
+    );
+    otherTab.close();
   });
 
   it('forgets a withdraw that failed', () => {

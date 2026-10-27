@@ -20,10 +20,11 @@ import {
   type DebateRequest,
   type ScheduledDebateRequest,
   getDebate,
+  isAccountWarmingUpQuery,
 } from '../api';
 import { debatePath } from '../debate-routes';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
-import { hostsLabel, startOfLocalDay } from '../lobbies/lobby-format';
+import { localDaysFrom, startOfLocalDay } from '../lobbies/lobby-format';
 import { LOBBY_DARK_SURFACE_CLASS_NAME } from '../lobbies/lobby-spotlight';
 import { debateEntryClick, routeIntoDebate } from '../lobbies/step-out';
 import { useMinuteNow } from '../lobbies/use-minute-now';
@@ -40,6 +41,8 @@ import { dayListParts } from './debate-calendar-model';
 import { useDebateRequests } from './hooks';
 import { debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { useHubAskState } from './hub-ask-context';
+import { HUB_EYEBROW_CLASS_NAME } from './hub-eyebrow';
+import { askTitle } from './hub-live-strip';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import {
   HUB_SCROLL_SELECTOR,
@@ -58,6 +61,7 @@ import {
   isSettledHistoryItem,
   unnamedHistoryUserIds,
   useDebateHistory,
+  useRefreshHistoryWhenLiveEnds,
 } from './request-history';
 import { RequestOverflowMenu } from './request-overflow-menu';
 import { formatTime, formatTimeRange } from './scheduled-debate-format';
@@ -79,7 +83,7 @@ import {
   useRescheduler,
   useScheduledContent,
 } from './scheduled-debates-section';
-import { type UpcomingLobbyRow } from './upcoming-lobby-rows';
+import { type UpcomingLobbyRow, lobbyHostLine } from './upcoming-lobby-rows';
 import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
@@ -117,6 +121,8 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const needsYouCount = useRequestsTabCount({ authenticated, activity, requests: requestsQuery.data });
 
   const history = useDebateHistory(true);
+  // A challenge answered or lapsed, or the viewer's own debate over: each joins the past.
+  useRefreshHistoryWhenLiveEnds([activity?.challenge?.id, activity?.debate?.id]);
   const { personalSpaceId } = usePersonalSpaceId();
   // Only once history has said it cannot answer: the graph read is a stand-in, not a second source.
   const pastDebates = usePersonDebates(personalSpaceId ?? '', history.unavailable);
@@ -125,7 +131,9 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const historyUserIds = React.useMemo(() => unnamedHistoryUserIds(history.items), [history.items]);
   const historyPeople = useGeoChatUserSummaries(historyUserIds, historyUserIds.length > 0);
   const people = React.useMemo(() => [...scheduled.people, ...historyPeople], [historyPeople, scheduled.people]);
-  const lookUp = useParticipantLookup(true, people);
+  // The roster only for the invites and booked debates that show who is online, as on the section:
+  // history's people are named by geo-chat and the summaries above.
+  const lookUp = useParticipantLookup(scheduled.answerable.length > 0 || scheduled.upcoming.length > 0, people);
 
   const { answer, busy, error: conflict } = useScheduledDebateAnswer();
   // The debate whose time is being moved, on the other debater's week — as in `ScheduledDebatesSection`.
@@ -212,14 +220,21 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   });
 
   const failures = readFailureMessages(scheduled);
-  // Empty only when it is known to be: a read that failed is not "nothing", and the past still on its
-  // way is not either. Saying so over a failure contradicts it, and over loading history the message
+  // geo-chat not knowing a new account yet: retried for about a minute, and said on the first refusal.
+  const requestsWarmingUp = isAccountWarmingUpQuery(requestsQuery);
+  const requestsTrouble = Boolean(requestsQuery.error) || requestsWarmingUp;
+  // Nothing to draw yet while either live read is still on its way, unless all that is left is
+  // waiting a new account's refusal out, which the requests' own state says.
+  const isLoading = shown.length === 0 && (scheduled.loading || (requestsQuery.isLoading && !requestsWarmingUp));
+  // Empty only when it is known to be: a read that failed is not "nothing", and a read still on its
+  // way is not either. Saying so over a failure contradicts it, and over a loading read the message
   // shows for a moment and then swaps out for the timeline, taking the now-line with it.
   const isEmpty =
     shown.length === 0 &&
     availabilityRequests.length === 0 &&
     failures.length === 0 &&
-    !requestsQuery.error &&
+    !requestsTrouble &&
+    !scheduled.loading &&
     !(filter === 'all' && history.isLoading);
 
   return (
@@ -271,8 +286,10 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
         ) : null}
 
         {/* Only the instant rows depend on the requests read. A debate that is due, an invite, a lobby
-            or the past must not vanish behind its error or its warming-up retry, as on the section. */}
-        {requestsQuery.error ? (
+            or the past must not vanish behind its error or its warming-up retry, as on the section.
+            Mounted on the failure behind a retry too, as the rail does: until the retries are spent
+            there is no `error`, and a new account would never hear "Setting up your account". */}
+        {requestsQuery.error || requestsQuery.failureReason ? (
           <HubQueryState
             analyticsSurface="hub"
             isLoading={false}
@@ -288,7 +305,7 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
 
         <HubQueryState
           analyticsSurface="hub"
-          isLoading={requestsQuery.isLoading && scheduled.loading}
+          isLoading={isLoading}
           error={null}
           isEmpty={isEmpty}
           emptyMessage={
@@ -312,17 +329,27 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
             <NowLine ref={nowLineRef} />
             {present.length > 0 ? (
               <DaySection
-                label={<span className="text-browseSection font-semibold tracking-[.3px] text-green">NOW</span>}
+                label={<span className="text-browseSection font-semibold tracking-eyebrow text-green">NOW</span>}
               >
                 {present.map(entry => (
                   <React.Fragment key={entry.key}>{entry.node}</React.Fragment>
                 ))}
               </DaySection>
             ) : null}
-            <DaySections entries={upcoming} now={now} todayAbove={past.some(entry => sameDay(entry.at, now))} />
+            <DaySections
+              entries={upcoming}
+              now={now}
+              todayAbove={past.some(entry => localDaysFrom(entry.at, now) === 0)}
+            />
             {/* With only the past to show, the space under the line would otherwise read as broken. Not
-                when a read failed: then there may well be something coming up, and the failure says so. */}
-            {filter === 'all' && present.length === 0 && upcoming.length === 0 && failures.length === 0 ? (
+                when a read failed or is still on its way: then there may well be something coming up,
+                and the failure, or the read landing, says so. */}
+            {filter === 'all' &&
+            present.length === 0 &&
+            upcoming.length === 0 &&
+            failures.length === 0 &&
+            !requestsTrouble &&
+            !scheduled.loading ? (
               <DaySection label={null}>
                 <Text as="p" variant="footnote" color="grey-04" data-testid="requests-nothing-ahead">
                   Nothing coming up. Invites and debates you book show up here.
@@ -484,15 +511,6 @@ export function buildEntries({
     );
 }
 
-/** Midnight-anchored key for a day in the viewer's zone. */
-function dayKey(at: number) {
-  return startOfLocalDay(at);
-}
-
-function sameDay(a: number, b: number) {
-  return dayKey(a) === dayKey(b);
-}
-
 /**
  * Entries grouped by day, each day one section with its date in the left column. Today can appear
  * twice — once above the now-line and once below — and only the first carries the date.
@@ -511,12 +529,12 @@ function DaySections({
 }) {
   const groups: { key: number; at: number; entries: TimelineEntry[] }[] = [];
   for (const entry of entries) {
-    const key = dayKey(entry.at);
+    const key = startOfLocalDay(entry.at);
     const last = groups[groups.length - 1];
     if (last && last.key === key) last.entries.push(entry);
     else groups.push({ key, at: entry.at, entries: [entry] });
   }
-  const today = dayKey(now);
+  const today = startOfLocalDay(now);
 
   return (
     <>
@@ -567,9 +585,7 @@ function DateLabel({ at, today, repeat }: { at: number; today: boolean; repeat: 
       >
         {day}
       </span>
-      <span className="text-footnoteMedium tracking-[.3px] text-grey-04">
-        {today ? 'TODAY' : weekday.toUpperCase()}
-      </span>
+      <span className={HUB_EYEBROW_CLASS_NAME}>{today ? 'TODAY' : weekday.toUpperCase()}</span>
     </>
   );
 }
@@ -712,7 +728,8 @@ function IncomingRequestItem({ request }: { request: DebateRequest }) {
           >
             Accept
           </HubPillButton>
-          {/* Passes it on to the next person, which is what "Not now" means everywhere now. */}
+          {/* Passes it on to the next person, as "Not now" does on a claim request. A challenge's own
+              Dismiss is final, so it is not called "Not now" (`IncomingChallengeItem`). */}
           <HubPillButton
             size="compact"
             analyticsLabel={debateAnalyticsLabel('hub', 'Dismiss')}
@@ -733,7 +750,7 @@ function IncomingRequestItem({ request }: { request: DebateRequest }) {
 /** A claimless challenge to the viewer. Accepting opens the claim picker with them. */
 function IncomingChallengeItem({ challenge }: { challenge: DebateChallenge }) {
   const clock = useAskClock(challenge.expires_at);
-  const { accept, reject, accepting, busy, error } = useIncomingChallengeActions(challenge);
+  const { accept, reject, accepting, rejecting, busy, error } = useIncomingChallengeActions(challenge);
 
   return (
     <TimelineItem
@@ -749,7 +766,7 @@ function IncomingChallengeItem({ challenge }: { challenge: DebateChallenge }) {
           <HubPillButton
             size="compact"
             variant="primary"
-            analyticsLabel="Debate hub Accept challenge"
+            analyticsLabel={debateAnalyticsLabel('hub', 'Accept challenge')}
             analyticsIntent="accept_debate_challenge"
             onClick={accept}
             disabled={busy}
@@ -758,14 +775,19 @@ function IncomingChallengeItem({ challenge }: { challenge: DebateChallenge }) {
           >
             Accept
           </HubPillButton>
+          {/* Rejects it for good: the requester's wait ends and their history reads that you declined.
+              Worded as the challenge card words it, not as a claim request's "Not now", which only
+              passes a request on. */}
           <HubPillButton
             size="compact"
-            analyticsLabel="Debate hub Dismiss challenge"
+            analyticsLabel={debateAnalyticsLabel('hub', 'Dismiss challenge')}
             analyticsIntent="dismiss_debate_challenge"
             onClick={reject}
             disabled={busy}
+            pending={rejecting}
+            pendingLabel="Dismissing…"
           >
-            Not now
+            Dismiss
           </HubPillButton>
         </CompactActionRow>
       }
@@ -784,13 +806,13 @@ function OutgoingAskItem() {
       testId="requests-outgoing"
       dot="waiting"
       time="Now"
-      title={ask.kind === 'claim' ? 'Requesting · people who disagree' : `Requesting ${ask.recipientName}`}
+      title={askTitle(ask)}
       sub={ask.kind === 'claim' ? `${ask.claim.claim} · ${clock.label} left` : `${clock.label} left to answer`}
       actions={
         <CompactActionRow>
           <HubPillButton
             size="compact"
-            analyticsLabel="Debate hub Withdraw request"
+            analyticsLabel={debateAnalyticsLabel('hub', 'Withdraw request')}
             analyticsIntent="withdraw_debate_request"
             onClick={cancel}
             disabled={cancelling}
@@ -826,7 +848,7 @@ function InviteItem({
   onAnswer: ScheduledDebateAnswer;
   onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
-  const { proposedByViewer, viewerAccepted } = scheduledRequestRoles(request, viewerId);
+  const { proposedByViewer, viewerAccepted, withdrawable } = scheduledRequestRoles(request, viewerId);
   const name = opponentName(opponent);
   const note = adminArrangedNote(request, opponent, viewerId);
   const slot = formatTimeRange(request.scheduled_start_at, request.scheduled_end_at);
@@ -864,14 +886,18 @@ function InviteItem({
       time={formatTime(request.scheduled_start_at)}
       title={viewerAccepted && !proposedByViewer ? `Debate with ${name}` : `Invite to ${name}`}
       sub={note ?? `Waiting on their answer · ${slot}`}
+      // Decided here rather than left to the actions, which draw nothing when the invite can't be
+      // taken back: handed that, the row still kept a gap for them.
       actions={
-        <WaitingInviteActions
-          compact
-          request={request}
-          opponent={opponent}
-          viewerId={viewerId}
-          onReschedule={onReschedule}
-        />
+        withdrawable ? (
+          <WaitingInviteActions
+            compact
+            request={request}
+            opponent={opponent}
+            viewerId={viewerId}
+            onReschedule={onReschedule}
+          />
+        ) : undefined
       }
     />
   );
@@ -913,15 +939,13 @@ function RoomItem({
 
 /** A lobby the viewer is going to or hosts, at its time; Live with Join once it is open. */
 function LobbyItem({ row }: { row: UpcomingLobbyRow }) {
-  const hosts = hostsLabel(row.hosts);
-
   return (
     <TimelineItem
       testId="requests-lobby"
       dot={row.open ? 'live' : 'lobby'}
       time={row.open ? 'Live' : formatTime(row.startsAt)}
       title={row.name}
-      sub={`Lobby · ${row.hosting ? 'You’re hosting' : hosts ? `Hosted by ${hosts}` : 'You’re going'}`}
+      sub={`Lobby · ${lobbyHostLine(row) ?? 'You’re going'}`}
       // The section card's button, so a lobby's clicks read the same from either layout.
       actions={
         <CompactActionRow>
@@ -1024,18 +1048,22 @@ const WATCH_ANALYTICS = { action: 'Watch past debate', intent: 'open_debate' } a
 
 /** A debate the viewer had, from the graph: the stand-in for history until GEO-3464 ships. */
 function PastDebateRow({ row }: { row: PastDebate }) {
+  const router = useRouter();
+  const href = NavUtils.toEntity(row.spaceId, row.entityId);
   return (
     <TimelineItem
       testId="requests-past-debate"
       dot="past"
       past
-      time={formatTime(new Date(row.createdAtSec * 1000).toISOString())}
+      time={formatTime(row.createdAtSec * 1000)}
       title={row.debateClaim?.name ?? row.title}
       sub="Debate · Debated"
       actions={
         <CompactActionRow>
+          {/* Into a debate like `WatchDebate`: from a lobby, a plain click steps out of it first. */}
           <Link
-            href={NavUtils.toEntity(row.spaceId, row.entityId)}
+            href={href}
+            onClick={debateEntryClick(() => router.push(href))}
             className={hubPillClassName('secondary', undefined, 'compact')}
             {...hubAnalyticsAttributes(WATCH_ANALYTICS.action, WATCH_ANALYTICS.intent)}
           >
@@ -1156,6 +1184,13 @@ function useTimelineScroll({
    */
   const pinnedRef = React.useRef(true);
   /**
+   * Where the pin last left the box. A scroll that ends anywhere else is the viewer's, whatever moved
+   * it: dragging the scrollbar fires none of the input events in some browsers. Read back after the
+   * write, so the browser's clamping is what is remembered. 0 before the first pin, where opening the
+   * tab leaves the shared box (`changeTab` resets it).
+   */
+  const pinScrollTopRef = React.useRef(0);
+  /**
    * Scrolls the line (or the request a link asked for) to just under the filter row. `reached` is
    * false when the box could not scroll that far yet — the spacer that makes room renders a pass
    * later — so a caller knows to try again rather than settle short.
@@ -1167,6 +1202,7 @@ function useTimelineScroll({
     const target = pinTarget(measured.line);
     const wanted = Math.max(0, scrollOffsetWithin(target, scroller) - stickyHeight - LINE_GAP_PX);
     if (Math.abs(scroller.scrollTop - wanted) > 1) scroller.scrollTop = wanted;
+    pinScrollTopRef.current = scroller.scrollTop;
     lineOffsetRef.current = measured.line.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
     return { reached: scroller.scrollTop + 1 >= wanted, linked: target === measured.line ? null : target };
   }, [measure, pinTarget]);
@@ -1191,17 +1227,28 @@ function useTimelineScroll({
    * target, not the line: a linked request further down needs that much more room, and sized for the
    * line it sat past the end of the scroll, so the anchor never landed — no paging, no hold, no focus,
    * and every resize dragged the viewer back to the bottom.
+   *
+   * Again for each link (`focusKey`), whose request may sit further down than the last one's, and on
+   * every resize (the observer below): the box growing with the content unchanged — the live strip
+   * or the no-times line going, a phone's URL bar collapsing — clamps the scroll and drops the line.
+   * It cannot chase itself: what it measures, the room below the target, leaves the spacer out.
    */
-  React.useLayoutEffect(() => {
+  const committedSpacerRef = React.useRef(0);
+  const fitSpacer = React.useCallback(() => {
     const measured = measure();
     const root = rootRef.current;
     if (!measured || !root) return;
     const { scroller, stickyHeight } = measured;
     const target = pinTarget(measured.line);
-    const below = root.getBoundingClientRect().bottom - spacerHeight - target.getBoundingClientRect().top;
+    const below = root.getBoundingClientRect().bottom - committedSpacerRef.current - target.getBoundingClientRect().top;
     const needed = Math.max(0, Math.round(scroller.clientHeight - stickyHeight - below));
-    if (needed !== spacerHeight) setSpacerHeight(needed);
-  }, [layoutKey, lineMounted, measure, pinTarget, spacerHeight, pastKey]);
+    if (needed !== committedSpacerRef.current) setSpacerHeight(needed);
+  }, [measure, pinTarget]);
+
+  React.useLayoutEffect(() => {
+    committedSpacerRef.current = spacerHeight;
+    fitSpacer();
+  }, [fitSpacer, focusKey, layoutKey, lineMounted, pastKey, spacerHeight]);
 
   // The first anchor, and again for each request a link asks for (GEO-3431), which takes the line's
   // place. A link followed while the tab is already open must land on its request too.
@@ -1211,6 +1258,19 @@ function useTimelineScroll({
     const key = focused ? focusKey : null;
     if (anchored && anchoredForRef.current === key) return;
     if (anchored && key === null) return;
+    // The reads can take a minute to land (a new account's requests are retried while geo-chat warms
+    // up) with the rows already drawn. A viewer who scrolled meanwhile keeps their place: the first
+    // anchor only marks where the line is, so holding and paging can start from there.
+    if (!anchored && !pinnedRef.current) {
+      const measured = measure();
+      if (!measured) return;
+      lineOffsetRef.current = measured.lineOffset;
+      const target = pinTarget(measured.line);
+      if (target !== measured.line) target.focus({ preventScroll: true });
+      anchoredForRef.current = key;
+      setAnchored(true);
+      return;
+    }
     // A new link takes the scroll back from wherever the viewer had it.
     pinnedRef.current = true;
     const pinned = pinToTarget();
@@ -1220,7 +1280,7 @@ function useTimelineScroll({
     pinned.linked?.focus({ preventScroll: true });
     anchoredForRef.current = key;
     setAnchored(true);
-  }, [anchored, focusKey, focused, lineMounted, pinToTarget, ready, spacerHeight]);
+  }, [anchored, focusKey, focused, lineMounted, measure, pinTarget, pinToTarget, ready, spacerHeight]);
 
   // Keep the line still when rows arrive above it, and re-pin once the spacer has made room. And when
   // the line itself comes back: an empty "Needs you" swaps the timeline out, and on "All" it mounts
@@ -1254,8 +1314,8 @@ function useTimelineScroll({
     return () => cancelAnimationFrame(handle);
   }, [anchored, holdLine, lineMounted, measure]);
 
-  // The viewer taking the scroll is what ends the pin: from then on their place is what is kept.
-  // Input events rather than `scroll`, which the pin's own scrolling fires too.
+  // The viewer taking the scroll is what ends the pin: from then on their place is what is kept. Their
+  // input, at once, and any scroll the pin did not make (`pinScrollTopRef`, in the effect below).
   React.useEffect(() => {
     const scroller = rootRef.current?.closest<HTMLElement>(hubScrollSelector);
     if (!scroller) return;
@@ -1273,24 +1333,36 @@ function useTimelineScroll({
   // name resolves late and wraps, a font arriving. Safari has no CSS scroll anchoring, so nothing
   // else would hold it. One observer on the whole content: a change below the line leaves the line
   // where it is, so holding it there costs nothing.
+  //
+  // The box as well as the content, and the spacer re-fitted as well as the line held: the box
+  // changing height changes how much room the target needs below it.
   React.useEffect(() => {
     const content = contentRef.current;
+    const scroller = rootRef.current?.closest<HTMLElement>(hubScrollSelector);
     if (!anchored || !content || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => holdLine());
+    const observer = new ResizeObserver(() => {
+      fitSpacer();
+      holdLine();
+    });
     observer.observe(content);
+    if (scroller) observer.observe(scroller);
     return () => observer.disconnect();
-  }, [anchored, holdLine]);
+  }, [anchored, fitSpacer, holdLine, hubScrollSelector]);
 
   // Follow the viewer's own scrolling, so the next change restores where they are, not where they were.
   React.useEffect(() => {
-    if (!anchored) return;
     const scroller = rootRef.current?.closest<HTMLElement>(hubScrollSelector);
     if (!scroller) return;
     const onScroll = () => {
-      // The pin's own scrolling is not the viewer's place.
-      if (pinnedRef.current) return;
+      if (pinnedRef.current) {
+        // The pin's own scrolling is not the viewer's place; anywhere else it did not put the box is.
+        if (Math.abs(scroller.scrollTop - pinScrollTopRef.current) <= 1) return;
+        pinnedRef.current = false;
+      }
       const line = nowLineRef.current;
-      if (line) lineOffsetRef.current = line.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      if (anchored && line) {
+        lineOffsetRef.current = line.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      }
     };
     scroller.addEventListener('scroll', onScroll, { passive: true });
     return () => scroller.removeEventListener('scroll', onScroll);

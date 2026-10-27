@@ -77,6 +77,21 @@ describe('historyOutcomeLabel', () => {
     expect(label('scheduled_invite', 'outgoing', 'superseded')).toBe('The time went to another debate');
   });
 
+  // geo-chat#299 never calls a past booking with no debate behind it `accepted`.
+  it('says a booking that never became a debate didn’t happen', () => {
+    expect(label('scheduled_invite', 'outgoing', 'missed')).toBe('Didn’t happen');
+    expect(label('scheduled_invite', 'incoming', 'unknown')).toBeNull();
+  });
+
+  // geo-chat withdraws a claim request itself when its sender's readiness lapses, so "You" or "They"
+  // would guess. A challenge is only ever called off by a person.
+  it('says a claim request was cancelled without saying by whom', () => {
+    expect(label('claim_request', 'outgoing', 'cancelled')).toBe('Cancelled');
+    expect(label('claim_request', 'incoming', 'cancelled')).toBe('Cancelled');
+    expect(label('challenge', 'outgoing', 'cancelled')).toBe('You cancelled');
+    expect(label('challenge', 'incoming', 'cancelled')).toBe('They cancelled');
+  });
+
   // An arranged invite has no inviter, but the outcome still says whose answer it was.
   it('reads an arranged invite from the viewer’s side too', () => {
     expect(label('scheduled_invite', null, 'declined')).toBe('You declined');
@@ -102,6 +117,7 @@ describe('isSettledHistoryItem', () => {
 
   it('keeps settled items in the past', () => {
     expect(isSettledHistoryItem(item('expired', '2026-10-22T12:00:00Z'), now)).toBe(true);
+    expect(isSettledHistoryItem(item('missed', '2026-10-22T12:00:00Z'), now)).toBe(true);
   });
 
   it('drops still-open items and anything not yet happened', () => {

@@ -396,15 +396,21 @@ describe('DebatesHubPanel', () => {
     expect(screen.queryByRole('button', { name: /^My positions/ })).not.toBeInTheDocument();
   });
 
-  // The Panel-Matches board: how many matches are online, quietly beside the tab's name.
-  it('shows how many matches are online beside Matches, and nothing at none', () => {
+  // The Panel-Matches board: how many matches there are, quietly beside the tab's name.
+  it('shows how many matches there are beside Matches, and nothing at none', () => {
     renderOpen('explore');
     expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches$/);
     cleanup();
 
     mocks.matches = [{}, {}, {}];
     renderOpen('explore');
-    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent('Matches3 online');
+    // Review, 27 Oct: read aloud as "3 online", though it counts matched claims.
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches3 matches$/);
+    cleanup();
+
+    mocks.matches = [{}];
+    renderOpen('explore');
+    expect(screen.getByRole('button', { name: /^Matches/ })).toHaveTextContent(/^Matches1 match$/);
   });
 
   it('labels each tab’s clicks with its new name', () => {

@@ -209,8 +209,8 @@ describe('DebateGatewayClient', () => {
       [
         ['debates', 'detail', 'debate1'],
         ['debates', 'space', 'space-1'],
-        // GEO-3463: a debate ending is when its "Debated · Watch" row joins the timeline's past.
-        ['debates', 'account', 'user-a', 'history'],
+        // Not history: this reaches space subscribers for any public debate and fires many times in
+        // one. The viewer's own ending refreshes it from the timeline, as the debate leaves activity.
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
       ],
@@ -372,6 +372,68 @@ describe('DebateGatewayClient', () => {
     await flushInvalidations();
 
     expect(queryClient.getQueryData(historyKey)).toEqual(held);
+    unsubscribe();
+  });
+
+  // Paging back ten pages, closing and coming back after they went stale re-asked all ten on mount.
+  it('cuts history to its first page as soon as the timeline stops showing it', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', 'c3'), page('c', null)],
+      pageParams: [null, 'c2', 'c3'],
+    });
+    const observer = () =>
+      new InfiniteQueryObserver(queryClient, {
+        queryKey: historyKey,
+        queryFn: () => new Promise<never>(() => {}),
+        initialPageParam: null,
+        getNextPageParam: () => null,
+        enabled: false,
+      });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    const first = observer().subscribe(() => {});
+    const second = observer().subscribe(() => {});
+
+    // Another view of it still open: nothing is cut.
+    first();
+    expect(queryClient.getQueryData<{ pages: unknown[] }>(historyKey)?.pages).toHaveLength(3);
+
+    second();
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
+  });
+
+  // An event is what moves something into the past; the history on screen has to be asked again.
+  it('refetches the history the timeline is showing when a request changes', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const queryFn = vi.fn(async () => ({ items: [], next_cursor: null }));
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn,
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    const before = queryFn.mock.calls.length;
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-active', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expect(queryFn.mock.calls.length).toBe(before + 1);
     unsubscribe();
   });
 

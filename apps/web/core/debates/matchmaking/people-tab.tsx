@@ -528,7 +528,8 @@ export function PeopleTab({
 
       {/* Matches the other tabs' inset so content doesn't shift when switching between them. */}
       <div className="px-4 py-3">
-        {viewerHasNoSchedule ? <SetAvailabilityNotice /> : null}
+        {/* Full screen only: the panel asks with its own no-times line under the tabs (GEO-3463). */}
+        {viewerHasNoSchedule && dense ? <SetAvailabilityNotice /> : null}
         {showOffline && schedulableQuery.error ? (
           <Text as="p" variant="footnote" color="grey-04" className="pb-2">
             Couldn&rsquo;t load who&rsquo;s free this week.{' '}

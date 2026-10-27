@@ -38,10 +38,6 @@ export function calendarHref(from: string | null, picks?: CalendarPicks): string
 }
 
 /**
- * A comma-separated list, each entry in its canonical spelling, then deduplicated: in that order,
- * so one id written hyphenated and bare is one pick, not two.
- */
-/**
  * The calendar for one claim: everyone holding the other side, and when they're free (GEO-3220,
  * GEO-3463). `matchesOnly` because the reason to open it from a claim is to debate that claim, which
  * only someone on the other side can do. Every "Schedule" on a claim links through this.
@@ -55,6 +51,10 @@ export function personCalendarPicks(profileSpaceId: string): CalendarPicks {
   return { people: [normId(profileSpaceId)], claims: [], matchesOnly: false };
 }
 
+/**
+ * A comma-separated list, each entry in its canonical spelling, then deduplicated: in that order,
+ * so one id written hyphenated and bare is one pick, not two.
+ */
 function idList(raw: string | null, canonical: (id: string) => string | null): string[] {
   if (!raw) return [];
   return [

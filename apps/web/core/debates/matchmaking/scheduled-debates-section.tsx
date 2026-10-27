@@ -14,7 +14,6 @@ import {
 } from '~/core/debates/api';
 import { useDebateLobbies } from '~/core/debates/lobbies/hooks';
 import { markLobbyEntry } from '~/core/debates/lobbies/lobby-analytics';
-import { hostsLabel } from '~/core/debates/lobbies/lobby-format';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
@@ -41,7 +40,7 @@ import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
 import { RequestSection } from './request-section';
 import { formatDebateSlot, formatDebateTime, formatTime } from './scheduled-debate-format';
-import { type UpcomingLobbyRow, upcomingLobbyRows } from './upcoming-lobby-rows';
+import { type UpcomingLobbyRow, lobbyHostLine, upcomingLobbyRows } from './upcoming-lobby-rows';
 import { useAnswerOnce } from './use-answer-once';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useRequestCountdown } from './use-request-countdown';
@@ -994,7 +993,7 @@ function DebateParties({
 function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
   // From the clock, not from the reads: an empty lobby sends nothing when its start passes.
   const now = useMinuteNow();
-  const hosts = hostsLabel(row.hosts);
+  const hostLine = lobbyHostLine(row);
 
   return (
     <ScheduleCard
@@ -1009,9 +1008,9 @@ function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
           <Text as="p" variant="metadataMedium" className="truncate">
             {row.name}
           </Text>
-          {(row.hosting || hosts) && (
+          {hostLine && (
             <Text as="p" variant="footnote" color="grey-04" className="truncate">
-              {row.hosting ? 'You’re hosting' : `Hosted by ${hosts}`}
+              {hostLine}
             </Text>
           )}
         </div>

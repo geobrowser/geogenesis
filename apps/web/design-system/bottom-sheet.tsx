@@ -43,10 +43,14 @@ export function BottomSheet({
     <Root open={open} onOpenChange={onOpenChange}>
       {trigger ? <Trigger asChild>{trigger}</Trigger> : null}
       <Portal container={container ?? undefined}>
-        <Overlay className={`fixed inset-0 ${Z_LAYER_CLASS.bottomSheetBackdrop} bg-text/40`} />
+        {/* `data-no-sheet-drag` on both: portaled into another sheet (the debates panel's Filters,
+            GEO-3463), they sit inside its surface in the DOM, and its native touch listeners would
+            otherwise take a swipe here, or on this backdrop, as a drag that moves or dismisses it. */}
+        <Overlay data-no-sheet-drag className={`fixed inset-0 ${Z_LAYER_CLASS.bottomSheetBackdrop} bg-text/40`} />
         {/* `aria-modal` said outright, as Radix does not set it: a surface underneath that steps aside
             for a modal dialog (the debates panel's Escape handler) can only tell from this. */}
         <Content
+          data-no-sheet-drag
           aria-modal="true"
           aria-describedby={undefined}
           className={`fixed inset-x-0 bottom-0 ${Z_LAYER_CLASS.bottomSheet} rounded-t-2xl flex max-h-[85dvh] flex-col overflow-y-auto overscroll-contain bg-white px-4 pt-4 pb-[max(1.75rem,env(safe-area-inset-bottom))] focus:outline-hidden`}

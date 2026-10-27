@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { canStartMobileSheetGesture } from '~/core/utils/mobile-sheet-drag';
 import { Z_LAYERS, Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { BottomSheet } from './bottom-sheet';
@@ -45,6 +46,26 @@ describe('BottomSheet', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
 
     expect(screen.getByRole('dialog', { name: 'Daniel' })).toHaveAttribute('aria-modal', 'true');
+  });
+
+  // Review, 27 Oct: portaled into the panel's sheet, a swipe on the Filters sheet or its backdrop
+  // reached the panel's own touch listeners and dragged or dismissed the panel under it.
+  it('leaves the sheet it opens inside alone when swiped', () => {
+    const outer = document.createElement('div');
+    outer.innerHTML = '<section data-mobile-sheet-surface><div data-testid="container"></div></section>';
+    document.body.appendChild(outer);
+    const container = outer.querySelector<HTMLElement>('[data-testid="container"]')!;
+    render(
+      <BottomSheet open onOpenChange={() => {}} title="Filters" container={container}>
+        <p>Body</p>
+      </BottomSheet>
+    );
+
+    const sheet = screen.getByRole('dialog', { name: 'Filters' });
+    expect(canStartMobileSheetGesture(screen.getByText('Body'), outer)).toBe(false);
+    expect(canStartMobileSheetGesture(sheet, outer)).toBe(false);
+    expect(canStartMobileSheetGesture(sheet.previousElementSibling, outer)).toBe(false);
+    outer.remove();
   });
 
   it('portals into the container it is given, to stay inside another sheet’s focus trap', () => {

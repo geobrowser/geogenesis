@@ -3,7 +3,13 @@ import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within }
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateHistoryItem, DebateRequest, DebateRequestParty } from '../api';
+import {
+  type DebateHistoryItem,
+  type DebateRequest,
+  type DebateRequestParty,
+  GeoChatRequestError,
+  GeoChatSessionError,
+} from '../api';
 import { ResizeObserverStub, activeResizeObservers, fireResize } from '../resize-observer-fixtures';
 import { EMPTY_SCHEDULED, historyItem, invite } from './requests-fixtures';
 import type { ScheduledContent } from './scheduled-debates-section';
@@ -28,8 +34,14 @@ const mocks = vi.hoisted(() => ({
   pastDebatesEnabled: [] as boolean[],
   scheduled: null as unknown as ScheduledContent,
   requestsError: null as Error | null,
+  requestsFailureReason: null as Error | null,
+  requestsLoading: false,
+  rejectChallenge: vi.fn(),
+  rejectingChallenge: false,
+  invalidateQueries: vi.fn(),
   block: vi.fn(),
   challenge: null as unknown,
+  activeDebate: null as { id: string } | null,
   challengeError: null as Error | null,
 }));
 
@@ -83,17 +95,21 @@ vi.mock('../rooms/scheduling-hooks', () => ({
 
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
-  useDebateActivity: () => ({ data: { challenge: mocks.challenge, outbound_request: null } }),
+  useDebateActivity: () => ({
+    data: { challenge: mocks.challenge, debate: mocks.activeDebate, outbound_request: null },
+  }),
   useAcceptDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: mocks.challengeError }),
-  useRejectDebateChallenge: () => ({ mutate: vi.fn(), isPending: false }),
+  useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallenge, isPending: mocks.rejectingChallenge }),
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
 }));
 
 vi.mock('./hooks', () => ({
   useDebateRequests: () => ({
-    data: mocks.requestsError ? undefined : { incoming: mocks.incoming, outbound: mocks.outbound },
-    isLoading: false,
+    data:
+      mocks.requestsError || mocks.requestsLoading ? undefined : { incoming: mocks.incoming, outbound: mocks.outbound },
+    isLoading: mocks.requestsLoading,
     error: mocks.requestsError,
+    failureReason: mocks.requestsFailureReason ?? mocks.requestsError,
     refetch: vi.fn(),
   }),
   useBlockDebateUser: () => ({ mutate: mocks.block, isPending: false }),
@@ -101,6 +117,12 @@ vi.mock('./hooks', () => ({
   useDismissDebateRequest: () => ({ mutate: mocks.dismiss, isPending: false }),
   useWithdrawDebateRequest: () => ({ mutate: mocks.withdraw, isPending: false }),
   useDebatePeople: () => ({ data: { people: [] } }),
+}));
+
+// Only the history refresh reads the client here, and only to invalidate.
+vi.mock('@tanstack/react-query', async importOriginal => ({
+  ...(await importOriginal<typeof import('@tanstack/react-query')>()),
+  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
 }));
 
 vi.mock('../api', async importOriginal => ({
@@ -161,9 +183,17 @@ function fakeScroller({
   lineTop = () => 600,
   below = 0,
   focusedTop,
-  clientHeight = 800,
-}: { lineTop?: () => number; below?: number; focusedTop?: () => number; clientHeight?: number } = {}) {
+  clientHeight: boxHeight = 800,
+}: {
+  lineTop?: () => number;
+  below?: number;
+  focusedTop?: () => number;
+  /** The box's height, or a reading of it for a box that changes. */
+  clientHeight?: number | (() => number);
+} = {}) {
+  const clientHeight = () => (typeof boxHeight === 'function' ? boxHeight() : boxHeight);
   let scrollTop = 0;
+  let writes = 0;
   const scroller = document.createElement('div');
   scroller.setAttribute('data-debates-hub-scroll', '');
   const line = () => scroller.querySelector('[data-requests-now-line]');
@@ -171,12 +201,13 @@ function fakeScroller({
     parseFloat(scroller.querySelector<HTMLElement>('[data-requests-spacer]')?.style.height ?? '') || 0;
   // With the timeline swapped out (an empty state), there is next to nothing to scroll.
   const contentHeight = () => (line() ? lineTop() + below + spacer() : 0);
-  const maxScroll = () => Math.max(0, contentHeight() - clientHeight);
+  const maxScroll = () => Math.max(0, contentHeight() - clientHeight());
   Object.defineProperties(scroller, {
-    clientHeight: { get: () => clientHeight },
+    clientHeight: { get: clientHeight },
     scrollTop: {
       get: () => (scrollTop = Math.min(scrollTop, maxScroll())),
       set: (value: number) => {
+        writes += 1;
         scrollTop = Math.max(0, Math.min(value, maxScroll()));
       },
     },
@@ -185,7 +216,7 @@ function fakeScroller({
 
   const original = Element.prototype.getBoundingClientRect;
   Element.prototype.getBoundingClientRect = function (this: Element) {
-    if (this === scroller) return box(0, clientHeight);
+    if (this === scroller) return box(0, clientHeight());
     const top = scroller.scrollTop;
     const nowLine = line();
     if (this.hasAttribute('data-requests-now-line')) return box(lineTop() - top);
@@ -208,6 +239,15 @@ function fakeScroller({
       fireEvent.wheel(scroller);
       scroller.scrollTop += delta;
       fireEvent.scroll(scroller);
+    },
+    /** Dragging the scrollbar, which in some browsers fires the scroll and no input event at all. */
+    dragScrollbarBy(delta: number) {
+      scroller.scrollTop += delta;
+      fireEvent.scroll(scroller);
+    },
+    /** How many times anything has set `scrollTop`. */
+    get writes() {
+      return writes;
     },
   };
 }
@@ -233,6 +273,12 @@ beforeEach(() => {
   mocks.withdraw.mockReset();
   mocks.respond.mockReset().mockResolvedValue({ outcome: 'answered' });
   mocks.requestsError = null;
+  mocks.requestsFailureReason = null;
+  mocks.requestsLoading = false;
+  mocks.rejectChallenge.mockReset();
+  mocks.rejectingChallenge = false;
+  mocks.invalidateQueries.mockReset();
+  mocks.activeDebate = null;
   mocks.block.mockReset();
   mocks.challenge = null;
   mocks.challengeError = null;
@@ -275,6 +321,91 @@ describe('RequestsSchedule', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'r1' }, expect.anything());
+  });
+
+  // Rejecting a challenge is final: the requester's wait ends and their history says you declined.
+  // "Not now" promised a later that does not exist.
+  it('calls a challenge’s reject Dismiss, as its card does, and shows it under way', () => {
+    mocks.challenge = {
+      id: 'ch-1',
+      status: 'pending',
+      requester: party('user-them', 'Ana'),
+      recipient: party('user-me', 'You'),
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    };
+    const view = render(<RequestsSchedule />);
+
+    const item = screen.getByTestId('requests-incoming-challenge');
+    expect(within(item).queryByRole('button', { name: 'Not now' })).not.toBeInTheDocument();
+    const dismiss = within(item).getByRole('button', { name: 'Dismiss' });
+    expect(dismiss).toHaveAttribute('data-geo-analytics-label', 'Debate hub Dismiss challenge');
+    expect(within(item).getByRole('button', { name: 'Accept' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Accept challenge'
+    );
+    fireEvent.click(dismiss);
+    expect(mocks.rejectChallenge).toHaveBeenCalledWith('ch-1');
+
+    mocks.rejectingChallenge = true;
+    view.rerender(<RequestsSchedule />);
+    expect(within(screen.getByTestId('requests-incoming-challenge')).getByText('Dismissing…')).toBeInTheDocument();
+  });
+
+  // geo-chat says a challenge was answered or lapsed with `debate.activity_changed` alone, and the
+  // viewer's debate ending reaches activity too; neither refreshes history from the gateway.
+  it('refreshes the past when a challenge or the viewer’s debate leaves activity', () => {
+    const challenge = {
+      id: 'ch-1',
+      status: 'pending',
+      requester: party('user-them', 'Ana'),
+      recipient: party('user-me', 'You'),
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    };
+    mocks.challenge = challenge;
+    const view = render(<RequestsSchedule />);
+    expect(mocks.invalidateQueries).not.toHaveBeenCalled();
+
+    // Arriving is not an ending.
+    mocks.activeDebate = { id: 'd1' };
+    view.rerender(<RequestsSchedule />);
+    expect(mocks.invalidateQueries).not.toHaveBeenCalled();
+
+    mocks.challenge = null;
+    view.rerender(<RequestsSchedule />);
+    expect(mocks.invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['debates', 'account', 'account-a', 'history'],
+      refetchType: 'active',
+    });
+
+    mocks.activeDebate = null;
+    view.rerender(<RequestsSchedule />);
+    expect(mocks.invalidateQueries).toHaveBeenCalledTimes(2);
+  });
+
+  // The actions draw nothing for an invite that can't be taken back; handed in anyway, the row kept
+  // an empty 8px wrapper for them.
+  it('leaves no room for actions on a waiting invite that can’t be withdrawn', () => {
+    mocks.scheduled = {
+      ...EMPTY_SCHEDULED,
+      answerable: [
+        invite('s3', false, {
+          invited_by_user_id: 'user-them',
+          proposed_by_user_id: 'user-them',
+          participants: [
+            { user_id: 'user-me', accepted: null },
+            { user_id: 'user-them', accepted: true },
+          ],
+        }),
+      ],
+    };
+    render(<RequestsSchedule />);
+
+    const row = screen.getByText(/Waiting on their answer/).closest('.items-start')!;
+    expect(within(row as HTMLElement).queryByRole('button')).not.toBeInTheDocument();
+    expect(row.querySelector('.mt-2')).toBeNull();
   });
 
   it('offers Accept, Decline and Suggest a time on an invite, in that order, with no expiry line', () => {
@@ -383,6 +514,31 @@ describe('RequestsSchedule', () => {
 
     expect(mocks.pastDebatesEnabled).toContain(true);
     expect(screen.getByTestId('requests-past-debate')).toHaveTextContent('Nuclear power debate');
+  });
+
+  // From inside a lobby, a plain click on the stand-in's Watch steps out first, as history's does.
+  it('steps out of a lobby before the stand-in’s Watch navigates', async () => {
+    const { registerLobbyStepOut } = await import('../lobbies/step-out');
+    const stepOut = vi.fn(async () => undefined);
+    const release = registerLobbyStepOut(stepOut);
+    mocks.history = { ...mocks.history, unavailable: true };
+    mocks.pastDebates = [
+      {
+        entityId: 'debate-1',
+        spaceId: 'space-a',
+        title: 'Nuclear power debate',
+        createdAtSec: Math.floor(Date.now() / 1000) - 86_400,
+        debateClaim: null,
+      },
+    ];
+    render(<RequestsSchedule />);
+
+    const watch = within(screen.getByTestId('requests-past-debate')).getByRole('link', { name: 'Watch' });
+    const notPrevented = fireEvent.click(watch);
+    release();
+
+    expect(notPrevented).toBe(false);
+    expect(stepOut).toHaveBeenCalledTimes(1);
   });
 
   it('does not ask the graph for past debates while history answers', () => {
@@ -606,6 +762,48 @@ describe('RequestsSchedule', () => {
     expect(empty()).not.toBeInTheDocument();
   });
 
+  // The requests read landing first, empty, said "Any debate requests…" until an invite landed and
+  // swapped it for the timeline: the line-remount path that has broken the anchor before.
+  it('says nothing about an empty tab, or nothing coming up, while the scheduled reads load', async () => {
+    mocks.scheduled = { ...EMPTY_SCHEDULED, loading: true };
+    const view = render(<RequestsSchedule />);
+    expect(screen.queryByText('Any debate requests you’ll receive will appear here.')).not.toBeInTheDocument();
+
+    // With the past to show, the timeline is drawn, but nothing ahead is claimed until it is known.
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    view.rerender(<RequestsSchedule />);
+    // In from the skeleton, which animates out first.
+    expect(await screen.findByTestId('requests-history')).toBeInTheDocument();
+    expect(screen.queryByTestId('requests-nothing-ahead')).not.toBeInTheDocument();
+
+    mocks.scheduled = { ...EMPTY_SCHEDULED };
+    view.rerender(<RequestsSchedule />);
+    expect(screen.getByTestId('requests-nothing-ahead')).toBeInTheDocument();
+  });
+
+  it('does not say nothing is coming up over a failed requests read', () => {
+    mocks.requestsError = new Error('geo-chat is down');
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    render(<RequestsSchedule />);
+
+    expect(screen.getByTestId('requests-history')).toBeInTheDocument();
+    expect(screen.queryByTestId('requests-nothing-ahead')).not.toBeInTheDocument();
+  });
+
+  // A new account's requests read is refused while geo-chat sets it up, and retried for a minute.
+  // Until the retries are spent there is no `error`, only the failure behind the retry.
+  it('says the account is being set up while its requests read is still being retried', () => {
+    mocks.requestsLoading = true;
+    mocks.requestsFailureReason = new GeoChatSessionError(new GeoChatRequestError('not yet', null, 401));
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    render(<RequestsSchedule />);
+
+    expect(screen.getByText(/Setting up your account/)).toBeInTheDocument();
+    // The rest of the timeline stays.
+    expect(screen.getByTestId('requests-history')).toBeInTheDocument();
+    expect(screen.queryByText('Any debate requests you’ll receive will appear here.')).not.toBeInTheDocument();
+  });
+
   // The action row is one line that does not wrap. The confirm step's question and its two pills
   // squeezed into it beside Join and Reschedule, the question wrapping a word a line.
   it('opens Cancel’s confirm step under the action row, not in it', () => {
@@ -697,21 +895,125 @@ describe('RequestsSchedule against the board', () => {
 });
 
 describe('RequestsSchedule scrolling', () => {
-  // GEO-3431: a link followed while Requests is already open still lands on its request.
-  it('scrolls to and focuses a request a link asks for after the tab is open', () => {
-    mocks.scheduled = { ...EMPTY_SCHEDULED, answerable: [invite('s1', true)] };
+  // GEO-3431: a link followed while Requests is already open still lands on its request. The second
+  // link's request sits further down than the first's: the spacer, sized for the first, kept the pin
+  // from reaching it, and it was never focused.
+  it('scrolls to and focuses a request a link asks for after the tab is open, further down', () => {
+    mocks.scheduled = {
+      ...EMPTY_SCHEDULED,
+      answerable: [invite('s1', true), invite('s2', true, { startsInMinutes: 3 * 24 * 60 })],
+    };
+    // The line 600px down, s1 300px under it, s2 300px under that, and 100px of the list after.
+    let focusedTop = 900;
+    const layout = fakeScroller({ below: 700, focusedTop: () => focusedTop });
+    const view = layout.render(<RequestsSchedule focusedRequestId="s1" />);
+    expect(layout.scroller.scrollTop).toBe(840);
+
+    focusedTop = 1200;
+    view.rerender(<RequestsSchedule focusedRequestId="s2" />);
+
+    // 1200 down, less the filter row and the gap.
+    expect(layout.scroller.scrollTop).toBe(1140);
+    const focused = document.activeElement as HTMLElement;
+    expect(focused).toHaveAttribute('data-focused');
+    expect(within(focused).getByText(/Debate · /)).toBeInTheDocument();
+    expect(screen.getAllByText('Mia invited you')[1]!.closest('[data-focused]')).toBe(focused);
+  });
+
+  // The box getting taller with the content unchanged — the live strip going, a phone's URL bar
+  // collapsing — clamped the scroll short of the line, and the observer only held what was left.
+  it('keeps the line under the filter row when the box itself grows', () => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    let height = 800;
+    const layout = fakeScroller({ clientHeight: () => height });
+    layout.render();
+    expect(layout.scroller.scrollTop).toBe(540);
+
+    height = 900;
+    // Only the box's own observer: nothing inside it changed size.
+    act(() => fireResize(layout.scroller));
+
+    expect(layout.scroller.scrollTop).toBe(540);
+  });
+
+  // The reads can take a minute (a new account's requests are retried meanwhile) with the rows already
+  // drawn. Landing then re-pinned the line, taking the scroll from a viewer who had moved into the past.
+  it('leaves a viewer who scrolled before the reads landed where they are', () => {
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    mocks.scheduled = { ...EMPTY_SCHEDULED, loading: true };
+    const layout = fakeScroller();
+    const view = layout.render();
+    expect(layout.scroller.scrollTop).toBe(0);
+
+    layout.scrollBy(200);
+    mocks.scheduled = { ...EMPTY_SCHEDULED };
+    view.rerender(<RequestsSchedule />);
+
+    expect(layout.scroller.scrollTop).toBe(200);
+  });
+
+  // Some browsers fire none of wheel, touch, pointer or key for a scrollbar drag: the scroll itself
+  // is what says the viewer took over.
+  it('lets go of the line when the viewer drags the scrollbar', () => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    let lineTop = 600;
+    const layout = fakeScroller({ lineTop: () => lineTop });
+    layout.render();
+    expect(layout.scroller.scrollTop).toBe(540);
+
+    layout.dragScrollbarBy(-240);
+    lineTop = 640;
+    act(() => fireResize());
+
+    // Held where they left it, 40px further for the row that grew above: not pinned back to 580.
+    expect(layout.scroller.scrollTop).toBe(340);
+  });
+
+  // Before the anchor the top of a short list is always in view, and would page everything at once.
+  it('keeps the sentinel off until the line has landed', () => {
+    stubIntersecting();
+    mocks.history = { ...mocks.history, items: [historyItem()], hasMore: true };
+    mocks.scheduled = { ...EMPTY_SCHEDULED, loading: true };
     const view = render(
       <div data-debates-hub-scroll>
         <RequestsSchedule />
       </div>
     );
+    expect(mocks.history.loadMore).not.toHaveBeenCalled();
+
+    mocks.scheduled = { ...EMPTY_SCHEDULED };
     view.rerender(
       <div data-debates-hub-scroll>
-        <RequestsSchedule focusedRequestId="s1" />
+        <RequestsSchedule />
       </div>
     );
+    expect(mocks.history.loadMore).toHaveBeenCalled();
+  });
 
-    expect(document.activeElement).toBe(screen.getByText('Mia invited you').closest('[data-focused]'));
+  // The settle loop holds the line while an entrance animation carries it. A line that never stops
+  // moving must not hold the box for ever: it gives up after its frame cap.
+  it('stops settling the line after its frame cap', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback));
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    mocks.history = { ...mocks.history, items: [historyItem()] };
+    let frame = 0;
+    // 4px one frame, back the next, for as long as anyone looks.
+    const layout = fakeScroller({ lineTop: () => 600 + (frame % 2) * 4 });
+    layout.render();
+    const before = layout.writes;
+
+    act(() => {
+      for (; frame < 200 && frames.length > 0; frame += 1) {
+        for (const callback of frames.splice(0)) callback(frame * 16);
+      }
+    });
+
+    // One write a frame while it chases the line, and none once the cap is reached.
+    expect(layout.writes - before).toBeLessThanOrEqual(60);
+    expect(layout.writes - before).toBeGreaterThan(10);
   });
 
   /** The observer whose content holds `node`: what a row above the line growing would fire. */

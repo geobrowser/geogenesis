@@ -339,7 +339,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               {tab.id === 'lobby' && matchCount > 0 ? (
                 <span className="text-breadcrumb font-medium text-grey-04">
                   {matchCount}
-                  <span className="sr-only"> online</span>
+                  {/* The count is of matched claims, not of people online. */}
+                  <span className="sr-only"> {matchCount === 1 ? 'match' : 'matches'}</span>
                 </span>
               ) : null}
               {tab.id === 'requests' && requestCount > 0 ? (

@@ -6,6 +6,7 @@ import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbyClaimList, DebateLobbyPerson } from '../api';
+import { HUB_EYEBROW_CLASS_NAME } from '../matchmaking/hub-eyebrow';
 import { useClaimListName } from './lobby-claim-list-tab';
 import { goingLabel, hostsLabel, personName } from './lobby-format';
 import { LobbyAvatarStack } from './lobby-people';
@@ -61,7 +62,7 @@ export function LobbyClaimListNames({ lists }: { lists: DebateLobbyClaimList[] |
   if (!lists || lists.length === 0) return null;
   return (
     <section className="flex flex-col gap-1" aria-label="Claim lists">
-      <h3 className="text-footnoteMedium tracking-[0.3px] text-grey-04 uppercase">Claim lists</h3>
+      <h3 className={HUB_EYEBROW_CLASS_NAME}>Claim lists</h3>
       <ul className="flex flex-col gap-0.5">
         {lists.map(list => (
           <ClaimListName key={`${list.space_id}:${list.entity_id}`} list={list} />

@@ -13,8 +13,11 @@ import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from './hub-scroll';
 import { panelFilters } from './panel-filters-fixtures';
 import {
   debatesHubExploreSearchAtom,
+  debatesHubExploreShowAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubHideMyPositionsAtom,
+  debatesHubPanelExploreSearchAtom,
+  debatesHubPanelExploreSpaceIdsAtom,
   debatesHubPositionsSpaceIdsAtom,
   lobbyExploreSearchAtom,
 } from '~/atoms';
@@ -3000,6 +3003,60 @@ describe('in the side panel', () => {
     await new Promise(resolve => setTimeout(resolve, 600));
     expect(view.store.get(debatesHubPositionsSpaceIdsAtom)).toEqual([]);
     expect(mocks.lastQuery).not.toMatchObject({ spaceIds: [SPACE_ID] });
+  });
+
+  // Review, 27 Oct: the panel's Explore offered "Explore claims" from its own empty list, the tab
+  // already open, so the button did nothing.
+  it('offers the tab’s own way out of an empty list rather than Explore', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [];
+    mocks.claims = [];
+    const turnOff = vi.fn();
+    const onTabChange = vi.fn();
+    render(
+      <ClaimsTab
+        variant="lobby"
+        onTabChange={onTabChange}
+        panelFilters={panelFilters({ emptyAction: { label: 'Turn off Someone online', onClick: turnOff } })}
+      />
+    );
+
+    await screen.findByText('Nobody is ready to debate you on a claim right now.');
+    expect(screen.queryByRole('button', { name: 'Explore claims' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Turn off Someone online' }));
+    expect(turnOff).toHaveBeenCalled();
+    expect(onTabChange).not.toHaveBeenCalled();
+  });
+
+  // Review, 27 Oct: the panel has no "Hide my positions" switch; Show is how it hides them.
+  it('points at Show when the viewer has answered everything', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'One you have answered')];
+    mocks.graphAnsweredIds = new Set([FEATURED_A]);
+    const store = createStore();
+    render(<ClaimsTab atomsFrom="panelExplore" panelFilters={panelFilters()} />, store);
+    await showAllClaims();
+
+    expect(await screen.findByText(/Choose All under Show to see them/)).toBeInTheDocument();
+    expect(screen.queryByText(/Hide my positions/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    expect(store.get(debatesHubExploreShowAtom)).toBe('all');
+  });
+
+  // Review, 27 Oct: under the tab's own narrowing the pills count the kept rows, so a picked space
+  // the rows had left dropped out: its chip read "Space" and there was no pill to un-pick it.
+  it('keeps a picked space named, with its pill, once the rows leave it', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    mocks.sidebarData = sidebarData();
+    const store = createStore();
+    store.set(debatesHubPanelExploreSpaceIdsAtom, [SPACE_ID]);
+    store.set(debatesHubPanelExploreSearchAtom, 'nothing matches this');
+    render(<ClaimsTab atomsFrom="panelExplore" panelFilters={panelFilters()} keepClaim={() => true} />, store);
+    await showAllClaims();
+    await waitFor(() => expect(mocks.taggedFiltersAskedFor.at(-1)?.search).toBe('nothing matches this'));
+
+    expect(await screen.findByRole('button', { name: 'Remove Crypto' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    const filters = await screen.findByRole('dialog', { name: 'Filters' });
+    expect(within(filters).getByRole('button', { name: /^Crypto/ })).toBeInTheDocument();
   });
 
   it('asks the graph for claims in every picked space, not any', async () => {

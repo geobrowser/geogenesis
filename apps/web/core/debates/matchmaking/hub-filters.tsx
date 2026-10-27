@@ -11,6 +11,7 @@ import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-sp
 import { normId } from '~/core/utils/norm-id';
 
 import { BottomSheet } from '~/design-system/bottom-sheet';
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Search } from '~/design-system/icons/search';
 import { inputStyles } from '~/design-system/input';
@@ -22,6 +23,7 @@ import { type ClaimOrderFacts, compareByNewest, compareByRanking } from './claim
 import { SegmentedControl } from './debate-calendar-controls';
 import { FacetFilterPills, type FacetPillOption } from './facet-filter-pills';
 import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
+import { HUB_EYEBROW_CLASS_NAME } from './hub-eyebrow';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import type { HubEmptyAction } from './hub-states';
 import { opposingPositions } from './opposing-positions';
@@ -104,6 +106,11 @@ export type PanelListFilters = {
    * turning that switch back off. Without it the list would blame a filter the viewer never set.
    */
   emptyPredicate?: { message: string; action?: HubEmptyAction };
+  /**
+   * The way out of an empty list the tab's own Show or switches narrowed, in place of "Explore
+   * claims": on the panel's Explore that is the tab already open, so the button did nothing.
+   */
+  emptyAction?: HubEmptyAction;
 };
 
 export type ClaimRowSort = 'best' | 'newest' | 'people';
@@ -114,8 +121,10 @@ export type SortableClaimRow = {
   viewer_response?: { position: boolean } | null;
 };
 
-/** People who could take the other side right now, the "Most people" sort's measure. */
-/** A viewer holding no side could take either, so every side counts. */
+/**
+ * People who could take the other side right now, the "Most people" sort's measure. A viewer holding
+ * no side could take either, so every side counts.
+ */
 export function opposingPeopleCount(row: SortableClaimRow) {
   const viewerSide = row.viewer_response?.position;
   return (viewerSide === undefined ? row.positions : opposingPositions(row.positions, viewerSide)).reduce(
@@ -505,7 +514,7 @@ function FiltersBody<S extends string, C extends string>({
                 toggle.checked ? 'text-text' : 'text-grey-04'
               )}
             >
-              <CheckBox checked={toggle.checked} />
+              <CheckboxVisual variant="filled" checked={toggle.checked} />
               {toggle.label}
             </button>
           ))}
@@ -548,28 +557,10 @@ function FiltersBody<S extends string, C extends string>({
 }
 
 /** The prototype's `.box`: 14px, a grey outline, filled black when on. */
-function CheckBox({ checked }: { checked: boolean }) {
-  return (
-    <span
-      aria-hidden
-      className={cx(
-        'inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
-        checked ? 'border-text bg-text text-white' : 'border-grey-03 bg-white'
-      )}
-    >
-      {checked ? (
-        <svg viewBox="0 0 10 10" className="size-2.5" fill="none" stroke="currentColor" strokeWidth="1.6">
-          <path d="M2 5.2 4.1 7.2 8 3" />
-        </svg>
-      ) : null}
-    </span>
-  );
-}
-
 function FilterSection({ heading, children }: { heading: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col">
-      <h3 className="mb-2 text-footnoteMedium tracking-eyebrow text-grey-04 uppercase">{heading}</h3>
+      <h3 className={cx('mb-2', HUB_EYEBROW_CLASS_NAME)}>{heading}</h3>
       {children}
     </section>
   );
@@ -619,8 +610,9 @@ export function PanelFiltersBar({
   resultCount: number | null;
   countsPending?: boolean;
 }) {
+  // The picked ids too: the chip names a pick from these labels even when the rows have left it.
   const { labelsById, isLoading: labelsLoading } = useSpaceLabels(
-    React.useMemo(() => spaces.map(space => space.id), [spaces])
+    React.useMemo(() => [...new Set([...spaces.map(space => space.id), ...spaceIds])], [spaces, spaceIds])
   );
   const clearFacets = React.useCallback(() => {
     onSpacesClear();

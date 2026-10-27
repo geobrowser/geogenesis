@@ -4390,8 +4390,9 @@ export type DebateHistoryItem = {
   /**
    * How it ended, from the viewer's side. Read through `historyOutcomeLabel`, which knows the values:
    * requests and challenges `accepted | declined | taken_by_other | cancelled | expired |
-   * passed_by_everyone | unknown`; invites their status, with `declined` the viewer's own answer and
-   * `declined_by_other` the other debater's; debates (finished only) `held | never_started |
+   * passed_by_everyone | unknown` (a claim request's `cancelled` can be geo-chat withdrawing it); invites
+   * their status, with `declined` the viewer's own answer, `declined_by_other` the other debater's, and
+   * `missed` or `unknown` for a past booking with no debate behind it; debates (finished only) `held | never_started |
    * abandoned`; lobbies `joined`.
    */
   outcome: string;

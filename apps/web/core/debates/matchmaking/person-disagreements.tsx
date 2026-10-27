@@ -19,6 +19,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { RequestDebateControl } from '../request-debate-control';
 import type { ClaimMatch } from './disagreement-counts';
 import { debateActionAnalyticsAttributes } from './hub-analytics';
+import { HUB_EYEBROW_CLASS_NAME } from './hub-eyebrow';
 import { PersonSpaceIcon } from './person-space-icons';
 
 /**
@@ -105,7 +106,7 @@ export function PersonMatches({
           >
             {compact ? (
               <>
-                <p className="m-0 px-2 pt-1 pb-1.5 text-footnoteMedium tracking-[0.3px] text-grey-04 uppercase">
+                <p className={cx('m-0 px-2 pt-1 pb-1.5', HUB_EYEBROW_CLASS_NAME)}>
                   {count} {count === 1 ? 'match' : 'matches'} with {personName}
                 </p>
                 <ul

@@ -31,15 +31,16 @@ import { debateRoomPath } from '../rooms/room-routes';
 import { claimCalendarPicks, personCalendarPicks } from './debate-calendar-route';
 import { debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { useHubAskState } from './hub-ask-context';
-import { hubPillClassName } from './hub-pill-button';
+import { HUB_ICON_BUTTON_CLASS_NAME, hubPillClassName } from './hub-pill-button';
 import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
 import { type EndedAsk, type OutgoingAsk, useAskClock } from './use-outgoing-ask';
 
 const STRIP_CLASS_NAME = 'mx-4 mb-3 flex h-11 shrink-0 items-center gap-2 overflow-hidden rounded-lg pr-2 pl-3';
 
-const STRIP_PILL_CLASS_NAME =
-  'inline-flex h-7 shrink-0 items-center justify-center rounded-full px-3.5 text-metadata whitespace-nowrap transition-colors md:h-8';
+const STRIP_PILL_CLASS_NAME = hubPillClassName('primary', 'px-3.5 md:h-8');
+/** The live strip's white pill on black: `tag` without its grey edge. */
+const STRIP_LIGHT_PILL_CLASS_NAME = hubPillClassName('tag', 'border-white bg-white px-3.5 md:h-8');
 
 /**
  * The one strip above the tabs (GEO-3463). At most one, 44px, and nothing at all when none of these
@@ -79,7 +80,7 @@ export function askShareLeft(ask: Pick<OutgoingAsk, 'createdAt' | 'expiresAt'>, 
   return Math.max(0, Math.min(1, remainingMs / lifetime));
 }
 
-function askTitle(ask: OutgoingAsk) {
+export function askTitle(ask: OutgoingAsk) {
   return ask.kind === 'person' ? `Requesting ${ask.recipientName}` : 'Requesting · people who disagree';
 }
 
@@ -150,7 +151,7 @@ function EndedAskStrip({ ended, onDismiss }: { ended: EndedAsk; onDismiss: () =>
           close();
         }}
         {...hubAnalyticsAttributes('Strip schedule after request', 'open_debate_calendar')}
-        className={cx(STRIP_PILL_CLASS_NAME, 'bg-text text-white hover:bg-text/90')}
+        className={STRIP_PILL_CLASS_NAME}
       >
         Schedule
       </Link>
@@ -159,7 +160,7 @@ function EndedAskStrip({ ended, onDismiss }: { ended: EndedAsk; onDismiss: () =>
         aria-label="Dismiss"
         onClick={onDismiss}
         {...hubAnalyticsAttributes('Strip dismiss ended request')}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 hover:bg-grey-01"
+        className={HUB_ICON_BUTTON_CLASS_NAME}
       >
         <CloseSmall />
       </button>
@@ -184,7 +185,7 @@ function LiveLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
       <span className="shrink-0 text-footnoteMedium">Live</span>
       <span className="min-w-0 truncate text-metadataMedium">{lobby.name}</span>
       <span className="shrink-0 text-breadcrumb whitespace-nowrap text-grey-03">{hereLabel(lobby.headcount)}</span>
-      <span aria-hidden className={cx(STRIP_PILL_CLASS_NAME, 'ml-auto bg-white text-text')}>
+      <span aria-hidden className={cx(STRIP_LIGHT_PILL_CLASS_NAME, 'ml-auto')}>
         {joinLabel(lobby, true)}
       </span>
     </Link>
@@ -262,9 +263,20 @@ function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
 /**
  * The lobby's own read for what the list row leaves out: hosts, who is going, claim lists. Asked for
  * only while the details are open, and drawn from the list row until it lands.
+ *
+ * The count is the list row's, which the gateway patches live; the view is read once and refetched
+ * only at opening. So an RSVP elsewhere, which reaches this viewer as that patch alone, refetches it
+ * here for the names.
  */
 function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: number; rsvp: React.ReactNode }) {
-  const { data: view } = useDebateLobby(lobby.lobby_id);
+  const { data: view, refetch } = useDebateLobby(lobby.lobby_id);
+  const goingCount = lobby.reminder_count;
+  const readAtCount = React.useRef(goingCount);
+  React.useEffect(() => {
+    if (readAtCount.current === goingCount) return;
+    readAtCount.current = goingCount;
+    void refetch();
+  }, [goingCount, refetch]);
   const hosts = usePreOpenHosts(view ?? lobby);
   const date = lobbyDateLabel(lobby.starts_at);
 
@@ -281,7 +293,7 @@ function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: nu
         ) : null}
       </div>
       <LobbyHostedBy hosts={hosts} />
-      <LobbyGoing going={view?.going} count={view?.reminder_count ?? lobby.reminder_count} />
+      <LobbyGoing going={view?.going} count={goingCount} />
       <LobbyClaimListNames lists={view?.claim_lists} />
       <div className="flex items-center justify-between gap-2 border-t border-divider pt-3">
         <Link

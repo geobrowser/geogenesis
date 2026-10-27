@@ -51,7 +51,14 @@ import {
   rowsByPlacedClaim,
   taggedClaimEntry,
 } from './tagged-claim-entry';
-import { countBy, inEverySpace, keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
+import {
+  countBy,
+  inEverySpace,
+  keepSelectableTopics,
+  keepSelectedVisible,
+  orderFacetOptions,
+  toggleId,
+} from './topic-facets';
 import { useClaimRowTopics, useHeldClaimRows, useRowTopicFacet } from './use-claim-rows';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
@@ -960,8 +967,13 @@ export function ClaimsTab({
   const { topicsByClaimId: keptTopicsById } = useClaimRowTopics(keptRows);
   const keptFacetTopics = useRowTopicFacet(keptRows, keptTopicsById, topicIds);
   const panelFacetSpaces = React.useMemo(
-    () => (keepClaim ? countBy(keptRows.map(entry => ({ id: entry.claim.space_id, name: null }))) : facetSpaces),
-    [facetSpaces, keepClaim, keptRows]
+    // A picked space stays at zero when the rows leave it, as the source's facets keep it, or its
+    // pill (the way to un-pick it) and its name go.
+    () =>
+      keepClaim
+        ? keepSelectedVisible(countBy(keptRows.map(entry => ({ id: entry.claim.space_id, name: null }))), spaceIds)
+        : facetSpaces,
+    [facetSpaces, keepClaim, keptRows, spaceIds]
   );
   const panelFacetTopics = keepClaim ? keptFacetTopics : facetTopics;
   // Whether those counts describe the rows on screen, which is what "does this pill still narrow"
@@ -1298,7 +1310,9 @@ export function ClaimsTab({
             stillPaging
               ? searchingMessage
               : collapsedEverything
-                ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
+                ? panelMode
+                  ? 'You’ve answered every claim here. Choose All under Show to see them, or pick another space or topic.'
+                  : 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
                 : predicateEmptied
                   ? (panelFilters?.emptyPredicate?.message ?? 'No claims match these filters.')
                   : hasNarrowingFilters
@@ -1319,7 +1333,8 @@ export function ClaimsTab({
             stillPaging
               ? undefined
               : collapsedEverything
-                ? { label: 'Show my positions', onClick: () => setHideMyPositions(false) }
+                ? // The panel has no switch: Show is how it hides them, and All is this.
+                  { label: panelMode ? 'Show all' : 'Show my positions', onClick: () => setHideMyPositions(false) }
                 : predicateEmptied && panelFilters?.emptyPredicate?.action
                   ? panelFilters.emptyPredicate.action
                   : hasFilters
@@ -1333,7 +1348,7 @@ export function ClaimsTab({
                           setTopicIds([]);
                         },
                       }
-                    : exploreClaimsAction(onTabChange)
+                    : (panelFilters?.emptyAction ?? exploreClaimsAction(onTabChange))
           }
         >
           {/* One list, in the server's order. Splitting out the claims you'd already answered

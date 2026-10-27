@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -73,6 +73,31 @@ export function useDebateHistory(enabled: boolean) {
     loadMoreFailed: query.isFetchNextPageError,
     loadMore: query.fetchNextPage,
   };
+}
+
+/**
+ * Refreshes the past when something live in `liveIds` goes away. A challenge's reject and expiry
+ * reach this tab as `debate.activity_changed` alone, and the viewer's own debate ending as an
+ * activity refresh too: neither says that history changed, so the row that left Now would otherwise
+ * be missing from the past until something unrelated refreshed it. Watched here, on the client, so
+ * only an ending of the viewer's own refetches the list — not every activity change, nor every
+ * public debate's `debate.state_changed`, both of which fire often and cost a request per page held.
+ */
+export function useRefreshHistoryWhenLiveEnds(liveIds: readonly (string | null | undefined)[]) {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  const key = liveIds.filter(Boolean).join('|');
+  const previousRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    const previous = previousRef.current;
+    previousRef.current = key;
+    if (previous === null) return;
+    const now = new Set(key ? key.split('|') : []);
+    const ended = previous !== '' && previous.split('|').some(id => !now.has(id));
+    if (!ended) return;
+    void queryClient.invalidateQueries({ queryKey: debateQueryKeys.history(accountKey), refetchType: 'active' });
+  }, [accountKey, key, queryClient]);
 }
 
 /**
@@ -202,6 +227,9 @@ export function historyOutcomeLabel(item: Pick<DebateHistoryItem, 'kind' | 'dire
         return 'Cancelled';
       case 'superseded':
         return 'The time went to another debate';
+      // Booked, but the debate never happened: someone didn't come, or the room closed early.
+      case 'missed':
+        return 'Didn’t happen';
       default:
         return null;
     }
@@ -214,8 +242,9 @@ export function historyOutcomeLabel(item: Pick<DebateHistoryItem, 'kind' | 'dire
         return 'You passed';
       case 'taken_by_other':
         return 'Someone else took it';
+      // A claim request is also withdrawn when its sender's readiness lapses, so it is not always theirs.
       case 'cancelled':
-        return 'They cancelled';
+        return kind === 'challenge' ? 'They cancelled' : 'Cancelled';
       case 'expired':
         return 'Missed';
       default:
@@ -228,8 +257,9 @@ export function historyOutcomeLabel(item: Pick<DebateHistoryItem, 'kind' | 'dire
       return kind === 'challenge' ? 'They accepted' : 'Accepted';
     case 'declined':
       return 'They declined';
+    // geo-chat withdraws a claim request for its sender too (a readiness lapse, going unavailable).
     case 'cancelled':
-      return 'You cancelled';
+      return kind === 'challenge' ? 'You cancelled' : 'Cancelled';
     case 'expired':
       // A challenge went to one person, so nobody "took" it; they simply did not answer.
       return kind === 'challenge' ? 'No answer' : 'Nobody took it';

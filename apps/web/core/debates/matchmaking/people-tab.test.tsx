@@ -2062,13 +2062,23 @@ describe('Online only', () => {
   it('asks the viewer to set availability rather than implying nobody matches', () => {
     mocks.people = [];
     mocks.schedulable = { viewer_timezone: '', viewer_has_schedule: false, truncated: false, people: [] };
-    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    render(<PeopleTab onTabChange={mocks.onTabChange} dense />);
 
     expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
     // Offline people are listed without hours now (GEO-3154), so it no longer promises them.
     expect(screen.queryByText(/to see offline people/)).not.toBeInTheDocument();
     expect(screen.getByText(/so others can schedule a debate with you/)).toBeInTheDocument();
     expect(screen.queryByText(/at the same times as you/)).not.toBeInTheDocument();
+  });
+
+  // Review, 27 Oct: the panel's no-times line already asks, so the box asked a second time.
+  it('leaves the ask to the panel’s own no-times line', () => {
+    mocks.people = [];
+    mocks.schedulable = { viewer_timezone: '', viewer_has_schedule: false, truncated: false, people: [] };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByRole('button', { name: 'Set availability' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/so others can schedule a debate with you/)).not.toBeInTheDocument();
   });
 
   it('does not tell a viewer with no hours that their times failed to load', () => {

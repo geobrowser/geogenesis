@@ -233,6 +233,51 @@ describe('PanelExploreTab', () => {
     expect(keep(claim(true, { total: 3, now: 2 }, { total: 1, now: 0 }))).toBe(false);
   });
 
+  // Review, 27 Oct: an empty list here offered "Explore claims", which is this tab, so it did nothing.
+  it('turns Someone online back off from an empty list it narrowed', () => {
+    renderTab(<PanelExploreTab onTabChange={vi.fn()} />);
+    act(() => seen.claimsTab?.panelFilters?.toggles?.[0]?.onChange(true));
+
+    const action = seen.claimsTab?.panelFilters?.emptyAction;
+    expect(action?.label).toBe('Turn off Someone online');
+    act(() => action?.onClick());
+
+    expect(seen.claimsTab?.variant).toBe('explore');
+  });
+
+  it('shows every claim from an empty My positions', () => {
+    const store = renderTab(<PanelExploreTab onTabChange={vi.fn()} />);
+    act(() => store.set(debatesHubExploreShowAtom, 'mine'));
+
+    const action = seen.claimsTab?.panelFilters?.emptyAction;
+    expect(action?.label).toBe('Show all claims');
+    act(() => action?.onClick());
+
+    expect(store.get(debatesHubExploreShowAtom)).toBe('all');
+    expect(seen.claimsTab?.variant).toBe('explore');
+  });
+
+  it('turns Someone online off when it alone emptied My positions', () => {
+    const store = renderTab(<PanelExploreTab onTabChange={vi.fn()} />);
+    act(() => {
+      store.set(debatesHubExploreShowAtom, 'mine');
+      seen.claimsTab?.panelFilters?.toggles?.[0]?.onChange(true);
+    });
+
+    const empty = seen.claimsTab?.panelFilters?.emptyPredicate;
+    expect(empty?.action?.label).toBe('Turn off Someone online');
+    act(() => empty?.action?.onClick());
+
+    expect(seen.claimsTab?.keepClaim).toBeUndefined();
+    expect(store.get(debatesHubExploreShowAtom)).toBe('mine');
+  });
+
+  it('leaves the plain Explore list’s empty state alone', () => {
+    renderTab(<PanelExploreTab onTabChange={vi.fn()} />);
+
+    expect(seen.claimsTab?.panelFilters?.emptyAction).toBeUndefined();
+  });
+
   it('clears Show and Someone online with Clear all, leaving Sort', () => {
     const store = renderTab(<PanelExploreTab onTabChange={vi.fn()} />);
     act(() => {

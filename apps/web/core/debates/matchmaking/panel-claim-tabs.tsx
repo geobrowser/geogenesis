@@ -225,6 +225,14 @@ export function PanelExploreTab({
         setShow('unanswered');
         setSomeoneOnline(false);
       },
+      // An empty list here is one Show or the switch narrowed, and "Explore claims" would be this
+      // tab, so the way out undoes that instead.
+      emptyAction:
+        variant === 'positions'
+          ? { label: 'Show all claims', onClick: () => setShow('all') }
+          : variant === 'lobby'
+            ? { label: 'Turn off Someone online', onClick: () => setSomeoneOnline(false) }
+            : undefined,
       // The tag answers in either order; the geo-chat lists are sorted in hand.
       graphOrder: variant === 'explore' ? sort : undefined,
       clientSort: variant === 'explore' ? undefined : sort,
@@ -235,13 +243,26 @@ export function PanelExploreTab({
   // What the chosen source cannot be asked for. My positions has no online filter, so that one is
   // applied here.
   const keepClaim = variant === 'positions' && someoneOnline ? hasSomeoneOnlineOpposite : undefined;
+  const panelFilters = React.useMemo<PanelListFilters>(
+    () =>
+      keepClaim
+        ? {
+            ...filters,
+            emptyPredicate: {
+              message: 'Nobody who disagrees with you is online right now.',
+              action: { label: 'Turn off Someone online', onClick: () => setSomeoneOnline(false) },
+            },
+          }
+        : filters,
+    [filters, keepClaim, setSomeoneOnline]
+  );
 
   return (
     <ClaimsTab
       key={variant}
       variant={variant}
       atomsFrom="panelExplore"
-      panelFilters={filters}
+      panelFilters={panelFilters}
       keepClaim={keepClaim}
       // `debate_now` keeps the claims you have answered. Under Not answered they fold away the way
       // Explore's do, which also holds one you answer in front of you long enough to press its new
