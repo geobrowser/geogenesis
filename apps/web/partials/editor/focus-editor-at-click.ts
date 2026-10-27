@@ -7,6 +7,11 @@ import type { Editor } from '@tiptap/react';
  */
 export function focusEditorAtClick(editor: Editor, click: { clientX: number; clientY: number }) {
   const { view } = editor;
+
+  if (!(Selection.atEnd(view.state.doc) instanceof TextSelection)) {
+    editor.commands.insertContentAt(view.state.doc.content.size, { type: 'paragraph' });
+  }
+
   const box = view.dom.getBoundingClientRect();
 
   if (click.clientY < box.bottom) {
@@ -18,14 +23,6 @@ export function focusEditorAtClick(editor: Editor, click: { clientX: number; cli
       const selection = Selection.findFrom($pos, 1, true) ?? Selection.findFrom($pos, -1, true);
       if (selection) return editor.commands.focus(selection.from, { scrollIntoView: false });
     }
-  }
-
-  if (!(Selection.atEnd(view.state.doc) instanceof TextSelection)) {
-    return editor
-      .chain()
-      .insertContentAt(view.state.doc.content.size, { type: 'paragraph' })
-      .focus('end', { scrollIntoView: false })
-      .run();
   }
 
   return editor.commands.focus('end', { scrollIntoView: false });

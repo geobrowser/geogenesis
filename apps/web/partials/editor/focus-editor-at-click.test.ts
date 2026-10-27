@@ -104,4 +104,32 @@ describe('focusEditorAtClick', () => {
 
     expect(blocks(editor)).toEqual(['A', 'Bx']);
   });
+
+  describe('on a touch device', () => {
+    function makeTouchEditor(blocks: Block[]) {
+      vi.spyOn(navigator, 'platform', 'get').mockReturnValue('iPhone');
+      const editor = makeEditor(blocks);
+      document.body.appendChild(editor.view.dom);
+      return editor;
+    }
+
+    it('puts the caret in a new paragraph below a table that ends the doc', () => {
+      const editor = makeTouchEditor(['A', 'table']);
+
+      focusEditorAtClick(editor, { clientX: 300, clientY: BOX.bottom + 20 });
+      editor.commands.insertContent('x');
+
+      expect(blocks(editor)).toEqual(['A', 'table', 'x']);
+    });
+
+    it('puts the caret beside a block when the doc ends in a table', () => {
+      const editor = makeTouchEditor(['A', 'table']);
+      vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 1, inside: -1 });
+
+      focusEditorAtClick(editor, { clientX: BOX.left - 40, clientY: 20 });
+      editor.commands.insertContent('x');
+
+      expect(blocks(editor)).toEqual(['xA', 'table', '']);
+    });
+  });
 });
