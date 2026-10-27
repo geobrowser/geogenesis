@@ -37,25 +37,26 @@ export function DebateExploreMetaRow({
   return (
     <div className="flex items-center justify-between gap-3">
       <div
-        className={cx(
-          'flex items-center gap-x-2',
-          // The space (avatar + name + offer) keeps its width so it always shows in full; the end
-          // slot shrinks instead, which is what truncates a long followed-topic name rather than
-          // letting it run into the space. The compact gallery stays a clipped single line.
-          compact ? 'min-w-0 flex-nowrap overflow-hidden' : 'shrink-0 flex-wrap gap-y-1'
-        )}
+        // The space side keeps its full width and never wraps: the space name always shows in full,
+        // and the Join pill / Debate tag stay shrink-0. The end slot shrinks instead, so the followed
+        // topic name is the only label that truncates. (The compact gallery clips to a single line.)
+        className={cx('flex flex-nowrap items-center gap-x-2', compact ? 'min-w-0 overflow-hidden' : 'shrink-0')}
       >
         {!hideSpaceLink ? (
           <Link
             href={NavUtils.toSpace(item.spaceId)}
-            className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
+            className="flex items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
           >
             <SpaceThumb image={item.spaceImage} name={item.spaceName} />
-            <span className="min-w-0 truncate">{item.spaceName}</span>
+            <span className={cx('whitespace-nowrap', compact && 'min-w-0 truncate')}>{item.spaceName}</span>
           </Link>
         ) : null}
-        {offer.shown}
-        {!compact && !hideTypeTag ? <ExploreTypeTag>Debate</ExploreTypeTag> : null}
+        {offer.shown ? <span className="shrink-0">{offer.shown}</span> : null}
+        {!compact && !hideTypeTag ? (
+          <span className="shrink-0">
+            <ExploreTypeTag>Debate</ExploreTypeTag>
+          </span>
+        ) : null}
       </div>
       {endSlot}
       {offer.mounted}

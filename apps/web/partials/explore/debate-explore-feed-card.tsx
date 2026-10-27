@@ -480,13 +480,14 @@ export function DebateExploreFeedCard({
               hideTypeTag
               compact={compactChrome}
               endSlot={
-                // The topic control shares this one meta-row line; only its topic name truncates,
-                // while Follow, the +N list and the full-screen link stay shrink-0. Keeping it on the
-                // row rather than adding one leaves the card's height budget (DEBATE_CARD_COLUMN_BUDGET)
-                // untouched.
-                <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
-                  {topicFollow ? <ExploreCardTopicFollow topics={item.topics} className="mr-1" /> : null}
-                  <div className="flex shrink-0 items-center gap-1">
+                // The topic control shares this one meta-row line. The row never wraps: Follow, the +N
+                // list and the full-screen link keep their size (grouped shrink-0), the space name on
+                // the left always shows in full, and the topic name here is the only label that gives —
+                // it shows whenever there is room and truncates rather than disappearing. So the card's
+                // height budget (DEBATE_CARD_COLUMN_BUDGET) stays untouched.
+                <div className="flex min-w-0 flex-nowrap items-center justify-end gap-1">
+                  {topicFollow ? <ExploreCardTopicFollow topics={item.topics} className="mr-1 min-w-0" /> : null}
+                  <span className="flex shrink-0 items-center gap-1">
                     {endSlot}
                     <FullscreenLink
                       requiresFullPage
@@ -495,7 +496,7 @@ export function DebateExploreFeedCard({
                       spaceId={item.spaceId}
                       ariaLabel="Watch this debate full screen"
                     />
-                  </div>
+                  </span>
                 </div>
               }
             />

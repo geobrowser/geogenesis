@@ -27,7 +27,7 @@ export function ExploreCardTopicFollow({
   return (
     <ActionContextProvider value={SCOPE}>
       <div className={cx('flex min-w-0 items-center gap-1.5', className)}>
-        <span className={cx(META_SEGMENT_CLASS, 'min-w-0 truncate')}>{first!.name}</span>
+        <span className={cx(META_SEGMENT_CLASS, 'max-w-[160px] min-w-0 truncate')}>{first!.name}</span>
         <FollowButton target={{ kind: 'topic', id: first!.id, name: first!.name }} />
         {rest.length > 0 ? <MoreTopics topics={rest} /> : null}
       </div>
