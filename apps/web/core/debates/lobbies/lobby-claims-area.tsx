@@ -4,8 +4,7 @@ import * as React from 'react';
 
 import { motion } from 'framer-motion';
 
-import { useLocalVotes } from '~/core/state/local-votes';
-import { clearSaveVotesPromptLobby, openSaveVotesPrompt } from '~/core/state/save-votes-prompt';
+import { clearSaveVotesPromptLobby, setSaveVotesPromptLobby } from '~/core/state/save-votes-prompt';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
@@ -41,7 +40,7 @@ const TABS: { id: 'room' | 'explore'; label: string }[] = [
  */
 export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
   const [activeTab, setActiveTab] = React.useState<LobbyClaimsTab>('room');
-  useSavePromptOnGuestVote(lobby.name);
+  useSavePromptLobby(lobby.name);
 
   const lists = React.useMemo(() => orderedClaimLists(lobby), [lobby]);
   const activeList = lists.find(list => claimListKey(list) === activeTab) ?? null;
@@ -294,18 +293,15 @@ function useTabsHeight() {
 }
 
 /**
- * A guest's vote here opens the save sheet at once, which shows the vote and signs them up in
- * place, with the lobby's own copy. The lobby has no claim card option for it.
+ * The shared vote path decides when to ask and why. The lobby supplies its copy without opening a
+ * second ask or replacing the centered follow-up with a corner card.
  */
-function useSavePromptOnGuestVote(lobbyName: string) {
+function useSavePromptLobby(lobbyName: string) {
   const guest = useIsLobbyGuest();
-  const count = useLocalVotes().votes.length;
-  const seenRef = React.useRef(count);
   React.useEffect(() => {
-    const previous = seenRef.current;
-    seenRef.current = count;
-    if (guest && count > previous) openSaveVotesPrompt('single_claim', { lobbyName });
-  }, [count, guest, lobbyName]);
-  // The lobby copy promises they stay here, so it ends with the claims area.
-  React.useEffect(() => clearSaveVotesPromptLobby, []);
+    if (!guest) return;
+    setSaveVotesPromptLobby(lobbyName);
+    // The lobby copy promises they stay here, so it ends with the claims area or guest session.
+    return clearSaveVotesPromptLobby;
+  }, [guest, lobbyName]);
 }

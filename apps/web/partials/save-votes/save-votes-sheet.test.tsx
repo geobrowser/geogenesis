@@ -17,10 +17,12 @@ import {
 import { castLocalVote } from '~/core/state/cast-local-vote';
 import { clearLocalVotes, readLocalVotes, removeLocalVote, toggleLocalVote } from '~/core/state/local-votes';
 import {
+  clearSaveVotesPromptLobby,
   closeSaveVotesPrompt,
   markPromptedThisSession,
   openSaveVotesPrompt,
   readSaveVotesPrompt,
+  setSaveVotesPromptLobby,
 } from '~/core/state/save-votes-prompt';
 
 import { useMarkEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
@@ -103,6 +105,7 @@ afterEach(cleanup);
 beforeEach(() => {
   clearLocalVotes();
   closeSaveVotesPrompt();
+  clearSaveVotesPromptLobby();
   window.sessionStorage.clear();
   mocks.ready = true;
   mocks.authenticated = false;
@@ -134,65 +137,72 @@ describe('copy', () => {
 
 describe('SaveVotesSheet', () => {
   it.each([
-    ['feed', 'threshold', true],
-    ['feed', 'threshold', false],
-    ['single', 'single_claim', true],
-    ['single', 'single_claim', false],
-  ] as const)('asks once after the first %s vote (%s, already mounted: %s)', (surface, reason, alreadyMounted) => {
-    const cast = (entityId: string, direction: 'positive' | 'negative' = 'positive') =>
-      act(() => {
-        castLocalVote({
-          entityId,
-          spaceId: 'space-1',
-          responseKind: 'stance',
-          direction,
-          title: entityId,
-          surface,
-          attribution: snapshotActionContext('claim_position_control', 'claim', entityId),
+    ['feed', 'threshold', true, null],
+    ['feed', 'threshold', false, null],
+    ['single', 'single_claim', true, null],
+    ['single', 'single_claim', false, null],
+    ['feed', 'threshold', true, 'Onboarding with Adam'],
+    ['feed', 'threshold', false, 'Onboarding with Adam'],
+  ] as const)(
+    'asks once after the first %s vote (%s, already mounted: %s, lobby: %s)',
+    (surface, reason, alreadyMounted, lobbyName) => {
+      if (lobbyName) setSaveVotesPromptLobby(lobbyName);
+      const label = lobbyName ? 'Join the discussion' : 'Save your votes';
+      const cast = (entityId: string, direction: 'positive' | 'negative' = 'positive') =>
+        act(() => {
+          castLocalVote({
+            entityId,
+            spaceId: 'space-1',
+            responseKind: 'stance',
+            direction,
+            title: entityId,
+            surface,
+            attribution: snapshotActionContext('claim_position_control', 'claim', entityId),
+          });
         });
-      });
-    // In the app the sheet is lazy-loaded after the first vote. Cover that first mount as well as
-    // a sheet already mounted, and React's effect replay, without counting a return-visit ask too.
-    const sheet = (
-      <React.StrictMode>
-        <SaveVotesSheet />
-      </React.StrictMode>
-    );
-    const view = alreadyMounted ? render(sheet) : null;
+      // In the app the sheet is lazy-loaded after the first vote. Cover that first mount as well as
+      // a sheet already mounted, and React's effect replay, without counting a return-visit ask too.
+      const sheet = (
+        <React.StrictMode>
+          <SaveVotesSheet />
+        </React.StrictMode>
+      );
+      const view = alreadyMounted ? render(sheet) : null;
 
-    cast('a');
-    if (!alreadyMounted) render(sheet);
+      cast('a');
+      if (!alreadyMounted) render(sheet);
 
-    expect(screen.getByText('Save your vote')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: 'Save your votes' })).not.toBeInTheDocument();
-    expect(mocks.impression.mock.calls).toEqual([[reason, 1]]);
-    expect(readLocalVotes().prompt.shownCount).toBe(1);
-    view?.rerender(sheet);
-    expect(mocks.impression).toHaveBeenCalledOnce();
+      const region = screen.getByRole('region', { name: label });
+      expect(region).toHaveTextContent(lobbyName ?? 'Save your vote');
+      expect(screen.queryByRole('dialog', { name: label })).not.toBeInTheDocument();
+      expect(mocks.impression.mock.calls).toEqual([[reason, 1]]);
+      expect(readLocalVotes().prompt.shownCount).toBe(1);
+      view?.rerender(sheet);
+      expect(mocks.impression).toHaveBeenCalledOnce();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
-    cast('a', 'negative');
-    expect(readSaveVotesPrompt()).toBeNull();
-    for (const entityId of ['b', 'c', 'd']) {
-      cast(entityId);
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      cast('a', 'negative');
       expect(readSaveVotesPrompt()).toBeNull();
-    }
-    expect(mocks.impression).toHaveBeenCalledOnce();
+      for (const entityId of ['b', 'c', 'd']) {
+        cast(entityId);
+        expect(readSaveVotesPrompt()).toBeNull();
+      }
+      expect(mocks.impression).toHaveBeenCalledOnce();
 
-    cast('e');
-    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toHaveTextContent('Save your 5 votes');
-    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
-    expect(mocks.impression.mock.calls).toEqual([
-      [reason, 1],
-      ['repeat', 5],
-    ]);
-    expect(readLocalVotes().prompt.shownCount).toBe(2);
-    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
-    cast('f');
-    expect(readSaveVotesPrompt()).toBeNull();
-    expect(mocks.impression).toHaveBeenCalledTimes(2);
-  });
+      cast('e');
+      expect(screen.getByRole('dialog', { name: label })).toHaveTextContent(lobbyName ?? 'Save your 5 votes');
+      expect(screen.queryByRole('region', { name: label })).not.toBeInTheDocument();
+      expect(mocks.impression.mock.calls).toEqual([
+        [reason, 1],
+        ['repeat', 5],
+      ]);
+      expect(readLocalVotes().prompt.shownCount).toBe(2);
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      cast('f');
+      expect(readSaveVotesPrompt()).toBeNull();
+      expect(mocks.impression).toHaveBeenCalledTimes(2);
+    }
+  );
 
   it('asks a visitor who came from one of our emails to log in, not sign up (GEO-3374)', () => {
     noteEmailArrival('?ref_email=welcome');

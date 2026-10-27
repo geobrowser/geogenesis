@@ -50,6 +50,8 @@ const SESSION_KEY = 'geo:save-votes-prompted';
 let current: SaveVotesPromptReason | null = null;
 /** The lobby the sheet was opened from, which changes its copy; `null` everywhere else. */
 let currentLobbyName: string | null = null;
+/** The guest lobby whose claims are mounted; supplies copy without deciding when to ask. */
+let promptLobbyName: string | null = null;
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void) {
@@ -82,17 +84,30 @@ export function readSaveVotesPrompt(): SaveVotesPromptReason | null {
   return current;
 }
 
+function isVoteTriggeredPrompt(reason: SaveVotesPromptReason | null): boolean {
+  return reason === 'threshold' || reason === 'single_claim' || reason === 'repeat';
+}
+
 export function openSaveVotesPrompt(reason: SaveVotesPromptReason, options?: { lobbyName?: string }) {
   markPromptedThisSession();
-  const lobbyName = options?.lobbyName?.trim() || null;
+  const lobbyName = (options?.lobbyName ?? (isVoteTriggeredPrompt(reason) ? promptLobbyName : null))?.trim() || null;
   if (current === reason && currentLobbyName === lobbyName) return;
   current = reason;
   currentLobbyName = lobbyName;
   emit();
 }
 
+/** Supply the mounted guest lobby's copy to vote-triggered asks, preserving their reasons. */
+export function setSaveVotesPromptLobby(lobbyName: string) {
+  promptLobbyName = lobbyName.trim() || null;
+  if (!isVoteTriggeredPrompt(current) || currentLobbyName === promptLobbyName) return;
+  currentLobbyName = promptLobbyName;
+  emit();
+}
+
 /** Back to the sheet's usual copy, for a lobby the visitor has left; the sheet stays as it is. */
 export function clearSaveVotesPromptLobby() {
+  promptLobbyName = null;
   if (currentLobbyName === null) return;
   currentLobbyName = null;
   emit();
