@@ -528,16 +528,30 @@ describe('DebateCalendar', () => {
     });
   });
 
-  it('runs Sunday to Saturday, with a line at the current time in today', () => {
+  it('starts with today and shows the next six days, with a line at the current time', () => {
     render(<DebateCalendar />);
 
     const headers = screen.getAllByRole('columnheader').slice(1);
-    expect(headers[0]).toHaveTextContent(/Sun\s*4/);
-    expect(headers[6]).toHaveTextContent(/Sat\s*10/);
+    expect(headers[0]).toHaveTextContent(/Wed\s*7/);
+    expect(headers[6]).toHaveTextContent(/Tue\s*13/);
     // Wednesday 10:00 sharp: the top of Wednesday's 10 o'clock row.
     const line = screen.getByTestId('calendar-now-line');
     expect(line.closest('[role="gridcell"]')).toHaveAccessibleName(/^Wednesday, October 7, 10:00 AM/);
     expect(line).toHaveStyle({ top: '0%' });
+  });
+
+  it('moves by seven days and returns to a range starting today', () => {
+    mocks.schedulable = response([free('11', 'Elena', [thursdaySix, [at(15, 18), at(15, 19)]])]);
+    render(<DebateCalendar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
+    const nextHeaders = screen.getAllByRole('columnheader').slice(1);
+    expect(nextHeaders[0]).toHaveTextContent(/Wed\s*14/);
+    expect(nextHeaders[6]).toHaveTextContent(/Tue\s*20/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Today' }));
+    expect(screen.getAllByRole('columnheader')[1]).toHaveTextContent(/Wed\s*7/);
+    expect(screen.getByRole('button', { name: 'Previous week' })).toBeDisabled();
   });
 
   it('opens this week on the current time, and other weeks on their first busy hour', () => {
