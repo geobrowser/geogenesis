@@ -191,3 +191,14 @@ describe('joinStateNeedsOpening', () => {
     expect(joinStateNeedsOpening({ audioMuted: true, videoEnabled: false }, [])).toBe(false);
   });
 });
+
+it('counts the required 45-second round once in the new Open rounds upper bound', () => {
+  expect(
+    describeFormatLine({
+      label: 'Open rounds',
+      isOpenRounds: true,
+      turnDurationsMs: [60_000, 60_000],
+      openRounds: { maxRebuttalRounds: 10, requiredRebuttalRounds: 2, rebuttalTurnMs: 30_000 },
+    })
+  ).toBe('Open rounds · up to 12 min 30s total');
+});

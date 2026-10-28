@@ -42,7 +42,7 @@ export function requestOpenRounds(
   return {
     max_rebuttal_rounds: request.max_rebuttal_rounds,
     required_rebuttal_rounds: request.required_rebuttal_rounds ?? 0,
-    rebuttal_turn_ms: openRoundsDefaultRebuttalTurnMs,
+    rebuttal_turn_ms: (request.required_rebuttal_rounds ?? 0) >= 2 ? 30_000 : openRoundsDefaultRebuttalTurnMs,
   };
 }
 
@@ -73,6 +73,7 @@ export function DebateFormatDetails({
   const fixedFormat = isOpenRounds ? null : debateFormatById(formatId || defaultDebateFormatId);
   const rebuttalTurnMs = openRounds?.rebuttal_turn_ms ?? openRoundsDefaultRebuttalTurnMs;
   const requiredRebuttalRounds = openRounds ? openRoundsRequiredRebuttalRounds(openRounds) : 0;
+  const numberedOnly = isOpenRounds && requiredRebuttalRounds >= 2 && rebuttalTurnMs === 30_000;
   const maxRebuttalRounds = openRounds?.max_rebuttal_rounds ?? null;
   if (!isOpenRounds && !fixedFormat) {
     return (
@@ -89,8 +90,8 @@ export function DebateFormatDetails({
       }))
     : [
         ...openRoundsOpeningTurnDurationsMs.map(durationMs => ({ durationMs, role: 'opening' as const })),
-        ...Array.from({ length: requiredRebuttalRounds * 2 }, () => ({
-          durationMs: rebuttalTurnMs,
+        ...Array.from({ length: requiredRebuttalRounds * 2 }, (_, index) => ({
+          durationMs: numberedOnly && index < 2 ? 45_000 : rebuttalTurnMs,
           role: 'rebuttal' as const,
         })),
       ];
@@ -105,7 +106,11 @@ export function DebateFormatDetails({
             durationMs={durationMs}
             alternate={index % 2 === 1}
             participant={participant}
-            label={turnLabel(participant, currentUserId, role)}
+            label={
+              numberedOnly
+                ? `Round ${Math.floor(index / 2) + 1} · ${participant.user_id === currentUserId ? 'You' : speakerLabel(participant)}`
+                : turnLabel(participant, currentUserId, role)
+            }
           />
         );
       })}
@@ -115,6 +120,7 @@ export function DebateFormatDetails({
           rebuttalTurnMs={rebuttalTurnMs}
           extendableRounds={maxRebuttalRounds === null ? null : maxRebuttalRounds - requiredRebuttalRounds}
           afterRequiredRounds={requiredRebuttalRounds > 0}
+          numberedOnly={numberedOnly}
         />
       )}
     </div>
@@ -159,11 +165,13 @@ function OpenRoundsRebuttalRow({
   rebuttalTurnMs,
   extendableRounds,
   afterRequiredRounds,
+  numberedOnly,
 }: {
   rebuttalTurnMs: number;
   /** The cap less the required rounds, which the turn rows above already list. */
   extendableRounds: number | null;
   afterRequiredRounds: boolean;
+  numberedOnly: boolean;
 }) {
   // The cap is decided with the request (GEO-3201), so a format box without one would be naming a
   // guess at what the server will enforce.
@@ -183,7 +191,10 @@ function OpenRoundsRebuttalRow({
           Then extend, round by round
         </Text>
         <Text as="div" variant="metadata" color="grey-04">
-          A round happens if one of you picks Extend and neither picks End.{cap}
+          {numberedOnly
+            ? 'Both of you must pick Extend to add a round.'
+            : 'A round happens if one of you picks Extend and neither picks End.'}
+          {cap}
         </Text>
       </div>
     </div>

@@ -238,6 +238,7 @@ export function DebateRequestDialog({
                       ? {
                           maxRebuttalRounds: openRounds.max_rebuttal_rounds ?? 0,
                           rebuttalTurnMs: openRounds.rebuttal_turn_ms ?? 0,
+                          requiredRebuttalRounds: openRounds.required_rebuttal_rounds ?? 0,
                         }
                       : null,
                   })}

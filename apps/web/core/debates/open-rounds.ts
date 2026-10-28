@@ -175,6 +175,21 @@ export function openRoundLastWord(
   return openRoundEndsOnPick(debate.open_rounds, roundIndex) ? 'round' : null;
 }
 
+/** GEO-3521 snapshots Round 3 at 30s; every older Open rounds allowance used 45s.
+ * Use the stored turns so old recordings keep their labels and timing, even after a rerender.
+ */
+export function hasNumberedOpenRounds(debate: Pick<Debate, 'open_rounds' | 'turn_durations_ms'>) {
+  return isOpenRoundsDebate(debate) && debate.turn_durations_ms[4] === 30_000 && debate.turn_durations_ms[5] === 30_000;
+}
+
+/** Round cue roles: a null role displays only Round N; fixed and legacy labels stay as recorded. */
+export function debateRoundRoleForDebate(
+  debate: Pick<Debate, 'open_rounds' | 'turn_durations_ms'>,
+  turnIndex: number
+): DebateTurnRole | null {
+  return hasNumberedOpenRounds(debate) ? null : debateTurnRoleForDebate(debate, turnIndex);
+}
+
 /**
  * What a turn is. Open rounds sends `turn_roles`, one per appended turn, and it is read as given;
  * every fixed format keeps `debateTurnRole`'s position rule (GEO-2852).
