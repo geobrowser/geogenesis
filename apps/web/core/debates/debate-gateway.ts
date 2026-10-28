@@ -15,6 +15,7 @@ import type { SpaceCallsResponse } from '~/core/space-calls/api';
 import { spaceCallKeys } from '~/core/space-calls/query-keys';
 import {
   isPreOpenCallView,
+  isPreOpenViewOfCall,
   parseSpaceCallPatch,
   spaceCallsRefetch,
   withSpaceCallPatch,
@@ -637,11 +638,23 @@ export class DebateGatewayClient {
         if (!identifiers.space_id) break;
         const listKey = spaceCallKeys.list(identifiers.space_id);
         const patch = parseSpaceCallPatch(identifiers.space_call);
+        const lobbyRoot = this.accountQueryKey('lobby');
+        // A call opened early: its pre-call page would otherwise wait for its own opens_at.
+        if (patch && patch.status !== 'scheduled' && lobbyRoot) {
+          const callId = patch.call.call_id;
+          const filters = {
+            queryKey: lobbyRoot,
+            predicate: (query: Query) => isPreOpenViewOfCall(query.state.data as DebateLobbyView | undefined, callId),
+          };
+          // Rows mostly carry roster changes; only a cached pre-call view needs a read.
+          if (this.queryClient.getQueryCache().findAll(filters).length > 0) {
+            this.queueInvalidation(`pre-open-call:${dashlessId(callId)}`, { ...filters, refetchType: 'active' });
+          }
+        }
         if (!patch || patch.status !== 'live') {
           const refetch = spaceCallsRefetch(patch ? undefined : identifiers.change);
           if (refetch.list) this.queueQuery(listKey);
           if (refetch.past) this.queueQuery(spaceCallKeys.past(identifiers.space_id));
-          const lobbyRoot = this.accountQueryKey('lobby');
           if (refetch.preOpen && lobbyRoot) {
             const spaceId = identifiers.space_id;
             this.queueInvalidation(`pre-open-calls:${dashlessId(spaceId)}`, {

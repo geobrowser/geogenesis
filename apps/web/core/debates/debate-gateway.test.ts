@@ -877,6 +877,28 @@ describe('DebateGatewayClient', () => {
       expect(matched).toEqual([preOpen]);
     });
 
+    it('refetches the pre-call page of a call that opened early, by its id however spelled', async () => {
+      const view = (lobbyId: string, status: string) => ({
+        lobby_id: lobbyId,
+        access: status === 'not_yet_open' ? { status, opens_at: '2026-11-04T15:50:00Z' } : { status },
+        call: { space_id: 'sp1', space_name: null, started_by: null },
+      });
+      const preOpen = ['debates', 'account', 'user-a', 'lobby', 'abcd'];
+      const otherCall = ['debates', 'account', 'user-a', 'lobby', 'ef01'];
+      queryClient.setQueryData(preOpen, view('AB-CD', 'not_yet_open'));
+      queryClient.setQueryData(otherCall, view('ef01', 'not_yet_open'));
+      const row = { call_id: 'abcd', as_of: '2026-11-04T15:20:00.000001Z', hosts: [], avatars: [], headcount: 1 };
+
+      await spaceCallsChanged({ space_id: 'sp1', space_call: { status: 'live', as_of: row.as_of, call: row } });
+      const all: QueryFilters[] = invalidateQueries.mock.calls.map((args: unknown[]) => args[0] as QueryFilters);
+      const matched = queryClient
+        .getQueryCache()
+        .findAll()
+        .filter(query => all.some(filters => matchQuery(filters, query)))
+        .map(query => query.queryKey);
+      expect(matched).toEqual([preOpen]);
+    });
+
     it('patches a live row into the live list and leaves the past pages alone', async () => {
       const call = {
         call_id: 'call1',

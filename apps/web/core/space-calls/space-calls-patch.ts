@@ -59,6 +59,11 @@ export function spaceCallsRefetch(change: unknown): { list: boolean; past: boole
   }
 }
 
+/** The lobby view of `callId` before its room opened, however either id is spelled. */
+export function isPreOpenViewOfCall(view: DebateLobbyView | undefined, callId: string) {
+  return Boolean(view?.call && sameId(view.lobby_id, callId) && view.access.status === 'not_yet_open');
+}
+
 /** A lobby view of a call in `spaceId` whose room has not opened. */
 export function isPreOpenCallView(view: DebateLobbyView | undefined, spaceId: string) {
   return Boolean(view?.call && sameId(view.call.space_id, spaceId) && view.access.status === 'not_yet_open');
