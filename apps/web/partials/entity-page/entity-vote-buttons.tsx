@@ -179,7 +179,7 @@ function EntityResponseButtons({
     submitResponse,
     submitResponseAsync,
     optimisticResponse,
-    isProcessingResponse,
+    isSubmittingResponse,
     isResponseIndexingDelayed,
     isConnected,
     personalSpaceId,
@@ -512,7 +512,8 @@ function EntityResponseButtons({
     );
   }
 
-  // The two thumbs share `ResponseButton` with the claim pills.
+  // The two thumbs share `ResponseButton` with the claim pills, and the same submission window:
+  // `isSubmittingResponse` clears once the bundler has the write.
   const thumbClassName = cx(
     'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
     VOTE_BUTTON_RESTING_CLASS
@@ -523,7 +524,7 @@ function EntityResponseButtons({
       {claimResponderAvatarsPosition === 'leading' ? claimResponderAvatarsTrigger('leading') : null}
       <ResponseButton
         selected={positiveActive}
-        pending={isProcessingResponse}
+        pending={isSubmittingResponse}
         disabled={responseDisabled}
         actionTitle={positiveTitle}
         ariaLabel={positiveTitle}
@@ -545,7 +546,7 @@ function EntityResponseButtons({
       </RespondersPopover>
       <ResponseButton
         selected={negativeActive}
-        pending={isProcessingResponse}
+        pending={isSubmittingResponse}
         disabled={responseDisabled}
         actionTitle={negativeTitle}
         ariaLabel={negativeTitle}
