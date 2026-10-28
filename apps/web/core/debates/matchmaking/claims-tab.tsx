@@ -17,7 +17,11 @@ import { Input } from '~/design-system/input';
 
 import type { MatchmakingClaim, MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
-import { DebateClaimCardSurface, type DebateClaimListId, useRecordClaimFilter } from '../debate-claim-card-surface';
+import {
+  DebateClaimCardSurface,
+  type DebateClaimListId,
+  useRecordedSpaceTopicFilters,
+} from '../debate-claim-card-surface';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import {
   type TaggedClaim,
@@ -51,7 +55,7 @@ import {
   rowsByPlacedClaim,
   taggedClaimEntry,
 } from './tagged-claim-entry';
-import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
+import { keepSelectableTopics, orderFacetOptions } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
@@ -687,23 +691,13 @@ export function ClaimsTab({
 
   // GEO-3495. The viewer's own filter presses, by what they chose; the seed above is not one.
   const listId = CLAIMS_LIST_IDS[variant];
-  const recordFilter = useRecordClaimFilter('debate_matchmaking');
-  const toggleSpace = (id: string) => {
-    recordFilter(listId, { kind: 'space', value: id, selected: !spaceIds.includes(id) });
-    onSpaceToggle(id);
-  };
-  const clearSpaces = () => {
-    recordFilter(listId, { kind: 'space', value: 'all', selected: false });
-    onSpacesClear();
-  };
-  const toggleTopic = (id: string) => {
-    recordFilter(listId, { kind: 'topic', value: id, selected: !topicIds.includes(id) });
-    setTopicIds(current => toggleId(current, id));
-  };
-  const clearTopics = () => {
-    recordFilter(listId, { kind: 'topic', value: 'all', selected: false });
-    setTopicIds([]);
-  };
+  const recordedFilters = useRecordedSpaceTopicFilters(listId, {
+    spaceIds,
+    onSpaceToggle,
+    onSpacesClear,
+    topicIds,
+    setTopicIds,
+  });
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.
@@ -1063,12 +1057,12 @@ export function ClaimsTab({
         <HubFacetRail
           facetSpaces={facetSpaces}
           spaceIds={spaceIds}
-          onSpaceToggle={toggleSpace}
-          onSpacesClear={clearSpaces}
+          onSpaceToggle={recordedFilters.onSpaceToggle}
+          onSpacesClear={recordedFilters.onSpacesClear}
           facetTopics={facetTopics}
           topicIds={topicIds}
-          onTopicToggle={toggleTopic}
-          onTopicsClear={clearTopics}
+          onTopicToggle={recordedFilters.onTopicToggle}
+          onTopicsClear={recordedFilters.onTopicsClear}
         />
       }
     >
@@ -1093,11 +1087,11 @@ export function ClaimsTab({
           leading={scopePicker}
           menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
           spaceIds={spaceIds}
-          onSpaceToggle={toggleSpace}
-          onSpacesClear={clearSpaces}
+          onSpaceToggle={recordedFilters.onSpaceToggle}
+          onSpacesClear={recordedFilters.onSpacesClear}
           topicIds={topicIds}
-          onTopicToggle={toggleTopic}
-          onTopicsClear={clearTopics}
+          onTopicToggle={recordedFilters.onTopicToggle}
+          onTopicsClear={recordedFilters.onTopicsClear}
           facetSpaces={facetSpaces}
           facetTopics={facetTopics}
           countsPending={countsPending}
@@ -1208,7 +1202,7 @@ export function ClaimsTab({
                       label: 'Clear filters',
                       onClick: () => {
                         setSearch('');
-                        recordFilter(listId, { kind: 'filters', value: 'all' });
+                        recordedFilters.recordFilter({ kind: 'filters', value: 'all' });
                         // The menu's own clear row, so this counts as choosing the unfiltered
                         // list and the default cannot put its spaces back.
                         onSpacesClear();

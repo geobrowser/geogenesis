@@ -200,6 +200,15 @@ export function observeOperation(
   };
 }
 
+/** The outcome ids of a successful result, or none: reading them must never fail the action. */
+function readOutcome<T>(outcomeOf: ((result: T) => Record<string, unknown>) | undefined, result: T) {
+  try {
+    return outcomeOf?.(result);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Observe an async application operation without changing its result or errors. `failureOf` names a
  * failure the result carries without throwing; the caller still receives that result. `outcomeOf`
@@ -217,7 +226,7 @@ export async function runObservedAction<T>(
     const result = await run();
     const failure = failureOf?.(result) ?? null;
     if (failure) operation.failed(failure);
-    else operation.succeeded(outcomeOf?.(result));
+    else operation.succeeded(readOutcome(outcomeOf, result));
     return result;
   } catch (error) {
     operation.failed(classifyOperationFailure(error));

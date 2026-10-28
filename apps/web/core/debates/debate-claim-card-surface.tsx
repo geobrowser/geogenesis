@@ -6,6 +6,8 @@ import type { ActionComponent, ActionScope } from '~/core/action-context';
 import { ActionSurface, useActionContext } from '~/core/action-context-provider';
 import { recordAction } from '~/core/analytics-operations';
 
+import { toggleId } from './matchmaking/topic-facets';
+
 /**
  * GEO-3495. Where a claim card was shown when someone picked a claim to debate. Ids of lists, never
  * their text: a lobby's curated list adds its page as `list_entity_id`.
@@ -51,9 +53,26 @@ export const HUB_TAB_LIST_IDS: Partial<Record<string, DebateClaimListId>> = {
 };
 
 /**
+ * GEO-3495. Where each section of a list starts in its 1-based numbering, as offsets: section `i`'s
+ * first card is `offsets[i] + 1`, so positions run on across sections.
+ */
+export function sectionStartOffsets(counts: readonly number[]): number[] {
+  let total = 0;
+  return counts.map(count => {
+    const start = total;
+    total += count;
+    return start;
+  });
+}
+
+/**
  * A claim card in a debate picker, side panel or lobby list (GEO-3495): records its impression with
  * the list and 1-based position, and attributes a debate requested from inside it to the same.
  * `display: contents`, so the card keeps its own place in the list's layout.
+ *
+ * It sits between `HubCardList` and the card, so it hands the list's `ref` on to the card: the
+ * list's popLayout measures that node to pop a leaving card out of flow, and this wrapper has no box
+ * of its own to measure.
  */
 export function DebateClaimCardSurface({
   claimId,
@@ -61,13 +80,15 @@ export function DebateClaimCardSurface({
   position,
   scope,
   children,
+  ref,
 }: {
   claimId: string;
   listId: DebateClaimListId;
   position: number;
   /** More attribution: the list's entity, its section, its agenda, whether it was searched. */
   scope?: Omit<ActionScope, 'component' | 'target_id' | 'target_type' | 'list_id' | 'item_position'>;
-  children: React.ReactNode;
+  children: React.ReactElement<{ ref?: React.Ref<HTMLElement> }>;
+  ref?: React.Ref<HTMLElement>;
 }) {
   return (
     <ActionSurface
@@ -81,7 +102,7 @@ export function DebateClaimCardSurface({
         item_position: position,
       }}
     >
-      {children}
+      {ref ? React.cloneElement(children, { ref }) : children}
     </ActionSurface>
   );
 }
@@ -123,4 +144,41 @@ export function useRecordClaimFilter(component: ActionComponent, scope: ActionSc
     },
     [getContext]
   );
+}
+
+/**
+ * A hub list's space and topic filter handlers, each recording the viewer's choice (GEO-3495) before
+ * applying it: for `HubFacetRail` and `SpaceTopicFilters`. A per-kind clear records `all`.
+ */
+export function useRecordedSpaceTopicFilters(
+  listId: DebateClaimListId,
+  filters: {
+    spaceIds: readonly string[];
+    onSpaceToggle: (id: string) => void;
+    onSpacesClear: () => void;
+    topicIds: readonly string[];
+    setTopicIds: (next: string[] | ((current: string[]) => string[])) => void;
+  }
+) {
+  const recordFilter = useRecordClaimFilter('debate_matchmaking');
+  const { spaceIds, onSpaceToggle, onSpacesClear, topicIds, setTopicIds } = filters;
+  return {
+    recordFilter: (choice: ClaimFilterChoice) => recordFilter(listId, choice),
+    onSpaceToggle: (id: string) => {
+      recordFilter(listId, { kind: 'space', value: id, selected: !spaceIds.includes(id) });
+      onSpaceToggle(id);
+    },
+    onSpacesClear: () => {
+      recordFilter(listId, { kind: 'space', value: 'all', selected: false });
+      onSpacesClear();
+    },
+    onTopicToggle: (id: string) => {
+      recordFilter(listId, { kind: 'topic', value: id, selected: !topicIds.includes(id) });
+      setTopicIds(current => toggleId(current, id));
+    },
+    onTopicsClear: () => {
+      recordFilter(listId, { kind: 'topic', value: 'all', selected: false });
+      setTopicIds([]);
+    },
+  };
 }

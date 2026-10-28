@@ -27,6 +27,7 @@ import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import {
   DebateClaimCardSurface,
   type DebateClaimListId,
+  sectionStartOffsets,
   useRecordClaimFilter,
 } from '~/core/debates/debate-claim-card-surface';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
@@ -2808,9 +2809,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       : [];
   const visibleCount = tab === 'debate' ? visibleDebateItems.length : visibleClaims.length;
   // GEO-3495. Where each section and round starts in the list's numbering, and where the fold does.
-  const offsetsOf = (counts: number[]) => counts.map((_, index) => counts.slice(0, index).reduce((a, b) => a + b, 0));
-  const sectionOffsets = offsetsOf(visibleSections.map(section => section.claims.length));
-  const roundOffsets = offsetsOf(visibleDebateRounds.map(round => round.items.length));
+  const sectionOffsets = sectionStartOffsets(visibleSections.map(section => section.claims.length));
+  const roundOffsets = sectionStartOffsets(visibleDebateRounds.map(round => round.items.length));
   const foldOffset = showsSections
     ? visibleSections.reduce((total, section) => total + section.claims.length, 0)
     : visibleCount;

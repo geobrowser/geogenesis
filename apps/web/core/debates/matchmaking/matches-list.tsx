@@ -8,7 +8,7 @@ import { Input } from '~/design-system/input';
 
 import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
-import { DebateClaimCardSurface, useRecordClaimFilter } from '../debate-claim-card-surface';
+import { DebateClaimCardSurface, useRecordedSpaceTopicFilters } from '../debate-claim-card-surface';
 import { useDebateActivity } from '../hooks';
 import { claimRowKey } from './claim-row-key';
 import { type ClaimsLayout, HubListColumns, HubStickyControls, SpaceTopicFilters } from './claims-tab';
@@ -25,7 +25,6 @@ import {
   countBy,
   keepSelectedVisible,
   orderFacetOptions,
-  toggleId,
   topicsFor,
 } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
@@ -211,23 +210,13 @@ export function MatchesList({
   });
 
   // GEO-3495. The viewer's own filter presses, by what they chose.
-  const recordFilter = useRecordClaimFilter('debate_matchmaking');
-  const toggleSpace = (id: string) => {
-    recordFilter('hub_matches', { kind: 'space', value: id, selected: !spaceIds.includes(id) });
-    onSpaceToggle(id);
-  };
-  const clearSpaces = () => {
-    recordFilter('hub_matches', { kind: 'space', value: 'all', selected: false });
-    onSpacesClear();
-  };
-  const toggleTopic = (id: string) => {
-    recordFilter('hub_matches', { kind: 'topic', value: id, selected: !topicIds.includes(id) });
-    setTopicIds(current => toggleId(current, id));
-  };
-  const clearTopics = () => {
-    recordFilter('hub_matches', { kind: 'topic', value: 'all', selected: false });
-    setTopicIds([]);
-  };
+  const recordedFilters = useRecordedSpaceTopicFilters('hub_matches', {
+    spaceIds,
+    onSpaceToggle,
+    onSpacesClear,
+    topicIds,
+    setTopicIds,
+  });
 
   const facetTopics = React.useMemo(
     () =>
@@ -261,12 +250,12 @@ export function MatchesList({
         <HubFacetRail
           facetSpaces={facetSpaces}
           spaceIds={spaceIds}
-          onSpaceToggle={toggleSpace}
-          onSpacesClear={clearSpaces}
+          onSpaceToggle={recordedFilters.onSpaceToggle}
+          onSpacesClear={recordedFilters.onSpacesClear}
           facetTopics={facetTopics}
           topicIds={topicIds}
-          onTopicToggle={toggleTopic}
-          onTopicsClear={clearTopics}
+          onTopicToggle={recordedFilters.onTopicToggle}
+          onTopicsClear={recordedFilters.onTopicsClear}
         />
       }
     >
@@ -288,11 +277,11 @@ export function MatchesList({
           leading={scopePicker}
           menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
           spaceIds={spaceIds}
-          onSpaceToggle={toggleSpace}
-          onSpacesClear={clearSpaces}
+          onSpaceToggle={recordedFilters.onSpaceToggle}
+          onSpacesClear={recordedFilters.onSpacesClear}
           topicIds={topicIds}
-          onTopicToggle={toggleTopic}
-          onTopicsClear={clearTopics}
+          onTopicToggle={recordedFilters.onTopicToggle}
+          onTopicsClear={recordedFilters.onTopicsClear}
           facetSpaces={facetSpaces}
           facetTopics={facetTopics}
           trailing={trailing}
@@ -351,7 +340,7 @@ export function MatchesList({
                   label: 'Clear filters',
                   onClick: () => {
                     setSearch('');
-                    recordFilter('hub_matches', { kind: 'filters', value: 'all' });
+                    recordedFilters.recordFilter({ kind: 'filters', value: 'all' });
                     // The menu's own clear row, so this counts as choosing the unfiltered list and
                     // the default cannot put its spaces back.
                     onSpacesClear();

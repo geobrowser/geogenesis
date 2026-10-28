@@ -10,7 +10,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateLobbyClaimList } from '../api';
 import { type PlacedClaimListSection, placeClaimListSections, useClaimListPage } from '../claim-list-pages';
-import { DebateClaimCardSurface } from '../debate-claim-card-surface';
+import { DebateClaimCardSurface, sectionStartOffsets } from '../debate-claim-card-surface';
 import { useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { HubStickyControls } from '../matchmaking/claims-tab';
@@ -133,9 +133,7 @@ function ClaimListSections({
     );
   }, [sections, rows.claims]);
   // GEO-3495. Where each section starts in the page's numbering.
-  const sectionOffsets = sections.map((_, index) =>
-    sections.slice(0, index).reduce((total, section) => total + section.claims.length, 0)
-  );
+  const sectionOffsets = sectionStartOffsets(sections.map(section => section.claims.length));
 
   // In page order, so a long page reads a section's room sides as it scrolls into view.
   const batches = React.useMemo(() => exploreRoomClaimBatches(entriesBySection.flat()), [entriesBySection]);
