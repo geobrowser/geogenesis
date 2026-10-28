@@ -55,7 +55,18 @@ describe('orderByDebatability', () => {
     const ordered = orderByDebatability(rows, row => claimDebatability(row.counts, row.holder)).map(row => row.id);
 
     expect(ordered.slice(0, 2).sort()).toEqual(['even-split', 'lopsided-oppose']);
-    expect(ordered.slice(2)).toEqual(['lopsided-agree', 'single-vote']);
+    expect(ordered.slice(2).sort()).toEqual(['lopsided-agree', 'single-vote']);
+  });
+
+  it('does not lift a lopsided claim the holder agrees with above claims too thin to judge', () => {
+    const rows = [
+      { id: 'recent-thin', counts: { positive: 2, negative: 1 }, holder: AGREE },
+      { id: 'lopsided-agree', counts: { positive: 9, negative: 1 }, holder: AGREE },
+    ];
+
+    const ordered = orderByDebatability(rows, row => claimDebatability(row.counts, row.holder)).map(row => row.id);
+
+    expect(ordered).toEqual(['recent-thin', 'lopsided-agree']);
   });
 
   it('puts pinned rows above every other, most debatable first among them', () => {

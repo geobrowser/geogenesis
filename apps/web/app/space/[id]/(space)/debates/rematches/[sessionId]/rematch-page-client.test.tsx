@@ -1908,6 +1908,19 @@ describe('DebateRematchPageClient', () => {
     // the rows the tab will list — which `participantClaimRows` filters — so the lookup behind them
     // has to have run before the viewer gets there. A number that waits is a number that reads `0`
     // for a viewer with a backlog, which is what GEO-2656 took out of the other tab.
+    // GEO-3527. Ordered about the viewer, not the opponent: they side with nine of ten on the shared
+    // claim and hold out against nine on their own one, so their own one leads.
+    it('puts the claims the viewer holds against the crowd first', async () => {
+      viewerOnlyClaim();
+      mocks.responseCounts.set(CLAIM_SHARED, { positive: 9, negative: 1 });
+      mocks.responseCounts.set(VIEWER_ONLY, { positive: 1, negative: 9 });
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showMyPositions();
+
+      await screen.findByText('Only mine');
+      expect(appearsBefore('Only mine', 'A claim both participants chose')).toBe(true);
+    });
+
     it('looks the viewer’s own claims up with the opponent’s, so the tab can count them', async () => {
       viewerOnlyClaim();
       // A position on the claim this session excludes — the one the pair just debated. It is one of

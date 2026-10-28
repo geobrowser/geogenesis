@@ -14,6 +14,21 @@ import { normId } from '~/core/utils/norm-id';
 
 export type ClaimResponseCounts = { positive: number; negative: number };
 
+/** How far past half the rest of the crowd sits against the holder: 0 at even or with them, 1 alone. */
+function againstTheCrowd(counts: ClaimResponseCounts, holderPosition: boolean) {
+  // The counts include the holder's own response; take it out so only everyone else is the crowd.
+  const crowdWith = Math.max(0, (holderPosition ? counts.positive : counts.negative) - 1);
+  const crowdAgainst = holderPosition ? counts.negative : counts.positive;
+  const crowd = crowdWith + crowdAgainst;
+  return crowd > 0 ? Math.max(0, (2 * crowdAgainst) / crowd - 1) : 0;
+}
+
+/**
+ * The least a claim must score to be lifted: a minority of at least a quarter, or at least three
+ * quarters of everyone else against the person.
+ */
+export const DEBATABLE_SCORE_CUTOFF = 0.5;
+
 /**
  * How debatable a claim is for one person, from the split of positions on it (GEO-3527).
  *
@@ -25,7 +40,12 @@ export type ClaimResponseCounts = { positive: number; negative: number };
  *   - **Split.** People are divided. 1 at an even split, 0 when everyone holds one side.
  *
  * The score is the larger of the two, so the top of a list mixes both kinds rather than listing one
- * before the other. A lopsided claim the person sides with scores low on both and sinks.
+ * before the other.
+ *
+ * Only a claim that reaches {@link DEBATABLE_SCORE_CUTOFF} scores at all; anything short of it scores
+ * 0, the same as a claim under the floor. Otherwise a near-unanimous claim the person agrees with —
+ * 9 to 1, a split of 0.2 — would outrank every claim with too few positions to judge, which is most
+ * of a list, and the lopsided consensus the ordering exists to push down would rise above them.
  *
  * The person's own position is taken out of the crowd before "against" is measured — otherwise a
  * claim they hold alone would read as a crowd that partly agrees with them.
@@ -40,15 +60,8 @@ export function claimDebatability(counts: ClaimResponseCounts | undefined, holde
   if (!meetsFloor) return 0;
 
   const split = 1 - Math.abs((2 * counts.positive) / total - 1);
-
-  if (holderPosition === null) return split;
-  // The counts include the holder's own response; take it out so only everyone else is the crowd.
-  const crowdWith = Math.max(0, (holderPosition ? counts.positive : counts.negative) - 1);
-  const crowdAgainst = holderPosition ? counts.negative : counts.positive;
-  const crowd = crowdWith + crowdAgainst;
-  const against = crowd > 0 ? Math.max(0, (2 * crowdAgainst) / crowd - 1) : 0;
-
-  return Math.max(split, against);
+  const score = holderPosition === null ? split : Math.max(split, againstTheCrowd(counts, holderPosition));
+  return score >= DEBATABLE_SCORE_CUTOFF ? score : 0;
 }
 
 /** The key a claim's counts are filed under: the claim in the space its card is drawn for. */
@@ -163,7 +176,8 @@ export const claimResponseCountsQueryKey = (keys: string[]) => ['claim-picker', 
  *
  * Its own cache entries rather than the per-card counts keys: those move optimistically with the
  * viewer's own vote, and this is read once to arrange a list, not to draw a number. Asked in sorted
- * runs, so a claim joining the set re-asks its own run and nothing else.
+ * runs, so a claim joining the set re-asks the run it lands in and the runs after it, not the ones
+ * before.
  *
  * `isLoading` only on a first ask. A run that fails leaves its claims without counts — they score 0
  * and keep their place — rather than holding the list back.
