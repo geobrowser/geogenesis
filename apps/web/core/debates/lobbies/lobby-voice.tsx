@@ -40,10 +40,10 @@ import { Text } from '~/design-system/text';
 import { type DebateLobbyVoiceToken, dashlessId, getDebateLobbyVoiceToken } from '../api';
 import { cameraFailureMessage } from '../camera-failure';
 import { CameraIcon, MicrophoneIcon } from '../debate-room-controls';
-import { createDebateRoomOwnershipCoordinator } from '../debate-room-ownership';
 import { useGeoChatAuth } from '../hooks';
 import { tokenAllowsCamera } from '../livekit-grant';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { useVoiceOwnership } from '../voice-owner';
 import { createLobbyCamera } from './lobby-camera';
 import { lobbyErrorMessage } from './lobby-format';
 import { useLobbyRoomNoun } from './lobby-purpose';
@@ -159,50 +159,25 @@ export function LobbyVoice({
   const lobbyId = lobby.lobby_id;
   const canPublish = rolePublishes(lobby);
 
-  // One LiveKit identity per person: a second tab would replace this one, so tabs take turns.
-  const [ownership, setOwnership] = React.useState<OwnershipState>('pending');
+  // One voice per person across all Geo tabs: another tab's lobby, picker or debate takes turns
+  // with this one. Yielding disconnects first, so this tab neither sends nor plays.
   const roomRef = React.useRef<Room | null>(null);
-  const coordinatorRef = React.useRef<ReturnType<typeof createDebateRoomOwnershipCoordinator> | null>(null);
-
-  React.useEffect(() => {
-    if (!currentUserId) return;
-    let cancelled = false;
-    const coordinator = createDebateRoomOwnershipCoordinator({
-      debateId: `lobby:${dashlessId(lobbyId)}`,
-      userId: currentUserId,
-      onTakeoverRequested: async () => {
-        // Yield only when not on screen, and disconnect before answering.
-        if (typeof document !== 'undefined' && document.visibilityState === 'visible') return false;
-        try {
-          await roomRef.current?.disconnect();
-        } catch {
-          // Released when the page goes away anyway.
-        }
-        roomRef.current = null;
-        if (!cancelled) setOwnership('elsewhere');
-        return true;
-      },
-    });
-    coordinatorRef.current = coordinator;
-    void (async () => {
-      const result = await coordinator.acquire();
-      if (cancelled) return;
-      if (result.acquired) return setOwnership('owned');
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        const released = await coordinator.requestTakeover();
-        if (!cancelled) setOwnership(released ? 'owned' : 'elsewhere');
-      } else {
-        setOwnership('elsewhere');
+  const voice = useVoiceOwnership({
+    userId: currentUserId,
+    kind: 'lobby',
+    active: Boolean(currentUserId),
+    claimOnActive: true,
+    claimKey: lobbyId,
+    onYield: async () => {
+      try {
+        await roomRef.current?.disconnect();
+      } catch {
+        // Released when the page goes away anyway.
       }
-    })();
-    return () => {
-      cancelled = true;
-      coordinatorRef.current = null;
-      setOwnership('pending');
-      void coordinator.release();
-      coordinator.close();
-    };
-  }, [currentUserId, lobbyId]);
+      roomRef.current = null;
+    },
+  });
+  const ownership: OwnershipState = voice.ownership;
 
   // Minted right before connecting, once this connection holds a lease; LiveKit refreshes it while
   // connected. Disabled during a lapse's rejoin, which keeps the token and the live room.
@@ -234,12 +209,11 @@ export function LobbyVoice({
     setEpoch(value => value + 1);
   }, [accountKey, canPublish, lobbyId, queryClient]);
 
+  const { takeOver: claimVoice } = voice;
   const takeOver = React.useCallback(async () => {
-    const coordinator = coordinatorRef.current;
-    if (!coordinator || !(await coordinator.requestTakeover())) return;
-    setOwnership('owned');
+    if (!(await claimVoice())) return;
     retry();
-  }, [retry]);
+  }, [claimVoice, retry]);
 
   const data = token.data;
   const micIntent = Boolean(data?.can_publish) && (micChoice ?? !data?.start_muted);
@@ -288,7 +262,7 @@ export function LobbyVoice({
     setCameraIntent(choice.videoEnabled);
   }, []);
   // Shown as voice in another tab, with "Use voice here"; it does not reconnect by itself.
-  const handleReplaced = React.useCallback(() => setOwnership('elsewhere'), []);
+  const handleReplaced = voice.markElsewhere;
   // A join dropped before it ever connected gets one fresh token by itself, then the notice.
   const autoRetriedRef = React.useRef(false);
   const handleNeverConnected = React.useCallback(() => {
@@ -323,6 +297,7 @@ export function LobbyVoice({
   const notice = ((): VoiceNotice | null => {
     if (!currentUserId || ownership === 'pending') return { message: 'Connecting voice…' };
     if (ownership === 'elsewhere') {
+      if (voice.heldBy === 'debate') return { message: 'Voice is on in your debate tab' };
       return { message: 'Voice is on in another tab', actionLabel: 'Use voice here', onAction: () => void takeOver() };
     }
     if (token.error) {
