@@ -9,6 +9,7 @@ import { CallRoom } from '~/core/space-calls/call-room';
 import { EndedCallRecording } from '~/core/space-calls/recording/ended-call-recording';
 import { spaceCallPath, spaceCallsTabPath } from '~/core/space-calls/routes';
 import { useBrowseSidebarPageDefault } from '~/core/state/browse-sidebar-state';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -150,8 +151,10 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   // Only where the page shows the guest banner, which is how a closed prompt is opened again. A
   // scheduled call's pre-call page has none: it asks on Remind me, or once the call is open.
   const callRoom = useIsCallRoom();
+  const spaceCalls = useFeatureFlag('spaceCalls');
+  const preCallPage = callRoom && spaceCalls;
   const notYetOpen = lobby?.access.status === 'not_yet_open';
-  useLobbySignInPrompt(lobbyId, signedOut && (admitted || (notYetOpen && !callRoom)));
+  useLobbySignInPrompt(lobbyId, signedOut && (admitted || (notYetOpen && !preCallPage)));
   const exitHref = useLobbyExitHref();
   const exiting = useExitLobbyWhenOut({
     lobbyId,
@@ -227,8 +230,10 @@ function LobbyAccess({
 }) {
   const guest = useIsLobbyGuest();
   const purpose = useLobbyRoomPurpose();
+  // Scheduled calls (GEO-3420) are the community calls feature; off, a call page reads as before.
+  const spaceCalls = useFeatureFlag('spaceCalls');
   // A call gone from geo-chat leaves quietly, never showing a cached copy.
-  if (missing && purpose.purpose === 'call') {
+  if (missing && purpose.purpose === 'call' && spaceCalls) {
     return (
       <LobbyNotice action={{ href: spaceCallsTabPath(purpose.spaceId), label: CALL_STATE_COPY.backToCalls }}>
         {CALL_STATE_COPY.unavailable}
@@ -274,7 +279,7 @@ function LobbyAccess({
         />
       );
     case 'not_yet_open':
-      return purpose.purpose === 'call' ? <CallPreOpen lobby={lobby} /> : <NotYetOpen lobby={lobby} />;
+      return purpose.purpose === 'call' && spaceCalls ? <CallPreOpen lobby={lobby} /> : <NotYetOpen lobby={lobby} />;
     case 'admitted':
       if (guest && guestSession.state.status === 'removed') {
         return (

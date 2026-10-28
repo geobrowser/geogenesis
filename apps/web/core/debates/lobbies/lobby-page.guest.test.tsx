@@ -9,6 +9,7 @@ import type { DebateLobbyGuestView, DebateLobbyMember, DebateLobbySummary, Debat
 import { rememberLastPageOutsideDebates } from '../debate-return-navigation';
 
 const mocks = vi.hoisted(() => ({
+  spaceCalls: true,
   phone: false,
   authenticated: false,
   memberLobby: undefined as DebateLobbyView | undefined,
@@ -196,6 +197,10 @@ vi.mock('./lobby-guest-sign-in', () => ({
   useLobbySignInPrompt: (_lobbyId: string, open: boolean) => void mocks.signInPrompt.push(open),
 }));
 vi.mock('../matchmaking/hooks', () => ({ useMatchmakingScope: vi.fn() }));
+vi.mock('~/core/state/feature-flags', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
+  useFeatureFlag: (id: string) => id === 'spaceCalls' && mocks.spaceCalls,
+}));
 vi.mock('~/partials/space-calls/call-pre-open', () => ({ CallPreOpen: () => <div data-testid="call-pre-open" /> }));
 vi.mock('~/core/space-calls/call-room', () => ({ CallRoom: () => <div data-testid="call-room" /> }));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.userId }));
@@ -248,6 +253,7 @@ const memberView: DebateLobbyView = {
 beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
+  mocks.spaceCalls = true;
   mocks.phone = false;
   mocks.authenticated = false;
   mocks.memberLobby = undefined;
@@ -651,6 +657,37 @@ describe('DebateLobbyPage account prompt', () => {
     mocks.guestView = { lobby: lobbyFields, claims: null, highlights: null };
     render(asCall(<DebateLobbyPage lobbyId="lobby1" />));
     expect(mocks.signInPrompt.at(-1)).toBe(true);
+  });
+
+  it('reads a scheduled call as master does with community calls off (GEO-3420)', () => {
+    mocks.spaceCalls = false;
+    mocks.guestView = {
+      ...mocks.guestView!,
+      lobby: { ...lobbyFields, access: { status: 'not_yet_open', opens_at: '2099-10-06T17:50:00Z' } },
+    };
+    render(
+      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+        <DebateLobbyPage lobbyId="lobby1" />
+      </LobbyPurposeProvider>
+    );
+    expect(screen.queryByTestId('call-pre-open')).not.toBeInTheDocument();
+    expect(screen.getByTestId('debate-lobby')).toBeInTheDocument();
+    expect(mocks.signInPrompt.at(-1)).toBe(true);
+  });
+
+  it('keeps a missing call’s retry with community calls off', async () => {
+    const { GeoChatRequestError } = await import('../api');
+    mocks.spaceCalls = false;
+    mocks.authenticated = true;
+    mocks.memberError = true;
+    mocks.memberErrorValue = new GeoChatRequestError('gone', 'lobby_not_found', 404);
+    render(
+      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+        <DebateLobbyPage lobbyId="lobby1" />
+      </LobbyPurposeProvider>
+    );
+    expect(screen.getByText('Could not open this call.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Back to calls' })).not.toBeInTheDocument();
   });
 
   it('leaves a call geo-chat no longer has, without its cached view or a retry (GEO-3420)', async () => {
