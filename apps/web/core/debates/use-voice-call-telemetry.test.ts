@@ -468,6 +468,38 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     );
   });
 
+  it('adds a probe’s measurements to each sample and stops it with the call', async () => {
+    const call = fakeRoom();
+    const stop = vi.fn();
+    const sample = vi.fn(async () => ({ recv_audio_state: 'playing' }));
+    let report: ((change: Record<string, unknown>) => void) | undefined;
+    const end = startVoiceCallTelemetry(call.room, 'debate', 'debate-1', undefined, {
+      probe: reporter => {
+        report = reporter;
+        return { sample, stop };
+      },
+    });
+
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_FIRST_SAMPLE_MS)));
+    expect(events('debate_voice_sampled').at(-1)).toEqual(
+      expect.objectContaining({ call_id: 'debate-1', recv_audio_state: 'playing' })
+    );
+
+    sample.mockRejectedValueOnce(new Error('probe failed'));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
+    expect(events('debate_voice_sampled')).toHaveLength(2);
+
+    report?.({ change: 'recv_video', recv_video_state: 'no_track' });
+    expect(events('debate_voice_changed').at(-1)).toEqual(
+      expect.objectContaining({ call_surface: 'debate', call_id: 'debate-1', change: 'recv_video' })
+    );
+
+    end();
+    expect(stop).toHaveBeenCalledOnce();
+    report?.({ change: 'recv_video', recv_video_state: 'shown' });
+    expect(events('debate_voice_changed').at(-1)).toEqual(expect.objectContaining({ recv_video_state: 'no_track' }));
+  });
+
   // Copilot on #2884 (round 2): the summary is the last word on a call. Leaving the page summarises
   // it before LiveKit tears the room down, and nothing the room says after that may report.
   it('reports nothing after the summary, whatever the room says next', () => {

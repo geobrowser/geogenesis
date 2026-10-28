@@ -52,7 +52,7 @@ import {
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
 import { ROOM_END_TURN_CLASS, ROOM_UI_FONT, RoomExit } from '~/core/debates/debate-room-stamps';
-import { loadDebateRoomTelemetry } from '~/core/debates/debate-room-telemetry';
+import { type DebateRoomTelemetry, loadDebateRoomTelemetry } from '~/core/debates/debate-room-telemetry';
 import { DebateRoundIndicator } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
@@ -1020,7 +1020,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const routing = (async () => {
       await previous?.catch(() => undefined);
       if (roomRef.current !== room) throw new Error('Room changed during speaker selection');
-      await switchMediaDevice(room, 'audiooutput', id);
+      await switchMediaDevice(room, 'audiooutput', id).catch(error => {
+        roomTelemetry.get(room)?.audioOutputFailed(error);
+        throw error;
+      });
       appliedAudioOutputRef.current = { room, id };
     })();
     audioOutputRouteRef.current = routing;
@@ -1923,7 +1926,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
         connectingRoomRef.current = null;
         roomRef.current = room;
-        roomTelemetryStops.set(room, startTelemetry(room as unknown as Room, debateId, token.participant_slot));
+        roomTelemetry.set(
+          room,
+          startTelemetry(room as unknown as Room, debateId, token.participant_slot, () =>
+            audioOutputSupportedRef.current ? selectedAudioOutputIdRef.current : null
+          )
+        );
         // Whoever joins second finds the other already there, and no arrival event will fire.
         if ((room.remoteParticipants?.size ?? 0) > 0) setRemotePresence('present');
 
@@ -4466,12 +4474,12 @@ async function publishTrackWithRetry(room: RoomLike, track: LocalTrackLike, isCu
 }
 
 /** Cleanup belongs to each Room, including ones superseded before joining finishes. */
-const roomTelemetryStops = new WeakMap<RoomLike, () => void>();
+const roomTelemetry = new WeakMap<RoomLike, DebateRoomTelemetry>();
 
 function disconnectLiveKitRoom(room: RoomLike | null, stopTracks?: boolean) {
   if (!room) return;
-  roomTelemetryStops.get(room)?.();
-  roomTelemetryStops.delete(room);
+  roomTelemetry.get(room)?.stop();
+  roomTelemetry.delete(room);
   room.disconnect(stopTracks);
 }
 

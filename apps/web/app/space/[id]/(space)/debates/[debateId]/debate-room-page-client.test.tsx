@@ -901,11 +901,13 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalled());
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
     expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
-    expect(mocks.startVoiceCallTelemetry).toHaveBeenCalledWith(expect.anything(), 'debate', 'debate-1', {
-      debate_id: 'debate-1',
-      participant_slot: 1,
-      call_session_id: expect.any(String),
-    });
+    expect(mocks.startVoiceCallTelemetry).toHaveBeenCalledWith(
+      expect.anything(),
+      'debate',
+      'debate-1',
+      { debate_id: 'debate-1', participant_slot: 1, call_session_id: expect.any(String) },
+      { probe: expect.any(Function) }
+    );
     expect(screen.getByText('Not recording')).toBeInTheDocument();
     expect(screen.queryByText('Recording')).not.toBeInTheDocument();
   });

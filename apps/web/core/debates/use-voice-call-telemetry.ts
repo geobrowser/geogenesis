@@ -36,6 +36,14 @@ import {
 
 export type VoiceCallSurface = 'picker' | 'lobby' | 'debate';
 
+export type ReportCallChange = (change: Record<string, unknown>) => void;
+
+/** Surface-specific measurements added to each sample; changes go through the call's own reporter. */
+export type CallProbe = {
+  sample: () => Promise<Record<string, unknown>>;
+  stop: () => void;
+};
+
 export const VOICE_SAMPLE_MS = 30_000;
 /** The first sample comes sooner, so a short call still reports its loss. */
 export const VOICE_FIRST_SAMPLE_MS = 10_000;
@@ -54,7 +62,8 @@ const NOTABLE_QUALITIES = new Set<ConnectionQuality>([ConnectionQuality.Poor, Co
  * - `debate_voice_sampled` every {@link VOICE_SAMPLE_MS} while connected (and once early): the
  *   connection quality LiveKit reports, packet loss each way, round trip, jitter, how much of what we
  *   heard had to be concealed and how loud it arrived, the microphone's own level, what kind of
- *   microphone it is, and the transport each way (UDP, TCP or a relay: a TCP fallback is what made GEO-3343 choppy).
+ *   microphone it is, and the transport each way (UDP, TCP or a relay: a TCP fallback is what made
+ *   GEO-3343 choppy).
  * - `debate_voice_changed` the moment something moves: quality into or out of poor or lost, a
  *   reconnect starting or finishing, a disconnect with its reason, a different kind of microphone,
  *   a different transport, incoming audio blocked or unblocked by the browser's autoplay policy.
@@ -76,7 +85,8 @@ export function startVoiceCallTelemetry(
   room: Room,
   surface: VoiceCallSurface,
   callId: string,
-  context: { debate_id: string; participant_slot: number; call_session_id: string } | undefined = undefined
+  context: { debate_id: string; participant_slot: number; call_session_id: string } | undefined = undefined,
+  options: { probe?: (report: ReportCallChange) => CallProbe } = {}
 ) {
   const base = { call_surface: surface, call_id: callId, ...context };
   const local = room.localParticipant;
@@ -102,9 +112,10 @@ export function startVoiceCallTelemetry(
   let ended = false;
 
   /** Every change reports through here, so nothing follows the call's summary. */
-  const reportChange = (change: Record<string, unknown>) => {
+  const reportChange: ReportCallChange = change => {
     if (!ended) captureSafely('debate_voice_changed', { ...base, ...change });
   };
+  let probe: CallProbe | undefined;
 
   const micKind = trackSwitches<MicKind>((next, previous) =>
     reportChange({ change: 'mic_device', mic_kind: next, previous_mic_kind: previous })
@@ -184,6 +195,8 @@ export function startVoiceCallTelemetry(
           // Unmeasured, not healthy.
         }
       }
+      // Optional, like the camera: its failure must not cost the audio sample.
+      const probed = probe ? await probe.sample().catch(() => ({})) : {};
       // The call can end during any of the reads above; nothing reports after its summary.
       if (ended) return;
       sendTransport.note(sentOver);
@@ -217,6 +230,7 @@ export function startVoiceCallTelemetry(
               ...(video?.metrics ?? {}),
             }
           : {}),
+        ...probed,
       });
     } finally {
       if (!committed) muteChanged ||= spansMuteChange;
@@ -345,6 +359,7 @@ export function startVoiceCallTelemetry(
     local.on(ParticipantEvent.TrackMuted, onMuteChange);
     local.on(ParticipantEvent.TrackUnmuted, onMuteChange);
     window.addEventListener('pagehide', onPageHide);
+    probe = options.probe?.(reportChange);
 
     if (connectedAt !== null) {
       startSampling();
@@ -371,6 +386,7 @@ export function startVoiceCallTelemetry(
     local.off(ParticipantEvent.TrackMuted, onMuteChange);
     local.off(ParticipantEvent.TrackUnmuted, onMuteChange);
     window.removeEventListener('pagehide', onPageHide);
+    probe?.stop();
   }
   return () => finish('left');
 }
@@ -404,7 +420,7 @@ function worstOf(worst: number | null, reading: number | null) {
  * Remembers a value and reports a move between two it could name. A first reading is not a change,
  * and `null` (nothing measurable yet) neither sets nor clears it.
  */
-function trackSwitches<T extends string>(report: (next: T, previous: T) => void) {
+export function trackSwitches<T extends string>(report: (next: T, previous: T) => void) {
   let value: T | null = null;
   return {
     current: () => value,
