@@ -100,6 +100,8 @@ type EntityVoteButtonsProps = {
    * announcement is the better failure than none.
    */
   compact?: boolean;
+  /** Draw a failed vote's message beside the arrows. */
+  showInlineError?: boolean;
   /** Whether to load counts yet. Until true, with nothing cached, the skeleton shows instead of a zero. */
   nearViewport?: boolean;
 };
@@ -130,6 +132,7 @@ function EntityResponseButtons({
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
   compact = false,
+  showInlineError = false,
   nearViewport = true,
 }: EntityVoteButtonsProps) {
   const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);
@@ -572,7 +575,7 @@ function EntityResponseButtons({
         </span>
       ) : null}
       {responseError ? (
-        <span role="alert" className={cx(compact ? 'sr-only' : 'ml-1 text-metadata text-red-01')}>
+        <span role="alert" className={cx(showInlineError && !compact ? 'ml-1 text-metadata text-red-01' : 'sr-only')}>
           {responseError}
         </span>
       ) : null}

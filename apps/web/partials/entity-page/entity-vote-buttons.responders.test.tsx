@@ -57,6 +57,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     submitResponseAsync: vi.fn(),
     optimisticResponse: mocks.optimistic,
     isResponseIndexingDelayed: mocks.indexingDelayed,
+    isSubmittingResponse: mocks.processing,
     isProcessingResponse: mocks.processing,
     isConnected: true,
     personalSpaceId: 'profile-1',
@@ -431,8 +432,9 @@ describe('while a response is confirming', () => {
 });
 
 /**
- * A publish that fails otherwise rolls the optimistic mark back and reads as the vote vanishing —
- * the claim pills already name the reason, and the thumbs now do too.
+ * A publish that fails rolls the optimistic mark back and reads as the vote vanishing, so the
+ * failure is always announced (`role="alert"`). It is only *drawn* beside the arrows where there is
+ * room: a page header that opts in.
  */
 describe('when a publish fails', () => {
   const MESSAGE = 'Publish failed';
@@ -441,20 +443,30 @@ describe('when a publish fails', () => {
     return screen.getAllByRole('button').filter(button => button.className.includes('group/vote'));
   }
 
-  async function pressUpAndFail({ compact = false }: { compact?: boolean } = {}) {
+  async function pressUpAndFail({
+    compact = false,
+    showInlineError = false,
+  }: { compact?: boolean; showInlineError?: boolean } = {}) {
     mocks.submitResponse = vi.fn((_direction: unknown, options?: { onError?: (error: unknown) => void }) =>
       options?.onError?.(new Error(MESSAGE))
     );
     const user = userEvent.setup();
-    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" compact={compact} />, {
-      wrapper,
-    });
+    render(
+      <EntityVoteButtons
+        entityId="entity-1"
+        spaceId={SPACE}
+        responseKind="stance"
+        compact={compact}
+        showInlineError={showInlineError}
+      />,
+      { wrapper }
+    );
     await waitFor(() => expect(thumbs()).toHaveLength(2));
     await user.click(thumbs()[0]!);
   }
 
-  it('names the reason where there is room', async () => {
-    await pressUpAndFail();
+  it('names the reason on a page header, which opts in to the room for it', async () => {
+    await pressUpAndFail({ showInlineError: true });
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(MESSAGE);
@@ -462,8 +474,17 @@ describe('when a publish fails', () => {
     expect(alert).not.toHaveClass('sr-only');
   });
 
-  it('keeps the reason announceable while taking no layout in the bar', async () => {
-    await pressUpAndFail({ compact: true });
+  it('keeps the reason announceable but out of layout in a row', async () => {
+    await pressUpAndFail();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(MESSAGE);
+    expect(alert).toHaveClass('sr-only');
+    expect(alert).not.toHaveClass('ml-1');
+  });
+
+  it('stays out of layout in the bar even where a header would have opted in', async () => {
+    await pressUpAndFail({ compact: true, showInlineError: true });
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(MESSAGE);

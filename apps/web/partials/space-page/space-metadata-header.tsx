@@ -96,7 +96,7 @@ export function SpacePageMetadataHeader({
         {membersComponent}
         <AddDataChip spaceId={spaceId} />
       </div>
-      <EntityVoteButtons entityId={id} spaceId={spaceId} />
+      <EntityVoteButtons entityId={id} spaceId={spaceId} showInlineError />
     </div>
   );
 }
