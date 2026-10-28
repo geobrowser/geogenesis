@@ -24,6 +24,12 @@ import {
 } from '~/core/debates/api';
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '~/core/debates/claim-picker-page';
 import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
+import {
+  DebateClaimCardSurface,
+  type DebateClaimListId,
+  sectionStartOffsets,
+  useRecordClaimFilter,
+} from '~/core/debates/debate-claim-card-surface';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
@@ -73,6 +79,7 @@ import {
   carriesEveryTopic,
   claimTopicsById,
   countBy,
+  hasId,
   keepSelectableTopics,
   narrowingOptions,
   orderFacetOptions,
@@ -209,6 +216,16 @@ const LANDING_TAB_ANALYTICS_NAMES: Record<PickerTab, string> = {
   opponent: 'their_positions',
   positions: 'my_positions',
   explore: 'explore',
+};
+
+/** GEO-3495. Each tab's list, as claim card impressions, requests and filter choices name it. */
+const PICKER_TAB_LIST_IDS: Record<PickerTab, DebateClaimListId> = {
+  matches: 'rematch_matches',
+  debate: 'rematch_from_this_debate',
+  related: 'rematch_related',
+  opponent: 'rematch_their_positions',
+  positions: 'rematch_my_positions',
+  explore: 'rematch_explore',
 };
 
 /**
@@ -2595,6 +2612,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         : visibleClaims.some(hasRequestTarget)));
 
   const setTopicPicked = (topicId: string) => setTopicIds(current => toggleId(current, topicId));
+  // GEO-3495. The list on screen, as card impressions, requests and filter choices name it.
+  const listId = PICKER_TAB_LIST_IDS[tab];
+  const recordFilter = useRecordClaimFilter('debate_matchmaking', { rematch_session_id: sessionId });
 
   /**
    * How many distinct claims the filters leave listed: the tagged query's own total, or the narrowed
@@ -2707,7 +2727,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         analytics={{ name: 'Claims source', surface: 'rematch' }}
         options={sourceOptions}
         value={source === 'mine' ? 'all' : source}
-        onChange={setChosenSource}
+        onChange={next => {
+          if (next !== source) recordFilter(listId, { kind: 'claims_source', value: next });
+          setChosenSource(next);
+        }}
       />
     ) : null;
 
@@ -2732,30 +2755,40 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     createRequest,
   });
 
-  const renderClaimCard = (claim: DebateRematchClaim, previouslyDebated = false) => {
+  // GEO-3495. Each card's 1-based place in its list, counted down the list as drawn: across sections
+  // and rounds, and on into the already-debated fold below.
+  const cardScope = { rematch_session_id: sessionId, ...(debouncedSearch ? { list_searched: true } : {}) };
+  const renderClaimCard = (claim: DebateRematchClaim, position: number, previouslyDebated = false) => {
     const saidBy = debateSaidByFor(claim);
     return (
-      <RematchClaimCard
+      <DebateClaimCardSurface
         key={claim.claim.claim_entity_id}
-        claim={claim}
-        previouslyDebated={previouslyDebated}
-        context={saidBy ? null : topicMatchCaptionFor(claim)}
-        headerMeta={saidBy}
-        session={session}
-        currentUserId={currentUserId}
-        chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
-        readiness={readinessByClaimId.get(normId(claim.claim.claim_entity_id)) ?? null}
-        onRequest={() =>
-          createRequest.mutate({
-            source_space_id: claim.claim.space_id,
-            claim_id: claim.claim.claim_entity_id,
-            format_id: defaultDebateFormatId,
-          })
-        }
-        busy={createRequest.isPending || session?.status === 'request_pending'}
-        // Associate the shared mutation error with the claim that initiated it.
-        requestError={hasRequestTarget(claim) ? requestError : null}
-      />
+        claimId={claim.claim.claim_entity_id}
+        listId={listId}
+        position={position}
+        scope={cardScope}
+      >
+        <RematchClaimCard
+          claim={claim}
+          previouslyDebated={previouslyDebated}
+          context={saidBy ? null : topicMatchCaptionFor(claim)}
+          headerMeta={saidBy}
+          session={session}
+          currentUserId={currentUserId}
+          chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
+          readiness={readinessByClaimId.get(normId(claim.claim.claim_entity_id)) ?? null}
+          onRequest={() =>
+            createRequest.mutate({
+              source_space_id: claim.claim.space_id,
+              claim_id: claim.claim.claim_entity_id,
+              format_id: defaultDebateFormatId,
+            })
+          }
+          busy={createRequest.isPending || session?.status === 'request_pending'}
+          // Associate the shared mutation error with the claim that initiated it.
+          requestError={hasRequestTarget(claim) ? requestError : null}
+        />
+      </DebateClaimCardSurface>
     );
   };
 
@@ -2776,6 +2809,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         })
       : [];
   const visibleCount = tab === 'debate' ? visibleDebateItems.length : visibleClaims.length;
+  // GEO-3495. Where each section and round starts in the list's numbering, and where the fold does.
+  const sectionOffsets = sectionStartOffsets(visibleSections.map(section => section.claims.length));
+  const roundOffsets = sectionStartOffsets(visibleDebateRounds.map(round => round.items.length));
+  const foldOffset = showsSections
+    ? visibleSections.reduce((total, section) => total + section.claims.length, 0)
+    : visibleCount;
   const opponentNoteShown = activeTab === 'opponent' && !tabIsLoading && visibleCount > 0;
 
   /**
@@ -2971,7 +3010,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   label={spec.label}
                   count={spec.count}
                   active={activeTab === spec.id}
-                  onClick={() => setTab(spec.id)}
+                  onClick={() => {
+                    // Only from a list on screen: before the landing there is none, only the skeleton.
+                    if (activeTab !== null && spec.id !== activeTab)
+                      recordFilter(PICKER_TAB_LIST_IDS[activeTab], {
+                        kind: 'tab',
+                        value: PICKER_TAB_LIST_IDS[spec.id],
+                      });
+                    setTab(spec.id);
+                  }}
                 />
               ))}
             </ScrollableTabRow>
@@ -2997,10 +3044,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     analyticsSurface="rematch"
                     options={pillOptions}
                     pickedIds={pickedFilterIds}
-                    onToggle={option =>
-                      option.kind === 'space' ? onSpaceToggle(option.id) : setTopicPicked(option.id)
-                    }
+                    onToggle={option => {
+                      recordFilter(listId, {
+                        kind: option.kind,
+                        value: option.id,
+                        selected: !hasId(pickedFilterIds, option.id),
+                      });
+                      if (option.kind === 'space') onSpaceToggle(option.id);
+                      else setTopicPicked(option.id);
+                    }}
                     onClear={() => {
+                      recordFilter(listId, { kind: 'filters', value: 'all' });
                       onSpacesClear();
                       setTopicIds([]);
                     }}
@@ -3023,6 +3077,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               query={search}
               topics={suggestedTopics}
               onPick={topicId => {
+                if (!topicIds.includes(topicId))
+                  recordFilter(listId, { kind: 'topic', value: topicId, selected: true });
                 setTopicIds(current => (current.includes(topicId) ? current : [...current, topicId]));
                 setSearch('');
               }}
@@ -3165,7 +3221,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           {showsSections ? (
             // Each data block on the curator's page is its own section, in page order.
             <div className="flex flex-col gap-4">
-              {visibleSections.map(section => (
+              {visibleSections.map((section, sectionIndex) => (
                 <RecommendedSection
                   key={section.id}
                   name={section.name}
@@ -3174,7 +3230,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   analytics={debateActionAnalyticsAttributes('rematch', 'Recommended section toggle')}
                   onOpenChange={open => reportSectionOpen(recommendedSectionKey(section.id), open)}
                 >
-                  <HubCardList>{section.claims.map(claim => renderClaimCard(claim))}</HubCardList>
+                  <HubCardList>
+                    {section.claims.map((claim, index) =>
+                      renderClaimCard(claim, sectionOffsets[sectionIndex] + index + 1)
+                    )}
+                  </HubCardList>
                 </RecommendedSection>
               ))}
             </div>
@@ -3185,7 +3245,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             // list per round would unmount it and mount a fresh one.
             <div data-testid="from-this-debate-rounds">
               <HubCardList>
-                {visibleDebateRounds.flatMap(round => [
+                {visibleDebateRounds.flatMap((round, roundIndex) => [
                   ...(round.label
                     ? [
                         <motion.div key={`round:${round.key}`} {...hubCardMotion} className="pt-2 first:pt-0">
@@ -3195,12 +3255,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                         </motion.div>,
                       ]
                     : []),
-                  ...round.items.map(item => renderClaimCard(item.row)),
+                  ...round.items.map((item, index) => renderClaimCard(item.row, roundOffsets[roundIndex] + index + 1)),
                 ])}
               </HubCardList>
             </div>
           ) : (
-            <HubCardList>{visibleClaims.map(claim => renderClaimCard(claim))}</HubCardList>
+            <HubCardList>{visibleClaims.map((claim, index) => renderClaimCard(claim, index + 1))}</HubCardList>
           )}
         </HubQueryState>
 
@@ -3274,7 +3334,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               analytics={debateActionAnalyticsAttributes('rematch', 'Already debated toggle')}
               onOpenChange={open => reportSectionOpen(ALREADY_DEBATED_SECTION, open)}
             >
-              <HubCardList>{visibleDebatedClaims.map(claim => renderClaimCard(claim, true))}</HubCardList>
+              <HubCardList>
+                {visibleDebatedClaims.map((claim, index) => renderClaimCard(claim, foldOffset + index + 1, true))}
+              </HubCardList>
             </RecommendedSection>
           </div>
         ) : null}

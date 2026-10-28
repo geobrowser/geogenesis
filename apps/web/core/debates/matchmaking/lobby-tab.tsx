@@ -5,6 +5,7 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 
 import { isAccountWarmingUpQuery } from '../api';
+import { useRecordClaimFilter } from '../debate-claim-card-surface';
 import { type ClaimsLayout, ClaimsTab } from './claims-tab';
 import { useMatchmakingMatches } from './hooks';
 import { MatchesList } from './matches-list';
@@ -63,6 +64,7 @@ export function LobbyTab({
         : 'filled';
 
   const { showNarrowed, rearm } = useNarrowedDefault(matchesOnly, matchesState);
+  const recordFilter = useRecordClaimFilter('debate_matchmaking');
 
   /**
    * Once a session, and held outside this component because this component does not last.
@@ -110,6 +112,11 @@ export function LobbyTab({
       // would then appear to do nothing.
       checked={showNarrowed}
       onChange={next => {
+        // GEO-3495: which of the two lists the viewer chose.
+        recordFilter(showNarrowed ? 'hub_matches' : 'hub_lobby', {
+          kind: 'tab',
+          value: next ? 'hub_matches' : 'hub_lobby',
+        });
         rearm();
         // The viewer has chosen which list to read, which is the question the move was guessing at.
         // Spent for the session rather than this mount: the hub unmounts the tab on the way out, and

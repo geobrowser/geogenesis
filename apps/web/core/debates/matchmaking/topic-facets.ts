@@ -230,13 +230,18 @@ export function orderFacetOptions<T extends { id: string; count: number }>(optio
  * picked in is at least the viewer's own.
  */
 export function toggleId(selected: readonly string[], id: string): string[] {
-  // Compared canonically: a space id reaches the menu in whichever spelling its rows carried, so
-  // unticking could otherwise add a second spelling of a space that was already picked instead of
-  // removing it.
   const key = normId(id);
-  return selected.some(entry => normId(entry) === key)
-    ? selected.filter(entry => normId(entry) !== key)
-    : [...selected, id];
+  return hasId(selected, id) ? selected.filter(entry => normId(entry) !== key) : [...selected, id];
+}
+
+/**
+ * Whether `id` is in the selection, compared canonically: a space id reaches the menu in whichever
+ * spelling its rows carried, so unticking could otherwise add a second spelling of a space that was
+ * already picked instead of removing it.
+ */
+export function hasId(selected: readonly string[], id: string): boolean {
+  const key = normId(id);
+  return selected.some(entry => normId(entry) === key);
 }
 
 /**
