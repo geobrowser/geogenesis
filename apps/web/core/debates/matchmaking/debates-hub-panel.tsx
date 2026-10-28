@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, motion } from 'framer-motion';
+import { useAtomValue } from 'jotai';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -22,12 +23,12 @@ import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
-import { HUB_TAB_LIST_IDS, useRecordClaimFilter } from '../debate-claim-card-surface';
+import { useRecordClaimFilter } from '../debate-claim-card-surface';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useLobbyLineup } from '../lobbies/live-lobbies';
 import { UpcomingLobbiesCard } from '../lobbies/lobbies-card';
 import { LobbySpotlight } from '../lobbies/lobby-spotlight';
-import { ClaimsTab } from './claims-tab';
+import { ClaimsTab, HUB_TAB_LIST_IDS } from './claims-tab';
 import { calendarHref } from './debate-calendar-route';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { hubAnalyticsAttributes } from './hub-analytics';
@@ -46,7 +47,7 @@ import { useFocusTrap } from './use-focus-trap';
 import { useHubFilterOwner } from './use-hub-filter-owner';
 import { useRequestsTabCount } from './use-requests-tab-count';
 import { isWorkspaceList, useWorkspaceQuery, workspaceHref } from './use-workspace-query';
-import { type DebatesHubTab } from '~/atoms';
+import { type DebatesHubTab, debatesHubLobbyListAtom } from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -267,6 +268,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
   // leave Requests scrolled to the same offset.
   // GEO-3495. A press onto a claim list tab, by the list it opens.
   const recordFilter = useRecordClaimFilter('debate_matchmaking');
+  const lobbyList = useAtomValue(debatesHubLobbyListAtom);
+  const listOfTab = (tab: DebatesHubTab) => (tab === 'lobby' ? lobbyList : HUB_TAB_LIST_IDS[tab]);
   const changeTab = React.useCallback(
     (tab: DebatesHubTab) => {
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
@@ -322,9 +325,9 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               aria-current={activeTab === tab.id ? 'true' : undefined}
               data-tab-active={activeTab === tab.id ? 'true' : undefined}
               onClick={() => {
-                const listId = HUB_TAB_LIST_IDS[tab.id];
+                const listId = listOfTab(tab.id);
                 if (listId && tab.id !== activeTab) {
-                  recordFilter(HUB_TAB_LIST_IDS[activeTab] ?? listId, { kind: 'tab', value: listId });
+                  recordFilter(listOfTab(activeTab) ?? listId, { kind: 'tab', value: listId });
                 }
                 changeTab(tab.id);
               }}

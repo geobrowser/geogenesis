@@ -17,6 +17,7 @@ import {
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
   debatesHubExploreTopicIdsAtom,
+  debatesHubLobbyListAtom,
   debatesHubLobbySearchAtom,
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
@@ -45,6 +46,12 @@ const mocks = vi.hoisted(() => ({
   isMobile: false,
   scheduledAwaitingAnswerCount: undefined as number | undefined,
   scheduledRequests: undefined as unknown[] | undefined,
+  capture: vi.fn(),
+}));
+
+vi.mock('~/core/analytics', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/analytics')>()),
+  capture: mocks.capture,
 }));
 
 // Booking reads room completion only when moving a scheduled request.
@@ -493,6 +500,32 @@ describe('DebatesHubPanel', () => {
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
     // Signed in, the list includes offline people free at shared times, so the empty copy says so.
     expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
+  });
+
+  // GEO-3495: Live draws either of two lists, and a tab press names the one it drew.
+  it('records a press to and from Live as the list Live draws', async () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    store.set(debatesHubLobbyListAtom, 'hub_matches');
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+    mocks.capture.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Live/ }));
+    // With no matches to show, Live steps back to its wider list.
+    await vi.waitFor(() => expect(store.get(debatesHubLobbyListAtom)).toBe('hub_lobby'));
+    fireEvent.click(screen.getByRole('button', { name: /^Explore/ }));
+
+    const tabPresses = mocks.capture.mock.calls
+      .filter(([event, props]) => event === 'action_completed' && props.action_kind === 'filter_claims')
+      .map(([, props]) => [props.list_id, props.target_id]);
+    expect(tabPresses).toEqual([
+      ['hub_explore', 'hub_matches'],
+      ['hub_lobby', 'hub_explore'],
+    ]);
   });
 
   it('leaves the lobbies card off Requests, which lists the lobbies itself', async () => {

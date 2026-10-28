@@ -242,6 +242,16 @@ const CLAIMS_LIST_IDS: Record<ClaimsListVariant, DebateClaimListId> = {
   lobbyExplore: 'lobby_explore',
 };
 
+/**
+ * GEO-3495. The hub tabs that are claim lists, by the list they show. Lobby shows either its wider
+ * list or, with "Matches only" on, `hub_matches`: the one drawn is `debatesHubLobbyListAtom`.
+ */
+export const HUB_TAB_LIST_IDS: Partial<Record<DebatesHubTab, DebateClaimListId>> = {
+  lobby: CLAIMS_LIST_IDS.lobby,
+  explore: CLAIMS_LIST_IDS.explore,
+  positions: CLAIMS_LIST_IDS.positions,
+};
+
 /** What the tab would hand its own card, for a host drawing the card itself. */
 export type ClaimCardDefaults = { answersReady: boolean; allowsSignedOutVotes: boolean };
 

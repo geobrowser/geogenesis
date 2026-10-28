@@ -305,6 +305,12 @@ export const lobbyExploreSpaceSeedSpentAtom = atom(false);
 export const debatesHubLobbyMoveSpentAtom = atom(false);
 
 /**
+ * Which list the hub's Lobby tab last drew (GEO-3495): its wider list, or `hub_matches` with
+ * "Matches only" on. The tab row records a tab press from and to Lobby as this list.
+ */
+export const debatesHubLobbyListAtom = atom<'hub_lobby' | 'hub_matches'>('hub_lobby');
+
+/**
  * Which account the filter state above belongs to, so it is never handed to a different viewer.
  *
  * Session-scoped state outlives the sign-in that changes who is looking, so "whose are these" has

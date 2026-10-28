@@ -5,8 +5,9 @@ import * as React from 'react';
 import type { ActionComponent, ActionScope } from '~/core/action-context';
 import { ActionSurface, useActionContext } from '~/core/action-context-provider';
 import { recordAction } from '~/core/analytics-operations';
+import { normId } from '~/core/utils/norm-id';
 
-import { toggleId } from './matchmaking/topic-facets';
+import { hasId, toggleId } from './matchmaking/topic-facets';
 
 /**
  * GEO-3495. Where a claim card was shown when someone picked a claim to debate. Ids of lists, never
@@ -44,13 +45,6 @@ export type DebateClaimListId =
   | 'todays_claims_lobby'
   | 'todays_claims_callout'
   | 'todays_claims_explore_banner';
-
-/** GEO-3495. The hub tabs that are claim lists, by the list they show. Lobby is its wider list. */
-export const HUB_TAB_LIST_IDS: Partial<Record<string, DebateClaimListId>> = {
-  lobby: 'hub_lobby',
-  explore: 'hub_explore',
-  positions: 'hub_my_positions',
-};
 
 /**
  * GEO-3495. Where each section of a list starts in its 1-based numbering, as offsets: section `i`'s
@@ -133,7 +127,8 @@ export function useRecordClaimFilter(component: ActionComponent, scope: ActionSc
           'filter_claims',
           getContext({
             target_type: choice.kind,
-            target_id: choice.value,
+            // One spelling per space or topic, whichever its menu row carried.
+            target_id: choice.kind === 'space' || choice.kind === 'topic' ? normId(choice.value) : choice.value,
             list_id: listId,
             ...('selected' in choice ? { filter_selected: choice.selected } : {}),
           })
@@ -165,7 +160,7 @@ export function useRecordedSpaceTopicFilters(
   return {
     recordFilter: (choice: ClaimFilterChoice) => recordFilter(listId, choice),
     onSpaceToggle: (id: string) => {
-      recordFilter(listId, { kind: 'space', value: id, selected: !spaceIds.includes(id) });
+      recordFilter(listId, { kind: 'space', value: id, selected: !hasId(spaceIds, id) });
       onSpaceToggle(id);
     },
     onSpacesClear: () => {
@@ -173,7 +168,7 @@ export function useRecordedSpaceTopicFilters(
       onSpacesClear();
     },
     onTopicToggle: (id: string) => {
-      recordFilter(listId, { kind: 'topic', value: id, selected: !topicIds.includes(id) });
+      recordFilter(listId, { kind: 'topic', value: id, selected: !hasId(topicIds, id) });
       setTopicIds(current => toggleId(current, id));
     },
     onTopicsClear: () => {

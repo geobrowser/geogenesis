@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError, GeoChatSessionError } from '../api';
 import { LobbyTab } from './lobby-tab';
-import { debatesHubMatchesOnlyAtom } from '~/atoms';
+import { debatesHubLobbyListAtom, debatesHubMatchesOnlyAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   /** What the matches lookup answers, and whether it has answered at all. */
@@ -345,6 +345,16 @@ describe('LobbyTab', () => {
     const returning = renderLobby(store);
 
     expect(returning.onTabChange).not.toHaveBeenCalled();
+  });
+
+  // GEO-3495: the hub's tab row records a press from and to Lobby as the list drawn here.
+  it('names the list it draws for the tab row', () => {
+    const store = renderLobby();
+    expect(store.get(debatesHubLobbyListAtom)).toBe('hub_matches');
+
+    fireEvent.click(toggle());
+
+    expect(store.get(debatesHubLobbyListAtom)).toBe('hub_lobby');
   });
 
   it('swaps to the wider list when toggled off', () => {

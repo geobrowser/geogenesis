@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 
 import { isAccountWarmingUpQuery } from '../api';
 import { useRecordClaimFilter } from '../debate-claim-card-surface';
@@ -11,7 +11,12 @@ import { useMatchmakingMatches } from './hooks';
 import { MatchesList } from './matches-list';
 import { MatchesOnlySwitch } from './matches-only-switch';
 import { type NarrowedListState, useNarrowedDefault } from './use-narrowed-default';
-import { type DebatesHubTab, debatesHubLobbyMoveSpentAtom, debatesHubMatchesOnlyAtom } from '~/atoms';
+import {
+  type DebatesHubTab,
+  debatesHubLobbyListAtom,
+  debatesHubLobbyMoveSpentAtom,
+  debatesHubMatchesOnlyAtom,
+} from '~/atoms';
 
 /**
  * The hub's landing tab, and the single answer to "what can I debate right now" (GEO-2861).
@@ -64,6 +69,8 @@ export function LobbyTab({
         : 'filled';
 
   const { showNarrowed, rearm } = useNarrowedDefault(matchesOnly, matchesState);
+  const setLobbyList = useSetAtom(debatesHubLobbyListAtom);
+  React.useEffect(() => setLobbyList(showNarrowed ? 'hub_matches' : 'hub_lobby'), [setLobbyList, showNarrowed]);
 
   /**
    * Once a session, and held outside this component because this component does not last.

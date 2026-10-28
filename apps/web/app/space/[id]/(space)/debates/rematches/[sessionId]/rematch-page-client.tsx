@@ -79,6 +79,7 @@ import {
   carriesEveryTopic,
   claimTopicsById,
   countBy,
+  hasId,
   keepSelectableTopics,
   narrowingOptions,
   orderFacetOptions,
@@ -3010,8 +3011,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   count={spec.count}
                   active={activeTab === spec.id}
                   onClick={() => {
-                    if (spec.id !== activeTab)
-                      recordFilter(PICKER_TAB_LIST_IDS[tab], { kind: 'tab', value: PICKER_TAB_LIST_IDS[spec.id] });
+                    // Only from a list on screen: before the landing there is none, only the skeleton.
+                    if (activeTab !== null && spec.id !== activeTab)
+                      recordFilter(PICKER_TAB_LIST_IDS[activeTab], {
+                        kind: 'tab',
+                        value: PICKER_TAB_LIST_IDS[spec.id],
+                      });
                     setTab(spec.id);
                   }}
                 />
@@ -3043,7 +3048,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                       recordFilter(listId, {
                         kind: option.kind,
                         value: option.id,
-                        selected: !pickedFilterIds.includes(option.id),
+                        selected: !hasId(pickedFilterIds, option.id),
                       });
                       if (option.kind === 'space') onSpaceToggle(option.id);
                       else setTopicPicked(option.id);

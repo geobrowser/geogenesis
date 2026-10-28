@@ -207,7 +207,7 @@ describe('GEO-3495 claim attribution', () => {
         action_kind: 'filter_claims',
         component: 'debate_matchmaking',
         target_type: 'topic',
-        target_id: 'topic-1',
+        target_id: 'topic1',
         filter_selected: true,
         list_id: 'rematch_explore',
         rematch_session_id: 'session',
@@ -215,6 +215,31 @@ describe('GEO-3495 claim attribution', () => {
       expect.objectContaining({ target_type: 'tab', target_id: 'rematch_matches', list_id: 'rematch_explore' }),
     ]);
     expect(completions()[1]).not.toHaveProperty('filter_selected');
+  });
+
+  // A space id reaches the menu in either spelling (see `toggleId`): unticking one picked in the
+  // other is still an untick, and both name the space the same way.
+  it('records a space press under one spelling, whichever the menu row carried', () => {
+    const onSpaceToggle = vi.fn();
+    function Filters() {
+      const filters = useRecordedSpaceTopicFilters('hub_matches', {
+        spaceIds: ['3f2a1b4c-0d5e-4f6a-8b7c-9d0e1f2a3b4c'],
+        onSpaceToggle,
+        onSpacesClear: vi.fn(),
+        topicIds: [],
+        setTopicIds: vi.fn(),
+      });
+      return <button onClick={() => filters.onSpaceToggle('3F2A1B4C0D5E4F6A8B7C9D0E1F2A3B4C')}>Space</button>;
+    }
+    render(<Filters />);
+    fireEvent.click(screen.getByRole('button', { name: 'Space' }));
+    expect(completions()).toEqual([
+      expect.objectContaining({
+        target_type: 'space',
+        target_id: '3f2a1b4c0d5e4f6a8b7c9d0e1f2a3b4c',
+        filter_selected: false,
+      }),
+    ]);
   });
 
   it("records a hub list's space and topic presses, then applies them", () => {
@@ -242,13 +267,13 @@ describe('GEO-3495 claim attribution', () => {
     expect(completions()).toEqual([
       expect.objectContaining({
         target_type: 'space',
-        target_id: 'space-1',
+        target_id: 'space1',
         filter_selected: false,
         list_id: 'hub_matches',
       }),
       expect.objectContaining({
         target_type: 'topic',
-        target_id: 'topic-1',
+        target_id: 'topic1',
         filter_selected: true,
         list_id: 'hub_matches',
       }),
