@@ -116,12 +116,8 @@ export function shouldEnableLocalAudio({
 }
 
 /**
- * How long the local microphone is sure to stay closed: `0` while it is live.
- *
- * Read from the gate itself, so the two cannot disagree. Closed, the gate opens again only at the
- * room clock's next boundary (`msUntilPhaseEnds`: the next turn, a vote, a result, the thank-you),
- * at the earliest the prearm before it; or on something nobody can schedule, an unmute or a turn
- * yielded early, which recording uploads answer by being cut short (GEO-3410).
+ * How long the local mic is sure to stay closed (`0` while live): until the prearm before the room
+ * clock's next boundary. Unschedulable openings (unmute, early yield) cut uploads short (GEO-3410).
  */
 export function msLocalAudioStaysClosed(input: LocalAudioGateInput, msUntilPhaseEnds: number): number {
   if (shouldEnableLocalAudio(input)) return 0;
