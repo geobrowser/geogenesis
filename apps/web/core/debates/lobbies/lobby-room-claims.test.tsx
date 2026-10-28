@@ -52,6 +52,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
 }));
 
 vi.mock('../hooks', () => ({ useDebateActivity: () => ({ data: mocks.activity }) }));
+vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => null }));
 
 vi.mock('../matchmaking/hooks', () => ({
   useDebateRequests: () => ({ data: { outbound: null, incoming: [] } }),

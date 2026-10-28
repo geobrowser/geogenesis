@@ -479,6 +479,40 @@ describe('DebateGatewayClient', () => {
     unsubscribe();
   });
 
+  // Until geo-chat#299 deploys the route is a 404, and every request event would add another.
+  it('does not ask again for history whose route was missing', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const queryFn = vi.fn(async () => {
+      throw new GeoChatRequestError('Not found', null, 404);
+    });
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn,
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      retry: false,
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    const before = queryFn.mock.calls.length;
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-missing', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expect(queryFn.mock.calls.length).toBe(before);
+    unsubscribe();
+  });
+
   // Refetching history re-asks every page it holds, and `requests_changed` can come faster than that.
   // Cancelling the refetch at each flush meant a viewer paged back never saw it land.
   it('lets the history on screen finish refetching when another event comes in', async () => {

@@ -133,7 +133,7 @@ vi.mock('./hooks', () => ({
 // Only the history refresh reads the client here, and only to invalidate.
 vi.mock('@tanstack/react-query', async importOriginal => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
-  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
+  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries, getQueryState: () => undefined }),
 }));
 
 vi.mock('../api', async importOriginal => ({

@@ -4,16 +4,16 @@ import * as React from 'react';
 
 import { atom, useAtom } from 'jotai';
 
+import { useLiveOutboundChallenge, useLiveOutboundRequest } from '~/core/claims/browse/use-claim-matchup';
 import { normId } from '~/core/utils/norm-id';
 
 import { hasActiveDebateFlow } from '../activity-state';
 import type { DebateClaimSummary } from '../api';
 import { useDebateActivity, useGeoChatAuth, useRejectDebateChallenge } from '../hooks';
 import { speakerLabel } from '../playback-utils';
-import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { askWasWithdrawn } from './ask-withdrawals';
 import { useDebateRequests, useWithdrawDebateRequest } from './hooks';
-import { useLiveRequest, useRequestCountdown } from './use-request-countdown';
+import { useRequestCountdown } from './use-request-countdown';
 
 /**
  * The one live ask the viewer has out (GEO-3463): a claim request, which fans out to up to three
@@ -41,6 +41,13 @@ export type OutgoingAsk =
 
 /** Why a Debate now waits while the viewer's one ask is out, wherever the panel pauses one. */
 export const ONE_ASK_AT_A_TIME_REASON = 'One request at a time. Cancel yours to ask on another claim.';
+
+/** The same, for a claim's Debate now: "another claim" only reads right when the ask is one. */
+export function claimPausedReason(ask: OutgoingAsk) {
+  return ask.kind === 'person'
+    ? 'One request at a time. Cancel your challenge to ask on a claim.'
+    : ONE_ASK_AT_A_TIME_REASON;
+}
 
 /**
  * An ask that ran out without anyone taking it. Kept until the viewer dismisses it or asks again, so
@@ -81,15 +88,12 @@ export function useOutgoingAsk() {
   const { authenticated, accountKey } = useGeoChatAuth();
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
-  const currentUserId = useCurrentGeoChatUserId();
   const withdrawRequest = useWithdrawDebateRequest();
   const rejectChallenge = useRejectDebateChallenge();
   const [ended, setEnded] = useAtom(endedAskAtom);
 
-  const outbound = useLiveRequest(requests?.outbound ?? activity?.outbound_request);
-  const challenge = useLiveRequest(activity?.challenge);
-  const outboundChallenge =
-    challenge && currentUserId && challenge.requester.user_id === currentUserId ? challenge : null;
+  const outbound = useLiveOutboundRequest(activity, requests);
+  const outboundChallenge = useLiveOutboundChallenge(activity);
 
   const ask = React.useMemo<OutgoingAsk | null>(() => {
     if (!authenticated) return null;

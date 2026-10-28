@@ -31,7 +31,8 @@ vi.mock('./use-request-countdown', async importOriginal => ({
   useServerClock: () => null,
 }));
 
-const { askIsForClaim, askIsForPerson, ENDED_ASK_TTL_MS, useOutgoingAsk } = await import('./use-outgoing-ask');
+const { askIsForClaim, askIsForPerson, claimPausedReason, ENDED_ASK_TTL_MS, useOutgoingAsk } =
+  await import('./use-outgoing-ask');
 const { HubAskProvider, useHubAskState } = await import('./hub-ask-context');
 const { ASK_WITHDRAWALS_CHANNEL, ASK_WITHDRAWN_TTL_MS, askWasWithdrawn, markAskWithdrawn, unmarkAskWithdrawn } =
   await import('./ask-withdrawals');
@@ -344,5 +345,22 @@ describe('ask withdrawals', () => {
     unmarkAskWithdrawn(id);
 
     expect(askWasWithdrawn(id)).toBe(false);
+  });
+});
+
+// "ask on another claim" only reads right when the ask that is out is a claim.
+describe('claimPausedReason', () => {
+  const base = { id: 'a', createdAt: '2026-10-27T12:00:00Z', expiresAt: '2026-10-27T12:02:00Z' };
+  it('names the challenge when the ask that is out is one', () => {
+    expect(claimPausedReason({ ...base, kind: 'person', recipientProfileSpaceId: 'p', recipientName: 'Ana' })).toBe(
+      'One request at a time. Cancel your challenge to ask on a claim.'
+    );
+  });
+
+  it('keeps "another claim" when the ask is a claim', () => {
+    const ask = { ...base, kind: 'claim', claim: { claim_entity_id: 'c', space_id: 's' } } as Parameters<
+      typeof claimPausedReason
+    >[0];
+    expect(claimPausedReason(ask)).toBe('One request at a time. Cancel yours to ask on another claim.');
   });
 });

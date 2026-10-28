@@ -10,6 +10,7 @@ import {
   type DebateParticipantSummary,
   listDebateHistory,
 } from '../api';
+import { historyRouteMissing } from '../history-route';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { opponentName } from '../rooms/room-opponent';
 import { sameId } from '../rooms/room-presence';
@@ -96,6 +97,7 @@ export function useRefreshHistoryWhenLiveEnds(liveIds: readonly (string | null |
     const now = new Set(key ? key.split('|') : []);
     const ended = previous !== '' && previous.split('|').some(id => !now.has(id));
     if (!ended) return;
+    if (historyRouteMissing(queryClient.getQueryState(debateQueryKeys.history(accountKey)))) return;
     // `cancelRefetch: false`: a refetch or a page already on its way is joined, not restarted. Aborting
     // it is the starvation the gateway's flush leaves history's in-flight fetches to land to avoid.
     void queryClient.invalidateQueries(

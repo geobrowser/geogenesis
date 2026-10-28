@@ -5,6 +5,7 @@ import * as React from 'react';
 import {
   claimRequestBlockedReason,
   debateRequestErrorMessage,
+  useLiveOutboundChallenge,
   useLiveOutboundRequest,
   useMissingIntentRecovery,
 } from '~/core/claims/browse/use-claim-matchup';
@@ -132,6 +133,7 @@ export function LobbyClaimRequest({
   const { data: requests } = useDebateRequests(true);
   // Past its expiry, not "withdraw it", though geo-chat has not said it ended yet.
   const outbound = useLiveOutboundRequest(activity, requests);
+  const outboundChallenge = useLiveOutboundChallenge(activity);
   const createRequest = useCreateDebateRequest();
   const recoverFromMissingIntent = useMissingIntentRecovery({
     claimId: claim.claim_entity_id,
@@ -157,7 +159,10 @@ export function LobbyClaimRequest({
       ? readinessDisabledMessage(reason)
       : null;
   const blockedReason =
-    claimRequestBlockedReason(activity, outbound) ?? readinessBlock ?? unavailableReason ?? undefined;
+    claimRequestBlockedReason(activity, outbound, outboundChallenge) ??
+    readinessBlock ??
+    unavailableReason ??
+    undefined;
 
   return (
     <RequestDebateControl

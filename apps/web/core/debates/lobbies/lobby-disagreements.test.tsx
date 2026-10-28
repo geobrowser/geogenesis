@@ -57,6 +57,7 @@ vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
 }));
 
 vi.mock('../hooks', () => ({ useDebateActivity: () => ({ data: { available_to_debate: true } }) }));
+vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => null }));
 
 vi.mock('../matchmaking/hooks', () => ({
   useDebateRequests: () => ({ data: { outbound: null, incoming: [] } }),

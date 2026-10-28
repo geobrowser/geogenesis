@@ -28,6 +28,7 @@ import {
   getStoredGeoChatAccessToken,
   resetGeoChatSession,
 } from './api';
+import { historyRouteMissing } from './history-route';
 import {
   type DebateLobbyCardPatch,
   applyLobbyCardPatch,
@@ -816,9 +817,11 @@ export class DebateGatewayClient {
     id?: string
   ) {
     if (!this.accountKey) return;
-    this.queueQuery(
-      id ? ['debates', 'account', this.accountKey, kind, id] : ['debates', 'account', this.accountKey, kind]
-    );
+    const queryKey = id
+      ? ['debates', 'account', this.accountKey, kind, id]
+      : ['debates', 'account', this.accountKey, kind];
+    if (kind === 'history' && historyRouteMissing(this.queryClient.getQueryState(queryKey))) return;
+    this.queueQuery(queryKey);
   }
 
   /**
