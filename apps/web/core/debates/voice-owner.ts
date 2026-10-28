@@ -319,7 +319,8 @@ export function useVoiceOwnership({
   );
 
   const takeOver = React.useCallback(async () => {
-    if (!owner) return false;
+    // Signed out: there is no one's voice to coordinate.
+    if (!owner) return true;
     const owned = await owner.claim({ kind });
     if (owned) setReplaced(false);
     return owned;

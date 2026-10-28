@@ -25,6 +25,25 @@ const mocks = vi.hoisted(() => ({
   joinChoiceRef: { current: null as unknown },
   /** What `ensurePreview` hands back — the per-device truth the card reads. */
   tracks: [] as { mediaStreamTrack: { kind: string } }[],
+  /** The viewer's voice across tabs: whether another tab holds it, and whether asking takes it. */
+  voiceHeldElsewhere: false,
+  voiceTakeOver: vi.fn(async () => true),
+  voiceHeldBy: null as 'debate' | null,
+  voiceOnYield: null as null | (() => void | Promise<void>),
+}));
+
+vi.mock('./voice-owner', () => ({
+  useVoiceOwnership: (options: { onYield?: () => void | Promise<void> }) => {
+    mocks.voiceOnYield = options.onYield ?? null;
+    return {
+      ownership: mocks.voiceHeldElsewhere ? 'elsewhere' : 'owned',
+      heldBy: mocks.voiceHeldBy,
+      takeOver: mocks.voiceTakeOver,
+      heldElsewhere: async () => mocks.voiceHeldElsewhere,
+      markElsewhere: () => undefined,
+      announceYieldable: () => undefined,
+    };
+  },
 }));
 
 /*
@@ -89,6 +108,10 @@ beforeEach(() => {
   mocks.beginSession.mockReset();
   mocks.releaseSession.mockReset();
   mocks.stopMedia.mockReset();
+  mocks.voiceHeldElsewhere = false;
+  mocks.voiceHeldBy = null;
+  mocks.voiceTakeOver.mockReset().mockResolvedValue(true);
+  mocks.voiceOnYield = null;
 });
 
 const lobbyCaptureCleanups: (() => void)[] = [];
@@ -725,5 +748,63 @@ describe('the devices match the sentence', () => {
 
     await waitFor(() => expect(mocks.stopMedia).toHaveBeenCalled());
     expect(await screen.findByText('Joining listening only')).toBeInTheDocument();
+  });
+});
+
+describe('voice held by another tab', () => {
+  it('opens nothing by itself, even where the browser allows it', async () => {
+    mocks.permission = 'granted';
+    mocks.voiceHeldElsewhere = true;
+    mount();
+
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn microphone on' })).toBeInTheDocument();
+    expect(mocks.ensurePreview).not.toHaveBeenCalled();
+    expect(mocks.voiceTakeOver).not.toHaveBeenCalled();
+  });
+
+  it('does not open a choice the card arrived with', async () => {
+    mocks.permission = 'granted';
+    mocks.voiceHeldElsewhere = true;
+    mount({ initialJoinState: { micOn: true, cameraOn: true } });
+
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(mocks.ensurePreview).not.toHaveBeenCalled();
+  });
+
+  it('takes voice when the camera is turned on here', async () => {
+    mocks.permission = 'granted';
+    mocks.voiceHeldElsewhere = true;
+    mount();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.ensurePreview).toHaveBeenCalledWith({ audio: false, video: true }));
+    expect(mocks.voiceTakeOver).toHaveBeenCalledOnce();
+  });
+
+  it('says where voice is when a live debate keeps it', async () => {
+    mocks.permission = 'granted';
+    mocks.voiceHeldElsewhere = true;
+    mocks.voiceHeldBy = 'debate';
+    mocks.voiceTakeOver.mockResolvedValue(false);
+    mount();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn microphone on' }));
+    expect(await screen.findByText('Voice is on in your debate tab.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn microphone on' })).toBeInTheDocument();
+    expect(mocks.ensurePreview).not.toHaveBeenCalled();
+  });
+
+  it('turns its devices off when another tab takes voice', async () => {
+    mocks.permission = 'granted';
+    mount();
+    expect(await screen.findByText('Joining with mic and camera on')).toBeInTheDocument();
+
+    await act(async () => {
+      await mocks.voiceOnYield?.();
+    });
+    expect(mocks.stopMedia).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn microphone on' })).toBeInTheDocument();
   });
 });
