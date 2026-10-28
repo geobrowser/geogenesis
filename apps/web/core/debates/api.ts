@@ -2868,6 +2868,8 @@ export type DebateLobbyCallDetails = {
   recording?: CallRecordingState | null;
   /** GEO-3420; absent from a geo-chat that predates scheduled calls. */
   status?: SpaceCallStatus;
+  /** Scheduled calls are switched off: this one stays `not_yet_open` past its `opens_at`. */
+  held?: boolean;
   /** `null` for a call started on the spot. */
   ends_at?: string | null;
   /** `null` for a call started on the spot. */
@@ -2985,6 +2987,10 @@ export async function listDebateLobbyCalendar(
     accountKey,
     signal,
   });
+}
+
+export function isLobbyNotFound(error: unknown): boolean {
+  return error instanceof GeoChatRequestError && error.status === 404 && error.code === 'lobby_not_found';
 }
 
 /** 404 `lobby_not_found` for an id that is not a lobby, which includes a two-person room. */

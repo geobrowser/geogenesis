@@ -78,6 +78,14 @@ describe('CallPreOpen', () => {
     expect(screen.getByRole('link', { name: '← Back to Crypto' })).toHaveAttribute('href', '/space/space1/calls');
   });
 
+  it('says scheduled calls are paused for a held call, and keeps Remind me', () => {
+    render(<CallPreOpen lobby={lobby({ series, agenda: null, held: true })} />);
+    expect(screen.getByText('Scheduled calls are paused.')).toBeInTheDocument();
+    expect(screen.queryByText(/^Opens at/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remind me' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /join|start/i })).not.toBeInTheDocument();
+  });
+
   it('lets a host edit a written agenda', () => {
     render(
       <CallPreOpen

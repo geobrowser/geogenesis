@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { CallRoom } from '~/core/space-calls/call-room';
 import { EndedCallRecording } from '~/core/space-calls/recording/ended-call-recording';
-import { spaceCallPath } from '~/core/space-calls/routes';
+import { spaceCallPath, spaceCallsTabPath } from '~/core/space-calls/routes';
 import { useBrowseSidebarPageDefault } from '~/core/state/browse-sidebar-state';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -17,7 +17,7 @@ import { Text } from '~/design-system/text';
 
 import { CallPreOpen } from '~/partials/space-calls/call-pre-open';
 
-import type { DebateLobbyView } from '../api';
+import { type DebateLobbyView, isLobbyNotFound } from '../api';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
 import { HubHeaderControls } from '../matchmaking/hub-header-controls';
@@ -171,6 +171,7 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
       <LobbyAccess
         lobby={lobby}
         failed={(guest ? guestQuery : lobbyQuery).isError}
+        missing={isLobbyNotFound((guest ? guestQuery : lobbyQuery).error)}
         onRetry={() => void (guest ? guestQuery : lobbyQuery).refetch()}
         presence={presence}
         guestSession={guestSession}
@@ -207,6 +208,7 @@ export function memberPath(
 function LobbyAccess({
   lobby,
   failed,
+  missing,
   onRetry,
   presence,
   guestSession,
@@ -214,6 +216,8 @@ function LobbyAccess({
 }: {
   lobby: LobbyPageView | null;
   failed: boolean;
+  /** The last read was a 404: whatever is cached is gone. */
+  missing: boolean;
   /** Reads the lobby again; a member join follows once it loads. */
   onRetry: () => void;
   presence: ReturnType<typeof useLobbyPresence>;
@@ -223,6 +227,14 @@ function LobbyAccess({
 }) {
   const guest = useIsLobbyGuest();
   const purpose = useLobbyRoomPurpose();
+  // A call gone from geo-chat leaves quietly, never showing a cached copy.
+  if (missing && purpose.purpose === 'call') {
+    return (
+      <LobbyNotice action={{ href: spaceCallsTabPath(purpose.spaceId), label: CALL_STATE_COPY.backToCalls }}>
+        {CALL_STATE_COPY.unavailable}
+      </LobbyNotice>
+    );
+  }
   if (!lobby) {
     const call = purpose.purpose === 'call';
     return failed ? (

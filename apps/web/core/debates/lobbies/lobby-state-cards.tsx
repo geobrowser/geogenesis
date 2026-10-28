@@ -39,6 +39,8 @@ export const CALL_STATE_COPY = {
   /** A scheduled call dropped by a schedule edit (GEO-3420). */
   cancelled: 'This call was cancelled',
   backToSpace: 'Back to the space',
+  unavailable: 'This call isn’t available.',
+  backToCalls: 'Back to calls',
   emptyDetail: 'You’re the first one here. Share the link so others can join.',
 } as const;
 

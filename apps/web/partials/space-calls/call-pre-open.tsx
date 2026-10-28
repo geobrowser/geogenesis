@@ -17,6 +17,7 @@ import { CallRemind } from './call-remind';
 import { PreCallView } from './pre-call-view';
 
 export const SERIES_DEFAULT_AGENDA_NOTE = 'From the series description.';
+export const CALLS_PAUSED_LABEL = 'Scheduled calls are paused.';
 
 /**
  * A space call's page before its room opens (GEO-3420), in place of the lobby's not-yet-open card.
@@ -43,7 +44,7 @@ export function CallPreOpen({ lobby }: { lobby: LobbyPageView }) {
       endsAt={call.ends_at ?? null}
       spaceName={call.space_name}
       exitHref={spaceCalls ? spaceCallsTabPath(call.space_id) : NavUtils.toSpace(call.space_id)}
-      opensLabel={notYetOpenLabel(lobby, now)}
+      opensLabel={call.held ? CALLS_PAUSED_LABEL : notYetOpenLabel(lobby, now)}
       editHref={spaceCalls && isEditor && series ? spaceCallSeriesEditPath(call.space_id, series.series_id) : null}
       remind={
         <CallRemind

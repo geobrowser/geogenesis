@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   memberLobby: undefined as DebateLobbyView | undefined,
   /** The member read failed for good, after its warm-up retries. */
   memberError: false,
+  memberErrorValue: null as unknown,
   memberRefetch: vi.fn(),
   /** The member view was read since the page mounted, rather than served from the cache. */
   memberFresh: true,
@@ -89,6 +90,7 @@ vi.mock('./hooks', () => ({
   useDebateLobby: () => ({
     data: mocks.memberLobby,
     isError: mocks.memberError,
+    error: mocks.memberErrorValue,
     refetch: mocks.memberRefetch,
     isFetchedAfterMount: mocks.memberFresh,
   }),
@@ -250,6 +252,7 @@ beforeEach(() => {
   mocks.authenticated = false;
   mocks.memberLobby = undefined;
   mocks.memberError = false;
+  mocks.memberErrorValue = null;
   mocks.memberRefetch.mockReset();
   mocks.memberFresh = true;
   mocks.guestView = { lobby: lobbyFields, claims: null, highlights: null };
@@ -648,6 +651,22 @@ describe('DebateLobbyPage account prompt', () => {
     mocks.guestView = { lobby: lobbyFields, claims: null, highlights: null };
     render(asCall(<DebateLobbyPage lobbyId="lobby1" />));
     expect(mocks.signInPrompt.at(-1)).toBe(true);
+  });
+
+  it('leaves a call geo-chat no longer has, without its cached view or a retry (GEO-3420)', async () => {
+    const { GeoChatRequestError } = await import('../api');
+    mocks.authenticated = true;
+    mocks.memberLobby = memberView;
+    mocks.memberError = true;
+    mocks.memberErrorValue = new GeoChatRequestError('gone', 'lobby_not_found', 404);
+    render(
+      <LobbyPurposeProvider value={{ purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' }}>
+        <DebateLobbyPage lobbyId="lobby1" />
+      </LobbyPurposeProvider>
+    );
+    expect(screen.getByText('This call isn’t available.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to calls' })).toHaveAttribute('href', '/space/space1/calls');
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 
   it('does not ask for an ended lobby or a signed-in viewer', () => {
