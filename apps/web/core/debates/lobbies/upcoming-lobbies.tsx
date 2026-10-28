@@ -47,6 +47,11 @@ export function lobbyBadgeTime(iso: string) {
     : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
+/** "Today 4 PM", or "Today · 4 PM" with `separator`. Either part drops out when unreadable. */
+export function lobbyWhenLabel(iso: string, separator = ' ') {
+  return [lobbyDayLabel(iso), lobbyBadgeTime(iso)].filter(Boolean).join(separator);
+}
+
 /** RSVP, or Going once set: black, so a lobby the viewer is going to stands out in a row of them. */
 export function LobbyRsvpButton({
   lobby,
@@ -109,7 +114,7 @@ function UpcomingLobbyCard({
   /** The only card: it fills the row instead of leaving most of it empty. */
   alone: boolean;
 }) {
-  const when = [lobbyDayLabel(lobby.starts_at), lobbyBadgeTime(lobby.starts_at)].filter(Boolean).join(' ');
+  const when = lobbyWhenLabel(lobby.starts_at);
   return (
     <li
       className={cx(

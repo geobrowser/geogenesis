@@ -52,12 +52,15 @@ const attendee = {
   avatar_cid: null,
 };
 
+// A lobby opens ten minutes before it starts, so a fixture that moves `starts_at` moves `opens_at` with it.
 const lobby = (id: string, overrides: Partial<DebateLobbySummary> = {}): DebateLobbySummary => ({
   lobby_id: id,
   name: `Debate ${id}`,
   scheduled: true,
   starts_at: new Date(NOW + 3 * HOUR).toISOString(),
-  opens_at: new Date(NOW + 3 * HOUR - 10 * 60_000).toISOString(),
+  opens_at: new Date(
+    Date.parse(overrides.starts_at ?? new Date(NOW + 3 * HOUR).toISOString()) - 10 * 60_000
+  ).toISOString(),
   open: false,
   hosts: [host],
   headcount: 0,

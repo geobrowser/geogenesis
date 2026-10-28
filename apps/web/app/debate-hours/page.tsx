@@ -2,15 +2,21 @@ import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import { Geist } from 'next/font/google';
+import localFont from 'next/font/local';
 
 import { DebateHoursPage } from '~/core/debates/lobbies/debate-hours-page';
 
 /**
  * The marketing site's face, for this page only (GEO-3517): visitors arrive from the home page's
  * "Join debate hours", and the page continues its look. The app keeps Calibre everywhere else.
+ * Self-hosted like the root layout's Geist; the variable latin cut covers the 400 to 600 the page sets.
  */
-const geist = Geist({ subsets: ['latin'], weight: ['400', '500', '600'], display: 'swap' });
+const geist = localFont({
+  src: '../fonts/Geist-Variable-latin.woff2',
+  weight: '100 900',
+  style: 'normal',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Debate hours',

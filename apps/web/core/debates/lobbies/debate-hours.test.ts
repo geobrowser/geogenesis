@@ -6,12 +6,15 @@ import { DEBATE_HOURS_WINDOW_MS, debateHours } from './debate-hours';
 const NOW = Date.parse('2026-10-28T12:00:00Z');
 const HOUR = 60 * 60_000;
 
+// A lobby opens ten minutes before it starts, so a fixture that moves `starts_at` moves `opens_at` with it.
 const lobby = (id: string, overrides: Partial<DebateLobbySummary> = {}): DebateLobbySummary => ({
   lobby_id: id,
   name: id,
   scheduled: true,
   starts_at: new Date(NOW + 5 * HOUR).toISOString(),
-  opens_at: new Date(NOW + 5 * HOUR - 10 * 60_000).toISOString(),
+  opens_at: new Date(
+    Date.parse(overrides.starts_at ?? new Date(NOW + 5 * HOUR).toISOString()) - 10 * 60_000
+  ).toISOString(),
   open: false,
   hosts: [],
   headcount: 0,

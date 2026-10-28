@@ -17,10 +17,10 @@ import { debateRoomPath } from '../rooms/room-routes';
 import { debateHours } from './debate-hours';
 import { useDebateLobbies } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
-import { personName, rsvpLabel } from './lobby-format';
-import { LobbyByline } from './lobby-host-names';
+import { goingLabel, personName, rsvpLabel } from './lobby-format';
+import { LobbyByline, LobbyHostNames } from './lobby-host-names';
 import { LobbyReminderError, useLobbyReminderPress } from './lobby-reminder-press';
-import { lobbyBadgeTime, lobbyDayLabel } from './upcoming-lobbies';
+import { lobbyBadgeTime, lobbyDayLabel, lobbyWhenLabel } from './upcoming-lobbies';
 import { useMinuteNow } from './use-minute-now';
 
 /**
@@ -68,7 +68,7 @@ export function DebateHoursPage({ className }: { className?: string }) {
             <div className="flex flex-wrap items-center gap-5">
               <a
                 href="#debate-hours-list"
-                className="inline-flex h-11 items-center rounded-full bg-[#151515] px-5 text-[20px] font-medium tracking-[-0.8px] text-white hover:bg-[#0e0e0e] md:text-[18px]"
+                className={cx(PILL_CLASS_NAME, SOLID_PILL_CLASS_NAME)}
                 data-geo-analytics-label="Debate hours Find a debate hour"
                 data-geo-analytics-intent="debate_hours_action"
               >
@@ -120,6 +120,16 @@ export function DebateHoursPage({ className }: { className?: string }) {
   );
 }
 
+/**
+ * The marketing site's `PillButton`: one 44px size, its type stepping down from 20 to 18 below
+ * 1730, solid ink or a 2px ink outline that takes a second, inset pixel on hover.
+ */
+const PILL_CLASS_NAME =
+  'inline-flex h-11 items-center justify-center rounded-full px-5 text-[20px] leading-none font-medium tracking-[-0.8px] whitespace-nowrap transition-[background-color,border-color,color,box-shadow] duration-150 disabled:opacity-60 max-[1730px]:text-[18px]';
+const SOLID_PILL_CLASS_NAME = 'bg-[#151515] text-white hover:bg-[#0e0e0e]';
+const OUTLINE_PILL_CLASS_NAME =
+  'border-2 border-[#151515] bg-white text-[#151515] hover:border-[#0e0e0e] hover:shadow-[inset_0_0_0_1px_#0e0e0e]';
+
 /** The marketing palette's light fills, in order down the list. Ink reads on every one of them. */
 const TILE_COLORS = ['#ffd400', '#43d384', '#fe90e1', '#ff7900'] as const;
 
@@ -149,11 +159,6 @@ function useGoingToast(lobbies: DebateLobbySummary[] | undefined) {
       setToast(<span>You’re going to {newlyGoing.name}. We’ve emailed you a calendar invite.</span>);
     }
   }, [accountKey, lobbies, setToast]);
-}
-
-/** "Today · 7 PM". */
-function whenLabel(lobby: DebateLobbySummary) {
-  return [lobbyDayLabel(lobby.starts_at), lobbyBadgeTime(lobby.starts_at)].filter(Boolean).join(' · ');
 }
 
 /** The hosts' faces, overlapping. Public: a host lists the lobby. */
@@ -192,12 +197,10 @@ function DebateHourRsvp({ lobby, onColor = false }: { lobby: DebateLobbySummary;
         data-geo-analytics-label={`Debate hours ${going ? 'Going' : 'RSVP'}`}
         data-geo-analytics-intent="debate_hours_rsvp"
         className={cx(
-          'inline-flex items-center justify-center rounded-full border-2 border-[#151515] font-medium whitespace-nowrap transition-colors disabled:opacity-60',
-          onColor ? 'h-12 w-full text-[20px] tracking-[-0.8px]' : 'h-11 px-5 text-[18px] tracking-[-0.6px]',
+          PILL_CLASS_NAME,
+          onColor && 'w-full',
           // On the coloured card RSVP is the solid pill; in the list it is the outline one.
-          going === onColor
-            ? 'bg-white text-[#151515] hover:bg-[#f2f2f2]'
-            : 'bg-[#151515] text-white hover:bg-[#0e0e0e]'
+          going === onColor ? OUTLINE_PILL_CLASS_NAME : SOLID_PILL_CLASS_NAME
         )}
       >
         {rsvpLabel(going)}
@@ -207,10 +210,16 @@ function DebateHourRsvp({ lobby, onColor = false }: { lobby: DebateLobbySummary;
   );
 }
 
+/**
+ * When the featured card says "Starting soon". Wider than the panel's 15-minute countdown
+ * (`LOBBY_SOON_WINDOW_MS`): a newcomer deciding whether to wait for this one wants to know an hour out.
+ */
+const STARTING_SOON_MS = 60 * 60_000;
+
 /** The next debate hour, or one happening now, as the page's one big thing to do. */
 function FeaturedDebateHour({ lobby, now }: { lobby: DebateLobbySummary; now: number }) {
   const live = lobby.open;
-  const startsSoon = !live && Date.parse(lobby.starts_at) - now < 60 * 60_000;
+  const startsSoon = !live && Date.parse(lobby.starts_at) - now < STARTING_SOON_MS;
   return (
     <article
       aria-labelledby="featured-debate-hour"
@@ -222,7 +231,7 @@ function FeaturedDebateHour({ lobby, now }: { lobby: DebateLobbySummary; now: nu
           {live ? 'Happening now' : startsSoon ? 'Starting soon' : 'Coming up next'}
         </span>
         <span className="text-[16px] leading-5 font-medium tracking-[-0.32px]">
-          {live ? `${lobby.headcount} here` : whenLabel(lobby)}
+          {live ? `${lobby.headcount} here` : lobbyWhenLabel(lobby.starts_at, ' · ')}
         </span>
       </div>
       <h2
@@ -249,7 +258,7 @@ function FeaturedDebateHour({ lobby, now }: { lobby: DebateLobbySummary; now: nu
           onClick={() => markLobbyEntry(lobby.lobby_id, 'debate_hours')}
           data-geo-analytics-label="Debate hours Join lobby"
           data-geo-analytics-intent="debate_hours_action"
-          className="inline-flex h-12 w-full items-center justify-center rounded-full bg-[#151515] text-[20px] font-medium tracking-[-0.8px] text-white hover:bg-[#0e0e0e]"
+          className={cx(PILL_CLASS_NAME, SOLID_PILL_CLASS_NAME, 'w-full')}
         >
           Join
         </Link>
@@ -265,7 +274,7 @@ function FeaturedDebateHour({ lobby, now }: { lobby: DebateLobbySummary; now: nu
 
 /** One more debate hour this week: the day and time on a coloured tile, the name, the hosts, RSVP. */
 function DebateHourCard({ lobby, tile }: { lobby: DebateLobbySummary; tile: string }) {
-  const going = lobby.reminder_count > 0 ? `${lobby.reminder_count} going` : null;
+  const going = lobby.reminder_count > 0 ? goingLabel(lobby.reminder_count) : null;
   return (
     <li
       className="flex flex-col gap-4 rounded-xl border border-[#e2e2e2] bg-white p-5 md:p-4"
@@ -291,13 +300,17 @@ function DebateHourCard({ lobby, tile }: { lobby: DebateLobbySummary; tile: stri
             onClick={() => markLobbyEntry(lobby.lobby_id, 'debate_hours')}
             className="text-[21px] leading-[25px] font-semibold tracking-[-0.63px] hover:underline md:text-[17px] md:leading-[21px] md:tracking-[-0.4px]"
           >
-            <span className="sr-only">{whenLabel(lobby)}: </span>
+            <span className="sr-only">{lobbyWhenLabel(lobby.starts_at, ' · ')}: </span>
             {lobby.name}
           </Link>
           <span className="flex min-w-0 items-center gap-2 text-[16px] leading-5 text-[#151515]/60 md:text-[14px] md:leading-[18px]">
             <HostFaces lobby={lobby} size={26} ring="border-white" />
             <span className="min-w-0 truncate">
-              <LobbyByline lobby={{ ...lobby, reminder_count: 0 }} hostedBy analyticsLabel="Debate hours host" />
+              {lobby.hosts.length > 0 ? (
+                <>
+                  Hosted by <LobbyHostNames hosts={lobby.hosts} analyticsLabel="Debate hours host" />
+                </>
+              ) : null}
             </span>
           </span>
         </div>
@@ -325,7 +338,7 @@ function NoDebateHours() {
         href={NavUtils.toExplore()}
         data-geo-analytics-label="Debate hours Watch debates"
         data-geo-analytics-intent="debate_hours_action"
-        className="inline-flex h-11 items-center self-start rounded-full bg-[#151515] px-5 text-[18px] font-medium tracking-[-0.6px] text-white hover:bg-[#0e0e0e]"
+        className={cx(PILL_CLASS_NAME, SOLID_PILL_CLASS_NAME, 'self-start')}
       >
         Watch debates
       </Link>
@@ -337,11 +350,7 @@ function LoadFailed({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="flex flex-col gap-4 rounded-[20px] border border-[#e2e2e2] p-7 md:p-5">
       <p className="text-[18px] leading-7">We couldn’t load debate hours.</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="inline-flex h-11 items-center self-start rounded-full border-2 border-[#151515] px-5 text-[18px] font-medium tracking-[-0.6px] hover:bg-[#f2f2f2]"
-      >
+      <button type="button" onClick={onRetry} className={cx(PILL_CLASS_NAME, OUTLINE_PILL_CLASS_NAME, 'self-start')}>
         Try again
       </button>
     </div>

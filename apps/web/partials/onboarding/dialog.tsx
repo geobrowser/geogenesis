@@ -389,7 +389,7 @@ type StepWithHeader = (typeof STEPS_WITH_HEADER)[number];
 const StepDots = ({ step }: { step: StepWithHeader }) => {
   const currentOrder = stepOrder[step] ?? 1;
   return (
-    <div className="flex w-full items-center justify-center gap-[7px]">
+    <div className="flex w-full items-center justify-center gap-[7px]" data-testid="onboarding-step-dots">
       {Object.values(stepOrder).map(order => (
         <span
           key={order}
