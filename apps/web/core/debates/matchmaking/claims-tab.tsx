@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
@@ -20,6 +20,7 @@ import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allow
 import {
   DebateClaimCardSurface,
   type DebateClaimListId,
+  useRecordClaimFilter,
   useRecordedSpaceTopicFilters,
 } from '../debate-claim-card-surface';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
@@ -68,6 +69,8 @@ import {
   debatesHubExploreSpaceSeedSpentAtom,
   debatesHubExploreTopicIdsAtom,
   debatesHubHideMyPositionsAtom,
+  debatesHubLobbyArrivalAtom,
+  debatesHubLobbyListAtom,
   debatesHubLobbySearchAtom,
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
@@ -242,15 +245,33 @@ const CLAIMS_LIST_IDS: Record<ClaimsListVariant, DebateClaimListId> = {
   lobbyExplore: 'lobby_explore',
 };
 
-/**
- * GEO-3495. The hub tabs that are claim lists, by the list they show. Lobby shows either its wider
- * list or, with "Matches only" on, `hub_matches`: the one drawn is `debatesHubLobbyListAtom`.
- */
-export const HUB_TAB_LIST_IDS: Partial<Record<DebatesHubTab, DebateClaimListId>> = {
-  lobby: CLAIMS_LIST_IDS.lobby,
+/** GEO-3495. The hub tabs that are a single claim list, by that list. Lobby draws one of two. */
+const HUB_TAB_LIST_IDS: Partial<Record<DebatesHubTab, DebateClaimListId>> = {
   explore: CLAIMS_LIST_IDS.explore,
   positions: CLAIMS_LIST_IDS.positions,
 };
+
+/**
+ * GEO-3495. Records the viewer moving between the hub's claim lists, for the side panel's tab row and
+ * the full-screen list picker alike. Leaving Lobby names the list it is drawing. Arriving on Lobby is
+ * left to Lobby, which records it once it knows which of its two lists it draws.
+ */
+export function useRecordHubListChange() {
+  const recordFilter = useRecordClaimFilter('debate_matchmaking');
+  const lobbyList = useAtomValue(debatesHubLobbyListAtom);
+  const setArrival = useSetAtom(debatesHubLobbyArrivalAtom);
+  return (from: DebatesHubTab, to: DebatesHubTab) => {
+    if (from === to) return;
+    const fromList = from === 'lobby' ? lobbyList : (HUB_TAB_LIST_IDS[from] ?? null);
+    if (to === 'lobby') {
+      setArrival({ from: fromList });
+      return;
+    }
+    setArrival(null);
+    const toList = HUB_TAB_LIST_IDS[to];
+    if (toList) recordFilter(fromList ?? toList, { kind: 'tab', value: toList });
+  };
+}
 
 /** What the tab would hand its own card, for a host drawing the card itself. */
 export type ClaimCardDefaults = { answersReady: boolean; allowsSignedOutVotes: boolean };

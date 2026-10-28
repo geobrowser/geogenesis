@@ -9,7 +9,14 @@ import { Text } from '~/design-system/text';
 
 import { useGeoChatAuth } from '../hooks';
 import { fromClaimsFilterSearch } from './claims-filter-params';
-import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST, VARIANT_ATOMS, readUrlSeed } from './claims-tab';
+import {
+  ClaimsTab,
+  type ClaimsTabVariant,
+  DEFAULT_WORKSPACE_LIST,
+  VARIANT_ATOMS,
+  readUrlSeed,
+  useRecordHubListChange,
+} from './claims-tab';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubLiveRail } from './hub-live-rail';
@@ -120,12 +127,16 @@ export function DebatesHubWorkspace() {
     if (isWorkspaceList(tab)) setList(tab);
   }, []);
 
+  const recordListChange = useRecordHubListChange();
   const picker = (
     <HubFilterMenu
       label={options.find(option => option.value === shown)?.label ?? 'Explore'}
       options={options}
       value={shown}
-      onChange={setList}
+      onChange={next => {
+        recordListChange(shown, next);
+        setList(next);
+      }}
     />
   );
 

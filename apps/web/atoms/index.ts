@@ -3,6 +3,7 @@ import { atomWithStorage } from 'jotai/utils';
 
 import type { ActionContext, ActionScope } from '~/core/action-context';
 import type { Debate } from '~/core/debates/api';
+import type { DebateClaimListId } from '~/core/debates/debate-claim-card-surface';
 import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
@@ -305,10 +306,17 @@ export const lobbyExploreSpaceSeedSpentAtom = atom(false);
 export const debatesHubLobbyMoveSpentAtom = atom(false);
 
 /**
- * Which list the hub's Lobby tab last drew (GEO-3495): its wider list, or `hub_matches` with
- * "Matches only" on. The tab row records a tab press from and to Lobby as this list.
+ * The list the hub's Lobby tab is drawing while it is open (GEO-3495): its wider list, or
+ * `hub_matches` with "Matches only" on. A press off Lobby is recorded as leaving this list.
  */
 export const debatesHubLobbyListAtom = atom<'hub_lobby' | 'hub_matches'>('hub_lobby');
+
+/**
+ * A press onto the hub's Lobby tab, waiting for the tab to decide which of its two lists it draws
+ * (GEO-3495): `from` is the list the viewer left, if they were on one. Lobby records the press once it
+ * has decided, and a way off Lobby before then drops it.
+ */
+export const debatesHubLobbyArrivalAtom = atom<{ from: DebateClaimListId | null } | null>(null);
 
 /**
  * Which account the filter state above belongs to, so it is never handed to a different viewer.
@@ -354,6 +362,8 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPeopleOnlineOnlyAtom, false);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
   set(debatesHubLobbyMoveSpentAtom, false);
+  set(debatesHubLobbyListAtom, 'hub_lobby');
+  set(debatesHubLobbyArrivalAtom, null);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than
   // working state, which is the whole reason it is stored rather than session-scoped. Handing a new
   // account the previous one's *filters* is a leak; handing them a browsing preference held on this

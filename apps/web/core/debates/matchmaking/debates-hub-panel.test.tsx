@@ -503,6 +503,7 @@ describe('DebatesHubPanel', () => {
   });
 
   // GEO-3495: Live draws either of two lists, and a tab press names the one it drew.
+  // Live's list from a visit before, which is not what it draws now: the press onto it waits for Live.
   it('records a press to and from Live as the list Live draws', async () => {
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'explore' });
@@ -514,16 +515,18 @@ describe('DebatesHubPanel', () => {
     );
     mocks.capture.mockClear();
 
+    const tabPresses = () =>
+      mocks.capture.mock.calls
+        .filter(([event, props]) => event === 'action_completed' && props.action_kind === 'filter_claims')
+        .map(([, props]) => [props.list_id, props.target_id]);
+
     fireEvent.click(screen.getByRole('button', { name: /^Live/ }));
-    // With no matches to show, Live steps back to its wider list.
-    await vi.waitFor(() => expect(store.get(debatesHubLobbyListAtom)).toBe('hub_lobby'));
+    // With no matches to show, Live steps back to its wider list, and records the press as that.
+    await vi.waitFor(() => expect(tabPresses()).toEqual([['hub_explore', 'hub_lobby']]));
     fireEvent.click(screen.getByRole('button', { name: /^Explore/ }));
 
-    const tabPresses = mocks.capture.mock.calls
-      .filter(([event, props]) => event === 'action_completed' && props.action_kind === 'filter_claims')
-      .map(([, props]) => [props.list_id, props.target_id]);
-    expect(tabPresses).toEqual([
-      ['hub_explore', 'hub_matches'],
+    expect(tabPresses()).toEqual([
+      ['hub_explore', 'hub_lobby'],
       ['hub_lobby', 'hub_explore'],
     ]);
   });

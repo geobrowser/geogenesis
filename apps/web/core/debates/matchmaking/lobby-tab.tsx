@@ -13,6 +13,7 @@ import { MatchesOnlySwitch } from './matches-only-switch';
 import { type NarrowedListState, useNarrowedDefault } from './use-narrowed-default';
 import {
   type DebatesHubTab,
+  debatesHubLobbyArrivalAtom,
   debatesHubLobbyListAtom,
   debatesHubLobbyMoveSpentAtom,
   debatesHubMatchesOnlyAtom,
@@ -69,8 +70,18 @@ export function LobbyTab({
         : 'filled';
 
   const { showNarrowed, rearm } = useNarrowedDefault(matchesOnly, matchesState);
+  // GEO-3495: which list this is, for a press off Lobby, and a press onto it recorded once the list
+  // is decided rather than when it was pressed, which could not know.
+  const lobbyList = showNarrowed ? 'hub_matches' : 'hub_lobby';
   const setLobbyList = useSetAtom(debatesHubLobbyListAtom);
-  React.useEffect(() => setLobbyList(showNarrowed ? 'hub_matches' : 'hub_lobby'), [setLobbyList, showNarrowed]);
+  React.useEffect(() => setLobbyList(lobbyList), [setLobbyList, lobbyList]);
+  const [arrival, setArrival] = useAtom(debatesHubLobbyArrivalAtom);
+  const recordFilter = useRecordClaimFilter('debate_matchmaking');
+  React.useEffect(() => {
+    if (!arrival || matchesState === 'pending') return;
+    setArrival(null);
+    recordFilter(arrival.from ?? lobbyList, { kind: 'tab', value: lobbyList });
+  }, [arrival, lobbyList, matchesState, recordFilter, setArrival]);
 
   /**
    * Once a session, and held outside this component because this component does not last.
@@ -89,9 +100,11 @@ export function LobbyTab({
   const leaveLobby = React.useCallback(
     (tab: DebatesHubTab) => {
       setMoveSpent(true);
+      // Moved on before deciding which list it draws: the press onto Lobby named neither.
+      setArrival(null);
       onTabChange(tab);
     },
-    [onTabChange, setMoveSpent]
+    [onTabChange, setArrival, setMoveSpent]
   );
   const showExplore = React.useCallback(() => leaveLobby('explore'), [leaveLobby]);
 
@@ -110,7 +123,6 @@ export function LobbyTab({
     showExplore();
   }, [moveSpent, showExplore, warmingUp]);
 
-  const recordFilter = useRecordClaimFilter('debate_matchmaking');
   const toggle = (
     <MatchesOnlySwitch
       analyticsSurface="hub"

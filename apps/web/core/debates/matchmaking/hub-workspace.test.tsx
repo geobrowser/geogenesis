@@ -24,6 +24,7 @@ vi.mock('./claims-tab', async () => {
     // The list a URL means when it names none, so the workspace can follow a bare `/matchmaking`
     // back to Lobby. Mirrored because this file mocks the module wholesale.
     DEFAULT_WORKSPACE_LIST: 'lobby',
+    useRecordHubListChange: () => mocks.recordListChange,
     CLAIMS_TAB_VARIANTS: ['explore', 'lobby', 'positions'],
     VARIANT_ATOMS: {
       explore: {
@@ -76,7 +77,12 @@ vi.mock('./hub-live-rail', () => ({ HubLiveRail: () => <div data-testid="hub-liv
 // Covered through the side panel's suite; here it only matters that the header draws them.
 vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => <div data-testid="hub-header-controls" /> }));
 
-const mocks = vi.hoisted(() => ({ ready: true, authenticated: true, mounts: [] as string[] }));
+const mocks = vi.hoisted(() => ({
+  ready: true,
+  authenticated: true,
+  mounts: [] as string[],
+  recordListChange: vi.fn(),
+}));
 
 /**
  * The address bar, which is both what `useSearchParams` reads and what the workspace writes to. In
@@ -291,6 +297,17 @@ describe('choosing which claim list the workspace shows', () => {
 
     expect(screen.getByTestId('claims-tab-positions')).toBeInTheDocument();
     expect(screen.queryByTestId('lobby-tab')).toBeNull();
+  });
+
+  // GEO-3495: the same recorder as the side panel's tab row, from the list on screen to the one picked.
+  it('records the list the viewer picks', () => {
+    mocks.recordListChange.mockClear();
+    render(<DebatesHubWorkspace />);
+
+    fireEvent.click(picker('Matches'));
+    fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
+
+    expect(mocks.recordListChange).toHaveBeenCalledExactlyOnceWith('lobby', 'positions');
   });
 
   it('remounts the tab when the list changes, rather than reusing the instance', () => {
