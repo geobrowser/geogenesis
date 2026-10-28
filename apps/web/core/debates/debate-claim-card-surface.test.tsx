@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { snapshotActionContext } from '~/core/action-context';
+import { type ActionScope, snapshotActionContext } from '~/core/action-context';
 import { ActionContextProvider, useActionContext } from '~/core/action-context-provider';
 import { runObservedAction } from '~/core/analytics-operations';
 
@@ -44,6 +44,7 @@ describe('GEO-3495 claim attribution', () => {
       list_section_id: 'topic',
       agenda_id: 'agenda',
       agenda_date: '2026-10-27',
+      debated_since_listing: 2,
       list_searched: true,
       rematch_session_id: 'session',
       filter_selected: true,
@@ -53,10 +54,18 @@ describe('GEO-3495 claim attribution', () => {
       list_section_id: 'topic',
       agenda_id: 'agenda',
       agenda_date: '2026-10-27',
+      debated_since_listing: 2,
       list_searched: true,
       rematch_session_id: 'session',
       filter_selected: true,
     });
+  });
+
+  it('drops a debated count that is not a number', () => {
+    const scope = { list_id: 'todays_claims', debated_since_listing: 'twice' } as unknown as ActionScope;
+    expect(snapshotActionContext('debate_claim_card', 'claim', 'claim', scope)).not.toHaveProperty(
+      'debated_since_listing'
+    );
   });
 
   it('puts the created request id on the completion', async () => {

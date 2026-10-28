@@ -76,6 +76,7 @@ describe('shipped action contract', () => {
         list_section_id: 'section',
         agenda_id: 'agenda',
         agenda_date: '2026-10-27',
+        debated_since_listing: 1,
         list_searched: true,
         rematch_session_id: 'session',
         filter_selected: false,

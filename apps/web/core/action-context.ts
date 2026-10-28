@@ -118,7 +118,10 @@ export type ActionContext = {
    * one list: a lobby's curated claim list page.
    */
   list_entity_id?: string;
-  /** GEO-3495. The section of the list the item sits in (an agenda's topic), as an entity id. */
+  /**
+   * GEO-3495. The section of the list the item sits in, as an id: on Today's claims the agenda's data
+   * block (its section); on a lobby's curated list, the card's section.
+   */
   list_section_id?: string;
   /**
    * GEO-3495. The Debate agenda a claim was listed on and its date (YYYY-MM-DD, New York). Set by the
@@ -126,6 +129,11 @@ export type ActionContext = {
    */
   agenda_id?: string;
   agenda_date?: string;
+  /**
+   * GEO-3495. On Today's claims, how many times the claim had been debated since its agenda listing,
+   * which orders debated claims below undebated ones. A count only; dropped unless a finite number.
+   */
+  debated_since_listing?: number;
   /** GEO-3495. Whether the list was narrowed by a search, never what was searched. */
   list_searched?: boolean;
   /** GEO-3495. The in-room picker session the action was taken in (geo-chat's rematch session id). */
@@ -167,6 +175,7 @@ export const ACTION_CONTEXT_FIELDS = [
   'list_section_id',
   'agenda_id',
   'agenda_date',
+  'debated_since_listing',
   'list_searched',
   'rematch_session_id',
   'filter_selected',
@@ -291,6 +300,7 @@ export function snapshotActionContext(
   return Object.fromEntries(
     ACTION_CONTEXT_FIELDS.flatMap(key => {
       const value = context[key];
+      if (key === 'debated_since_listing' && !(typeof value === 'number' && Number.isFinite(value))) return [];
       return value === undefined ? [] : [[key, Array.isArray(value) ? [...value] : value]];
     })
   ) as ActionContext;

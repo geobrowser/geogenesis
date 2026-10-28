@@ -10,7 +10,16 @@ import { recordAction } from '~/core/analytics-operations';
  * GEO-3495. Where a claim card was shown when someone picked a claim to debate. Ids of lists, never
  * their text: a lobby's curated list adds its page as `list_entity_id`.
  *
- * `todays_claims` is reserved for the Today's claims lists (GEO-3489, GEO-3490, GEO-3491).
+ * Today's claims has one id per surface, reserved here so the lists that build it use these rather
+ * than improvising. A distinct id rather than `todays_claims` plus a surface property, so every
+ * report that groups by `list_id` tells the surfaces apart with no change:
+ *   todays_claims                 the in-room picker's tab (GEO-3489)
+ *   todays_claims_hub             the section in the debates side panel and full-screen hub (GEO-3490)
+ *   todays_claims_lobby           a lobby's "Today's claims" tab (GEO-3491)
+ *   todays_claims_callout         the daily callout in the side panel and hub (GEO-3498)
+ *   todays_claims_explore_banner  the Explore banner (GEO-3502)
+ * Each also sets `agenda_id`, `agenda_date`, `list_section_id` (the agenda's data block) and
+ * `debated_since_listing`.
  */
 export type DebateClaimListId =
   | 'rematch_matches'
@@ -28,7 +37,11 @@ export type DebateClaimListId =
   | 'lobby_room_vote'
   | 'lobby_list'
   | 'lobby_explore'
-  | 'todays_claims';
+  | 'todays_claims'
+  | 'todays_claims_hub'
+  | 'todays_claims_lobby'
+  | 'todays_claims_callout'
+  | 'todays_claims_explore_banner';
 
 /** GEO-3495. The hub tabs that are claim lists, by the list they show. Lobby is its wider list. */
 export const HUB_TAB_LIST_IDS: Partial<Record<string, DebateClaimListId>> = {
@@ -75,11 +88,13 @@ export function DebateClaimCardSurface({
 
 /**
  * What a filter choice names (GEO-3495): a tab by its list id, a space or topic by its entity id, the
- * claims source by its token. `filters` / `all` is clearing every filter at once.
+ * claims source by its token. `filters` / `all` is clearing every filter at once. `section` is a
+ * Today's claims agenda section collapsed or expanded from its heading, by its data block id;
+ * `selected` is true when it opened (reserved for GEO-3489).
  */
 export type ClaimFilterChoice =
   | { kind: 'tab'; value: DebateClaimListId }
-  | { kind: 'space' | 'topic'; value: string; selected: boolean }
+  | { kind: 'space' | 'topic' | 'section'; value: string; selected: boolean }
   | { kind: 'claims_source'; value: 'recommended' | 'all' | 'mine' }
   | { kind: 'filters'; value: 'all' };
 
