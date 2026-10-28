@@ -566,16 +566,15 @@ function LobbyRoom({
       header={<LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />}
       belowHeader={!guest && state.status === 'joined' ? <LobbyScheduledRequests lobby={lobby} /> : null}
       people={
-        <>
-          {/* A host's shared screen (GEO-3507), above the speakers as in a call. */}
-          <CallScreenStage members={lobby.members} />
+        // A host's shared screen (GEO-3507), above the speakers as in a call.
+        <CallScreenStage members={lobby.members}>
           <LobbyPeople
             lobby={lobby}
             viewerId={currentUserId}
             ownAvailable={ownAvailable}
             disagreements={disagreements}
           />
-        </>
+        </CallScreenStage>
       }
       aside={{
         tab: 'Claims',
