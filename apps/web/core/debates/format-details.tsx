@@ -120,7 +120,6 @@ export function DebateFormatDetails({
           rebuttalTurnMs={rebuttalTurnMs}
           extendableRounds={maxRebuttalRounds === null ? null : maxRebuttalRounds - requiredRebuttalRounds}
           afterRequiredRounds={requiredRebuttalRounds > 0}
-          numberedOnly={numberedOnly}
         />
       )}
     </div>
@@ -160,18 +159,16 @@ function TurnRow({
   );
 }
 
-/** The dashed row: rebuttal rounds that happen when one debater picks Extend and neither picks End. */
+/** The dashed row: optional rounds added when both debaters pick Extend. */
 function OpenRoundsRebuttalRow({
   rebuttalTurnMs,
   extendableRounds,
   afterRequiredRounds,
-  numberedOnly,
 }: {
   rebuttalTurnMs: number;
   /** The cap less the required rounds, which the turn rows above already list. */
   extendableRounds: number | null;
   afterRequiredRounds: boolean;
-  numberedOnly: boolean;
 }) {
   // The cap is decided with the request (GEO-3201), so a format box without one would be naming a
   // guess at what the server will enforce.
@@ -191,9 +188,7 @@ function OpenRoundsRebuttalRow({
           Then extend, round by round
         </Text>
         <Text as="div" variant="metadata" color="grey-04">
-          {numberedOnly
-            ? 'Both of you must pick Extend to add a round.'
-            : 'A round happens if one of you picks Extend and neither picks End.'}
+          Both of you must pick Extend to add a round.
           {cap}
         </Text>
       </div>
