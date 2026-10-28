@@ -47,23 +47,26 @@ export function seriesSynced(list: Pick<SpaceCallsResponse, 'series'> | undefine
 
 /**
  * After a schedule publish (GEO-3420): refreshes geo-chat if executed and returns the Calls tab href.
- * Other failures are left to the sweep; a 403 means the list won't catch up, so no note.
+ * Other failures are left to the sweep. A refusal (403, or 503 `call_series_disabled` with scheduled
+ * calls off) means the list won't catch up, so no note.
  */
 export function useAfterSeriesPublish(spaceId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   return async ({ seriesId, proposalId, schedule }: { seriesId: string; proposalId: string; schedule: string }) => {
     const outcome = await readScheduleOutcome({ spaceId, proposalId });
     if (outcome === 'executed') {
-      const forbidden = await refreshCallSeries(
+      const refused = await refreshCallSeries(
         spaceId,
         { series_id: dashlessId(seriesId), schedule },
         getPrivyIdentityToken,
         accountKey
       ).then(
         () => false,
-        error => error instanceof GeoChatRequestError && error.status === 403
+        error =>
+          error instanceof GeoChatRequestError &&
+          (error.status === 403 || (error.status === 503 && error.code === 'call_series_disabled'))
       );
-      if (forbidden) return spaceCallsTabPath(spaceId);
+      if (refused) return spaceCallsTabPath(spaceId);
     }
     return scheduledCallsTabHref(spaceId, { seriesId, outcome, schedule });
   };

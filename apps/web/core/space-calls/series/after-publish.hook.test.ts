@@ -34,8 +34,8 @@ describe('useAfterSeriesPublish', () => {
     expect(await result.current(publish)).toContain('outcome=executed');
   });
 
-  it('opens the Calls tab without the note when the refresh answers 403', async () => {
-    mocks.refresh.mockRejectedValue(new GeoChatRequestError('no', 'call_series_disabled', 403));
+  it.each([403, 503])('opens the Calls tab without the note when scheduled calls are off (%i)', async status => {
+    mocks.refresh.mockRejectedValue(new GeoChatRequestError('no', 'call_series_disabled', status));
     const { result } = renderHook(() => useAfterSeriesPublish('space1'));
     expect(await result.current(publish)).toBe('/space/space1/calls');
   });
