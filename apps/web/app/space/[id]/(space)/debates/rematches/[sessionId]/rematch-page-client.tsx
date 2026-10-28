@@ -1099,8 +1099,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * headings over real claims in front of every pair — and, counted before the rest, it could move a
    * claim's listing date, take its place in Earlier this week, or reset the day sections are
    * remembered for. Empty until both publishability lookups have answered.
+   *
+   * Held once they have: `publishabilityPending` covers every tab's spaces, and the other tabs' arrive
+   * after this one has landed. Without the hold, each of those lookups emptied the tab, reset its
+   * sections to their defaults and read as it settling all over again.
    */
-  const todaysScopePending = publishabilityPending || publishableSpacesLoading;
+  const publishabilityUnknown = publishabilityPending || publishableSpacesLoading;
+  const todaysScopeJudged = useLastSettled(!publishabilityUnknown, publishabilityUnknown, sessionId);
+  const todaysScopePending = !todaysScopeJudged;
   const todaysAgendas = React.useMemo(
     () => (todaysScopePending ? NO_AGENDAS : todaysAgendasQuery.agendasIn(canPublishDebateIn)),
     [canPublishDebateIn, todaysAgendasQuery, todaysScopePending]
@@ -1742,8 +1748,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const todaysClaims = todaysClaimsSplit.fresh;
   /** Every row the tab lists, the pair's already-debated fold included. */
   const todaysListedCount = todaysClaimsListed.length;
+  /**
+   * The agendas failed before the tab had anything to show. A refetch that fails later — they are
+   * refetched on focus — keeps the list it already has, as the queries themselves do, rather than
+   * taking the tab out from under someone reading it.
+   */
+  const todaysFailed = Boolean(todaysAgendasQuery.error) && todaysListedCount === 0;
+  /** What the pair land on: claims they can still request, in the sections that start open. */
+  const todaysLandingCount = React.useMemo(
+    () => todaysClaims.filter(claim => todaysSectionByRow.get(claimRowKey(claim)) !== EARLIER_THIS_WEEK_SECTION).length,
+    [todaysClaims, todaysSectionByRow]
+  );
   /** In the strip while it is settling or once it has a row, and only with the flag. */
-  const todaysOffered = todaysClaimsEnabled && !todaysAgendasQuery.error && (todaysSettling || todaysListedCount > 0);
+  const todaysOffered = todaysClaimsEnabled && !todaysFailed && (todaysSettling || todaysListedCount > 0);
 
   // The opponent is whichever participant isn't the local user; with no local user there is none.
   const opponentPositionOf = React.useCallback(
@@ -1962,14 +1979,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const opponentLandingPending =
     sessionQuery.isLoading || positions.isLoading || positions.isFetching || opponentClaimsSettling;
   const landingStates: [PickerTab, LandingState][] = [
-    // First whenever an agenda lists a claim this pair can debate (GEO-3489). Every input to that is
-    // the session's or the graph's, so both of the pair land on the same tab.
-    [
-      'todays',
-      !todaysClaimsEnabled || todaysAgendasQuery.error
-        ? 'empty'
-        : listLandingState(todaysSettling, todaysClaims.length),
-    ],
+    // First whenever an agenda lists a claim this pair can debate in a section that starts open
+    // (GEO-3489): landing on one closed "Earlier this week" heading is landing on nothing to see.
+    // Every input is the session's or the graph's, so both of the pair land on the same tab.
+    ['todays', !todaysClaimsEnabled || todaysFailed ? 'empty' : listLandingState(todaysSettling, todaysLandingCount)],
     // A lookup that failed cannot say whether there are matches. It is not a reason to wait either.
     ['matches', opponentTabError ? 'empty' : listLandingState(opponentLandingPending, matchClaims.length)],
     // Empty while extraction is still running counts as empty: landing on "pulling the claims out"
@@ -2474,7 +2487,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     sessionQuery.error ??
     (tab === 'todays'
       ? // The agendas are the list. geo-chat's rows and counts beside them only refine it.
-        (todaysAgendasQuery.error ?? null)
+        todaysFailed
+        ? todaysAgendasQuery.error
+        : null
       : tab === 'opponent' || tab === 'matches'
         ? (positions.error ?? opponentEntitiesQuery.error)
         : tab === 'related'

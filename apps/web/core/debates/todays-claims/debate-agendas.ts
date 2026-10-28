@@ -246,15 +246,22 @@ export function buildDebateAgendas(
       return true;
     });
 
-  // A claim's newest listing: a space's newest day first, newest of those first, then the week's.
+  // A claim's newest listing, wherever it is: each space's newest day and every older listing this
+  // week, the latest day winning. Not the listing it is shown under, which the page picks by space.
   const listedAtByClaim = new Map<string, string>();
-  const listed = (claimId: string, listedAt: string) => {
-    if (!listedAtByClaim.has(claimId)) listedAtByClaim.set(claimId, listedAt);
+  const newestListing = new Map<string, string>();
+  const listed = (claimId: string, listedOn: string, listedAt: string) => {
+    const known = newestListing.get(claimId);
+    if (known && known >= listedOn) return;
+    newestListing.set(claimId, listedOn);
+    listedAtByClaim.set(claimId, listedAt);
   };
-  for (const space of [...spaces].sort((a, b) => (a.listedOn < b.listedOn ? 1 : -1))) {
-    for (const section of space.sections) for (const claimId of section.claimIds) listed(claimId, section.listedAt);
+  for (const space of spaces) {
+    for (const section of space.sections) {
+      for (const claimId of section.claimIds) listed(claimId, space.listedOn, section.listedAt);
+    }
   }
-  for (const listing of earlierOnce) listed(listing.claimId, listing.listedAt);
+  for (const listing of earlier) listed(listing.claimId, listing.listedOn, listing.listedAt);
 
   const newestDay = spaces.reduce<string | null>(
     (day, space) => (day === null || space.listedOn > day ? space.listedOn : day),

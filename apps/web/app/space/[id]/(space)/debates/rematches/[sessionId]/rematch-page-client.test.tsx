@@ -899,6 +899,7 @@ const todays = vi.hoisted(() => ({
   },
   entities: [] as any[],
   loading: false,
+  error: null as Error | null,
   /** Debates since listing per claim id, or null for a geo-chat that cannot say. */
   counts: null as Map<string, number> | null,
   countsAsked: [] as Array<Array<{ claimId: string; since: string }>>,
@@ -947,7 +948,7 @@ vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
       claimIds: enabled ? [...listedAtByClaim(todays.agendas).keys()] : [],
       claimEntities: enabled ? todays.entities : [],
       isLoading: enabled && todays.loading,
-      error: null,
+      error: enabled ? todays.error : null,
     }),
   };
 });
@@ -7409,6 +7410,7 @@ describe('Today’s claims', () => {
     todays.agendas = { spaces: [], earlier: [], newestDay: null };
     todays.entities = [];
     todays.loading = false;
+    todays.error = null;
     todays.counts = null;
     todays.countsAsked.length = 0;
     todays.members = {};
@@ -7620,6 +7622,49 @@ describe('Today’s claims', () => {
 
     expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Better reentry support reduces recidivism')).toBeNull();
+  });
+
+  // Every tab's spaces are judged by one lookup; another tab's arriving later must not reach in here.
+  it('keeps its sections as the viewer left them while another tab’s spaces are looked up', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    fireEvent.click(screen.getByRole('button', { name: /Brazil election/ }));
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+
+    mocks.spacesPending = true;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+    expect(screen.getByText('The courts are persecuting the Bolsonaros')).toBeInTheDocument();
+    // A choice made in that window is still the day's.
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+    mocks.spacesPending = false;
+    rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+    expect(await screen.findByText('A claim from Monday')).toBeInTheDocument();
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+  });
+
+  it('keeps the tab and its list when a background refetch of the agendas fails', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+
+    todays.error = new Error('graph unavailable');
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Lula should be re-elected')).toBeInTheDocument();
+  });
+
+  it('lands where master does when only Earlier this week, folded, has anything to request', async () => {
+    twoAgendas();
+    mocks.excludedClaimIds = [CLAIM_SOURCE, T_LULA, T_AGE, T_COURTS, T_PRISON, T_VOTE];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    // Still one tap away.
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toBeInTheDocument();
   });
 
   it('lands where master does when no space has an agenda', async () => {

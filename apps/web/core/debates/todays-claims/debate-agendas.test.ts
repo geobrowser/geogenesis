@@ -165,6 +165,24 @@ describe('buildDebateAgendas', () => {
     expect(earlier.map(listing => [listing.claimId, listing.listedOn])).toEqual([[claim(2), '2026-10-25']]);
   });
 
+  // Counted from the newest listing anywhere, not from the space the claim happens to be shown under.
+  it('dates a claim from its newest listing across spaces', () => {
+    const agendas = [
+      agenda('agenda-world-26', { [WORLD]: { date: '2026-10-26T00:00:00-04:00', blocks: ['b-world'] } }),
+      agenda('agenda-debates-28', { [DEBATES]: { date: '2026-10-28T00:00:00-04:00', blocks: ['b-debates-28'] } }),
+      agenda('agenda-debates-27', { [DEBATES]: { date: '2026-10-27T00:00:00-04:00', blocks: ['b-debates-27'] } }),
+    ];
+    const blocks = [
+      block('b-world', 'World', [claim(1)]),
+      block('b-debates-28', 'Today', [claim(2)], DEBATES),
+      block('b-debates-27', 'Yesterday', [claim(1)], DEBATES),
+    ];
+
+    const { listedAtByClaim } = buildDebateAgendas(agendas, blocks, allClaims, TODAY);
+
+    expect(listedAtByClaim.get(claim(1))).toBe('2026-10-27T00:00:00-04:00');
+  });
+
   it('leaves out items that are not claims, and blocks with none', () => {
     const agendas = [agenda('agenda-28', { [WORLD]: { date: '2026-10-28T00:00:00-04:00', blocks: ['b-1', 'b-2'] } })];
     const blocks = [block('b-1', 'Mixed', [claim(1), 'not-a-claim']), block('b-2', 'Notes', ['not-a-claim'])];
