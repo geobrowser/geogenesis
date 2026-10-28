@@ -3963,8 +3963,8 @@ function DebateDebugMenu({
             <MicrophoneIcon muted={audioMuted} />
           </RecordingCircleButton>
           <RecordingCircleButton
-            ariaLabel={remoteAudioEnabled ? 'Disable audio' : 'Enable audio'}
-            title={remoteAudioEnabled ? 'Disable audio' : 'Enable audio'}
+            ariaLabel={remoteAudioEnabled ? 'Turn speaker off' : 'Turn speaker on'}
+            title={remoteAudioEnabled ? 'Turn speaker off' : 'Turn speaker on'}
             onClick={onToggleRemoteAudioEnabled}
             disabled={controlsDisabled}
             active={!remoteAudioEnabled}

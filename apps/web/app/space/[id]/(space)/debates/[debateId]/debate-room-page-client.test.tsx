@@ -3608,7 +3608,7 @@ describe('DebateRoomPageClient', () => {
     const remoteAudio = document.createElement('audio');
     act(() => emitRoomEvent('trackSubscribed', { kind: 'audio', attach: () => remoteAudio, detach: () => [] }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disable audio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Turn speaker off' }));
     expect(remoteAudio.muted).toBe(true);
     // As LiveKit's does: every remote audio element is unmuted and played.
     mocks.roomStartAudio.mockImplementation(async () => {
@@ -3890,7 +3890,7 @@ describe('DebateRoomPageClient', () => {
     expect(debateVideoTile('local').parentElement).toHaveClass('max-w-[430px]');
     expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Disable audio' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Turn speaker off' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
     expect(screen.queryByText(/has the floor/i)).not.toBeInTheDocument();
     expectActiveDebateVideoTile('local');
@@ -3971,7 +3971,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Disable audio' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn speaker off' })).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Debate phases' })).toBeInTheDocument();
     expect(screen.getByText('Connecting').closest('li')).not.toHaveAttribute('aria-current');
     expect(screen.getByText('Preflight').closest('li')).not.toHaveAttribute('aria-current');
@@ -3984,7 +3984,7 @@ describe('DebateRoomPageClient', () => {
     act(() => trackSubscribed?.({ attach: () => remoteVideo }));
     expect(remoteVideo.muted).toBe(false);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disable audio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Turn speaker off' }));
 
     await waitFor(() => expect(remoteVideo.muted).toBe(true));
     expectDebateVideoTileInColor('remote');
