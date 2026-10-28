@@ -130,8 +130,13 @@ export function startVoiceCallTelemetry(
   const micTrack = () => local.getTrackPublication(Track.Source.Microphone)?.track as LocalAudioTrack | undefined;
 
   /** An unpublished mic has no label, and is not a device change. */
-  const noteMicKind = () => {
-    const kind = micKindOf(micTrack()?.mediaStreamTrack?.label);
+  let micReads = 0;
+  const noteMicKind = async () => {
+    const read = ++micReads;
+    const label = await micLabel(micTrack()).catch(() => undefined);
+    // A later read has the newer device; the call may also have ended meanwhile.
+    if (read !== micReads || ended) return;
+    const kind = micKindOf(label);
     micKind.note(kind === 'unknown' ? null : kind);
   };
 
@@ -143,7 +148,7 @@ export function startVoiceCallTelemetry(
     let spansMuteChange = false;
     let committed = false;
     try {
-      noteMicKind();
+      await noteMicKind();
       // A refused read throws out of the sample, which is dropped: an empty snapshot taken as the
       // baseline would make the next sample report the whole call as one interval.
       const senderEntries = await readStats(micTrack());
@@ -303,8 +308,9 @@ export function startVoiceCallTelemetry(
   };
 
   const onActiveDevice = (kind: MediaDeviceKind) => {
-    if (kind === 'audioinput') noteMicKind();
+    if (kind === 'audioinput') void noteMicKind();
   };
+  const onLocalTrackPublished = () => void noteMicKind();
 
   const onPageHide = () => {
     if (surface !== 'debate') return finish('page_closed');
@@ -328,7 +334,7 @@ export function startVoiceCallTelemetry(
     room.on(RoomEvent.ConnectionStateChanged, onConnectionState);
     room.on(RoomEvent.Disconnected, onDisconnected);
     room.on(RoomEvent.ActiveDeviceChanged, onActiveDevice);
-    room.on(RoomEvent.LocalTrackPublished, noteMicKind);
+    room.on(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
     local.on(ParticipantEvent.ConnectionQualityChanged, onQuality);
     local.on(ParticipantEvent.TrackMuted, onMuteChange);
     local.on(ParticipantEvent.TrackUnmuted, onMuteChange);
@@ -353,13 +359,25 @@ export function startVoiceCallTelemetry(
     room.off(RoomEvent.ConnectionStateChanged, onConnectionState);
     room.off(RoomEvent.Disconnected, onDisconnected);
     room.off(RoomEvent.ActiveDeviceChanged, onActiveDevice);
-    room.off(RoomEvent.LocalTrackPublished, noteMicKind);
+    room.off(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
     local.off(ParticipantEvent.ConnectionQualityChanged, onQuality);
     local.off(ParticipantEvent.TrackMuted, onMuteChange);
     local.off(ParticipantEvent.TrackUnmuted, onMuteChange);
     window.removeEventListener('pagehide', onPageHide);
   }
   return () => finish('left');
+}
+
+/**
+ * The physical microphone's label. A processor (the debate room's noise filter) publishes its own
+ * output track, whose label names no device, so its source device is looked up instead.
+ */
+async function micLabel(track: LocalAudioTrack | undefined) {
+  if (!track) return undefined;
+  if (!track.getProcessor()) return track.mediaStreamTrack?.label;
+  const deviceId = await track.getDeviceId(false);
+  const devices = (await navigator.mediaDevices?.enumerateDevices?.()) ?? [];
+  return devices.find(device => device.kind === 'audioinput' && device.deviceId === deviceId)?.label;
 }
 
 /** Bound each read separately so a late browser result cannot commit an expired sample. */
