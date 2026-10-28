@@ -67,7 +67,7 @@ type ResponseButtonProps = {
   pendingClassName?: string;
   ariaLabel?: string;
   tooltip?: boolean;
-  buttonProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
+  buttonProps?: React.ButtonHTMLAttributes<HTMLButtonElement> & { [key: `data-${string}`]: string };
   children: React.ReactNode;
 };
 
