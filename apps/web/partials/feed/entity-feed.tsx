@@ -132,6 +132,8 @@ type EntityFeedProps = {
   topicFacetEndpoint?: string;
   /** Keep the Topic picker visible while its options load or when the default list is empty. */
   showTopicFilter?: boolean;
+  /** Drop the Topic counts under Top. */
+  hideTopicCountsUnderTop?: boolean;
   /** Stable query parameters owned by a contextual feed, such as the page Topic and route space. */
   fixedParams?: Record<string, string>;
   /** Optional bound for contextual AND-composed Topic selections. */
@@ -284,6 +286,7 @@ export function EntityFeed({
   selectTypesWithResultsByDefault = false,
   topicFacetEndpoint,
   showTopicFilter = false,
+  hideTopicCountsUnderTop = false,
   fixedParams = {},
   maxTopicSelections,
   feedTopSpacingClassName,
@@ -403,7 +406,7 @@ export function EntityFeed({
     ? topicFacets.isLoading || topicFacets.isPlaceholderData
     : showTopicFilter;
   const topicFacetFailed = Boolean(topicFacetEndpoint) && topicFacets.isError && !topicFacets.data;
-  const topicCountsExact = sort !== 'top';
+  const topicCountsExact = hideTopicCountsUnderTop ? sort !== 'top' : true;
   const availableTopicOptions = React.useMemo<HubFilterOption<string>[]>(() => {
     if (!topicFacetEndpoint) return [];
     return orderFacetOptions(topicFacets.data?.topics ?? [], selectedTopicIds).map(topic => ({
