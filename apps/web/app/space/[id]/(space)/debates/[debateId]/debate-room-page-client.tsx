@@ -1222,10 +1222,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setConnectionConflictSource('ownership_released');
         setRoomError('This debate moved to another tab.');
         setRoomState('idle');
+        const releasedFrom = roomStateRef.current;
+        // Now, not on the next render: the taking tab's voice claim may reach this tab first.
+        roomStateRef.current = 'idle';
         logDebateConnectionDiagnostic('ownership-released', {
           debateId,
           instanceId: connectionInstanceIdRef.current,
-          roomState: roomStateRef.current,
+          roomState: releasedFrom,
         });
         reportConnectionConflict(
           generation,

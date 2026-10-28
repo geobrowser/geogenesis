@@ -3252,6 +3252,37 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument();
   });
 
+  it('gives voice to the tab it just handed the room to, before re-rendering', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    // "Continue here" in another tab: the room is handed over, then that tab claims voice before
+    // this one renders again.
+    let voiceReleased: boolean | undefined;
+    await act(async () => {
+      const roomReleased = await mocks.ownershipTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+      });
+      expect(roomReleased).toBe(true);
+      voiceReleased = await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+        requesterLabel: 'debate',
+      });
+    });
+    expect(voiceReleased).toBe(true);
+  });
+
   it('keeps voice from another tab while the debate is under way', async () => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
