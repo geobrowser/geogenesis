@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom';
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { entityActionScope } from '~/core/action-entity-context';
 import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/config';
+import { useRematchPanelContext } from '~/core/debates/rematch-panel-context';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
@@ -34,6 +35,7 @@ import {
   shouldSuppressSidePanelPathnameAutoClose,
 } from '~/core/state/personal-profile/create-post-flow';
 import type { Entity } from '~/core/types';
+import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { NavUtils } from '~/core/utils/utils';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
@@ -42,12 +44,13 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { CloseSidePanel } from '~/design-system/icons/close-side-panel';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Fullscreen } from '~/design-system/icons/full-screen';
-import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
+import { MobileSheetSurface } from '~/design-system/mobile-sheet-surface';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { BountyDetailHeader, BountyDetailSections } from '~/partials/bounties';
 import { EntityPageBody } from '~/partials/entity-page/entity-page-body';
+import { EntitySidePanelNavigation } from '~/partials/entity-page/entity-side-panel-navigation';
 import { useEntityPageSurfaceData } from '~/partials/entity-page/hooks/use-entity-page-surface-data';
 import { useScrollToCommentsOnOpen } from '~/partials/entity-page/hooks/use-scroll-to-comments-on-open';
 import { NavbarBreadcrumb } from '~/partials/navbar/navbar-breadcrumb';
@@ -157,6 +160,7 @@ function EntitySidePanelHeader({
 }) {
   const panelCtx = React.useContext(EntitySidePanelEditContext);
 
+  const inRematch = useRematchPanelContext() !== null;
   const entityPageHref = NavUtils.toEntity(entitySpaceId, entityId, panelCtx?.panelWantsEdit ?? false);
 
   return (
@@ -164,7 +168,7 @@ function EntitySidePanelHeader({
       <button
         type="button"
         onClick={onClose}
-        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01 lg:[&_svg]:rotate-90"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01 lg:hidden"
         aria-label="Close side panel"
       >
         <CloseSidePanel color="grey-04" />
@@ -180,10 +184,12 @@ function EntitySidePanelHeader({
         href={entityPageHref}
         entityId={entityId}
         spaceId={entitySpaceId}
-        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-grey-02 bg-white px-2 text-metadata font-medium text-text shadow-light transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:text-text"
-        aria-label="Open entity full page"
+        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-grey-02 bg-white px-2 text-metadata font-medium text-text shadow-light transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:text-text lg:hidden"
+        target={inRematch ? '_blank' : undefined}
+        rel={inRematch ? 'noopener noreferrer' : undefined}
+        aria-label={inRematch ? 'Open entity in new tab' : 'Open entity full page'}
       >
-        Open
+        {inRematch ? 'Open in new tab' : 'Open'}
         <Fullscreen />
       </Link>
     </div>
@@ -224,7 +230,7 @@ function EntitySidePanelBody({
     return (
       <div className="flex flex-1 items-center justify-center px-4 py-24 mobile:px-5">
         <Text variant="body" color="grey-04">
-          Could not load this entity in this space. Try opening it full page from the link in the header.
+          Could not load this entity in this space.
         </Text>
       </div>
     );
@@ -236,6 +242,7 @@ function EntitySidePanelBody({
         id={entityId}
         spaceId={entitySpaceId}
         initialBlocks={surface.blocks}
+        isLoadingBlocks={surface.isLoadingBlocks}
         initialBlockRelations={surface.blockRelations}
         initialTabs={surface.initialTabs}
         initialCollectionItems={surface.initialCollectionItems}
@@ -284,6 +291,7 @@ export function EntitySidePanelSurface({
   previewName,
   previewDescription,
   scrollToCommentsRequest = null,
+  initialTab,
   onClose,
 }: {
   entityId: string;
@@ -302,6 +310,7 @@ export function EntitySidePanelSurface({
    * is a new request — the panel passes its target, which a second click on the same card replaces.
    */
   scrollToCommentsRequest?: object | null;
+  initialTab?: EntitySidePanelTabSelection;
   onClose: () => void;
 }) {
   const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null);
@@ -328,17 +337,17 @@ export function EntitySidePanelSurface({
         openedWithMainViewEditing={openedWithMainViewEditing}
         openedFromReviewEdits={openedFromReviewEdits}
       >
-        <div className="flex min-h-0 flex-1 flex-col">
-          {showHeader ? (
-            <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
-          ) : null}
-          <div
-            ref={setScrollElement}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
-            data-entity-side-panel-scroll
-            data-mobile-sheet-scroll
-          >
-            <EntitySidePanelActiveTabProvider entityId={entityId} spaceId={effectiveSpaceId}>
+        <EntitySidePanelActiveTabProvider entityId={entityId} spaceId={effectiveSpaceId} initialTab={initialTab}>
+          <EntitySidePanelNavigation entityId={entityId} spaceId={effectiveSpaceId}>
+            {showHeader ? (
+              <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
+            ) : null}
+            <div
+              ref={setScrollElement}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+              data-entity-side-panel-scroll
+              data-mobile-sheet-scroll
+            >
               <ScrollToCommentsOnOpen container={scrollElement} request={scrollToCommentsRequest} />
               <EntitySidePanelBody
                 key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
@@ -350,16 +359,17 @@ export function EntitySidePanelSurface({
                 previewName={previewName}
                 previewDescription={previewDescription}
               />
-            </EntitySidePanelActiveTabProvider>
-          </div>
-        </div>
+            </div>
+          </EntitySidePanelNavigation>
+        </EntitySidePanelActiveTabProvider>
       </EntitySidePanelEditModeProvider>
     </ActionContextProvider>
   );
 }
 
 // On mobile the panel opens as a bottom sheet (like the ranking compose flow) rather than a
-// full-height right-hand drawer. It starts this far below the top of the screen.
+// full-height right-hand drawer. It starts this far below the top of the screen, and an upward
+// swipe takes it full screen.
 const MOBILE_SHEET_TOP_OFFSET_PX = 200;
 
 export function EntitySidePanel() {
@@ -419,14 +429,10 @@ export function EntitySidePanel() {
     closeSidePanel();
   }, [bumpReviewVersion, closeSidePanel, createPostFlow, jotaiStore, setCreatePostFlow, setEditable, sidePanelTarget]);
 
-  const {
-    dragControls,
-    handleDragEnd: handleSheetDragEnd,
-    handlePointerDown: handleSheetPointerDown,
-    setOverlayElement,
-  } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheetControlsRef, sheet } = useMobileSheetDrag({
     enabled: isMobile && Boolean(sidePanelTarget),
     onDismiss: handleCloseSidePanel,
+    peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
   });
 
   React.useEffect(() => {
@@ -535,6 +541,7 @@ export function EntitySidePanel() {
           openedFromReviewEdits={openedFromReviewEdits}
           forceRequestedSpace={forceRequestedSpace}
           scrollToCommentsRequest={sidePanelTarget.scrollToComments ? sidePanelTarget : null}
+          initialTab={sidePanelTarget.initialTab}
           onClose={handleCloseSidePanel}
         />
       </EntitySidePanelPopoverPortalProvider>
@@ -552,7 +559,6 @@ export function EntitySidePanel() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.15 }}
-        onPointerDown={handleSheetPointerDown}
       >
         <button
           type="button"
@@ -560,28 +566,18 @@ export function EntitySidePanel() {
           onClick={handleCloseSidePanel}
           aria-label="Close"
         />
-        <motion.div
+        <MobileSheetSurface
           ref={panelHostRef as React.Ref<HTMLDivElement>}
           data-entity-side-panel
-          data-mobile-sheet-surface
           role="dialog"
           aria-modal="true"
           aria-label="Entity side panel"
-          drag="y"
-          dragControls={dragControls}
-          dragListener={false}
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={0.12}
-          onDragEnd={handleSheetDragEnd}
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-          className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
-          style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
+          sheetStyle={sheetStyle}
+          sheetControlsRef={sheetControlsRef}
+          sheet={sheet}
         >
-          <MobileSheetGrabHandle />
           {panelBody}
-        </motion.div>
+        </MobileSheetSurface>
       </motion.div>,
       document.body
     );

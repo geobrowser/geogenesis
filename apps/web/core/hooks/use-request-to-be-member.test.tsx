@@ -56,6 +56,17 @@ describe('useRequestToBeMember', () => {
     expect(mocks.requestSpaceMembership).toHaveBeenCalledOnce();
   });
 
+  it('sends the space name with the join conversion when the control knows it', async () => {
+    const { result } = renderHook(() => useRequestToBeMember({ spaceId: SPACE, space: { name: 'Philosophy' } }), {
+      wrapper,
+    });
+
+    await act(() => result.current.requestToBeMemberAsync());
+
+    const dataLayer = (window as Window & { dataLayer?: Record<string, unknown>[] }).dataLayer ?? [];
+    expect(dataLayer.at(-1)).toMatchObject({ event: 'geo_join_space', space_id: SPACE, space_name: 'Philosophy' });
+  });
+
   // Pressed live by someone already in: say so, as it always has.
   it('reports an existing membership on a live press', async () => {
     mocks.alreadyMember = true;

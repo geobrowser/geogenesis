@@ -9,6 +9,12 @@ import { isDebateProfileMissing } from '~/core/debates/api';
 import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { useDisagreementCount } from '~/core/debates/matchmaking/use-disagreement-count';
+import { useDebateRoom } from '~/core/debates/rooms/hooks';
+import { useRequestRoom } from '~/core/debates/rooms/request-room';
+import { opponentOf } from '~/core/debates/rooms/room-opponent';
+import { noticeFrom, sameId } from '~/core/debates/rooms/room-presence';
+import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
+import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -16,6 +22,8 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import { Spaces } from '~/core/utils/space';
+
+import { ScheduledDebateNoticeDialog } from '~/partials/scheduled-debates/scheduled-debate-notice';
 
 import { OwnScheduleModal } from './own-schedule-modal';
 import { Notice } from './peer-availability';
@@ -32,13 +40,15 @@ export function AvailabilityDeepLink() {
   const [profileSpaceId, setProfileSpaceId] = React.useState<string | null>(null);
   const [rescheduleRequestId, setRescheduleRequestId] = React.useState<string | null>(null);
   const [via, setVia] = React.useState<string | null>(null);
+  const [pickedStart, setPickedStart] = React.useState<string | null>(null);
   const setToast = useSetToast();
   const notAPerson = React.useCallback(() => setToast(<span>{NOT_A_PERSON_MESSAGE}</span>), [setToast]);
-  useAvailabilityDeepLink((spaceId, requestId, linkVia) => {
+  useAvailabilityDeepLink((spaceId, requestId, linkVia, start) => {
     if (!spaceId) return notAPerson();
     setProfileSpaceId(spaceId);
     setRescheduleRequestId(requestId);
     setVia(linkVia);
+    setPickedStart(start);
   });
   // Stable, since the modal fires it from an effect.
   const dismissNotAPerson = React.useCallback(() => {
@@ -50,9 +60,12 @@ export function AvailabilityDeepLink() {
 
   return (
     <SharedAvailabilityModal
+      // A new link starts its own decision rather than inheriting the last one's.
+      key={`${profileSpaceId}:${rescheduleRequestId ?? pickedStart ?? ''}`}
       open
       profileSpaceId={profileSpaceId}
       rescheduleRequestId={rescheduleRequestId}
+      pickedStart={pickedStart}
       via={via}
       onClose={() => setProfileSpaceId(null)}
       onNotAPerson={dismissNotAPerson}
@@ -75,6 +88,7 @@ export function SharedAvailabilityModal({
   open,
   profileSpaceId,
   rescheduleRequestId = null,
+  pickedStart = null,
   via = null,
   onClose,
   onNotAPerson,
@@ -83,6 +97,8 @@ export function SharedAvailabilityModal({
   profileSpaceId: string;
   /** Picking a slot moves this scheduled request rather than proposing a new one. */
   rescheduleRequestId?: string | null;
+  /** A time the link picked in advance: "none of these work"'s emailed times (GEO-3429). */
+  pickedStart?: string | null;
   /** The link's `via` attribution, for analytics. */
   via?: string | null;
   onClose: () => void;
@@ -108,7 +124,7 @@ export function SharedAvailabilityModal({
     // The trigger was cleared on arrival, so the current URL would not reopen this. A new account
     // goes through onboarding and is sent back here afterwards, and should land on the week again —
     // still carrying the `via` it came with, or that second arrival loses its attribution.
-    redirectTo: toAvailability(profileSpaceId, { rescheduleRequestId, via: via ?? undefined }),
+    redirectTo: toAvailability(profileSpaceId, { rescheduleRequestId, pickedStart, via: via ?? undefined }),
   });
   // Whether this is a person at all, and the only name there is for a signed-out recipient — who is
   // who this link is mostly for. `null` is a space that does not exist, which is not a person either.
@@ -161,15 +177,33 @@ export function SharedAvailabilityModal({
     debateAvailabilityLinkOpened({
       viewer: isSelf ? 'self' : authenticated ? 'other' : 'signed_out',
       peer: isSelf ? null : settledPeer,
-      rescheduling: rescheduleRequestId !== null,
+      rescheduleRequestId,
       via,
     })
   );
 
+  const roomOpen = useRoomOpenFor(open && !isSelf ? rescheduleRequestId : null, { ready, authenticated });
+  const [calendarAnyway, setCalendarAnyway] = React.useState(false);
+
   if (isSelf) {
     return <OwnScheduleModal open={open} onOpenChange={next => !next && onClose()} surface="availability_link" />;
   }
-  if (!whoseKnown) return null;
+  if (!whoseKnown || roomOpen === null) return null;
+
+  // GEO-3427, board 2. Once the room is open, "Choose different time" is mostly opened by someone who
+  // is late or not coming, and a week of slots is the wrong answer to both. They get the three
+  // choices first, and the week is still one press away.
+  if (roomOpen && rescheduleRequestId && !calendarAnyway) {
+    return (
+      <ScheduledDebateNoticeDialog
+        open={open}
+        requestId={rescheduleRequestId}
+        initialStep="decide"
+        onClose={onClose}
+        onReschedule={() => setCalendarAnyway(true)}
+      />
+    );
+  }
 
   const notice = (() => {
     if (peer === 'error') return <Notice className="flex-1">Couldn&rsquo;t load their availability.</Notice>;
@@ -210,11 +244,71 @@ export function SharedAvailabilityModal({
       userId={person?.user_id ?? ''}
       peerName={name}
       rescheduleRequestId={rescheduleRequestId}
-      entry={rescheduleRequestId ? 'reschedule_link' : 'availability_link'}
+      initialSelectedStart={pickedStart}
+      entry={rescheduleRequestId ? 'reschedule_link' : pickedStart ? 'no_time_works_link' : 'availability_link'}
       disagreementCount={disagreementCount}
       onClose={onClose}
     >
       {notice}
     </PeerAvailabilityBookingModal>
   );
+}
+
+/**
+ * Whether a reschedule link should open on the three choices (board 2) rather than the week: the
+ * debate's room is open, and the viewer is the one not there. `null` while that is still being read,
+ * so the week is not drawn and then swapped. `false` for anything that is not a reschedule, for a
+ * signed-out viewer (who sees the week's own sign-in first, and is decided again once signed in), and
+ * once a read fails, which is no reason to withhold the week the link has always opened.
+ *
+ * Not a debate that already happened, though geo-chat lists its room as joinable until it is swept.
+ *
+ * Not the person waiting: the running-late email gives them this same link as its Reschedule, and
+ * "I'm running late" is the wrong question for someone already in the room. They are inside now, or
+ * the other debater has said they are late.
+ *
+ * Nothing is decided until Privy has restored the session, because an email link opens in a fresh
+ * tab where signed-out is only "not known yet". Then it is settled once per arrival: the reads keep
+ * polling, and following them would swap one dialog for the other under someone mid-choice.
+ */
+function useRoomOpenFor(requestId: string | null, auth: { ready: boolean; authenticated: boolean }): boolean | null {
+  const reading = requestId !== null && auth.authenticated;
+  const { requests, rooms, request, room, finished } = useRequestRoom(requestId, reading);
+  const viewerId = useCurrentGeoChatUserId();
+  const [settled, setSettled] = React.useState<boolean | null>(null);
+  const open = noticeRequestState(request) === 'active' && room?.joinable ? room : null;
+  // Who is inside and who said they are late. Read only while it can still change the answer: the
+  // room view polls every few seconds, and the week can be open for as long as someone browses it.
+  const roomView = useDebateRoom(open?.room_id ?? '', open !== null && finished === false && settled === null);
+
+  const live = (() => {
+    if (requestId === null) return false;
+    if (!auth.ready) return null;
+    if (!auth.authenticated) return false;
+    if (requests.isError || rooms.isError) return false;
+    if (requests.isPending || rooms.isPending) return null;
+    if (!open) return false;
+    if (finished === null) return null;
+    if (finished) return false;
+    // Who is waiting can't be told without it, and board 2 is the wrong question for them.
+    if (roomView.isError) return false;
+    if (!roomView.data || !viewerId) return null;
+    // The person waiting, who board 2 is the wrong question for: inside now, already came (whose
+    // Can't make it would be a plain cancel, dropping a note), or told the other is late while not
+    // late themselves.
+    const inside = roomView.data.occupants.some(userId => sameId(userId, viewerId));
+    const notices = roomView.data.notices;
+    const toldOtherIsLate =
+      noticeFrom(notices, opponentOf(request, viewerId), 'running_late') !== null &&
+      noticeFrom(notices, viewerId, 'running_late') === null;
+    return !inside && !roomView.data.viewer_arrived && !toldOtherIsLate;
+  })();
+
+  // Signed out is not latched: someone who signs in from the week's own prompt is decided afresh.
+  const latch = live !== null && auth.authenticated;
+  React.useEffect(() => {
+    if (latch) setSettled(current => current ?? live);
+  }, [latch, live]);
+
+  return settled ?? live;
 }

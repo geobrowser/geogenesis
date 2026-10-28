@@ -9,16 +9,22 @@ import { responsePositionLabel } from '~/core/responses/entity-response';
 import { Text } from '~/design-system/text';
 
 import { MutedMicrophoneIndicator } from './debate-room-controls';
+import {
+  ROOM_COUNT_ENTER_CLASS,
+  ROOM_OUTLINED_STYLE,
+  ROOM_UI_FONT,
+  RoomDim,
+  RoomExit,
+  RoomMiddlePhrase,
+  RoomPill,
+  RoomTilePill,
+} from './debate-room-stamps';
+import { RecordingCornerIndicator } from './recording-corner-indicator';
+import type { RecordingCountdownRingProps } from './recording-countdown-ring';
+import { recordingLabelTextShadow, recordingOverlayTextShadow } from './recording-overlay-styles';
+import { TurnFinishingIndicator } from './turn-finishing-indicator';
 
-export const recordingOverlayTextShadow = {
-  textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000',
-};
-
-// Label/phrase overlays in Figma are dark text with a white outline (the inverse of the big
-// numbers and "GO!", which stay white-on-black via recordingOverlayTextShadow).
-export const recordingLabelTextShadow = {
-  textShadow: '-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, 0 4px 12px rgba(0,0,0,0.25)',
-};
+export { recordingLabelTextShadow, recordingOverlayTextShadow } from './recording-overlay-styles';
 
 /**
  * The translucent fill the tile chips share.
@@ -45,13 +51,15 @@ export const tileChipSurface = 'bg-white/85';
 export function DebateTileChip({
   className,
   children,
+  openRounds = false,
   ...spanProps
-}: React.ComponentPropsWithoutRef<'span'> & { className?: string }) {
+}: React.ComponentPropsWithoutRef<'span'> & { openRounds?: boolean }) {
   return (
     <span
       {...spanProps}
       className={cx(
-        'inline-flex h-4 items-center gap-1 rounded-full px-1.5 text-[0.75rem] leading-none whitespace-nowrap',
+        'inline-flex items-center rounded-full leading-none whitespace-nowrap',
+        openRounds ? 'h-[4.4cqw] gap-[1cqw] px-[1.8cqw] text-[2.8cqw] font-medium' : 'h-4 gap-1 px-1.5 text-[0.75rem]',
         className
       )}
     >
@@ -80,7 +88,7 @@ export function DebatePositionChip({
   label,
   className,
   ...spanProps
-}: React.ComponentPropsWithoutRef<'span'> & { label: string }) {
+}: React.ComponentPropsWithoutRef<'span'> & { label: string; openRounds?: boolean }) {
   return (
     <DebateTileChip {...spanProps} className={cx('max-w-full shrink-0 truncate text-text', tileChipSurface, className)}>
       {label}
@@ -109,6 +117,7 @@ export function DebateVideoTile({
   showWrapItUp = false,
   showDebateEndsSoon = false,
   endingTurn = false,
+  turnEndedStamp = true,
   endTurnAction,
   inactive = false,
   revealInactive = false,
@@ -119,6 +128,13 @@ export function DebateVideoTile({
   closingMessage = false,
   tileControls,
   status,
+  reveal,
+  chipsHidden = false,
+  openRounds = false,
+  dimmed = false,
+  finalSeconds = false,
+  nextTurnName = null,
+  finishingSince = null,
   children,
 }: {
   participantPosition: boolean | null;
@@ -132,6 +148,11 @@ export function DebateVideoTile({
   showWrapItUp?: boolean;
   showDebateEndsSoon?: boolean;
   endingTurn?: boolean;
+  /**
+   * Open rounds only: whether an ended turn is labelled "Turn ended". Only a turn that hands over to the
+   * other speaker is; any other yield closes as soon as it is accepted, so its tile just dims.
+   */
+  turnEndedStamp?: boolean;
   endTurnAction?: React.ReactNode;
   inactive?: boolean;
   revealInactive?: boolean;
@@ -139,7 +160,7 @@ export function DebateVideoTile({
   /** Names the tile for assistive technology — otherwise both are unlabelled `section`s. */
   tileLabel?: string;
   showMutedIndicator?: boolean;
-  countdown?: React.ReactNode;
+  countdown?: React.ReactElement<RecordingCountdownRingProps> | null;
   closingMessage?: boolean;
   /** The middle of the bottom row. The intro screen puts your mic and camera here. */
   tileControls?: React.ReactNode;
@@ -150,36 +171,113 @@ export function DebateVideoTile({
    * so nothing the debate does later can displace it.
    */
   status?: React.ReactNode;
+  /** Over the middle of the tile, above the phase overlays: the Open rounds pick reveal (GEO-3179). */
+  reveal?: React.ReactNode;
+  /**
+   * Fades the bottom row out while result text sits over the gap between the tiles, which is where
+   * the upper tile's chips are (GEO-3179).
+   */
+  chipsHidden?: boolean;
+  /**
+   * Open rounds (GEO-3366): classic outlined type and glass pills. Fixed formats keep their overlays.
+   */
+  openRounds?: boolean;
+  /** Open rounds only: dims the picture under a moment that spans both tiles, like the pick and the reveal. */
+  dimmed?: boolean;
+  /** Open rounds only: the speaker's last five seconds, when their outline turns warning red with the timer. */
+  finalSeconds?: boolean;
+  /** Open rounds only: after you end your turn, whose turn it is now, on their tile. */
+  nextTurnName?: string | null;
+  /**
+   * GEO-3407. When this speaker's turn ended (`Date.now()`), while their microphone is still open
+   * past the buzzer because they are finishing a sentence. Null otherwise. Holds the outline and puts
+   * `TurnFinishingIndicator` in the corner instead of the muted microphone, so the tile never shows
+   * them muted while they can still be heard.
+   */
+  finishingSince?: number | null;
   children: React.ReactNode;
 }) {
   const positionLabel = participantPosition === null ? null : responsePositionLabel(participantPosition);
+  const finishing = finishingSince !== null;
   const showInactiveIndicator =
-    showMutedIndicator || (inactive && !revealInactive && !countdown && !overlayText && !endingTurn);
+    !finishing && (showMutedIndicator || (inactive && !revealInactive && !countdown && !overlayText && !endingTurn));
+  const outlined = active || finishing;
+  const upcoming = upcomingSeconds !== null && upcomingSeconds !== undefined;
 
   return (
     <section
       aria-label={tileLabel}
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
       data-active-speaker={active ? 'true' : 'false'}
+      data-final-seconds={openRounds && finalSeconds ? 'true' : undefined}
+      data-turn-finishing={finishing ? 'true' : undefined}
+      style={openRounds ? ROOM_UI_FONT : undefined}
       className={cx(
-        'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
-        active && 'outline-[3px] outline-offset-0 outline-purple'
+        // Its own stacking context: the outline and badges inside are z-indexed against each other,
+        // and must stay under what the room lays across both tiles, like the vote card. A finishing
+        // speaker's outline, up during the vote (GEO-3407), otherwise painted over the card.
+        'relative isolate min-h-0 overflow-hidden bg-black shadow-card',
+        openRounds ? '@container aspect-[8/5] rounded-[3cqw] text-white' : 'aspect-[5/3] rounded-lg',
+        outlined && ['outline-[3px]', openRounds ? '-outline-offset-3' : 'outline-offset-0'],
+        outlined && (openRounds ? (finalSeconds ? 'outline-[#FF4A26]' : 'outline-white') : 'outline-purple')
       )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
-      {endTurnAction && <div className="absolute top-3 left-3 z-40">{endTurnAction}</div>}
-      <div
-        aria-hidden="true"
-        data-inactive-speaker={inactiveIndicatorId}
-        data-visible={showInactiveIndicator ? 'true' : 'false'}
-        className={cx(
-          'pointer-events-none absolute top-3 right-3 z-20',
-          showInactiveIndicator ? 'opacity-100' : 'opacity-0'
-        )}
-      >
-        {showInactiveIndicator && <MutedMicrophoneIndicator />}
-      </div>
-      {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
+      {openRounds && outlined && (
+        // A negative outline alone paints below positioned video content. Draw its inside edge
+        // above the media so the white/red speaker border remains visible on a live camera too.
+        <div
+          aria-hidden="true"
+          data-room-speaker-outline
+          className={cx(
+            'pointer-events-none absolute inset-0 z-50 rounded-[inherit] border-[3px]',
+            finalSeconds ? 'border-[#FF4A26]' : 'border-white'
+          )}
+        />
+      )}
+      {openRounds && <RoomDim on={dimmed || endingTurn || upcoming} />}
+      {/* Ending a turn hands the corner from the timer to the muted microphone and takes End turn
+          away, so in Open rounds each fades rather than cutting (GEO-3347). Fixed formats cut. */}
+      {(openRounds || endTurnAction) && (
+        <div className={cx('absolute z-40', openRounds ? 'top-[2.4cqw] left-[2.4cqw]' : 'top-3 left-3')}>
+          {openRounds ? (
+            <RoomExit layout="inline">
+              {endTurnAction && <div className="pointer-events-auto">{endTurnAction}</div>}
+            </RoomExit>
+          ) : (
+            endTurnAction
+          )}
+        </div>
+      )}
+      {openRounds ? (
+        <RecordingCornerIndicator
+          participant={inactiveIndicatorId}
+          muted={showInactiveIndicator}
+          // The count-in's number is the countdown, so the timer steps aside for it.
+          countdown={upcoming ? null : countdown}
+          finishingSince={finishingSince}
+        />
+      ) : (
+        <>
+          <div
+            aria-hidden="true"
+            data-inactive-speaker={inactiveIndicatorId}
+            data-visible={showInactiveIndicator ? 'true' : 'false'}
+            className={cx(
+              'pointer-events-none absolute top-3 right-3 z-20',
+              showInactiveIndicator ? 'opacity-100' : 'opacity-0'
+            )}
+          >
+            {showInactiveIndicator && <MutedMicrophoneIndicator />}
+          </div>
+          {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
+          {finishingSince !== null && !countdown && (
+            <div className="pointer-events-none absolute top-3 right-3 z-20">
+              <TurnFinishingIndicator startedAt={finishingSince} />
+            </div>
+          )}
+        </>
+      )}
 
       {/* One row rather than three corners, so nothing can end up underneath anything else.
           `1fr auto 1fr` rather than a flex row: the controls belong on the tile's centre line, and
@@ -205,9 +303,16 @@ export function DebateVideoTile({
           is room for equal columns, which is every width from ~360px up, the two resolve equal and
           the controls land exactly on the centre line. */}
       {(positionLabel !== null || tileControls || status) && (
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(auto,1fr)] items-center gap-2">
+        <div
+          data-tile-chips={chipsHidden ? 'hidden' : 'visible'}
+          className={cx(
+            'pointer-events-none absolute z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(auto,1fr)] items-center transition-opacity duration-200 motion-reduce:transition-none',
+            openRounds ? 'inset-x-[2.4cqw] bottom-[2.4cqw] gap-[1cqw]' : 'inset-x-3 bottom-3 gap-2',
+            chipsHidden && 'opacity-0'
+          )}
+        >
           <div className="flex min-w-0 justify-start">
-            {positionLabel !== null && <DebatePositionChip label={positionLabel} />}
+            {positionLabel !== null && <DebatePositionChip label={positionLabel} openRounds={openRounds} />}
           </div>
           <div className="pointer-events-auto">{tileControls}</div>
           {/* No `min-w-0` here, unlike the label: it is what lets the column's `auto` minimum see
@@ -216,65 +321,169 @@ export function DebateVideoTile({
         </div>
       )}
 
-      {closingMessage && (
-        <div
-          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-center text-recordingLabel text-text"
-          style={recordingLabelTextShadow}
-        >
-          Nice debate!
-          <br />
-          Say thanks
-        </div>
+      {openRounds ? (
+        <>
+          <RoomExit className="z-30">
+            {closingMessage && (
+              <RoomMiddlePhrase sizeCqw={5.46} data-room-phrase="thanks">
+                Nice debate! Say thanks
+              </RoomMiddlePhrase>
+            )}
+          </RoomExit>
+
+          <RoomExit className="z-30">
+            {endingTurn && turnEndedStamp && (
+              <RoomTilePill data-room-pill="ended" tone="dashed">
+                Turn ended
+              </RoomTilePill>
+            )}
+          </RoomExit>
+
+          <RoomExit className="z-30">
+            {nextTurnName && (
+              <RoomTilePill delayMs={600} data-room-pill="turn">
+                {nextTurnName}’s turn
+              </RoomTilePill>
+            )}
+          </RoomExit>
+
+          <RoomExit className="z-30">
+            {upcoming && (
+              <div
+                data-room-count-in-group
+                className="absolute top-1/2 left-1/2 grid w-max max-w-[92%] -translate-x-1/2 -translate-y-1/2 justify-items-center text-center"
+              >
+                <span
+                  className="text-[7.02cqw] leading-none font-semibold tracking-normal whitespace-nowrap text-white/85"
+                  data-room-phrase="count-in"
+                  style={ROOM_OUTLINED_STYLE}
+                >
+                  {upcomingLabel.replace("You're", 'You’re')}
+                </span>
+                <span
+                  key={upcomingSeconds}
+                  className={cx(
+                    'text-[15.6cqw] leading-[0.9] font-bold tracking-[-0.02em] whitespace-nowrap text-white',
+                    ROOM_COUNT_ENTER_CLASS
+                  )}
+                  data-room-count-in
+                  style={ROOM_OUTLINED_STYLE}
+                >
+                  {upcomingSeconds}
+                </span>
+              </div>
+            )}
+          </RoomExit>
+
+          <RoomExit className="z-30">
+            {showGo && (
+              <RoomTilePill data-room-pill="go" tone="white" fadeInMs={200}>
+                Go
+              </RoomTilePill>
+            )}
+          </RoomExit>
+
+          <RoomExit className="z-30">
+            {showWrapItUp && (
+              <RoomTilePill data-room-pill="wrap-it-up" tone="red">
+                Wrap it up
+              </RoomTilePill>
+            )}
+          </RoomExit>
+
+          <RoomExit className="z-30">
+            {showDebateEndsSoon && (
+              <RoomMiddlePhrase sizeCqw={6.24} data-room-phrase="ends-soon">
+                Debate ends soon
+              </RoomMiddlePhrase>
+            )}
+          </RoomExit>
+
+          <RoomExit className="z-[35]">{reveal}</RoomExit>
+        </>
+      ) : (
+        <>
+          {closingMessage && (
+            <div
+              className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-center text-recordingLabel text-text"
+              style={recordingLabelTextShadow}
+            >
+              Nice debate!
+              <br />
+              Say thanks
+            </div>
+          )}
+
+          {endingTurn && (
+            <div
+              className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
+              style={recordingLabelTextShadow}
+            >
+              Ending turn…
+            </div>
+          )}
+
+          {upcomingSeconds !== null && upcomingSeconds !== undefined && (
+            <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center text-center">
+              <div className="text-recordingLabel text-text" style={recordingLabelTextShadow}>
+                {upcomingLabel}
+              </div>
+              <div
+                className="mt-1 text-[7.5rem] leading-[0.85] font-bold text-white"
+                style={recordingOverlayTextShadow}
+              >
+                {upcomingSeconds}
+              </div>
+            </div>
+          )}
+
+          {showGo && (
+            <div
+              className="pointer-events-none absolute inset-0 z-30 grid place-items-center text-center text-[7.5rem] leading-none font-bold text-white"
+              style={recordingOverlayTextShadow}
+            >
+              GO!
+            </div>
+          )}
+
+          {showWrapItUp && (
+            <div
+              className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
+              style={recordingLabelTextShadow}
+            >
+              Wrap it up!
+            </div>
+          )}
+
+          {showDebateEndsSoon && (
+            <div
+              className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
+              style={recordingLabelTextShadow}
+            >
+              Debate ends soon
+            </div>
+          )}
+        </>
       )}
 
-      {endingTurn && (
-        <div
-          className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
-          style={recordingLabelTextShadow}
-        >
-          Ending turn…
-        </div>
-      )}
+      {!openRounds && reveal}
 
-      {upcomingSeconds !== null && upcomingSeconds !== undefined && (
-        <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center text-center">
-          <div className="text-recordingLabel text-text" style={recordingLabelTextShadow}>
-            {upcomingLabel}
-          </div>
-          <div className="mt-1 text-[7.5rem] leading-[0.85] font-bold text-white" style={recordingOverlayTextShadow}>
-            {upcomingSeconds}
-          </div>
-        </div>
-      )}
-
-      {showGo && (
-        <div
-          className="pointer-events-none absolute inset-0 z-30 grid place-items-center text-center text-[7.5rem] leading-none font-bold text-white"
-          style={recordingOverlayTextShadow}
-        >
-          GO!
-        </div>
-      )}
-
-      {showWrapItUp && (
-        <div
-          className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
-          style={recordingLabelTextShadow}
-        >
-          Wrap it up!
-        </div>
-      )}
-
-      {showDebateEndsSoon && (
-        <div
-          className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
-          style={recordingLabelTextShadow}
-        >
-          Debate ends soon
-        </div>
-      )}
-
-      {overlayText && (
+      {openRounds ? (
+        <RoomExit className="z-10">
+          {overlayText && (
+            <div
+              role="status"
+              aria-live="polite"
+              data-room-media-status
+              className="pointer-events-none absolute inset-0 grid place-items-center bg-black/42 px-[4cqw] backdrop-blur-sm"
+            >
+              <RoomPill className={overlayCompact ? '[&>span]:text-balance [&>span]:whitespace-normal' : undefined}>
+                {overlayText}
+              </RoomPill>
+            </div>
+          )}
+        </RoomExit>
+      ) : overlayText ? (
         <div
           role="status"
           aria-live="polite"
@@ -292,7 +501,7 @@ export function DebateVideoTile({
             {overlayText}
           </Text>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

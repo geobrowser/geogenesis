@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -47,17 +47,41 @@ const mocks = vi.hoisted(() => ({
   scheduledRequests: undefined as unknown[] | undefined,
 }));
 
+// Booking reads room completion only when moving a scheduled request.
+vi.mock('../rooms/request-room', () => ({
+  useRequestRoom: () => ({
+    requests: { isLoading: false },
+    rooms: { isLoading: false },
+    request: undefined,
+    room: null,
+    finished: false,
+  }),
+}));
+
 vi.mock('../rooms/scheduling-hooks', () => ({
   useScheduledDebates: () => ({ data: mocks.scheduledRequests ? { requests: mocks.scheduledRequests } : undefined }),
   // The People tab's booking modal; booking has its own coverage.
   useCreateScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useRescheduleScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useNoTimeWorks: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
 }));
+
+// The card has its own suite; here it only matters which tabs show it.
+vi.mock('../lobbies/lobbies-card', () => ({ UpcomingLobbiesCard: () => <div data-testid="live-lobbies-card" /> }));
 
 // The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
 vi.mock('./scheduled-debates-section', () => ({
   ScheduledDebatesSection: () => null,
-  useScheduledContent: () => ({ answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null }),
+  hasScheduledContent: () => false,
+  useScheduledContent: () => ({
+    answerable: [],
+    upcoming: [],
+    lobbies: [],
+    people: [],
+    requestsError: null,
+    roomsError: null,
+    lobbiesError: null,
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -89,11 +113,24 @@ vi.mock('../claim-picker-page', async importOriginal => ({
   useClaimEntitiesByIds: () => ({ entities: [], isLoading: false, error: null }),
 }));
 
+// GEO-3268's lineup reads the lobby list and holds the matchmaking scope; nothing is live here.
+const lineup = vi.hoisted(() => ({ live: [] as { lobby_id: string }[], soon: null, later: [] }));
+vi.mock('../lobbies/live-lobbies', () => ({ useLobbyLineup: () => lineup }));
+// The banner's own suite covers what it draws; here, only whether the panel keeps it mounted.
+vi.mock('./set-schedule-banner', () => ({
+  SetScheduleBanner: ({ hidden }: { hidden?: boolean }) => (
+    <div data-testid="schedule-banner" data-hidden={String(Boolean(hidden))} />
+  ),
+}));
+vi.mock('../lobbies/lobby-spotlight', () => ({ LobbySpotlight: () => <div data-testid="lobby-spotlight" /> }));
+
 vi.mock('../hooks', () => ({
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
+  // The People tab's week reads it when moving a request (GEO-3429); nothing here moves one.
+  usePeerSchedule: () => ({ schedule: undefined }),
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   useDebateActivity: () => ({
     data: {
@@ -204,6 +241,7 @@ function renderOpen(tab: DebatesHubTab = 'requests') {
 }
 
 beforeEach(() => {
+  lineup.live = [];
   mocks.ready = true;
   mocks.authenticated = true;
   mocks.accountKey = 'user-a';
@@ -457,6 +495,15 @@ describe('DebatesHubPanel', () => {
     expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
   });
 
+  it('leaves the lobbies card off Requests, which lists the lobbies itself', async () => {
+    renderOpen('people');
+    expect(screen.getByTestId('live-lobbies-card')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Requests/ }));
+
+    expect(screen.queryByTestId('live-lobbies-card')).not.toBeInTheDocument();
+  });
+
   it('toggles availability from the panel header', async () => {
     renderOpen();
 
@@ -584,6 +631,22 @@ describe('DebatesHubPanel', () => {
 
     expect(store.get(debatesHubAtom)).not.toBeNull();
     opener.remove();
+  });
+
+  it('keeps mobile status-filter options inside the modal focus boundary', async () => {
+    mocks.isMobile = true;
+    window.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    renderOpen();
+    const dialog = screen.getByRole('dialog', { name: 'Debates' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Any status' }));
+    const option = await screen.findByRole('button', { name: 'Received' });
+    expect(dialog).toContainElement(option);
+    fireEvent.click(option);
+    expect(within(dialog).getByRole('button', { name: 'Received' })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('gives the mobile sheet a close button that assistive tech can reach', () => {
@@ -951,5 +1014,22 @@ describe('Requests badge', () => {
     ];
 
     expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
+  });
+});
+
+// GEO-3268. A live lobby takes the schedule banner's place. The banner holds the schedule dialog,
+// so it stays mounted, hidden, rather than being swapped out under someone mid-edit.
+describe('DebatesHubPanel lobby spotlight', () => {
+  it('shows the schedule banner while nothing is live', () => {
+    renderOpen('explore');
+    expect(screen.getByTestId('schedule-banner')).toHaveAttribute('data-hidden', 'false');
+    expect(screen.queryByTestId('lobby-spotlight')).not.toBeInTheDocument();
+  });
+
+  it('puts the spotlight in its place while a lobby is live, keeping the banner mounted and hidden', () => {
+    lineup.live = [{ lobby_id: 'nyc' }];
+    renderOpen('explore');
+    expect(screen.getByTestId('lobby-spotlight')).toBeInTheDocument();
+    expect(screen.getByTestId('schedule-banner')).toHaveAttribute('data-hidden', 'true');
   });
 });

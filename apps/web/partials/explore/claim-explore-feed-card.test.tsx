@@ -1,5 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -12,8 +13,25 @@ import type { Entity } from '~/core/types';
 
 import { ClaimExploreFeedCard } from './claim-explore-feed-card';
 
+// The readiness backfill refreshes readiness reads through the query client once it lands.
+function render(ui: React.ReactElement) {
+  const queryClient = new QueryClient();
+  return rtlRender(ui, {
+    wrapper: ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+}
+
 // Node's built-in localStorage shim can shadow jsdom with a partial object. The card only needs the
 // pending-account hook indirectly, so keep this layout suite independent of that persisted atom.
+// The meta row's Join/Follow offer reads the space type and the viewer (GEO-3236); both have their
+// own suites.
+vi.mock('~/core/hooks/use-is-personal-space', () => ({ useIsPersonalSpace: () => undefined }));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: null, isRegistered: false, isLoading: false }),
+}));
+
 vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
   pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,

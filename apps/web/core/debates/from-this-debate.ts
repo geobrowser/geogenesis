@@ -5,6 +5,8 @@ import * as React from 'react';
 import { normId } from '~/core/utils/norm-id';
 import { validateEntityId } from '~/core/utils/utils';
 
+import { openRoundIndexForTurn } from './open-rounds';
+import { roundLabel, roundParts } from './round-cues';
 import type { DebateExtractedClaimsResponse } from './server/extracted-claims';
 
 /**
@@ -21,6 +23,13 @@ export type FromThisDebateClaim = {
   id: string;
   text: string;
   turnIndex: number;
+  /**
+   * The room turn it was said in (GEO-3325), which rounds are drawn from; null where geo-chat could
+   * not place it, or on a read from before it did.
+   */
+  roomTurnIndex: number | null;
+  /** Where in the debate it was said, in ms from the start; null on payloads without timings. */
+  startMs: number | null;
   /** Who said it, from the turn the claim was extracted from. */
   speakerName: string | null;
   /** That speaker's personal space, so a caller can fall back to the participant's own name. */
@@ -37,9 +46,32 @@ function trimmedId(value: unknown): string | null {
   return validateEntityId(canonical) ? canonical : null;
 }
 
+function startMsOf(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function roomTurnIndexOf(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+/**
+ * When a claim was said: by turn, then by where in the turn, with an untimed claim after the timed
+ * ones in its turn. Ties are left to the caller, which breaks them by the order it was handed.
+ */
+function compareWhenSaid(
+  a: Pick<FromThisDebateClaim, 'turnIndex' | 'startMs'>,
+  b: Pick<FromThisDebateClaim, 'turnIndex' | 'startMs'>
+): number {
+  if (a.turnIndex !== b.turnIndex) return a.turnIndex - b.turnIndex;
+  if (a.startMs === b.startMs) return 0;
+  if (a.startMs === null) return 1;
+  if (b.startMs === null) return -1;
+  return a.startMs - b.startMs;
+}
+
 /**
  * geo-chat's `GET /debates/{id}/claims` payload → the claims the picker can list, in the order
- * they were said.
+ * they were said: by turn, then by where in the turn.
  *
  * - A claim with neither a graph match nor a minted id is skipped. Those are payloads written
  *   before geo-chat minted ids (geo-chat#201); the publisher would mint a fresh id for them at
@@ -59,9 +91,13 @@ export function fromThisDebateCandidates(
   const seen = new Set<string>();
   const candidates: FromThisDebateClaim[] = [];
   claims
-    .map((claim, order) => ({ claim, order }))
-    .sort((a, b) => (a.claim.turn_index ?? 0) - (b.claim.turn_index ?? 0) || a.order - b.order)
-    .forEach(({ claim }) => {
+    .map((claim, order) => ({
+      claim,
+      order,
+      said: { turnIndex: claim.turn_index ?? 0, startMs: startMsOf(claim.start_ms) },
+    }))
+    .sort((a, b) => compareWhenSaid(a.said, b.said) || a.order - b.order)
+    .forEach(({ claim, said }) => {
       if (claim.is_contestable === false) return;
       const text = typeof claim.text === 'string' ? claim.text.trim() : '';
       if (!text) return;
@@ -74,6 +110,8 @@ export function fromThisDebateCandidates(
         id,
         text,
         turnIndex: claim.turn_index,
+        roomTurnIndex: roomTurnIndexOf(claim.room_turn_index),
+        startMs: said.startMs,
         speakerName: turn?.speaker_name?.trim() || null,
         speakerSpaceId: turn?.attributed_space_id || null,
         matched: matchedId !== null,
@@ -89,6 +127,9 @@ export function fromThisDebateCandidates(
  * claims are appended after them, in the order the payload gives. A claim the payload no longer
  * carries — the final pass dropped or merged it — goes, unless `keepIds` names it: a claim somebody
  * has a request open on stays where it is, as last seen.
+ *
+ * The tab no longer draws in this order: it groups by round and sorts by when each claim was said
+ * ({@link groupFromThisDebateByRound}). What this still decides is which claims are listed.
  */
 export function mergeFromThisDebate(
   previous: FromThisDebateClaim[],
@@ -138,4 +179,68 @@ export function useFromThisDebateList(
     // `resetKey` is read through the ref above, and listed so a new session recomputes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [next, keepIds, resetKey]);
+}
+
+/**
+ * One stretch of the "From this debate" list: a round and the claims said in it, or, where the
+ * rounds cannot be told ({@link groupFromThisDebateByRound}), the whole list with no label.
+ */
+export type FromThisDebateRound<T> = { key: number; label: string | null; items: T[] };
+
+/**
+ * The tab's list as the debate ran: in the order each claim was said, grouped by round where the
+ * rounds can be told, a round being both debaters' turns.
+ *
+ * Sorted here rather than trusted from the list, which is append-only (D4) and so puts a claim the
+ * final pass found late after everything already listed, whatever turn it came from.
+ *
+ * Rounds come from each claim's `roomTurnIndex`, the room turn geo-chat placed it in (GEO-3325),
+ * whenever every claim listed has one. Otherwise they fall back to `turnIndex`, which counts runs of
+ * one speaker's transcribed speech, not the room's turns: geo-chat numbers a new turn each time the
+ * speaker changes, skipping silence. A turn nobody spoke in merges the turns either side of it, and
+ * every round after it would be labelled one early. So on that fallback rounds are drawn only when
+ * the transcript has exactly as many turns as the room ran (`roomTurnCount`); otherwise the list
+ * comes back as one unlabelled stretch, still in order.
+ *
+ * Rounds are named the way the room named them ("Round 2 · Rebuttal"). An Open rounds debate runs
+ * as many rounds as the pair unlock, so the format's names do not apply there and its rounds are
+ * numbered only.
+ */
+export function groupFromThisDebateByRound<T>(
+  items: T[],
+  claimOf: (item: T) => FromThisDebateClaim,
+  {
+    roomTurnCount,
+    extractedTurnCount,
+    numberedOnly,
+  }: { roomTurnCount: number; extractedTurnCount: number; numberedOnly: boolean }
+): FromThisDebateRound<T>[] {
+  const claims = items.map((item, order) => ({ item, claim: claimOf(item), order }));
+  if (claims.length === 0) return [];
+  const placed = claims.every(({ claim }) => claim.roomTurnIndex !== null);
+  const sorted = claims
+    .map(entry => ({
+      ...entry,
+      said: {
+        turnIndex: placed ? (entry.claim.roomTurnIndex ?? 0) : entry.claim.turnIndex,
+        startMs: entry.claim.startMs,
+      },
+    }))
+    .sort((a, b) => compareWhenSaid(a.said, b.said) || a.order - b.order);
+  if (roomTurnCount <= 0 || (!placed && extractedTurnCount !== roomTurnCount)) {
+    return [{ key: -1, label: null, items: sorted.map(({ item }) => item) }];
+  }
+  const rounds: FromThisDebateRound<T>[] = [];
+  for (const { item, said } of sorted) {
+    const key = openRoundIndexForTurn(said.turnIndex);
+    let round = rounds[rounds.length - 1];
+    if (!round || round.key !== key) {
+      const firstTurn = key * 2;
+      const label = numberedOnly ? roundParts(firstTurn, roomTurnCount).round : roundLabel(firstTurn, roomTurnCount);
+      round = { key, label, items: [] };
+      rounds.push(round);
+    }
+    round.items.push(item);
+  }
+  return rounds;
 }

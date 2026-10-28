@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { type DebateAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+
 import { Tooltip } from '~/design-system/tooltip';
 
 /**
@@ -14,9 +16,9 @@ import { Tooltip } from '~/design-system/tooltip';
  * `HubPillButton` in a footer. Same words, same action, two designs and two copies of the state
  * ladder underneath. Moving between the surfaces read as moving between two products.
  *
- * The *action* stays with the caller, because it genuinely differs: the panel sends
- * `create_debate_request_as`, the picker a session-scoped rematch request. Only the offer is shared
- * — what it looks like, what it is called in each state, and how it announces itself.
+ * The action stays with the caller: ordinary matchmaking sends `create_debate_request_as`, while
+ * the picker and its entity panel share `RematchRequestControl` for session-scoped requests. This
+ * primitive supplies the appearance and accessible pending/error announcements for both.
  */
 /**
  * The shape of a control in a claim card's end slot.
@@ -51,6 +53,7 @@ export function RequestDebateControl({
   note,
   variant = 'inline',
   className,
+  analytics,
 }: {
   onRequest: () => void;
   disabled?: boolean;
@@ -72,6 +75,8 @@ export function RequestDebateControl({
    */
   variant?: 'inline' | 'block';
   className?: string;
+  /** The button's click-analytics label and intent. Visible text never reaches the warehouse. */
+  analytics?: DebateAnalyticsAttributes;
 }) {
   const base = claimSlotPillClass(variant);
   const aside = cx('text-footnote', variant === 'block' ? 'text-left' : 'text-right');
@@ -80,6 +85,7 @@ export function RequestDebateControl({
     <button
       type="button"
       onClick={onRequest}
+      {...analytics}
       disabled={disabled || isRequesting || pending}
       aria-busy={isRequesting || pending ? true : undefined}
       className={cx(

@@ -12,6 +12,8 @@ import { useStore } from 'jotai';
 import { withActionContext } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
 import { personProfileOpened } from '~/core/analytics';
+import { FollowTopicButton } from '~/core/follows/follow-button';
+import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -27,6 +29,7 @@ import {
   type ActiveResponseDirection,
   ENTITY_RESPONSE_COPY,
   RESPONSE_CONFIRMING_COPY,
+  RESPONSE_LOCAL_ONLY_COPY,
   type ResponseKind,
   entityResponderProfilesQueryKey,
   entityRespondersQueryKey,
@@ -37,15 +40,19 @@ import {
 } from '~/core/responses/entity-response';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
+import { castLocalVote } from '~/core/state/cast-local-vote';
+import { removeLocalVote, useLocalVote } from '~/core/state/local-votes';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
+import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
+import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
+import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { Avatar } from '~/design-system/avatar';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
-import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
@@ -61,7 +68,6 @@ type EntityVoteButtonsProps = {
   spaceId: string;
   responseKind?: ResponseKind | null;
   claimResponderAvatarsPosition?: 'leading' | 'trailing';
-  presentation?: 'inline' | 'debate-vertical' | 'debate-horizontal';
   /**
    * A surface with no room for prose: the sticky entity header's 48px row.
    *
@@ -92,15 +98,37 @@ type EntityVoteButtonsProps = {
    * announcement is the better failure than none.
    */
   compact?: boolean;
+  /** Whether to load counts yet. Until true, with nothing cached, the skeleton shows instead of a zero. */
+  nearViewport?: boolean;
 };
 
-export function EntityVoteButtons({
+/**
+ * An entity's response control, wherever an entity is drawn with one: votes for an ordinary entity,
+ * agree / disagree for a claim, and Follow for a topic (GEO-3191), which is followed, not voted on.
+ *
+ * The topic case is decided here rather than by each caller, so a table row, a gallery tile, a
+ * ranking entry and the sticky header all agree with the topic's own page. Read off the same types
+ * the entity routes on (a claim typed as a topic too stays a claim), and only when the caller hasn't
+ * named a response kind: a caller that has is asking for that kind on purpose. While the entity is
+ * loading, `EntityResponseButtons` draws its skeleton, so a topic never shows votes first.
+ */
+export function EntityVoteButtons(props: EntityVoteButtonsProps) {
+  const inferKind = props.responseKind === undefined;
+  const { entity } = useQueryEntity({ id: props.entityId, includeDeleted: true, enabled: inferKind });
+
+  if (inferKind && entity?.types && entityBrowseViewFromTypes(entity.types) === 'topic') {
+    return <FollowTopicButton topic={{ id: props.entityId, name: entity.name }} />;
+  }
+  return <EntityResponseButtons {...props} />;
+}
+
+function EntityResponseButtons({
   entityId,
   spaceId: requestedSpaceId,
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
-  presentation = 'inline',
   compact = false,
+  nearViewport = true,
 }: EntityVoteButtonsProps) {
   const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);
   const responseBatch = useClaimResponseBatchState();
@@ -155,6 +183,10 @@ export function EntityVoteButtons({
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
+  const { ready: authReady, authenticated } = usePrivy();
+  // Known to be signed out — not still restoring a session, when `authenticated` reads false too.
+  const signedOut = authReady && !authenticated;
+  const authResolving = useAuthResolving();
   const queryClient = useQueryClient();
   // Signed in without a usable space, a vote is held only when one is on its way: being created for
   // a new account, or still loading for a returning one. With neither, nothing would ever publish it,
@@ -171,7 +203,7 @@ export function EntityVoteButtons({
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, queryResponseKind),
     queryFn: () =>
       Effect.runPromise(getEntityResponseCounts(entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)),
-    enabled: !responseBatch.managed && !isResponseKindLoading && responseKind !== null,
+    enabled: nearViewport && !responseBatch.managed && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
@@ -189,7 +221,8 @@ export function EntityVoteButtons({
         getUserEntityResponse(personalSpaceId, entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)
       );
     },
-    enabled: !responseBatch.managed && !!personalSpaceId && !isResponseKindLoading && responseKind !== null,
+    enabled:
+      nearViewport && !responseBatch.managed && !!personalSpaceId && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
@@ -232,8 +265,17 @@ export function EntityVoteButtons({
 
   // A queued (pre-personal-space) vote overrides the mutation's own optimistic state until it is
   // replayed and cleared from the queue, at which point the mutation's state takes over.
-  const effectiveOptimistic = queuedResponse !== undefined ? queuedResponse : optimisticResponse;
+  // While sign-in resolves, a queued press may yet become a device vote.
+  const heldResponse = authResolving ? queuedResponse : undefined;
+  const countedQueuedResponse = authResolving ? undefined : queuedResponse;
+  const effectiveOptimistic = countedQueuedResponse !== undefined ? countedQueuedResponse : optimisticResponse;
   const activeResponse = effectiveOptimistic === undefined ? serverResponseDirection : effectiveOptimistic;
+  // A vote cast signed out and kept on this device until a save publishes it (GEO-3214). Drawn as the
+  // viewer's — the arrow fills — but left out of the score and the split: it doesn't count until it
+  // is saved, and the counts say so by not moving. `activeResponse` stays the counted side.
+  const localDirection = useLocalVote(entityId, spaceId, responseKind);
+  const drawnResponse =
+    heldResponse ?? (effectiveOptimistic === undefined && localDirection !== null ? localDirection : activeResponse);
 
   const positiveResponses = BigInt(responseCounts?.positive ?? 0);
   const negativeResponses = BigInt(responseCounts?.negative ?? 0);
@@ -259,10 +301,52 @@ export function EntityVoteButtons({
 
   function queueResponse(direction: ActiveResponseDirection) {
     if (!smartAccount) {
+      // Signed out: vote on this device, with no sign-in in the way. The save sheet asks for an
+      // account once there are a few.
+      //
+      // Still resolving, the side is queued with what to do if it resolves signed out: a device vote,
+      // or the prompt when there is no response kind to keep one under (`PendingActionsRunner`).
+      // `!smartAccount` reads as signed out for that moment, and acting on it showed a signed-in
+      // viewer the sign-in prompt — or, before that, dropped the press, which loses a fast tap on a
+      // page that has only just loaded.
+      if (authResolving) {
+        const attribution = getContext();
+        const title = entity?.name ?? '';
+        queuedVote.queue(direction, {
+          onSignedOut:
+            responseKind === null
+              ? {
+                  prompt: {
+                    ...attribution,
+                    auth_control: `${responseKind}_${direction}`,
+                    auth_intent: 'vote',
+                    auth_continuation: 'queued',
+                  },
+                }
+              : () => castLocalVote({ entityId, spaceId, responseKind, direction, title, attribution }),
+        });
+        return;
+      }
+      if (signedOut && responseKind !== null) {
+        castLocalVote({
+          entityId,
+          spaceId,
+          responseKind,
+          direction,
+          title: entity?.name ?? '',
+          attribution: getContext(),
+        });
+        return;
+      }
       openPrivySignIn(direction);
       return;
     }
     if (spaceOnTheWay) queueVoteWrite(direction);
+  }
+
+  /** A press signed in replaces this entity's device vote rather than being saved over by it. */
+  function dropLocalVote() {
+    if (localDirection !== null && responseKind !== null) removeLocalVote({ entityId, spaceId, responseKind });
   }
 
   function handlePositiveResponse() {
@@ -270,6 +354,7 @@ export function EntityVoteButtons({
       queueResponse('positive');
       return;
     }
+    dropLocalVote();
     submitResponse(activeResponse === 'positive' ? 'clear' : 'positive');
   }
 
@@ -278,40 +363,47 @@ export function EntityVoteButtons({
       queueResponse('negative');
       return;
     }
+    dropLocalVote();
     submitResponse(activeResponse === 'negative' ? 'clear' : 'negative');
   }
 
   const scoreLabel = formatScore(displayScore);
 
-  const positiveActive = activeResponse === 'positive';
-  const negativeActive = activeResponse === 'negative';
+  const positiveActive = drawnResponse === 'positive';
+  const negativeActive = drawnResponse === 'negative';
   // Never block the buttons: when the personal space isn't ready the click queues the vote
   // instead of writing it, so the user is never stopped from acting while it's being created.
   const responseDisabled = false;
   const signedInTitle = spaceOnTheWay
     ? 'Vote now — saved until your account is ready'
     : 'Finish setting up your account to vote';
-  const positiveTitle = !isConnected
-    ? smartAccount
-      ? signedInTitle
-      : responseCopy.signIn
-    : positiveActive
-      ? responseCopy.removePositive
-      : responseCopy.positiveAction;
-  const negativeTitle = !isConnected
-    ? smartAccount
-      ? signedInTitle
-      : responseCopy.signIn
-    : negativeActive
-      ? responseCopy.removeNegative
-      : responseCopy.negativeAction;
+  const voteTitle = (direction: ActiveResponseDirection) => {
+    const active = direction === 'positive' ? positiveActive : negativeActive;
+    if (isConnected) {
+      if (!active) return direction === 'positive' ? responseCopy.positiveAction : responseCopy.negativeAction;
+      return direction === 'positive' ? responseCopy.removePositive : responseCopy.removeNegative;
+    }
+    if (smartAccount) return signedInTitle;
+    // Signed out, a press votes on this device: the arrow does what it says (GEO-3214).
+    if (signedOut) {
+      if (localDirection === direction) return RESPONSE_LOCAL_ONLY_COPY;
+      return direction === 'positive' ? responseCopy.positiveAction : responseCopy.negativeAction;
+    }
+    return responseCopy.signIn;
+  };
+  const positiveTitle = voteTitle('positive');
+  const negativeTitle = voteTitle('negative');
 
   const totalResponders = (responseCounts?.positive ?? 0) + (responseCounts?.negative ?? 0);
 
   const optimisticPositiveDelta =
-    effectiveOptimistic !== undefined ? (positiveActive ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0) : 0;
+    effectiveOptimistic !== undefined
+      ? (activeResponse === 'positive' ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0)
+      : 0;
   const optimisticNegativeDelta =
-    effectiveOptimistic !== undefined ? (negativeActive ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0) : 0;
+    effectiveOptimistic !== undefined
+      ? (activeResponse === 'negative' ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0)
+      : 0;
   const effectivePositive = Math.max(0, (responseCounts?.positive ?? 0) + optimisticPositiveDelta);
   const effectiveNegative = Math.max(0, (responseCounts?.negative ?? 0) + optimisticNegativeDelta);
   const effectiveTotal = effectivePositive + effectiveNegative;
@@ -387,7 +479,8 @@ export function EntityVoteButtons({
     );
   };
 
-  if ((responseBatch.managed && !responseBatch.ready) || isResponseKindLoading) {
+  const countsDeferred = !nearViewport && !responseBatch.managed && responseCounts === undefined;
+  if ((responseBatch.managed && !responseBatch.ready) || isResponseKindLoading || countsDeferred) {
     return <Skeleton className="h-5 w-16 shrink-0 rounded" />;
   }
 
@@ -409,22 +502,6 @@ export function EntityVoteButtons({
     );
   }
 
-  if (presentation !== 'inline') {
-    return (
-      <DebateVotePill
-        orientation={presentation === 'debate-vertical' ? 'vertical' : 'horizontal'}
-        score={scoreLabel}
-        positiveActive={positiveActive}
-        negativeActive={negativeActive}
-        disabled={responseDisabled}
-        positiveTitle={positiveTitle}
-        negativeTitle={negativeTitle}
-        onPositive={handlePositiveResponse}
-        onNegative={handleNegativeResponse}
-      />
-    );
-  }
-
   /*
    * Everything the two thumbs share, so the two cannot drift — and so this control matches the claim
    * pills while a response confirms, which is how they came apart in the first place: #2587 and #2598
@@ -440,10 +517,6 @@ export function EntityVoteButtons({
    * - drop the hover step, since nothing under the pointer is going to happen;
    * - put `RESPONSE_CONFIRMING_COPY` in the tooltip, as the pills' `actionTitle` does;
    * - stay at full strength: `aria-disabled` rather than `disabled`, so the side still reads as taken.
-   *
-   * Inline only. `DebateVotePill` draws this control in the debate overlay and shares its handlers,
-   * so the guard sits on these buttons rather than in `handlePositiveResponse` — widening it to the
-   * overlay belongs with unifying the pills and the thumbs into one control.
    */
   const voteButtonProps = (onPress: () => void, title: string) => ({
     onClick: () => {
@@ -565,68 +638,6 @@ function RespondersPopover({
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
-  );
-}
-
-function DebateVotePill({
-  orientation,
-  score,
-  positiveActive,
-  negativeActive,
-  disabled,
-  positiveTitle,
-  negativeTitle,
-  onPositive,
-  onNegative,
-}: {
-  orientation: 'vertical' | 'horizontal';
-  score: string;
-  positiveActive: boolean;
-  negativeActive: boolean;
-  disabled: boolean;
-  positiveTitle: string;
-  negativeTitle: string;
-  onPositive: () => void;
-  onNegative: () => void;
-}) {
-  return (
-    <div
-      data-entity-vote-presentation={`debate-${orientation}`}
-      className={cx(
-        'flex items-center justify-center gap-1.5 rounded-full border border-grey-02 bg-white text-text shadow-light',
-        orientation === 'vertical' ? 'w-9 flex-col py-2' : 'h-7 px-2.5'
-      )}
-    >
-      <button
-        type="button"
-        aria-label={positiveTitle}
-        aria-pressed={positiveActive}
-        disabled={disabled}
-        title={positiveTitle}
-        onClick={onPositive}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
-      >
-        <VoteArrow direction="up" filled={positiveActive} />
-      </button>
-      <span className="text-metadataMedium text-text tabular-nums">{score}</span>
-      <button
-        type="button"
-        aria-label={negativeTitle}
-        aria-pressed={negativeActive}
-        disabled={disabled}
-        title={negativeTitle}
-        onClick={onNegative}
-        className={cx(
-          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
-          VOTE_BUTTON_CLASS
-        )}
-      >
-        <VoteArrow direction="down" filled={negativeActive} />
-      </button>
-    </div>
   );
 }
 
@@ -770,7 +781,9 @@ function VoterRow({
     return (
       <Link
         href={profile.profileLink}
-        onClick={() => personProfileOpened(profile.spaceId, profile.id, { interaction_surface: interactionSurface })}
+        {...observePanelNavigation(() =>
+          personProfileOpened(profile.spaceId, profile.id, { interaction_surface: interactionSurface })
+        )}
       >
         {content}
       </Link>

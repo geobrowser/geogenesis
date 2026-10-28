@@ -68,11 +68,11 @@ export function freeSlotsByUser(response: SchedulablePeopleResponse, now: number
 }
 
 /**
- * Local midnight on the Sunday `weekOffset` weeks from the one `now` falls in. The grid reads Sunday
- * to Saturday, like a wall calendar; saved schedules are still Monday-first (`mondayOf`).
+ * Local midnight today, or `weekOffset` seven-day windows ahead. The grid rolls forward each day;
+ * saved recurring schedules remain Monday-first (`mondayOf`).
  */
 export function weekStart(now: Date, weekOffset: number): Date {
-  return addDays(now, weekOffset * DAYS_IN_WEEK - now.getDay());
+  return addDays(now, weekOffset * DAYS_IN_WEEK);
 }
 
 /** The seven local midnights of a week, plus the eighth, which closes it. */
@@ -155,7 +155,7 @@ export function viewerFreeSlots(
 
   // A week either side of the drawn two: the viewer's zone and the browser's can disagree about
   // which date it is, and a slot near midnight belongs to whichever week it lands in here. Monday
-  // weeks, not the grid's Sunday ones: a recurring block's `weekday` counts from Monday.
+  // weeks, not the grid's rolling ones: a recurring block's `weekday` counts from Monday.
   const monday = mondayOf(now);
   for (let offset = -1; offset <= CALENDAR_WEEKS; offset++) {
     const dates = weekDates(addDays(monday, offset * DAYS_IN_WEEK)).map(isoDate);
@@ -207,6 +207,8 @@ export type OwnDebate = {
   state: 'booked' | 'requested' | 'asked';
   /** The other side, whose name labels the block. */
   opponentUserId: string | null;
+  /** The Geo team set this debate up (GEO-3229): neither debater asked the other. */
+  arrangedByAdmin: boolean;
 };
 
 /**
@@ -237,6 +239,7 @@ export function ownDebates(
       end,
       state: request.status === 'accepted' ? 'booked' : request.viewer_must_answer ? 'asked' : 'requested',
       opponentUserId: opponentOf(request, viewerUserId),
+      arrangedByAdmin: request.created_by_admin,
     });
   }
   return debates.sort((left, right) => left.start - right.start);
@@ -291,7 +294,7 @@ export function timeRangeLabel(start: number, end: number): string {
  */
 export function weekOffsetLabels(days: Date[]): string[] {
   const labels: string[] = [];
-  for (const day of days) {
+  for (const day of days.slice(0, DAYS_IN_WEEK)) {
     const noon = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12);
     const label = gmtOffsetLabel(noon);
     if (!labels.includes(label)) labels.push(label);

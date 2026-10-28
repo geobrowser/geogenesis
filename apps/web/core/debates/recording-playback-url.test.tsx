@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   userId: 'user-a' as string | null,
 }));
 
-vi.mock('@geogenesis/auth', () => ({
+vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({
     ready: true,
     authenticated: mocks.userId !== null,

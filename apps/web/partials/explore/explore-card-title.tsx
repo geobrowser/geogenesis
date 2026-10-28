@@ -11,6 +11,14 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { ExploreCardEntityLink } from './explore-card-entity-link';
 
 /**
+ * The type an Explore card's heading is set in, shared with the debate card's claim (GEO-3454) so a
+ * debate reads the same in the feed and at full screen. Important-flagged because a bare `h2` picks
+ * up the prose heading styles.
+ */
+export const EXPLORE_CARD_TITLE_CLASS_NAME =
+  'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text';
+
+/**
  * What heads an Explore card, and which entity that heading opens.
  *
  * One function because it is one decision, and a debate has two renditions that must not disagree:
@@ -90,10 +98,7 @@ export function ExploreCardTitle({
       <h2
         ref={setHeadingElement}
         title={showFullTextOnHover && isOverflowing ? text : undefined}
-        className={cx(
-          'mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline',
-          clamped && 'line-clamp-2'
-        )}
+        className={cx(EXPLORE_CARD_TITLE_CLASS_NAME, 'hover:underline', clamped && 'line-clamp-2')}
       >
         {text}
       </h2>

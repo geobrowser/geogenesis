@@ -13,9 +13,12 @@ import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cac
 import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
-import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
-import type { ExploreFeedItem, ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { type ExplorePageSort, PUBLIC_FEED_PARAM } from '~/core/explore/explore-feed-params';
+import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
+import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
+import { seenStore } from '~/core/explore/seen-demotion/seen-store';
+import { useFeedViewer } from '~/core/hooks/use-awaited-smart-account';
 import { exploreMoreFiltersOpenAtom } from '~/core/state/explore-more-filters';
 import { normId } from '~/core/utils/norm-id';
 
@@ -27,6 +30,33 @@ import type { ClaimCardVariant } from '~/partials/explore/claim-explore-feed-car
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
+
+/**
+ * Cards drawn in full on the first render, whatever the viewport. The rest wait until they are near
+ * it (see `ExploreFeedCard`'s `deferUntilNearViewport`). Enough to fill a desktop screen without
+ * waiting on the observer, so the cards a reader sees first — and the lead card's poster, which is
+ * the page's largest paint — never pass through a placeholder.
+ */
+const EAGER_CARD_COUNT = 4;
+
+// A refetch rebuilds every loaded page from a re-ranked page one, so pages never go stale by age.
+// A failed first load has no data and stays stale, so focus and reconnect still retry it.
+const FEED_SESSION_OPTIONS = { staleTime: Infinity } as const;
+
+// A reader still within a screen of the top gets a fresh feed on return; one who has scrolled keeps theirs.
+// The age matches the app's default staleTime (`core/query-client.tsx`).
+const TOP_REFRESH_AFTER_MS = 30_000;
+function refreshAtTop(query: { state: { data: unknown; dataUpdatedAt: number } }): boolean | 'always' {
+  if (query.state.data === undefined) return true;
+  const atTop = window.scrollY < window.innerHeight;
+  return atTop && Date.now() - query.state.dataUpdatedAt > TOP_REFRESH_AFTER_MS ? 'always' : false;
+}
+
+const FEED_PAGES_SESSION_OPTIONS = {
+  ...FEED_SESSION_OPTIONS,
+  refetchOnWindowFocus: refreshAtTop,
+  refetchOnReconnect: refreshAtTop,
+} as const;
 
 function LoadingSkeleton() {
   return (
@@ -78,6 +108,8 @@ const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
 type EntityFeedProps = {
   /** REST endpoint this feed fetches from (e.g. `/api/explore/feed` or `/api/activity/feed`). */
   apiEndpoint: string;
+  /** Explore's resume policy: loaded pages stay put, refreshing on return only near the top. Explore opts in. */
+  preserveSession?: boolean;
   /** When set, the feed is pinned to this space. */
   lockedSpaceId?: string;
   /** Initial value for the time dropdown. Defaults to "week". */
@@ -91,6 +123,8 @@ type EntityFeedProps = {
    * you waits for them rather than serving Best first and then swapping the feed underneath.
    */
   followedTopicIds?: readonly string[] | null;
+  /** Use the topic stream until onboarding's account-owned follow submissions finish. For you only. */
+  pendingTopicFollows?: boolean;
   /** Whether to render the time-range dropdown. Defaults to true. */
   showTimeFilter?: boolean;
   /** Whether to render the sort dropdown (Best / New / Top). Defaults to false. */
@@ -143,24 +177,43 @@ type EntityFeedProps = {
    * Explore only; harmless where the server does not personalize.
    */
   sendIdentityToken?: boolean;
+  /**
+   * The wallet cookie the page was rendered with, if any. It keys the first page from hydration on
+   * (see `useFeedViewer`), rather than the page being fetched anonymously and then again once the
+   * smart account resolves.
+   */
+  walletAddress?: string | null;
+  /**
+   * Fetch the signed-out first page of Best from the CDN-cached anonymous URL (Explore only). Used
+   * only when nobody is signed in and the request is the plain first Best page; anything else keeps
+   * the personal URL, because the CDN ignores cookies.
+   */
+  cdnFirstPage?: boolean;
+  /**
+   * Extra cards between the feed's own, by the index of the card they follow, for `feedLength`
+   * cards (GEO-3421's past calls). Drawn only on an unfiltered feed; pages and cursors ignore them.
+   */
+  interleave?: (feedLength: number) => ReadonlyMap<number, React.ReactNode>;
 };
 
-async function fetchFeedPage(
-  apiEndpoint: string,
-  params: {
-    sort: ExplorePageSort;
-    /** Omitted when the feed's sort has no time range. */
-    time: ExploreTime | undefined;
-    /** Empty means no space narrowing at all. */
-    spaceIds: readonly string[];
-    typeIds: readonly string[] | undefined;
-    topicIds: readonly string[];
-    followedTopicIds: readonly string[];
-    fixedParams: Record<string, string>;
-    cursor: string | undefined;
-    identityToken?: string | null;
-  }
-): Promise<ExploreFeedResult> {
+/**
+ * The query string of a feed request. `anonymous` adds the cacheable-URL marker, and only to the
+ * plain first Best page: any cursor, filter or other sort stays on the uncached URL.
+ */
+type FeedQueryParams = {
+  sort: ExplorePageSort;
+  time: ExploreTime | undefined;
+  spaceIds: readonly string[];
+  typeIds: readonly string[] | undefined;
+  topicIds: readonly string[];
+  followedTopicIds: readonly string[];
+  pendingTopicFollows?: boolean;
+  fixedParams: Record<string, string>;
+  cursor: string | undefined;
+  anonymous?: boolean;
+};
+
+export function buildFeedQuery(params: FeedQueryParams): string {
   const sp = new URLSearchParams();
   sp.set('sort', params.sort);
   // Absent means "no time filter" — see the route's parseTime. Sending nothing is what keeps a
@@ -172,9 +225,20 @@ async function fetchFeedPage(
   if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
   if (params.topicIds.length > 0) sp.set('topicIds', params.topicIds.join(','));
   if (params.followedTopicIds.length > 0) sp.set('followedTopicIds', params.followedTopicIds.join(','));
+  if (params.sort === 'for-you' && params.pendingTopicFollows) sp.set('pendingTopicFollows', '1');
   for (const [key, value] of Object.entries(params.fixedParams)) sp.set(key, value);
   if (params.cursor) sp.set('cursor', params.cursor);
-  const res = await fetch(`${apiEndpoint}?${sp.toString()}`, {
+  if (params.anonymous && sp.toString() === 'sort=best') sp.set(PUBLIC_FEED_PARAM, '1');
+  return sp.toString();
+}
+
+async function fetchFeedPage(
+  apiEndpoint: string,
+  params: FeedQueryParams & {
+    identityToken?: string | null;
+  }
+): Promise<ExploreFeedResult> {
+  const res = await fetch(`${apiEndpoint}?${buildFeedQuery(params)}`, {
     credentials: 'include',
     ...(params.identityToken ? { headers: { authorization: `Bearer ${params.identityToken}` } } : {}),
   });
@@ -182,6 +246,18 @@ async function fetchFeedPage(
     throw new Error('Feed failed');
   }
   return res.json() as Promise<ExploreFeedResult>;
+}
+
+/** `items` with the card `leadId` names moved to the front, when it is there. */
+export function leadFirst<T extends { entityId: string }>(items: T[], leadId: string | null): T[] {
+  if (leadId === null) return items;
+  const index = items.findIndex(item => normId(item.entityId) === normId(leadId));
+  if (index <= 0) return items;
+  return [items[index]!, ...items.slice(0, index), ...items.slice(index + 1)];
+}
+
+function sameFeedOtherThanAccount(a: readonly unknown[], b: readonly unknown[]) {
+  return a.length === b.length && a.slice(0, -1).every((part, i) => part === b[i]);
 }
 
 type TopicFacetResult = { topics: Array<{ id: string; name: string | null; count: number }> };
@@ -216,11 +292,13 @@ async function fetchTopicFacets(
  */
 export function EntityFeed({
   apiEndpoint,
+  preserveSession = false,
   lockedSpaceId,
   initialTime = 'week',
   initialSort = 'new',
   sortOptions = DEFAULT_SORT_OPTIONS,
   followedTopicIds = [],
+  pendingTopicFollows = false,
   showTimeFilter = true,
   showSortFilter = false,
   compactHeader = false,
@@ -241,6 +319,9 @@ export function EntityFeed({
   titleOpensSidePanel = false,
   claimCardVariant = 'feed',
   sendIdentityToken = false,
+  walletAddress = null,
+  cdnFirstPage = false,
+  interleave,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
@@ -431,15 +512,17 @@ export function EntityFeed({
     [maxTopicSelections]
   );
 
-  // Key the query on the smart-account address because that hook is what writes the
-  // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier
-  // (before the cookie is set), which caused refetches to return anonymous data on
-  // sign-in and leave "Join space" buttons stuck for a few seconds.
-  const { smartAccount } = useSmartAccount();
-  const smartAccountAddress = smartAccount?.account.address ?? null;
+  const isForYou = sort === 'for-you';
+  // Only where the server can use it, so no other page waits on Privy for a token: For you, and
+  // Best while interleaving is on (GEO-3144), which needs to know who is reading.
+  const usesIdentityToken = sendIdentityToken && (isForYou || (sort === 'best' && FEED_INTERLEAVING_ENABLED));
+  // Key the query on the wallet the server route will read from the cookie: the smart-account
+  // address once it resolves (that hook writes the cookie), and the cookie's own value until then.
+  // Privy's user.id updates earlier (before the cookie is set), which caused refetches to return
+  // anonymous data on sign-in and leave "Join space" buttons stuck for a few seconds.
+  const { viewerAddress, awaitingIdentityToken } = useFeedViewer(walletAddress, usesIdentityToken);
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
   // request, and caching them apart would refetch on a change the viewer never made.
-  const isForYou = sort === 'for-you';
   const requestedFollowedTopicIds = isForYou ? (followedTopicIds ?? []) : [];
   const queryKey = [
     apiEndpoint,
@@ -449,42 +532,74 @@ export function EntityFeed({
     typeIdsKey,
     topicIdsKey,
     fixedParamsKey,
-    smartAccountAddress,
     // Only on For you, so every other sort's key, and so its cache, is unchanged.
-    ...(isForYou ? [requestedFollowedTopicIds.join(',')] : []),
+    ...(isForYou ? [requestedFollowedTopicIds.join(','), pendingTopicFollows] : []),
+    // Last, so `placeholderData` below can tell a change of account from a change of filter.
+    viewerAddress,
   ];
 
-  // Only where the server can use it, so no other page waits on Privy for a token: For you, and
-  // Best while interleaving is on (GEO-3144), which needs to know who is reading.
-  const wantsIdentityToken =
-    sendIdentityToken && smartAccountAddress !== null && (isForYou || (sort === 'best' && FEED_INTERLEAVING_ENABLED));
+  const wantsIdentityToken = usesIdentityToken && viewerAddress !== null;
+  const feedParams = {
+    sort,
+    time: requestedTime,
+    spaceIds: requestedSpaceIds,
+    typeIds,
+    topicIds: selectedTopicIds,
+    followedTopicIds: requestedFollowedTopicIds,
+    pendingTopicFollows: isForYou && pendingTopicFollows,
+    fixedParams,
+  };
 
-  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
-    queryKey,
-    queryFn: async ({ pageParam }) =>
-      fetchFeedPage(apiEndpoint, {
-        identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
-        sort,
-        time: requestedTime,
-        spaceIds: requestedSpaceIds,
-        typeIds,
-        topicIds: selectedTopicIds,
-        followedTopicIds: requestedFollowedTopicIds,
-        fixedParams,
-        cursor: pageParam as string | undefined,
-      }),
-    enabled: !isForYou || followedTopicIds !== null,
-    initialPageParam: undefined as string | undefined,
-    getNextPageParam: last => last.nextCursor ?? undefined,
-    retry: 2,
-    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
+  // A signed-in reader's plain first Best page is built for them, which takes most of a second
+  // after Privy hands over a token. The CDN-cached public page is the same feed bar a few
+  // member-space cards and flags, and the route preloads it for everyone, so it paints first and the
+  // reader's own page replaces it when it lands.
+  const paintsFromPublicPage =
+    cdnFirstPage &&
+    viewerAddress !== null &&
+    buildFeedQuery({ ...feedParams, cursor: undefined, anonymous: true }).includes(`${PUBLIC_FEED_PARAM}=1`);
+  // Only a placeholder until the reader's own page lands, so it is never refreshed automatically.
+  const publicFirstPage = useQuery({
+    ...(preserveSession ? FEED_SESSION_OPTIONS : {}),
+    queryKey: [apiEndpoint, PUBLIC_FEED_PARAM],
+    queryFn: () => fetchFeedPage(apiEndpoint, { ...feedParams, cursor: undefined, anonymous: true }),
+    enabled: paintsFromPublicPage,
+    retry: false,
   });
+  const publicPlaceholder = paintsFromPublicPage ? publicFirstPage.data : undefined;
+
+  const { data, isLoading, isFetchingNextPage, isPlaceholderData, fetchNextPage, hasNextPage, error } =
+    useInfiniteQuery({
+      ...(preserveSession ? FEED_PAGES_SESSION_OPTIONS : {}),
+      queryKey,
+      queryFn: async ({ pageParam }) =>
+        fetchFeedPage(apiEndpoint, {
+          ...feedParams,
+          identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
+          anonymous: cdnFirstPage && viewerAddress === null && !wantsIdentityToken,
+          cursor: pageParam as string | undefined,
+        }),
+      enabled: !awaitingIdentityToken && (!isForYou || followedTopicIds !== null),
+      // When only the account changed (signing in on the page, or an account that arrived after the
+      // wait gave up), keep the cards up while the new page loads instead of dropping to skeletons.
+      // Otherwise a signed-in reader sees the public page meanwhile.
+      placeholderData: (previous, previousQuery) => {
+        if (previousQuery && sameFeedOtherThanAccount(previousQuery.queryKey, queryKey)) return previous;
+        return publicPlaceholder ? { pages: [publicPlaceholder], pageParams: [undefined] } : undefined;
+      },
+      initialPageParam: undefined as string | undefined,
+      getNextPageParam: last => last.nextCursor ?? undefined,
+      retry: 2,
+      retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
+    });
 
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     const el = sentinelRef.current;
-    if (!el || !hasNextPage) return;
+    // A placeholder's cursor belongs to another feed: its next page would be fetched against this
+    // one's key. Wait for the real first page.
+    if (!el || !hasNextPage || isPlaceholderData) return;
     const io = new IntersectionObserver(
       entries => {
         if (entries[0]?.isIntersecting && !isFetchingNextPage) {
@@ -495,13 +610,32 @@ export function EntityFeed({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isPlaceholderData]);
+
+  // GEO-3234. Load what this browser has already shown, once, while the first page is in flight.
+  const isBest = sort === 'best';
+  React.useEffect(() => {
+    if (isBest) seenStore().prime();
+  }, [isBest]);
+  const [mountedAtSec] = React.useState(() => Math.floor(Date.now() / 1000));
+  // Keyed on the feed so a pin never follows the reader onto another sort or filter.
+  const feedKey = JSON.stringify(queryKey.slice(0, -1));
+  const [pin, setPin] = React.useState<{ feedKey: string; entityId: string } | null>(null);
+  const pinnedLeadId = pin?.feedKey === feedKey ? pin.entityId : null;
+  const setPinnedLeadId = React.useCallback((entityId: string) => setPin({ feedKey, entityId }), [feedKey]);
 
   const items = React.useMemo(() => {
-    const pages = data?.pages ?? [];
-    const flat: ExploreFeedItem[] = [];
-    for (const p of pages) flat.push(...p.items);
-    if (!isForYou) return flat;
+    // GEO-3234. Best's pages composed together for this visitor: seen cards hidden, gaps filled from
+    // each page's reserve, nothing shown twice. Pages without the config pass through.
+    const flat = composeSeenPages(
+      (data?.pages ?? []).map(p => ({
+        items: p.items,
+        reserve: p.reserve,
+        config: readSeenDemotionPageConfig(p.seenDemotion),
+      })),
+      { snapshot: seenStore().snapshot(), nowSec: mountedAtSec }
+    );
+    if (!isForYou) return leadFirst(flat, pinnedLeadId);
     // For you pages two streams that overlap, so an item served from one can come back later from
     // the other. The first appearance stays.
     const seen = new Set<string>();
@@ -511,7 +645,17 @@ export function EntityFeed({
       seen.add(id);
       return true;
     });
-  }, [data?.pages, isForYou]);
+  }, [data?.pages, isForYou, mountedAtSec, pinnedLeadId]);
+
+  // The public page's lead is already playing when the reader's own page replaces it, so it stays on
+  // top if that page has it too, rather than the card sliding away under them.
+  const placeholderLeadId = isPlaceholderData && publicPlaceholder ? (items[0]?.entityId ?? null) : null;
+  React.useEffect(() => {
+    if (placeholderLeadId !== null) setPinnedLeadId(placeholderLeadId);
+  }, [placeholderLeadId, setPinnedLeadId]);
+
+  const unfiltered = requestedSpaceIds.length === 0 && typeIds === undefined && selectedTopicIds.length === 0;
+  const interleaved = unfiltered ? interleave?.(items.length) : undefined;
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_LABELS[sort];
@@ -661,7 +805,7 @@ export function EntityFeed({
       <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
-        ) : isLoading || (isForYou && followedTopicIds === null) ? (
+        ) : isLoading || awaitingIdentityToken || (isForYou && followedTopicIds === null) ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <LoadingSkeleton key={i} />
@@ -671,15 +815,18 @@ export function EntityFeed({
           <p className="text-browseMenu text-grey-04">No entities match these filters yet.</p>
         ) : (
           items.map((item, index) => (
-            <ExploreFeedCard
-              itemPosition={index + 1}
-              key={`${item.entityId}-${item.spaceId}`}
-              item={item}
-              hideSpaceLink={lockedSpaceId != null}
-              hideJoinButton={lockedSpaceId != null}
-              titleOpensSidePanel={titleOpensSidePanel}
-              claimCardVariant={claimCardVariant}
-            />
+            <React.Fragment key={`${item.entityId}-${item.spaceId}`}>
+              <ExploreFeedCard
+                itemPosition={index + 1}
+                item={item}
+                hideSpaceLink={lockedSpaceId != null}
+                hideJoinButton={lockedSpaceId != null}
+                titleOpensSidePanel={titleOpensSidePanel}
+                claimCardVariant={claimCardVariant}
+                deferUntilNearViewport={index >= EAGER_CARD_COUNT}
+              />
+              {interleaved?.get(index)}
+            </React.Fragment>
           ))
         )}
         <div ref={sentinelRef} className="h-4 w-full" aria-hidden />

@@ -17,7 +17,7 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 
 import { useDebateActivity, useDebateSchedule, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
-import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes } from './hub-analytics';
+import { type DebateActionAnalyticsSurface, debateActionAnalyticsAttributes } from './hub-analytics';
 import { hubPillClassName } from './hub-pill-button';
 
 /** How long "Link copied" stays before the row reads as a link again. */
@@ -35,8 +35,8 @@ export function HubHeaderControls({
 }: {
   /** The set-schedule banner sends focus here when it retires. */
   scheduleButtonRef?: React.RefObject<HTMLButtonElement | null>;
-  /** Whose clicks these are: the hub's, or the calendar's on its own page. */
-  analyticsSurface?: DebateAnalyticsSurface;
+  /** Whose clicks these are: the hub's, the calendar's on its own page, or a lobby's. */
+  analyticsSurface?: DebateActionAnalyticsSurface;
   children?: React.ReactNode;
 }) {
   return (
@@ -56,15 +56,15 @@ export function HubHeaderControls({
  * It replaced a full-width "I'm available" switch and a calendar icon for the weekly editor, which
  * sat beside the Calendar button looking identical to it while meaning something else.
  *
- * With no weekly times saved, the pill carries the brand-purple dot the old calendar icon did, so a
- * viewer who closed the set-schedule banner still has something quiet asking.
+ * With no weekly times saved, the pill carries the brand-purple dot the old calendar icon did, so
+ * the ask is still there on screens without the set-schedule banner.
  */
 function AvailabilityMenu({
   triggerRef,
   analyticsSurface,
 }: {
   triggerRef?: React.RefObject<HTMLButtonElement | null>;
-  analyticsSurface: DebateAnalyticsSurface;
+  analyticsSurface: DebateActionAnalyticsSurface;
 }) {
   const { authenticated } = useGeoChatAuth();
   const { data: activity } = useDebateActivity(authenticated);
