@@ -73,6 +73,7 @@ export function DebatePreScreen({
   mediaError,
   canRetryConnection,
   onRetryConnection,
+  retryConnectionLabel = 'Reconnect',
   canTakeOverConnection,
   onTakeOverConnection,
   readyBusy,
@@ -139,6 +140,7 @@ export function DebatePreScreen({
   mediaError: string | null;
   canRetryConnection: boolean;
   onRetryConnection: () => void;
+  retryConnectionLabel?: string;
   /** Another tab or device holds this debate and this one can claim it back. */
   canTakeOverConnection: boolean;
   onTakeOverConnection: () => void;
@@ -479,7 +481,7 @@ export function DebatePreScreen({
                 onClick={canTakeOverConnection ? onTakeOverConnection : onRetryConnection}
                 className="inline-flex min-h-8 shrink-0 items-center justify-center rounded-full bg-text px-4 text-button text-white hover:bg-text/90"
               >
-                {canTakeOverConnection ? 'Continue here' : 'Reconnect'}
+                {canTakeOverConnection ? 'Continue here' : retryConnectionLabel}
               </button>
             )}
           </div>

@@ -1641,29 +1641,33 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   // One voice per person across Geo tabs: a lobby, picker or card preview elsewhere stops while this
   // room holds voice. Yielding (intro, or once the debate is over) leaves a retry that takes it back.
-  const { stopMedia } = mediaSession;
-  // Set when this tab gave voice up in the intro: its devices stay closed until a reconnect.
+  // Set when this tab gave voice up in the intro: its devices stay closed, and show as off, until
+  // voice is taken back. The choice it had is restored then.
   const [voiceYielded, setVoiceYielded] = React.useState(false);
+  const yieldedJoinStateRef = React.useRef<{ audioMuted: boolean; videoEnabled: boolean } | null>(null);
   const tabVoice = useVoiceOwnership({
     userId: currentUserId,
     kind: 'debate',
     active: Boolean(currentUserId),
     policy: () => debateVoicePolicy(debateStatusRef.current, roomStateRef.current !== 'idle'),
-    onYield: () => {
+    onYield: async () => {
       const status = debateStatusRef.current;
       connectionGenerationRef.current += 1;
       disconnectConnectingRoom(connectingRoomRef);
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       localMediaStreamRef.current = null;
-      stopMedia();
+      // Closes every device and settles the preview as idle, so its toggles stay usable.
+      await ensureLocalPreview({ audio: false, video: false }).catch(() => undefined);
       setRemoteVideoReady(false);
       setRemotePresence('absent');
       setConnectStarting(false);
-      if (status !== 'complete' && status !== 'cancelled') setRoomError('Voice is on in another tab.');
+      if (status !== 'complete' && status !== 'cancelled') setRoomError('Voice is on in another tab');
       // The intro stays off until a retry; the debate itself still connects when it starts.
       if (status === 'ready') {
         autoConnectAttemptedRef.current = `${debateId}:intro`;
         setAutoConnectAttemptedKey(autoConnectAttemptedRef.current);
+        yieldedJoinStateRef.current ??= joinStateRef.current;
+        setJoinState({ audioMuted: true, videoEnabled: false });
         setVoiceYielded(true);
       }
       setRoomState('idle');
@@ -1723,6 +1727,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (!isCurrent()) {
         if (connectStartingGenerationRef.current === generation) setConnectStarting(false);
         return;
+      }
+      if (yieldedJoinStateRef.current) {
+        setJoinState(yieldedJoinStateRef.current);
+        yieldedJoinStateRef.current = null;
       }
       setVoiceYielded(false);
 
@@ -2141,6 +2149,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       selectedAudioInputIdRef,
       selectedAudioOutputIdRef,
       selectedVideoInputIdRef,
+      setJoinState,
       setPreviewStream,
       stopLocalRecorder,
     ]
@@ -2353,11 +2362,34 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     void openForJoinState({ audioMuted, videoEnabled }, { forceRestart: liveKindsNow().length === 0, retry: true });
   }, [audioMuted, liveKindsNow, openForJoinState, videoEnabled]);
 
+  // Taking voice back after giving it up in the intro: an explicit claim, then the devices and room.
+  const resumeVoice = React.useCallback(
+    async (next?: { audioMuted: boolean; videoEnabled: boolean }) => {
+      if (!(await claimVoice())) return;
+      const restored = next ?? yieldedJoinStateRef.current ?? joinStateRef.current;
+      yieldedJoinStateRef.current = null;
+      setJoinState(restored);
+      setVoiceYielded(false);
+      await openForJoinState(restored);
+      void connect();
+    },
+    [claimVoice, connect, openForJoinState, setJoinState]
+  );
+
+  const retryRoomConnection = React.useCallback(() => {
+    if (voiceYielded) void resumeVoice();
+    else retryConnection();
+  }, [resumeVoice, retryConnection, voiceYielded]);
+
   const toggleAudioMuted = React.useCallback(() => {
     const next = { audioMuted: !audioMuted, videoEnabled };
+    if (voiceYielded) {
+      if (!next.audioMuted) void resumeVoice(next);
+      return;
+    }
     setJoinState(next);
     ensureKindsForJoinState(next);
-  }, [audioMuted, ensureKindsForJoinState, setJoinState, videoEnabled]);
+  }, [audioMuted, ensureKindsForJoinState, resumeVoice, setJoinState, videoEnabled, voiceYielded]);
 
   const rememberJoinStateForPicker = React.useCallback(
     (sessionId: string) =>
@@ -2371,9 +2403,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const toggleVideoEnabled = React.useCallback(() => {
     const next = { audioMuted, videoEnabled: !videoEnabled };
+    if (voiceYielded) {
+      if (next.videoEnabled) void resumeVoice(next);
+      return;
+    }
     setJoinState(next);
     ensureKindsForJoinState(next);
-  }, [audioMuted, ensureKindsForJoinState, setJoinState, videoEnabled]);
+  }, [audioMuted, ensureKindsForJoinState, resumeVoice, setJoinState, videoEnabled, voiceYielded]);
 
   const savePickAsync = saveOpenRoundPick.mutateAsync;
   const pickOpenRound = React.useCallback(
@@ -3328,7 +3364,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             }
             connectionSettling={roomState === 'connecting' || roomState === 'reconnecting' || publishingMedia}
             canRetryConnection={roomState === 'idle' && roomError !== null && !connectionConflict}
-            onRetryConnection={retryConnection}
+            onRetryConnection={retryRoomConnection}
+            retryConnectionLabel={voiceYielded ? 'Use voice here' : undefined}
             canTakeOverConnection={connectionConflict && canTakeOverConnection}
             onTakeOverConnection={takeOverConnection}
             readyBusy={markReady.isPending}
@@ -3369,10 +3406,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                     (!connectionConflict || canTakeOverConnection) && (
                       <Button
                         type="button"
-                        onClick={connectionConflict ? takeOverConnection : retryConnection}
+                        onClick={connectionConflict ? takeOverConnection : retryRoomConnection}
                         disabled={liveKitJoin.isPending || markJoined.isPending}
                       >
-                        {connectionConflict ? 'Continue here' : 'Retry connection'}
+                        {connectionConflict ? 'Continue here' : voiceYielded ? 'Use voice here' : 'Retry connection'}
                       </Button>
                     )}
                   <Button type="button" variant="secondary" onClick={() => router.push(`/space/${spaceId}/debates`)}>
@@ -3418,7 +3455,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 remoteDisconnected={remotePresence === 'left'}
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
-                onRetryConnection={retryConnection}
+                onRetryConnection={retryRoomConnection}
                 returnsToLobby={returnsToLobby}
                 onLeave={leave}
                 leaveDisabled={abortDebate.isPending || recordingModalRoomState === 'saving'}

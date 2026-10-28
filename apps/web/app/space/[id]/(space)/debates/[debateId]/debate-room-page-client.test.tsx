@@ -37,6 +37,7 @@ import {
 } from '~/core/debates/open-rounds-fixtures';
 import { clearRematchJoinIntents, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { DebateRequestMediaPreview } from '~/core/debates/request-media-preview';
+import { tabVoiceOwner } from '~/core/debates/voice-owner';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
 
@@ -3210,7 +3211,7 @@ describe('DebateRoomPageClient', () => {
     });
     expect(released).toBe(true);
     expect(mocks.roomDisconnect).toHaveBeenCalled();
-    expect(await screen.findByText('Voice is on in another tab.')).toBeInTheDocument();
+    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
     expect(mocks.roomConnect).toHaveBeenCalledOnce();
     // Nor are the camera and mic opened again behind the other tab's back.
     await act(async () => {
@@ -3218,8 +3219,37 @@ describe('DebateRoomPageClient', () => {
     });
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(previewsBefore);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use voice here' }));
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
+  });
+
+  it('takes voice back when the camera is turned on after giving it up in the intro', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await act(async () => {
+      await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+        requesterLabel: 'lobby',
+      });
+    });
+    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
+    const previewsBefore = mocks.createLocalTracks.mock.calls.length;
+
+    // Shown as it is: nothing open.
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument();
+
+    const claim = vi.spyOn(tabVoiceOwner(mocks.currentUserId!), 'claim');
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
+    expect(claim).toHaveBeenCalledWith({ kind: 'debate' });
+    expect(mocks.createLocalTracks.mock.calls.length).toBeGreaterThan(previewsBefore);
+    // Only what was turned on comes back on.
+    expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument();
   });
 
   it('keeps voice from another tab while the debate is under way', async () => {
