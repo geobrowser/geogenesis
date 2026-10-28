@@ -140,7 +140,7 @@ export function useMyDebateLobby(enabled = true) {
 }
 
 /** A held call opens only when scheduled calls are switched back on, which nothing announces to its page. */
-const HELD_CALL_REFETCH_MS = 3 * 60_000;
+export const HELD_CALL_REFETCH_MS = 3 * 60_000;
 
 /** Floor between refetches at `opens_at`, so a client clock ahead of the server cannot spin. */
 const OPENS_REFETCH_MIN_MS = 5_000;
