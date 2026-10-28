@@ -7055,7 +7055,7 @@ describe('DebateRoomPageClient', () => {
       expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
       expect(openRoundAnnouncement()).toHaveTextContent('You: Extend. Bob: Extend.');
 
-      // The picks stay up for 1.9 s, leaving a 1.1 s title (GEO-3522).
+      // The picks stay up for 1.95 s, leaving a 1.05 s title (GEO-3522).
       rerenderAt(view, '20:02:05.500', openRoundsRevealRebut());
       expect(result()).toBeNull();
 
@@ -7107,7 +7107,7 @@ describe('DebateRoomPageClient', () => {
         vi.spyOn(Date, 'now').mockReturnValue(startAt - 3_500);
         const view = await renderLiveDebate(debate);
         await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'round'));
-        expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText('Your turn in')).not.toBeInTheDocument());
         expect(audioTrack.mediaStreamTrack.enabled).toBe(false);
 
         for (const seconds of [3, 2, 1]) {
@@ -7121,7 +7121,7 @@ describe('DebateRoomPageClient', () => {
         rerenderAt(view, startAt + 100, debate);
         await waitFor(() => expectActiveDebateVideoTile('local', 'outline-white'));
         await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
-        expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText('Your turn in')).not.toBeInTheDocument());
       }
     );
 
@@ -7173,7 +7173,7 @@ describe('DebateRoomPageClient', () => {
       await renderLiveDebate(openRoundsRevealRebut());
       await waitFor(() => expect(reveal('local')).toBeInTheDocument());
 
-      // The room clock stays at 20:02:05 (0.8 s in); the reveal's own timer reaches 1.9 s.
+      // The room clock stays at 20:02:05 (0.8 s in); the reveal's own timer reaches 1.95 s.
       await act(async () => {
         vi.advanceTimersByTime(1_200);
       });

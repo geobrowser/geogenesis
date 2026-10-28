@@ -27,8 +27,8 @@ describe('openRoundRevealStep', () => {
   });
 
   it('counts the opener in once the window closes after an Extend', () => {
-    expect(openRoundRevealStep(1_899, 'extend', 3_000)).toBe('flip');
-    expect(openRoundRevealStep(1_900, 'extend', 3_000)).toBe('result');
+    expect(openRoundRevealStep(1_949, 'extend', 3_000)).toBe('flip');
+    expect(openRoundRevealStep(1_950, 'extend', 3_000)).toBe('result');
     expect(openRoundRevealStep(2_999, 'extend', 3_000)).toBe('result');
     expect(openRoundRevealStep(3_000, 'extend', 3_000)).toBe('countIn');
     expect(openRoundRevealStep(7_999, 'extend', 3_000)).toBe('countIn');
@@ -56,10 +56,10 @@ describe('useOpenRoundRevealStep', () => {
     const { result } = renderHook(() => useOpenRoundRevealStep(600, 'extend', 3_000));
     expect(result.current).toBe('flip');
 
-    act(() => vi.advanceTimersByTime(1_900 - 600));
+    act(() => vi.advanceTimersByTime(1_950 - 600));
     expect(result.current).toBe('result');
 
-    act(() => vi.advanceTimersByTime(3_000 - 1_900));
+    act(() => vi.advanceTimersByTime(3_000 - 1_950));
     expect(result.current).toBe('countIn');
   });
 
@@ -70,7 +70,7 @@ describe('useOpenRoundRevealStep', () => {
       ({ elapsed }: { elapsed: number | null }) => useOpenRoundRevealStep(elapsed, 'extend', 3_000),
       { initialProps: { elapsed: 600 as number | null } }
     );
-    act(() => vi.advanceTimersByTime(1_900 - 600));
+    act(() => vi.advanceTimersByTime(1_950 - 600));
     expect(result.current).toBe('result');
 
     // A round is spoken between the two reveals.

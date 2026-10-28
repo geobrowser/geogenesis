@@ -45,9 +45,9 @@ import { roundLabel } from './round-cues';
 export type OpenRoundRevealStep = 'flip' | 'result' | 'countIn';
 
 /** The share of the window the picks have to land and be read before the result takes over. */
-// GEO-3522: the title occupies 1.1 s of the 3 s result window (was 1.65 s),
-// a third shorter. The picks stay readable for the first 1.9 s.
-const OPEN_ROUND_EXTEND_FLIP_SHARE = 1.9 / 3;
+// GEO-3522: the title occupies 1.05 s of the 3 s result window (was 1.65 s),
+// 36% shorter (31% including the unchanged 300 ms exit). Picks stay up for 1.95 s.
+const OPEN_ROUND_EXTEND_FLIP_SHARE = 1.95 / 3;
 const OPEN_ROUND_END_FLIP_SHARE = 0.45;
 
 /**
