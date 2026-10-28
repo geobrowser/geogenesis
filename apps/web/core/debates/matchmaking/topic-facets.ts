@@ -336,6 +336,17 @@ export function carriesEveryTopic(topics: { id: string }[] | undefined, selected
   return selected.every(id => carried.has(id));
 }
 
+/**
+ * Whether a row is in every picked space: the side panel's space picks narrow (AND, GEO-3463), like
+ * topics. A claim row sits in one space, so it passes two picks only if they name the same space; a
+ * person is active in several. Ids compare dashless, since lists and facets disagree on dashes.
+ */
+export function inEverySpace(spaceIds: readonly string[], rowSpaceIds: string | readonly string[]): boolean {
+  if (spaceIds.length === 0) return true;
+  const rows = new Set((typeof rowSpaceIds === 'string' ? [rowSpaceIds] : rowSpaceIds).map(normId));
+  return spaceIds.every(id => rows.has(normId(id)));
+}
+
 /** Letters and digits in any script: what separates words in a topic name is everything else. */
 const WORD_START = /[\p{L}\p{N}]/u;
 

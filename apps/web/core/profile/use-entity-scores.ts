@@ -34,6 +34,9 @@ import { normId } from '~/core/utils/norm-id';
  * one, so unlike Score it needs no fallback. Both come back in one request
  * because they are read together and asking twice for one list would be two
  * cache entries describing the same rows.
+ *
+ * **Created at** rides along for the debates panel's Newest sort (GEO-3463),
+ * which orders claims in hand by it and by ranking score, from this same read.
  */
 const SCORES_SOURCE = /* GraphQL */ `
   query EntityScores($ids: [UUID!], $propertyId: UUID!) {
@@ -41,6 +44,7 @@ const SCORES_SOURCE = /* GraphQL */ `
       nodes {
         id
         rankingScore
+        createdAt
         valuesList(filter: { propertyId: { is: $propertyId } }) {
           integer
         }
@@ -61,11 +65,12 @@ export const entityScoresDocument = parse(SCORES_SOURCE) as TypedDocumentNode<an
  * `sortRows` then pushes behind every scored row. So Top would have put a
  * profile's 101st debate last regardless of how high it scored.
  */
-const ID_BATCH_SIZE = 100;
+export const ID_BATCH_SIZE = 100;
 
 type ScoreNode = {
   id?: string | null;
   rankingScore?: number | string | null;
+  createdAt?: string | null;
   valuesList?: ({ integer?: number | string | null } | null)[] | null;
 };
 
@@ -76,6 +81,8 @@ export type EntityScores = {
   scores: Map<string, number>;
   /** The indexer's ranking score. Present for every entity. */
   rankings: Map<string, number>;
+  /** When the entity was created, in ms. Absent where the graph sends none or an unreadable one. */
+  createdAt: Map<string, number>;
 };
 
 /**
@@ -91,6 +98,7 @@ export type EntityScores = {
 export function decodeScores(response: ScoresResponse): EntityScores {
   const scores = new Map<string, number>();
   const rankings = new Map<string, number>();
+  const createdAt = new Map<string, number>();
 
   for (const node of response.entitiesConnection?.nodes ?? []) {
     if (!node?.id) continue;
@@ -107,9 +115,24 @@ export function decodeScores(response: ScoresResponse): EntityScores {
       const value = typeof rank === 'number' ? rank : Number(rank);
       if (Number.isFinite(value)) rankings.set(key, value);
     }
+
+    const created = node.createdAt ? Date.parse(node.createdAt) : NaN;
+    if (Number.isFinite(created)) createdAt.set(key, created);
   }
 
-  return { scores, rankings };
+  return { scores, rankings, createdAt };
+}
+
+/** One request for up to {@link ID_BATCH_SIZE} ids. Callers with more chunk them. */
+export function fetchEntityScores(ids: readonly string[], signal?: AbortSignal): Promise<EntityScores> {
+  return Effect.runPromise(
+    graphql({
+      query: entityScoresDocument,
+      decoder: decodeScores,
+      variables: { ids: [...ids], propertyId: SCORE_SYSTEM_PROPERTY },
+      signal,
+    })
+  );
 }
 
 export function entityScoresQueryKey(ids: readonly string[]) {
@@ -117,7 +140,7 @@ export function entityScoresQueryKey(ids: readonly string[]) {
   return ['entity-scores', [...ids].map(normId).sort().join(',')] as const;
 }
 
-const NO_SCORES: EntityScores = { scores: new Map(), rankings: new Map() };
+const NO_SCORES: EntityScores = { scores: new Map(), rankings: new Map(), createdAt: new Map() };
 
 type EntityScoreCheckpoint = EntityScores & {
   ids: string[];
@@ -125,7 +148,7 @@ type EntityScoreCheckpoint = EntityScores & {
 };
 
 function createEntityScoreCheckpoint(ids: readonly string[]): EntityScoreCheckpoint {
-  return { ids: [...ids], nextStart: 0, scores: new Map(), rankings: new Map() };
+  return { ids: [...ids], nextStart: 0, scores: new Map(), rankings: new Map(), createdAt: new Map() };
 }
 
 function cloneEntityScoreCheckpoint(checkpoint: EntityScoreCheckpoint): EntityScoreCheckpoint {
@@ -134,6 +157,7 @@ function cloneEntityScoreCheckpoint(checkpoint: EntityScoreCheckpoint): EntitySc
     nextStart: checkpoint.nextStart,
     scores: new Map(checkpoint.scores),
     rankings: new Map(checkpoint.rankings),
+    createdAt: new Map(checkpoint.createdAt),
   };
 }
 
@@ -157,17 +181,11 @@ export function useEntityScores({ ids, enabled = true }: { ids: readonly string[
       try {
         while (checkpoint.nextStart < checkpoint.ids.length) {
           const chunk = checkpoint.ids.slice(checkpoint.nextStart, checkpoint.nextStart + ID_BATCH_SIZE);
-          const page = await Effect.runPromise(
-            graphql({
-              query: entityScoresDocument,
-              decoder: decodeScores,
-              variables: { ids: chunk, propertyId: SCORE_SYSTEM_PROPERTY },
-              signal,
-            })
-          );
+          const page = await fetchEntityScores(chunk, signal);
 
           for (const [id, score] of page.scores) checkpoint.scores.set(id, score);
           for (const [id, rank] of page.rankings) checkpoint.rankings.set(id, rank);
+          for (const [id, created] of page.createdAt) checkpoint.createdAt.set(id, created);
           checkpoint.nextStart += chunk.length;
         }
       } catch (cause) {
@@ -175,7 +193,11 @@ export function useEntityScores({ ids, enabled = true }: { ids: readonly string[
         throw cause;
       }
 
-      const result = { scores: new Map(checkpoint.scores), rankings: new Map(checkpoint.rankings) };
+      const result = {
+        scores: new Map(checkpoint.scores),
+        rankings: new Map(checkpoint.rankings),
+        createdAt: new Map(checkpoint.createdAt),
+      };
       if (!signal.aborted) resetProgress();
       return result;
     },

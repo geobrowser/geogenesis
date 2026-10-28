@@ -14,8 +14,16 @@ import * as React from 'react';
  * The tradeoff: a claim that gets hot mid-session won't climb until a reset. In a narrow panel the
  * user is actively working, that's the right trade — freshness still arrives as new rows appearing
  * in their correct place.
+ *
+ * `appendNew` puts rows not seen before after every row already shown instead (GEO-3463), for a list
+ * sorted in hand that pages: page 2's best claim would otherwise land above the rows being read.
  */
-export function useStableListOrder<T>(items: T[], keyOf: (item: T) => string, resetKey: string): T[] {
+export function useStableListOrder<T>(
+  items: T[],
+  keyOf: (item: T) => string,
+  resetKey: string,
+  { appendNew = false }: { appendNew?: boolean } = {}
+): T[] {
   const orderRef = React.useRef<string[]>([]);
   const resetRef = React.useRef(resetKey);
   // Kept in a ref so callers can pass an inline arrow without busting the memo every render.
@@ -37,16 +45,18 @@ export function useStableListOrder<T>(items: T[], keyOf: (item: T) => string, re
     // Walk the server order. Keys we've shown before are drained in their remembered order, so
     // their relative positions survive; keys we haven't land exactly where the server put them.
     const next: string[] = [];
+    const fresh: string[] = [];
     let heldIndex = 0;
     for (const item of items) {
       const itemKey = key(item);
       if (seen.has(itemKey)) {
         if (heldIndex < held.length) next.push(held[heldIndex++]);
       } else {
-        next.push(itemKey);
+        (appendNew ? fresh : next).push(itemKey);
       }
     }
     while (heldIndex < held.length) next.push(held[heldIndex++]);
+    next.push(...fresh);
 
     // Writing during render is safe here because the result is a fixed point: recomputing from
     // `next` yields `next`, so a discarded or double-invoked memo produces the same order.
@@ -57,5 +67,5 @@ export function useStableListOrder<T>(items: T[], keyOf: (item: T) => string, re
     // emptied, and the memo has to recompute against the cleared order rather than hand back the
     // last one. Dropping it as "unnecessary" would return a stale order on every reset.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, resetKey]);
+  }, [appendNew, items, resetKey]);
 }

@@ -6,6 +6,7 @@ import type * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyHighlights, DebateLobbyMember, DebateLobbyView } from '../api';
+import { ResizeObserverStub } from '../resize-observer-fixtures';
 
 const claimList = (entityId: string) => ({
   entity_id: entityId,
@@ -122,11 +123,6 @@ vi.mock('./lobby-queued-request', () => ({
   useLobbyQueuedRequest: () => ({ pending: null, request: vi.fn(), outcome: null, dismissOutcome: vi.fn() }),
 }));
 
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
 window.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
 
 const { DebateLobbyPage } = await import('./lobby-page');
