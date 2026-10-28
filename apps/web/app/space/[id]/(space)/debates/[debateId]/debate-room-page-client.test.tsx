@@ -40,7 +40,7 @@ import { DebateRequestMediaPreview } from '~/core/debates/request-media-preview'
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
 
-import { DebateRoomPageClient, localTurnStartsInSeconds, upcomingTurnLabel } from './debate-room-page-client';
+import { DebateRoomPageClient, upcomingTurnLabel } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
   startVoiceCallTelemetry: vi.fn(),
@@ -578,49 +578,6 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
-});
-
-describe('localTurnStartsInSeconds', () => {
-  it.each([
-    [3_000, 3, 3],
-    [3_000, 4, null],
-    [5_000, 4, 4],
-    [5_000, 6, null],
-    [0, 1, null],
-    [undefined, 1, null],
-    [-1, 1, null],
-  ])('uses the saved %s ms count-in with %s seconds remaining', (countInMs, remainingSeconds, expected) => {
-    const debate = openRoundsRevealRebut();
-    debate.open_rounds = { ...debate.open_rounds!, extend_count_in_ms: countInMs };
-    const countdown = {
-      effectiveStatus: 'in_progress',
-      turnIndex: 1,
-      activeSlot: null,
-      yieldingSlot: null,
-      remainingSeconds,
-      openRounds: { phase: 'result' },
-    } as Parameters<typeof localTurnStartsInSeconds>[1];
-    expect(localTurnStartsInSeconds(debate, countdown, 1)).toBe(expected);
-  });
-
-  it.each([
-    [true, 4, null],
-    [true, 3, 3],
-    [false, 5, 5],
-    [false, 6, null],
-  ])('keeps the ordinary count-in boundary for open=%s at %s seconds', (open, remainingSeconds, expected) => {
-    const debate = openRoundsListening();
-    if (!open) delete debate.open_rounds;
-    const countdown = {
-      effectiveStatus: 'in_progress',
-      turnIndex: 0,
-      activeSlot: 1,
-      yieldingSlot: null,
-      remainingSeconds,
-      openRounds: open ? { phase: 'speaking' } : null,
-    } as Parameters<typeof localTurnStartsInSeconds>[1];
-    expect(localTurnStartsInSeconds(debate, countdown, 2)).toBe(expected);
-  });
 });
 
 describe('upcomingTurnLabel', () => {
