@@ -157,8 +157,9 @@ export function createTabVoiceOwner({
       onTakeoverRequested: async context => {
         const policies = [...surfaces].map(surface => surface.policy());
         if (!shouldYieldVoice(policies, context)) return false;
-        setState({ ownership: 'elsewhere', heldBy: asSurfaceKind(context.requesterLabel) });
+        // Off the air before the UI moves: unmounting the room first would drop the handle to await.
         await Promise.allSettled([...surfaces].map(surface => Promise.resolve().then(surface.onYield)));
+        setState({ ownership: 'elsewhere', heldBy: asSurfaceKind(context.requesterLabel) });
         return true;
       },
     });

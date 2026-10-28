@@ -29,7 +29,6 @@ import { AudioSettings, MobileSettingsSheet } from '~/core/debates/audio-setting
 import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
 import { cameraFailureMessage } from '~/core/debates/camera-failure';
 import { CameraIcon, MicrophoneIcon } from '~/core/debates/debate-room-controls';
-import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
 import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { tokenAllowsCamera } from '~/core/debates/livekit-grant';
@@ -45,6 +44,7 @@ import {
 import { resolveJoinChoice } from '~/core/debates/request-join-state';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { TrackVideo } from '~/core/debates/track-video';
+import { useVoiceOwnership } from '~/core/debates/voice-owner';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { switchMediaDevice, toMediaDeviceOptions, withMediaDeviceOptions } from '~/core/media/device-options';
 import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
@@ -343,65 +343,25 @@ function SessionRematchVoiceHeader({
   const opponent = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
   const local = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
 
-  // Only one tab per user may hold the mic. Same coordinator as the debate room, namespaced so a
-  // rematch session can never collide with a debate id.
-  const [ownership, setOwnership] = React.useState<OwnershipState>('pending');
+  // One voice per person across all Geo tabs: a lobby, debate or another picker takes turns with
+  // this one. Yielding disconnects first, so the winning tab never publishes alongside this one.
   const roomRef = React.useRef<Room | null>(null);
-  const coordinatorRef = React.useRef<ReturnType<typeof createDebateRoomOwnershipCoordinator> | null>(null);
-
-  React.useEffect(() => {
-    if (!voiceActive) {
-      // Ownership outlives the coordinator that granted it otherwise, so a session that leaves a
-      // voice-capable status and comes back would let this tab connect on a cached token before the
-      // new lock is acquired.
-      setOwnership('pending');
-      return;
-    }
-    let cancelled = false;
-    const coordinator = createDebateRoomOwnershipCoordinator({
-      debateId: `rematch:${session.id}`,
-      userId: currentUserId,
-      onTakeoverRequested: async () => {
-        // Yield only when the user isn't looking at this tab — and finish disconnecting before
-        // answering, so the winning tab never publishes alongside this one.
-        if (typeof document !== 'undefined' && document.visibilityState === 'visible') return false;
-        try {
-          await roomRef.current?.disconnect();
-        } catch {
-          // A failed disconnect still releases the mic when the page goes away; yield regardless.
-        }
-        roomRef.current = null;
-        if (!cancelled) setOwnership('elsewhere');
-        return true;
-      },
-    });
-    coordinatorRef.current = coordinator;
-
-    void (async () => {
-      const result = await coordinator.acquire();
-      if (cancelled) return;
-      if (result.acquired) {
-        setOwnership('owned');
-        return;
+  const tabVoice = useVoiceOwnership({
+    userId: currentUserId,
+    kind: 'picker',
+    active: voiceActive,
+    claimOnActive: true,
+    claimKey: session.id,
+    onYield: async () => {
+      try {
+        await roomRef.current?.disconnect();
+      } catch {
+        // A failed disconnect still releases the mic when the page goes away; yield regardless.
       }
-      // Another tab owns the voice connection. A visible tab is the one the user is actually in,
-      // so it asks once; a background tab waits for the user to press "Use voice here".
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        const released = await coordinator.requestTakeover();
-        if (cancelled) return;
-        setOwnership(released ? 'owned' : 'elsewhere');
-      } else {
-        setOwnership('elsewhere');
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      coordinatorRef.current = null;
-      void coordinator.release();
-      coordinator.close();
-    };
-  }, [currentUserId, session.id, voiceActive]);
+      roomRef.current = null;
+    },
+  });
+  const ownership: OwnershipState = tabVoice.ownership;
 
   const join = useRematchLiveKitJoin(session.id, voiceActive && ownership === 'owned');
 
@@ -528,16 +488,13 @@ function SessionRematchVoiceHeader({
     setMicFailure(failure ?? null);
   }, []);
 
+  const { takeOver: claimVoice } = tabVoice;
   const takeOver = React.useCallback(async () => {
-    const coordinator = coordinatorRef.current;
-    if (!coordinator) return;
-    const released = await coordinator.requestTakeover();
-    if (!released) return;
-    setOwnership('owned');
+    if (!(await claimVoice())) return;
     // This tab may have been sitting on a cached token since before it yielded, and five minutes
     // is a very reachable gap between handing the mic over and asking for it back.
     retry();
-  }, [retry]);
+  }, [claimVoice, retry]);
 
   const { selectedAudioInputId, selectedVideoInputId } = useDebateMediaSession();
   const devices = useInitialMediaDevices({ audioInputId: selectedAudioInputId, videoInputId: selectedVideoInputId });
@@ -591,6 +548,7 @@ function SessionRematchVoiceHeader({
     if (!voiceActive) return { kind: 'absent' };
 
     if (ownership === 'elsewhere') {
+      if (tabVoice.heldBy === 'debate') return { kind: 'message', message: 'Voice is on in your debate tab' };
       return {
         kind: 'message',
         message: 'Voice is active in another tab',

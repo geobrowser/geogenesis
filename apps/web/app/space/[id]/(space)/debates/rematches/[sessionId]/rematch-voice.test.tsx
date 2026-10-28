@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
+import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
 import {
   carryLobbyJoinChoice,
   clearCarriedLobbyChoice,
@@ -44,7 +45,7 @@ const mocks = vi.hoisted(() => ({
   coordinatorOptions: [] as Array<{
     debateId: string;
     userId: string;
-    onTakeoverRequested?: () => Promise<boolean> | boolean;
+    onTakeoverRequested?: (context: DebateRoomTakeoverContext) => Promise<boolean> | boolean;
   }>,
   connectionState: 'connected',
   canPlayAudio: true,
@@ -244,21 +245,24 @@ vi.mock('~/core/debates/media-session', () => ({
   }),
 }));
 
-vi.mock('~/core/debates/debate-room-ownership', () => ({
+// The tab's voice lock: `acquireResult` is a free lock, `requestTakeover` another tab handing it over.
+vi.mock('~/core/debates/debate-room-ownership', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/debates/debate-room-ownership')>()),
   createDebateRoomOwnershipCoordinator: (options: {
     debateId: string;
     userId: string;
-    onTakeoverRequested?: () => Promise<boolean> | boolean;
+    onTakeoverRequested?: (context: DebateRoomTakeoverContext) => Promise<boolean> | boolean;
   }) => {
     mocks.coordinatorOptions.push(options);
+    let owned = false;
     return {
       instanceId: 'test-instance',
       coordinationMode: 'lock-and-broadcast',
-      acquire: () => Promise.resolve(mocks.acquireResult),
-      requestTakeover: mocks.requestTakeover,
+      requestTakeover: async () => (owned = mocks.acquireResult.acquired || (await mocks.requestTakeover())),
       release: mocks.release,
       close: mocks.close,
-      ownsConnection: () => mocks.acquireResult.acquired,
+      ownsConnection: () => owned,
+      lastRefusedBy: () => undefined,
     };
   },
 }));
@@ -419,7 +423,9 @@ function stepOutOfLobbyWithMic(on: boolean) {
   forgetLobbyDevices();
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Lets the last test's tab voice hold run its deferred release.
+  await new Promise(resolve => setTimeout(resolve, 0));
   stubMicrophoneApis();
   // The settings popover measures its trigger to place itself; jsdom has no ResizeObserver.
   vi.stubGlobal(
@@ -561,8 +567,8 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByTitle('Waiting for Salina to join')).toBeInTheDocument();
     // Auto-join, but muted: the room connects to listen, not to publish.
     expect(mocks.livekitRoomProps[0]?.audio).toBe(false);
-    // The ownership lock is namespaced away from real debate ids.
-    expect(mocks.coordinatorOptions[0]?.debateId).toBe('rematch:session-1');
+    // One voice lock per person, shared with the lobby and the debate room.
+    expect(mocks.coordinatorOptions[0]?.debateId).toBe('voice');
   });
 
   it('keeps the microphone live when the pair arrives from a recorded debate', async () => {
@@ -1000,7 +1006,12 @@ describe('RematchVoiceHeader', () => {
     const onTakeoverRequested = mocks.coordinatorOptions[0]?.onTakeoverRequested;
     let yielded: boolean | undefined;
     await act(async () => {
-      yielded = await onTakeoverRequested?.();
+      yielded = await onTakeoverRequested?.({
+        automatic: false,
+        requesterPriority: 2,
+        ownerPriority: 0,
+        requesterLabel: 'lobby',
+      });
     });
 
     expect(yielded).toBe(true);
@@ -1009,8 +1020,8 @@ describe('RematchVoiceHeader', () => {
     expect(screen.getByText('Voice is active in another tab')).toBeInTheDocument();
   });
 
-  // The tab the user is actually looking at keeps the microphone; only a background one steps aside.
-  it('refuses to yield the microphone while the user is looking at this tab', async () => {
+  // A page opening in another tab takes voice only from a tab further from the viewer than it is.
+  it('keeps the microphone against a page opening in a tab no nearer the viewer', async () => {
     setVisibility('visible');
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
@@ -1018,7 +1029,7 @@ describe('RematchVoiceHeader', () => {
     const onTakeoverRequested = mocks.coordinatorOptions[0]?.onTakeoverRequested;
     let yielded: boolean | undefined;
     await act(async () => {
-      yielded = await onTakeoverRequested?.();
+      yielded = await onTakeoverRequested?.({ automatic: true, requesterPriority: 1, ownerPriority: 2 });
     });
 
     expect(yielded).toBe(false);
