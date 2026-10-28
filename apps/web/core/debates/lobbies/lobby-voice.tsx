@@ -890,11 +890,14 @@ function VoiceBar({
           <HubPillButton
             variant={mic.on ? 'secondary' : 'primary'}
             analyticsLabel={mic.on ? 'Lobby mute' : 'Lobby unmute'}
-            aria-label={mic.on ? 'Mute microphone' : 'Unmute microphone'}
+            aria-pressed={!mic.on}
             onClick={() => mic.onToggle(!mic.on)}
             className="md:h-10"
           >
-            <MicrophoneIcon muted={!mic.on} />
+            <span className="inline-flex items-center gap-1.5">
+              <MicrophoneIcon muted={!mic.on} />
+              {mic.on ? 'Mute' : 'Unmute'}
+            </span>
           </HubPillButton>
         ) : null}
         {mic && camera ? (
