@@ -805,31 +805,44 @@ describe('DebateGatewayClient', () => {
       });
     });
 
-    it('refetches only the lists when no call is named', async () => {
+    /** The keyed invalidations, and whether the space's calls not yet open were refetched too. */
+    function invalidated() {
+      const filters: Record<string, unknown>[] = invalidateQueries.mock.calls.map(
+        (call: unknown[]) => call[0] as Record<string, unknown>
+      );
+      return {
+        keyed: filters.filter(filter => 'queryKey' in filter),
+        preOpen: filters.some(filter => typeof filter.predicate === 'function'),
+      };
+    }
+
+    it('refetches the lists and the calls not yet open when no call is named', async () => {
       await spaceCallsChanged({ space_id: 'sp1' });
-      expect(invalidateQueries.mock.calls.map((call: unknown[]) => call[0])).toEqual([
-        { queryKey: ['debates', 'space-calls', 'sp1'], refetchType: 'active' },
-        { queryKey: ['debates', 'space-past-calls', 'sp1'], refetchType: 'active' },
-      ]);
+      expect(invalidated()).toEqual({
+        keyed: [
+          { queryKey: ['debates', 'space-calls', 'sp1'], refetchType: 'active' },
+          { queryKey: ['debates', 'space-past-calls', 'sp1'], refetchType: 'active' },
+        ],
+        preOpen: true,
+      });
     });
 
     it.each([
-      ['started', [['debates', 'space-calls', 'sp1']]],
-      ['opened', [['debates', 'space-calls', 'sp1']]],
-      ['schedule', [['debates', 'space-calls', 'sp1']]],
+      ['started', [['debates', 'space-calls', 'sp1']], false],
+      ['opened', [['debates', 'space-calls', 'sp1']], false],
+      ['schedule', [['debates', 'space-calls', 'sp1']], true],
       [
         'ended',
         [
           ['debates', 'space-calls', 'sp1'],
           ['debates', 'space-past-calls', 'sp1'],
         ],
+        false,
       ],
-      ['agenda', []],
-    ])('narrows a rowless %s to its own data', async (change, keys) => {
+      ['agenda', [], false],
+    ])('narrows a rowless %s to its own data', async (change, keys, preOpen) => {
       await spaceCallsChanged({ space_id: 'sp1', change });
-      expect(invalidateQueries.mock.calls.map((call: unknown[]) => call[0])).toEqual(
-        keys.map(queryKey => ({ queryKey, refetchType: 'active' }))
-      );
+      expect(invalidated()).toEqual({ keyed: keys.map(queryKey => ({ queryKey, refetchType: 'active' })), preOpen });
     });
 
     it('refetches only the call for its agenda', async () => {
@@ -837,6 +850,32 @@ describe('DebateGatewayClient', () => {
       expect(invalidateQueries.mock.calls.map((call: unknown[]) => call[0])).toEqual([
         { queryKey: ['debates', 'account', 'user-a', 'lobby', 'abcd'], refetchType: 'active' },
       ]);
+    });
+
+    it('refetches the space’s calls not yet open on a schedule change, and no other space’s', async () => {
+      const call = (spaceId: string, status: string) => ({
+        lobby_id: 'x',
+        access: status === 'not_yet_open' ? { status, opens_at: '2026-11-04T15:50:00Z' } : { status },
+        call: { space_id: spaceId, space_name: null, started_by: null },
+      });
+      const preOpen = ['debates', 'account', 'user-a', 'lobby', 'call1'];
+      const open = ['debates', 'account', 'user-a', 'lobby', 'call2'];
+      const elsewhere = ['debates', 'account', 'user-a', 'lobby', 'call3'];
+      queryClient.setQueryData(preOpen, call('SP-1', 'not_yet_open'));
+      queryClient.setQueryData(open, call('sp1', 'admitted'));
+      queryClient.setQueryData(elsewhere, call('sp2', 'not_yet_open'));
+
+      await spaceCallsChanged({ space_id: 'sp1', change: 'schedule' });
+      const all: { predicate?: (query: unknown) => boolean }[] = invalidateQueries.mock.calls.map(
+        (args: unknown[]) => args[0] as { predicate?: (query: unknown) => boolean }
+      );
+      const filters = all.find(filter => filter.predicate);
+      const matched = queryClient
+        .getQueryCache()
+        .findAll()
+        .filter(query => filters?.predicate?.(query))
+        .map(query => query.queryKey);
+      expect(matched).toEqual([preOpen]);
     });
 
     it('patches a live row into the live list and leaves the past pages alone', async () => {

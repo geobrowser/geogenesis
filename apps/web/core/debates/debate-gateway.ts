@@ -13,7 +13,12 @@ import {
 } from '~/core/responses/claim-response-summary-query-keys';
 import type { SpaceCallsResponse } from '~/core/space-calls/api';
 import { spaceCallKeys } from '~/core/space-calls/query-keys';
-import { parseSpaceCallPatch, spaceCallsRefetch, withSpaceCallPatch } from '~/core/space-calls/space-calls-patch';
+import {
+  isPreOpenCallQuery,
+  parseSpaceCallPatch,
+  spaceCallsRefetch,
+  withSpaceCallPatch,
+} from '~/core/space-calls/space-calls-patch';
 
 import {
   type DebateLobbiesResponse,
@@ -636,6 +641,13 @@ export class DebateGatewayClient {
           const refetch = spaceCallsRefetch(patch ? undefined : identifiers.change);
           if (refetch.list) this.queueQuery(listKey);
           if (refetch.past) this.queueQuery(spaceCallKeys.past(identifiers.space_id));
+          if (refetch.preOpen) {
+            const spaceId = identifiers.space_id;
+            this.queueInvalidation(`pre-open-calls:${dashlessId(spaceId)}`, {
+              predicate: query => isPreOpenCallQuery(query, spaceId),
+              refetchType: 'active',
+            });
+          }
           if (!patch && identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
           break;
         }

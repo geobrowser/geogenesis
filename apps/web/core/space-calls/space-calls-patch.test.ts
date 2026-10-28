@@ -62,13 +62,13 @@ describe('withSpaceCallPatch', () => {
 
 describe('spaceCallsRefetch', () => {
   it.each([
-    ['started', { list: true, past: false }],
-    ['opened', { list: true, past: false }],
-    ['schedule', { list: true, past: false }],
-    ['agenda', { list: false, past: false }],
-    ['ended', { list: true, past: true }],
-    [undefined, { list: true, past: true }],
-    ['something-new', { list: true, past: true }],
+    ['started', { list: true, past: false, preOpen: false }],
+    ['opened', { list: true, past: false, preOpen: false }],
+    ['schedule', { list: true, past: false, preOpen: true }],
+    ['agenda', { list: false, past: false, preOpen: false }],
+    ['ended', { list: true, past: true, preOpen: false }],
+    [undefined, { list: true, past: true, preOpen: true }],
+    ['something-new', { list: true, past: true, preOpen: true }],
   ])('refetches for %s', (change, expected) => {
     expect(spaceCallsRefetch(change)).toEqual(expected);
   });

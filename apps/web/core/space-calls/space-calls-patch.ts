@@ -1,4 +1,7 @@
-import { dashlessId } from '~/core/debates/api';
+import type { Query } from '@tanstack/react-query';
+
+import { type DebateLobbyView, dashlessId } from '~/core/debates/api';
+import { sameId } from '~/core/debates/rooms/room-presence';
 
 import type { SpaceCallSummary, SpaceCallsResponse } from './api';
 
@@ -38,16 +41,30 @@ export function withSpaceCallPatch(list: SpaceCallsResponse, patch: SpaceCallPat
   return changed ? { ...list, calls } : list;
 }
 
-/** What a rowless `debate.space_calls_changed` refetches besides the call it names; missing or unknown `change`, both. */
-export function spaceCallsRefetch(change: unknown): { list: boolean; past: boolean } {
+/**
+ * What a rowless `debate.space_calls_changed` refetches besides the call it names; `preOpen` is the
+ * space's calls not yet open, which a schedule edit can move or cancel. Missing or unknown, all.
+ */
+export function spaceCallsRefetch(change: unknown): { list: boolean; past: boolean; preOpen: boolean } {
   switch (change) {
     case 'started':
     case 'opened':
+      return { list: true, past: false, preOpen: false };
     case 'schedule':
-      return { list: true, past: false };
+      return { list: true, past: false, preOpen: true };
     case 'agenda':
-      return { list: false, past: false };
+      return { list: false, past: false, preOpen: false };
+    case 'ended':
+      return { list: true, past: true, preOpen: false };
     default:
-      return { list: true, past: true };
+      return { list: true, past: true, preOpen: true };
   }
+}
+
+/** A cached member view of a call in `spaceId` whose room has not opened. */
+export function isPreOpenCallQuery(query: Pick<Query, 'queryKey' | 'state'>, spaceId: string) {
+  const [root, account, , kind] = query.queryKey;
+  if (root !== 'debates' || account !== 'account' || kind !== 'lobby') return false;
+  const view = query.state.data as DebateLobbyView | undefined;
+  return Boolean(view?.call && sameId(view.call.space_id, spaceId) && view.access.status === 'not_yet_open');
 }

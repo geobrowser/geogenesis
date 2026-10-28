@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useDebateGatewayScope } from '~/core/debates/debate-gateway';
+import { useGeoChatAuth } from '~/core/debates/hooks';
 import { notYetOpenLabel } from '~/core/debates/lobbies/lobby-format';
 import type { LobbyPageView } from '~/core/debates/lobbies/lobby-view';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
@@ -29,6 +31,9 @@ export function CallPreOpen({ lobby }: { lobby: LobbyPageView }) {
   const now = useMinuteNow();
   const saveAgenda = useSaveCallAgenda(lobby.lobby_id);
   const { isEditor } = useAccessControl(call?.space_id ?? '');
+  const { authenticated } = useGeoChatAuth();
+  // Its space's schedule events move or cancel it; signed out, the guest view polls instead.
+  useDebateGatewayScope({ scope: 'space', space_id: call?.space_id ?? '' }, authenticated && Boolean(call));
   if (!call) return null;
 
   const series = call.series ?? null;

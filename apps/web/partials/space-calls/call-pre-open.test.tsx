@@ -6,8 +6,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DebateLobbyCallDetails } from '~/core/debates/api';
 import type { LobbyPageView } from '~/core/debates/lobbies/lobby-view';
 
-const mocks = vi.hoisted(() => ({ remind: [] as unknown[], flag: true, editor: false }));
+const mocks = vi.hoisted(() => ({
+  remind: [] as unknown[],
+  flag: true,
+  editor: false,
+  authenticated: false,
+  scope: vi.fn(),
+}));
 
+vi.mock('~/core/debates/debate-gateway', () => ({ useDebateGatewayScope: mocks.scope }));
+vi.mock('~/core/debates/hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/debates/hooks')>()),
+  useGeoChatAuth: () => ({ authenticated: mocks.authenticated }),
+}));
 vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.flag }));
 vi.mock('~/core/hooks/use-access-control', () => ({ useAccessControl: () => ({ isEditor: mocks.editor }) }));
 vi.mock('~/core/space-calls/series/hooks', () => ({ useSaveCallAgenda: () => ({ mutateAsync: vi.fn() }) }));
@@ -25,6 +36,8 @@ afterEach(() => {
   mocks.remind = [];
   mocks.flag = true;
   mocks.editor = false;
+  mocks.authenticated = false;
+  mocks.scope.mockReset();
 });
 
 const series = {
@@ -84,6 +97,14 @@ describe('CallPreOpen', () => {
     expect(screen.queryByText(/^Opens at/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remind me' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /join|start/i })).not.toBeInTheDocument();
+  });
+
+  it('listens to its space’s schedule events signed in only', () => {
+    const { rerender } = render(<CallPreOpen lobby={lobby({ series, agenda: null })} />);
+    expect(mocks.scope).toHaveBeenLastCalledWith({ scope: 'space', space_id: 'space1' }, false);
+    mocks.authenticated = true;
+    rerender(<CallPreOpen lobby={lobby({ series, agenda: null })} />);
+    expect(mocks.scope).toHaveBeenLastCalledWith({ scope: 'space', space_id: 'space1' }, true);
   });
 
   it('lets a host edit a written agenda', () => {
