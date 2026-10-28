@@ -18,44 +18,11 @@ import {
  * The three claim lists are the panel's tabs and have their own suites; this one is about how the
  * workspace lets you move between them, since it has no tab strip to do it with.
  */
-vi.mock('./claims-tab', async () => {
-  const atoms = await import('~/atoms');
+// Keep the URL defaults, parser, and filter atoms real; only stub the list's rendering.
+vi.mock('./claims-tab', async importOriginal => {
+  const actual = await importOriginal<typeof import('./claims-tab')>();
   return {
-    // The list a URL means when it names none, so the workspace can follow a bare `/matchmaking`
-    // back to Explore. Mirrored because this file mocks the module wholesale.
-    DEFAULT_WORKSPACE_LIST: 'explore',
-    CLAIMS_TAB_VARIANTS: ['explore', 'lobby', 'positions'],
-    VARIANT_ATOMS: {
-      explore: {
-        spaceIds: atoms.debatesHubExploreSpaceIdsAtom,
-        topicIds: atoms.debatesHubExploreTopicIdsAtom,
-        search: atoms.debatesHubExploreSearchAtom,
-        seedSpent: atoms.debatesHubExploreSpaceSeedSpentAtom,
-      },
-      positions: {
-        spaceIds: atoms.debatesHubPositionsSpaceIdsAtom,
-        topicIds: atoms.debatesHubPositionsTopicIdsAtom,
-        search: atoms.debatesHubPositionsSearchAtom,
-        seedSpent: atoms.debatesHubPositionsSpaceSeedSpentAtom,
-      },
-      lobby: {
-        spaceIds: atoms.debatesHubLobbySpaceIdsAtom,
-        topicIds: atoms.debatesHubLobbyTopicIdsAtom,
-        search: atoms.debatesHubLobbySearchAtom,
-        seedSpent: atoms.debatesHubLobbySpaceSeedSpentAtom,
-      },
-    },
-    readUrlSeed: (variant: string, query: string) => {
-      const params = new URLSearchParams(query);
-      const list = params.get('list') ?? 'explore';
-      if (list !== variant) return null;
-      return {
-        list: params.get('list'),
-        search: params.get('q') ?? '',
-        spaceIds: (params.get('spaces') ?? '').split(',').filter(Boolean),
-        topicIds: (params.get('topics') ?? '').split(',').filter(Boolean),
-      };
-    },
+    ...actual,
     ClaimsTab: ({ variant, scopePicker }: { variant?: string; scopePicker?: React.ReactNode }) => {
       const logged = React.useRef(false);
       React.useEffect(() => {
