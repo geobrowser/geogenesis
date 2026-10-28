@@ -416,4 +416,22 @@ describe('DebateLobbyPage with a shared screen', () => {
     render(<DebateLobbyPage lobbyId="lobby1" />);
     expect(screen.queryByTestId('call-screen-stage')).toBeNull();
   });
+
+  it('notes the share on a phone’s Claims tab, and taps back to People', () => {
+    mocks.phone = true;
+    share();
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Claims' }));
+    const claims = screen.getByRole('tabpanel', { name: 'Claims' });
+    fireEvent.click(within(claims).getByRole('button', { name: 'Adam is sharing' }));
+    expect(screen.getByRole('tab', { name: 'People' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('region', { name: 'Adam is sharing their screen' })).toBeVisible();
+  });
+
+  it('has no share note on a desktop, where the claims sit beside the share', () => {
+    share();
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.queryByTestId('call-share-notice')).toBeNull();
+  });
 });

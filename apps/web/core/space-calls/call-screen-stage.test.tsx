@@ -14,6 +14,7 @@ vi.mock('~/core/debates/track-video', () => ({
   TrackVideo: ({ track }: { track: { id: string } }) => <video data-testid="call-screen-video" data-track={track.id} />,
 }));
 
+const { LobbyShowPeopleContext, LobbySlotsProvider } = await import('~/core/debates/lobbies/lobby-slots');
 const { CallScreenStage, nextScreenShares, shownScreenShare, useScreenShareChoice, NO_SCREEN_SHARES } =
   await import('./call-screen-stage');
 
@@ -170,6 +171,60 @@ describe('CallScreenStage', () => {
       await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Full screen' })));
       expect(requestFullscreen).toHaveBeenCalledTimes(1);
       expect(within(frame).getByTestId('call-screen-video')).toHaveAttribute('data-track', 'ada');
+    });
+  });
+
+  // GEO-3507: a phone's Claims tab notes a live share, a tap away from the stage on People.
+  describe('share notice', () => {
+    function renderTabbed(showPeople: (() => void) | null) {
+      const target = document.createElement('div');
+      document.body.append(target);
+      const ui = () => (
+        <LobbySlotsProvider value={{ shareNotice: target }}>
+          <LobbyShowPeopleContext.Provider value={showPeople}>
+            <CallScreenStage members={MEMBERS} />
+          </LobbyShowPeopleContext.Provider>
+        </LobbySlotsProvider>
+      );
+      const result = render(ui());
+      return { target, rerender: () => result.rerender(ui()) };
+    }
+
+    afterEach(() => {
+      document.body.innerHTML = '';
+    });
+
+    it('names a lone sharer, and counts several', () => {
+      share('ada');
+      const { target, rerender } = renderTabbed(vi.fn());
+      expect(within(target).getByRole('button', { name: 'Ada is sharing' })).toBeInTheDocument();
+
+      share('ada', 'ben');
+      rerender();
+      expect(within(target).getByRole('button', { name: '2 people sharing' })).toBeInTheDocument();
+    });
+
+    it('goes when nobody shares', () => {
+      share('ada');
+      const { target, rerender } = renderTabbed(vi.fn());
+      share();
+      rerender();
+      expect(within(target).queryByTestId('call-share-notice')).toBeNull();
+    });
+
+    it('switches to People when tapped', () => {
+      share('ada');
+      const showPeople = vi.fn();
+      const { target } = renderTabbed(showPeople);
+      fireEvent.click(within(target).getByRole('button', { name: 'Ada is sharing' }));
+      expect(showPeople).toHaveBeenCalledTimes(1);
+    });
+
+    it('draws nothing without tabs, as on a desktop', () => {
+      share('ada');
+      const { target } = renderTabbed(null);
+      expect(target).toBeEmptyDOMElement();
+      expect(screen.queryByTestId('call-share-notice')).toBeNull();
     });
   });
 });

@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import type { DebateLobbyMember } from '~/core/debates/api';
 import { personName } from '~/core/debates/lobbies/lobby-format';
+import { LobbyShowPeopleContext, LobbySlot } from '~/core/debates/lobbies/lobby-slots';
 import { useLobbyVoiceStates } from '~/core/debates/lobbies/lobby-voice';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { TrackVideo } from '~/core/debates/track-video';
@@ -20,6 +21,8 @@ export const CALL_SCREEN_COPY = {
   shares: 'Shared screens',
   sharingTag: 'Sharing',
   show: (name: string) => `Show ${name}’s screen`,
+  notice: (name: string) => `${name} is sharing`,
+  noticeCount: (count: number) => `${count} people sharing`,
 } as const;
 
 /** Sharers oldest first, and the one the viewer picked by hand while it is live. */
@@ -67,6 +70,8 @@ export function CallScreenStage({
   children?: React.ReactNode;
 }) {
   const { screens } = useLobbyVoiceStates();
+  // Set only on a phone's tabs, where the stage is a tab away from the claims.
+  const showPeople = React.useContext(LobbyShowPeopleContext);
   const frameRef = React.useRef<HTMLDivElement>(null);
   const live = screens ? [...screens.keys()] : [];
 
@@ -141,6 +146,21 @@ export function CallScreenStage({
             {label}
           </Text>
         </section>
+      ) : null}
+      {showPeople && shownId && track ? (
+        <LobbySlot name="shareNotice" inPlace={false}>
+          <button
+            type="button"
+            onClick={showPeople}
+            data-testid="call-share-notice"
+            className="flex items-center gap-1.5 self-start rounded-full bg-text py-1 pr-2.5 pl-2 text-metadataMedium text-white"
+          >
+            <span className="size-1.5 rounded-full bg-red-01" aria-hidden />
+            {shares.order.length > 1
+              ? CALL_SCREEN_COPY.noticeCount(shares.order.length)
+              : CALL_SCREEN_COPY.notice(nameOf(shownId).name)}
+          </button>
+        </LobbySlot>
       ) : null}
       {children}
     </ScreenShareChoiceContext.Provider>
