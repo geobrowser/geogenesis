@@ -23,6 +23,7 @@ import {
   getServerTime,
   startLocalRecordingMultipart,
 } from '~/core/debates/api';
+import { DebateAudioBlockedNotice } from '~/core/debates/debate-audio-blocked-notice';
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
 import {
@@ -238,6 +239,7 @@ type RoomLike = {
   // LiveKit fires ParticipantConnected only for arrivals, so whoever joins second has to read the
   // people already in the room off the connected room instead.
   remoteParticipants?: { size: number };
+  startAudio?: () => Promise<void>;
 };
 
 export type DebateCountdown = {
@@ -519,6 +521,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [remoteAudioTrack, setRemoteAudioTrack] = React.useState<MediaStreamTrack | null>(null);
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
   const roomRef = React.useRef<RoomLike | null>(null);
+  // The live room as React state, for the autoplay prompt's subscription to it.
+  const [audioRoom, setAudioRoom] = React.useState<Room | null>(null);
   const appliedAudioOutputRef = React.useRef<{ room: RoomLike; id: string } | null>(null);
   const audioOutputRouteRef = React.useRef<Promise<void> | null>(null);
   const connectingRoomRef = React.useRef<RoomLike | null>(null);
@@ -1926,6 +1930,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
         connectingRoomRef.current = null;
         roomRef.current = room;
+        setAudioRoom(room as unknown as Room);
         roomTelemetry.set(
           room,
           startTelemetry(room as unknown as Room, debateId, token.participant_slot, () =>
@@ -2739,6 +2744,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   reportJoinedRef.current = reportJoinedForConnecting;
 
   const markLocalReady = React.useCallback(async () => {
+    // The intro's room may already hold audio the browser refused to autoplay; this click is the
+    // gesture that lets it play. Called first, while the gesture is still current.
+    void roomRef.current?.startAudio?.().catch(() => undefined);
     setRoomError(null);
     // Ready needs both devices. A failure takes the toggle's way back, or with nothing live leaves
     // the preview's error and a Try again that asks for both.
@@ -3378,6 +3386,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 remoteFinishingSince={remoteFinishingSince}
                 onPickOpenRound={pickOpenRound}
                 remoteDisconnected={remotePresence === 'left'}
+                audioRoom={roomState === 'connected' ? audioRoom : null}
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
@@ -3422,6 +3431,7 @@ function DebateRecordingModal({
   remoteFinishingSince,
   onPickOpenRound,
   remoteDisconnected,
+  audioRoom,
   onRetryFinalization,
   canRetryConnection,
   onRetryConnection,
@@ -3461,6 +3471,8 @@ function DebateRecordingModal({
   ) => Promise<unknown>;
   /** The other debater has dropped out of the call, which mid-debate means reconnecting. */
   remoteDisconnected: boolean;
+  /** The connected room, so incoming audio the browser blocked can be enabled with a click. */
+  audioRoom: Room | null;
   onRetryFinalization: () => void;
   canRetryConnection: boolean;
   onRetryConnection: () => void;
@@ -3850,6 +3862,7 @@ function DebateRecordingModal({
             <Text>Reconnecting to the debate room…</Text>
           </div>
         )}
+        {audioRoom && <DebateAudioBlockedNotice room={audioRoom} openRoundsStyle={openRoundsStyle} />}
 
         {openRoundsStyle && (
           <RoomExit layout="inline" className="w-full max-w-[430px]">
