@@ -1648,11 +1648,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // voice is taken back. The choice it had is restored then.
   const [voiceYielded, setVoiceYielded] = React.useState(false);
   const yieldedJoinStateRef = React.useRef<{ audioMuted: boolean; videoEnabled: boolean } | null>(null);
+  // The connection generation claiming voice before its room state renders as connecting.
+  const voiceClaimGenerationRef = React.useRef<number | null>(null);
   const tabVoice = useVoiceOwnership({
     userId: currentUserId,
     kind: 'debate',
     active: Boolean(currentUserId),
-    policy: () => debateVoicePolicy(debateStatusRef.current, roomStateRef.current !== 'idle'),
+    policy: () =>
+      debateVoicePolicy(
+        debateStatusRef.current,
+        roomStateRef.current !== 'idle' || voiceClaimGenerationRef.current === connectionGenerationRef.current
+      ),
     onYield: async () => {
       const status = debateStatusRef.current;
       connectionGenerationRef.current += 1;
@@ -1677,10 +1683,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     },
   });
   const { takeOver: claimVoice, claimUntilHeld: claimVoiceUntilHeld, announceYieldable } = tabVoice;
-  const voicePolicy = debateVoicePolicy(countdown.effectiveStatus, roomState !== 'idle');
+  // Re-checked when status or room state changes; the owner reads the live policy and announces only
+  // while this tab holds voice.
+  const roomHeld = roomState !== 'idle';
   React.useEffect(() => {
-    if (voicePolicy === 'yield') announceYieldable();
-  }, [announceYieldable, voicePolicy]);
+    announceYieldable();
+  }, [announceYieldable, countdown.effectiveStatus, roomHeld]);
 
   const connect = React.useCallback(
     async (options: { takeover?: boolean; automatic?: boolean } = {}) => {
@@ -1725,6 +1733,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         return;
       }
 
+      // Counts as holding the room from here: a nearer tab's automatic claim must not cut this connect.
+      voiceClaimGenerationRef.current = generation;
       // A live room must hold voice: if the first claim loses a race, keep asking (in the background,
       // so the room is not held up) until it holds it or this connection is superseded.
       if (!(await claimVoice())) {
@@ -1757,6 +1767,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setPostJoinConnectionFailure(false);
       setConnectStarting(false);
       setRoomState('connecting');
+      roomStateRef.current = 'connecting';
+      voiceClaimGenerationRef.current = null;
       setServerClockSettled(false);
       setRemoteVideoReady(false);
       setRemotePresence('absent');

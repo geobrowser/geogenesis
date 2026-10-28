@@ -3283,6 +3283,41 @@ describe('DebateRoomPageClient', () => {
     expect(voiceReleased).toBe(true);
   });
 
+  it('keeps a connecting debate from an automatic claim while it is still claiming voice', async () => {
+    const owner = tabVoiceOwner(mocks.currentUserId!);
+    let finishClaim = (_owned: boolean) => {};
+    const realClaim = owner.claim.bind(owner);
+    const claim = vi.spyOn(owner, 'claim').mockImplementationOnce(options => {
+      // The real claim sets up the takeover handler; the room waits on this slower one.
+      void realClaim(options);
+      return new Promise<boolean>(resolve => (finishClaim = resolve));
+    });
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(claim).toHaveBeenCalled());
+
+    // A page opening in a nearer tab, before the room has rendered as connecting.
+    let released: boolean | undefined;
+    await act(async () => {
+      released = await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: true,
+        requesterLabel: 'lobby',
+      });
+    });
+    expect(released).toBe(false);
+
+    await act(async () => finishClaim(true));
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+  });
+
   it('keeps asking for voice when a starting debate loses its first claim', async () => {
     const owner = tabVoiceOwner(mocks.currentUserId!);
     vi.spyOn(owner, 'claim').mockResolvedValueOnce(false);

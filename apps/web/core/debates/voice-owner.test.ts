@@ -326,6 +326,29 @@ describe('tab voice owner', () => {
     expect(debateTab.yields).toBe(1);
   });
 
+  it('announces only from the tab holding voice, and only when it would yield', async () => {
+    const debateTab = openTab('debate', 0);
+    const debate = debateTab.surface('debate', 'refuse');
+    await debateTab.claim('debate');
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby');
+
+    // Still live: nothing to announce.
+    debateTab.owner.announceYieldable();
+    // Another tab that does not hold voice.
+    const bystander = openTab('bystander', 1);
+    bystander.surface('preview');
+    asTab('bystander', () => bystander.owner.announceYieldable());
+    await flush();
+    expect(lobbyTab.owner.getState().heldBy).toBe('debate');
+
+    debate.policy = 'yield';
+    debateTab.owner.announceYieldable();
+    await flush();
+    expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
+  });
+
   it('asks again for a claim made while this tab is still handing voice over', async () => {
     const debateTab = openTab('debate', 0);
     let policy: VoiceYieldPolicy = 'explicit-only';

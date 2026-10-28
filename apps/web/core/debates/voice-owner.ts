@@ -96,7 +96,7 @@ export type TabVoiceOwner = {
   claimUntilHeld: (options: { kind: VoiceSurfaceKind; stop: () => boolean }) => Promise<boolean>;
   /** Whether another tab holds voice right now, without asking for it. */
   heldElsewhere: () => Promise<boolean>;
-  /** Tells tabs waiting on this one that its surfaces now yield, e.g. a debate that ended. */
+  /** Tells waiting tabs this one would now yield, e.g. a debate that ended; only if it holds voice and its surfaces say so. */
   announceYieldable: () => void;
   getState: () => VoiceTabState;
   subscribe: (listener: () => void) => () => void;
@@ -193,10 +193,12 @@ export function createTabVoiceOwner({
     notices.onmessage = event => {
       const type = (event.data as { type?: string } | null)?.type;
       if (type === 'yieldable') return restoreButton();
-      if (type === 'policy-query' && coordinator?.ownsConnection() && strongestPolicy(surfacePolicies()) === 'yield') {
-        announceYieldable();
-      }
+      if (type === 'policy-query') announceIfYieldable();
     };
+  };
+
+  const announceIfYieldable = () => {
+    if (coordinator?.ownsConnection() && strongestPolicy(surfacePolicies()) === 'yield') announceYieldable();
   };
 
   const announceYieldable = () => {
@@ -313,7 +315,7 @@ export function createTabVoiceOwner({
         return false;
       }
     },
-    announceYieldable,
+    announceYieldable: announceIfYieldable,
     getState: () => state,
     subscribe: listener => {
       listeners.add(listener);
