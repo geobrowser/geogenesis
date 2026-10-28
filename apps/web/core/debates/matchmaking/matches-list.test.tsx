@@ -12,11 +12,15 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 
 import type { MatchmakingMatch } from '../api';
 import { MatchesList } from './matches-list';
+import { PanelMatchesTab } from './panel-claim-tabs';
+import { panelFilters } from './panel-filters-fixtures';
 import {
+  debatesHubDrawnListAtom,
   debatesHubLobbySearchAtom,
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubPanelMatchesSpaceIdsAtom,
 } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
@@ -58,6 +62,12 @@ vi.mock('../claim-picker-page', () => ({
   }),
 }));
 
+// A live outbound request is timed against geo-chat's clock (`useLiveRequest`); answered here.
+vi.mock('../api', async importOriginal => ({
+  ...(await importOriginal<typeof import('../api')>()),
+  getServerTime: () => Promise.resolve({ server_time_ms: Date.now() }),
+}));
+
 vi.mock('../hooks', () => ({
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
   // exercising it — the schedule itself is covered in core/availability.
@@ -81,6 +91,7 @@ vi.mock('../hooks', () => ({
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
+  useUpdateDebateAvailability: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -385,6 +396,7 @@ describe('MatchesList', () => {
 
     mocks.outbound = {
       id: 'request-1',
+      status: 'pending',
       claim: match().claim,
       expires_at: '2099-01-01T00:00:00.000Z',
       requester: party('user-me', 'You', true, 'Agree'),
@@ -402,6 +414,7 @@ describe('MatchesList', () => {
   it('keeps a sent request and the filters in the same pinned block', () => {
     mocks.outbound = {
       id: 'request-1',
+      status: 'pending',
       claim: match().claim,
       expires_at: '2099-01-01T00:00:00.000Z',
       requester: party('user-me', 'You', true, 'Agree'),
@@ -453,6 +466,14 @@ describe('MatchesList', () => {
 
   // The other direction: a fresh session starts unfiltered, so the atom is not quietly sticky
   // across viewers or page loads.
+  // GEO-3495: the hub's tab row records a press as leaving the list on screen, which this says.
+  it('says it is the hub list on screen', () => {
+    const store = createStore();
+    render(<MatchesList onTabChange={vi.fn()} />, store);
+
+    expect(store.get(debatesHubDrawnListAtom)).toBe('hub_matches');
+  });
+
   it('starts unfiltered in a new session', () => {
     render(<MatchesList onTabChange={vi.fn()} />, createStore());
 
@@ -734,5 +755,69 @@ describe('MatchesList', () => {
       expect(await screen.findByText('No matches match these filters.')).toBeInTheDocument();
       expect(screen.queryByText('Chips are better than fries')).toBeNull();
     });
+  });
+});
+
+// GEO-3463. The side panel's Matches: one search and one Filters button, its Sort, and empty states
+// that offer what would fill the tab.
+describe('MatchesList in the panel', () => {
+  it('swaps the menus row for a search field and a Filters button', () => {
+    render(<MatchesList panelFilters={panelFilters({ clientSort: 'best' })} />);
+
+    expect(screen.getByRole('textbox', { name: 'Search claims' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any space/ })).not.toBeInTheDocument();
+  });
+
+  it('sorts Most people by who could take the other side right now', () => {
+    const fewer = match();
+    const more = match({
+      claim: {
+        id: 'debate-claim-2',
+        space_id: OTHER_SPACE_ID,
+        claim_entity_id: OTHER_CLAIM_ENTITY_ID,
+        claim: 'Tea is better than coffee',
+        description: null,
+      },
+      positions: [
+        { position: true, position_label: 'Agree', total_count: 1, available_now_count: 1, participants: [] },
+        { position: false, position_label: 'Disagree', total_count: 9, available_now_count: 6, participants: [] },
+      ],
+    } as Partial<MatchmakingMatch>);
+    mocks.matches = [fewer, more];
+
+    render(<MatchesList panelFilters={panelFilters({ clientSort: 'people' })} />);
+
+    const titles = screen.getAllByText(/better than/).map(node => node.textContent);
+    expect(titles).toEqual(['Tea is better than coffee', 'Chips are better than fries']);
+  });
+
+  // 26 Oct (Preston): picks narrow (AND). A match sits in one space, so two picked spaces leave none.
+  it('keeps only matches in every picked space', () => {
+    const store = createStore();
+    store.set(debatesHubPanelMatchesSpaceIdsAtom, [SPACE_ID, OTHER_SPACE_ID]);
+    render(<MatchesList atomsFrom="panelMatches" panelFilters={panelFilters({ clientSort: 'best' })} />, store);
+
+    expect(screen.queryByText('Chips are better than fries')).not.toBeInTheDocument();
+  });
+
+  // Review: full screen seeds the viewer's member spaces and reads them as any of them. Shared with
+  // the panel, which needs every one, that seed emptied Matches.
+  it('does not read full screen’s spaces, seeded or picked', () => {
+    mocks.matches = [match()];
+    const store = createStore();
+    store.set(debatesHubLobbySpaceIdsAtom, [SPACE_ID, OTHER_SPACE_ID]);
+    store.set(debatesHubLobbySpaceSeedSpentAtom, true);
+    render(<PanelMatchesTab onTabChange={vi.fn()} />, store);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+  });
+
+  it('still lists matches in any picked space in full screen', () => {
+    const store = createStore();
+    store.set(debatesHubLobbySpaceIdsAtom, [SPACE_ID, OTHER_SPACE_ID]);
+    render(<MatchesList layout="workspace" />, store);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
 });

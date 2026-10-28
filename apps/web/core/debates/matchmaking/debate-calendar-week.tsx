@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
+import { useHoverIntent } from '~/core/hooks/use-hover-intent';
 
 import { Avatar } from '~/design-system/avatar';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -28,9 +29,9 @@ import {
   hourLabel,
   hourProgress,
   hourStart,
-  timeRangeLabel,
   weekOffsetLabels,
 } from './debate-calendar-model';
+import { formatTimeRange } from './scheduled-debate-format';
 import { debateActionAnalyticsAttributes } from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
 import { useDebatesHub } from './use-debates-hub';
@@ -138,28 +139,18 @@ export function CalendarWeek({
   const shownCard = React.useRef<Card | null>(null);
   shownCard.current = card;
   const cardAnchor = React.useRef<HTMLElement | null>(null);
-  const cardTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clearCardTimer = () => {
-    if (cardTimer.current) clearTimeout(cardTimer.current);
-    cardTimer.current = null;
-  };
-  React.useEffect(() => clearCardTimer, []);
+  const cardIntent = useHoverIntent({ openDelay: 0, closeDelay: CARD_CLOSE_DELAY_MS });
+  const clearCardTimer = cardIntent.cancel;
   const showCard = (next: Card, anchor: HTMLElement, delay: number) => {
-    clearCardTimer();
-    const show = () => {
+    cardIntent.openSoon(() => {
       cardAnchor.current = anchor;
       const shown = shownCard.current;
       const person = peopleByUser.get(next.userKey);
       if (person && (shown?.key !== next.key || shown.userKey !== next.userKey)) calendarPersonViewed(person.user_id);
       setCard(next);
-    };
-    if (delay === 0) show();
-    else cardTimer.current = setTimeout(show, delay);
+    }, delay);
   };
-  const hideCard = () => {
-    clearCardTimer();
-    cardTimer.current = setTimeout(() => setCard(null), CARD_CLOSE_DELAY_MS);
-  };
+  const hideCard = () => cardIntent.closeSoon(() => setCard(null));
 
   const openHourAt = (key: string) => {
     const people = cells.get(key) ?? [];
@@ -564,7 +555,7 @@ function HourPeople({
         <div className="flex flex-col gap-0.5">
           <Text as="p" variant="listSemibold">
             {date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })},{' '}
-            {timeRangeLabel(start, start + 60 * 60_000)}
+            {formatTimeRange(start, start + 60 * 60_000, { periodOnce: false })}
           </Text>
           <Text as="p" variant="footnote" color="grey-04">
             {people.length} {people.length === 1 ? 'person' : 'people'} free · most matches first
@@ -623,7 +614,7 @@ function DebateBlock({
         debate.state === 'booked' ? 'bg-text text-white' : 'border border-dashed border-text bg-white text-text'
       )}
     >
-      <span>{timeRangeLabel(debate.start, debate.end)}</span>
+      <span>{formatTimeRange(debate.start, debate.end, { periodOnce: false })}</span>
       <span className={cx('truncate font-normal', debate.state === 'booked' ? 'text-grey-02' : 'text-grey-04')}>
         {label}
       </span>

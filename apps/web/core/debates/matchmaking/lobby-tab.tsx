@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
+import { useAtom } from 'jotai';
 
 import { isAccountWarmingUpQuery } from '../api';
 import { useRecordClaimFilter } from '../debate-claim-card-surface';
@@ -11,13 +11,7 @@ import { useMatchmakingMatches } from './hooks';
 import { MatchesList } from './matches-list';
 import { MatchesOnlySwitch } from './matches-only-switch';
 import { type NarrowedListState, useNarrowedDefault } from './use-narrowed-default';
-import {
-  type DebatesHubTab,
-  debatesHubLobbyArrivalAtom,
-  debatesHubLobbyListAtom,
-  debatesHubLobbyMoveSpentAtom,
-  debatesHubMatchesOnlyAtom,
-} from '~/atoms';
+import { type DebatesHubTab, debatesHubLobbyMoveSpentAtom, debatesHubMatchesOnlyAtom } from '~/atoms';
 
 /**
  * The hub's landing tab, and the single answer to "what can I debate right now" (GEO-2861).
@@ -70,23 +64,7 @@ export function LobbyTab({
         : 'filled';
 
   const { showNarrowed, rearm } = useNarrowedDefault(matchesOnly, matchesState);
-  // GEO-3495: which list this is, for a press off Lobby, and a press onto it recorded once the list
-  // is decided rather than when it was pressed, which could not know.
-  const lobbyList = showNarrowed ? 'hub_matches' : 'hub_lobby';
-  const setLobbyList = useSetAtom(debatesHubLobbyListAtom);
-  React.useEffect(() => setLobbyList(lobbyList), [setLobbyList, lobbyList]);
-  const arrival = useAtomValue(debatesHubLobbyArrivalAtom);
-  const store = useStore();
   const recordFilter = useRecordClaimFilter('debate_matchmaking');
-  React.useEffect(() => {
-    if (!arrival || matchesState === 'pending') return;
-    // Taken from the store, not the render: Strict Mode runs this twice on one commit, and the
-    // second run must find it gone rather than record the press again.
-    const pending = store.get(debatesHubLobbyArrivalAtom);
-    if (!pending) return;
-    store.set(debatesHubLobbyArrivalAtom, null);
-    recordFilter(pending.from ?? lobbyList, { kind: 'tab', value: lobbyList });
-  }, [arrival, lobbyList, matchesState, recordFilter, store]);
 
   /**
    * Once a session, and held outside this component because this component does not last.

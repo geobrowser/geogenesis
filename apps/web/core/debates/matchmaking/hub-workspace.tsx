@@ -15,8 +15,9 @@ import {
   DEFAULT_WORKSPACE_LIST,
   VARIANT_ATOMS,
   readUrlSeed,
-  useRecordHubListChange,
+  useRecordHubTabPress,
 } from './claims-tab';
+import { HubAskProvider } from './hub-ask-context';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubLiveRail } from './hub-live-rail';
@@ -27,8 +28,8 @@ import { isWorkspaceList, useWorkspaceQuery, workspaceHref } from './use-workspa
 import type { DebatesHubTab } from '~/atoms';
 
 const LIST_OPTIONS: HubFilterOption<ClaimsTabVariant>[] = [
-  { value: 'lobby', label: 'Matches' },
   { value: 'explore', label: 'Explore' },
+  { value: 'lobby', label: 'Matches' },
   { value: 'positions', label: 'My positions' },
 ];
 
@@ -50,7 +51,7 @@ export const URL_SYNC_DELAY_MS = 300;
  * Width is capped by the shell's 1200px `<main>`.
  */
 export function DebatesHubWorkspace() {
-  const [list, setList] = React.useState<ClaimsTabVariant>('lobby');
+  const [list, setList] = React.useState<ClaimsTabVariant>(DEFAULT_WORKSPACE_LIST);
 
   const { ready, authenticated, accountKey } = useGeoChatAuth();
 
@@ -127,14 +128,14 @@ export function DebatesHubWorkspace() {
     if (isWorkspaceList(tab)) setList(tab);
   }, []);
 
-  const recordListChange = useRecordHubListChange(shown);
+  const recordTabPress = useRecordHubTabPress(shown);
   const picker = (
     <HubFilterMenu
       label={options.find(option => option.value === shown)?.label ?? 'Explore'}
       options={options}
       value={shown}
       onChange={next => {
-        recordListChange(next);
+        recordTabPress(next);
         setList(next);
       }}
     />
@@ -152,15 +153,19 @@ export function DebatesHubWorkspace() {
       </header>
 
       <div className="flex gap-8 px-4">
-        <div className="min-w-0 flex-1">
-          {!ready || !filtersReconciled ? (
-            <HubSkeleton />
-          ) : shown === 'lobby' ? (
-            <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} />
-          ) : (
-            <ClaimsTab key={shown} variant={shown} layout="workspace" scopePicker={picker} />
-          )}
-        </div>
+        {/* Shared claim cards read the open ask here too (GEO-3463, decision 4): "Requesting · m:ss"
+            on the card that sent it, the others paused. */}
+        <HubAskProvider>
+          <div className="min-w-0 flex-1">
+            {!ready || !filtersReconciled ? (
+              <HubSkeleton />
+            ) : shown === 'lobby' ? (
+              <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} />
+            ) : (
+              <ClaimsTab key={shown} variant={shown} layout="workspace" scopePicker={picker} />
+            )}
+          </div>
+        </HubAskProvider>
 
         <aside
           aria-label="Live"

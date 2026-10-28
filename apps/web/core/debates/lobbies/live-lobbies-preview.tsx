@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
+import { useHoverIntent } from '~/core/hooks/use-hover-intent';
+
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbySummary } from '../api';
@@ -39,23 +41,13 @@ export function LiveLobbiesPreview({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
-  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clear = () => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-  };
+  const intent = useHoverIntent({ openDelay: OPEN_DELAY_MS, closeDelay: CLOSE_DELAY_MS });
+  const clear = intent.cancel;
   const openSoon = (event: React.PointerEvent) => {
     if (event.pointerType !== 'mouse') return;
-    clear();
-    timer.current = setTimeout(() => setOpen(true), OPEN_DELAY_MS);
+    intent.openSoon(() => setOpen(true));
   };
-  const closeSoon = () => {
-    clear();
-    timer.current = setTimeout(() => setOpen(false), CLOSE_DELAY_MS);
-  };
-
-  React.useEffect(() => clear, []);
+  const closeSoon = () => intent.closeSoon(() => setOpen(false));
 
   const shown = open && !disabled && lobbies.length > 0;
 

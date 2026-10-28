@@ -86,10 +86,11 @@ describe('CopyAvailabilityLinkMenuItem', () => {
     expect(url.pathname).toBe(`/space/${owner}`);
     expect(url.searchParams.get('modal')).toBe('availability');
     expect(url.searchParams.get('via')).toBe('share');
+    expect(url.searchParams.get('si')).toHaveLength(24);
     expect(capture).toHaveBeenCalledWith(
       'share_link_handoff',
       expect.objectContaining({
-        ...parseShareLink(url.searchParams),
+        ...parseShareLink(url),
         sharer_profile_space_id: personalSpaceId,
         sharer_role: 'unknown',
       })

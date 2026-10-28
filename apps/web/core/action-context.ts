@@ -32,6 +32,7 @@ export const ACTION_COMPONENTS = [
   'debate_end_card',
   'debate_claims_panel',
   'topic_follow_button',
+  'onboarding_customize_feed',
   'person_follow_button',
   'debate_claim_card',
 ] as const;

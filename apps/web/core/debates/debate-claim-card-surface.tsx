@@ -2,12 +2,15 @@
 
 import * as React from 'react';
 
+import { useSetAtom } from 'jotai';
+
 import type { ActionComponent, ActionScope } from '~/core/action-context';
 import { ActionSurface, useActionContext } from '~/core/action-context-provider';
 import { recordAction } from '~/core/analytics-operations';
 import { normId } from '~/core/utils/norm-id';
 
 import { hasId, toggleId } from './matchmaking/topic-facets';
+import { debatesHubDrawnListAtom } from '~/atoms';
 
 /**
  * GEO-3495. Where a claim card was shown when someone picked a claim to debate. Ids of lists, never
@@ -101,15 +104,22 @@ export function DebateClaimCardSurface({
   );
 }
 
+/** GEO-3495. The debates hub's claim tabs (side panel tabs, full screen's list picker), as recorded. */
+export type HubTabName = 'matches' | 'explore' | 'my_positions';
+
 /**
- * What a filter choice names (GEO-3495): a tab by its list id, a space or topic by its entity id, the
- * claims source by its token. `filters` / `all` is clearing every filter at once. `section` is a
- * Today's claims agenda section collapsed or expanded from its heading, by its data block id;
- * `selected` is true when it opened (reserved for GEO-3489).
+ * What a filter choice names (GEO-3495): a picker tab by its list id; a hub tab by its name, since
+ * which list a hub tab draws is decided by its own filters after the press; a space or topic by its
+ * entity id; the claims source by its token. `show`, `sort` and `toggle` are the panel's Filters
+ * controls, by their option value or toggle id. `filters` / `all` is clearing every filter at once.
+ * `section` is a Today's claims agenda section collapsed or expanded from its heading, by its data
+ * block id; `selected` is true when it opened (reserved for GEO-3489).
  */
 export type ClaimFilterChoice =
   | { kind: 'tab'; value: DebateClaimListId }
-  | { kind: 'space' | 'topic' | 'section'; value: string; selected: boolean }
+  | { kind: 'hub_tab'; value: HubTabName }
+  | { kind: 'space' | 'topic' | 'section' | 'toggle'; value: string; selected: boolean }
+  | { kind: 'show' | 'sort'; value: string }
   | { kind: 'claims_source'; value: 'recommended' | 'all' | 'mine' }
   | { kind: 'filters'; value: 'all' };
 
@@ -117,11 +127,12 @@ export type ClaimFilterChoice =
  * Records the viewer's own tab, space, topic and source choices on a claim list as `filter_claims`
  * (GEO-3495), so a list's use can be read by what was chosen rather than only that a pill was
  * pressed. Call it from the press, never from a default being applied. Never the search text.
+ * `listId` is the list on screen, or null when the press was on a hub tab with no claim list.
  */
 export function useRecordClaimFilter(component: ActionComponent, scope: ActionScope = {}) {
   const getContext = useActionContext(component, 'filter', '', scope);
   return React.useCallback(
-    (listId: DebateClaimListId, choice: ClaimFilterChoice) => {
+    (listId: DebateClaimListId | null, choice: ClaimFilterChoice) => {
       try {
         recordAction(
           'filter_claims',
@@ -129,7 +140,7 @@ export function useRecordClaimFilter(component: ActionComponent, scope: ActionSc
             target_type: choice.kind,
             // One spelling per space or topic, whichever its menu row carried.
             target_id: choice.kind === 'space' || choice.kind === 'topic' ? normId(choice.value) : choice.value,
-            list_id: listId,
+            ...(listId ? { list_id: listId } : {}),
             ...('selected' in choice ? { filter_selected: choice.selected } : {}),
           })
         );
@@ -139,6 +150,18 @@ export function useRecordClaimFilter(component: ActionComponent, scope: ActionSc
     },
     [getContext]
   );
+}
+
+/**
+ * GEO-3495. Says which claim list the debates hub has on screen, so a press on the hub's tabs can be
+ * recorded as leaving it. Called by the list itself once drawn, because a hub tab picks its list from
+ * its own filters (Matches widens to your positions, Explore's Show picks one of three).
+ */
+export function useReportDrawnHubList(listId: DebateClaimListId, enabled = true) {
+  const setDrawnList = useSetAtom(debatesHubDrawnListAtom);
+  React.useEffect(() => {
+    if (enabled) setDrawnList(listId);
+  }, [enabled, listId, setDrawnList]);
 }
 
 /**

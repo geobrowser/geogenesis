@@ -108,7 +108,7 @@ describe('OpenLobbyDialog', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } });
     const view = render(<OpenLobbyDialog onClose={vi.fn()} />);
     const initial = (screen.getByRole('textbox', { name: 'Lobby link' }) as HTMLInputElement).value;
-    expect(parseShareLink(new URL(initial).searchParams)).not.toBeNull();
+    expect(parseShareLink(initial)).not.toBeNull();
     view.rerender(<OpenLobbyDialog onClose={vi.fn()} />);
     expect((screen.getByRole('textbox', { name: 'Lobby link' }) as HTMLInputElement).value).toBe(initial);
     expect(mocks.capture).not.toHaveBeenCalled();
@@ -121,7 +121,7 @@ describe('OpenLobbyDialog', () => {
     await waitFor(() =>
       expect(mocks.capture.mock.calls.filter(([name]) => name === 'share_link_handoff')).toHaveLength(2)
     );
-    expect(write.mock.calls.map(([url]) => parseShareLink(new URL(url).searchParams)!.share_id)).toEqual(
+    expect(write.mock.calls.map(([url]) => parseShareLink(url)!.share_id)).toEqual(
       mocks.capture.mock.calls.filter(([name]) => name === 'share_link_handoff').map(([, props]) => props.share_id)
     );
   });

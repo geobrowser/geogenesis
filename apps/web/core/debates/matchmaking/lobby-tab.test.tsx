@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError, GeoChatSessionError } from '../api';
 import { LobbyTab } from './lobby-tab';
-import { debatesHubLobbyArrivalAtom, debatesHubLobbyListAtom, debatesHubMatchesOnlyAtom } from '~/atoms';
+import { debatesHubMatchesOnlyAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   /** What the matches lookup answers, and whether it has answered at all. */
@@ -19,12 +19,6 @@ const mocks = vi.hoisted(() => ({
   matchesFailureReason: null as unknown,
   /** Whether the wider list reports a corpus with nothing in it — the last rung of the ladder. */
   widerEmpty: false,
-  capture: vi.fn(),
-}));
-
-vi.mock('~/core/analytics', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/analytics')>()),
-  capture: mocks.capture,
 }));
 
 vi.mock('./hooks', () => ({
@@ -95,7 +89,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
-  mocks.capture.mockClear();
 });
 
 /**
@@ -352,55 +345,6 @@ describe('LobbyTab', () => {
     const returning = renderLobby(store);
 
     expect(returning.onTabChange).not.toHaveBeenCalled();
-  });
-
-  // GEO-3495: the hub's tab row records a press from and to Lobby as the list drawn here.
-  it('names the list it draws for the tab row', () => {
-    const store = renderLobby();
-    expect(store.get(debatesHubLobbyListAtom)).toBe('hub_matches');
-
-    fireEvent.click(toggle());
-
-    expect(store.get(debatesHubLobbyListAtom)).toBe('hub_lobby');
-  });
-
-  // GEO-3495: a press onto Lobby could not know which list it opens; Lobby records it once decided.
-  describe('a press onto it', () => {
-    const tabPresses = () =>
-      mocks.capture.mock.calls
-        .filter(([event, props]) => event === 'action_completed' && props.target_type === 'tab')
-        .map(([, props]) => [props.list_id, props.target_id]);
-    const pressedFrom = (from: 'hub_explore' | null) => {
-      const store = createStore();
-      store.set(debatesHubLobbyArrivalAtom, { from });
-      return store;
-    };
-
-    it('is recorded as the list it decided on, once', () => {
-      const store = renderLobby(pressedFrom('hub_explore'));
-      store.rerender();
-
-      expect(tabPresses()).toEqual([['hub_explore', 'hub_matches']]);
-      expect(store.get(debatesHubLobbyArrivalAtom)).toBeNull();
-    });
-
-    it('waits while the matches lookup is still out', () => {
-      mocks.matchesFetching = true;
-      const store = renderLobby(pressedFrom('hub_explore'));
-      expect(tabPresses()).toEqual([]);
-
-      mocks.matchesFetching = false;
-      mocks.matches = [];
-      store.rerender();
-
-      expect(tabPresses()).toEqual([['hub_explore', 'hub_lobby']]);
-    });
-
-    it('names Lobby as both ends when the press came from a tab with no list', () => {
-      renderLobby(pressedFrom(null));
-
-      expect(tabPresses()).toEqual([['hub_matches', 'hub_matches']]);
-    });
   });
 
   it('swaps to the wider list when toggled off', () => {
