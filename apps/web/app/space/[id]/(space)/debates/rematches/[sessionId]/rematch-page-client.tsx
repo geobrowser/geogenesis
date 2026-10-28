@@ -851,18 +851,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * Keyed canonically, and read through {@link isClaimExcluded}.
    *
    * These ids come from geo-chat, which spells them as UUIDs; every caller tests them against a
-   * graph entity id, which is bare hex. A raw `has` across that boundary is always false, so the
-   * exclusions geo-chat sends were never applied to any graph-sourced list — the claim the pair
-   * just debated included, which this set adds by hand for exactly that reason.
+   * graph entity id, which is bare hex. A raw `has` across that boundary is always false.
+   *
+   * geo-chat alone decides whether the source debate's claim is excluded: only when that debate
+   * counts as debated (GEO-3504), so a debate the pair abandoned leaves its claim on offer.
    */
-  const excludedClaimIds = React.useMemo(() => {
-    const excluded = new Set(
-      rematchClaimLookups.flatMap(data => (data?.excluded_claim_ids ?? []).map(claimId => normId(claimId)))
-    );
-    const sourceClaimId = sourceDebateQuery.data?.claim.claim_entity_id;
-    if (sourceClaimId) excluded.add(normId(sourceClaimId));
-    return excluded;
-  }, [rematchClaimLookups, sourceDebateQuery.data]);
+  const excludedClaimIds = React.useMemo(
+    () =>
+      new Set(rematchClaimLookups.flatMap(data => (data?.excluded_claim_ids ?? []).map(claimId => normId(claimId)))),
+    [rematchClaimLookups]
+  );
 
   /** Whether this session excludes a claim, whichever spelling of its id the caller holds. */
   const isClaimExcluded = React.useCallback(
