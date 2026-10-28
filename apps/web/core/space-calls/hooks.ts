@@ -22,7 +22,9 @@ const OVERDUE_REFETCH_MS = 30_000;
  * Query skips it while the tab is hidden. `false` for a space without calls, which cannot gain one.
  */
 export function nextSpaceCallsRefetch(data: SpaceCallsResponse | undefined, now: number): number | false {
-  if (!data?.supported) return false;
+  // Nothing read yet, or the first read failed: keep trying. A failed later read keeps its data.
+  if (!data) return SIGNED_OUT_SPACE_CALLS_POLL_MS;
+  if (!data.supported) return false;
   let next = now + SIGNED_OUT_SPACE_CALLS_POLL_MS;
   for (const call of data.calls) {
     const status = call.status ?? 'live';

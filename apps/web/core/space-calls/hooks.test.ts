@@ -27,8 +27,11 @@ function list(calls: SpaceCallSummary[], supported = true): SpaceCallsResponse {
 
 describe('nextSpaceCallsRefetch', () => {
   it('never reads a space without calls again', () => {
-    expect(nextSpaceCallsRefetch(undefined, NOW)).toBe(false);
     expect(nextSpaceCallsRefetch(list([], false), NOW)).toBe(false);
+  });
+
+  it('keeps polling before a first read succeeds', () => {
+    expect(nextSpaceCallsRefetch(undefined, NOW)).toBe(POLL);
   });
 
   it('polls every 3 minutes, also while a call is live', () => {
