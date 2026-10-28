@@ -4,7 +4,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { debateQueryNetworkOptions } from '~/core/debates/hooks';
 
-import { spacePastCallsQueryKey } from '../query-keys';
+import { spaceCallKeys } from '../query-keys';
 import { listPastCalls } from '../recording/api';
 
 export const SPACE_PAST_CALLS_PAGE = 20;
@@ -13,7 +13,7 @@ export const SPACE_PAST_CALLS_PAGE = 20;
 export function useSpacePastCalls(spaceId: string, enabled = true) {
   return useInfiniteQuery({
     ...debateQueryNetworkOptions,
-    queryKey: spacePastCallsQueryKey(spaceId),
+    queryKey: spaceCallKeys.past(spaceId),
     queryFn: ({ pageParam, signal }) =>
       listPastCalls({ limit: SPACE_PAST_CALLS_PAGE, spaceId, cursor: pageParam }, signal),
     initialPageParam: null as string | null,

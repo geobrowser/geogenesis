@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SpaceCallSummary, SpaceCallsResponse } from './api';
-import { parseSpaceCallPatch, withSpaceCallPatch } from './space-calls-patch';
+import { parseSpaceCallPatch, spaceCallsRefetch, withSpaceCallPatch } from './space-calls-patch';
 
 function row(extra: Partial<SpaceCallSummary> & { as_of?: string } = {}): SpaceCallSummary & { as_of: string } {
   return {
@@ -57,5 +57,19 @@ describe('withSpaceCallPatch', () => {
     expect(withSpaceCallPatch(scheduled, { status: 'live', as_of: opened.as_of, call: opened }).calls).toEqual([
       opened,
     ]);
+  });
+});
+
+describe('spaceCallsRefetch', () => {
+  it.each([
+    ['started', { list: true, past: false }],
+    ['opened', { list: true, past: false }],
+    ['schedule', { list: true, past: false }],
+    ['agenda', { list: false, past: false }],
+    ['ended', { list: true, past: true }],
+    [undefined, { list: true, past: true }],
+    ['something-new', { list: true, past: true }],
+  ])('refetches for %s', (change, expected) => {
+    expect(spaceCallsRefetch(change)).toEqual(expected);
   });
 });

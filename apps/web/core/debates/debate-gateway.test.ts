@@ -813,6 +813,32 @@ describe('DebateGatewayClient', () => {
       ]);
     });
 
+    it.each([
+      ['started', [['debates', 'space-calls', 'sp1']]],
+      ['opened', [['debates', 'space-calls', 'sp1']]],
+      ['schedule', [['debates', 'space-calls', 'sp1']]],
+      [
+        'ended',
+        [
+          ['debates', 'space-calls', 'sp1'],
+          ['debates', 'space-past-calls', 'sp1'],
+        ],
+      ],
+      ['agenda', []],
+    ])('narrows a rowless %s to its own data', async (change, keys) => {
+      await spaceCallsChanged({ space_id: 'sp1', change });
+      expect(invalidateQueries.mock.calls.map((call: unknown[]) => call[0])).toEqual(
+        keys.map(queryKey => ({ queryKey, refetchType: 'active' }))
+      );
+    });
+
+    it('refetches only the call for its agenda', async () => {
+      await spaceCallsChanged({ space_id: 'sp1', lobby_id: 'AB-CD', change: 'agenda' });
+      expect(invalidateQueries.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+        { queryKey: ['debates', 'account', 'user-a', 'lobby', 'abcd'], refetchType: 'active' },
+      ]);
+    });
+
     it('patches a live row into the live list and leaves the past pages alone', async () => {
       const call = {
         call_id: 'call1',

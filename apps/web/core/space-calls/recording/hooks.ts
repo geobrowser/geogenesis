@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { type CallRecordingState, type DebateLobbyView, dashlessId } from '~/core/debates/api';
+import { type CallRecordingState, type DebateLobbyView } from '~/core/debates/api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '~/core/debates/hooks';
 import { useStoreLobbyView } from '~/core/debates/lobbies/hooks';
 
+import { spaceCallKeys } from '../query-keys';
 import {
   getCallRecordingPlayback,
   listPastCalls,
@@ -52,9 +53,6 @@ function withRecording(view: DebateLobbyView, recording: CallRecordingState): De
 /** Re-sign this long before the 4-hour URL lapses. */
 const PLAYBACK_REFRESH_MARGIN_MS = 5 * 60_000;
 
-export const callRecordingPlaybackKey = (callId: string, accountKey: string | null) =>
-  ['call-recording-playback', dashlessId(callId), accountKey] as const;
-
 /** The signed manifest for a ready recording, re-signed before it expires. */
 export function useCallRecordingPlayback(callId: string, enabled: boolean) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
@@ -62,7 +60,7 @@ export function useCallRecordingPlayback(callId: string, enabled: boolean) {
 
   return useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: callRecordingPlaybackKey(callId, viewerKey),
+    queryKey: spaceCallKeys.recordingPlayback(callId, viewerKey),
     queryFn: ({ signal }) => getCallRecordingPlayback(callId, getPrivyIdentityToken, viewerKey, signal),
     enabled: enabled && ready,
     staleTime: Infinity,
@@ -104,7 +102,7 @@ const PAST_CALLS_STALE_MS = 5 * 60_000;
 export function usePastCalls(enabled: boolean) {
   return useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: ['call-recordings', 'past', PAST_CALLS_LIMIT] as const,
+    queryKey: spaceCallKeys.explorePast(PAST_CALLS_LIMIT),
     queryFn: ({ signal }) => listPastCalls({ limit: PAST_CALLS_LIMIT }, signal),
     enabled,
     staleTime: PAST_CALLS_STALE_MS,

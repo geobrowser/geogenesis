@@ -37,3 +37,21 @@ export function withSpaceCallPatch(list: SpaceCallsResponse, patch: SpaceCallPat
   });
   return changed ? { ...list, calls } : list;
 }
+
+/**
+ * What a rowless `debate.space_calls_changed` refetches besides the call it names, by its `change`:
+ * an agenda is only the call's own view, and only an ended call reaches the past calls. Missing or
+ * unknown, both.
+ */
+export function spaceCallsRefetch(change: unknown): { list: boolean; past: boolean } {
+  switch (change) {
+    case 'started':
+    case 'opened':
+    case 'schedule':
+      return { list: true, past: false };
+    case 'agenda':
+      return { list: false, past: false };
+    default:
+      return { list: true, past: true };
+  }
+}

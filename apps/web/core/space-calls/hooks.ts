@@ -2,15 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { dashlessId } from '~/core/debates/api';
 import { useDebateGatewayScope } from '~/core/debates/debate-gateway';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '~/core/debates/hooks';
 
 import { type SpaceCallsResponse, listSpaceCalls, startSpaceCall } from './api';
-
-/** Under `debates`, so a gateway reconcile refetches it; the event patches every viewer's copy. */
-export const spaceCallsQueryKey = (spaceId: string, accountKey: string | null) =>
-  ['debates', 'space-calls', dashlessId(spaceId), accountKey] as const;
+import { spaceCallKeys } from './query-keys';
 
 /** Signed out there is no gateway; the contract asks for 30–60s. */
 export const SIGNED_OUT_SPACE_CALLS_POLL_MS = 45_000;
@@ -39,7 +35,7 @@ export function useSpaceCalls(spaceId: string, enabled = true, { live = true }: 
 
   return useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: spaceCallsQueryKey(spaceId, viewerKey),
+    queryKey: spaceCallKeys.viewerList(spaceId, viewerKey),
     queryFn: ({ signal }) => listSpaceCalls(spaceId, getPrivyIdentityToken, viewerKey, signal),
     enabled: enabled && ready && Boolean(spaceId),
     refetchInterval: query => spaceCallsPoll({ authenticated, live }, query.state.data),
@@ -55,7 +51,7 @@ export function useStartSpaceCall(spaceId: string) {
     mutationFn: () => startSpaceCall(spaceId, {}, getPrivyIdentityToken, accountKey),
     onSuccess: view => {
       queryClient.setQueryData(debateQueryKeys.lobby(accountKey, view.lobby_id), view);
-      void queryClient.invalidateQueries({ queryKey: ['debates', 'space-calls', dashlessId(spaceId)] });
+      void queryClient.invalidateQueries({ queryKey: spaceCallKeys.list(spaceId) });
     },
   });
 }

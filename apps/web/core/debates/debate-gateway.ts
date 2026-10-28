@@ -12,8 +12,8 @@ import {
   isClaimResponseSummaryQueryKey,
 } from '~/core/responses/claim-response-summary-query-keys';
 import type { SpaceCallsResponse } from '~/core/space-calls/api';
-import { spacePastCallsQueryKey } from '~/core/space-calls/query-keys';
-import { parseSpaceCallPatch, withSpaceCallPatch } from '~/core/space-calls/space-calls-patch';
+import { spaceCallKeys } from '~/core/space-calls/query-keys';
+import { parseSpaceCallPatch, spaceCallsRefetch, withSpaceCallPatch } from '~/core/space-calls/space-calls-patch';
 
 import {
   type DebateLobbiesResponse,
@@ -91,6 +91,8 @@ type DebateEventPayload = {
   guest_count?: unknown;
   /** On `debate.space_calls_changed`: the call's list row; see `parseSpaceCallPatch`. */
   space_call?: unknown;
+  /** On a rowless `debate.space_calls_changed`; see `spaceCallsRefetch`. */
+  change?: unknown;
   claim_entity_ids?: string[];
   sections?: MatchmakingSection[];
 };
@@ -624,17 +626,17 @@ export class DebateGatewayClient {
         );
         break;
       }
-      // GEO-3419. To the space scope: a call started, ended or closed (no row: refetch the list),
-      // or its people or hosts changed (a row, patched in place when newer).
+      // GEO-3419. To the space scope: a live call's people or hosts changed (a row, patched in place
+      // when newer), or anything else (no row, or a row no longer live: refetch). GEO-3420: a rowless
+      // event's `change` narrows the refetch.
       case 'debate.space_calls_changed': {
         if (!identifiers.space_id) break;
-        const listKey = ['debates', 'space-calls', dashlessId(identifiers.space_id)];
+        const listKey = spaceCallKeys.list(identifiers.space_id);
         const patch = parseSpaceCallPatch(identifiers.space_call);
         if (!patch || patch.status !== 'live') {
-          this.queueQuery(listKey);
-          // A call may have ended (GEO-3420).
-          this.queueQuery(spacePastCallsQueryKey(identifiers.space_id));
-          // A call's own change, such as its agenda (GEO-3420): its page refetches too.
+          const refetch = spaceCallsRefetch(patch ? undefined : identifiers.change);
+          if (refetch.list) this.queueQuery(listKey);
+          if (refetch.past) this.queueQuery(spaceCallKeys.past(identifiers.space_id));
           if (!patch && identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
           break;
         }
@@ -748,8 +750,8 @@ export class DebateGatewayClient {
     if (scope.scope === 'space') {
       this.queueQuery(['debates', 'claims', scope.space_id]);
       this.queueQuery(['debates', 'space', scope.space_id]);
-      this.queueQuery(['debates', 'space-calls', dashlessId(scope.space_id)]);
-      this.queueQuery(spacePastCallsQueryKey(scope.space_id));
+      this.queueQuery(spaceCallKeys.list(scope.space_id));
+      this.queueQuery(spaceCallKeys.past(scope.space_id));
       return;
     }
     if (scope.scope === 'matchmaking') {

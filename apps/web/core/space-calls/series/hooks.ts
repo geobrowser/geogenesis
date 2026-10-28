@@ -7,10 +7,8 @@ import { debateQueryKeys, useGeoChatAuth } from '~/core/debates/hooks';
 import { sameId } from '~/core/debates/rooms/room-presence';
 
 import { type SpaceCallsResponse, saveCallAgenda, setCallReminder, setCallSeriesReminder } from '../api';
+import { spaceCallKeys, spaceCallMutationKeys } from '../query-keys';
 import { agendaConflictCurrent } from './call-errors';
-
-/** Every viewer's copy of a space's call list, signed in or out. */
-const spaceCallsListKey = (spaceId: string) => ['debates', 'space-calls', dashlessId(spaceId)] as const;
 
 /** `ids` with `id` in or out, by id however spelled. */
 export function withId(ids: string[], id: string, present: boolean) {
@@ -51,12 +49,12 @@ export function useCallReminder(spaceId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationKey: ['debates', 'call-reminder'],
+    mutationKey: spaceCallMutationKeys.reminder,
     mutationFn: ({ callId, remind }: { callId: string; remind: boolean }) =>
       setCallReminder(callId, remind, getPrivyIdentityToken, accountKey),
     onSuccess: (view, { callId }) => {
       storeCallView(queryClient, accountKey, view);
-      queryClient.setQueriesData<SpaceCallsResponse>({ queryKey: spaceCallsListKey(spaceId) }, list =>
+      queryClient.setQueriesData<SpaceCallsResponse>({ queryKey: spaceCallKeys.list(spaceId) }, list =>
         list ? withListReminder(list, { callId, reminded: view.viewer.reminded }) : list
       );
     },
@@ -68,14 +66,14 @@ export function useCallSeriesReminder(spaceId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationKey: ['debates', 'call-series-reminder'],
+    mutationKey: spaceCallMutationKeys.seriesReminder,
     mutationFn: ({ seriesId, remind }: { seriesId: string; remind: boolean }) =>
       setCallSeriesReminder(spaceId, seriesId, remind, getPrivyIdentityToken, accountKey),
     onSuccess: ({ series_id, reminded }) => {
-      queryClient.setQueriesData<SpaceCallsResponse>({ queryKey: spaceCallsListKey(spaceId) }, list =>
+      queryClient.setQueriesData<SpaceCallsResponse>({ queryKey: spaceCallKeys.list(spaceId) }, list =>
         list ? withListReminder(list, { seriesId: series_id, reminded }) : list
       );
-      queryClient.setQueriesData<DebateLobbyView>({ queryKey: ['debates', 'account', accountKey, 'lobby'] }, view =>
+      queryClient.setQueriesData<DebateLobbyView>({ queryKey: debateQueryKeys.lobbyRoot(accountKey) }, view =>
         view ? withSeriesReminded(view, series_id, reminded) : view
       );
     },
