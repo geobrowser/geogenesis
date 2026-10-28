@@ -2722,12 +2722,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!handoffSettled) return;
     if (roomState === 'idle') {
       if (rematchSessionClosed && !rematchLeaveRequestedRef.current && !idleSaveFailed) {
+        if (debate?.rematch_session_id && !didLocallyLeaveRematch(debate.rematch_session_id)) {
+          setOpponentLeftNotice({ recordingDiscarded: false });
+        }
         void leaveIdleRoom(returnFromDebate);
       }
       return;
     }
     void finishLiveDebate({ allowDuringThankYou: true });
   }, [
+    debate,
     finishLiveDebate,
     handoffSettled,
     idleSaveFailed,
@@ -2735,6 +2739,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     rematchSessionClosed,
     returnFromDebate,
     roomState,
+    setOpponentLeftNotice,
   ]);
 
   /**
