@@ -197,6 +197,8 @@ describe('every debate entry steps out of a lobby', () => {
     'core/debates/lobbies/upcoming-lobbies.tsx',
     'core/debates/lobbies/lobbies-calendar.tsx',
     'partials/explore/explore-live-lobbies-banner.tsx',
+    // GEO-3517: the debate hours page links into lobbies only.
+    'core/debates/lobbies/debate-hours-page.tsx',
     'core/debates/lobbies/lobby-page.tsx',
     'core/debates/lobbies/lobby-state-cards.tsx',
     'core/debates/lobbies/open-lobby-dialog.tsx',
