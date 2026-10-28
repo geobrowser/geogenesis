@@ -6,9 +6,13 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
+import { CLAIM_RESPONSE_OBJECT_TYPE, summarizeClaimResponses } from '~/core/claims/browse/claim-response-summary';
+import { chunk } from '~/core/community/community-graphql';
 import { graphql } from '~/core/io/graphql-client';
 import { CLAIM_RESPONSE_KIND, responseKindToVoteKind } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
+
+export type ClaimResponseCounts = { positive: number; negative: number };
 
 /**
  * How debatable a claim is for one person, from the split of positions on it (GEO-3527).
@@ -25,20 +29,15 @@ import { normId } from '~/core/utils/norm-id';
  *
  * The person's own position is taken out of the crowd before "against" is measured — otherwise a
  * claim they hold alone would read as a crowd that partly agrees with them.
+ *
+ * Neither counts below `CLAIM_RESPONSE_FLOOR`, the floor every surface uses before calling a claim
+ * contested: under it a single disagreement reads as a maximally split claim, and the thinnest data
+ * would decide the top of the list.
  */
-export type ClaimResponseCounts = { positive: number; negative: number };
-
-/**
- * Positions a claim needs before either signal counts. Below it a single disagreement reads as a
- * maximally contested claim, which is the thinnest data deciding the top of the list. The ticket
- * gave a range of 7 to 10.
- */
-export const DEBATABLE_MIN_POSITIONS = 8;
-
 export function claimDebatability(counts: ClaimResponseCounts | undefined, holderPosition: boolean | null): number {
   if (!counts) return 0;
-  const total = counts.positive + counts.negative;
-  if (total < DEBATABLE_MIN_POSITIONS) return 0;
+  const { total, meetsFloor } = summarizeClaimResponses(counts.positive, counts.negative);
+  if (!meetsFloor) return 0;
 
   const split = 1 - Math.abs((2 * counts.positive) / total - 1);
 
@@ -107,9 +106,19 @@ type ClaimResponseCountsQuery = {
   } | null;
 };
 
+/** Hand-written, as `claim-picker-page.ts`'s are: the generated types predate `VotesCountFilter`. */
+type ClaimResponseCountsVariables = {
+  filter: {
+    objectType: { is: number };
+    voteKind: { is: number };
+    or: Array<{ spaceId: { is: string }; objectId: { in: string[] } }>;
+  };
+  first: number;
+};
+
 const claimResponseCountsDocument = parse(CLAIM_RESPONSE_COUNTS_SOURCE) as TypedDocumentNode<
   ClaimResponseCountsQuery,
-  { filter: unknown; first: number }
+  ClaimResponseCountsVariables
 >;
 
 /** `claimCountsKey`s in, each claim's counts out under the same key. A claim nobody has answered has no row. */
@@ -135,7 +144,7 @@ export function fetchClaimResponseCounts(keys: string[], signal?: AbortSignal) {
       },
       variables: {
         filter: {
-          objectType: { is: 0 },
+          objectType: { is: CLAIM_RESPONSE_OBJECT_TYPE },
           voteKind: { is: responseKindToVoteKind(CLAIM_RESPONSE_KIND) },
           or: [...bySpace].map(([spaceId, claimIds]) => ({ spaceId: { is: spaceId }, objectId: { in: claimIds } })),
         },
@@ -164,14 +173,10 @@ export function useClaimResponseCounts(claims: Array<{ claimEntityId: string; sp
     .sort()
     .join(',');
 
-  const runs = React.useMemo(() => {
-    const keys = signature ? signature.split(',') : [];
-    const chunks: string[][] = [];
-    for (let start = 0; start < keys.length; start += CLAIM_RESPONSE_COUNTS_CHUNK) {
-      chunks.push(keys.slice(start, start + CLAIM_RESPONSE_COUNTS_CHUNK));
-    }
-    return chunks;
-  }, [signature]);
+  const runs = React.useMemo(
+    () => chunk(signature ? signature.split(',') : [], CLAIM_RESPONSE_COUNTS_CHUNK),
+    [signature]
+  );
 
   const combine = React.useCallback((results: UseQueryResult<Map<string, ClaimResponseCounts>>[]) => {
     const counts = new Map<string, ClaimResponseCounts>();

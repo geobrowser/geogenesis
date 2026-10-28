@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEBATABLE_MIN_POSITIONS, claimCountsKey, claimDebatability, orderByDebatability } from './claim-debatability';
+import { CLAIM_RESPONSE_FLOOR } from '~/core/claims/browse/claim-response-summary';
+
+import { claimCountsKey, claimDebatability, orderByDebatability } from './claim-debatability';
 
 const AGREE = true;
 const DISAGREE = false;
@@ -19,15 +21,15 @@ describe('claimDebatability', () => {
   });
 
   it('scores neither signal below the floor', () => {
-    const below = DEBATABLE_MIN_POSITIONS - 1;
+    const below = CLAIM_RESPONSE_FLOOR - 1;
     expect(claimDebatability({ positive: 0, negative: below }, AGREE)).toBe(0);
     expect(claimDebatability({ positive: 1, negative: 1 }, AGREE)).toBe(0);
-    expect(claimDebatability({ positive: 1, negative: DEBATABLE_MIN_POSITIONS - 1 }, AGREE)).toBeGreaterThan(0);
+    expect(claimDebatability({ positive: 1, negative: CLAIM_RESPONSE_FLOOR - 1 }, AGREE)).toBeGreaterThan(0);
   });
 
   it('leaves the holder out of the crowd they are measured against', () => {
-    // Alone against seven: everyone else disagrees with them, which is as against as it gets.
-    expect(claimDebatability({ positive: 1, negative: 7 }, AGREE)).toBe(1);
+    // Alone against eleven: everyone else disagrees with them, which is as against as it gets.
+    expect(claimDebatability({ positive: 1, negative: 11 }, AGREE)).toBe(1);
   });
 
   it('puts a lone holdout and an even split level, so both kinds reach the top', () => {
@@ -36,7 +38,7 @@ describe('claimDebatability', () => {
   });
 
   it('falls back to the split when the holder has no side, and to 0 without counts', () => {
-    expect(claimDebatability({ positive: 4, negative: 4 }, null)).toBe(1);
+    expect(claimDebatability({ positive: 5, negative: 5 }, null)).toBe(1);
     expect(claimDebatability(undefined, AGREE)).toBe(0);
   });
 });

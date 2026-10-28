@@ -56,6 +56,7 @@ import {
 } from '~/core/debates/hooks';
 import { useDebateReturnNavigation } from '~/core/debates/lobbies/lobby-return';
 import {
+  type ClaimResponseCounts,
   claimCountsKey,
   claimDebatability,
   orderByDebatability,
@@ -284,6 +285,31 @@ const CLAIMS_SOURCE_LABELS: Record<ExploreSource, string> = {
  * Both the opponent's tab and Explore's "My positions" are this question asked about one of the two
  * debaters, and `positions` already covers both, so neither costs a lookup of its own.
  */
+/** Each claim and space a person answered in: where their list's rows are drawn, and counted. */
+function claimsAnsweredBy(
+  byClaim: ParticipantPositionsByClaim,
+  profileSpaceId: string | null
+): Array<{ claimEntityId: string; spaceId: string }> {
+  if (!profileSpaceId) return [];
+  return [...byClaim.values()].flatMap(rows =>
+    rows
+      .filter(row => idEquals(row.profileSpaceId, profileSpaceId))
+      .map(row => ({ claimEntityId: row.claimId, spaceId: row.spaceId }))
+  );
+}
+
+/**
+ * How debatable a row is for whoever holds `holderPosition` on it (GEO-3527), from the counts in the
+ * space its card is drawn for.
+ */
+function rowDebatability(
+  row: DebateRematchClaim,
+  holderPosition: boolean | null,
+  counts: ReadonlyMap<string, ClaimResponseCounts>
+) {
+  return claimDebatability(counts.get(claimCountsKey(row.claim.claim_entity_id, row.claim.space_id)), holderPosition);
+}
+
 function claimIdsAnsweredBy(byClaim: ParticipantPositionsByClaim, profileSpaceId: string | null): string[] {
   if (!profileSpaceId) return [];
 
@@ -620,17 +646,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // By person, alongside positions, for the same reason as the opponent's.
   const viewerEntitiesQuery = useAnsweredClaimEntities(localParticipant?.profile_space_id ?? null, viewerClaimIds);
 
-  // GEO-3527. The agree / disagree counts both people's lists are ordered by, for every claim either
-  // of them answered, in the space they answered it in — which is the space a row on their list is
-  // drawn for, since a row only lists where its person holds a side. Keyed on positions rather than
-  // the rows, so it runs alongside the entity and session lookups instead of after them.
-  const positionCounts = useClaimResponseCounts(
+  // GEO-3527. The agree / disagree counts each person's list is ordered by, for every claim they
+  // answered, in the space they answered it in — which is the space a row on their list is drawn
+  // for, since a row only lists where its person holds a side. Keyed on positions rather than the
+  // rows, so they run alongside the entity and session lookups instead of after them; and one per
+  // person, so the viewer answering something new re-asks their own list's counts, not the
+  // opponent's.
+  const opponentCounts = useClaimResponseCounts(
     React.useMemo(
-      () =>
-        [...positions.byClaim.values()].flatMap(rows =>
-          rows.map(row => ({ claimEntityId: row.claimId, spaceId: row.spaceId }))
-        ),
-      [positions.byClaim]
+      () => claimsAnsweredBy(positions.byClaim, remoteParticipant?.profile_space_id ?? null),
+      [positions.byClaim, remoteParticipant]
+    )
+  );
+  const viewerCounts = useClaimResponseCounts(
+    React.useMemo(
+      () => claimsAnsweredBy(positions.byClaim, localParticipant?.profile_space_id ?? null),
+      [localParticipant, positions.byClaim]
     )
   );
   // Both graph-sourced options, one pipeline (GEO-2771).
@@ -1206,9 +1237,44 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [pairDebatedClaimIds]
   );
 
-  // The opponent's tab: every claim they hold a side on, most debatable first. Held until the session's
-  // exclusions are in, so nothing lists and then vanishes. Not narrowed by the space allowlist —
-  // see it above.
+  // The opponent is whichever participant isn't the local user; with no local user there is none.
+  const opponentPositionOf = React.useCallback(
+    (claim: DebateRematchClaim) =>
+      currentUserId === null
+        ? null
+        : (claim.participants.find(position => position.user_id !== currentUserId)?.position ?? null),
+    [currentUserId]
+  );
+
+  const viewerPositionOf = React.useCallback(
+    (claim: DebateRematchClaim) =>
+      currentUserId === null
+        ? null
+        : (claim.participants.find(position => position.user_id === currentUserId)?.position ?? null),
+    [currentUserId]
+  );
+
+  /**
+   * A match (GEO-2861, a tab of its own since GEO-3148): both of you hold a side, and they are
+   * opposite ones — the claims a rematch can be requested on right now.
+   *
+   * A client-side predicate, unlike the hub's, because there is no matches endpoint here. Both sides
+   * are already in hand from the session's own rows, so this asks the same question of them rather
+   * than approximating it.
+   */
+  const isRematchable = React.useCallback(
+    (claim: DebateRematchClaim) => {
+      const mine = viewerPositionOf(claim);
+      const theirs = opponentPositionOf(claim);
+
+      return mine !== null && theirs !== null && mine !== theirs;
+    },
+    [opponentPositionOf, viewerPositionOf]
+  );
+
+  // The opponent's tab: every claim they hold a side on, matches then most debatable first. Held
+  // until the session's exclusions are in, so nothing lists and then vanishes. Not narrowed by the
+  // space allowlist — see it above.
   /**
    * One participant's positions as picker rows, shared-preference first. The caller orders these
    * again by opposed sides and debatability, so shared preference is what breaks its ties.
@@ -1251,25 +1317,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // (GEO-3527): the claims they hold against the crowd, and the ones people are split on. The counts
   // are part of settling, because the hold below keeps whatever order it is first shown — a list
   // drawn before them would keep its old order for good.
-  const opponentClaimsSettling = opponentRowsSettling || positionCounts.isLoading;
-  const opponentClaimsNow = React.useMemo(() => {
-    if (opponentClaimsSettling) return [];
-    const sideOf = (row: DebateRematchClaim, mine: boolean) =>
-      row.participants.find(side => (side.user_id === currentUserId) === mine)?.position ?? null;
-    return orderByDebatability(
-      opponentRows,
-      row =>
-        claimDebatability(
-          positionCounts.counts.get(claimCountsKey(row.claim.claim_entity_id, row.claim.space_id)),
-          sideOf(row, false)
-        ),
-      row => {
-        const mine = sideOf(row, true);
-        const theirs = sideOf(row, false);
-        return mine !== null && theirs !== null && mine !== theirs;
-      }
-    );
-  }, [currentUserId, opponentClaimsSettling, positionCounts.counts, opponentRows]);
+  const opponentClaimsSettling = opponentRowsSettling || opponentCounts.isLoading;
+  const opponentClaimsNow = React.useMemo(
+    () =>
+      opponentClaimsSettling
+        ? []
+        : orderByDebatability(
+            opponentRows,
+            row => rowDebatability(row, opponentPositionOf(row), opponentCounts.counts),
+            isRematchable
+          ),
+    [isRematchable, opponentClaimsSettling, opponentCounts.counts, opponentPositionOf, opponentRows]
+  );
   // A new response from the opponent adds an id, and the lookups keyed on the id list start over.
   // The list they were drawn from is still right for every claim already on it, so it stays up
   // until the new one lands rather than dropping to nothing in between.
@@ -1278,7 +1337,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // read off the session row, so taking a side on a claim the opponent has already answered flips
   // it — and re-sorting sent the row the viewer had just acted on to the top, carrying the rest of
   // the list with it. Held so that arrangement survives the viewer acting on it; a claim the
-  // opponent answers next is new rather than moved, and still lands where the sort puts it. Keyed on the session, so reopening the flow arranges it afresh.
+  // opponent answers next is new rather than moved, and still lands where the sort puts it. Keyed
+  // on the session, so reopening the flow arranges it afresh.
   //
   // Applied after `useLastSettled` rather than before it: the hold remembers the rows it has been
   // shown, and `opponentClaimsNow` empties on every refetch. Stabilising that would hand it an
@@ -1307,18 +1367,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [currentUserId, participantClaimRows, viewerClaimIds, viewerRowsSettling, viewerEntitiesQuery.entities]
   );
   // Ordered the same way, about the viewer: their own claims against the crowd, and the split ones.
-  const viewerClaimsSettling = viewerRowsSettling || positionCounts.isLoading;
+  const viewerClaimsSettling = viewerRowsSettling || viewerCounts.isLoading;
   const viewerClaimsNow = React.useMemo(
     () =>
       viewerClaimsSettling
         ? []
-        : orderByDebatability(viewerRows, row =>
-            claimDebatability(
-              positionCounts.counts.get(claimCountsKey(row.claim.claim_entity_id, row.claim.space_id)),
-              row.participants.find(side => side.user_id === currentUserId)?.position ?? null
-            )
-          ),
-    [currentUserId, viewerClaimsSettling, positionCounts.counts, viewerRows]
+        : orderByDebatability(viewerRows, row => rowDebatability(row, viewerPositionOf(row), viewerCounts.counts)),
+    [viewerClaimsSettling, viewerCounts.counts, viewerPositionOf, viewerRows]
   );
   const viewerClaimsHeld = useLastSettled(viewerClaimsNow, viewerClaimsSettling, sessionId);
   // Held against the viewer's own acting on it, exactly as the opponent's list is: taking a side
@@ -1643,41 +1698,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [taggedClaimsListed, isPairDebated]
   );
   const taggedClaims = taggedClaimsSplit.fresh;
-
-  // The opponent is whichever participant isn't the local user; with no local user there is none.
-  const opponentPositionOf = React.useCallback(
-    (claim: DebateRematchClaim) =>
-      currentUserId === null
-        ? null
-        : (claim.participants.find(position => position.user_id !== currentUserId)?.position ?? null),
-    [currentUserId]
-  );
-
-  const viewerPositionOf = React.useCallback(
-    (claim: DebateRematchClaim) =>
-      currentUserId === null
-        ? null
-        : (claim.participants.find(position => position.user_id === currentUserId)?.position ?? null),
-    [currentUserId]
-  );
-
-  /**
-   * A match (GEO-2861, a tab of its own since GEO-3148): both of you hold a side, and they are
-   * opposite ones — the claims a rematch can be requested on right now.
-   *
-   * A client-side predicate, unlike the hub's, because there is no matches endpoint here. Both sides
-   * are already in hand from the session's own rows, so this asks the same question of them rather
-   * than approximating it.
-   */
-  const isRematchable = React.useCallback(
-    (claim: DebateRematchClaim) => {
-      const mine = viewerPositionOf(claim);
-      const theirs = opponentPositionOf(claim);
-
-      return mine !== null && theirs !== null && mine !== theirs;
-    },
-    [opponentPositionOf, viewerPositionOf]
-  );
 
   /**
    * Both of you hold the same side: nothing to debate. What "Hide agreed" takes off their tab.
