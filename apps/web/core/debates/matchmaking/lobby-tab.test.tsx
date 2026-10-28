@@ -401,17 +401,6 @@ describe('LobbyTab', () => {
 
       expect(tabPresses()).toEqual([['hub_matches', 'hub_matches']]);
     });
-
-    it('is dropped when Lobby moves on before deciding', () => {
-      localStorage.setItem(STORAGE_KEY, 'false');
-      mocks.matchesFetching = true;
-      const store = renderLobby(pressedFrom('hub_explore'));
-
-      fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
-
-      expect(store.get(debatesHubLobbyArrivalAtom)).toBeNull();
-      expect(tabPresses()).toEqual([]);
-    });
   });
 
   it('swaps to the wider list when toggled off', () => {

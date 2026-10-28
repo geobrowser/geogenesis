@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 
 import { isAccountWarmingUpQuery } from '../api';
 import { useRecordClaimFilter } from '../debate-claim-card-surface';
@@ -75,13 +75,18 @@ export function LobbyTab({
   const lobbyList = showNarrowed ? 'hub_matches' : 'hub_lobby';
   const setLobbyList = useSetAtom(debatesHubLobbyListAtom);
   React.useEffect(() => setLobbyList(lobbyList), [setLobbyList, lobbyList]);
-  const [arrival, setArrival] = useAtom(debatesHubLobbyArrivalAtom);
+  const arrival = useAtomValue(debatesHubLobbyArrivalAtom);
+  const store = useStore();
   const recordFilter = useRecordClaimFilter('debate_matchmaking');
   React.useEffect(() => {
     if (!arrival || matchesState === 'pending') return;
-    setArrival(null);
-    recordFilter(arrival.from ?? lobbyList, { kind: 'tab', value: lobbyList });
-  }, [arrival, lobbyList, matchesState, recordFilter, setArrival]);
+    // Taken from the store, not the render: Strict Mode runs this twice on one commit, and the
+    // second run must find it gone rather than record the press again.
+    const pending = store.get(debatesHubLobbyArrivalAtom);
+    if (!pending) return;
+    store.set(debatesHubLobbyArrivalAtom, null);
+    recordFilter(pending.from ?? lobbyList, { kind: 'tab', value: lobbyList });
+  }, [arrival, lobbyList, matchesState, recordFilter, store]);
 
   /**
    * Once a session, and held outside this component because this component does not last.
@@ -100,11 +105,9 @@ export function LobbyTab({
   const leaveLobby = React.useCallback(
     (tab: DebatesHubTab) => {
       setMoveSpent(true);
-      // Moved on before deciding which list it draws: the press onto Lobby named neither.
-      setArrival(null);
       onTabChange(tab);
     },
-    [onTabChange, setArrival, setMoveSpent]
+    [onTabChange, setMoveSpent]
   );
   const showExplore = React.useCallback(() => leaveLobby('explore'), [leaveLobby]);
 

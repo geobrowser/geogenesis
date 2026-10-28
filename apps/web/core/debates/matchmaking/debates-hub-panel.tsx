@@ -264,7 +264,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 
   // One scroll container is shared by all four tabs, so a scrolled People list would otherwise
   // leave Requests scrolled to the same offset.
-  const recordListChange = useRecordHubListChange();
+  const recordListChange = useRecordHubListChange(activeTab);
   const changeTab = React.useCallback(
     (tab: DebatesHubTab) => {
       if (scrollRef.current) scrollRef.current.scrollTop = 0;
@@ -320,7 +320,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               aria-current={activeTab === tab.id ? 'true' : undefined}
               data-tab-active={activeTab === tab.id ? 'true' : undefined}
               onClick={() => {
-                recordListChange(activeTab, tab.id);
+                recordListChange(tab.id);
                 changeTab(tab.id);
               }}
               className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}

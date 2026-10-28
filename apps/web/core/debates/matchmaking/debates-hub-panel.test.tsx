@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -17,6 +17,7 @@ import {
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
   debatesHubExploreTopicIdsAtom,
+  debatesHubLobbyArrivalAtom,
   debatesHubLobbyListAtom,
   debatesHubLobbySearchAtom,
   debatesHubLobbySpaceIdsAtom,
@@ -47,6 +48,7 @@ const mocks = vi.hoisted(() => ({
   scheduledAwaitingAnswerCount: undefined as number | undefined,
   scheduledRequests: undefined as unknown[] | undefined,
   capture: vi.fn(),
+  matchesFetching: false,
 }));
 
 vi.mock('~/core/analytics', async importOriginal => ({
@@ -161,7 +163,12 @@ vi.mock('./hooks', () => ({
     error: mocks.peopleError,
   }),
   useMatchmakingClaims: () => ({ data: undefined, isLoading: false, error: null, hasNextPage: false }),
-  useMatchmakingMatches: () => ({ data: { matches: [] }, isLoading: false, error: null }),
+  useMatchmakingMatches: () => ({
+    data: { matches: [] },
+    isLoading: false,
+    isFetching: mocks.matchesFetching,
+    error: null,
+  }),
   useCreateDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useAcceptDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -529,6 +536,79 @@ describe('DebatesHubPanel', () => {
       ['hub_explore', 'hub_lobby'],
       ['hub_lobby', 'hub_explore'],
     ]);
+  });
+
+  // A press onto Live waits for Live to decide its list. If the panel closes or moves on first, the
+  // press is dropped, so a later arrival that nobody pressed is not recorded as one.
+  describe('a press onto Live that Live had not decided on yet', () => {
+    const tabPresses = () =>
+      mocks.capture.mock.calls
+        .filter(([event, props]) => event === 'action_completed' && props.action_kind === 'filter_claims')
+        .map(([, props]) => [props.list_id, props.target_id]);
+    const pressLiveWhilePending = () => {
+      mocks.matchesFetching = true;
+      const store = createStore();
+      store.set(debatesHubAtom, { tab: 'explore' });
+      const tree = () => (
+        <Provider store={store}>
+          <DebatesHubPanel />
+        </Provider>
+      );
+      const view = render(tree());
+      mocks.capture.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: /^Live/ }));
+      expect(store.get(debatesHubLobbyArrivalAtom)).not.toBeNull();
+      return { store, view, tree };
+    };
+    afterEach(() => {
+      mocks.matchesFetching = false;
+    });
+
+    it('is dropped when the panel closes', () => {
+      const { store, view, tree } = pressLiveWhilePending();
+
+      view.unmount();
+      mocks.matchesFetching = false;
+      // Opened again later, on Live.
+      render(tree());
+
+      expect(store.get(debatesHubLobbyArrivalAtom)).toBeNull();
+      expect(tabPresses()).toEqual([]);
+    });
+
+    // Strict Mode runs Live's effects twice on mounting: the press is still recorded, and once.
+    it('survives Strict Mode and is recorded once Live decides', async () => {
+      mocks.matchesFetching = true;
+      const store = createStore();
+      store.set(debatesHubAtom, { tab: 'explore' });
+      const tree = () => (
+        <React.StrictMode>
+          <Provider store={store}>
+            <DebatesHubPanel />
+          </Provider>
+        </React.StrictMode>
+      );
+      const view = render(tree());
+      mocks.capture.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: /^Live/ }));
+
+      // Live's body arrives after the cross-fade, its lookup still out.
+      await screen.findByTestId('claims-tab');
+      expect(store.get(debatesHubLobbyArrivalAtom)).not.toBeNull();
+      mocks.matchesFetching = false;
+      view.rerender(tree());
+
+      await vi.waitFor(() => expect(tabPresses()).toEqual([['hub_explore', 'hub_lobby']]));
+    });
+
+    it('is dropped when the hub is moved off Live from outside the tab row', () => {
+      const { store } = pressLiveWhilePending();
+
+      act(() => store.set(debatesHubAtom, { tab: 'requests' }));
+
+      expect(store.get(debatesHubLobbyArrivalAtom)).toBeNull();
+      expect(tabPresses()).toEqual([]);
+    });
   });
 
   it('leaves the lobbies card off Requests, which lists the lobbies itself', async () => {

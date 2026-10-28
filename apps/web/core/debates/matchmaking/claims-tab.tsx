@@ -252,15 +252,24 @@ const HUB_TAB_LIST_IDS: Partial<Record<DebatesHubTab, DebateClaimListId>> = {
 };
 
 /**
- * GEO-3495. Records the viewer moving between the hub's claim lists, for the side panel's tab row and
- * the full-screen list picker alike. Leaving Lobby names the list it is drawing. Arriving on Lobby is
- * left to Lobby, which records it once it knows which of its two lists it draws.
+ * GEO-3495. Records the viewer moving from `shown`, the list a host draws, to another, for the side
+ * panel's tab row and the full-screen list picker alike. Leaving Lobby names the list it is drawing.
+ * Arriving on Lobby is left to Lobby, which records it once it knows which of its two lists it draws.
+ *
+ * The host owns that pending press: it is dropped once the host stops showing Lobby, or closes, so it
+ * is never recorded later as a press nobody made. Held here rather than in Lobby's own unmount,
+ * because the tab bodies cross-fade: the panel can close, or the tab change, before Lobby has mounted.
  */
-export function useRecordHubListChange() {
+export function useRecordHubListChange(shown: DebatesHubTab) {
   const recordFilter = useRecordClaimFilter('debate_matchmaking');
   const lobbyList = useAtomValue(debatesHubLobbyListAtom);
   const setArrival = useSetAtom(debatesHubLobbyArrivalAtom);
-  return (from: DebatesHubTab, to: DebatesHubTab) => {
+  React.useEffect(() => {
+    if (shown !== 'lobby') setArrival(null);
+  }, [setArrival, shown]);
+  React.useEffect(() => () => setArrival(null), [setArrival]);
+  return (to: DebatesHubTab) => {
+    const from = shown;
     if (from === to) return;
     const fromList = from === 'lobby' ? lobbyList : (HUB_TAB_LIST_IDS[from] ?? null);
     if (to === 'lobby') {

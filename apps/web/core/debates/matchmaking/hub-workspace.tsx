@@ -127,14 +127,14 @@ export function DebatesHubWorkspace() {
     if (isWorkspaceList(tab)) setList(tab);
   }, []);
 
-  const recordListChange = useRecordHubListChange();
+  const recordListChange = useRecordHubListChange(shown);
   const picker = (
     <HubFilterMenu
       label={options.find(option => option.value === shown)?.label ?? 'Explore'}
       options={options}
       value={shown}
       onChange={next => {
-        recordListChange(shown, next);
+        recordListChange(next);
         setList(next);
       }}
     />

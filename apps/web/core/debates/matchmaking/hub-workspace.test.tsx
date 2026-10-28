@@ -307,7 +307,7 @@ describe('choosing which claim list the workspace shows', () => {
     fireEvent.click(picker('Matches'));
     fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
 
-    expect(mocks.recordListChange).toHaveBeenCalledExactlyOnceWith('lobby', 'positions');
+    expect(mocks.recordListChange).toHaveBeenCalledExactlyOnceWith('positions');
   });
 
   it('remounts the tab when the list changes, rather than reusing the instance', () => {
