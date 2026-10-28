@@ -1123,6 +1123,98 @@
       "schedule": "DTSTART;TZID=America/Sao_Paulo:20261006T140000\nRRULE:FREQ=MONTHLY;INTERVAL=2;BYDAY=1TU"
     },
     {
+      "length_minutes": 60,
+      "name": "yearly",
+      "now": "2027-10-20T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2027-11-15T18:00:00Z",
+          "start": "2027-11-15T17:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Europe/Paris:20261115T180000\nRRULE:FREQ=YEARLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "yearly_from_february_29_in_a_common_year",
+      "now": "2027-02-10T00:00:00Z",
+      "occurrences": [],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART:20240229T170000Z\nRRULE:FREQ=YEARLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "yearly_from_february_29_in_a_leap_year",
+      "now": "2028-02-10T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2028-02-29T18:00:00Z",
+          "start": "2028-02-29T17:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART:20240229T170000Z\nRRULE:FREQ=YEARLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "monthly_on_the_31st_across_february",
+      "now": "2027-02-01T00:00:00Z",
+      "occurrences": [],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART:20261031T150000Z\nRRULE:FREQ=MONTHLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "monthly_on_the_30th_across_february",
+      "now": "2027-02-20T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2027-03-31T01:00:00Z",
+          "start": "2027-03-31T00:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/Chicago:20270130T190000\nRRULE:FREQ=MONTHLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "monthly_on_the_29th_across_a_common_february",
+      "now": "2027-02-20T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2027-03-29T13:00:00Z",
+          "start": "2027-03-29T12:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART:20270129T120000Z\nRRULE:FREQ=MONTHLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "monthly_on_the_29th_across_a_leap_february",
+      "now": "2028-02-20T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2028-02-29T13:00:00Z",
+          "start": "2028-02-29T12:00:00Z"
+        },
+        {
+          "end": "2028-03-29T13:00:00Z",
+          "start": "2028-03-29T12:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART:20280129T120000Z\nRRULE:FREQ=MONTHLY"
+    },
+    {
       "length_minutes": 30,
       "name": "weekly_tuesday_thursday_saturday_auckland",
       "now": "2026-10-26T00:00:00Z",
