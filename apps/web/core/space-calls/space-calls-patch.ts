@@ -3,7 +3,7 @@ import { sameId } from '~/core/debates/rooms/room-presence';
 
 import type { SpaceCallSummary, SpaceCallsResponse } from './api';
 
-/** A `debate.space_calls_changed` row: a live call whose people or hosts changed (GEO-3419). */
+/** A `debate.space_calls_changed` row: a call that opened, or whose people or hosts changed. */
 export type SpaceCallPatch = { status: string; as_of: string; call: SpaceCallSummary };
 
 /** The event's `space_call`, or `null` when it has none (refetch the list) or it is malformed. */
@@ -46,7 +46,6 @@ export function withSpaceCallPatch(list: SpaceCallsResponse, patch: SpaceCallPat
 export function spaceCallsRefetch(change: unknown): { list: boolean; past: boolean; preOpen: boolean } {
   switch (change) {
     case 'started':
-    case 'opened':
       return { list: true, past: false, preOpen: false };
     case 'schedule':
       return { list: true, past: false, preOpen: true };

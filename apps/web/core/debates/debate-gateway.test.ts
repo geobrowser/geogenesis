@@ -829,7 +829,14 @@ describe('DebateGatewayClient', () => {
 
     it.each([
       ['started', [['debates', 'space-calls', 'sp1']], false],
-      ['opened', [['debates', 'space-calls', 'sp1']], false],
+      [
+        'opened',
+        [
+          ['debates', 'space-calls', 'sp1'],
+          ['debates', 'space-past-calls', 'sp1'],
+        ],
+        true,
+      ],
       ['schedule', [['debates', 'space-calls', 'sp1']], true],
       [
         'ended',

@@ -76,7 +76,8 @@ describe('withSpaceCallPatch', () => {
 describe('spaceCallsRefetch', () => {
   it.each([
     ['started', { list: true, past: false, preOpen: false }],
-    ['opened', { list: true, past: false, preOpen: false }],
+    // An opening comes as a row; a rowless one, from an older geo-chat, reads as unknown.
+    ['opened', { list: true, past: true, preOpen: true }],
     ['schedule', { list: true, past: false, preOpen: true }],
     ['agenda', { list: false, past: false, preOpen: false }],
     ['ended', { list: true, past: true, preOpen: false }],
