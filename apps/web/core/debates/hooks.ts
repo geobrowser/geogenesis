@@ -225,6 +225,8 @@ export const debateQueryKeys = {
   rematchLiveKit: (accountKey: string | null, sessionId: string) => ['rematch-livekit', accountKey, sessionId] as const,
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
+  /** GEO-3489. Not per viewer: a claim's debates since its listing are the same whoever asks. */
+  claimDebateCounts: (asks: { claimId: string; since: string }[]) => ['debates', 'claim-debate-counts', asks] as const,
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
   profile: (accountKey: string | null, profileSpaceId: string) =>
     ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
@@ -488,7 +490,7 @@ const DEBATE_CLAIM_ID_BOUNDARY_DIVISOR = 16;
  * unchanged set; deriving the cut points from the ids makes an insertion rebuild the chunk it lands
  * in and then resynchronise at the next boundary, leaving the rest of the space cached.
  */
-function stableClaimIdChunks(claimIds: string[], batchSize = DEBATE_CLAIM_ID_BATCH_SIZE) {
+export function stableClaimIdChunks(claimIds: string[], batchSize = DEBATE_CLAIM_ID_BATCH_SIZE) {
   const uniqueClaimIds = [...new Set(claimIds)].sort();
   const chunks: string[][] = [];
   let current: string[] = [];

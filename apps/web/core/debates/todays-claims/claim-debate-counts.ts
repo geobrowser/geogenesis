@@ -7,7 +7,7 @@ import * as React from 'react';
 import { normId } from '~/core/utils/norm-id';
 
 import { CLAIM_DEBATE_COUNTS_MAX_CLAIMS, type ClaimDebateCountsResponse, getClaimDebateCounts } from '../api';
-import { debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import { debateQueryKeys, debateQueryNetworkOptions, stableClaimIdChunks, useGeoChatAuth } from '../hooks';
 
 export type ClaimDebateCountAsk = { claimId: string; since: string };
 
@@ -17,22 +17,23 @@ export type ClaimDebateCountAsk = { claimId: string; since: string };
  * Fetched once and never refreshed: Today's claims sets its order when the picker opens and holds it
  * there, so a newer count would only be a reason to move a card under someone's cursor.
  *
+ * Batched by `stableClaimIdChunks`, like the rematch rows, so a claim joining the list re-asks only
+ * the batch it lands in. Not gated on Privy having restored the session, which none of the picker's
+ * other geo-chat reads are either: a disabled query reads as settled, and the order would be set
+ * without the counts it is made from.
+ *
  * `byClaimId` is null until every batch has answered or one has failed. A caller that cannot get the
  * counts lists the agenda in its own order, which is the order an agenda nobody has debated yet has
  * anyway.
  */
 export function useClaimDebateCounts(asks: ClaimDebateCountAsk[], enabled = true) {
-  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   const batches = React.useMemo(() => {
-    const sorted = [...asks].sort((a, b) =>
-      a.claimId === b.claimId ? a.since.localeCompare(b.since) : a.claimId.localeCompare(b.claimId)
+    const sinceByClaim = new Map(asks.map(ask => [ask.claimId, ask.since]));
+    return stableClaimIdChunks([...sinceByClaim.keys()], CLAIM_DEBATE_COUNTS_MAX_CLAIMS).map(chunk =>
+      chunk.map(claimId => ({ claimId, since: sinceByClaim.get(claimId)! }))
     );
-    const chunks: ClaimDebateCountAsk[][] = [];
-    for (let index = 0; index < sorted.length; index += CLAIM_DEBATE_COUNTS_MAX_CLAIMS) {
-      chunks.push(sorted.slice(index, index + CLAIM_DEBATE_COUNTS_MAX_CLAIMS));
-    }
-    return chunks;
   }, [asks]);
 
   const combine = React.useCallback(
@@ -52,7 +53,7 @@ export function useClaimDebateCounts(asks: ClaimDebateCountAsk[], enabled = true
   return useQueries({
     queries: batches.map(batch => ({
       ...debateQueryNetworkOptions,
-      queryKey: ['debates', 'claim-debate-counts', accountKey, batch] as const,
+      queryKey: debateQueryKeys.claimDebateCounts(batch),
       queryFn: ({ signal }: { signal?: AbortSignal }) =>
         getClaimDebateCounts(
           batch.map(ask => ({ claim_entity_id: ask.claimId, since: ask.since })),
@@ -61,7 +62,7 @@ export function useClaimDebateCounts(asks: ClaimDebateCountAsk[], enabled = true
           signal
         ),
       staleTime: Infinity,
-      enabled: enabled && authenticated,
+      enabled,
     })),
     combine,
   });

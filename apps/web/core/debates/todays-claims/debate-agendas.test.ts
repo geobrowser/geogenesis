@@ -2,13 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  DEBATE_AGENDA_DATE_PROPERTY_ID,
-  agendaDayFromValue,
-  agendaDayOf,
-  buildDebateAgendas,
-  shiftAgendaDay,
-} from './debate-agendas';
+import { DEBATE_AGENDA_DATE_PROPERTY_ID, agendaDayFromValue, buildDebateAgendas } from './debate-agendas';
 
 const WORLD = '89bd89bf28ff8a0963faf92a8c905e20';
 const DEBATES = '9284477c8fe746368698994e2e517b32';
@@ -59,12 +53,6 @@ describe('agenda days', () => {
     expect(agendaDayFromValue('2026-10-27T00:00:00-04:00')).toBe('2026-10-27');
     expect(agendaDayFromValue('2026-10-27T04:00:00Z')).toBe('2026-10-27');
     expect(agendaDayFromValue('not a date')).toBeNull();
-  });
-
-  it('takes today in New York, and moves across a month', () => {
-    // 02:00 UTC on the 29th is still the 28th in New York.
-    expect(agendaDayOf(new Date('2026-10-29T02:00:00Z'))).toBe('2026-10-28');
-    expect(shiftAgendaDay('2026-11-02', -6)).toBe('2026-10-27');
   });
 });
 
@@ -131,13 +119,20 @@ describe('buildDebateAgendas', () => {
       block('b-25', 'Sunday', [claim(4), claim(2)]),
     ];
 
-    const { earlier } = buildDebateAgendas(agendas, blocks, allClaims, TODAY);
+    const { earlier, listedAtByClaim } = buildDebateAgendas(agendas, blocks, allClaims, TODAY);
 
     expect(earlier.map(listing => [listing.claimId, listing.listedOn])).toEqual([
       [claim(2), '2026-10-27'],
       [claim(3), '2026-10-27'],
       [claim(4), '2026-10-25'],
     ]);
+    // Each claim's debates count from its newest listing.
+    expect(Object.fromEntries(listedAtByClaim)).toEqual({
+      [claim(1)]: '2026-10-28T00:00:00-04:00',
+      [claim(2)]: '2026-10-27T00:00:00-04:00',
+      [claim(3)]: '2026-10-27T00:00:00-04:00',
+      [claim(4)]: '2026-10-25T00:00:00-04:00',
+    });
   });
 
   it('leaves out items that are not claims, and blocks with none', () => {
@@ -150,6 +145,11 @@ describe('buildDebateAgendas', () => {
   });
 
   it('has no spaces and no day when nothing is published', () => {
-    expect(buildDebateAgendas([], [], allClaims, TODAY)).toEqual({ spaces: [], earlier: [], newestDay: null });
+    expect(buildDebateAgendas([], [], allClaims, TODAY)).toEqual({
+      spaces: [],
+      earlier: [],
+      newestDay: null,
+      listedAtByClaim: new Map(),
+    });
   });
 });

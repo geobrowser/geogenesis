@@ -1,6 +1,7 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk';
+import { Position } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
@@ -9,6 +10,7 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import { normId } from '~/core/utils/norm-id';
 
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '../claim-picker-page';
+import { zonedDay } from '../debate-hours';
 
 /**
  * GEO-3487's Debate agenda type: one Page per space per day, a data block per topic with that
@@ -20,7 +22,7 @@ export const DEBATE_AGENDA_TYPE_ID = '79e3757b2630492c9d3bd73a78d45893';
 export const DEBATE_AGENDA_DATE_PROPERTY_ID = '52665f3efb7d48d58b6babb21b0d36db';
 
 /** Agenda days are New York days, the way the agendas are written and the ranking reads them. */
-const AGENDA_TIME_ZONE = 'America/New_York';
+export const AGENDA_TIME_ZONE = 'America/New_York';
 
 /** "Earlier this week": agendas from the six days before today. */
 export const EARLIER_AGENDA_DAYS = 6;
@@ -70,6 +72,11 @@ export type DebateAgendas = {
   earlier: DebateAgendaListing[];
   /** The newest agenda day across every space, or null when there are none. */
   newestDay: string | null;
+  /**
+   * Each listed claim's newest listing, the agenda Date it was listed under as written: where its
+   * debates start counting.
+   */
+  listedAtByClaim: Map<string, string>;
 };
 
 type AgendaEntity = {
@@ -91,24 +98,6 @@ type BlockEntity = {
   name: string | null;
   relations: AgendaEntity['relations'];
 };
-
-/** A day, `YYYY-MM-DD`, in New York. */
-export function agendaDayOf(date: Date): string {
-  // `en-CA` writes dates as YYYY-MM-DD.
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: AGENDA_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date);
-}
-
-/** `day` moved by `days` whole days, `YYYY-MM-DD` in and out. */
-export function shiftAgendaDay(day: string, days: number): string {
-  const date = new Date(`${day}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
 
 /**
  * The calendar day an agenda's Date value names, as it was written: `2026-10-27T00:00:00-04:00` and
@@ -172,7 +161,7 @@ export function buildDebateAgendas(
   today: string
 ): DebateAgendas {
   const blocksById = new Map(blocks.map(block => [normId(block.id), block]));
-  const oldest = shiftAgendaDay(today, -EARLIER_AGENDA_DAYS);
+  const oldest = oldestAgendaDay(today);
   const inWindow = spaceAgendasOf(agendas, today).filter(agenda => agenda.day >= oldest);
 
   const claimsOf = (agenda: SpaceAgenda) =>
@@ -251,15 +240,30 @@ export function buildDebateAgendas(
       return true;
     });
 
+  // A claim's newest listing: a space's newest day first, newest of those first, then the week's.
+  const listedAtByClaim = new Map<string, string>();
+  const listed = (claimId: string, listedAt: string) => {
+    if (!listedAtByClaim.has(claimId)) listedAtByClaim.set(claimId, listedAt);
+  };
+  for (const space of [...spaces].sort((a, b) => (a.listedOn < b.listedOn ? 1 : -1))) {
+    for (const section of space.sections) for (const claimId of section.claimIds) listed(claimId, section.listedAt);
+  }
+  for (const listing of earlierOnce) listed(listing.claimId, listing.listedAt);
+
   const newestDay = spaces.reduce<string | null>(
     (day, space) => (day === null || space.listedOn > day ? space.listedOn : day),
     null
   );
 
-  return { spaces, earlier: earlierOnce, newestDay };
+  return { spaces, earlier: earlierOnce, newestDay, listedAtByClaim };
 }
 
-const NO_AGENDAS: DebateAgendas = { spaces: [], earlier: [], newestDay: null };
+/** The first day "Earlier this week" reaches back to. */
+function oldestAgendaDay(today: string) {
+  return zonedDay(new Date(`${today}T12:00:00Z`), 'UTC', -EARLIER_AGENDA_DAYS);
+}
+
+const NO_AGENDAS: DebateAgendas = { spaces: [], earlier: [], newestDay: null, listedAtByClaim: new Map() };
 
 /**
  * GEO-3489. Every space's newest Debate agenda, read from the graph, with the week's older listings.
@@ -278,7 +282,7 @@ export function useDebateAgendas(enabled = true): {
   error: unknown;
 } {
   // Taken once per mount. A picker left open past midnight keeps the agendas it opened on.
-  const [today] = React.useState(() => agendaDayOf(new Date()));
+  const [today] = React.useState(() => zonedDay(new Date(), AGENDA_TIME_ZONE));
 
   const {
     entities: agendaEntities,
@@ -292,7 +296,7 @@ export function useDebateAgendas(enabled = true): {
     enabled,
   });
 
-  const oldest = shiftAgendaDay(today, -EARLIER_AGENDA_DAYS);
+  const oldest = oldestAgendaDay(today);
   const blockIds = React.useMemo(
     () => [
       ...new Set(
@@ -360,10 +364,7 @@ export function useDebateAgendas(enabled = true): {
 
 const NO_IDS: string[] = [];
 
-/** Blocks and collection items both carry a fractional index; absent, they fall to the end. */
+/** Blocks and collection items both carry a fractional index, ordered the way `sortRelations` orders them. */
 function byPosition(a: { position?: string }, z: { position?: string }) {
-  if (a.position === undefined || z.position === undefined) {
-    return Number(a.position === undefined) - Number(z.position === undefined);
-  }
-  return a.position.localeCompare(z.position);
+  return Position.compare(a.position ?? null, z.position ?? null);
 }
