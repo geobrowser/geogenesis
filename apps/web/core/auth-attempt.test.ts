@@ -292,3 +292,32 @@ describe('durable sign-in attempts', () => {
     spy.mockRestore();
   });
 });
+
+// GEO-3468: these properties belong on the funnel event and join to the sign-up attempt.
+it.each([
+  { topic_count: 3, space_pick_count: 2 },
+  { topic_count: 0, space_pick_count: 0 },
+])('reports the customize-feed decision and counts once, including after a reload (%j)', picks => {
+  const attempt = beginAuthAttempt(entry);
+  finishAuthAttempt('signed_up', attempt);
+  const outcome = picks.topic_count > 0 ? 'completed' : 'skipped';
+  trackAuthOnboarding('customize-feed', 'viewed');
+  trackAuthOnboarding('customize-feed', outcome, picks);
+  resetAuthAttempt();
+  sessionStorage.setItem('geo:auth-attempt:active', attempt.id);
+  trackAuthOnboarding('customize-feed', outcome, picks);
+  const decisions = capture.mock.calls.filter(
+    ([event, props]) => event === 'auth_onboarding_progress' && props.outcome === outcome
+  );
+  expect(decisions).toEqual([
+    [
+      'auth_onboarding_progress',
+      expect.objectContaining({
+        auth_attempt_id: attempt.id,
+        onboarding_step: 'customize-feed',
+        outcome,
+        ...picks,
+      }),
+    ],
+  ]);
+});

@@ -21,8 +21,8 @@ import { isWorkspaceList, useWorkspaceQuery, workspaceHref } from './use-workspa
 import type { DebatesHubTab } from '~/atoms';
 
 const LIST_OPTIONS: HubFilterOption<ClaimsTabVariant>[] = [
-  { value: 'lobby', label: 'Matches' },
   { value: 'explore', label: 'Explore' },
+  { value: 'lobby', label: 'Matches' },
   { value: 'positions', label: 'My positions' },
 ];
 
@@ -44,7 +44,7 @@ export const URL_SYNC_DELAY_MS = 300;
  * Width is capped by the shell's 1200px `<main>`.
  */
 export function DebatesHubWorkspace() {
-  const [list, setList] = React.useState<ClaimsTabVariant>('lobby');
+  const [list, setList] = React.useState<ClaimsTabVariant>(DEFAULT_WORKSPACE_LIST);
 
   const { ready, authenticated, accountKey } = useGeoChatAuth();
 

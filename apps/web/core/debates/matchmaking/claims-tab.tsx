@@ -163,7 +163,7 @@ export type ClaimsListVariant = ClaimsTabVariant | 'lobbyExplore';
 /** Every value the `list` param may name, for validating one that arrived from outside. */
 export const CLAIMS_TAB_VARIANTS: readonly ClaimsTabVariant[] = ['explore', 'lobby', 'positions'];
 
-export const DEFAULT_WORKSPACE_LIST: ClaimsTabVariant = 'lobby';
+export const DEFAULT_WORKSPACE_LIST: ClaimsTabVariant = 'explore';
 
 /**
  * The seed a variant should apply for a query, or null when the link names a different list.

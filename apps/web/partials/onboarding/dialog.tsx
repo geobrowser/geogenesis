@@ -246,12 +246,10 @@ export const OnboardingDialog = () => {
   // `topicId` is empty unless the user claimed an existing entity on the match step.
   function onCompleteOnboard() {
     if (!address || !smartAccount) return;
-    capture('form_submission', {
-      form_type: 'onboarding_customize_feed',
-      outcome: feedTopics.length > 0 ? 'completed' : 'skipped',
-      topic_count: feedTopics.length,
-      space_pick_count: selectedTopicIds.length,
-    });
+    const outcome = feedTopics.length > 0 ? 'completed' : 'skipped';
+    const picks = { topic_count: feedTopics.length, space_pick_count: selectedTopicIds.length };
+    trackAuthOnboarding('customize-feed', outcome, picks);
+    capture('form_submission', { form_type: 'onboarding_customize_feed', outcome, ...picks });
     beginOptimisticOnboarding(topicId);
   }
 
