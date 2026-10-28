@@ -11,9 +11,8 @@ import { Text } from '~/design-system/text';
 import { DebateRoomNotice, DebateRoomNoticeAction } from './debate-room-notice';
 
 /**
- * Asks for the click the browser's autoplay policy wants before it plays the opponent's audio, as
- * the claim picker and lobby voice do. A page reload loses the gesture the intro supplied, and
- * without this the room stays silent with nothing to press. `startAudio()` must run from that click.
+ * Shown while the browser's autoplay policy holds back the opponent's audio, e.g. after a reload.
+ * `startAudio()` must run from the click.
  */
 export function DebateAudioBlockedNotice({ room, openRoundsStyle }: { room: Room; openRoundsStyle: boolean }) {
   const { canPlayAudio, startAudio } = useAudioPlayback(room);

@@ -1,8 +1,4 @@
-/**
- * Whether the debate room actually plays what it receives (GEO-3511). The call stats say whether the
- * opponent's audio and video arrived; these say whether they reached a speaker and the screen. Pure,
- * so every rule is testable from plain objects.
- */
+/** Whether the opponent's audio and video, once received, reached a speaker and the screen. */
 
 /** The opponent's audio as this person's browser handles it, worst explanation first. */
 export type RecvAudioState =
@@ -34,7 +30,7 @@ export type RecvVideoState =
   | 'frozen'
   | 'shown';
 
-/** Where the opponent's audio is routed. `missing`: the chosen speaker is no longer connected. */
+/** Where the opponent's audio is routed. `missing`: the chosen speaker is not listed. */
 export type AudioOutputState = 'default' | 'selected' | 'mismatch' | 'missing';
 
 export type MediaElementLike = {

@@ -31,12 +31,8 @@ const RECHECK_EVENTS = [
 ] as const;
 
 /**
- * Whether the opponent is heard and seen, not only received (GEO-3511). Adds to each debate sample
- * the state of their audio and camera here, the decoded frame rate and layer, and where the audio is
- * routed; reports each change of those as it happens. Element and track state are read on room
- * events and with each sample, never per frame.
- *
- * @param audioOutputId the speaker the person chose, or null where the browser cannot route audio.
+ * Adds the opponent's playback state to each debate sample and reports its changes. Read on room
+ * events and per sample, never per frame. `audioOutputId`: the chosen speaker, null if unroutable.
  */
 export function debatePlaybackProbe(room: Room, audioOutputId: () => string | null) {
   return (report: ReportCallChange): DebatePlaybackProbe => {
