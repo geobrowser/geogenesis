@@ -85,6 +85,7 @@ import { useCarriedLobbyChoice, useDebateReturnNavigation } from '~/core/debates
 import {
   type LocalAudioGateInput,
   MIC_OVERRUN_MAX_MS,
+  MIC_PREARM_BEFORE_TURN_MS,
   shouldEnableLocalAudio,
   turnOverrunPossible,
 } from '~/core/debates/local-audio-gate';
@@ -305,6 +306,7 @@ function startRoomRecordingStream({
   mimeType,
   startedAtMs,
   shouldPause,
+  callWindowMs,
 }: {
   debateId: string;
   userId: string;
@@ -314,6 +316,7 @@ function startRoomRecordingStream({
   mimeType: string;
   startedAtMs: number;
   shouldPause: () => RecordingPauseReason | null;
+  callWindowMs: () => number | null;
 }): LiveRecordingStream {
   const { getPrivyIdentityToken, accountKey } = auth;
   const videoSettings = stream.getVideoTracks()[0]?.getSettings?.();
@@ -349,6 +352,7 @@ function startRoomRecordingStream({
         abortLocalRecordingMultipart(debateId, { filename, upload_id: uploadId }, getPrivyIdentityToken, accountKey),
     },
     shouldPause,
+    callWindowMs,
   });
 }
 
@@ -549,6 +553,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // The streamed upload shares the upstream with the call, so it stands down while the call
   // struggles. Set from LiveKit's own quality reports for the local participant.
   const callConnectionPoorRef = React.useRef(false);
+  // GEO-3410. How long the call can spare the uplink from now; read by the streamer before each part.
+  const recordingCallWindowRef = React.useRef<() => number | null>(() => null);
   const recordingStartedAtRef = React.useRef<number | null>(null);
   // GEO-3407. The clock a recording was started on, for its whole capture. A clock sync retry can
   // replace the room's clock mid-debate; a recording that read the new one at its end would measure
@@ -810,6 +816,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     openRoundResultHeld: revealHoldsExit,
   };
   const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
+  // GEO-3410. Recording parts go out while this microphone is closed, and only those expected to land
+  // before it opens again: on a slow uplink a part in flight doubled the call's round trip. Past the
+  // recording (thanking, the end screen) nothing is held back.
+  const inRecordingWindow = countdown.effectiveStatus === 'preflight' || countdown.effectiveStatus === 'in_progress';
+  const recordingMicLive = inRecordingWindow && localAudioEnabled;
+  const recordingCallWindowEndsAt = inRecordingWindow
+    ? Date.now() + (recordingMicLive ? 0 : Math.max(0, countdown.remainingMs - MIC_PREARM_BEFORE_TURN_MS))
+    : null;
+  recordingCallWindowRef.current = () =>
+    recordingCallWindowEndsAt === null ? null : Math.max(0, recordingCallWindowEndsAt - Date.now());
   const localFinishingSince = localAudioEnabled ? localTurnEndedAt : null;
   // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
   // turn. Reading preferences through a ref keeps that write consistent with the reconciliation
@@ -991,6 +1007,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     markCapturingRef.current = () => void markCapturing.mutateAsync().catch(() => undefined);
     markJoinedRef.current = () => markJoined.mutateAsync();
   }, [markCapturing, markJoined, serverClock]);
+
+  React.useEffect(() => {
+    const live = liveRecordingStreamRef.current;
+    if (recordingMicLive) live?.yieldToCall();
+    else live?.resume();
+  }, [recordingMicLive]);
 
   React.useEffect(() => {
     setLocalTrackPreferences(
@@ -1305,6 +1327,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                     if (callConnectionPoorRef.current) return 'connection_poor';
                     return null;
                   },
+                  callWindowMs: () => recordingCallWindowRef.current(),
                 });
               }
               // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
