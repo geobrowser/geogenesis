@@ -11,9 +11,8 @@ import { Text } from '~/design-system/text';
 import { DebateRoomNotice, DebateRoomNoticeAction } from './debate-room-notice';
 
 /**
- * Shown while the browser's autoplay policy holds back the opponent's audio, e.g. after a reload.
- * `startAudio()` must run from the click. It unmutes every remote audio element, so `onAudioStarted`
- * puts the room's speaker toggle back.
+ * Shown while autoplay policy holds back the opponent's audio. `startAudio()` must run from the
+ * click and unmutes every remote element, so `onAudioStarted` re-applies the speaker toggle.
  */
 export function DebateAudioBlockedNotice({
   room,
