@@ -326,6 +326,41 @@ describe('tab voice owner', () => {
     expect(debateTab.yields).toBe(1);
   });
 
+  it('asks again for a claim made while this tab is still handing voice over', async () => {
+    const debateTab = openTab('debate', 0);
+    let policy: VoiceYieldPolicy = 'explicit-only';
+    let finishYield = () => {};
+    let yieldStarted = () => {};
+    const started = new Promise<void>(resolve => (yieldStarted = resolve));
+    asTab('debate', () =>
+      debateTab.owner.register({
+        kind: 'debate',
+        policy: () => policy,
+        onYield: () =>
+          new Promise<void>(resolve => {
+            finishYield = resolve;
+            yieldStarted();
+          }),
+      })
+    );
+    await debateTab.claim('debate');
+
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    const lobbyClaim = lobbyTab.claim('lobby');
+    await started;
+
+    // The intro flips to connecting mid-handover and claims voice for the room.
+    policy = 'refuse';
+    const debateClaim = debateTab.claim('debate');
+    finishYield();
+    await expect(lobbyClaim).resolves.toBe(true);
+    await expect(debateClaim).resolves.toBe(true);
+    expect(debateTab.owner.getState()).toEqual({ ownership: 'owned', heldBy: null });
+    expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: 'debate' });
+    expect(locks.heldCount()).toBe(1);
+  });
+
   it('takes voice from a lobby tab when a debate claims it', async () => {
     const lobbyTab = openTab('lobby', 2);
     lobbyTab.surface('lobby');

@@ -119,6 +119,8 @@ export function createTabVoiceOwner({
   let coordinator: DebateRoomOwnershipCoordinator | null = null;
   let inflight: { automatic: boolean; owned: Promise<boolean> } | null = null;
   let teardown: ReturnType<typeof setTimeout> | null = null;
+  // Set while this tab hands voice over; the lock is still held until the handover ends.
+  let yielding: Promise<void> | null = null;
   let notices: BroadcastChannel | null = null;
   let debateWatch: ReturnType<typeof setInterval> | null = null;
   const lockName = debateRoomCoordinationName(VOICE_SCOPE, userId);
@@ -215,9 +217,18 @@ export function createTabVoiceOwner({
       describeOwner: () => strongestSurface()?.kind,
       onTakeoverRequested: async context => {
         if (!shouldYieldVoice(surfacePolicies(), context)) return false;
-        // Off the air before the UI moves: unmounting the room first would drop the handle to await.
-        await Promise.allSettled([...surfaces].map(surface => Promise.resolve().then(surface.onYield)));
-        setState({ ownership: 'elsewhere', heldBy: asSurfaceKind(context.requesterLabel) });
+        const handover = (async () => {
+          // Off the air before the UI moves: unmounting the room first would drop the handle to await.
+          await Promise.allSettled([...surfaces].map(surface => Promise.resolve().then(surface.onYield)));
+          setState({ ownership: 'elsewhere', heldBy: asSurfaceKind(context.requesterLabel) });
+        })();
+        // Cleared a task later, once the coordinator has let the lock go.
+        const done = handover.then(() => new Promise<void>(resolve => setTimeout(resolve, 0)));
+        yielding = done;
+        void done.then(() => {
+          if (yielding === done) yielding = null;
+        });
+        await handover;
         return true;
       },
     });
@@ -255,6 +266,8 @@ export function createTabVoiceOwner({
       };
     },
     claim: function claim({ automatic = false, kind }): Promise<boolean> {
+      // Mid-handover the lock is still ours but about to go: ask again once it has.
+      if (yielding) return yielding.then(() => claim({ automatic, kind }));
       const active = ensureCoordinator();
       // Without Web Locks and BroadcastChannel no tab can ask another to stop, so voice is never
       // withheld; LiveKit's one-identity rule still covers the same room in two tabs.
