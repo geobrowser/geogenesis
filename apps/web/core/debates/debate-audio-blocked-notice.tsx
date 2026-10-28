@@ -12,13 +12,26 @@ import { DebateRoomNotice, DebateRoomNoticeAction } from './debate-room-notice';
 
 /**
  * Shown while the browser's autoplay policy holds back the opponent's audio, e.g. after a reload.
- * `startAudio()` must run from the click.
+ * `startAudio()` must run from the click. It unmutes every remote audio element, so `onAudioStarted`
+ * puts the room's speaker toggle back.
  */
-export function DebateAudioBlockedNotice({ room, openRoundsStyle }: { room: Room; openRoundsStyle: boolean }) {
+export function DebateAudioBlockedNotice({
+  room,
+  openRoundsStyle,
+  onAudioStarted,
+}: {
+  room: Room;
+  openRoundsStyle: boolean;
+  onAudioStarted: () => void;
+}) {
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
   if (canPlayAudio) return null;
+  const enable = () =>
+    void startAudio()
+      .catch(() => undefined)
+      .finally(onAudioStarted);
   const action = (
-    <DebateRoomNoticeAction appearance={openRoundsStyle ? 'glass' : 'default'} onClick={() => void startAudio()}>
+    <DebateRoomNoticeAction appearance={openRoundsStyle ? 'glass' : 'default'} onClick={enable}>
       Enable audio
     </DebateRoomNoticeAction>
   );

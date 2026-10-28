@@ -3594,6 +3594,35 @@ describe('DebateRoomPageClient', () => {
     }
   );
 
+  it('keeps the speaker off when enabling blocked audio unmutes the elements', async () => {
+    // The room's speaker toggle sits behind the debugging flag.
+    mocks.featureFlags.debateDebugging = true;
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+    const remoteAudio = document.createElement('audio');
+    act(() => emitRoomEvent('trackSubscribed', { kind: 'audio', attach: () => remoteAudio, detach: () => [] }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disable audio' }));
+    expect(remoteAudio.muted).toBe(true);
+    // As LiveKit's does: every remote audio element is unmuted and played.
+    mocks.roomStartAudio.mockImplementation(async () => {
+      remoteAudio.muted = false;
+    });
+    mocks.roomCanPlaybackAudio = false;
+    act(() => emitRoomEvent('audioPlaybackChanged', false));
+    const notice = (await screen.findByText('Audio is blocked')).closest('[role="status"]') as HTMLElement;
+    fireEvent.click(within(notice).getByRole('button', { name: 'Enable audio' }));
+
+    await waitFor(() => expect(mocks.roomStartAudio).toHaveBeenCalled());
+    await waitFor(() => expect(remoteAudio.muted).toBe(true));
+  });
+
   it('reports a reconnect episode once, with its duration, and joins with resilient connect options', async () => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),

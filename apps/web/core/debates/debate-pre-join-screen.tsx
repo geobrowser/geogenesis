@@ -80,6 +80,7 @@ export function DebatePreScreen({
   readyBusy,
   onReady,
   audioRoom,
+  onAudioStarted,
   onLeave,
   returnsToLobby = false,
   leaveDisabled,
@@ -149,6 +150,7 @@ export function DebatePreScreen({
   onReady: () => void;
   /** The connected room, so audio the browser blocked can be enabled with a click. */
   audioRoom: Room | null;
+  onAudioStarted: () => void;
   onLeave: () => void;
   returnsToLobby?: boolean;
   leaveDisabled: boolean;
@@ -476,7 +478,7 @@ export function DebatePreScreen({
         {/* Before Ready, the Ready click itself unblocks audio. */}
         {localReady && audioRoom && (
           <div className="flex w-full max-w-[900px] justify-center">
-            <DebateAudioBlockedNotice room={audioRoom} openRoundsStyle={false} />
+            <DebateAudioBlockedNotice room={audioRoom} openRoundsStyle={false} onAudioStarted={onAudioStarted} />
           </div>
         )}
 

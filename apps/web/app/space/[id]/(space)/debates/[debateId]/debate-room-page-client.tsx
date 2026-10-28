@@ -1019,6 +1019,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRemoteMediaAudioEnabled(remoteMediaRef, remoteAudioEnabled);
   }, [remoteAudioEnabled]);
 
+  /** LiveKit's `startAudio()` unmutes every remote audio element; the speaker toggle wins. */
+  const reapplyRemoteAudioEnabled = React.useCallback(
+    () => setRemoteMediaAudioEnabled(remoteMediaRef, remoteAudioEnabledRef.current),
+    []
+  );
+
   const routeAudioOutput = React.useCallback((room: RoomLike, id: string) => {
     const previous = audioOutputRouteRef.current;
     const routing = (async () => {
@@ -2746,7 +2752,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const markLocalReady = React.useCallback(async () => {
     // The intro's room may already hold audio the browser refused to autoplay; this click is the
     // gesture that lets it play. Called first, while the gesture is still current.
-    void roomRef.current?.startAudio?.().catch(() => undefined);
+    void roomRef.current
+      ?.startAudio?.()
+      .catch(() => undefined)
+      .finally(reapplyRemoteAudioEnabled);
     setRoomError(null);
     // Ready needs both devices. A failure takes the toggle's way back, or with nothing live leaves
     // the preview's error and a Try again that asks for both.
@@ -2757,7 +2766,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not mark you ready.');
     }
-  }, [markReady, openForJoinState, syncLocalPublications]);
+  }, [markReady, openForJoinState, reapplyRemoteAudioEnabled, syncLocalPublications]);
 
   const publishRematchLeave = React.useCallback(async () => {
     if (rematchLeavePublishedRef.current) return;
@@ -3304,6 +3313,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             readyBusy={markReady.isPending}
             onReady={markLocalReady}
             audioRoom={roomState === 'connected' ? audioRoom : null}
+            onAudioStarted={reapplyRemoteAudioEnabled}
             returnsToLobby={returnsToLobby}
             onLeave={leave}
             leaveDisabled={abortDebate.isPending}
@@ -3388,6 +3398,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onPickOpenRound={pickOpenRound}
                 remoteDisconnected={remotePresence === 'left'}
                 audioRoom={roomState === 'connected' ? audioRoom : null}
+                onAudioStarted={reapplyRemoteAudioEnabled}
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
@@ -3433,6 +3444,7 @@ function DebateRecordingModal({
   onPickOpenRound,
   remoteDisconnected,
   audioRoom,
+  onAudioStarted,
   onRetryFinalization,
   canRetryConnection,
   onRetryConnection,
@@ -3474,6 +3486,7 @@ function DebateRecordingModal({
   remoteDisconnected: boolean;
   /** The connected room, so incoming audio the browser blocked can be enabled with a click. */
   audioRoom: Room | null;
+  onAudioStarted: () => void;
   onRetryFinalization: () => void;
   canRetryConnection: boolean;
   onRetryConnection: () => void;
@@ -3863,7 +3876,13 @@ function DebateRecordingModal({
             <Text>Reconnecting to the debate room…</Text>
           </div>
         )}
-        {audioRoom && <DebateAudioBlockedNotice room={audioRoom} openRoundsStyle={openRoundsStyle} />}
+        {audioRoom && (
+          <DebateAudioBlockedNotice
+            room={audioRoom}
+            openRoundsStyle={openRoundsStyle}
+            onAudioStarted={onAudioStarted}
+          />
+        )}
 
         {openRoundsStyle && (
           <RoomExit layout="inline" className="w-full max-w-[430px]">
