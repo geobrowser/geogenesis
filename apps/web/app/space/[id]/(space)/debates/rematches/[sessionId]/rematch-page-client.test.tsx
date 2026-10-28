@@ -2837,6 +2837,16 @@ describe('DebateRematchPageClient', () => {
       expect(appearsBefore(SECOND_CLAIM, FIRST_CLAIM)).toBe(true);
     });
 
+    it('keeps a claim you hold the opposite side on above a more debatable one', async () => {
+      againstTheCrowdOnTheSecond();
+      // The viewer agrees with the first, which the opponent disagrees with: a match.
+      mocks.positions = [position('profile-local', CLAIM_SHARED, SPACE_1, true), ...mocks.positions];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(appearsBefore(FIRST_CLAIM, SECOND_CLAIM)).toBe(true);
+    });
+
     it('waits for the counts before drawing the list, so the order it holds is the debatable one', async () => {
       againstTheCrowdOnTheSecond();
       mocks.responseCountsLoading = true;

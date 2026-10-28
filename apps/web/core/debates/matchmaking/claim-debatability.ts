@@ -1,9 +1,13 @@
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { type UseQueryResult, useQueries } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { claimResponseTargetKey, fetchClaimResponseSummaries } from '~/core/responses/claim-response-summaries';
-import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
+import { Effect } from 'effect';
+import { parse } from 'graphql';
+
+import { graphql } from '~/core/io/graphql-client';
+import { CLAIM_RESPONSE_KIND, responseKindToVoteKind } from '~/core/responses/entity-response';
 import { normId } from '~/core/utils/norm-id';
 
 /**
@@ -56,29 +60,101 @@ export function claimCountsKey(claimEntityId: string, spaceId: string) {
 /**
  * Most debatable first. Stable, so claims that score the same — every claim below the floor among
  * them — keep the order they came in.
+ *
+ * `pinned` rows go above all the rest, most debatable first among themselves: the claims the pair
+ * already hold opposite sides on, which can be requested as they stand.
  */
-export function orderByDebatability<T>(rows: T[], scoreOf: (row: T) => number): T[] {
+export function orderByDebatability<T>(
+  rows: T[],
+  scoreOf: (row: T) => number,
+  pinned: (row: T) => boolean = () => false
+): T[] {
   return rows
-    .map((row, index) => ({ row, index, score: scoreOf(row) }))
-    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((row, index) => ({ row, index, pinned: pinned(row), score: scoreOf(row) }))
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.score - a.score || a.index - b.index)
     .map(entry => entry.row);
 }
 
-/** Responses are counted per space, so claims are asked for in runs per space of at most this many. */
-export const CLAIM_RESPONSE_COUNTS_CHUNK = 50;
+/**
+ * Claims per counts request. Each claim is one row of the graph's per-claim tally, so this bounds the
+ * filter's size rather than the answer's.
+ */
+export const CLAIM_RESPONSE_COUNTS_CHUNK = 100;
 
 const NO_COUNTS = new Map<string, ClaimResponseCounts>();
 
-export const claimResponseCountsQueryKey = (spaceId: string, claimIds: string[]) =>
-  ['claim-picker', 'response-counts', spaceId, claimIds] as const;
+/**
+ * The graph's running tally per claim and space — the table the cards' own counts read one claim at
+ * a time — for many claims in one request. One row per claim, where the per-vote rows the claims
+ * list batches by would be one per person and need paging.
+ */
+const CLAIM_RESPONSE_COUNTS_SOURCE = /* GraphQL */ `
+  query ClaimPickerResponseCounts($filter: VotesCountFilter!, $first: Int!) {
+    votesCountsConnection(first: $first, filter: $filter) {
+      nodes {
+        objectId
+        spaceId
+        positive
+        negative
+      }
+    }
+  }
+`;
+
+type ClaimResponseCountsQuery = {
+  votesCountsConnection: {
+    nodes: Array<{ objectId: string; spaceId: string; positive: string | number; negative: string | number } | null>;
+  } | null;
+};
+
+const claimResponseCountsDocument = parse(CLAIM_RESPONSE_COUNTS_SOURCE) as TypedDocumentNode<
+  ClaimResponseCountsQuery,
+  { filter: unknown; first: number }
+>;
+
+/** `claimCountsKey`s in, each claim's counts out under the same key. A claim nobody has answered has no row. */
+export function fetchClaimResponseCounts(keys: string[], signal?: AbortSignal) {
+  const bySpace = new Map<string, string[]>();
+  for (const key of keys) {
+    const [spaceId, claimId] = key.split(':');
+    bySpace.set(spaceId, [...(bySpace.get(spaceId) ?? []), claimId]);
+  }
+  return Effect.runPromise(
+    graphql({
+      query: claimResponseCountsDocument,
+      decoder: data => {
+        const counts = new Map<string, ClaimResponseCounts>();
+        for (const node of data.votesCountsConnection?.nodes ?? []) {
+          if (!node) continue;
+          counts.set(claimCountsKey(node.objectId, node.spaceId), {
+            positive: Number(node.positive),
+            negative: Number(node.negative),
+          });
+        }
+        return counts;
+      },
+      variables: {
+        filter: {
+          objectType: { is: 0 },
+          voteKind: { is: responseKindToVoteKind(CLAIM_RESPONSE_KIND) },
+          or: [...bySpace].map(([spaceId, claimIds]) => ({ spaceId: { is: spaceId }, objectId: { in: claimIds } })),
+        },
+        first: keys.length,
+      },
+      signal,
+    })
+  );
+}
+
+export const claimResponseCountsQueryKey = (keys: string[]) => ['claim-picker', 'response-counts', keys] as const;
 
 /**
- * The agree / disagree counts for a set of claims, each in the space its card is drawn for, keyed by
+ * The agree / disagree counts for a set of claims, each in a given space, keyed by
  * {@link claimCountsKey}.
  *
  * Its own cache entries rather than the per-card counts keys: those move optimistically with the
- * viewer's own vote, and this is read once to arrange a list, not to draw a number. Runs are sorted
- * by id within a space, so a claim joining the list re-asks its own run and nothing else.
+ * viewer's own vote, and this is read once to arrange a list, not to draw a number. Asked in sorted
+ * runs, so a claim joining the set re-asks its own run and nothing else.
  *
  * `isLoading` only on a first ask. A run that fails leaves its claims without counts — they score 0
  * and keep their place — rather than holding the list back.
@@ -89,57 +165,29 @@ export function useClaimResponseCounts(claims: Array<{ claimEntityId: string; sp
     .join(',');
 
   const runs = React.useMemo(() => {
-    const bySpace = new Map<string, string[]>();
-    for (const key of signature ? signature.split(',') : []) {
-      const [spaceId, claimId] = key.split(':');
-      bySpace.set(spaceId, [...(bySpace.get(spaceId) ?? []), claimId]);
-    }
-    const chunks: Array<{ spaceId: string; claimIds: string[] }> = [];
-    for (const [spaceId, claimIds] of bySpace) {
-      for (let start = 0; start < claimIds.length; start += CLAIM_RESPONSE_COUNTS_CHUNK) {
-        chunks.push({ spaceId, claimIds: claimIds.slice(start, start + CLAIM_RESPONSE_COUNTS_CHUNK) });
-      }
+    const keys = signature ? signature.split(',') : [];
+    const chunks: string[][] = [];
+    for (let start = 0; start < keys.length; start += CLAIM_RESPONSE_COUNTS_CHUNK) {
+      chunks.push(keys.slice(start, start + CLAIM_RESPONSE_COUNTS_CHUNK));
     }
     return chunks;
   }, [signature]);
 
-  const combine = React.useCallback(
-    (results: UseQueryResult<Map<string, ClaimResponseCounts>>[]) => {
-      const counts = new Map<string, ClaimResponseCounts>();
-      results.forEach((result, index) => {
-        const run = runs[index];
-        if (!run || !result.data) return;
-        for (const claimId of run.claimIds) {
-          const found = result.data.get(claimId);
-          if (found) counts.set(claimCountsKey(claimId, run.spaceId), found);
-        }
-      });
-      return {
-        counts: counts.size > 0 ? counts : NO_COUNTS,
-        isLoading: results.some(result => result.isLoading),
-      };
-    },
-    [runs]
-  );
+  const combine = React.useCallback((results: UseQueryResult<Map<string, ClaimResponseCounts>>[]) => {
+    const counts = new Map<string, ClaimResponseCounts>();
+    for (const result of results) {
+      for (const [key, found] of result.data ?? []) counts.set(key, found);
+    }
+    return {
+      counts: counts.size > 0 ? counts : NO_COUNTS,
+      isLoading: results.some(result => result.isLoading),
+    };
+  }, []);
 
   return useQueries({
     queries: runs.map(run => ({
-      queryKey: claimResponseCountsQueryKey(run.spaceId, run.claimIds),
-      queryFn: async ({ signal }: { signal?: AbortSignal }) => {
-        const targets = run.claimIds.map(entityId => ({ entityId, responseKind: CLAIM_RESPONSE_KIND }));
-        const summaries = await fetchClaimResponseSummaries({
-          spaceId: run.spaceId,
-          targets,
-          personalSpaceId: null,
-          signal,
-        });
-        const byClaim = new Map<string, ClaimResponseCounts>();
-        for (const target of targets) {
-          const summary = summaries.get(claimResponseTargetKey(target));
-          if (summary) byClaim.set(target.entityId, summary.counts);
-        }
-        return byClaim;
-      },
+      queryKey: claimResponseCountsQueryKey(run),
+      queryFn: ({ signal }: { signal?: AbortSignal }) => fetchClaimResponseCounts(run, signal),
       staleTime: 60_000,
       retry: 1,
     })),

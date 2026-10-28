@@ -56,6 +56,12 @@ describe('orderByDebatability', () => {
     expect(ordered.slice(2)).toEqual(['lopsided-agree', 'single-vote']);
   });
 
+  it('puts pinned rows above every other, most debatable first among them', () => {
+    const scores: Record<string, number> = { a: 0.2, b: 1, c: 0.5, d: 0.9 };
+    const pinned = (row: string) => row === 'a' || row === 'c';
+    expect(orderByDebatability(['a', 'b', 'c', 'd'], row => scores[row]!, pinned)).toEqual(['c', 'a', 'b', 'd']);
+  });
+
   it('keeps the incoming order among equal scores', () => {
     const rows = ['a', 'b', 'c', 'd'];
     expect(orderByDebatability(rows, () => 0)).toEqual(rows);

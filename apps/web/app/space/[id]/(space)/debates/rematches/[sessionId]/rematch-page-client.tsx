@@ -619,6 +619,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
   // By person, alongside positions, for the same reason as the opponent's.
   const viewerEntitiesQuery = useAnsweredClaimEntities(localParticipant?.profile_space_id ?? null, viewerClaimIds);
+
+  // GEO-3527. The agree / disagree counts both people's lists are ordered by, for every claim either
+  // of them answered, in the space they answered it in — which is the space a row on their list is
+  // drawn for, since a row only lists where its person holds a side. Keyed on positions rather than
+  // the rows, so it runs alongside the entity and session lookups instead of after them.
+  const positionCounts = useClaimResponseCounts(
+    React.useMemo(
+      () =>
+        [...positions.byClaim.values()].flatMap(rows =>
+          rows.map(row => ({ claimEntityId: row.claimId, spaceId: row.spaceId }))
+        ),
+      [positions.byClaim]
+    )
+  );
   // Both graph-sourced options, one pipeline (GEO-2771).
   //
   // Featured and All are the same question asked of two tags — which claims carry it — so All joins
@@ -1196,8 +1210,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // exclusions are in, so nothing lists and then vanishes. Not narrowed by the space allowlist —
   // see it above.
   /**
-   * One participant's positions as picker rows, shared-preference first. Debatability is ordered on
-   * top of this by the caller, so shared preference is what breaks its ties.
+   * One participant's positions as picker rows, shared-preference first. The caller orders these
+   * again by opposed sides and debatability, so shared preference is what breaks its ties.
    *
    * The opponent's tab and Explore's "My positions" are the same list asked about two people, so
    * they are the same code asked about two people: `holdsSide` is the whole of the difference.
@@ -1233,23 +1247,29 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         : participantClaimRows(opponentClaimIds, opponentEntitiesQuery.entities, userId => userId !== currentUserId),
     [currentUserId, opponentClaimIds, opponentRowsSettling, opponentEntitiesQuery.entities, participantClaimRows]
   );
-  // Most debatable for the opponent first (GEO-3527): the claims they hold against the crowd, and
-  // the ones people are split on. The counts are part of settling, because the hold below keeps
-  // whatever order it is first shown — a list drawn before them would keep its old order for good.
-  const opponentCounts = useClaimResponseCounts(opponentRows.map(claimCountsTarget));
-  const opponentClaimsSettling = opponentRowsSettling || opponentCounts.isLoading;
-  const opponentClaimsNow = React.useMemo(
-    () =>
-      opponentClaimsSettling
-        ? []
-        : orderByDebatability(opponentRows, row =>
-            claimDebatability(
-              opponentCounts.counts.get(claimCountsKey(row.claim.claim_entity_id, row.claim.space_id)),
-              row.participants.find(side => side.user_id !== currentUserId)?.position ?? null
-            )
-          ),
-    [currentUserId, opponentClaimsSettling, opponentCounts.counts, opponentRows]
-  );
+  // Claims the two of you hold opposite sides on first, then the most debatable for the opponent
+  // (GEO-3527): the claims they hold against the crowd, and the ones people are split on. The counts
+  // are part of settling, because the hold below keeps whatever order it is first shown — a list
+  // drawn before them would keep its old order for good.
+  const opponentClaimsSettling = opponentRowsSettling || positionCounts.isLoading;
+  const opponentClaimsNow = React.useMemo(() => {
+    if (opponentClaimsSettling) return [];
+    const sideOf = (row: DebateRematchClaim, mine: boolean) =>
+      row.participants.find(side => (side.user_id === currentUserId) === mine)?.position ?? null;
+    return orderByDebatability(
+      opponentRows,
+      row =>
+        claimDebatability(
+          positionCounts.counts.get(claimCountsKey(row.claim.claim_entity_id, row.claim.space_id)),
+          sideOf(row, false)
+        ),
+      row => {
+        const mine = sideOf(row, true);
+        const theirs = sideOf(row, false);
+        return mine !== null && theirs !== null && mine !== theirs;
+      }
+    );
+  }, [currentUserId, opponentClaimsSettling, positionCounts.counts, opponentRows]);
   // A new response from the opponent adds an id, and the lookups keyed on the id list start over.
   // The list they were drawn from is still right for every claim already on it, so it stays up
   // until the new one lands rather than dropping to nothing in between.
@@ -1287,19 +1307,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [currentUserId, participantClaimRows, viewerClaimIds, viewerRowsSettling, viewerEntitiesQuery.entities]
   );
   // Ordered the same way, about the viewer: their own claims against the crowd, and the split ones.
-  const viewerCounts = useClaimResponseCounts(viewerRows.map(claimCountsTarget));
-  const viewerClaimsSettling = viewerRowsSettling || viewerCounts.isLoading;
+  const viewerClaimsSettling = viewerRowsSettling || positionCounts.isLoading;
   const viewerClaimsNow = React.useMemo(
     () =>
       viewerClaimsSettling
         ? []
         : orderByDebatability(viewerRows, row =>
             claimDebatability(
-              viewerCounts.counts.get(claimCountsKey(row.claim.claim_entity_id, row.claim.space_id)),
+              positionCounts.counts.get(claimCountsKey(row.claim.claim_entity_id, row.claim.space_id)),
               row.participants.find(side => side.user_id === currentUserId)?.position ?? null
             )
           ),
-    [currentUserId, viewerClaimsSettling, viewerCounts.counts, viewerRows]
+    [currentUserId, viewerClaimsSettling, positionCounts.counts, viewerRows]
   );
   const viewerClaimsHeld = useLastSettled(viewerClaimsNow, viewerClaimsSettling, sessionId);
   // Held against the viewer's own acting on it, exactly as the opponent's list is: taking a side
@@ -3746,11 +3765,6 @@ function RecommendedSection({
  * Split after each list's hold rather than inside its builder, so every hold, order and settling
  * rule above keeps seeing the whole list it always did, and the rows only part ways on the way out.
  */
-/** The claim and the space its counts are read in: the one its card is drawn for. */
-function claimCountsTarget(row: DebateRematchClaim) {
-  return { claimEntityId: row.claim.claim_entity_id, spaceId: row.claim.space_id };
-}
-
 function splitByDebated(rows: DebateRematchClaim[], isDebated: (claim: DebateRematchClaim) => boolean) {
   const fresh: DebateRematchClaim[] = [];
   const debated: DebateRematchClaim[] = [];
