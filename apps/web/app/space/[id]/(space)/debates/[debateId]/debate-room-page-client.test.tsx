@@ -2751,6 +2751,27 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.roomStartAudio).toHaveBeenCalled();
   });
 
+  it.each([true, false])(
+    'offers to enable blocked audio on the pre-screen once Ready is pressed (ready: %s)',
+    async localReady => {
+      mocks.debate = readyDebate({ localReady, remoteReady: false });
+
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalled());
+      mocks.roomCanPlaybackAudio = false;
+      act(() => emitRoomEvent('audioPlaybackChanged', false));
+
+      if (!localReady) {
+        // The Ready click is the gesture that unblocks it.
+        await waitFor(() => expect(screen.getByRole('button', { name: "I'm ready to debate" })).toBeEnabled());
+        expect(screen.queryByRole('button', { name: 'Enable audio' })).not.toBeInTheDocument();
+        return;
+      }
+      fireEvent.click(await screen.findByRole('button', { name: 'Enable audio' }));
+      expect(mocks.roomStartAudio).toHaveBeenCalled();
+    }
+  );
+
   it('connects to LiveKit once the debate leaves the ready pre-screen', async () => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),

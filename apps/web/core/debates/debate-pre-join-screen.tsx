@@ -5,6 +5,7 @@ import * as Popover from '@radix-ui/react-popover';
 import * as React from 'react';
 
 import cx from 'classnames';
+import type { Room } from 'livekit-client';
 
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
 import type { DebateParticipant } from '~/core/debates/api';
@@ -17,6 +18,7 @@ import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { AudioSettings, MobileSettingsSheet } from './audio-settings';
+import { DebateAudioBlockedNotice } from './debate-audio-blocked-notice';
 import { DebateRecordingStatusPill } from './debate-recording-status-pill';
 import { CameraIcon, DebateLeaveButton, DebateTileToggleButton, MicrophoneIcon } from './debate-room-controls';
 import { DebateTileChip, DebateVideoTile, tileChipSurface } from './debate-video-tile';
@@ -77,6 +79,7 @@ export function DebatePreScreen({
   onTakeOverConnection,
   readyBusy,
   onReady,
+  audioRoom,
   onLeave,
   returnsToLobby = false,
   leaveDisabled,
@@ -144,6 +147,8 @@ export function DebatePreScreen({
   onTakeOverConnection: () => void;
   readyBusy: boolean;
   onReady: () => void;
+  /** The connected room, so audio the browser blocked can be enabled with a click. */
+  audioRoom: Room | null;
   onLeave: () => void;
   returnsToLobby?: boolean;
   leaveDisabled: boolean;
@@ -467,6 +472,13 @@ export function DebatePreScreen({
         <div className="flex w-full max-w-[900px] items-start gap-5 md:max-w-none md:flex-col md:items-stretch md:gap-3 md:rounded-lg md:border md:border-grey-02 md:bg-white md:p-3">
           {orderedGroups}
         </div>
+
+        {/* Before Ready, the Ready click itself unblocks audio. */}
+        {localReady && audioRoom && (
+          <div className="flex w-full max-w-[900px] justify-center">
+            <DebateAudioBlockedNotice room={audioRoom} openRoundsStyle={false} />
+          </div>
+        )}
 
         {error && (
           <div className="mt-3 flex w-full max-w-[900px] flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
