@@ -17,6 +17,7 @@ const api = vi.hoisted(() => ({
   listDebateLobbies: vi.fn(),
   listDebateLobbyCalendar: vi.fn(),
   setDebateLobbyReminder: vi.fn(),
+  setDebateLobbyDismissal: vi.fn(),
   endDebateLobby: vi.fn(),
 }));
 
@@ -41,6 +42,7 @@ const {
   useDebateLobbies,
   useDebateLobby,
   useDebateLobbyCalendar,
+  useDebateLobbyDismissal,
   useDebateLobbyReminder,
   useEndDebateLobby,
   useLobbyPresence,
@@ -971,6 +973,85 @@ it('writes a saved reminder into the cached list and calendar rows without waiti
     api.listDebateLobbies.mockReset();
     api.listDebateLobbyCalendar.mockReset();
   }
+});
+
+// GEO-3519. Dismiss takes the row out of the timeline on the press, list and calendar week alike,
+// and puts only that row back if the write fails.
+describe('useDebateLobbyDismissal', () => {
+  const row = { lobby_id: 'lobby1', open: false, viewer_reminded: false, viewer_dismissed: false, reminder_count: 0 };
+  type Rows = { lobbies: (typeof row)[] };
+
+  function setup() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(debateQueryKeys.lobbies('acct'), { lobbies: [row, { ...row, lobby_id: 'other' }] });
+    client.setQueryData(debateQueryKeys.lobbyCalendar('acct', 1, 2), { lobbies: [{ ...row, state: 'upcoming' }] });
+    // The refetch a saved write starts; never landing, so what is read below is the cache's own.
+    api.listDebateLobbies.mockReturnValue(new Promise(() => undefined));
+    api.listDebateLobbyCalendar.mockReturnValue(new Promise(() => undefined));
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const list = () => client.getQueryData<Rows>(debateQueryKeys.lobbies('acct'))?.lobbies;
+    const week = () => client.getQueryData<Rows>(debateQueryKeys.lobbyCalendar('acct', 1, 2))?.lobbies;
+    return { client, wrapper, list, week };
+  }
+
+  afterEach(() => {
+    api.listDebateLobbies.mockReset();
+    api.listDebateLobbyCalendar.mockReset();
+  });
+
+  it('dismisses through geo-chat, drawn at once, before the write lands', async () => {
+    let settle: (view: DebateLobbyView) => void = () => undefined;
+    api.setDebateLobbyDismissal.mockImplementationOnce(() => new Promise(done => (settle = done)));
+    const { wrapper, list, week } = setup();
+    const { result } = renderHook(() => useDebateLobbyDismissal(), { wrapper });
+
+    act(() => result.current.mutate({ lobbyId: 'lobby1', dismissed: true }));
+
+    await waitFor(() => expect(list()?.[0]).toMatchObject({ viewer_dismissed: true }));
+    expect(list()?.[1]).toMatchObject({ viewer_dismissed: false });
+    expect(week()?.[0]).toMatchObject({ viewer_dismissed: true, state: 'upcoming' });
+    expect(api.setDebateLobbyDismissal).toHaveBeenCalledWith('lobby1', true, expect.anything(), 'acct');
+
+    await act(async () => settle(view(false)));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(list()?.[0]).toMatchObject({ viewer_dismissed: true });
+  });
+
+  it('puts the row back when the write fails, keeping what changed meanwhile', async () => {
+    let fail: (error: Error) => void = () => undefined;
+    api.setDebateLobbyDismissal.mockImplementationOnce(() => new Promise((_, reject) => (fail = reject)));
+    const { client, wrapper, list } = setup();
+    const { result } = renderHook(() => useDebateLobbyDismissal(), { wrapper });
+
+    act(() => result.current.mutate({ lobbyId: 'lobby1', dismissed: true }));
+    await waitFor(() => expect(list()?.[0]).toMatchObject({ viewer_dismissed: true }));
+    // A card patch landing while the write is out.
+    client.setQueryData<Rows>(debateQueryKeys.lobbies('acct'), old => ({
+      lobbies: old!.lobbies.map(r => (r.lobby_id === 'lobby1' ? { ...r, reminder_count: 7 } : r)),
+    }));
+
+    await act(async () => fail(new GeoChatRequestError('down', 'unavailable', 503)));
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(list()?.[0]).toMatchObject({ viewer_dismissed: false, reminder_count: 7 });
+  });
+
+  // geo-chat clears a dismissal on RSVP; the cached row follows without waiting for a refetch.
+  it('is cleared by an RSVP', async () => {
+    const { client, wrapper, list } = setup();
+    client.setQueryData<Rows>(debateQueryKeys.lobbies('acct'), { lobbies: [{ ...row, viewer_dismissed: true }] });
+    api.setDebateLobbyReminder.mockResolvedValueOnce({
+      ...view(false),
+      viewer: { ...view(false).viewer, reminded: true },
+    });
+    const { result } = renderHook(() => useDebateLobbyReminder(), { wrapper });
+
+    await act(() => result.current.mutateAsync({ lobbyId: 'lobby1', reminded: true }));
+
+    expect(list()?.[0]).toMatchObject({ viewer_reminded: true, viewer_dismissed: false });
+  });
 });
 
 // GEO-3289. Signed out there is no gateway scope to patch the list, so it is polled.

@@ -16,6 +16,7 @@ import {
   type DebateChallenge,
   type DebateClaimSummary,
   type DebateHistoryItem,
+  type DebateLobbySummary,
   type DebateParticipantSummary,
   type DebateRequest,
   type ScheduledDebateRequest,
@@ -24,9 +25,18 @@ import {
 } from '../api';
 import { debatePath } from '../debate-routes';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
-import { localDaysFrom, startOfLocalDay } from '../lobbies/lobby-format';
+import { lobbyDismissalError, useDebateLobbyCalendar, useDebateLobbyDismissal } from '../lobbies/hooks';
+import {
+  DISMISS_FAILED,
+  RSVP_FAILED,
+  lobbyErrorMessage,
+  localDaysFrom,
+  startOfLocalDay,
+} from '../lobbies/lobby-format';
+import { useLobbyReminderPress } from '../lobbies/lobby-reminder-press';
 import { LOBBY_DARK_SURFACE_CLASS_NAME } from '../lobbies/lobby-spotlight';
 import { debateEntryClick, routeIntoDebate } from '../lobbies/step-out';
+import { LobbyRsvpPill } from '../lobbies/upcoming-lobbies';
 import { useMinuteNow } from '../lobbies/use-minute-now';
 import { speakerLabel } from '../playback-utils';
 import { opponentName, opponentOf } from '../rooms/room-opponent';
@@ -51,6 +61,7 @@ import {
 } from './hub-scroll';
 import { HubQueryState } from './hub-states';
 import { useIncomingRequestActions } from './incoming-request-card';
+import { LobbyDetailsPopover } from './lobby-details-popover';
 import {
   dedupeHistory,
   historyNames,
@@ -82,7 +93,7 @@ import {
   useRescheduler,
   useScheduledContent,
 } from './scheduled-debates-section';
-import { type UpcomingLobbyRow, lobbyHostLine } from './upcoming-lobby-rows';
+import { type UpcomingLobbyRow, lobbyHostLine, unansweredLobbies, unansweredLobbyRange } from './upcoming-lobby-rows';
 import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
@@ -136,6 +147,17 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const lookUp = useParticipantLookup(scheduled.answerable.length > 0 || scheduled.upcoming.length > 0, people);
 
   const { answer, busy, error: conflict } = useScheduledDebateAnswer();
+  // Held here rather than on each row: a dismissed row leaves at once, and its failure has to outlive
+  // it to be said on the row that comes back.
+  const dismissal = useDebateLobbyDismissal();
+  // Lobbies the viewer has not answered (GEO-3519), from the calendar's uncapped range for the week.
+  const today = startOfLocalDay(now);
+  const range = React.useMemo(() => unansweredLobbyRange(today), [today]);
+  const { data: week } = useDebateLobbyCalendar(range.from, range.to);
+  const unanswered = React.useMemo(
+    () => unansweredLobbies(week?.lobbies ?? [], scheduled.lobbies, viewerId, now),
+    [now, scheduled.lobbies, viewerId, week]
+  );
   // The debate whose time is being moved, on the other debater's week — as in `ScheduledDebatesSection`.
   const { reschedulerFor, reschedulingModal } = useRescheduler(lookUp);
 
@@ -161,6 +183,7 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
     incomingChallenge,
     ask,
     scheduled,
+    unansweredLobbies: unanswered,
     history: historyItems,
     pastDebates: history.unavailable ? pastDebates.rows : [],
     render: {
@@ -194,6 +217,7 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
         />
       ),
       lobby: row => <LobbyItem row={row} />,
+      unansweredLobby: lobby => <UnansweredLobbyItem lobby={lobby} now={now} dismissal={dismissal} />,
       history: item => <HistoryRow item={item} lookUp={lookUp} />,
       pastDebate: row => <PastDebateRow row={row} />,
     },
@@ -417,6 +441,7 @@ export function buildEntries({
   incomingChallenge,
   ask,
   scheduled,
+  unansweredLobbies,
   history,
   pastDebates,
   render,
@@ -426,6 +451,8 @@ export function buildEntries({
   incomingChallenge: DebateChallenge | null;
   ask: OutgoingAskState['ask'];
   scheduled: Pick<ScheduledContent, 'answerable' | 'upcoming' | 'lobbies'>;
+  /** Upcoming lobbies the viewer has not answered (GEO-3519); see `unansweredLobbies`. */
+  unansweredLobbies: DebateLobbySummary[];
   history: DebateHistoryItem[];
   pastDebates: PastDebate[];
   render: {
@@ -435,6 +462,7 @@ export function buildEntries({
     invite: (request: ScheduledDebateRequest) => React.ReactNode;
     room: (row: UpcomingRoomRow) => React.ReactNode;
     lobby: (row: UpcomingLobbyRow) => React.ReactNode;
+    unansweredLobby: (lobby: DebateLobbySummary) => React.ReactNode;
     history: (item: DebateHistoryItem) => React.ReactNode;
     pastDebate: (row: PastDebate) => React.ReactNode;
   };
@@ -488,6 +516,16 @@ export function buildEntries({
       when: row.open ? 'now' : 'upcoming',
       needsYou: false,
       node: render.lobby(row),
+    });
+  }
+  // Offered, not asked: nobody is waiting on the viewer's answer, so never Needs you (GEO-3519).
+  for (const lobby of unansweredLobbies) {
+    add({
+      key: `unanswered-lobby:${lobby.lobby_id}`,
+      at: lobby.starts_at,
+      when: 'upcoming',
+      needsYou: false,
+      node: render.unansweredLobby(lobby),
     });
   }
 
@@ -964,6 +1002,72 @@ function LobbyItem({ row }: { row: UpcomingLobbyRow }) {
       actions={
         <CompactActionRow>
           <LobbyRowAction compact row={row} />
+        </CompactActionRow>
+      }
+    />
+  );
+}
+
+/**
+ * An upcoming lobby the viewer has not answered (GEO-3519): RSVP, after which it is a lobby they are
+ * going to ({@link LobbyItem}), or Dismiss, after which it leaves the timeline. Its name opens the
+ * lobby's details, with the same RSVP.
+ */
+function UnansweredLobbyItem({
+  lobby,
+  now,
+  dismissal,
+}: {
+  lobby: DebateLobbySummary;
+  now: number;
+  dismissal: ReturnType<typeof useDebateLobbyDismissal>;
+}) {
+  const remind = useLobbyReminderPress(lobby);
+  const dismissError = lobbyDismissalError(dismissal, lobby.lobby_id);
+  // One press for both copies of RSVP: the row's and the details'.
+  const rsvp = (
+    <LobbyRsvpPill
+      size="compact"
+      remind={remind}
+      analyticsLabel={debateAnalyticsLabel('hub', `Requests lobby ${remind.reminded ? 'Going' : 'RSVP'}`)}
+    />
+  );
+
+  return (
+    <TimelineItem
+      testId="requests-unanswered-lobby"
+      dot="lobby"
+      time={formatTime(lobby.starts_at)}
+      title={
+        <LobbyDetailsPopover
+          lobby={lobby}
+          now={now}
+          rsvp={rsvp}
+          className="text-left underline-offset-2 hover:underline"
+        >
+          {lobby.name}
+        </LobbyDetailsPopover>
+      }
+      sub={['Lobby', lobbyHostLine({ hosting: false, hosts: lobby.hosts })].filter(Boolean).join(' · ')}
+      error={
+        remind.error
+          ? lobbyErrorMessage(remind.error, RSVP_FAILED)
+          : dismissError
+            ? lobbyErrorMessage(dismissError, DISMISS_FAILED)
+            : null
+      }
+      actions={
+        <CompactActionRow>
+          {rsvp}
+          <HubPillButton
+            size="compact"
+            analyticsLabel={debateAnalyticsLabel('hub', 'Requests lobby dismiss')}
+            analyticsIntent="dismiss_debate_lobby"
+            onClick={() => dismissal.mutate({ lobbyId: lobby.lobby_id, dismissed: true })}
+            disabled={remind.pending}
+          >
+            Dismiss
+          </HubPillButton>
         </CompactActionRow>
       }
     />

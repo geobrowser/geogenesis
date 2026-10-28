@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   type DebateHistoryItem,
+  type DebateLobbyCalendarRow,
+  type DebateLobbySummary,
   type DebateRequest,
   type DebateRequestParty,
   GeoChatRequestError,
@@ -46,6 +48,16 @@ const mocks = vi.hoisted(() => ({
   personalSpaceLoading: false,
   pastDebatesLoading: false,
   challengeError: null as Error | null,
+  remind: vi.fn(),
+  dismissal: {
+    mutate: vi.fn(),
+    isError: false,
+    error: null as Error | null,
+    variables: undefined as { lobbyId: string; dismissed: boolean } | undefined,
+  },
+  lobbyView: { data: undefined as unknown, refetch: vi.fn() },
+  calendar: [] as DebateLobbyCalendarRow[],
+  calendarRange: [] as [Date, Date][],
 }));
 
 vi.mock('next/navigation', () => ({
@@ -134,6 +146,24 @@ vi.mock('./hooks', () => ({
 vi.mock('@tanstack/react-query', async importOriginal => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries, getQueryState: () => undefined }),
+}));
+
+// The lobby rows' writes have suites of their own (`lobbies/hooks.test.tsx`, and the real-hooks
+// render); here it matters which write a press asks for.
+vi.mock('../lobbies/hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('../lobbies/hooks')>()),
+  useDebateLobbyDismissal: () => mocks.dismissal,
+  useDebateLobbyCalendar: (from: Date, to: Date) => {
+    mocks.calendarRange.push([from, to]);
+    return { data: { lobbies: mocks.calendar } };
+  },
+  useDebateLobby: () => mocks.lobbyView,
+}));
+vi.mock('../lobbies/lobby-host-lobbies', () => ({
+  usePreOpenHosts: (lobby: { hosts?: unknown[] }) => lobby.hosts ?? [],
+}));
+vi.mock('../lobbies/lobby-reminder-press', () => ({
+  useLobbyReminderPress: () => ({ reminded: false, pending: false, error: null, press: mocks.remind }),
 }));
 
 vi.mock('../api', async importOriginal => ({
@@ -296,6 +326,10 @@ beforeEach(() => {
   mocks.block.mockReset();
   mocks.challenge = null;
   mocks.challengeError = null;
+  mocks.remind.mockReset();
+  mocks.calendar = [];
+  mocks.calendarRange = [];
+  mocks.dismissal = { mutate: vi.fn(), isError: false, error: null, variables: undefined };
 });
 
 afterEach(() => {
@@ -669,6 +703,155 @@ describe('RequestsSchedule', () => {
     const item = screen.getByTestId('requests-lobby');
     expect(within(item).getByText('Live')).toBeInTheDocument();
     expect(within(item).getByRole('link', { name: 'Join' })).toBeInTheDocument();
+  });
+
+  describe('upcoming lobbies the viewer has not answered (GEO-3519)', () => {
+    const HOST = { user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null };
+    // At a fixed local noon, so the rows' days and times are the same whenever the suite runs.
+    const NOON = new Date(2026, 9, 27, 12, 0);
+    const startsIn = (minutes: number) => new Date(NOON.getTime() + minutes * 60_000).toISOString();
+    const listed = (
+      id: string,
+      minutes: number,
+      overrides: Partial<DebateLobbyCalendarRow> = {}
+    ): DebateLobbyCalendarRow => ({
+      lobby_id: id,
+      name: `Lobby ${id}`,
+      scheduled: true,
+      starts_at: startsIn(minutes),
+      opens_at: startsIn(minutes - 10),
+      open: false,
+      hosts: [HOST],
+      headcount: 0,
+      avatars: [],
+      debating_count: 0,
+      reminder_count: 3,
+      viewer_reminded: false,
+      viewer_on_roster: false,
+      state: 'upcoming',
+      closed_at: null,
+      ...overrides,
+    });
+    const offered = () => screen.queryAllByTestId('requests-unanswered-lobby');
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(NOON);
+    });
+
+    it('offers one at its start time, with its host, RSVP and Dismiss', () => {
+      mocks.calendar = [listed('l1', 24 * 60)];
+      render(<RequestsSchedule />);
+
+      const [row] = offered();
+      expect(row).toHaveTextContent('Lobby l1');
+      expect(row).toHaveTextContent('Lobby · Hosted by Bryan');
+      expect(row).toHaveTextContent(
+        new Date(startsIn(24 * 60)).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+      );
+      expect(isAbove(nowLine(), row!)).toBe(true);
+
+      fireEvent.click(within(row!).getByRole('button', { name: 'RSVP' }));
+      expect(mocks.remind).toHaveBeenCalledTimes(1);
+      fireEvent.click(within(row!).getByRole('button', { name: 'Dismiss' }));
+      expect(mocks.dismissal.mutate).toHaveBeenCalledWith({ lobbyId: 'l1', dismissed: true });
+    });
+
+    // Uncapped, unlike the side panel's list: today's midnight to the one a week on.
+    it('reads the week’s lobbies from the calendar range', () => {
+      render(<RequestsSchedule />);
+
+      expect(mocks.calendarRange.at(-1)).toEqual([new Date(2026, 9, 27), new Date(2026, 10, 3)]);
+    });
+
+    it('places it by day and time among the rest of the timeline', () => {
+      mocks.scheduled = {
+        ...EMPTY_SCHEDULED,
+        answerable: [
+          invite('nine', true, { startsInMinutes: 21 * 60 }),
+          invite('eleven', false, { startsInMinutes: 23 * 60 }),
+        ],
+      };
+      mocks.calendar = [listed('later', 2 * 24 * 60), listed('ten', 22 * 60)];
+      render(<RequestsSchedule />);
+
+      const [ten, later] = offered();
+      expect(ten).toHaveTextContent('Lobby ten');
+      expect(later).toHaveTextContent('Lobby later');
+      // Tomorrow, between the 9 o'clock and 11 o'clock invites; the day after in its own section.
+      const tomorrow = ten!.closest('section')!;
+      const [nine, eleven] = [screen.getByText('Mia invited you'), screen.getByText('Invite to Mia')];
+      expect(tomorrow).toContainElement(nine);
+      expect(tomorrow).toContainElement(eleven);
+      expect(isAbove(nine, ten!)).toBe(true);
+      expect(isAbove(ten!, eleven)).toBe(true);
+      expect(later!.closest('section')).not.toBe(tomorrow);
+      expect(isAbove(eleven, later!)).toBe(true);
+    });
+
+    it('leaves out a lobby already on the timeline as one the viewer is going to', () => {
+      mocks.scheduled = {
+        ...EMPTY_SCHEDULED,
+        lobbies: [
+          {
+            lobbyId: 'l1',
+            name: 'Lobby l1',
+            startsAt: startsIn(60),
+            opensAt: startsIn(50),
+            open: false,
+            hosts: [HOST],
+            hosting: false,
+            onRoster: false,
+          },
+        ],
+      };
+      mocks.calendar = [listed('l1', 60)];
+      render(<RequestsSchedule />);
+
+      expect(offered()).toHaveLength(0);
+      expect(screen.getByTestId('requests-lobby')).toHaveTextContent('Lobby · Hosted by Bryan');
+    });
+
+    // Nobody is waiting on the answer: an offered lobby is not a request.
+    it('neither counts toward Needs you nor shows under it', async () => {
+      mocks.calendar = [listed('l1', 60)];
+      render(<RequestsSchedule />);
+      expect(offered()).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Needs you (0)' }));
+
+      expect(await screen.findByText('Nothing needs your answer right now.')).toBeInTheDocument();
+      await waitFor(() => expect(offered()).toHaveLength(0));
+    });
+
+    it('opens the lobby’s details from its name', () => {
+      mocks.calendar = [listed('l1', 60)];
+      render(<RequestsSchedule />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Lobby l1, lobby details' }));
+
+      const details = screen.getByRole('dialog', { name: 'Lobby details' });
+      expect(details).toHaveTextContent('Hosted by Bryan');
+      expect(within(details).getByRole('link', { name: 'Open lobby page' })).toHaveAttribute('href', '/debate/l1');
+      fireEvent.click(within(details).getByRole('button', { name: 'RSVP' }));
+      expect(mocks.remind).toHaveBeenCalledTimes(1);
+    });
+
+    // The write is held above the rows, so its failure is said on the row that comes back.
+    it('says a dismissal that failed on its own row only', () => {
+      mocks.dismissal = {
+        ...mocks.dismissal,
+        isError: true,
+        error: new Error('down'),
+        variables: { lobbyId: 'l1', dismissed: true },
+      };
+      mocks.calendar = [listed('l1', 60), listed('l2', 120)];
+      render(<RequestsSchedule />);
+
+      const [first, second] = offered();
+      expect(within(first!).getByRole('alert')).toHaveTextContent('Could not dismiss this lobby. Try again.');
+      expect(within(second!).queryByRole('alert')).not.toBeInTheDocument();
+    });
   });
 
   // The design's landing: the now-line just under the filter row, whatever is above it. 26 Oct: with
@@ -1298,6 +1481,7 @@ describe('buildEntries', () => {
             incomingChallenge: null,
             ask: null,
             scheduled: { answerable: [], upcoming: r, lobbies: [] },
+            unansweredLobbies: [],
             history: h,
             pastDebates: [],
             render: {
@@ -1307,6 +1491,7 @@ describe('buildEntries', () => {
               invite: () => null,
               room: () => null,
               lobby: () => null,
+              unansweredLobby: () => null,
               history: () => null,
               pastDebate: () => null,
             },
@@ -1326,5 +1511,43 @@ describe('buildEntries', () => {
         }
       }
     }
+  });
+
+  // GEO-3519. Offered, never asked: after Now whatever its time, by time among the rest, never Needs you.
+  it('places an unanswered lobby as upcoming, by its start time, never as needing an answer', () => {
+    const lobby = (id: string, minutes: number) => ({ lobby_id: id, starts_at: at(minutes) }) as DebateLobbySummary;
+    const entries = buildEntries({
+      now: Date.now(),
+      incoming: [request('r1', -5)],
+      incomingChallenge: null,
+      ask: null,
+      scheduled: { answerable: [invite('i1', true, { startsInMinutes: 90 })], upcoming: [], lobbies: [] },
+      unansweredLobbies: [lobby('late', 120), lobby('early', 60), lobby('started', -1)],
+      history: [],
+      pastDebates: [],
+      render: {
+        incoming: () => null,
+        challenge: () => null,
+        ask: () => null,
+        invite: () => null,
+        room: () => null,
+        lobby: () => null,
+        unansweredLobby: () => null,
+        history: () => null,
+        pastDebate: () => null,
+      },
+    });
+
+    expect(entries.map(entry => entry.key)).toEqual([
+      'request:r1',
+      'unanswered-lobby:started',
+      'unanswered-lobby:early',
+      'invite:i1',
+      'unanswered-lobby:late',
+    ]);
+    expect(entries.filter(entry => entry.key.startsWith('unanswered-lobby:'))).toEqual(
+      expect.arrayContaining([expect.objectContaining({ when: 'upcoming', needsYou: false })])
+    );
+    expect(entries.filter(entry => entry.needsYou).map(entry => entry.key)).toEqual(['request:r1', 'invite:i1']);
   });
 });

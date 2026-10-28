@@ -21,7 +21,7 @@ const replay = vi.hoisted(() => vi.fn());
 // GEO-3289. A reminder queued before sign-up replays from here.
 vi.mock('../lobbies/lobby-reminder-press', () => ({ useLobbyReminderReplay: replay }));
 // GEO-3268's lineup reads the lobby list and holds the matchmaking scope.
-vi.mock('../lobbies/live-lobbies', () => ({ useLobbyLineup: () => ({ live: lineup.live, soon: null, later: [] }) }));
+vi.mock('../lobbies/live-lobbies', () => ({ useLobbyLineup: () => ({ live: lineup.live }) }));
 vi.mock('../lobbies/live-lobbies-preview', () => ({
   LiveLobbiesPreview: ({ children }: { children: unknown }) => children,
 }));

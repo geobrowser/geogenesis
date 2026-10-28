@@ -39,14 +39,13 @@ afterEach(() => {
 });
 
 describe('LiveLobbySpotlight', () => {
-  it('renders nothing with nothing live, even with one opening soon', () => {
-    const soon = lobby({ open: false, scheduled: true });
-    const { container } = render(<LiveLobbySpotlight lineup={{ live: [], soon, later: [] }} />);
+  it('renders nothing with nothing live', () => {
+    const { container } = render(<LiveLobbySpotlight lineup={{ live: [] }} />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('leads with the lobby: Live, its name, host, who is there and Join', () => {
-    render(<LiveLobbySpotlight lineup={{ live: [lobby({})], soon: null, later: [] }} />);
+    render(<LiveLobbySpotlight lineup={{ live: [lobby({})] }} />);
     const card = within(screen.getByRole('region', { name: 'Live debate lobby' }));
 
     expect(card.getByText('Live')).toBeInTheDocument();
@@ -57,13 +56,13 @@ describe('LiveLobbySpotlight', () => {
   });
 
   it('marks the join as coming from the side panel', () => {
-    render(<LiveLobbySpotlight lineup={{ live: [lobby({})], soon: null, later: [] }} />);
+    render(<LiveLobbySpotlight lineup={{ live: [lobby({})] }} />);
     screen.getByRole('link', { name: 'Join lobby' }).click();
     expect(mocks.markLobbyEntry).toHaveBeenCalledWith('nyc', 'side_panel');
   });
 
   it('offers the way back in, not Join, to someone already in the lobby', () => {
-    render(<LiveLobbySpotlight lineup={{ live: [lobby({ viewer_on_roster: true })], soon: null, later: [] }} />);
+    render(<LiveLobbySpotlight lineup={{ live: [lobby({ viewer_on_roster: true })] }} />);
     expect(screen.getByRole('link', { name: 'Back to lobby' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Join lobby' })).not.toBeInTheDocument();
     expect(screen.getByText('14 here · 6 debating · You’re here')).toBeInTheDocument();
@@ -71,7 +70,7 @@ describe('LiveLobbySpotlight', () => {
 
   it('lists every other live lobby under the lead, each with its own Join', () => {
     const other = lobby({ lobby_id: 'ai', name: 'AI Policy Night', headcount: 5, debating_count: 2 });
-    render(<LiveLobbySpotlight lineup={{ live: [lobby({}), other], soon: null, later: [] }} />);
+    render(<LiveLobbySpotlight lineup={{ live: [lobby({}), other] }} />);
 
     expect(screen.getByRole('region', { name: 'Live debate lobbies' })).toBeInTheDocument();
     expect(screen.getByText('2 lobbies live')).toBeInTheDocument();

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,8 +13,6 @@ const mocks = vi.hoisted(() => ({
   cancel: vi.fn(),
   dismissEnded: vi.fn(),
   close: vi.fn(),
-  remind: vi.fn(),
-  reminded: false,
 }));
 
 vi.mock('./hub-ask-context', () => ({
@@ -34,29 +32,9 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/explore',
   useSearchParams: () => new URLSearchParams(),
 }));
-// RSVP has its own suite; here it only matters that the strip offers it.
-vi.mock('../lobbies/lobby-reminder-press', () => ({
-  useLobbyReminderPress: () => ({ reminded: mocks.reminded, pending: false, error: null, press: mocks.remind }),
-  LobbyReminderError: () => null,
-}));
-
-// The lobby's own read, for what the list row leaves out (GEO-3463 details).
-const lobbyView = vi.hoisted(() => ({ data: undefined as unknown, refetch: vi.fn() }));
-vi.mock('../lobbies/hooks', () => ({ useDebateLobby: () => lobbyView }));
-vi.mock('../lobbies/lobby-host-lobbies', () => ({
-  usePreOpenHosts: (lobby: { hosts?: unknown[] }) => lobby.hosts ?? [],
-}));
-vi.mock('../lobbies/lobby-claim-list-tab', () => ({
-  useClaimListName: (list: { entity_id: string }) => `List ${list.entity_id}`,
-}));
-
-window.ResizeObserver ??= class {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-} as unknown as typeof ResizeObserver;
 
 const { HubLiveStrip, askShareLeft } = await import('./hub-live-strip');
+const { lobbyLineup } = await import('../lobbies/live-lobbies');
 
 const CLAIM = {
   id: 'dc-1',
@@ -85,12 +63,11 @@ function lobby(overrides: Partial<DebateLobbySummary> = {}): DebateLobbySummary 
   };
 }
 
-const EMPTY: LobbyLineup = { live: [], soon: null, later: [] };
+const EMPTY: LobbyLineup = { live: [] };
 
 beforeEach(() => {
   mocks.ask = null;
   mocks.ended = null;
-  mocks.reminded = false;
 });
 
 afterEach(() => {
@@ -115,114 +92,15 @@ describe('HubLiveStrip', () => {
     expect(card.getByRole('link', { name: 'Join lobby' })).toHaveAttribute('href', '/debate/lobby1');
   });
 
-  it('shows the next scheduled lobby with RSVP when none is live', () => {
-    const later = lobby({ open: false, scheduled: true, name: 'AI policy night' });
-    render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
+  // GEO-3519: the timeline is the one place for lobbies still to open. The live card stays.
+  it('shows no strip for a lobby still to open, and keeps the live card', () => {
+    const later = lobby({ lobby_id: 'later', open: false, scheduled: true, name: 'AI policy night' });
+    const { container, rerender } = render(<HubLiveStrip lineup={lobbyLineup([later])} />);
+    expect(container).toBeEmptyDOMElement();
 
-    const strip = screen.getByTestId('hub-strip-next-lobby');
-    expect(strip).toHaveTextContent('AI policy night');
-    fireEvent.click(screen.getByRole('button', { name: 'RSVP' }));
-    expect(mocks.remind).toHaveBeenCalled();
-  });
-
-  // Review: the strip drew its own RSVP with the calendar's look inverted. It is the calendar's pill.
-  it('draws RSVP outlined and Going black, as the calendar does', () => {
-    const later = lobby({ open: false, scheduled: true });
-    const { rerender } = render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
-    expect(screen.getByRole('button', { name: 'RSVP' })).not.toHaveClass('bg-text');
-
-    mocks.reminded = true;
-    rerender(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
-    expect(screen.getByRole('button', { name: 'Going' })).toHaveClass('bg-text', 'text-white');
-  });
-
-  // 26 Oct (Preston): black means live. A lobby on Tuesday is not.
-  it('draws an upcoming lobby light, not on the live strip’s black', () => {
-    const later = lobby({ open: false, scheduled: true });
-    render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
-
-    const strip = screen.getByTestId('hub-strip-next-lobby');
-    expect(strip).toHaveClass('bg-white');
-    expect(strip.className).not.toMatch(/151515/);
-  });
-
-  it('opens the lobby’s details from its name: full name, hosts, who is going and its claim lists', () => {
-    const host = { user_id: 'host-1', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null };
-    const person = (id: string, name: string) => ({
-      user_id: id,
-      profile_space_id: `space-${id}`,
-      display_name: name,
-      avatar_cid: null,
-    });
-    lobbyView.data = {
-      name: 'Geo Open Debates - Politics and Policy Night',
-      hosts: [host],
-      reminder_count: 14,
-      going: [person('a', 'Ana'), person('b', 'Ben')],
-      claim_lists: [{ entity_id: 'page-1', space_id: 'space-1', position: 0, added_by: null, added_at: '' }],
-    };
-    const later = lobby({ open: false, scheduled: true, name: 'Geo Open Debates - Pol…', reminder_count: 14 });
-    render(<HubLiveStrip lineup={{ ...EMPTY, later: [later] }} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
-    const details = screen.getByRole('dialog', { name: 'Lobby details' });
-
-    expect(details).toHaveTextContent('Geo Open Debates - Politics and Policy Night');
-    expect(details).toHaveTextContent('Hosted by Bryan');
-    expect(details).toHaveTextContent('Ana, Ben and 12 more going');
-    expect(details).toHaveTextContent('List page-1');
-    expect(within(details).getByRole('link', { name: 'Open lobby page' })).toHaveAttribute('href', '/debate/lobby1');
-    lobbyView.data = undefined;
-  });
-
-  // Review, 27 Oct: someone else's RSVP reaches this viewer only as the list row's count, and the
-  // details kept the view's older count and names.
-  it('keeps the details’ going count live, and reads the names again when it moves', () => {
-    const person = (id: string, name: string) => ({
-      user_id: id,
-      profile_space_id: `space-${id}`,
-      display_name: name,
-      avatar_cid: null,
-    });
-    lobbyView.data = { reminder_count: 2, going: [person('a', 'Ana'), person('b', 'Ben')] };
-    const later = (count: number) => lobby({ open: false, scheduled: true, reminder_count: count });
-    const { rerender } = render(<HubLiveStrip lineup={{ ...EMPTY, later: [later(2)] }} />);
-    fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
-    expect(screen.getByTestId('lobby-going')).toHaveTextContent('Ana and Ben going');
-    // Once for opening (see the next case), and not again until the count moves.
-    expect(lobbyView.refetch).toHaveBeenCalledTimes(1);
-
-    rerender(<HubLiveStrip lineup={{ ...EMPTY, later: [later(3)] }} />);
-
-    expect(screen.getByTestId('lobby-going')).toHaveTextContent('Ana, Ben and 1 more going');
-    expect(lobbyView.refetch).toHaveBeenCalledTimes(2);
-    lobbyView.data = undefined;
-  });
-
-  // Review, 27 Oct: one RSVP cleared and another set inside the 3s broadcast window leave the count
-  // where it was, so a held view kept naming the person who left. Opening reads it again.
-  it('reads the names again each time the details open', async () => {
-    lobbyView.data = { reminder_count: 1, going: [] };
-    render(<HubLiveStrip lineup={{ ...EMPTY, later: [lobby({ open: false, scheduled: true, reminder_count: 1 })] }} />);
-    const trigger = screen.getByRole('button', { name: /lobby details/ });
-
-    fireEvent.click(trigger);
-    expect(lobbyView.refetch).toHaveBeenCalledTimes(1);
-    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Lobby details' }), { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Lobby details' })).not.toBeInTheDocument());
-
-    fireEvent.click(trigger);
-    expect(lobbyView.refetch).toHaveBeenCalledTimes(2);
-    lobbyView.data = undefined;
-  });
-
-  // With nothing held, the query's own first read is the one out; a refetch would only restart it.
-  it('leaves a first read alone when the details open', () => {
-    lobbyView.data = undefined;
-    render(<HubLiveStrip lineup={{ ...EMPTY, later: [lobby({ open: false, scheduled: true, reminder_count: 1 })] }} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /lobby details/ }));
-    expect(lobbyView.refetch).not.toHaveBeenCalled();
+    rerender(<HubLiveStrip lineup={lobbyLineup([later, lobby()])} />);
+    expect(screen.getByTestId('lobby-spotlight')).toHaveTextContent('NYC Debates');
+    expect(screen.queryByText('AI policy night')).not.toBeInTheDocument();
   });
 
   it('puts your open request ahead of a live lobby, with the time left and Cancel', () => {

@@ -27,6 +27,7 @@ import {
   listDebateLobbies,
   listDebateLobbyCalendar,
   sendDebateLobbyHeartbeat,
+  setDebateLobbyDismissal,
   setDebateLobbyPresence,
   setDebateLobbyReminder,
   stepOutOfDebateLobby,
@@ -232,26 +233,52 @@ export function useCreateDebateLobby() {
   });
 }
 
-/** `list` with the viewer's reminder on `view`'s row, or the same list when it is not listed. */
-function withReminder<T extends { lobbies: DebateLobbySummary[] }>(list: T, view: DebateLobbyView): T {
-  if (!list.lobbies.some(row => dashlessId(row.lobby_id) === dashlessId(view.lobby_id))) return list;
-  return {
-    ...list,
-    lobbies: list.lobbies.map(row =>
-      dashlessId(row.lobby_id) === dashlessId(view.lobby_id)
-        ? { ...row, viewer_reminded: view.viewer.reminded, reminder_count: view.reminder_count }
-        : row
-    ),
-  };
+/** A cached lobby list, or the calendar's week, which sits under the same key. */
+type ListedLobbies = { lobbies: DebateLobbySummary[] };
+
+/** `list` with `patch` laid over `lobbyId`'s row, or the same list when it is not listed. */
+function patchListedLobby<T extends ListedLobbies>(list: T, lobbyId: string, patch: Partial<DebateLobbySummary>): T {
+  const id = dashlessId(lobbyId);
+  if (!list.lobbies.some(row => dashlessId(row.lobby_id) === id)) return list;
+  return { ...list, lobbies: list.lobbies.map(row => (dashlessId(row.lobby_id) === id ? { ...row, ...patch } : row)) };
+}
+
+/** Lays `patch` over `lobbyId`'s row in every cached list: the side panel's and each calendar week. */
+function useWriteListedLobby() {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  return React.useCallback(
+    (lobbyId: string, patch: Partial<DebateLobbySummary>) =>
+      queryClient.setQueriesData<ListedLobbies>(
+        { queryKey: debateQueryKeys.lobbies(accountKey) },
+        list => list && patchListedLobby(list, lobbyId, patch)
+      ),
+    [accountKey, queryClient]
+  );
+}
+
+/** Too late to change: the lobby opened or ended since the list was read, so the list is read again. */
+function useRefetchListOnConflict() {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  return React.useCallback(
+    (error: Error) => {
+      if (error instanceof GeoChatRequestError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbies(accountKey) });
+      }
+    },
+    [accountKey, queryClient]
+  );
 }
 
 /** Every reminder write shares it, so one in flight shows on every control for that lobby. */
 const LOBBY_REMINDER_MUTATION_KEY = ['debates', 'lobby-reminder'] as const;
 
 export function useDebateLobbyReminder() {
-  const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
+  const writeListed = useWriteListedLobby();
+  const refetchOnConflict = useRefetchListOnConflict();
 
   return useMutation({
     mutationKey: LOBBY_REMINDER_MUTATION_KEY,
@@ -260,11 +287,13 @@ export function useDebateLobbyReminder() {
     onSuccess: view => {
       // Remind me draws from the list's row, so the answer is written there now (the calendar's
       // week sits under the same key). Waiting on the refetch `store` starts would show RSVP again
-      // until it lands, and for good if it fails (GEO-3289).
-      queryClient.setQueriesData<{ lobbies: DebateLobbySummary[] }>(
-        { queryKey: debateQueryKeys.lobbies(accountKey) },
-        list => list && withReminder(list, view)
-      );
+      // until it lands, and for good if it fails (GEO-3289). An RSVP clears a dismissal (GEO-3519),
+      // as geo-chat does, so a lobby dismissed and then RSVP'd elsewhere is not hidden meanwhile.
+      writeListed(view.lobby_id, {
+        viewer_reminded: view.viewer.reminded,
+        reminder_count: view.reminder_count,
+        ...(view.viewer.reminded ? { viewer_dismissed: false } : {}),
+      });
       store(view);
       lobbyRsvpChanged(view.lobby_id, {
         going: view.viewer.reminded,
@@ -272,13 +301,52 @@ export function useDebateLobbyReminder() {
         reminderCount: view.reminder_count,
       });
     },
-    // Too late to set: the lobby opened or ended since the list was read.
-    onError: error => {
-      if (error instanceof GeoChatRequestError && error.status === 409) {
-        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbies(accountKey) });
-      }
+    onError: refetchOnConflict,
+  });
+}
+
+/**
+ * Dismiss on an upcoming lobby in the Requests timeline (GEO-3519), or `dismissed: false` to take it
+ * back. Unlike the reminder it is drawn at once: the row leaves on the press, and comes back if the
+ * write fails. Hold it above the rows it removes, so the failure outlives the row it hid; see
+ * {@link lobbyDismissalError}.
+ */
+export function useDebateLobbyDismissal() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const store = useStoreLobbyView();
+  const writeListed = useWriteListedLobby();
+  const refetchOnConflict = useRefetchListOnConflict();
+
+  return useMutation({
+    mutationFn: ({ lobbyId, dismissed }: { lobbyId: string; dismissed: boolean }) =>
+      setDebateLobbyDismissal(lobbyId, dismissed, getPrivyIdentityToken, accountKey),
+    onMutate: async ({ lobbyId, dismissed }) => {
+      // A read already on its way would land the old row over this one.
+      await queryClient.cancelQueries({ queryKey: debateQueryKeys.lobbies(accountKey) });
+      writeListed(lobbyId, { viewer_dismissed: dismissed });
+    },
+    // geo-chat's answer over the drawn one, where it gives one.
+    onSuccess: (view, { dismissed }) => {
+      writeListed(view.lobby_id, { viewer_dismissed: view.viewer.dismissed ?? dismissed });
+      store(view);
+    },
+    // Only this row put back, rather than a snapshot of the whole list: card patches that landed
+    // while the write was out are kept.
+    onError: (error, { lobbyId, dismissed }) => {
+      writeListed(lobbyId, { viewer_dismissed: !dismissed });
+      refetchOnConflict(error);
     },
   });
+}
+
+/** The failure of the dismissal `dismissal` last asked for, when it was for `lobbyId`. */
+export function lobbyDismissalError(
+  dismissal: Pick<ReturnType<typeof useDebateLobbyDismissal>, 'isError' | 'error' | 'variables'>,
+  lobbyId: string
+): Error | null {
+  if (!dismissal.isError || !dismissal.variables) return null;
+  return dashlessId(dismissal.variables.lobbyId) === dashlessId(lobbyId) ? dismissal.error : null;
 }
 
 /**

@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import type { DebateLobbySummary } from '../api';
 import { type DebateAnalyticsSurface, debateAnalyticsLabel } from '../matchmaking/hub-analytics';
-import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { HubPillButton, type HubPillSize } from '../matchmaking/hub-pill-button';
 import { rsvpLabel } from './lobby-format';
 import { LobbyReminderError, useLobbyReminderPress } from './lobby-reminder-press';
 
@@ -21,23 +21,27 @@ export function lobbyBadgeTime(iso: string) {
 
 /**
  * RSVP, or Going once set: black, so a lobby the viewer is going to stands out in a row of them. The
- * pill alone, for a host that holds the press itself (the side panel's lobby strip, which draws it
- * twice and says a failure under the strip); {@link LobbyRsvpButton} is the pill with its error.
+ * pill alone, for a host that holds the press itself (the Requests timeline's unanswered lobby row,
+ * which draws it twice and says a failure on the row); {@link LobbyRsvpButton} is the pill with its
+ * error.
  */
 export function LobbyRsvpPill({
   remind,
   analyticsLabel,
   analyticsSurface = 'hub',
+  size,
   className,
 }: {
   remind: Pick<ReturnType<typeof useLobbyReminderPress>, 'reminded' | 'pending' | 'press'>;
   /** As given: HubPillButton does not prefix an explicit label with the surface. */
   analyticsLabel: string;
   analyticsSurface?: DebateAnalyticsSurface;
+  size?: HubPillSize;
   className?: string;
 }) {
   return (
     <HubPillButton
+      size={size}
       variant={remind.reminded ? 'primary' : 'secondary'}
       analyticsSurface={analyticsSurface}
       analyticsLabel={analyticsLabel}

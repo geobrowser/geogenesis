@@ -143,7 +143,7 @@ vi.mock('../claim-picker-page', async importOriginal => ({
 }));
 
 // GEO-3268's lineup reads the lobby list and holds the matchmaking scope; nothing is live here.
-const lineup = vi.hoisted(() => ({ live: [] as { lobby_id: string }[], soon: null, later: [] }));
+const lineup = vi.hoisted(() => ({ live: [] as { lobby_id: string }[] }));
 vi.mock('../lobbies/live-lobbies', () => ({ useLobbyLineup: () => lineup }));
 
 vi.mock('../hooks', () => ({

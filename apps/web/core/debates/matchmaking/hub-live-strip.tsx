@@ -1,30 +1,14 @@
 'use client';
 
-import * as Popover from '@radix-ui/react-popover';
-
-import * as React from 'react';
-
 import cx from 'classnames';
 import Link from 'next/link';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
-import { Text } from '~/design-system/text';
-import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
-import type { DebateLobbySummary } from '../api';
-import { useDebateLobby } from '../lobbies/hooks';
 import type { LobbyLineup } from '../lobbies/live-lobbies';
-import { markLobbyEntry } from '../lobbies/lobby-analytics';
-import { lobbyDateLabel, lobbyTimeLabel, notYetOpenLabel } from '../lobbies/lobby-format';
-import { usePreOpenHosts } from '../lobbies/lobby-host-lobbies';
-import { LobbyClaimListNames, LobbyGoing, LobbyHostedBy } from '../lobbies/lobby-pre-open-details';
-import { LobbyReminderError, useLobbyReminderPress } from '../lobbies/lobby-reminder-press';
 import { LiveLobbySpotlight, SPOTLIGHT_SECONDARY_PILL_CLASS_NAME } from '../lobbies/lobby-spotlight';
-import { LobbyRsvpPill } from '../lobbies/upcoming-lobbies';
-import { useMinuteNow } from '../lobbies/use-minute-now';
-import { debateRoomPath } from '../rooms/room-routes';
 import { claimCalendarPicks, personCalendarPicks } from './debate-calendar-route';
-import { debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
+import { hubAnalyticsAttributes } from './hub-analytics';
 import { useHubAskState } from './hub-ask-context';
 import { HUB_ICON_BUTTON_CLASS_NAME, hubPillClassName } from './hub-pill-button';
 import { AskTimer } from './requesting-pill';
@@ -44,9 +28,9 @@ const STRIP_PILL_CLASS_NAME = hubPillClassName('primary', 'px-3.5 md:h-8');
  * In priority order:
  *  1. your open ask — who was asked, the time left, Cancel — and once it ends unanswered, that nobody
  *     took it, with Schedule;
- *  2. a live lobby, as the full live card (`LiveLobbySpotlight`): every live lobby, Join for each;
- *  3. the next scheduled lobby, when none is live.
+ *  2. a live lobby, as the full live card (`LiveLobbySpotlight`): every live lobby, Join for each.
  *
+ * A lobby still to open is not here: the Requests timeline is the one place for those (GEO-3519).
  * It sits outside the tabs, so the ask stays in view on every tab while it runs.
  */
 export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
@@ -57,9 +41,6 @@ export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
 
   const [live] = lineup.live;
   if (live) return <LiveLobbySpotlight lineup={lineup} />;
-
-  const next = lineup.soon ?? lineup.later[0] ?? null;
-  if (next) return <NextLobbyStrip lobby={next} />;
 
   return null;
 }
@@ -156,132 +137,5 @@ function EndedAskStrip({ ended, onDismiss }: { ended: EndedAsk; onDismiss: () =>
         <CloseSmall />
       </button>
     </section>
-  );
-}
-
-/**
- * The next lobby, when none is live. Light, not the live strip's black (Preston, 26 Oct): black means
- * "happening now", and a lobby on Tuesday is not. The name opens the lobby's details — its full name,
- * when it opens, who hosts it, who is going and the claim lists it starts with.
- */
-function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
-  const remind = useLobbyReminderPress(lobby);
-  const now = useMinuteNow();
-  const when = lobbyTimeLabel(lobby.starts_at, now);
-  const portal = useElevatedPopoverPortal();
-  const [open, setOpen] = React.useState(false);
-
-  // The calendar's RSVP, Going black, on the strip's light surface. One press for both copies of it.
-  const rsvp = (
-    <LobbyRsvpPill
-      remind={remind}
-      analyticsLabel={debateAnalyticsLabel(
-        'hub',
-        remind.reminded ? 'Lobby spotlight reminded' : 'Lobby spotlight remind me'
-      )}
-      className="md:h-8"
-    />
-  );
-
-  return (
-    <>
-      <section
-        aria-label="Next debate lobby"
-        data-testid="hub-strip-next-lobby"
-        className={cx(STRIP_CLASS_NAME, 'border border-grey-02 bg-white text-text')}
-      >
-        <Popover.Root open={open} onOpenChange={setOpen}>
-          <Popover.Trigger asChild>
-            <button
-              type="button"
-              aria-label={`${lobby.name}, lobby details`}
-              {...hubAnalyticsAttributes('Lobby strip details', 'open_lobby_details')}
-              className="flex min-w-0 flex-1 items-center gap-2 text-left"
-            >
-              <span className="shrink-0 text-footnoteMedium text-grey-04">Lobby</span>
-              <span className="min-w-0 truncate text-metadataMedium underline-offset-2 hover:underline">
-                {lobby.name}
-              </span>
-              {when ? <span className="shrink-0 text-breadcrumb whitespace-nowrap text-grey-04">{when}</span> : null}
-            </button>
-          </Popover.Trigger>
-          {portal ? (
-            <Popover.Portal container={portal}>
-              <Popover.Content
-                side="bottom"
-                align="start"
-                sideOffset={8}
-                collisionPadding={16}
-                aria-label="Lobby details"
-                className="z-100 flex w-[368px] max-w-[calc(100vw-32px)] flex-col gap-3 rounded-xl border border-grey-02 bg-white p-3.5 shadow-lg"
-              >
-                <LobbyDetails lobby={lobby} now={now} rsvp={rsvp} />
-              </Popover.Content>
-            </Popover.Portal>
-          ) : null}
-        </Popover.Root>
-        {rsvp}
-      </section>
-      <LobbyReminderError error={remind.error} />
-    </>
-  );
-}
-
-/**
- * The lobby's own read for what the list row leaves out: hosts, who is going, claim lists. Asked for
- * only while the details are open, and drawn from the list row until it lands.
- *
- * The count is the list row's, which the gateway patches live; the view is read again each time the
- * details open, since a held one is fresh for 30s whatever happened since. An RSVP elsewhere, which
- * reaches this viewer as that patch alone, refetches it here for the names. Card broadcasts are
- * coalesced, so one RSVP cleared and another set leave the count where it was: reopening is what
- * catches that, and a block or a name change.
- */
-function LobbyDetails({ lobby, now, rsvp }: { lobby: DebateLobbySummary; now: number; rsvp: React.ReactNode }) {
-  const { data: view, refetch } = useDebateLobby(lobby.lobby_id);
-  // Only over a view already held: with none, the query's own first read is out already.
-  const staleAtOpening = React.useRef(view !== undefined);
-  React.useEffect(() => {
-    if (!staleAtOpening.current) return;
-    staleAtOpening.current = false;
-    void refetch();
-  }, [refetch]);
-  const goingCount = lobby.reminder_count;
-  const readAtCount = React.useRef(goingCount);
-  React.useEffect(() => {
-    if (readAtCount.current === goingCount) return;
-    readAtCount.current = goingCount;
-    void refetch();
-  }, [goingCount, refetch]);
-  const hosts = usePreOpenHosts(view ?? lobby);
-  const date = lobbyDateLabel(lobby.starts_at);
-
-  return (
-    <>
-      <div className="flex flex-col gap-0.5">
-        <Text as="p" variant="metadataMedium">
-          {view?.name ?? lobby.name}
-        </Text>
-        {date ? (
-          <Text as="p" variant="breadcrumb" color="grey-04">
-            {date} · {notYetOpenLabel(lobby, now)}
-          </Text>
-        ) : null}
-      </div>
-      <LobbyHostedBy hosts={hosts} />
-      <LobbyGoing going={view?.going} count={goingCount} />
-      <LobbyClaimListNames lists={view?.claim_lists} />
-      <div className="flex items-center justify-between gap-2 border-t border-divider pt-3">
-        <Link
-          href={debateRoomPath(lobby.lobby_id)}
-          onClick={() => markLobbyEntry(lobby.lobby_id, 'side_panel')}
-          {...hubAnalyticsAttributes('Lobby strip open page', 'open_lobby')}
-          className={hubPillClassName('secondary')}
-        >
-          Open lobby page
-        </Link>
-        {rsvp}
-      </div>
-    </>
   );
 }

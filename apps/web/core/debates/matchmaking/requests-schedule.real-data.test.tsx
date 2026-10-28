@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { Provider, createStore } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { DebateLobbyCalendarRow, DebateLobbySummary } from '../api';
 import { ResizeObserverStub } from '../resize-observer-fixtures';
 import { historyItem, invite } from './requests-fixtures';
 
@@ -28,6 +29,11 @@ const api = vi.hoisted(() => ({
   // Until geo-chat#299 deploys, the history route is a 404; flipped for the case after it has.
   history404: true,
   history: [] as unknown[],
+  // Lobbies as geo-chat holds them, for the side panel's list and the calendar range alike: the
+  // RSVP and dismissal writes change them.
+  lobbies: [] as DebateLobbyCalendarRow[],
+  setDebateLobbyReminder: vi.fn(),
+  setDebateLobbyDismissal: vi.fn(),
 }));
 
 vi.mock('../api', async importOriginal => {
@@ -86,7 +92,10 @@ vi.mock('../api', async importOriginal => {
           },
         ],
       }),
-    listDebateLobbies: () => Promise.resolve({ lobbies: [] }),
+    listDebateLobbies: () => Promise.resolve({ lobbies: api.lobbies }),
+    listDebateLobbyCalendar: () => Promise.resolve({ lobbies: api.lobbies }),
+    setDebateLobbyReminder: api.setDebateLobbyReminder,
+    setDebateLobbyDismissal: api.setDebateLobbyDismissal,
     listDebateHistory: () =>
       api.history404
         ? Promise.reject(new actual.GeoChatRequestError('Not found', null, 404))
@@ -136,6 +145,8 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
+
 vi.mock('~/partials/availability/peer-availability-booking-modal', () => ({
   PeerAvailabilityBookingModal: () => null,
 }));
@@ -160,6 +171,9 @@ afterEach(() => {
   cleanup();
   api.history404 = true;
   api.history = [];
+  api.lobbies = [];
+  api.setDebateLobbyReminder.mockReset();
+  api.setDebateLobbyDismissal.mockReset();
 });
 
 function renderTab() {
@@ -198,5 +212,114 @@ describe('the Requests timeline over real hooks', () => {
     expect(row).toHaveTextContent('Requested · people who disagree');
     expect(row).toHaveTextContent('Stablecoins should be regulated · Nobody took it');
     expect(screen.queryByText('An older debate')).not.toBeInTheDocument();
+  });
+
+  describe('an upcoming lobby the viewer has not answered (GEO-3519)', () => {
+    const tomorrow = iso(24 * 60);
+    const offered: DebateLobbyCalendarRow = {
+      lobby_id: 'lobby-1',
+      name: 'AI policy night',
+      scheduled: true,
+      starts_at: tomorrow,
+      opens_at: tomorrow,
+      open: false,
+      hosts: [{ user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null }],
+      headcount: 0,
+      avatars: [],
+      debating_count: 0,
+      reminder_count: 2,
+      viewer_reminded: false,
+      viewer_dismissed: false,
+      viewer_on_roster: false,
+      state: 'upcoming',
+      closed_at: null,
+    };
+    /** The lobby view geo-chat answers a write with. */
+    const viewOf = (lobby: DebateLobbySummary) => ({
+      lobby_id: lobby.lobby_id,
+      name: lobby.name,
+      access: { status: 'not_yet_open', opens_at: lobby.opens_at },
+      starts_at: lobby.starts_at,
+      opens_at: lobby.opens_at,
+      scheduled: true,
+      created_by: 'user-host',
+      acting_host_id: null,
+      hosts_changed_at: null,
+      reminder_count: lobby.reminder_count,
+      members: [],
+      viewer: {
+        role: null,
+        creator: false,
+        hosting: false,
+        reminded: lobby.viewer_reminded,
+        voice_away_at: null,
+        connected: false,
+        stepped_out: false,
+      },
+    });
+
+    // `/me/debate-rooms` does not list it yet: that read hears of an RSVP only when geo-chat's
+    // event comes round. The row turns into the going row from the list's own answer.
+    it('turns into a lobby the viewer is going to once they RSVP', async () => {
+      api.lobbies = [offered];
+      api.setDebateLobbyReminder.mockImplementation(async () => {
+        api.lobbies = [{ ...offered, viewer_reminded: true, reminder_count: 3 }];
+        return viewOf(api.lobbies[0]!);
+      });
+      renderTab();
+
+      const row = await screen.findByTestId('requests-unanswered-lobby', {}, { timeout: 3000 });
+      fireEvent.click(within(row).getByRole('button', { name: 'RSVP' }));
+
+      const going = await screen.findByTestId('requests-lobby');
+      expect(going).toHaveTextContent('AI policy night');
+      expect(going).toHaveTextContent('Lobby · Hosted by Bryan');
+      expect(screen.queryByTestId('requests-unanswered-lobby')).not.toBeInTheDocument();
+      expect(api.setDebateLobbyReminder).toHaveBeenCalledWith('lobby-1', true, expect.anything(), 'account-me');
+    });
+
+    it('leaves on Dismiss at once, and stays gone once geo-chat has it', async () => {
+      api.lobbies = [offered];
+      let settle: () => void = () => undefined;
+      api.setDebateLobbyDismissal.mockImplementation(
+        () =>
+          new Promise(done => {
+            settle = () => {
+              api.lobbies = [{ ...offered, viewer_dismissed: true }];
+              done(viewOf(offered));
+            };
+          })
+      );
+      renderTab();
+
+      const row = await screen.findByTestId('requests-unanswered-lobby', {}, { timeout: 3000 });
+      fireEvent.click(within(row).getByRole('button', { name: 'Dismiss' }));
+
+      await waitFor(() => expect(screen.queryByTestId('requests-unanswered-lobby')).not.toBeInTheDocument());
+      expect(api.setDebateLobbyDismissal).toHaveBeenCalledWith('lobby-1', true, expect.anything(), 'account-me');
+
+      await act(async () => settle());
+      // The refetch the write starts, which now carries the dismissal.
+      await new Promise(resolve => setTimeout(resolve, 50));
+      expect(screen.queryByTestId('requests-unanswered-lobby')).not.toBeInTheDocument();
+    });
+
+    it('comes back with the failure said on it when the dismissal does not save', async () => {
+      api.lobbies = [offered];
+      let fail: () => void = () => undefined;
+      api.setDebateLobbyDismissal.mockImplementation(
+        () => new Promise((_, reject) => (fail = () => reject(new Error('down'))))
+      );
+      renderTab();
+
+      const row = await screen.findByTestId('requests-unanswered-lobby', {}, { timeout: 3000 });
+      fireEvent.click(within(row).getByRole('button', { name: 'Dismiss' }));
+      await waitFor(() => expect(screen.queryByTestId('requests-unanswered-lobby')).not.toBeInTheDocument());
+
+      await act(async () => fail());
+
+      const back = await screen.findByTestId('requests-unanswered-lobby');
+      expect(within(back).getByRole('alert')).toHaveTextContent('Could not dismiss this lobby. Try again.');
+    });
   });
 });
