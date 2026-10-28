@@ -31,7 +31,7 @@ export function callListItem(call: SpaceCallSummary): CallListItem | null {
     seriesId: call.series ? dashlessId(call.series.series_id) : null,
     seriesName: call.series?.name ?? null,
     remindSeriesId: call.series ? dashlessId(call.series.series_id) : null,
-    startsAt: call.starts_at ?? call.started_at,
+    startsAt: call.starts_at,
     endsAt: call.ends_at ?? null,
     status,
     headcount: call.headcount,

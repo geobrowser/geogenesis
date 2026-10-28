@@ -20,7 +20,7 @@ const item = (over: Partial<CallListItem>): CallListItem => ({
 const row = (over: Partial<SpaceCallSummary>): SpaceCallSummary => ({
   call_id: 'call1',
   name: 'Weekly',
-  started_at: '2026-11-02T17:00:00Z',
+  starts_at: '2026-11-02T17:00:00Z',
   started_by: null,
   hosts: [],
   headcount: 0,

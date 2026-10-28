@@ -843,7 +843,7 @@ describe('DebateGatewayClient', () => {
       const call = {
         call_id: 'call1',
         name: 'Weekly',
-        started_at: '2026-10-23T15:00:00Z',
+        starts_at: '2026-10-23T15:00:00Z',
         started_by: null,
         hosts: [],
         headcount: 1,

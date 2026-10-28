@@ -46,9 +46,7 @@ export function PastCallsSection({ spaceId }: { spaceId: string }) {
         testId="calls-tab-past"
       >
         {calls.map(call => {
-          const when = [callDateLabel(call.started_at), callTimeLabel(call.started_at, null)]
-            .filter(Boolean)
-            .join(' · ');
+          const when = [callDateLabel(call.starts_at), callTimeLabel(call.starts_at, null)].filter(Boolean).join(' · ');
           const length = pastCallDurationLabel(call.duration_seconds);
           // As on upcoming rows: the series, when it names the call differently.
           const series = call.series?.name && call.series.name !== call.name ? call.series.name : null;

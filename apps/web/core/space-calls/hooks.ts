@@ -30,7 +30,7 @@ export function nextSpaceCallsRefetch(data: SpaceCallsResponse | undefined, now:
       status === 'scheduled'
         ? Date.parse(call.opens_at ?? '')
         : status === 'live' && call.ends_at
-          ? Date.parse(call.starts_at ?? '') + CALL_HOLD_OPEN_MS
+          ? Date.parse(call.starts_at) + CALL_HOLD_OPEN_MS
           : NaN;
     if (status === 'scheduled' && at <= now) return OVERDUE_REFETCH_MS;
     if (at > now) next = Math.min(next, at + TRANSITION_SLACK_MS);

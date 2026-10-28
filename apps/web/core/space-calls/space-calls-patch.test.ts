@@ -7,7 +7,7 @@ function row(extra: Partial<SpaceCallSummary> & { as_of?: string } = {}): SpaceC
   return {
     call_id: 'call1',
     name: 'Community call',
-    started_at: '2026-10-23T15:00:02Z',
+    starts_at: '2026-10-23T15:00:02Z',
     started_by: null,
     hosts: [],
     headcount: 3,

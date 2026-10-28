@@ -93,7 +93,7 @@ export type PastCall = {
   space_id: string;
   space_name: string | null;
   name: string;
-  started_at: string;
+  starts_at: string;
   ended_at: string;
   /** The call's, end minus start. */
   duration_seconds: number | null;

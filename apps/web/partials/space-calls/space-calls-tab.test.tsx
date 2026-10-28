@@ -34,7 +34,7 @@ afterEach(() => {
 const live = {
   call_id: 'call1',
   name: 'Weekly call',
-  started_at: '2026-10-23T15:00:02Z',
+  starts_at: '2026-10-23T15:00:02Z',
   started_by: null,
   hosts: [],
   headcount: 2,

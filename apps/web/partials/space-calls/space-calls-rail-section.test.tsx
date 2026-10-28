@@ -15,7 +15,7 @@ afterEach(cleanup);
 const row = (over: Partial<SpaceCallSummary>): SpaceCallSummary => ({
   call_id: 'call1',
   name: 'Weekly',
-  started_at: '2026-11-04T16:00:00Z',
+  starts_at: '2026-11-04T16:00:00Z',
   started_by: null,
   hosts: [],
   headcount: 0,

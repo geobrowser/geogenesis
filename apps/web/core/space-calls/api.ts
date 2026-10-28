@@ -14,9 +14,8 @@ export type SpaceCallSummary = {
   /** Absent from a geo-chat that lists live calls only. `scheduled` before the room opens (GEO-3420). */
   status?: SpaceCallStatus;
   name: string;
-  started_at: string;
-  /** The scheduled start; for a call started on the spot, when it started. GEO-3420. */
-  starts_at?: string;
+  /** The scheduled start; for a call started on the spot, when it started. */
+  starts_at: string;
   /** The room opens 10 minutes before a scheduled start. GEO-3420. */
   opens_at?: string;
   /** `null` for a call started on the spot. GEO-3420. */

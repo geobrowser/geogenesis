@@ -11,7 +11,7 @@ function call(extra: Partial<SpaceCallSummary>): SpaceCallSummary {
   return {
     call_id: 'c1',
     name: 'Weekly',
-    started_at: '2026-10-28T12:00:00Z',
+    starts_at: '2026-10-28T12:00:00Z',
     started_by: null,
     hosts: [],
     headcount: 0,
