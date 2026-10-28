@@ -315,13 +315,13 @@ export function DebateVideoTile({
         >
           <div className="flex min-w-0 flex-col items-start gap-1">
             {participantName && (
-              <span
-                className="w-full truncate text-sm leading-5 font-semibold text-white"
-                style={recordingOverlayTextShadow}
+              <DebateTileChip
+                className={cx('max-w-full text-text', tileChipSurface)}
+                openRounds={openRounds}
                 title={participantName}
               >
-                {participantName}
-              </span>
+                <span className="truncate">{participantName}</span>
+              </DebateTileChip>
             )}
             {positionLabel !== null && <DebatePositionChip label={positionLabel} openRounds={openRounds} />}
           </div>

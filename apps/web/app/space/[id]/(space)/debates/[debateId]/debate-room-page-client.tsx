@@ -3801,7 +3801,12 @@ function DebateRecordingModal({
             />
           </div>
 
-          <DebateTurnNotice speaker={currentSpeaker} nextSpeaker={nextSpeaker} />
+          <DebateTurnNotice
+            speaker={currentSpeaker}
+            nextSpeaker={nextSpeaker}
+            microphoneMuted={audioMuted}
+            reconnecting={roomState === 'reconnecting'}
+          />
 
           {/* A size container, so the Open rounds panel and announcements over the tiles size with them. */}
           <div

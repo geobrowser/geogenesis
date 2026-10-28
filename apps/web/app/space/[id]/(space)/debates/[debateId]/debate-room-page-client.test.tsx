@@ -7311,6 +7311,18 @@ describe('DebateRoomPageClient', () => {
 
   describe('turn ownership announcements (GEO-3523)', () => {
     const turnNotice = () => document.querySelector('[data-debate-turn-notice]') as HTMLElement;
+    const openingDebate = (openRounds: boolean): Debate => {
+      const debate = openRoundsListening();
+      return {
+        ...debate,
+        turn_format_id: openRounds ? 'open_rounds' : 'standard',
+        open_rounds: openRounds ? debate.open_rounds : undefined,
+        current_turn_index: 0,
+        current_speaker_slot: 1,
+        turn_started_at: '2026-10-06T20:00:00.000Z',
+        turn_ends_at: '2026-10-06T20:01:00.000Z',
+      };
+    };
 
     it.each([false, true].flatMap(openRounds => [false, true].map(localOpens => ({ openRounds, localOpens }))))(
       'hands the floor over on the room clock (Open rounds: $openRounds, local opens: $localOpens)',
@@ -7318,15 +7330,7 @@ describe('DebateRoomPageClient', () => {
         mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
         if (!localOpens) joinAsBob();
         vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:00:54.000'));
-        const debate: Debate = {
-          ...openRoundsListening(),
-          turn_format_id: openRounds ? 'open_rounds' : 'standard',
-          open_rounds: openRounds ? openRoundsListening().open_rounds : undefined,
-          current_turn_index: 0,
-          current_speaker_slot: 1,
-          turn_started_at: '2026-10-06T20:00:00.000Z',
-          turn_ends_at: '2026-10-06T20:01:00.000Z',
-        };
+        const debate = openingDebate(openRounds);
         const view = await renderLiveDebate(debate);
         expect(turnNotice()).toHaveTextContent(localOpens ? 'Your turn' : 'Alice’s turn');
         expect(turnNotice()).not.toHaveTextContent('Starts in');
@@ -7354,6 +7358,31 @@ describe('DebateRoomPageClient', () => {
         rerenderAt(view, '20:01:10.000', debate);
         expect(turnNotice()).toHaveTextContent(localOpens ? 'Bob’s turn' : 'Your turn');
         expect(turnNotice()).toHaveTextContent(localOpens ? 'Listen' : 'Speak now');
+      }
+    );
+
+    it.each([false, true])(
+      'keeps the turn instruction in sync with the mic and connection (Open rounds: %s)',
+      async openRounds => {
+        mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+        mocks.featureFlags.debateDebugging = true;
+        vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:00:20.000'));
+        await renderLiveDebate(openingDebate(openRounds));
+        expect(turnNotice()).toHaveTextContent('Speak now');
+        fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+        expect(turnNotice()).toHaveTextContent('Your turn');
+        expect(turnNotice()).toHaveTextContent('Your microphone is off.');
+        expect(turnNotice()).not.toHaveTextContent('Speak now');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+        expect(turnNotice()).toHaveTextContent('Speak now');
+        act(() => emitRoomEvent('reconnecting'));
+        expect(turnNotice()).toHaveTextContent('Your turn');
+        expect(turnNotice()).toHaveTextContent('Reconnecting — the debate clock is still running.');
+        expect(turnNotice()).not.toHaveTextContent('Speak now');
+
+        act(() => emitRoomEvent('reconnected'));
+        expect(turnNotice()).toHaveTextContent('Speak now');
       }
     );
 
