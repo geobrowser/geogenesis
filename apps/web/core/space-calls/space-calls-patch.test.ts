@@ -38,6 +38,19 @@ describe('withSpaceCallPatch', () => {
     expect(withSpaceCallPatch(list, { status: 'live', as_of: newer.as_of, call: newer }).calls).toEqual([newer]);
   });
 
+  it('opens a scheduled row never broadcast (`as_of: null`) with its live row', () => {
+    const scheduled = {
+      ...row({ status: 'scheduled', headcount: 0 }),
+      as_of: null,
+      opens_at: '2026-10-23T14:50:00Z',
+      ends_at: '2026-10-23T16:00:00Z',
+    };
+    const live = { ...scheduled, status: 'live' as const, as_of: '2026-10-23T14:50:01.000001Z' };
+    const before: SpaceCallsResponse = { ...list, calls: [row({ call_id: 'other' }), scheduled] };
+    const after = withSpaceCallPatch(before, { status: 'live', as_of: live.as_of, call: live });
+    expect(after.calls).toEqual([before.calls[0], live]);
+  });
+
   it('keeps the list for an older patch, and never adds a call', () => {
     const older = row({ headcount: 1, as_of: '2026-10-23T15:00:00Z' });
     expect(withSpaceCallPatch(list, { status: 'live', as_of: older.as_of, call: older })).toBe(list);
