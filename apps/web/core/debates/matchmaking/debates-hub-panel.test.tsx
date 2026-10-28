@@ -812,7 +812,7 @@ describe('the way out to the full-screen hub', () => {
   });
 
   it.each([
-    ['explore', 'explore'],
+    ['explore', null],
     ['positions', 'positions'],
   ] as const)('opens the workspace on the list %s was showing', (tab, list) => {
     renderOpen(tab);
@@ -859,15 +859,15 @@ describe('the way out to the full-screen hub', () => {
       );
 
       const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
-      expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe('explore');
+      expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
     });
   });
 
-  it('omits Lobby from the URL, which is the workspace default', () => {
+  it('names Lobby in the URL so Matches still opens in the workspace', () => {
     renderOpen('lobby');
 
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
-    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe('lobby');
   });
 
   it.each(['requests', 'people'] as const)('hands over no list from %s, which is not one', tab => {
@@ -889,8 +889,8 @@ describe('the way out to the full-screen hub', () => {
     );
 
     const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
-    // Default list is omitted; the toggle never becomes its own `list` value.
-    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
+    // The toggle never becomes its own `list` value.
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe('lobby');
   });
 
   /**
@@ -958,7 +958,7 @@ describe('the filters the expand link carries', () => {
     const params = new URLSearchParams(href.split('?')[1] ?? '');
     // Carried with the rest: the search is an atom now, so it outlives the tab being unmounted,
     // which was the one reason this link used to leave it behind.
-    expect(params.get('list')).toBe('explore');
+    expect(params.get('list')).toBeNull();
     expect(params.get('q')).toBe('nuclear');
     expect(params.get('spaces')).toBe('space-a');
     expect(params.get('topics')).toBe('topic-a,topic-b');
