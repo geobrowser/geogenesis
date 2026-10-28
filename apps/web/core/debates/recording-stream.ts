@@ -773,8 +773,8 @@ export class RecordingPartStreamer {
     // Armed before the URL and the bytes are fetched, so a mic that opens meanwhile still stops the PUT.
     const abort = new AbortController();
     this.partAbort = abort;
-    let startedAt: number;
-    let body: Blob;
+    let startedAt: number | undefined;
+    let body: Blob | undefined;
     try {
       const upload = await this.partUrl(partNumber);
       const { start, end } = partRange(partNumber, multipart.partSize, this.byteSize);
@@ -785,6 +785,13 @@ export class RecordingPartStreamer {
       await trackRecordingPartUpload(this.options.telemetry, partNumber, sent.size, () =>
         this.options.putPart(upload, sent, abort.signal)
       );
+    } catch (error) {
+      // A part cut short needed longer than it ran, so the link is at most this fast. Without it a
+      // link slower than the default would be cut short every window and never learnt.
+      if (startedAt !== undefined && body && isAbortError(error)) {
+        this.noteUplink(body.size, this.options.now() - startedAt);
+      }
+      throw error;
     } finally {
       if (this.partAbort === abort) this.partAbort = null;
     }

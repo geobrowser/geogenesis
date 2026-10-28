@@ -516,6 +516,48 @@ describe('debate recording streaming', () => {
         expect((await streamer.finish())?.uploadedPartNumbers).toEqual([1]);
       });
 
+      it('learns from a part cut short, so a link slower than assumed is not cut short every window', async () => {
+        const timers = manualTimers();
+        const time = clock();
+        const wire = transport();
+        wire.putPart.mockImplementationOnce(
+          (_upload: unknown, _body: Blob, signal?: AbortSignal) =>
+            new Promise<void>((_resolve, reject) => {
+              signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+            })
+        );
+        let window = 2_000;
+        const streamer = new stream.RecordingPartStreamer({
+          ...wire,
+          ...timers,
+          now: time.now,
+          shouldPause: () => false,
+          callWindowMs: () => window,
+        });
+
+        // The default predicts about 1 s, so the part starts, and is still going when the mic opens.
+        streamer.append(new Blob(['01234567']));
+        await timers.drain();
+        expect(wire.putPart).toHaveBeenCalledOnce();
+        time.advance(1_500);
+        window = 0;
+        streamer.yieldToCall();
+        await flush();
+        await timers.runNext();
+
+        // It needed more than 1.5 s, so the next is predicted past 1.5 s × 1.25 + 1 s.
+        window = 2_000;
+        streamer.wake();
+        await timers.runNext();
+        expect(wire.putPart).toHaveBeenCalledOnce();
+
+        window = 3_000;
+        await timers.drain();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1]);
+        expect(streamer.stats().parts_aborted_for_mic).toBe(1);
+        await streamer.finish();
+      });
+
       it('stops a part whose microphone opened while its URL was being fetched', async () => {
         const timers = manualTimers();
         const wire = transport();
