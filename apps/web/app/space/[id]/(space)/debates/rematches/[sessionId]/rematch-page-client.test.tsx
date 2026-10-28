@@ -5545,6 +5545,24 @@ describe('where the pair land', () => {
     expect(landings).toEqual(['rematch-1', 'rematch-2']);
   });
 
+  // GEO-3495: a tab press is recorded as leaving the list on screen. Before the landing there is
+  // none, only the skeleton, so the first press names nothing it left.
+  it('records a tab press from the list on screen, and none from the skeleton', async () => {
+    mocks.positionsFetching = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    mocks.capture.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
+    await settleTabSwap();
+    fireEvent.click(screen.getByRole('button', { name: /^Matches/ }));
+
+    const presses = mocks.capture.mock.calls
+      .filter(([event, properties]) => event === 'action_completed' && properties?.target_type === 'tab')
+      .map(([, properties]) => [properties.list_id, properties.target_id]);
+    expect(presses).toEqual([['rematch_explore', 'rematch_matches']]);
+  });
+
   it('reports where it landed, once, with what each earlier tab held', async () => {
     nothingToRematch();
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -6457,7 +6475,8 @@ describe('inside a debate room', () => {
   // Each rejoin already retries its request. When all of those fail, the session is still ended and
   // will not change, so nothing would ever ask again without this.
   it('tries a failed rejoin again, a bounded number of times', async () => {
-    vi.useFakeTimers();
+    // Only the retry timers need to advance. Faking the animation clock can stall later tab swaps.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       const rejoin = vi.fn().mockResolvedValue(false);
       mocks.session = session({ status: 'expired' });
