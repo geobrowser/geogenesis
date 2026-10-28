@@ -11,10 +11,11 @@ import { Text } from '~/design-system/text';
 import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
 import type { DebateParticipantSummary, ParticipantSlot } from './api';
-import { DebateFormatDetails, type DebateFormatOpenRounds } from './format-details';
+import { DebateFormatDetails } from './format-details';
 import { DebateFormatSelector } from './format-selector';
 import {
   type DebateFormatId,
+  type OpenRoundsFormat,
   debateFormatById,
   defaultDebateFormatId,
   isOpenRoundsFormatId,
@@ -52,7 +53,7 @@ type DebateRequestDialogProps = {
   currentUserId: string;
   formatId: string | null | undefined;
   /** The debate's `open_rounds` block, when there is a debate (the ready prompt). */
-  openRounds?: DebateFormatOpenRounds | null;
+  openRounds?: OpenRoundsFormat | null;
   formatSelector?: DebateRequestDialogFormatSelector;
   busy: boolean;
   error: string | null;
@@ -234,13 +235,7 @@ export function DebateRequestDialog({
                     turnDurationsMs: isOpenRoundsFormatId(formatId)
                       ? openRoundsOpeningTurnDurationsMs
                       : (summaryFormat?.turnDurationsMs ?? []),
-                    openRounds: openRounds
-                      ? {
-                          maxRebuttalRounds: openRounds.max_rebuttal_rounds ?? 0,
-                          rebuttalTurnMs: openRounds.rebuttal_turn_ms ?? 0,
-                          requiredRebuttalRounds: openRounds.required_rebuttal_rounds ?? 0,
-                        }
-                      : null,
+                    openRounds,
                   })}
                 </Text>
               ) : (

@@ -1,5 +1,12 @@
 import type { Debate, DebateOpenRounds, OpenRoundPick, OpenRoundRevealedPick } from './api';
-import { type DebateTurnRole, debateTurnRole } from './formats';
+import {
+  type DebateTurnRole,
+  debateTurnRole,
+  hasNumberedOpenRoundsTurns,
+  openRoundsRequiredRebuttalRounds,
+} from './formats';
+
+export { openRoundsRequiredRebuttalRounds } from './formats';
 
 /**
  * The room's clock for Open rounds (GEO-3175), against geo-chat `docs/open-rounds-contract.md`.
@@ -91,11 +98,6 @@ export function isFinalOpenRound(openRounds: Pick<DebateOpenRounds, 'max_rebutta
   return roundIndex >= openRounds.max_rebuttal_rounds;
 }
 
-/** The rebuttal rounds that run before the first pick. `0` from a geo-chat that does not send it. */
-export function openRoundsRequiredRebuttalRounds(openRounds: Pick<DebateOpenRounds, 'required_rebuttal_rounds'>) {
-  return Math.max(0, openRounds.required_rebuttal_rounds ?? 0);
-}
-
 /**
  * Whether a round ends on a pick. Every round before the last required one runs straight into the
  * next, like a fixed format's rounds, so the first pick follows the last required round (or the
@@ -179,7 +181,7 @@ export function openRoundLastWord(
  * Use the stored turns so old recordings keep their labels and timing, even after a rerender.
  */
 export function hasNumberedOpenRounds(debate: Pick<Debate, 'open_rounds' | 'turn_durations_ms'>) {
-  return isOpenRoundsDebate(debate) && debate.turn_durations_ms[4] === 30_000 && debate.turn_durations_ms[5] === 30_000;
+  return isOpenRoundsDebate(debate) && hasNumberedOpenRoundsTurns(debate.turn_durations_ms);
 }
 
 /** Round cue roles: a null role displays only Round N; fixed and legacy labels stay as recorded. */

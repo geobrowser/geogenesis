@@ -536,6 +536,8 @@ export type DebateRematchRequest = {
   max_rebuttal_rounds?: number | null;
   /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
   required_rebuttal_rounds?: number | null;
+  /** Exact initial turns snapshotted when the request was created. Absent means legacy timing. */
+  turn_durations_ms?: number[] | null;
   created_at: string;
   expires_at: string;
 };
@@ -971,6 +973,8 @@ export type DebateRequest = {
   max_rebuttal_rounds?: number | null;
   /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
   required_rebuttal_rounds?: number | null;
+  /** Exact initial turns snapshotted when the request was created. Absent means legacy timing. */
+  turn_durations_ms?: number[] | null;
   created_at: string;
   /** Fixed for the lifetime of the request, even as it advances between recipients. */
   expires_at: string;

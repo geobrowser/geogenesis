@@ -118,7 +118,11 @@ describe('DebateFormatDetails', () => {
   it('shows three numbered rounds at 60, 45 and 30 seconds, then 30-second extras', () => {
     const { container } = renderDetails({
       formatId: 'open_rounds',
-      openRounds: requestOpenRounds({ max_rebuttal_rounds: 10, required_rebuttal_rounds: 2 }),
+      openRounds: requestOpenRounds({
+        max_rebuttal_rounds: 10,
+        required_rebuttal_rounds: 2,
+        turn_durations_ms: [60_000, 60_000, 45_000, 45_000, 30_000, 30_000],
+      }),
     });
     for (const round of [1, 2, 3]) {
       expect(screen.getByText(`Round ${round} · You`)).toBeInTheDocument();
@@ -129,6 +133,16 @@ describe('DebateFormatDetails', () => {
     expect(screen.getAllByText('30s')).toHaveLength(3);
     expect(screen.getByText('Both of you must pick Extend to add a round. Up to 8 more rounds.')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/opening|rebut|clos/i);
+  });
+
+  it('keeps a legacy request with a custom required count at 45 seconds', () => {
+    const { container } = renderDetails({
+      formatId: 'open_rounds',
+      openRounds: requestOpenRounds({ max_rebuttal_rounds: 10, required_rebuttal_rounds: 2 }),
+    });
+    expect(screen.getAllByText('45s')).toHaveLength(5);
+    expect(screen.queryByText('30s')).not.toBeInTheDocument();
+    expect(container.textContent).toContain('You rebut');
   });
 
   it('keeps the fixed formats’ turn lists', () => {

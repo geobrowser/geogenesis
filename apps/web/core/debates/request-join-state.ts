@@ -1,3 +1,5 @@
+import { type OpenRoundsFormat, openRoundsMaxSpeakingTimeMs } from './formats';
+
 export type DebateJoinState = {
   micOn: boolean;
   cameraOn: boolean;
@@ -46,7 +48,7 @@ export function describeFormatLine({
   label: string | null;
   turnDurationsMs: readonly number[];
   isOpenRounds?: boolean;
-  openRounds?: { maxRebuttalRounds: number; rebuttalTurnMs: number; requiredRebuttalRounds?: number } | null;
+  openRounds?: OpenRoundsFormat | null;
 }): string {
   const openingMs = turnDurationsMs.reduce((total, ms) => total + ms, 0);
   const withLabel = (time: string) => (label ? `${label} · ${time}` : time);
@@ -54,10 +56,7 @@ export function describeFormatLine({
   if (!isOpenRounds) return withLabel(`${formatTotalSpeakingTime(openingMs)} total`);
 
   if (openRounds) {
-    const rebuttalMs =
-      openRounds.maxRebuttalRounds * openRounds.rebuttalTurnMs * 2 +
-      ((openRounds.requiredRebuttalRounds ?? 0) >= 2 && openRounds.rebuttalTurnMs === 30_000 ? 30_000 : 0);
-    return withLabel(`up to ${formatTotalSpeakingTime(openingMs + rebuttalMs)} total`);
+    return withLabel(`up to ${formatTotalSpeakingTime(openRoundsMaxSpeakingTimeMs(openRounds))} total`);
   }
 
   return withLabel(`at least ${formatTotalSpeakingTime(openingMs)}`);

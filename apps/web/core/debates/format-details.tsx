@@ -3,18 +3,21 @@
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
-import type { DebateOpenRounds, DebateRequest } from './api';
+import type { DebateRequest } from './api';
 import {
   type DebateTurnRole,
+  type OpenRoundsFormat,
   debateFormatById,
   debateTurnRole,
   defaultDebateFormatId,
   formatTurnDuration,
+  hasNumberedOpenRoundsTurns,
   isOpenRoundsFormatId,
   openRoundsDefaultRebuttalTurnMs,
-  openRoundsOpeningTurnDurationsMs,
+  openRoundsExtraTurnMs,
+  openRoundsInitialTurnDurationsMs,
 } from './formats';
-import { openRoundsRequiredRebuttalRounds } from './open-rounds';
+import { openRoundIndexForTurn, openRoundNumber, openRoundsRequiredRebuttalRounds } from './open-rounds';
 import { speakerLabel } from './playback-utils';
 
 type FormatParticipant = {
@@ -24,25 +27,22 @@ type FormatParticipant = {
   avatar_cid: string | null;
 };
 
-/** What the format box needs from a debate's `open_rounds` block. */
-export type DebateFormatOpenRounds = Pick<
-  DebateOpenRounds,
-  'max_rebuttal_rounds' | 'rebuttal_turn_ms' | 'required_rebuttal_rounds'
->;
-
 /**
  * The format box's Open rounds block for a pending request. The server decides the format, cap and
- * required rounds when the request is made (GEO-3201); the rebuttal turn length isn't on the
- * request, so it uses the default every Open rounds debate starts with.
+ * required rounds and initial turns when the request is made. Missing turns identify a legacy
+ * request; its required-round count alone cannot identify the timing generation.
  */
 export function requestOpenRounds(
-  request: Pick<DebateRequest, 'max_rebuttal_rounds' | 'required_rebuttal_rounds'>
-): DebateFormatOpenRounds | null {
+  request: Pick<DebateRequest, 'max_rebuttal_rounds' | 'required_rebuttal_rounds' | 'turn_durations_ms'>
+): OpenRoundsFormat | null {
   if (request.max_rebuttal_rounds == null) return null;
   return {
     max_rebuttal_rounds: request.max_rebuttal_rounds,
     required_rebuttal_rounds: request.required_rebuttal_rounds ?? 0,
-    rebuttal_turn_ms: (request.required_rebuttal_rounds ?? 0) >= 2 ? 30_000 : openRoundsDefaultRebuttalTurnMs,
+    ...(request.turn_durations_ms && { turn_durations_ms: request.turn_durations_ms }),
+    rebuttal_turn_ms: hasNumberedOpenRoundsTurns(request.turn_durations_ms ?? [])
+      ? openRoundsExtraTurnMs
+      : openRoundsDefaultRebuttalTurnMs,
   };
 }
 
@@ -57,7 +57,7 @@ export function DebateFormatDetails({
    * The debate's own `open_rounds` block, when there is a debate. It carries the cap the server
    * snapshotted for this debate. For a pending request, build it with `requestOpenRounds`.
    */
-  openRounds?: DebateFormatOpenRounds | null;
+  openRounds?: OpenRoundsFormat | null;
   participants: FormatParticipant[];
   currentUserId: string;
 }) {
@@ -73,7 +73,10 @@ export function DebateFormatDetails({
   const fixedFormat = isOpenRounds ? null : debateFormatById(formatId || defaultDebateFormatId);
   const rebuttalTurnMs = openRounds?.rebuttal_turn_ms ?? openRoundsDefaultRebuttalTurnMs;
   const requiredRebuttalRounds = openRounds ? openRoundsRequiredRebuttalRounds(openRounds) : 0;
-  const numberedOnly = isOpenRounds && requiredRebuttalRounds >= 2 && rebuttalTurnMs === 30_000;
+  const initialTurns = openRoundsInitialTurnDurationsMs(
+    openRounds ?? { max_rebuttal_rounds: 0, rebuttal_turn_ms: rebuttalTurnMs }
+  );
+  const numberedOnly = isOpenRounds && hasNumberedOpenRoundsTurns(initialTurns);
   const maxRebuttalRounds = openRounds?.max_rebuttal_rounds ?? null;
   if (!isOpenRounds && !fixedFormat) {
     return (
@@ -88,13 +91,10 @@ export function DebateFormatDetails({
         durationMs,
         role: debateTurnRole(index, all.length),
       }))
-    : [
-        ...openRoundsOpeningTurnDurationsMs.map(durationMs => ({ durationMs, role: 'opening' as const })),
-        ...Array.from({ length: requiredRebuttalRounds * 2 }, (_, index) => ({
-          durationMs: numberedOnly && index < 2 ? 45_000 : rebuttalTurnMs,
-          role: 'rebuttal' as const,
-        })),
-      ];
+    : initialTurns.map((durationMs, index) => ({
+        durationMs,
+        role: index < 2 ? ('opening' as const) : ('rebuttal' as const),
+      }));
 
   return (
     <div className="grid">
@@ -108,7 +108,7 @@ export function DebateFormatDetails({
             participant={participant}
             label={
               numberedOnly
-                ? `Round ${Math.floor(index / 2) + 1} · ${participant.user_id === currentUserId ? 'You' : speakerLabel(participant)}`
+                ? `Round ${openRoundNumber(openRoundIndexForTurn(index))} · ${participant.user_id === currentUserId ? 'You' : speakerLabel(participant)}`
                 : turnLabel(participant, currentUserId, role)
             }
           />
