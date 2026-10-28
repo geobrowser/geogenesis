@@ -13,6 +13,10 @@ const mocks = vi.hoisted(() => ({
   cancel: vi.fn(),
   dismissEnded: vi.fn(),
   close: vi.fn(),
+  auth: { ready: true, authenticated: true },
+  signIn: vi.fn(),
+  queue: vi.fn(),
+  mutate: vi.fn(),
 }));
 
 vi.mock('./hub-ask-context', () => ({
@@ -31,6 +35,24 @@ vi.mock('./use-debates-hub', () => ({ useDebatesHub: () => ({ close: mocks.close
 vi.mock('next/navigation', () => ({
   usePathname: () => '/explore',
   useSearchParams: () => new URLSearchParams(),
+}));
+
+vi.mock('../hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('../hooks')>()),
+  useGeoChatAuth: () => mocks.auth,
+}));
+// The press itself is real, so a signed-out RSVP is seen going through sign-in; what it calls is not.
+vi.mock('../lobbies/hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('../lobbies/hooks')>()),
+  useDebateLobbies: () => ({ data: undefined, isError: false, refetch: vi.fn() }),
+  useDebateLobbyReminder: () => ({ mutate: mocks.mutate, mutateAsync: vi.fn(), isPending: false }),
+  useLobbyReminderSaving: () => false,
+  useLobbyReminderError: () => null,
+  useDebateLobby: () => ({ data: undefined, refetch: vi.fn() }),
+}));
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.signIn }));
+vi.mock('~/core/state/pending-actions', () => ({
+  useQueuedAction: () => ({ intent: undefined, isQueued: false, queue: mocks.queue, cancel: vi.fn() }),
 }));
 
 const { HubLiveStrip, askShareLeft } = await import('./hub-live-strip');
@@ -63,11 +85,12 @@ function lobby(overrides: Partial<DebateLobbySummary> = {}): DebateLobbySummary 
   };
 }
 
-const EMPTY: LobbyLineup = { live: [] };
+const EMPTY: LobbyLineup = { live: [], next: null };
 
 beforeEach(() => {
   mocks.ask = null;
   mocks.ended = null;
+  mocks.auth = { ready: true, authenticated: true };
 });
 
 afterEach(() => {
@@ -92,8 +115,8 @@ describe('HubLiveStrip', () => {
     expect(card.getByRole('link', { name: 'Join lobby' })).toHaveAttribute('href', '/debate/lobby1');
   });
 
-  // GEO-3519: the timeline is the one place for lobbies still to open. The live card stays.
-  it('shows no strip for a lobby still to open, and keeps the live card', () => {
+  // GEO-3519: signed in, the timeline is the place for lobbies still to open. The live card stays.
+  it('shows a signed-in viewer no strip for a lobby still to open, and keeps the live card', () => {
     const later = lobby({ lobby_id: 'later', open: false, scheduled: true, name: 'AI policy night' });
     const { container, rerender } = render(<HubLiveStrip lineup={lobbyLineup([later])} />);
     expect(container).toBeEmptyDOMElement();
@@ -101,6 +124,52 @@ describe('HubLiveStrip', () => {
     rerender(<HubLiveStrip lineup={lobbyLineup([later, lobby()])} />);
     expect(screen.getByTestId('lobby-spotlight')).toHaveTextContent('NYC Debates');
     expect(screen.queryByText('AI policy night')).not.toBeInTheDocument();
+  });
+
+  // Signed out there is no Requests tab, so the next lobby keeps its strip (Preston, 28 Oct).
+  describe('signed out', () => {
+    const later = lobby({ lobby_id: 'later', open: false, scheduled: true, name: 'AI policy night' });
+
+    beforeEach(() => {
+      mocks.auth = { ready: true, authenticated: false };
+    });
+
+    it('shows the next lobby still to open, light, with RSVP queuing the sign-up', () => {
+      render(<HubLiveStrip lineup={lobbyLineup([later])} />);
+
+      const strip = screen.getByTestId('hub-strip-next-lobby');
+      expect(strip).toHaveTextContent('AI policy night');
+      expect(strip).toHaveClass('bg-white');
+      fireEvent.click(within(strip).getByRole('button', { name: 'RSVP' }));
+      expect(mocks.queue).toHaveBeenCalledWith('later');
+      expect(mocks.signIn).toHaveBeenCalledWith(
+        expect.objectContaining({ auth_control: 'remind_lobby', target_id: 'later' }),
+        expect.anything()
+      );
+      expect(mocks.mutate).not.toHaveBeenCalled();
+    });
+
+    it('opens the lobby’s details from its name', () => {
+      render(<HubLiveStrip lineup={lobbyLineup([later])} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'AI policy night, lobby details' }));
+      const details = screen.getByRole('dialog', { name: 'Lobby details' });
+      expect(within(details).getByRole('link', { name: 'Open lobby page' })).toHaveAttribute('href', '/debate/later');
+    });
+
+    it('leads with a live lobby over the next one', () => {
+      render(<HubLiveStrip lineup={lobbyLineup([later, lobby()])} />);
+
+      expect(screen.getByTestId('lobby-spotlight')).toHaveTextContent('NYC Debates');
+      expect(screen.queryByTestId('hub-strip-next-lobby')).not.toBeInTheDocument();
+    });
+
+    it('shows nothing while auth is still resolving, so a signed-in viewer never sees it flash', () => {
+      mocks.auth = { ready: false, authenticated: false };
+      const { container } = render(<HubLiveStrip lineup={lobbyLineup([later])} />);
+
+      expect(container).toBeEmptyDOMElement();
+    });
   });
 
   it('puts your open request ahead of a live lobby, with the time left and Cancel', () => {

@@ -23,6 +23,11 @@ export type UpcomingLobbyRow = {
   hosts: DebateLobbyPerson[];
   hosting: boolean;
   onRoster: boolean;
+  /**
+   * The lobby's own row, from the side panel list or the calendar's week, for its details (GEO-3519);
+   * `null` when neither read has it.
+   */
+  summary: DebateLobbySummary | null;
 };
 
 /**
@@ -35,21 +40,32 @@ export function lobbyHostLine(row: Pick<UpcomingLobbyRow, 'hosting' | 'hosts'>) 
   return hosts ? `Hosted by ${hosts}` : null;
 }
 
+/**
+ * A lobby's line under its name on the Requests timeline, going or not (GEO-3519): "Lobby · " and
+ * who hosts it, or `fallback` when that is not known, or "Lobby" alone without one.
+ */
+export function lobbySubLine(row: Pick<UpcomingLobbyRow, 'hosting' | 'hosts'>, fallback: string | null = null) {
+  const host = lobbyHostLine(row) ?? fallback;
+  return host ? `Lobby · ${host}` : 'Lobby';
+}
+
 /** The viewer is one of `lobby`'s hosts. Never before the viewer is known. */
 function viewerHosts(lobby: Pick<DebateLobbySummary, 'hosts'>, viewerId: string | null) {
   return viewerId !== null && lobby.hosts.some(host => sameId(host.user_id, viewerId));
 }
 
 /**
- * Two sources, because neither has every lobby. `/me/debate-rooms` lists the ones the viewer said
+ * Three sources, because none has every lobby. `/me/debate-rooms` lists the ones the viewer said
  * Going to, but not the ones they host: a host is not on their own lobby's Going list. The side
  * panel list names hosts but caps how many lobbies it returns. Going rows come from the first and
  * borrow hosts from the second; hosted rows come from the second.
  *
- * The list's own Going lobbies too, while they are still to open (GEO-3519): an RSVP writes the
- * list's row at once, and `/me/debate-rooms` hears of it only when geo-chat's event comes round.
- * Without them, a lobby RSVP'd from the timeline would leave it, as one not going, until then.
- * The list always carries a lobby the viewer RSVP'd to, whatever its caps.
+ * And `week`, the calendar's uncapped next seven days where the Requests timeline reads it
+ * (GEO-3519): its Going lobbies still to open. An RSVP writes the week's row at once, and
+ * `/me/debate-rooms` hears of it only when geo-chat's event comes round, so without them a lobby
+ * RSVP'd from the timeline would leave it, as one not going, until then. The timeline offers RSVP
+ * only on lobbies in that week. One further out, RSVP'd elsewhere, is a going row once
+ * `/me/debate-rooms` lists it.
  *
  * geo-chat drops a Going entry once the viewer joins, so a Going lobby leaves the list when they go
  * in, as the open banner does. A hosted one stays until it ends.
@@ -57,9 +73,14 @@ function viewerHosts(lobby: Pick<DebateLobbySummary, 'hosts'>, viewerId: string 
 export function upcomingLobbyRows(
   rooms: UpcomingDebateRoom[],
   lobbies: DebateLobbySummary[],
-  viewerId: string | null
+  viewerId: string | null,
+  week: DebateLobbyCalendarRow[] = []
 ): UpcomingLobbyRow[] {
-  const summaries = new Map(lobbies.map(lobby => [dashlessId(lobby.lobby_id), lobby]));
+  // The list's row over the week's, for a lobby both have; either names its hosts.
+  const summaries = new Map<string, DebateLobbySummary>([
+    ...week.map(lobby => [dashlessId(lobby.lobby_id), lobby] as const),
+    ...lobbies.map(lobby => [dashlessId(lobby.lobby_id), lobby] as const),
+  ]);
   const hostedBy = (lobby: DebateLobbySummary | undefined) => lobby !== undefined && viewerHosts(lobby, viewerId);
 
   const rows = new Map<string, UpcomingLobbyRow>();
@@ -77,29 +98,36 @@ export function upcomingLobbyRows(
       hosts: summary?.hosts ?? [],
       hosting: hostedBy(summary),
       onRoster: summary?.viewer_on_roster ?? false,
+      summary: summary ?? null,
     });
   }
 
-  for (const lobby of lobbies) {
-    const id = dashlessId(lobby.lobby_id);
-    const hosting = hostedBy(lobby);
-    // Only lobbies set for a time: one opened on the spot is already on the host's screen. Before
-    // the viewer is known, nothing: whether they host it cannot be told yet.
-    if (rows.has(id) || !lobby.scheduled || viewerId === null) continue;
-    if (!hosting && !(lobby.viewer_reminded && !lobby.open)) continue;
-    rows.set(id, {
+  const add = (lobby: DebateLobbySummary) =>
+    rows.set(dashlessId(lobby.lobby_id), {
       lobbyId: lobby.lobby_id,
       name: lobby.name,
       startsAt: lobby.starts_at,
       opensAt: lobby.opens_at,
       open: lobby.open,
       hosts: lobby.hosts,
-      hosting,
+      hosting: hostedBy(lobby),
       onRoster: lobby.viewer_on_roster,
+      summary: summaries.get(dashlessId(lobby.lobby_id)) ?? lobby,
     });
+
+  for (const lobby of lobbies) {
+    // Only lobbies set for a time: one opened on the spot is already on the host's screen. Before
+    // the viewer is known, nothing: whether they host it cannot be told yet.
+    if (rows.has(dashlessId(lobby.lobby_id)) || !lobby.scheduled || !hostedBy(lobby)) continue;
+    add(lobby);
   }
 
-  // Soonest first: the two sources each have their own order.
+  for (const lobby of week) {
+    if (rows.has(dashlessId(lobby.lobby_id)) || !lobby.viewer_reminded || lobby.state !== 'upcoming') continue;
+    add(lobby);
+  }
+
+  // Soonest first: the sources each have their own order.
   return [...rows.values()].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
 }
 

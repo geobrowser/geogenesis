@@ -49,15 +49,15 @@ const mocks = vi.hoisted(() => ({
   pastDebatesLoading: false,
   challengeError: null as Error | null,
   remind: vi.fn(),
-  dismissal: {
-    mutate: vi.fn(),
-    isError: false,
-    error: null as Error | null,
-    variables: undefined as { lobbyId: string; dismissed: boolean } | undefined,
-  },
+  dismissal: { mutate: vi.fn() },
+  /** Each lobby's dismissal failure, by id. */
+  dismissalErrors: {} as Record<string, Error>,
   lobbyView: { data: undefined as unknown, refetch: vi.fn() },
   calendar: [] as DebateLobbyCalendarRow[],
   calendarRange: [] as [Date, Date][],
+  calendarOptions: [] as unknown[],
+  calendarLoading: false,
+  calendarError: null as Error | null,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -153,9 +153,15 @@ vi.mock('@tanstack/react-query', async importOriginal => ({
 vi.mock('../lobbies/hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../lobbies/hooks')>()),
   useDebateLobbyDismissal: () => mocks.dismissal,
-  useDebateLobbyCalendar: (from: Date, to: Date) => {
+  useLobbyDismissalError: (lobbyId: string) => mocks.dismissalErrors[lobbyId] ?? null,
+  useDebateLobbyCalendar: (from: Date, to: Date, _enabled: boolean, options: unknown) => {
     mocks.calendarRange.push([from, to]);
-    return { data: { lobbies: mocks.calendar } };
+    mocks.calendarOptions.push(options);
+    return {
+      data: mocks.calendarLoading ? undefined : { lobbies: mocks.calendar },
+      isLoading: mocks.calendarLoading,
+      error: mocks.calendarError,
+    };
   },
   useDebateLobby: () => mocks.lobbyView,
 }));
@@ -329,7 +335,11 @@ beforeEach(() => {
   mocks.remind.mockReset();
   mocks.calendar = [];
   mocks.calendarRange = [];
-  mocks.dismissal = { mutate: vi.fn(), isError: false, error: null, variables: undefined };
+  mocks.dismissal = { mutate: vi.fn() };
+  mocks.dismissalErrors = {};
+  mocks.calendarOptions = [];
+  mocks.calendarLoading = false;
+  mocks.calendarError = null;
 });
 
 afterEach(() => {
@@ -670,6 +680,7 @@ describe('RequestsSchedule', () => {
           hosts: [],
           hosting: false,
           onRoster: false,
+          summary: null,
         },
       ],
     };
@@ -695,6 +706,7 @@ describe('RequestsSchedule', () => {
           hosts: [],
           hosting: false,
           onRoster: false,
+          summary: null,
         },
       ],
     };
@@ -757,11 +769,34 @@ describe('RequestsSchedule', () => {
       expect(mocks.dismissal.mutate).toHaveBeenCalledWith({ lobbyId: 'l1', dismissed: true });
     });
 
-    // Uncapped, unlike the side panel's list: today's midnight to the one a week on.
-    it('reads the week’s lobbies from the calendar range', () => {
+    // Uncapped, unlike the side panel's list: today's midnight to the one a week on. Kept drawn while
+    // the next range loads, so the rows do not blink out when that range moves on at midnight.
+    it('reads the week’s lobbies from the calendar range, keeping the last range while one loads', () => {
       render(<RequestsSchedule />);
 
       expect(mocks.calendarRange.at(-1)).toEqual([new Date(2026, 9, 27), new Date(2026, 10, 3)]);
+      expect(mocks.calendarOptions.at(-1)).toEqual({ keepPreviousRange: true });
+    });
+
+    // A viewer whose only upcoming items are lobbies they have not answered would see "Any debate
+    // requests…" and then the rows.
+    it('does not call the tab empty while the week is loading', async () => {
+      const empty = () => screen.queryByText('Any debate requests you’ll receive will appear here.');
+      mocks.calendarLoading = true;
+      const view = render(<RequestsSchedule />);
+      expect(empty()).not.toBeInTheDocument();
+
+      mocks.calendarLoading = false;
+      view.rerender(<RequestsSchedule />);
+      expect(await screen.findByText('Any debate requests you’ll receive will appear here.')).toBeInTheDocument();
+    });
+
+    it('says a failed week read with the other reads, rather than nothing', () => {
+      mocks.calendarError = new Error('down');
+      render(<RequestsSchedule />);
+
+      expect(screen.getByText('Could not read this week’s lobbies: down')).toBeInTheDocument();
+      expect(screen.queryByText('Any debate requests you’ll receive will appear here.')).not.toBeInTheDocument();
     });
 
     it('places it by day and time among the rest of the timeline', () => {
@@ -802,6 +837,7 @@ describe('RequestsSchedule', () => {
             hosts: [HOST],
             hosting: false,
             onRoster: false,
+            summary: null,
           },
         ],
       };
@@ -839,12 +875,7 @@ describe('RequestsSchedule', () => {
 
     // The write is held above the rows, so its failure is said on the row that comes back.
     it('says a dismissal that failed on its own row only', () => {
-      mocks.dismissal = {
-        ...mocks.dismissal,
-        isError: true,
-        error: new Error('down'),
-        variables: { lobbyId: 'l1', dismissed: true },
-      };
+      mocks.dismissalErrors = { l1: new Error('down') };
       mocks.calendar = [listed('l1', 60), listed('l2', 120)];
       render(<RequestsSchedule />);
 

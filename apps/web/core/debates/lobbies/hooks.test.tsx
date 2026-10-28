@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyMember, DebateLobbyView } from '../api';
+import type { DebateLobbyCalendarRow, DebateLobbyMember, DebateLobbySummary, DebateLobbyView } from '../api';
 import type { LobbyPresenceRoster } from './hooks';
 
 const api = vi.hoisted(() => ({
@@ -45,9 +45,11 @@ const {
   useDebateLobbyDismissal,
   useDebateLobbyReminder,
   useEndDebateLobby,
+  useLobbyDismissalError,
   useLobbyPresence,
   useLobbyReminderSaving,
 } = await import('./hooks');
+const { applyLobbyCardPatch, applyLobbyCardPatchToCalendar } = await import('./lobby-card-patch');
 const { debateQueryKeys } = await import('../hooks');
 const { readCarriedLobbyChoice, reportLobbyMic, routeIntoDebate } = await import('./step-out');
 const { withLobbyClaimLists } = await import('./lobby-claim-lists-state');
@@ -978,32 +980,64 @@ it('writes a saved reminder into the cached list and calendar rows without waiti
 // GEO-3519. Dismiss takes the row out of the timeline on the press, list and calendar week alike,
 // and puts only that row back if the write fails.
 describe('useDebateLobbyDismissal', () => {
-  const row = { lobby_id: 'lobby1', open: false, viewer_reminded: false, viewer_dismissed: false, reminder_count: 0 };
-  type Rows = { lobbies: (typeof row)[] };
+  const row: DebateLobbySummary = {
+    lobby_id: 'lobby1',
+    name: 'Hour',
+    scheduled: true,
+    starts_at: '2026-10-05T10:00:00Z',
+    opens_at: '2026-10-05T10:00:00Z',
+    open: false,
+    hosts: [],
+    headcount: 0,
+    avatars: [],
+    debating_count: 0,
+    reminder_count: 0,
+    viewer_reminded: false,
+    viewer_dismissed: false,
+    viewer_on_roster: false,
+    as_of: '2026-10-05T09:00:00Z',
+  };
+  type Rows = { lobbies: DebateLobbySummary[] };
+  type Week = { lobbies: DebateLobbyCalendarRow[] };
 
   function setup() {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(debateQueryKeys.lobbies('acct'), { lobbies: [row, { ...row, lobby_id: 'other' }] });
-    client.setQueryData(debateQueryKeys.lobbyCalendar('acct', 1, 2), { lobbies: [{ ...row, state: 'upcoming' }] });
-    // The refetch a saved write starts; never landing, so what is read below is the cache's own.
+    client.setQueryData(debateQueryKeys.lobbyCalendar('acct', 1, 2), {
+      lobbies: [{ ...row, state: 'upcoming', closed_at: null }],
+    });
+    // The refetch a settled write starts; never landing, so what is read below is the cache's own.
     api.listDebateLobbies.mockReturnValue(new Promise(() => undefined));
     api.listDebateLobbyCalendar.mockReturnValue(new Promise(() => undefined));
     const wrapper = ({ children }: { children: React.ReactNode }) => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
     const list = () => client.getQueryData<Rows>(debateQueryKeys.lobbies('acct'))?.lobbies;
-    const week = () => client.getQueryData<Rows>(debateQueryKeys.lobbyCalendar('acct', 1, 2))?.lobbies;
+    const week = () => client.getQueryData<Week>(debateQueryKeys.lobbyCalendar('acct', 1, 2))?.lobbies;
     return { client, wrapper, list, week };
+  }
+
+  /** A dismissal write that settles when the test says so. */
+  function deferredDismissal() {
+    const write = { settle: (_view: DebateLobbyView) => undefined as void, fail: (_error: Error) => undefined as void };
+    api.setDebateLobbyDismissal.mockImplementationOnce(
+      () =>
+        new Promise<DebateLobbyView>((resolve, reject) => {
+          write.settle = resolve;
+          write.fail = reject;
+        })
+    );
+    return write;
   }
 
   afterEach(() => {
     api.listDebateLobbies.mockReset();
     api.listDebateLobbyCalendar.mockReset();
+    api.setDebateLobbyDismissal.mockReset();
   });
 
   it('dismisses through geo-chat, drawn at once, before the write lands', async () => {
-    let settle: (view: DebateLobbyView) => void = () => undefined;
-    api.setDebateLobbyDismissal.mockImplementationOnce(() => new Promise(done => (settle = done)));
+    const write = deferredDismissal();
     const { wrapper, list, week } = setup();
     const { result } = renderHook(() => useDebateLobbyDismissal(), { wrapper });
 
@@ -1014,28 +1048,90 @@ describe('useDebateLobbyDismissal', () => {
     expect(week()?.[0]).toMatchObject({ viewer_dismissed: true, state: 'upcoming' });
     expect(api.setDebateLobbyDismissal).toHaveBeenCalledWith('lobby1', true, expect.anything(), 'acct');
 
-    await act(async () => settle(view(false)));
+    await act(async () => write.settle(view(false)));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(list()?.[0]).toMatchObject({ viewer_dismissed: true });
   });
 
-  it('puts the row back when the write fails, keeping what changed meanwhile', async () => {
-    let fail: (error: Error) => void = () => undefined;
-    api.setDebateLobbyDismissal.mockImplementationOnce(() => new Promise((_, reject) => (fail = reject)));
-    const { client, wrapper, list } = setup();
+  // The patch is laid with the gateway's own helpers, so a patch that dropped the dismissal would
+  // show here, on the list and on the week, while the write is out.
+  it('puts the row back when the write fails, keeping a card patch that landed meanwhile', async () => {
+    const write = deferredDismissal();
+    const { client, wrapper, list, week } = setup();
     const { result } = renderHook(() => useDebateLobbyDismissal(), { wrapper });
 
     act(() => result.current.mutate({ lobbyId: 'lobby1', dismissed: true }));
     await waitFor(() => expect(list()?.[0]).toMatchObject({ viewer_dismissed: true }));
-    // A card patch landing while the write is out.
-    client.setQueryData<Rows>(debateQueryKeys.lobbies('acct'), old => ({
-      lobbies: old!.lobbies.map(r => (r.lobby_id === 'lobby1' ? { ...r, reminder_count: 7 } : r)),
-    }));
+    // Someone else's RSVP, broadcast as the lobby's card.
+    const {
+      viewer_reminded: _reminded,
+      viewer_dismissed: _dismissed,
+      viewer_on_roster: _onRoster,
+      as_of: _asOf,
+      ...card
+    } = row;
+    const patch = { asOf: '2026-10-05T09:30:00Z', lobby: { ...card, reminder_count: 7 } };
+    act(() => {
+      client.setQueryData<Rows>(debateQueryKeys.lobbies('acct'), old => old && applyLobbyCardPatch(old, patch));
+      client.setQueryData<Week>(
+        debateQueryKeys.lobbyCalendar('acct', 1, 2),
+        old => old && applyLobbyCardPatchToCalendar(old, patch)
+      );
+    });
+    expect(list()?.find(r => r.lobby_id === 'lobby1')).toMatchObject({ viewer_dismissed: true, reminder_count: 7 });
+    expect(week()?.[0]).toMatchObject({ viewer_dismissed: true, reminder_count: 7 });
 
-    await act(async () => fail(new GeoChatRequestError('down', 'unavailable', 503)));
+    await act(async () => write.fail(new GeoChatRequestError('down', 'unavailable', 503)));
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(list()?.[0]).toMatchObject({ viewer_dismissed: false, reminder_count: 7 });
+    expect(list()?.find(r => r.lobby_id === 'lobby1')).toMatchObject({ viewer_dismissed: false, reminder_count: 7 });
+    expect(week()?.[0]).toMatchObject({ viewer_dismissed: false, reminder_count: 7 });
+  });
+
+  // The write cancels reads on their way, which would land the old row over the drawn one. A failed
+  // write must not leave them cancelled for good.
+  it('reads the list again after a failed write that cancelled its read', async () => {
+    const { wrapper } = setup();
+    const write = deferredDismissal();
+    const { result } = renderHook(() => ({ list: useDebateLobbies(), dismissal: useDebateLobbyDismissal() }), {
+      wrapper,
+    });
+    await waitFor(() => expect(api.listDebateLobbies).toHaveBeenCalledTimes(1));
+    expect(result.current.list.isFetching).toBe(true);
+
+    act(() => result.current.dismissal.mutate({ lobbyId: 'lobby1', dismissed: true }));
+    await waitFor(() => expect(result.current.list.isFetching).toBe(false));
+
+    await act(async () => write.fail(new GeoChatRequestError('down', 'unavailable', 503)));
+
+    await waitFor(() => expect(api.listDebateLobbies).toHaveBeenCalledTimes(2));
+  });
+
+  // The panel holds one mutation for every row, so its own error follows only its last call.
+  it('says each lobby’s own failure, whichever was dismissed last', async () => {
+    const first = deferredDismissal();
+    const second = deferredDismissal();
+    const { wrapper } = setup();
+    const { result } = renderHook(
+      () => ({
+        dismissal: useDebateLobbyDismissal(),
+        first: useLobbyDismissalError('lobby1'),
+        second: useLobbyDismissalError('other'),
+      }),
+      { wrapper }
+    );
+
+    act(() => result.current.dismissal.mutate({ lobbyId: 'lobby1', dismissed: true }));
+    act(() => result.current.dismissal.mutate({ lobbyId: 'other', dismissed: true }));
+    await waitFor(() => expect(api.setDebateLobbyDismissal).toHaveBeenCalledTimes(2));
+    const failure = new GeoChatRequestError('down', 'unavailable', 503);
+    await act(async () => {
+      first.fail(failure);
+      second.settle({ ...view(false), lobby_id: 'other' });
+    });
+
+    await waitFor(() => expect(result.current.first).toBe(failure));
+    expect(result.current.second).toBeNull();
   });
 
   // geo-chat clears a dismissal on RSVP; the cached row follows without waiting for a refetch.
@@ -1044,13 +1140,27 @@ describe('useDebateLobbyDismissal', () => {
     client.setQueryData<Rows>(debateQueryKeys.lobbies('acct'), { lobbies: [{ ...row, viewer_dismissed: true }] });
     api.setDebateLobbyReminder.mockResolvedValueOnce({
       ...view(false),
-      viewer: { ...view(false).viewer, reminded: true },
+      viewer: { ...view(false).viewer, reminded: true, dismissed: false },
     });
     const { result } = renderHook(() => useDebateLobbyReminder(), { wrapper });
 
     await act(() => result.current.mutateAsync({ lobbyId: 'lobby1', reminded: true }));
 
     expect(list()?.[0]).toMatchObject({ viewer_reminded: true, viewer_dismissed: false });
+  });
+
+  // One rule for both writes: the row takes geo-chat's word, whichever way the reminder went.
+  it('takes the dismissal from geo-chat’s answer to a reminder, whichever way it went', async () => {
+    const { client, wrapper, list } = setup();
+    client.setQueryData<Rows>(debateQueryKeys.lobbies('acct'), { lobbies: [{ ...row, viewer_dismissed: true }] });
+    api.setDebateLobbyReminder.mockResolvedValueOnce({
+      ...view(false),
+      viewer: { ...view(false).viewer, reminded: false, dismissed: false },
+    });
+    const { result } = renderHook(() => useDebateLobbyReminder(), { wrapper });
+
+    await act(() => result.current.mutateAsync({ lobbyId: 'lobby1', reminded: false }));
+    expect(list()?.[0]).toMatchObject({ viewer_reminded: false, viewer_dismissed: false });
   });
 });
 
@@ -1100,6 +1210,37 @@ it('reads the calendar week for its bounds, and again whenever the lobby list is
 
   await client.invalidateQueries({ queryKey: debateQueryKeys.lobbies('acct') });
   await waitFor(() => expect(api.listDebateLobbyCalendar).toHaveBeenCalledTimes(2));
+});
+
+// GEO-3519. The Requests timeline's range moves on at midnight; its rows stay while the new one loads,
+// where the calendar's own weeks start empty.
+it.each([
+  [true, ['day-one']],
+  [false, undefined],
+])('with keepPreviousRange %s, draws the last range while the next loads: %j', async (keepPreviousRange, drawn) => {
+  api.listDebateLobbyCalendar.mockResolvedValueOnce({ lobbies: [{ lobby_id: 'day-one' }] });
+  api.listDebateLobbyCalendar.mockReturnValueOnce(new Promise(() => undefined));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const day = (date: number) => new Date(2026, 9, date);
+
+  try {
+    const { result, rerender } = renderHook(
+      ({ from }: { from: Date }) => useDebateLobbyCalendar(from, day(from.getDate() + 7), true, { keepPreviousRange }),
+      { wrapper, initialProps: { from: day(28) } }
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    rerender({ from: day(29) });
+    await waitFor(() => expect(api.listDebateLobbyCalendar).toHaveBeenCalledTimes(2));
+
+    expect(result.current.data?.lobbies.map(lobby => lobby.lobby_id)).toEqual(drawn);
+    expect(result.current.isLoading).toBe(!keepPreviousRange);
+  } finally {
+    api.listDebateLobbyCalendar.mockReset();
+  }
 });
 
 // Card patches stop while the panel is closed, so a reopen inside the stale window still reloads.

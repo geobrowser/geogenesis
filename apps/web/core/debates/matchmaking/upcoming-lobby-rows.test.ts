@@ -4,6 +4,7 @@ import type { DebateLobbyCalendarRow, DebateLobbySummary, UpcomingDebateRoom } f
 
 import {
   UNANSWERED_LOBBY_DAYS,
+  lobbySubLine,
   unansweredLobbies,
   unansweredLobbyRange,
   upcomingLobbyRows,
@@ -103,18 +104,59 @@ describe('upcomingLobbyRows', () => {
     expect(upcomingLobbyRows([], [summary()], null)).toEqual([]);
   });
 
-  // GEO-3519: an RSVP writes the list's row at once, and `/me/debate-rooms` hears of it a round trip
-  // later. A lobby RSVP'd from the timeline is a Going row from the list meanwhile, not gone.
-  it('lists a lobby the list says the viewer is going to, before the rooms read has it', () => {
-    const rows = upcomingLobbyRows([], [summary({ viewer_reminded: true })], 'user-me');
+  // GEO-3519: an RSVP writes the week's row at once, and `/me/debate-rooms` hears of it a round trip
+  // later. A lobby RSVP'd from the timeline is a Going row from the week meanwhile, not gone, and
+  // whatever the capped list holds.
+  describe('from the calendar’s week', () => {
+    const inWeek = (overrides: Partial<DebateLobbyCalendarRow> = {}): DebateLobbyCalendarRow => ({
+      ...summary(overrides),
+      state: 'upcoming',
+      closed_at: null,
+      ...overrides,
+    });
 
-    expect(rows).toEqual([expect.objectContaining({ name: 'Should cities ban cars?', hosting: false, hosts: [HOST] })]);
+    it('lists a lobby the week says the viewer is going to, one the list left out included', () => {
+      const week = [inWeek({ viewer_reminded: true })];
+      const rows = upcomingLobbyRows([], [], 'user-me', week);
+
+      expect(rows).toEqual([
+        expect.objectContaining({ name: 'Should cities ban cars?', hosting: false, hosts: [HOST], summary: week[0] }),
+      ]);
+    });
+
+    it('draws it once when the rooms read has it too, with the room’s open door', () => {
+      const rows = upcomingLobbyRows([lobbyRoom({ joinable: true })], [], 'user-me', [inWeek()]);
+
+      expect(rows).toEqual([expect.objectContaining({ open: true, hosts: [HOST] })]);
+    });
+
+    it('leaves out lobbies in it the viewer is not going to', () => {
+      expect(upcomingLobbyRows([], [], 'user-me', [inWeek({ viewer_reminded: false })])).toEqual([]);
+    });
+
+    // Once open, the rooms read is what says the viewer is still going: geo-chat drops the entry once
+    // they join.
+    it('leaves an open lobby the viewer RSVP’d to to the rooms read', () => {
+      expect(upcomingLobbyRows([], [], 'user-me', [inWeek({ open: true, state: 'open' })])).toEqual([]);
+    });
   });
 
-  // Once open, the rooms read is what says the viewer is still going: geo-chat drops the entry once
-  // they join.
-  it('leaves an open lobby the viewer RSVP’d to to the rooms read', () => {
-    expect(upcomingLobbyRows([], [summary({ viewer_reminded: true, open: true })], 'user-me')).toEqual([]);
+  // The list's Going rows are the week's to draw: where the timeline offers RSVP, it reads the week.
+  it('leaves a lobby the list alone says the viewer is going to for the rooms read', () => {
+    expect(upcomingLobbyRows([], [summary({ viewer_reminded: true })], 'user-me')).toEqual([]);
+  });
+});
+
+// GEO-3519. One line for an offered lobby and one the viewer is going to, so the two cannot drift.
+describe('lobbySubLine', () => {
+  it('says who hosts it after "Lobby"', () => {
+    expect(lobbySubLine({ hosting: false, hosts: [HOST] })).toBe('Lobby · Hosted by Bryan');
+    expect(lobbySubLine({ hosting: true, hosts: [HOST] }, 'You’re going')).toBe('Lobby · You’re hosting');
+  });
+
+  it('falls back when the hosts are not known, or says "Lobby" alone', () => {
+    expect(lobbySubLine({ hosting: false, hosts: [] }, 'You’re going')).toBe('Lobby · You’re going');
+    expect(lobbySubLine({ hosting: false, hosts: [] })).toBe('Lobby');
   });
 });
 

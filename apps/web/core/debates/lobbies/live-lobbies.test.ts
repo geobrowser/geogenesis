@@ -43,4 +43,14 @@ describe('lobbyLineup', () => {
   it('leaves a lobby still to open out', () => {
     expect(lobbyLineup([lobby({ scheduled: true, open: false })]).live).toEqual([]);
   });
+
+  // For the signed-out strip: the soonest to open, whatever the list's order.
+  it('makes the soonest lobby still to open the next one', () => {
+    const waiting = (id: string, opensIn: number) =>
+      lobby({ lobby_id: id, scheduled: true, open: false, opens_at: at(opensIn) });
+    const lineup = lobbyLineup([waiting('tomorrow', 86_400_000), lobby({}), waiting('soon', 600_000)]);
+
+    expect(lineup.next?.lobby_id).toBe('soon');
+    expect(lobbyLineup([lobby({})]).next).toBeNull();
+  });
 });

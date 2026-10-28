@@ -5,12 +5,19 @@ import Link from 'next/link';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 
+import type { DebateLobbySummary } from '../api';
+import { useGeoChatAuth } from '../hooks';
 import type { LobbyLineup } from '../lobbies/live-lobbies';
+import { lobbyTimeLabel } from '../lobbies/lobby-format';
+import { LobbyReminderError, useLobbyReminderPress } from '../lobbies/lobby-reminder-press';
 import { LiveLobbySpotlight, SPOTLIGHT_SECONDARY_PILL_CLASS_NAME } from '../lobbies/lobby-spotlight';
+import { LobbyRsvpPill } from '../lobbies/upcoming-lobbies';
+import { useMinuteNow } from '../lobbies/use-minute-now';
 import { claimCalendarPicks, personCalendarPicks } from './debate-calendar-route';
-import { hubAnalyticsAttributes } from './hub-analytics';
+import { debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { useHubAskState } from './hub-ask-context';
 import { HUB_ICON_BUTTON_CLASS_NAME, hubPillClassName } from './hub-pill-button';
+import { LobbyDetailsPopover } from './lobby-details-popover';
 import { AskTimer } from './requesting-pill';
 import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
@@ -28,19 +35,25 @@ const STRIP_PILL_CLASS_NAME = hubPillClassName('primary', 'px-3.5 md:h-8');
  * In priority order:
  *  1. your open ask — who was asked, the time left, Cancel — and once it ends unanswered, that nobody
  *     took it, with Schedule;
- *  2. a live lobby, as the full live card (`LiveLobbySpotlight`): every live lobby, Join for each.
+ *  2. a live lobby, as the full live card (`LiveLobbySpotlight`): every live lobby, Join for each;
+ *  3. signed out, the next lobby still to open, when none is live.
  *
- * A lobby still to open is not here: the Requests timeline is the one place for those (GEO-3519).
+ * Signed in, a lobby still to open is not here: the Requests timeline is the place for those
+ * (GEO-3519). Signed out there is no Requests tab, so the strip stays (Preston, 28 Oct).
  * It sits outside the tabs, so the ask stays in view on every tab while it runs.
  */
 export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
   const { ask, ended, cancel, cancelling, dismissEnded } = useHubAskState();
+  // Nothing while auth is still resolving, so a signed-in viewer never sees the strip flash.
+  const { ready, authenticated } = useGeoChatAuth();
 
   if (ask) return <AskStrip ask={ask} onCancel={cancel} cancelling={cancelling} />;
   if (ended) return <EndedAskStrip ended={ended} onDismiss={dismissEnded} />;
 
   const [live] = lineup.live;
   if (live) return <LiveLobbySpotlight lineup={lineup} />;
+
+  if (ready && !authenticated && lineup.next) return <NextLobbyStrip lobby={lineup.next} />;
 
   return null;
 }
@@ -137,5 +150,51 @@ function EndedAskStrip({ ended, onDismiss }: { ended: EndedAsk; onDismiss: () =>
         <CloseSmall />
       </button>
     </section>
+  );
+}
+
+/**
+ * The next lobby, for a signed-out visitor when none is live. Light, not the live strip's black
+ * (Preston, 26 Oct): black means "happening now", and a lobby on Tuesday is not. The name opens the
+ * lobby's details, and RSVP queues the sign-up (`useLobbyReminderPress`).
+ */
+function NextLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
+  const remind = useLobbyReminderPress(lobby);
+  const now = useMinuteNow();
+  const when = lobbyTimeLabel(lobby.starts_at, now);
+
+  // The calendar's RSVP, Going black, on the strip's light surface. One press for both copies of it.
+  const rsvp = (
+    <LobbyRsvpPill
+      remind={remind}
+      analyticsLabel={debateAnalyticsLabel(
+        'hub',
+        remind.reminded ? 'Lobby spotlight reminded' : 'Lobby spotlight remind me'
+      )}
+      className="md:h-8"
+    />
+  );
+
+  return (
+    <>
+      <section
+        aria-label="Next debate lobby"
+        data-testid="hub-strip-next-lobby"
+        className={cx(STRIP_CLASS_NAME, 'border border-grey-02 bg-white text-text')}
+      >
+        <LobbyDetailsPopover
+          lobby={lobby}
+          now={now}
+          rsvp={rsvp}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <span className="shrink-0 text-footnoteMedium text-grey-04">Lobby</span>
+          <span className="min-w-0 truncate text-metadataMedium underline-offset-2 hover:underline">{lobby.name}</span>
+          {when ? <span className="shrink-0 text-breadcrumb whitespace-nowrap text-grey-04">{when}</span> : null}
+        </LobbyDetailsPopover>
+        {rsvp}
+      </section>
+      <LobbyReminderError error={remind.error} />
+    </>
   );
 }

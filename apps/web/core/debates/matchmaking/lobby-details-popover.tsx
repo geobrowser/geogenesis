@@ -29,6 +29,8 @@ export function LobbyDetailsPopover({
   lobby,
   now,
   rsvp,
+  open,
+  onOpenChange,
   className,
   children,
 }: {
@@ -36,6 +38,12 @@ export function LobbyDetailsPopover({
   now: number;
   /** The caller's RSVP, so one press backs both copies of it. */
   rsvp: React.ReactNode;
+  /**
+   * Held by the caller, when given: the Requests timeline keeps the details open across an RSVP
+   * inside them, which swaps the row they hang from (GEO-3519).
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   className?: string;
   /** What the trigger shows: the lobby's name. */
   children: React.ReactNode;
@@ -43,7 +51,7 @@ export function LobbyDetailsPopover({
   const portal = useElevatedPopoverPortal();
 
   return (
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>
         <button
           type="button"

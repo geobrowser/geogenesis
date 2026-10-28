@@ -85,7 +85,7 @@ export function joinLabel(lobby: Pick<DebateLobbySummary, 'viewer_on_roster'>, s
  * one thing in the panel worth the room. A lobby that has not opened is in the Requests timeline
  * instead (GEO-3519).
  */
-export function LiveLobbySpotlight({ lineup }: { lineup: LobbyLineup }) {
+export function LiveLobbySpotlight({ lineup }: { lineup: Pick<LobbyLineup, 'live'> }) {
   const [lead, ...others] = lineup.live;
   if (!lead) return null;
   const href = debateRoomPath(lead.lobby_id);

@@ -20,12 +20,13 @@ import {
   type DebateParticipantSummary,
   type DebateRequest,
   type ScheduledDebateRequest,
+  dashlessId,
   getDebate,
   isAccountWarmingUpQuery,
 } from '../api';
 import { debatePath } from '../debate-routes';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
-import { lobbyDismissalError, useDebateLobbyCalendar, useDebateLobbyDismissal } from '../lobbies/hooks';
+import { useDebateLobbyCalendar, useDebateLobbyDismissal, useLobbyDismissalError } from '../lobbies/hooks';
 import {
   DISMISS_FAILED,
   RSVP_FAILED,
@@ -36,7 +37,7 @@ import {
 import { useLobbyReminderPress } from '../lobbies/lobby-reminder-press';
 import { LOBBY_DARK_SURFACE_CLASS_NAME } from '../lobbies/lobby-spotlight';
 import { debateEntryClick, routeIntoDebate } from '../lobbies/step-out';
-import { LobbyRsvpPill } from '../lobbies/upcoming-lobbies';
+import { LobbyRsvpButton, LobbyRsvpPill } from '../lobbies/upcoming-lobbies';
 import { useMinuteNow } from '../lobbies/use-minute-now';
 import { speakerLabel } from '../playback-utils';
 import { opponentName, opponentOf } from '../rooms/room-opponent';
@@ -93,7 +94,7 @@ import {
   useRescheduler,
   useScheduledContent,
 } from './scheduled-debates-section';
-import { type UpcomingLobbyRow, lobbyHostLine, unansweredLobbies, unansweredLobbyRange } from './upcoming-lobby-rows';
+import { type UpcomingLobbyRow, lobbySubLine, unansweredLobbies, unansweredLobbyRange } from './upcoming-lobby-rows';
 import { useCalendarHref } from './use-calendar-href';
 import { useDebatesHub } from './use-debates-hub';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
@@ -116,7 +117,13 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const now = useMinuteNow();
   const [filter, setFilter] = React.useState<TimelineFilter>('all');
 
-  const scheduled = useScheduledContent();
+  // Lobbies in the next seven days (GEO-3519), from the calendar's uncapped range: the ones the viewer
+  // has not answered, offered with RSVP and Dismiss, and the ones they RSVP'd to, as going rows at once.
+  const today = startOfLocalDay(now);
+  const range = React.useMemo(() => unansweredLobbyRange(today), [today]);
+  const weekQuery = useDebateLobbyCalendar(range.from, range.to, true, { keepPreviousRange: true });
+  const week = weekQuery.data?.lobbies;
+  const scheduled = useScheduledContent(week);
   const availabilityRequests = useAvailabilityRequests();
   const { authenticated } = useGeoChatAuth();
   const requestsQuery = useDebateRequests(true);
@@ -147,16 +154,24 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const lookUp = useParticipantLookup(scheduled.answerable.length > 0 || scheduled.upcoming.length > 0, people);
 
   const { answer, busy, error: conflict } = useScheduledDebateAnswer();
-  // Held here rather than on each row: a dismissed row leaves at once, and its failure has to outlive
-  // it to be said on the row that comes back.
+  // Held here rather than on each row: a dismissed row leaves at once, and its write has to outlive it.
   const dismissal = useDebateLobbyDismissal();
-  // Lobbies the viewer has not answered (GEO-3519), from the calendar's uncapped range for the week.
-  const today = startOfLocalDay(now);
-  const range = React.useMemo(() => unansweredLobbyRange(today), [today]);
-  const { data: week } = useDebateLobbyCalendar(range.from, range.to);
   const unanswered = React.useMemo(
-    () => unansweredLobbies(week?.lobbies ?? [], scheduled.lobbies, viewerId, now),
+    () => unansweredLobbies(week ?? [], scheduled.lobbies, viewerId, now),
     [now, scheduled.lobbies, viewerId, week]
+  );
+  // The lobby whose details are open, held here rather than on its row: an RSVP inside them turns an
+  // offered row into a going one, which is another row, and the details stay open on it.
+  const [detailsLobbyId, setDetailsLobbyId] = React.useState<string | null>(null);
+  const lobbyDetails = React.useCallback(
+    (lobbyId: string): LobbyDetailsState => ({
+      open: detailsLobbyId !== null && dashlessId(detailsLobbyId) === dashlessId(lobbyId),
+      onOpenChange: open =>
+        setDetailsLobbyId(current =>
+          open ? lobbyId : current !== null && dashlessId(current) === dashlessId(lobbyId) ? null : current
+        ),
+    }),
+    [detailsLobbyId]
   );
   // The debate whose time is being moved, on the other debater's week — as in `ScheduledDebatesSection`.
   const { reschedulerFor, reschedulingModal } = useRescheduler(lookUp);
@@ -216,8 +231,10 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
           onReschedule={reschedulerFor(row.requestId, row.opponentUserId, 'requests_reschedule')}
         />
       ),
-      lobby: row => <LobbyItem row={row} />,
-      unansweredLobby: lobby => <UnansweredLobbyItem lobby={lobby} now={now} dismissal={dismissal} />,
+      lobby: row => <LobbyItem row={row} now={now} details={lobbyDetails(row.lobbyId)} />,
+      unansweredLobby: lobby => (
+        <UnansweredLobbyItem lobby={lobby} now={now} dismissal={dismissal} details={lobbyDetails(lobby.lobby_id)} />
+      ),
       history: item => <HistoryRow item={item} lookUp={lookUp} />,
       pastDebate: row => <PastDebateRow row={row} />,
     },
@@ -231,7 +248,7 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   const { rootRef, contentRef, nowLineRef, sentinelRef, spacerHeight } = useTimelineScroll({
     // Everything below the now-line that can be known on arrival: anchoring before it lands would put
     // the line in the right place over a list that then grows under it.
-    ready: !scheduled.loading && !requestsQuery.isLoading,
+    ready: !scheduled.loading && !requestsQuery.isLoading && !weekQuery.isLoading,
     focused: focusedId !== null && linkedShown,
     focusKey: focusedId,
     pastKey: past.map(entry => entry.key).join('|'),
@@ -243,7 +260,7 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
     loadMore: history.loadMore,
   });
 
-  const failures = readFailureMessages(scheduled);
+  const failures = readFailureMessages({ ...scheduled, weekError: weekQuery.error });
   // geo-chat not knowing a new account yet: retried for about a minute, and said on the first refusal.
   const requestsWarmingUp = isAccountWarmingUpQuery(requestsQuery);
   const requestsTrouble = Boolean(requestsQuery.error) || requestsWarmingUp;
@@ -253,7 +270,8 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
   // the viewer's space, or reading their debates, is the past still loading. Needs you shows no past.
   const standInLoading = filter === 'all' && history.unavailable && (personalSpaceLoading || pastDebates.isLoading);
   const isLoading =
-    shown.length === 0 && (scheduled.loading || (requestsQuery.isLoading && !requestsWarmingUp) || standInLoading);
+    shown.length === 0 &&
+    (scheduled.loading || weekQuery.isLoading || (requestsQuery.isLoading && !requestsWarmingUp) || standInLoading);
   // Empty only when it is known to be: a read that failed is not "nothing", and a read still on its
   // way is not either. Saying so over a failure contradicts it, and over a loading read the message
   // shows for a moment and then swaps out for the timeline, taking the now-line with it.
@@ -263,6 +281,7 @@ export function RequestsSchedule({ focusedRequestId = null }: { focusedRequestId
     failures.length === 0 &&
     !requestsTrouble &&
     !scheduled.loading &&
+    !weekQuery.isLoading &&
     !(filter === 'all' && (history.isLoading || standInLoading));
 
   return (
@@ -989,15 +1008,37 @@ function RoomItem({
   );
 }
 
-/** A lobby the viewer is going to or hosts, at its time; Live with Join once it is open. */
-function LobbyItem({ row }: { row: UpcomingLobbyRow }) {
+/** A lobby's details, open or not; held by the timeline so they outlive the row (GEO-3519). */
+type LobbyDetailsState = { open: boolean; onOpenChange: (open: boolean) => void };
+
+/**
+ * A lobby the viewer is going to or hosts, at its time; Live with Join once it is open. Going and
+ * still to open, its name opens the lobby's details, as on an offered row (GEO-3519), with RSVP there
+ * showing Going.
+ */
+function LobbyItem({ row, now, details }: { row: UpcomingLobbyRow; now: number; details: LobbyDetailsState }) {
+  const summary = !row.open && !row.hosting ? row.summary : null;
   return (
     <TimelineItem
       testId="requests-lobby"
       dot={row.open ? 'live' : 'lobby'}
       time={row.open ? 'Live' : formatTime(row.startsAt)}
-      title={row.name}
-      sub={`Lobby · ${lobbyHostLine(row) ?? 'You’re going'}`}
+      title={
+        summary ? (
+          <LobbyDetailsPopover
+            lobby={summary}
+            now={now}
+            rsvp={<LobbyRsvpButton lobby={summary} analyticsLabelPrefix="Requests lobby" />}
+            {...details}
+            className="text-left underline-offset-2 hover:underline"
+          >
+            {row.name}
+          </LobbyDetailsPopover>
+        ) : (
+          row.name
+        )
+      }
+      sub={lobbySubLine(row, 'You’re going')}
       // The section card's button, so a lobby's clicks read the same from either layout.
       actions={
         <CompactActionRow>
@@ -1017,13 +1058,15 @@ function UnansweredLobbyItem({
   lobby,
   now,
   dismissal,
+  details,
 }: {
   lobby: DebateLobbySummary;
   now: number;
-  dismissal: ReturnType<typeof useDebateLobbyDismissal>;
+  dismissal: Pick<ReturnType<typeof useDebateLobbyDismissal>, 'mutate'>;
+  details: LobbyDetailsState;
 }) {
   const remind = useLobbyReminderPress(lobby);
-  const dismissError = lobbyDismissalError(dismissal, lobby.lobby_id);
+  const dismissError = useLobbyDismissalError(lobby.lobby_id);
   // One press for both copies of RSVP: the row's and the details'.
   const rsvp = (
     <LobbyRsvpPill
@@ -1043,12 +1086,13 @@ function UnansweredLobbyItem({
           lobby={lobby}
           now={now}
           rsvp={rsvp}
+          {...details}
           className="text-left underline-offset-2 hover:underline"
         >
           {lobby.name}
         </LobbyDetailsPopover>
       }
-      sub={['Lobby', lobbyHostLine({ hosting: false, hosts: lobby.hosts })].filter(Boolean).join(' · ')}
+      sub={lobbySubLine({ hosting: false, hosts: lobby.hosts })}
       error={
         remind.error
           ? lobbyErrorMessage(remind.error, RSVP_FAILED)

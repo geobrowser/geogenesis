@@ -32,6 +32,8 @@ const api = vi.hoisted(() => ({
   // Lobbies as geo-chat holds them, for the side panel's list and the calendar range alike: the
   // RSVP and dismissal writes change them.
   lobbies: [] as DebateLobbyCalendarRow[],
+  /** The side panel's list where it differs from the week: it caps upcoming lobbies, the week does not. */
+  listed: null as DebateLobbyCalendarRow[] | null,
   setDebateLobbyReminder: vi.fn(),
   setDebateLobbyDismissal: vi.fn(),
 }));
@@ -92,7 +94,9 @@ vi.mock('../api', async importOriginal => {
           },
         ],
       }),
-    listDebateLobbies: () => Promise.resolve({ lobbies: api.lobbies }),
+    listDebateLobbies: () => Promise.resolve({ lobbies: api.listed ?? api.lobbies }),
+    // The details' own read; the list row stands in for it.
+    getDebateLobby: () => new Promise(() => undefined),
     listDebateLobbyCalendar: () => Promise.resolve({ lobbies: api.lobbies }),
     setDebateLobbyReminder: api.setDebateLobbyReminder,
     setDebateLobbyDismissal: api.setDebateLobbyDismissal,
@@ -172,6 +176,7 @@ afterEach(() => {
   api.history404 = true;
   api.history = [];
   api.lobbies = [];
+  api.listed = null;
   api.setDebateLobbyReminder.mockReset();
   api.setDebateLobbyDismissal.mockReset();
 });
@@ -259,9 +264,11 @@ describe('the Requests timeline over real hooks', () => {
     });
 
     // `/me/debate-rooms` does not list it yet: that read hears of an RSVP only when geo-chat's
-    // event comes round. The row turns into the going row from the list's own answer.
-    it('turns into a lobby the viewer is going to once they RSVP', async () => {
+    // event comes round. The row turns into the going row from the week's own answer, and the capped
+    // list need not hold it: a creator's third lobby in the week, say.
+    it('turns into a lobby the viewer is going to once they RSVP, one the list left out included', async () => {
       api.lobbies = [offered];
+      api.listed = [];
       api.setDebateLobbyReminder.mockImplementation(async () => {
         api.lobbies = [{ ...offered, viewer_reminded: true, reminder_count: 3 }];
         return viewOf(api.lobbies[0]!);
@@ -276,6 +283,26 @@ describe('the Requests timeline over real hooks', () => {
       expect(going).toHaveTextContent('Lobby · Hosted by Bryan');
       expect(screen.queryByTestId('requests-unanswered-lobby')).not.toBeInTheDocument();
       expect(api.setDebateLobbyReminder).toHaveBeenCalledWith('lobby-1', true, expect.anything(), 'account-me');
+    });
+
+    // An RSVP inside the details swaps the offered row for a going one; the details stay open on it.
+    it('keeps the details open on the going row after an RSVP inside them', async () => {
+      api.lobbies = [offered];
+      api.setDebateLobbyReminder.mockImplementation(async () => {
+        api.lobbies = [{ ...offered, viewer_reminded: true, reminder_count: 3 }];
+        return viewOf(api.lobbies[0]!);
+      });
+      renderTab();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'AI policy night, lobby details' }, { timeout: 3000 }));
+      const before = screen.getByRole('dialog', { name: 'Lobby details' });
+      fireEvent.click(within(before).getByRole('button', { name: 'RSVP' }));
+
+      await screen.findByTestId('requests-lobby');
+      expect(screen.queryByTestId('requests-unanswered-lobby')).not.toBeInTheDocument();
+      const details = screen.getByRole('dialog', { name: 'Lobby details' });
+      expect(within(details).getByRole('button', { name: 'Going' })).toHaveAttribute('aria-pressed', 'true');
+      await waitFor(() => expect(details).toContainElement(document.activeElement as HTMLElement));
     });
 
     it('leaves on Dismiss at once, and stays gone once geo-chat has it', async () => {
