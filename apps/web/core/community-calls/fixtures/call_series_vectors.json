@@ -1424,6 +1424,24 @@
       "one_off": null,
       "readable": false,
       "schedule": "RRULE:FREQ=WEEKLY"
+    },
+    {
+      "length_minutes": null,
+      "name": "hourly_is_refused",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [],
+      "one_off": null,
+      "readable": false,
+      "schedule": "DTSTART:20261105T170000Z\nRRULE:FREQ=HOURLY"
+    },
+    {
+      "length_minutes": null,
+      "name": "minutely_is_refused",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [],
+      "one_off": null,
+      "readable": false,
+      "schedule": "DTSTART;TZID=Europe/Berlin:20261105T170000\nRRULE:FREQ=MINUTELY;INTERVAL=30"
     }
   ],
   "horizon_days": 42,
