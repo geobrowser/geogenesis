@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { isParticipantPositionsQueryKey } from '~/core/debates/participant-positions';
 import { isRematchClaimsQueryKey } from '~/core/debates/rematch-claims-query-key';
+import { publishRemoteClaimResponse, remoteClaimResponseFromEvent } from '~/core/debates/remote-claim-responses';
 import { queryClient } from '~/core/query-client';
 import {
   claimResponseTargetKey,
@@ -101,6 +102,8 @@ type DebateEventPayload = {
   /** On a rowless `debate.space_calls_changed`; see `spaceCallsRefetch`. */
   change?: unknown;
   claim_entity_ids?: string[];
+  /** On `debate.claims_changed` from one person's response report; see `remoteClaimResponseFromEvent`. */
+  claim_response?: unknown;
   sections?: MatchmakingSection[];
 };
 
@@ -531,11 +534,15 @@ export class DebateGatewayClient {
       case 'debate.activity_changed':
         this.queueAccountActivity();
         break;
-      case 'debate.claims_changed':
+      case 'debate.claims_changed': {
         if (identifiers.space_id) {
           this.queueClaims(identifiers.space_id, identifiers.claim_entity_ids);
         }
+        // Applied at once, before the refetch above can know about it.
+        const response = remoteClaimResponseFromEvent(identifiers);
+        if (response) publishRemoteClaimResponse(response);
         break;
+      }
       case 'debate.state_changed':
         if (identifiers.debate_id) this.queueQuery(['debates', 'detail', dashlessId(identifiers.debate_id)]);
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
