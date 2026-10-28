@@ -3283,6 +3283,27 @@ describe('DebateRoomPageClient', () => {
     expect(voiceReleased).toBe(true);
   });
 
+  it('keeps asking for voice when a starting debate loses its first claim', async () => {
+    const owner = tabVoiceOwner(mocks.currentUserId!);
+    vi.spyOn(owner, 'claim').mockResolvedValueOnce(false);
+    const claimUntilHeld = vi.spyOn(owner, 'claimUntilHeld').mockResolvedValue(true);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    expect(claimUntilHeld).toHaveBeenCalledWith(expect.objectContaining({ kind: 'debate' }));
+    // The room goes ahead meanwhile, and still refuses to hand voice over.
+    expect(mocks.roomConnect).toHaveBeenCalled();
+    const [{ stop }] = claimUntilHeld.mock.calls[0]!;
+    expect(stop()).toBe(false);
+  });
+
   it('keeps voice from another tab while the debate is under way', async () => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),

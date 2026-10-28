@@ -1676,7 +1676,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setRoomState('idle');
     },
   });
-  const { takeOver: claimVoice, announceYieldable } = tabVoice;
+  const { takeOver: claimVoice, claimUntilHeld: claimVoiceUntilHeld, announceYieldable } = tabVoice;
   const voicePolicy = debateVoicePolicy(countdown.effectiveStatus, roomState !== 'idle');
   React.useEffect(() => {
     if (voicePolicy === 'yield') announceYieldable();
@@ -1725,8 +1725,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         return;
       }
 
-      // Best effort: only another live debate refuses, and the room lock above already governs that.
-      await claimVoice();
+      // A live room must hold voice: if the first claim loses a race, keep asking (in the background,
+      // so the room is not held up) until it holds it or this connection is superseded.
+      if (!(await claimVoice())) {
+        void claimVoiceUntilHeld(() => !isCurrent() || debateVoicePolicy(debateStatusRef.current, true) === 'yield');
+      }
       if (!isCurrent()) {
         if (connectStartingGenerationRef.current === generation) setConnectStarting(false);
         return;
@@ -2140,6 +2143,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       audioOutputSelectionPromiseRef,
       audioOutputSupportedRef,
       claimVoice,
+      claimVoiceUntilHeld,
       debateId,
       initializeNoiseFilter,
       liveKitJoin,

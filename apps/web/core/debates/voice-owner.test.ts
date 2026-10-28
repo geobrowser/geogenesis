@@ -10,64 +10,94 @@ import {
   shouldYieldVoice,
 } from './voice-owner';
 
-type Holder = { release: () => void; tab: string | null };
-type Waiter = { name: string; callback: (lock: Lock | null) => unknown; resolve: () => void; tab: string | null };
+type Held = { name: string; mode: LockMode; tab: string | null; release: () => void };
+type Queued = {
+  name: string;
+  mode: LockMode;
+  tab: string | null;
+  callback: (lock: Lock | null) => unknown;
+  resolve: () => void;
+  reject: (error: unknown) => void;
+};
 
-/** Web Locks across fake tabs: one holder per name, queued requests granted when it goes, crashes included. */
+/**
+ * Web Locks across fake tabs, as the spec has them: shared locks coexist, an exclusive one needs the
+ * name free, the queue is FIFO, and `ifAvailable` fails while anything conflicts or is queued.
+ */
 class FakeLockManager {
-  held = new Map<string, Holder>();
-  waiting: Waiter[] = [];
+  held: Held[] = [];
+  queue: Queued[] = [];
   currentTab: string | null = null;
 
   request(name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<void> | void) {
-    if (options.ifAvailable && this.held.has(name)) return Promise.resolve(callback(null));
-    if (this.held.has(name)) {
-      return new Promise<void>((resolve, reject) => {
-        const waiter: Waiter = { name, callback, resolve, tab: this.currentTab };
-        this.waiting.push(waiter);
-        options.signal?.addEventListener('abort', () => {
-          this.waiting = this.waiting.filter(candidate => candidate !== waiter);
-          reject(new DOMException('aborted', 'AbortError'));
-        });
+    const mode = options.mode ?? 'exclusive';
+    const queuedHere = this.queue.some(request => request.name === name);
+    if (!queuedHere && this.grantable(name, mode)) return this.run(name, mode, this.currentTab, callback);
+    if (options.ifAvailable) return Promise.resolve(callback(null));
+    return new Promise<void>((resolve, reject) => {
+      const request: Queued = { name, mode, tab: this.currentTab, callback, resolve, reject };
+      this.queue.push(request);
+      options.signal?.addEventListener('abort', () => {
+        if (!this.queue.includes(request)) return;
+        this.queue = this.queue.filter(candidate => candidate !== request);
+        reject(new DOMException('aborted', 'AbortError'));
       });
-    }
-    return this.grant(name, callback, this.currentTab);
-  }
-
-  private grant(name: string, callback: (lock: Lock | null) => unknown, tab: string | null) {
-    const holder: Holder = { release: () => {}, tab };
-    this.held.set(name, holder);
-    return new Promise<void>(resolve => {
-      holder.release = () => {
-        if (this.held.get(name) !== holder) return;
-        this.held.delete(name);
-        resolve();
-        this.next(name);
-      };
-      void Promise.resolve(callback({ name, mode: 'exclusive' })).then(holder.release);
     });
   }
 
-  private next(name: string) {
-    const waiter = this.waiting.find(candidate => candidate.name === name);
-    if (!waiter) return;
-    this.waiting = this.waiting.filter(candidate => candidate !== waiter);
-    void this.grant(name, waiter.callback, waiter.tab).then(waiter.resolve);
+  heldCount(name?: string) {
+    return this.held.filter(lock => name === undefined || lock.name === name).length;
   }
 
   query() {
     return Promise.resolve({
-      held: [...this.held.keys()].map(name => ({ name, mode: 'exclusive' as const })),
-      pending: [],
+      held: this.held.map(({ name, mode }) => ({ name, mode })),
+      pending: this.queue.map(({ name, mode }) => ({ name, mode })),
     });
   }
 
   /** The browser drops a crashed tab's locks; without a tab, every holder's. */
   crash(tab?: string) {
-    for (const [name, holder] of [...this.held]) {
-      if (tab !== undefined && holder.tab !== tab) continue;
-      this.held.delete(name);
-      this.next(name);
+    const dropped = this.held.filter(lock => tab === undefined || lock.tab === tab);
+    this.held = this.held.filter(lock => !dropped.includes(lock));
+    if (tab !== undefined) this.queue = this.queue.filter(request => request.tab !== tab);
+    for (const name of new Set(dropped.map(lock => lock.name))) this.drain(name);
+  }
+
+  private grantable(name: string, mode: LockMode) {
+    const here = this.held.filter(lock => lock.name === name);
+    return mode === 'exclusive' ? here.length === 0 : here.every(lock => lock.mode === 'shared');
+  }
+
+  // A queued request's callback runs later in its own tab's event loop; the lock is held meanwhile.
+  private run(
+    name: string,
+    mode: LockMode,
+    tab: string | null,
+    callback: (lock: Lock | null) => unknown,
+    queued = false
+  ) {
+    const held: Held = { name, mode, tab, release: () => {} };
+    this.held.push(held);
+    return new Promise<void>(resolve => {
+      held.release = () => {
+        if (!this.held.includes(held)) return;
+        this.held = this.held.filter(lock => lock !== held);
+        resolve();
+        this.drain(name);
+      };
+      const invoke = () => void Promise.resolve(callback({ name, mode })).then(held.release, held.release);
+      if (queued) setTimeout(invoke, 0);
+      else invoke();
+    });
+  }
+
+  private drain(name: string) {
+    for (;;) {
+      const next = this.queue.find(request => request.name === name);
+      if (!next || !this.grantable(name, next.mode)) return;
+      this.queue = this.queue.filter(request => request !== next);
+      void this.run(name, next.mode, next.tab, next.callback, true).then(next.resolve, next.reject);
     }
   }
 }
@@ -339,7 +369,7 @@ describe('tab voice owner', () => {
     tab.surface('debate', 'refuse');
     await flush();
     expect(tab.owner.getState().ownership).toBe('owned');
-    expect(locks.held.size).toBe(1);
+    expect(locks.heldCount()).toBe(1);
   });
 
   it('frees voice when the owning tab closes', async () => {
@@ -350,7 +380,7 @@ describe('tab voice owner', () => {
     lobby.unregister();
     await flush();
     await flush();
-    expect(locks.held.size).toBe(0);
+    expect(locks.heldCount()).toBe(0);
 
     const second = openTab('second', 0);
     second.surface('picker');
@@ -385,26 +415,83 @@ describe('tab voice owner', () => {
     // Closed, crashed or reloaded: no React cleanup, no notice, only the lock let go.
     locks.crash('debate');
     FakeBroadcastChannel.crash('debate');
+    window.dispatchEvent(new Event('focus'));
     await flush();
     expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
     await expect(lobbyTab.claim('lobby')).resolves.toBe(true);
   });
 
-  it('watches a debate that took voice from this tab, without blocking its claim', async () => {
-    const lobbyTab = openTab('lobby', 2);
+  it('lets a debate tab taking the room over claim voice while a lobby tab waits on it', async () => {
+    const firstDebate = openTab('debate-1', 1);
+    const room = firstDebate.surface('debate', 'refuse');
+    await firstDebate.claim('debate');
+    const lobbyTab = openTab('lobby', 0);
     lobbyTab.surface('lobby');
-    await lobbyTab.claim('lobby', true);
+    await lobbyTab.claim('lobby');
+    expect(lobbyTab.owner.getState().heldBy).toBe('debate');
 
-    const debateTab = openTab('debate', 0);
+    // "Continue here": the first tab hands the room over, then the new tab claims voice at once.
+    room.policy = 'yield';
+    const secondDebate = openTab('debate-2', 2);
+    secondDebate.surface('debate', 'refuse');
+    await expect(secondDebate.claim('debate')).resolves.toBe(true);
+    expect(locks.heldCount()).toBe(1);
+    expect(lobbyTab.owner.getState().ownership).toBe('elsewhere');
+  });
+
+  it('lets a reloaded debate tab claim voice back while a lobby tab waits on it', async () => {
+    const debateTab = openTab('debate', 1);
     debateTab.surface('debate', 'refuse');
-    await expect(debateTab.claim('debate')).resolves.toBe(true);
-    await flush();
-    expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: 'debate' });
-    expect(locks.waiting).toHaveLength(1);
+    await debateTab.claim('debate');
+    const lobbyTab = openTab('lobby', 0);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby');
 
-    // The debate's lock was granted after the handover, outside the tab scope the fake tracks.
     locks.crash();
     FakeBroadcastChannel.crash('debate');
+    const reloaded = openTab('debate-reloaded', 2);
+    reloaded.surface('debate', 'refuse');
+    await expect(reloaded.claim('debate')).resolves.toBe(true);
+  });
+
+  it('keeps claiming for a debate until it holds voice', async () => {
+    // A lock held by a tab that never answers, e.g. a frozen tab's granted request.
+    let letGo = () => {};
+    void locks.request('geo:debate-room:voice:user-a', {}, () => new Promise<void>(resolve => (letGo = resolve)));
+    const debateTab = openTab('debate', 2);
+    debateTab.surface('debate', 'refuse');
+    await expect(debateTab.claim('debate')).resolves.toBe(false);
+
+    const held = asTab('debate', () => debateTab.owner.claimUntilHeld({ kind: 'debate', stop: () => false }));
+    letGo();
+    await expect(held).resolves.toBe(true);
+    expect(debateTab.owner.getState()).toEqual({ ownership: 'owned', heldBy: null });
+  }, 10_000);
+
+  it('stops claiming once the debate no longer needs voice', async () => {
+    void locks.request('geo:debate-room:voice:user-a', {}, () => new Promise<void>(() => {}));
+    const debateTab = openTab('debate', 2);
+    debateTab.surface('debate', 'refuse');
+    let stopped = false;
+    const held = asTab('debate', () => debateTab.owner.claimUntilHeld({ kind: 'debate', stop: () => stopped }));
+    stopped = true;
+    await expect(held).resolves.toBe(false);
+  }, 10_000);
+
+  it('checks again every few seconds while a waiting tab is on screen', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const debateTab = openTab('debate', 0);
+    debateTab.surface('debate', 'refuse');
+    await debateTab.claim('debate');
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby');
+
+    locks.crash();
+    FakeBroadcastChannel.crash('debate');
+    await flush();
+    expect(lobbyTab.owner.getState().heldBy).toBe('debate');
+    vi.advanceTimersByTime(3_000);
     await flush();
     expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
   });

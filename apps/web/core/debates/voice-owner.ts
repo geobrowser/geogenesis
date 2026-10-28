@@ -86,10 +86,14 @@ function asSurfaceKind(label: string | undefined): VoiceSurfaceKind | null {
 }
 
 const VOICE_SCOPE = 'voice';
+const DEBATE_RECHECK_MS = 3_000;
+const CLAIM_RETRY_MS = 250;
 
 export type TabVoiceOwner = {
   register: (surface: VoiceSurface) => () => void;
   claim: (options: VoiceClaimOptions) => Promise<boolean>;
+  /** Explicit claims until one holds voice or `stop()` says to give up; true once held. */
+  claimUntilHeld: (options: { kind: VoiceSurfaceKind; stop: () => boolean }) => Promise<boolean>;
   /** Whether another tab holds voice right now, without asking for it. */
   heldElsewhere: () => Promise<boolean>;
   /** Tells tabs waiting on this one that its surfaces now yield, e.g. a debate that ended. */
@@ -116,7 +120,7 @@ export function createTabVoiceOwner({
   let inflight: { automatic: boolean; owned: Promise<boolean> } | null = null;
   let teardown: ReturnType<typeof setTimeout> | null = null;
   let notices: BroadcastChannel | null = null;
-  let debateWatch: AbortController | null = null;
+  let debateWatch: ReturnType<typeof setInterval> | null = null;
   const lockName = debateRoomCoordinationName(VOICE_SCOPE, userId);
   const lockManager = () => (typeof navigator !== 'undefined' ? navigator.locks : undefined);
 
@@ -125,8 +129,9 @@ export function createTabVoiceOwner({
     if (waitingOnDebate()) setState({ ownership: 'elsewhere', heldBy: null });
   };
 
-  // A frozen tab can miss the debate's notice: on return, a free lock gives the button back, and a
-  // held one is asked whether it would yield now.
+  // The debate tab can go without a notice (crash, unload) or this tab can miss one while frozen.
+  // A free lock gives the button back; a held one is asked whether it would yield now. Only
+  // query(): a lock request here, even shared, would block the next exclusive claim.
   const recheckDebateHold = async () => {
     if (!waitingOnDebate() || (typeof document !== 'undefined' && document.visibilityState !== 'visible')) return;
     try {
@@ -138,49 +143,21 @@ export function createTabVoiceOwner({
     try {
       notices?.postMessage({ type: 'policy-query' });
     } catch {
-      // The queued lock request below still frees it.
+      // The next check asks again.
     }
-  };
-
-  // While a debate tab keeps voice, a queued lock request is granted the moment that tab lets go
-  // for any reason (end, close, crash, unload). It only restores the button; it never claims.
-  // Queued only once another tab holds the lock: a request queued behind this tab's own hold would
-  // be granted on its release and block the debate's claim.
-  let debateWatchArmed = false;
-  const armDebateWatch = async () => {
-    const controller = debateWatch;
-    if (!controller || debateWatchArmed || coordinator?.ownsConnection()) return;
-    const locks = lockManager();
-    if (typeof locks?.request !== 'function' || typeof locks.query !== 'function') return;
-    try {
-      const { held = [] } = await locks.query();
-      if (!held.some(lock => lock.name === lockName)) return;
-    } catch {
-      return;
-    }
-    if (debateWatch !== controller || debateWatchArmed) return;
-    debateWatchArmed = true;
-    locks
-      .request(lockName, { mode: 'shared', signal: controller.signal }, () => {
-        if (debateWatch === controller) restoreButton();
-      })
-      .catch(() => undefined);
   };
 
   const startDebateWatch = () => {
-    if (debateWatch) return;
-    debateWatch = new AbortController();
-    debateWatchArmed = false;
+    if (debateWatch !== null) return;
+    debateWatch = setInterval(() => void recheckDebateHold(), DEBATE_RECHECK_MS);
     window.addEventListener('focus', recheckDebateHold);
     document.addEventListener('visibilitychange', recheckDebateHold);
-    void armDebateWatch();
   };
 
   const stopDebateWatch = () => {
-    if (!debateWatch) return;
-    debateWatch.abort();
+    if (debateWatch === null) return;
+    clearInterval(debateWatch);
     debateWatch = null;
-    debateWatchArmed = false;
     window.removeEventListener('focus', recheckDebateHold);
     document.removeEventListener('visibilitychange', recheckDebateHold);
   };
@@ -214,19 +191,10 @@ export function createTabVoiceOwner({
     notices.onmessage = event => {
       const type = (event.data as { type?: string } | null)?.type;
       if (type === 'yieldable') return restoreButton();
-      if (type === 'held') return void armDebateWatch();
       if (type === 'policy-query' && coordinator?.ownsConnection() && strongestPolicy(surfacePolicies()) === 'yield') {
         announceYieldable();
       }
     };
-  };
-
-  const announceHeld = () => {
-    try {
-      notices?.postMessage({ type: 'held' });
-    } catch {
-      // A waiting tab still re-checks when it is looked at.
-    }
   };
 
   const announceYieldable = () => {
@@ -269,7 +237,7 @@ export function createTabVoiceOwner({
     stopDebateWatch();
   };
 
-  return {
+  const owner: TabVoiceOwner = {
     register: surface => {
       if (teardown !== null) {
         clearTimeout(teardown);
@@ -304,7 +272,6 @@ export function createTabVoiceOwner({
         .then(owned => {
           if (coordinator !== active) return false;
           setState(owned ? OWNED : { ownership: 'elsewhere', heldBy: asSurfaceKind(active.lastRefusedBy()) });
-          if (owned) announceHeld();
           return owned;
         })
         .finally(() => {
@@ -312,6 +279,14 @@ export function createTabVoiceOwner({
         });
       inflight = { automatic, owned: attempt };
       return attempt;
+    },
+    claimUntilHeld: async ({ kind, stop }) => {
+      while (!stop()) {
+        if (await owner.claim({ kind })) return true;
+        if (stop()) return false;
+        await new Promise(resolve => setTimeout(resolve, CLAIM_RETRY_MS));
+      }
+      return false;
     },
     heldElsewhere: async () => {
       if (state.ownership === 'owned') return false;
@@ -334,6 +309,7 @@ export function createTabVoiceOwner({
       };
     },
   };
+  return owner;
 }
 
 const tabOwners = new Map<string, TabVoiceOwner>();
@@ -364,6 +340,8 @@ type UseVoiceOwnershipOptions = {
 export type VoiceOwnershipHandle = VoiceTabState & {
   /** An explicit claim: "Use voice here", or turning a device on. */
   takeOver: () => Promise<boolean>;
+  /** Explicit claims until one holds voice or `stop()` says to give up. */
+  claimUntilHeld: (stop: () => boolean) => Promise<boolean>;
   /** For a connection replaced outside the lock (another device): shown as elsewhere until taken back. */
   markElsewhere: () => void;
   heldElsewhere: () => Promise<boolean>;
@@ -410,6 +388,10 @@ export function useVoiceOwnership({
     if (owned) setReplaced(false);
     return owned;
   }, [kind, owner]);
+  const claimUntilHeld = React.useCallback(
+    (stop: () => boolean) => (owner ? owner.claimUntilHeld({ kind, stop }) : Promise.resolve(true)),
+    [kind, owner]
+  );
   const markElsewhere = React.useCallback(() => setReplaced(true), []);
   const heldElsewhere = React.useCallback(() => owner?.heldElsewhere() ?? Promise.resolve(false), [owner]);
   const announceYieldable = React.useCallback(() => owner?.announceYieldable(), [owner]);
@@ -419,7 +401,7 @@ export function useVoiceOwnership({
     : replaced && tabState.ownership === 'owned'
       ? { ...tabState, ownership: 'elsewhere' }
       : tabState;
-  return { ...state, takeOver, markElsewhere, heldElsewhere, announceYieldable };
+  return { ...state, takeOver, claimUntilHeld, markElsewhere, heldElsewhere, announceYieldable };
 }
 
 const noopSubscribe = () => () => {};
