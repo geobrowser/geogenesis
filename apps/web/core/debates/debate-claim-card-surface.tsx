@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useSetAtom } from 'jotai';
+import { type PrimitiveAtom, atom, useStore } from 'jotai';
 
 import type { ActionComponent, ActionScope } from '~/core/action-context';
 import { ActionSurface, useActionContext } from '~/core/action-context-provider';
@@ -10,7 +10,6 @@ import { recordAction } from '~/core/analytics-operations';
 import { normId } from '~/core/utils/norm-id';
 
 import { hasId, toggleId } from './matchmaking/topic-facets';
-import { debatesHubDrawnListAtom } from '~/atoms';
 
 /**
  * GEO-3495. Where a claim card was shown when someone picked a claim to debate. Ids of lists, never
@@ -38,6 +37,7 @@ export type DebateClaimListId =
   | 'hub_matches'
   | 'hub_explore'
   | 'hub_my_positions'
+  | 'hub_matches_offline'
   | 'lobby_room_claims'
   | 'lobby_highlighted'
   | 'lobby_room_vote'
@@ -152,16 +152,35 @@ export function useRecordClaimFilter(component: ActionComponent, scope: ActionSc
   );
 }
 
+/** GEO-3495. The claim list a debates hub host has on screen, held per host. */
+export type DrawnHubList = PrimitiveAtom<DebateClaimListId | null>;
+
+const DrawnHubListContext = React.createContext<DrawnHubList | null>(null);
+
 /**
- * GEO-3495. Says which claim list the debates hub has on screen, so a press on the hub's tabs can be
- * recorded as leaving it. Called by the list itself once drawn, because a hub tab picks its list from
- * its own filters (Matches widens to your positions, Explore's Show picks one of three).
+ * GEO-3495. A debates hub host's own record of the claim list it has on screen: the side panel and
+ * full screen each keep one, since both can be open at once on `/matchmaking`. The host hands it to
+ * its lists through {@link DrawnHubListProvider} and reads it for {@link useRecordHubTabPress}.
+ */
+export function useDrawnHubList(): DrawnHubList {
+  const [drawnList] = React.useState(() => atom<DebateClaimListId | null>(null));
+  return drawnList;
+}
+
+export const DrawnHubListProvider = DrawnHubListContext.Provider;
+
+/**
+ * GEO-3495. Says which claim list its debates hub host has on screen, so a press on the host's tabs
+ * can be recorded as leaving it. Called by the list itself once drawn, because a hub tab picks its
+ * list from its own filters (Matches widens to your positions, Explore's Show picks one of three).
+ * Outside a hub host (a lobby's lists) there is nothing to tell.
  */
 export function useReportDrawnHubList(listId: DebateClaimListId, enabled = true) {
-  const setDrawnList = useSetAtom(debatesHubDrawnListAtom);
+  const drawnList = React.useContext(DrawnHubListContext);
+  const store = useStore();
   React.useEffect(() => {
-    if (enabled) setDrawnList(listId);
-  }, [enabled, listId, setDrawnList]);
+    if (enabled && drawnList) store.set(drawnList, listId);
+  }, [drawnList, enabled, listId, store]);
 }
 
 /**

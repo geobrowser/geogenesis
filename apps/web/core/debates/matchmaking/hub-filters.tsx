@@ -631,14 +631,15 @@ export function PanelFiltersBar({
       sort: {
         ...sort,
         onChange: (next: string) => {
-          record({ kind: 'sort', value: next });
+          // The segmented controls answer a press on the option already set; that chose nothing.
+          if (next !== sort.value) record({ kind: 'sort', value: next });
           sort.onChange(next);
         },
       },
       choice: choice && {
         ...choice,
         onChange: (next: string) => {
-          record({ kind: 'show', value: next });
+          if (next !== choice.value) record({ kind: 'show', value: next });
           choice.onChange(next);
         },
       },

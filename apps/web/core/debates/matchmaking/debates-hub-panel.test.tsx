@@ -8,12 +8,12 @@ import { usePathname } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
+import type { DebateClaimListId } from '../debate-claim-card-surface';
 import { DEBATES_MODAL } from '../debates-panel-deep-link';
 import { DebatesHubPanel } from './debates-hub-panel';
 import {
   type DebatesHubTab,
   debatesHubAtom,
-  debatesHubDrawnListAtom,
   debatesHubExploreSearchAtom,
   debatesHubExploreShowAtom,
   debatesHubExploreShowMineAtom,
@@ -212,6 +212,8 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 // stays real because the People tab renders it.
 vi.mock('./claims-tab', async () => {
   const actual = await vi.importActual<typeof import('./claims-tab')>('./claims-tab');
+  const surface = await vi.importActual<typeof import('../debate-claim-card-surface')>('../debate-claim-card-surface');
+  const MOCK_LIST_IDS = { explore: 'hub_explore', lobby: 'hub_lobby', positions: 'hub_my_positions' } as const;
   return {
     ...actual,
     // Two markers rather than one, because the hub now mounts a second, warming instance behind
@@ -224,8 +226,16 @@ vi.mock('./claims-tab', async () => {
     //
     // The warming one also records what it was handed: it has to be the panel's Explore, with the
     // panel's filters, not a bare `ClaimsTab warm` running full screen's settings.
-    ClaimsTab: (props: { warm?: boolean; atomsFrom?: string; panelFilters?: unknown }) => {
+    ClaimsTab: (props: {
+      warm?: boolean;
+      atomsFrom?: string;
+      panelFilters?: unknown;
+      variant?: 'explore' | 'lobby' | 'positions';
+      listId?: DebateClaimListId;
+    }) => {
       if (props.warm) mocks.warmClaimsTab = props;
+      // Says which list it is, as the real one does, so the tab row can record leaving it.
+      surface.useReportDrawnHubList(props.listId ?? MOCK_LIST_IDS[props.variant ?? 'explore'], !props.warm);
       return <div data-testid={props.warm ? 'claims-tab-warm' : 'claims-tab'} />;
     },
   };
@@ -627,7 +637,6 @@ describe('DebatesHubPanel', () => {
   it('records a press on a claim tab as leaving the list on screen', () => {
     const store = createStore();
     store.set(debatesHubAtom, { tab: 'explore' });
-    store.set(debatesHubDrawnListAtom, 'hub_explore');
     render(
       <Provider store={store}>
         <DebatesHubPanel />

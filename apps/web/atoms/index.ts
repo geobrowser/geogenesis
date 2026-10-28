@@ -3,7 +3,6 @@ import { atomWithStorage } from 'jotai/utils';
 
 import type { ActionContext, ActionScope } from '~/core/action-context';
 import type { Debate } from '~/core/debates/api';
-import type { DebateClaimListId } from '~/core/debates/debate-claim-card-surface';
 import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
@@ -387,12 +386,6 @@ export const lobbyExploreSpaceSeedSpentAtom = atom(false);
 export const debatesHubLobbyMoveSpentAtom = atom(false);
 
 /**
- * The claim list the debates hub has on screen (GEO-3495), as the list itself reports it: a press on
- * the hub's tabs is recorded as leaving this list. Null until a claim list has been drawn.
- */
-export const debatesHubDrawnListAtom = atom<DebateClaimListId | null>(null);
-
-/**
  * Which account the filter state above belongs to, so it is never handed to a different viewer.
  *
  * Session-scoped state outlives the sign-in that changes who is looking, so "whose are these" has
@@ -451,7 +444,6 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubExploreShowMineAtom, false);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
   set(debatesHubLobbyMoveSpentAtom, false);
-  set(debatesHubDrawnListAtom, null);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than
   // working state, which is the whole reason it is stored rather than session-scoped. Handing a new
   // account the previous one's *filters* is a leak; handing them a browsing preference held on this

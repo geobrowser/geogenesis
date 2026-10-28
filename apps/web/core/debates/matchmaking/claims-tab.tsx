@@ -20,6 +20,7 @@ import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allow
 import {
   DebateClaimCardSurface,
   type DebateClaimListId,
+  type DrawnHubList,
   type HubTabName,
   useRecordClaimFilter,
   useRecordedSpaceTopicFilters,
@@ -67,7 +68,6 @@ import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import {
   type DebatesHubTab,
-  debatesHubDrawnListAtom,
   debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
@@ -295,9 +295,9 @@ const HUB_TAB_NAMES: Partial<Record<DebatesHubTab, HubTabName>> = {
  * leaving the list on screen, which that list reports itself (`useReportDrawnHubList`); a press from
  * People or Requests left no list.
  */
-export function useRecordHubTabPress(shown: DebatesHubTab) {
+export function useRecordHubTabPress(shown: DebatesHubTab, drawn: DrawnHubList) {
   const recordFilter = useRecordClaimFilter('debate_matchmaking');
-  const drawnList = useAtomValue(debatesHubDrawnListAtom);
+  const drawnList = useAtomValue(drawn);
   return (to: DebatesHubTab) => {
     const name = HUB_TAB_NAMES[to];
     if (to === shown || !name) return;
@@ -317,6 +317,7 @@ export function ClaimsTab({
   stickyTopClassName,
   trailing,
   warm = false,
+  listId: listIdOverride,
   onSettledEmpty,
   onTabChange,
   layout = 'panel',
@@ -393,6 +394,12 @@ export function ClaimsTab({
    * the requests instead. Being the same component is what makes that impossible.
    */
   warm?: boolean;
+  /**
+   * GEO-3495: the list id its cards, requests and filters record, where the variant's own would name
+   * a different list. The panel's Matches draws your positions with someone on the other side, which
+   * is not Explore's My positions.
+   */
+  listId?: DebateClaimListId;
   layout?: ClaimsLayout;
   scopePicker?: React.ReactNode;
 } = {}) {
@@ -802,7 +809,7 @@ export function ClaimsTab({
   });
 
   // GEO-3495. The viewer's own filter presses, by what they chose; the seed above is not one.
-  const listId = CLAIMS_LIST_IDS[variant];
+  const listId = listIdOverride ?? CLAIMS_LIST_IDS[variant];
   // The warm instance draws nothing, and a lobby's own Explore is not the hub.
   useReportDrawnHubList(listId, !warm && variant !== 'lobbyExplore');
   const recordedFilters = useRecordedSpaceTopicFilters(listId, {

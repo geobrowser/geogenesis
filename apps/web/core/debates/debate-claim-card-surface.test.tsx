@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import * as React from 'react';
 
+import { useAtomValue } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ActionScope, snapshotActionContext } from '~/core/action-context';
@@ -10,9 +11,12 @@ import { runObservedAction } from '~/core/analytics-operations';
 
 import {
   DebateClaimCardSurface,
+  DrawnHubListProvider,
   sectionStartOffsets,
+  useDrawnHubList,
   useRecordClaimFilter,
   useRecordedSpaceTopicFilters,
+  useReportDrawnHubList,
 } from './debate-claim-card-surface';
 
 const { capture } = vi.hoisted(() => ({ capture: vi.fn() }));
@@ -111,6 +115,34 @@ describe('GEO-3495 claim attribution', () => {
       </DebateClaimCardSurface>
     );
     expect(ref.current).toBe(container.querySelector('article'));
+  });
+
+  // The side panel and full screen can both be open on /matchmaking: each keeps its own list on screen.
+  it('keeps each hub host’s list on screen to itself', () => {
+    const seen: Record<string, unknown> = {};
+    function List({ id }: { id: 'hub_matches' | 'hub_explore' }) {
+      useReportDrawnHubList(id);
+      return null;
+    }
+    function Host({ name, id }: { name: string; id: 'hub_matches' | 'hub_explore' }) {
+      const drawn = useDrawnHubList();
+      seen[name] = useAtomValue(drawn);
+      return (
+        <DrawnHubListProvider value={drawn}>
+          <List id={id} />
+        </DrawnHubListProvider>
+      );
+    }
+    render(
+      <>
+        <Host name="panel" id="hub_matches" />
+        <Host name="workspace" id="hub_explore" />
+        {/* Outside a hub host, a list has nowhere to say it. */}
+        <List id="hub_matches" />
+      </>
+    );
+
+    expect(seen).toEqual({ panel: 'hub_matches', workspace: 'hub_explore' });
   });
 
   it('numbers sections on from where the one before ended', () => {

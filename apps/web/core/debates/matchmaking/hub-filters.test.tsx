@@ -330,6 +330,18 @@ describe('PanelFiltersBar', () => {
     ]);
   });
 
+  // The segmented controls answer a press on the option already set, which chose nothing.
+  it('does not record pressing the Sort or Show already set', async () => {
+    const onFilterChoice = vi.fn();
+    render(<PanelHarness onFilterChoice={onFilterChoice} />);
+    const filters = await openFilters();
+
+    fireEvent.click(within(filters).getByRole('radio', { name: 'Best' }));
+    fireEvent.click(within(filters).getByRole('radio', { name: 'Not answered' }));
+
+    expect(onFilterChoice).not.toHaveBeenCalled();
+  });
+
   it('records Clear all once, rather than as each thing it cleared', async () => {
     const onFilterChoice = vi.fn();
     render(<PanelHarness onFilterChoice={onFilterChoice} />);
