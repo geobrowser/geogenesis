@@ -1,5 +1,3 @@
-import type { Query } from '@tanstack/react-query';
-
 import { type DebateLobbyView, dashlessId } from '~/core/debates/api';
 import { sameId } from '~/core/debates/rooms/room-presence';
 
@@ -61,10 +59,7 @@ export function spaceCallsRefetch(change: unknown): { list: boolean; past: boole
   }
 }
 
-/** A cached member view of a call in `spaceId` whose room has not opened. */
-export function isPreOpenCallQuery(query: Pick<Query, 'queryKey' | 'state'>, spaceId: string) {
-  const [root, account, , kind] = query.queryKey;
-  if (root !== 'debates' || account !== 'account' || kind !== 'lobby') return false;
-  const view = query.state.data as DebateLobbyView | undefined;
+/** A lobby view of a call in `spaceId` whose room has not opened. */
+export function isPreOpenCallView(view: DebateLobbyView | undefined, spaceId: string) {
   return Boolean(view?.call && sameId(view.call.space_id, spaceId) && view.access.status === 'not_yet_open');
 }

@@ -1,4 +1,4 @@
-import { CancelledError, QueryClient, QueryObserver } from '@tanstack/react-query';
+import { CancelledError, QueryClient, type QueryFilters, QueryObserver, matchQuery } from '@tanstack/react-query';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -811,7 +811,7 @@ describe('DebateGatewayClient', () => {
         (call: unknown[]) => call[0] as Record<string, unknown>
       );
       return {
-        keyed: filters.filter(filter => 'queryKey' in filter),
+        keyed: filters.filter(filter => typeof filter.predicate !== 'function'),
         preOpen: filters.some(filter => typeof filter.predicate === 'function'),
       };
     }
@@ -852,7 +852,7 @@ describe('DebateGatewayClient', () => {
       ]);
     });
 
-    it('refetches the space’s calls not yet open on a schedule change, and no other space’s', async () => {
+    it('refetches this account’s cached calls not yet open in the space on a schedule change, and nothing else', async () => {
       const call = (spaceId: string, status: string) => ({
         lobby_id: 'x',
         access: status === 'not_yet_open' ? { status, opens_at: '2026-11-04T15:50:00Z' } : { status },
@@ -864,16 +864,15 @@ describe('DebateGatewayClient', () => {
       queryClient.setQueryData(preOpen, call('SP-1', 'not_yet_open'));
       queryClient.setQueryData(open, call('sp1', 'admitted'));
       queryClient.setQueryData(elsewhere, call('sp2', 'not_yet_open'));
+      queryClient.setQueryData(['debates', 'account', 'user-b', 'lobby', 'call1'], call('sp1', 'not_yet_open'));
 
       await spaceCallsChanged({ space_id: 'sp1', change: 'schedule' });
-      const all: { predicate?: (query: unknown) => boolean }[] = invalidateQueries.mock.calls.map(
-        (args: unknown[]) => args[0] as { predicate?: (query: unknown) => boolean }
-      );
-      const filters = all.find(filter => filter.predicate);
+      const all: QueryFilters[] = invalidateQueries.mock.calls.map((args: unknown[]) => args[0] as QueryFilters);
+      const filters = all.find(filter => filter.predicate)!;
       const matched = queryClient
         .getQueryCache()
         .findAll()
-        .filter(query => filters?.predicate?.(query))
+        .filter(query => matchQuery(filters, query))
         .map(query => query.queryKey);
       expect(matched).toEqual([preOpen]);
     });

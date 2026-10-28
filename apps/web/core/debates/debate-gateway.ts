@@ -14,7 +14,7 @@ import {
 import type { SpaceCallsResponse } from '~/core/space-calls/api';
 import { spaceCallKeys } from '~/core/space-calls/query-keys';
 import {
-  isPreOpenCallQuery,
+  isPreOpenCallView,
   parseSpaceCallPatch,
   spaceCallsRefetch,
   withSpaceCallPatch,
@@ -641,10 +641,12 @@ export class DebateGatewayClient {
           const refetch = spaceCallsRefetch(patch ? undefined : identifiers.change);
           if (refetch.list) this.queueQuery(listKey);
           if (refetch.past) this.queueQuery(spaceCallKeys.past(identifiers.space_id));
-          if (refetch.preOpen) {
+          const lobbyRoot = this.accountQueryKey('lobby');
+          if (refetch.preOpen && lobbyRoot) {
             const spaceId = identifiers.space_id;
             this.queueInvalidation(`pre-open-calls:${dashlessId(spaceId)}`, {
-              predicate: query => isPreOpenCallQuery(query, spaceId),
+              queryKey: lobbyRoot,
+              predicate: query => isPreOpenCallView(query.state.data as DebateLobbyView | undefined, spaceId),
               refetchType: 'active',
             });
           }
@@ -817,10 +819,14 @@ export class DebateGatewayClient {
       | 'my-lobby',
     id?: string
   ) {
-    if (!this.accountKey) return;
-    this.queueQuery(
-      id ? ['debates', 'account', this.accountKey, kind, id] : ['debates', 'account', this.accountKey, kind]
-    );
+    const key = this.accountQueryKey(kind, id);
+    if (key) this.queueQuery(key);
+  }
+
+  /** This account's key for `kind`, as `debateQueryKeys` spells it; `null` signed out. */
+  private accountQueryKey(kind: string, id?: string): QueryKey | null {
+    if (!this.accountKey) return null;
+    return id ? ['debates', 'account', this.accountKey, kind, id] : ['debates', 'account', this.accountKey, kind];
   }
 
   private queueClaims(spaceId: string, claimEntityIds?: string[]) {
