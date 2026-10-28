@@ -136,7 +136,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
-import { firstName } from '~/partials/profile/claim-response-tag';
+import { ClaimResponseTag, firstName } from '~/partials/profile/claim-response-tag';
 
 import { RematchPublishCard } from './rematch-publish-card';
 import { RematchRequestCard } from './rematch-request-card';
@@ -2743,6 +2743,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         headerMeta={saidBy}
         session={session}
         currentUserId={currentUserId}
+        opponentPositionKnown={!positions.isLoading && !positions.error && !viewerIdentityUnresolved}
         chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
         readiness={readinessByClaimId.get(normId(claim.claim.claim_entity_id)) ?? null}
         onRequest={() =>
@@ -3402,6 +3403,7 @@ function RematchClaimCard({
   claim,
   session,
   currentUserId,
+  opponentPositionKnown,
   chatPosition,
   readiness: claimReadiness,
   onRequest,
@@ -3414,6 +3416,8 @@ function RematchClaimCard({
   claim: DebateRematchClaim;
   session: DebateRematchSession | null;
   currentUserId: string | null;
+  /** A failed or pending participant lookup cannot establish that the opponent has no position. */
+  opponentPositionKnown: boolean;
   /** geo-chat's own copy of this viewer's position; `undefined` when it has no row yet. */
   chatPosition: boolean | null | undefined;
   readiness: ClaimReadinessState | null;
@@ -3431,7 +3435,9 @@ function RematchClaimCard({
 }) {
   // `true` off a room, so this route's gate is unchanged. See `useRoomOpponentPresent`.
   const roomOpponentPresent = useRoomOpponentPresent();
-  const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
+  const remoteParticipant =
+    currentUserId === null ? undefined : session?.participants.find(person => person.user_id !== currentUserId);
+  const remotePosition = claim.participants.find(side => side.user_id === remoteParticipant?.user_id)?.position ?? null;
 
   // A claim whose stored kind didn't parse still has to render; 'stance' is the fallback
   // `responsePositionLabel` already applies, so the labels agree either way.
@@ -3519,6 +3525,16 @@ function RematchClaimCard({
       readiness={readiness}
       headerMeta={headerMeta}
       analyticsSurface="rematch"
+      showParticipants={false}
+      noteFor={position =>
+        opponentPositionKnown && (
+          <ClaimResponseTag
+            response={remotePosition === null ? undefined : { stance: remotePosition ? 'agree' : 'disagree' }}
+            personName={remoteParticipant?.display_name}
+            forPosition={position}
+          />
+        )
+      }
       // The card's own offer is replaced rather than hidden. A rematch request is its own mutation
       // with its own gating, but it is the same offer to the reader — so it wears the same control
       // in the same place instead of a footer button of its own (GEO-2825). Nothing to watch here
@@ -3552,8 +3568,13 @@ function RematchClaimCard({
       // push the row wider than the card. geo-chat's refusals here are sentences, not the couple of
       // words the side panel's are, which is why that surface can keep its own inline.
       footer={
-        context || requestError ? (
+        (opponentPositionKnown && remoteParticipant && remotePosition === null) || context || requestError ? (
           <>
+            {opponentPositionKnown && remoteParticipant && remotePosition === null ? (
+              <p className="mt-1.5 text-center text-breadcrumb text-grey-04">
+                {firstName(remoteParticipant.display_name) ?? 'Your opponent'} has no position yet
+              </p>
+            ) : null}
             {context}
             {requestError ? (
               <div role="alert" className="mt-2">

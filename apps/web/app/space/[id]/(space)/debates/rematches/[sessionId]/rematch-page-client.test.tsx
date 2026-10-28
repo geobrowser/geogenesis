@@ -1250,7 +1250,7 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled());
   });
 
-  it('renders active semantic response buttons with holder avatars', async () => {
+  it('renders active response buttons without faces and shows the opponent’s position beneath their side', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
@@ -1268,6 +1268,49 @@ describe('DebateRematchPageClient', () => {
         .getByRole('button', { name: /^Disagree/ })
         .querySelector('img, svg')
     ).not.toBeNull();
+    for (const button of within(sharedClaimCard!).getAllByRole('button', { name: /^(Agree|Disagree)/ })) {
+      expect(button.querySelector('img, [aria-hidden="true"]')).toBeNull();
+    }
+    const tag = within(sharedClaimCard!).getByText('disagrees').closest('p')!;
+    expect(tag).toHaveTextContent('Salina disagrees');
+    expect(tag.parentElement).toContainElement(within(sharedClaimCard!).getByRole('button', { name: /^Disagree/ }));
+    expect(within(sharedClaimCard!).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('shows the opponent’s agreement under Agree independently of the viewer’s side', async () => {
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED, SPACE_1, false),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, true),
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const card = screen.getByText('A claim both participants chose').closest('article')!;
+    const tag = within(card).getByText('agrees').closest('p')!;
+    expect(tag).toHaveTextContent('Salina agrees');
+    expect(tag.parentElement).toContainElement(within(card).getByRole('button', { name: /^Agree/ }));
+    expect(within(card).queryByText('disagrees')).toBeNull();
+  });
+
+  it('explicitly shows when the opponent has no position without implying the viewer has none', async () => {
+    mocks.positions = [position('profile-local', CLAIM_SHARED, SPACE_1, true)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const card = screen.getByText('A claim both participants chose').closest('article')!;
+    expect(within(card).getByText('Salina has no position yet')).toBeInTheDocument();
+    expect(within(card).queryByText('agrees')).toBeNull();
+    expect(within(card).queryByText('disagrees')).toBeNull();
+    expect(within(card).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('does not claim the opponent has no position while their lookup is unresolved', async () => {
+    mocks.positions = [];
+    mocks.positionsLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(screen.queryByText('Salina has no position yet')).toBeNull();
   });
 
   it('changes responses through the semantic buttons without rendering a second response area', async () => {

@@ -128,6 +128,8 @@ type Props = {
    * button that says the same word.
    */
   noteFor?: (position: boolean) => React.ReactNode;
+  /** False in the claim picker, where a named opponent's position replaces the faces. */
+  showParticipants?: boolean;
   /**
    * Leaves the end slot out.
    *
@@ -215,6 +217,7 @@ export function MatchmakingClaimCard({
   headerMeta,
   footer,
   noteFor,
+  showParticipants,
   onOpenClaim,
   viewerIdentityPending,
   viewerResponseUnknown,
@@ -267,6 +270,7 @@ export function MatchmakingClaimCard({
       {isOnGraph ? (
         <RespondableControls
           noteFor={noteFor}
+          showParticipants={showParticipants}
           claim={claim}
           positions={positions}
           readiness={readiness}
@@ -288,6 +292,8 @@ export function MatchmakingClaimCard({
         />
       ) : (
         <UnresolvableControls
+          noteFor={noteFor}
+          showParticipants={showParticipants}
           positions={positions}
           readiness={readiness}
           analyticsSurface={analyticsSurface}
@@ -789,6 +795,7 @@ function RespondableControls({
   headerMeta,
   hasFooter,
   noteFor,
+  showParticipants,
   analyticsSurface,
 }: {
   claim: DebateClaimSummary;
@@ -811,6 +818,7 @@ function RespondableControls({
   readResponses?: boolean;
   /** See {@link Props.noteFor}. */
   noteFor?: (position: boolean) => React.ReactNode;
+  showParticipants?: boolean;
   onOpenClaim?: () => void;
   viewerIdentityPending?: boolean;
   viewerResponseUnknown?: boolean;
@@ -992,6 +1000,7 @@ function RespondableControls({
         pending={isResponseSubmitting}
         titleFor={actionTitle}
         noteFor={noteFor}
+        showParticipants={showParticipants}
         localSide={localVoteSide}
         analyticsSurface={analyticsSurface}
       />
@@ -1167,6 +1176,8 @@ function UnresolvableControls({
   endSlot,
   headerMeta,
   analyticsSurface,
+  noteFor,
+  showParticipants,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -1177,6 +1188,8 @@ function UnresolvableControls({
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
   headerMeta?: React.ReactNode;
+  noteFor?: (position: boolean) => React.ReactNode;
+  showParticipants?: boolean;
 }) {
   return (
     <>
@@ -1218,6 +1231,8 @@ function UnresolvableControls({
         positions={positions}
         responseKind={CLAIM_RESPONSE_KIND}
         viewerPosition={readiness.viewer_response?.position ?? null}
+        noteFor={noteFor}
+        showParticipants={showParticipants}
       />
       <div className="mt-3">
         <Text as="span" variant="footnote" color="grey-04">
