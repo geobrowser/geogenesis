@@ -11,24 +11,48 @@ import {
 } from './voice-owner';
 
 type Holder = { release: () => void; tab: string | null };
+type Waiter = { name: string; callback: (lock: Lock | null) => unknown; resolve: () => void; tab: string | null };
 
-/** Web Locks across fake tabs: one holder per name, dropped when its tab crashes. */
+/** Web Locks across fake tabs: one holder per name, queued requests granted when it goes, crashes included. */
 class FakeLockManager {
   held = new Map<string, Holder>();
+  waiting: Waiter[] = [];
   currentTab: string | null = null;
 
   request(name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<void> | void) {
     if (options.ifAvailable && this.held.has(name)) return Promise.resolve(callback(null));
-    if (this.held.has(name)) return Promise.reject(new Error('fake lock manager only grants ifAvailable'));
-    const holder: Holder = { release: () => {}, tab: this.currentTab };
+    if (this.held.has(name)) {
+      return new Promise<void>((resolve, reject) => {
+        const waiter: Waiter = { name, callback, resolve, tab: this.currentTab };
+        this.waiting.push(waiter);
+        options.signal?.addEventListener('abort', () => {
+          this.waiting = this.waiting.filter(candidate => candidate !== waiter);
+          reject(new DOMException('aborted', 'AbortError'));
+        });
+      });
+    }
+    return this.grant(name, callback, this.currentTab);
+  }
+
+  private grant(name: string, callback: (lock: Lock | null) => unknown, tab: string | null) {
+    const holder: Holder = { release: () => {}, tab };
     this.held.set(name, holder);
     return new Promise<void>(resolve => {
       holder.release = () => {
-        if (this.held.get(name) === holder) this.held.delete(name);
+        if (this.held.get(name) !== holder) return;
+        this.held.delete(name);
         resolve();
+        this.next(name);
       };
       void Promise.resolve(callback({ name, mode: 'exclusive' })).then(holder.release);
     });
+  }
+
+  private next(name: string) {
+    const waiter = this.waiting.find(candidate => candidate.name === name);
+    if (!waiter) return;
+    this.waiting = this.waiting.filter(candidate => candidate !== waiter);
+    void this.grant(name, waiter.callback, waiter.tab).then(waiter.resolve);
   }
 
   query() {
@@ -38,9 +62,13 @@ class FakeLockManager {
     });
   }
 
-  /** The browser drops a crashed tab's locks. */
-  crash(tab: string) {
-    for (const [name, holder] of this.held) if (holder.tab === tab) this.held.delete(name);
+  /** The browser drops a crashed tab's locks; without a tab, every holder's. */
+  crash(tab?: string) {
+    for (const [name, holder] of [...this.held]) {
+      if (tab !== undefined && holder.tab !== tab) continue;
+      this.held.delete(name);
+      this.next(name);
+    }
   }
 }
 
@@ -343,6 +371,74 @@ describe('tab voice owner', () => {
     await flush();
     expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
     await expect(lobbyTab.claim('lobby')).resolves.toBe(true);
+  });
+
+  it('gives the waiting tab its button back when the debate tab goes without a word', async () => {
+    const debateTab = openTab('debate', 0);
+    debateTab.surface('debate', 'refuse');
+    await debateTab.claim('debate');
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby');
+    expect(lobbyTab.owner.getState().heldBy).toBe('debate');
+
+    // Closed, crashed or reloaded: no React cleanup, no notice, only the lock let go.
+    locks.crash('debate');
+    FakeBroadcastChannel.crash('debate');
+    await flush();
+    expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
+    await expect(lobbyTab.claim('lobby')).resolves.toBe(true);
+  });
+
+  it('watches a debate that took voice from this tab, without blocking its claim', async () => {
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby', true);
+
+    const debateTab = openTab('debate', 0);
+    debateTab.surface('debate', 'refuse');
+    await expect(debateTab.claim('debate')).resolves.toBe(true);
+    await flush();
+    expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: 'debate' });
+    expect(locks.waiting).toHaveLength(1);
+
+    // The debate's lock was granted after the handover, outside the tab scope the fake tracks.
+    locks.crash();
+    FakeBroadcastChannel.crash('debate');
+    await flush();
+    expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
+  });
+
+  it('keeps the button hidden while the debate really is live', async () => {
+    const debateTab = openTab('debate', 0);
+    debateTab.surface('debate', 'refuse');
+    await debateTab.claim('debate');
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby');
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    expect(lobbyTab.owner.getState().heldBy).toBe('debate');
+    expect(lobbyTab.owner.getState().ownership).toBe('elsewhere');
+  });
+
+  it('gives a tab that missed the notice its button back when it is looked at again', async () => {
+    const debateTab = openTab('debate', 0);
+    const debate = debateTab.surface('debate', 'refuse');
+    await debateTab.claim('debate');
+    const lobbyTab = openTab('lobby', 2);
+    lobbyTab.surface('lobby');
+    await lobbyTab.claim('lobby');
+
+    // The debate ends while the lobby tab is frozen: its notice is lost, and the lock stays held.
+    debate.policy = 'yield';
+    expect(lobbyTab.owner.getState().heldBy).toBe('debate');
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flush();
+    await flush();
+    expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
   });
 
   it('frees voice when the owning tab crashes', async () => {

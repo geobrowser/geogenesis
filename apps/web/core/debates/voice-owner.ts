@@ -116,12 +116,84 @@ export function createTabVoiceOwner({
   let inflight: { automatic: boolean; owned: Promise<boolean> } | null = null;
   let teardown: ReturnType<typeof setTimeout> | null = null;
   let notices: BroadcastChannel | null = null;
+  let debateWatch: AbortController | null = null;
+  const lockName = debateRoomCoordinationName(VOICE_SCOPE, userId);
+  const lockManager = () => (typeof navigator !== 'undefined' ? navigator.locks : undefined);
+
+  const waitingOnDebate = () => state.ownership === 'elsewhere' && state.heldBy === 'debate';
+  const restoreButton = () => {
+    if (waitingOnDebate()) setState({ ownership: 'elsewhere', heldBy: null });
+  };
+
+  // A frozen tab can miss the debate's notice: on return, a free lock gives the button back, and a
+  // held one is asked whether it would yield now.
+  const recheckDebateHold = async () => {
+    if (!waitingOnDebate() || (typeof document !== 'undefined' && document.visibilityState !== 'visible')) return;
+    try {
+      const { held = [] } = (await lockManager()?.query()) ?? {};
+      if (!held.some(lock => lock.name === lockName)) return restoreButton();
+    } catch {
+      // Fall through to asking.
+    }
+    try {
+      notices?.postMessage({ type: 'policy-query' });
+    } catch {
+      // The queued lock request below still frees it.
+    }
+  };
+
+  // While a debate tab keeps voice, a queued lock request is granted the moment that tab lets go
+  // for any reason (end, close, crash, unload). It only restores the button; it never claims.
+  // Queued only once another tab holds the lock: a request queued behind this tab's own hold would
+  // be granted on its release and block the debate's claim.
+  let debateWatchArmed = false;
+  const armDebateWatch = async () => {
+    const controller = debateWatch;
+    if (!controller || debateWatchArmed || coordinator?.ownsConnection()) return;
+    const locks = lockManager();
+    if (typeof locks?.request !== 'function' || typeof locks.query !== 'function') return;
+    try {
+      const { held = [] } = await locks.query();
+      if (!held.some(lock => lock.name === lockName)) return;
+    } catch {
+      return;
+    }
+    if (debateWatch !== controller || debateWatchArmed) return;
+    debateWatchArmed = true;
+    locks
+      .request(lockName, { mode: 'shared', signal: controller.signal }, () => {
+        if (debateWatch === controller) restoreButton();
+      })
+      .catch(() => undefined);
+  };
+
+  const startDebateWatch = () => {
+    if (debateWatch) return;
+    debateWatch = new AbortController();
+    debateWatchArmed = false;
+    window.addEventListener('focus', recheckDebateHold);
+    document.addEventListener('visibilitychange', recheckDebateHold);
+    void armDebateWatch();
+  };
+
+  const stopDebateWatch = () => {
+    if (!debateWatch) return;
+    debateWatch.abort();
+    debateWatch = null;
+    debateWatchArmed = false;
+    window.removeEventListener('focus', recheckDebateHold);
+    document.removeEventListener('visibilitychange', recheckDebateHold);
+  };
 
   const setState = (next: VoiceTabState) => {
     if (next.ownership === state.ownership && next.heldBy === state.heldBy) return;
     state = next;
+    if (waitingOnDebate()) startDebateWatch();
+    else stopDebateWatch();
     listeners.forEach(listener => listener());
   };
+
+  const surfacePolicies = () => [...surfaces].map(surface => surface.policy());
 
   const strongestSurface = () => {
     let strongest: VoiceSurface | null = null;
@@ -139,10 +211,22 @@ export function createTabVoiceOwner({
     } catch {
       return;
     }
-    notices.onmessage = () => {
-      if (state.ownership === 'elsewhere' && state.heldBy === 'debate')
-        setState({ ownership: 'elsewhere', heldBy: null });
+    notices.onmessage = event => {
+      const type = (event.data as { type?: string } | null)?.type;
+      if (type === 'yieldable') return restoreButton();
+      if (type === 'held') return void armDebateWatch();
+      if (type === 'policy-query' && coordinator?.ownsConnection() && strongestPolicy(surfacePolicies()) === 'yield') {
+        announceYieldable();
+      }
     };
+  };
+
+  const announceHeld = () => {
+    try {
+      notices?.postMessage({ type: 'held' });
+    } catch {
+      // A waiting tab still re-checks when it is looked at.
+    }
   };
 
   const announceYieldable = () => {
@@ -162,8 +246,7 @@ export function createTabVoiceOwner({
       getTabPriority,
       describeOwner: () => strongestSurface()?.kind,
       onTakeoverRequested: async context => {
-        const policies = [...surfaces].map(surface => surface.policy());
-        if (!shouldYieldVoice(policies, context)) return false;
+        if (!shouldYieldVoice(surfacePolicies(), context)) return false;
         // Off the air before the UI moves: unmounting the room first would drop the handle to await.
         await Promise.allSettled([...surfaces].map(surface => Promise.resolve().then(surface.onYield)));
         setState({ ownership: 'elsewhere', heldBy: asSurfaceKind(context.requesterLabel) });
@@ -183,6 +266,7 @@ export function createTabVoiceOwner({
     notices?.close();
     notices = null;
     setState(PENDING);
+    stopDebateWatch();
   };
 
   return {
@@ -220,6 +304,7 @@ export function createTabVoiceOwner({
         .then(owned => {
           if (coordinator !== active) return false;
           setState(owned ? OWNED : { ownership: 'elsewhere', heldBy: asSurfaceKind(active.lastRefusedBy()) });
+          if (owned) announceHeld();
           return owned;
         })
         .finally(() => {
@@ -231,12 +316,11 @@ export function createTabVoiceOwner({
     heldElsewhere: async () => {
       if (state.ownership === 'owned') return false;
       if (state.ownership === 'elsewhere') return true;
-      const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+      const locks = lockManager();
       if (typeof BroadcastChannel === 'undefined' || typeof locks?.query !== 'function') return false;
       try {
         const { held = [] } = await locks.query();
-        const name = debateRoomCoordinationName(VOICE_SCOPE, userId);
-        return held.some(lock => lock.name === name);
+        return held.some(lock => lock.name === lockName);
       } catch {
         return false;
       }
