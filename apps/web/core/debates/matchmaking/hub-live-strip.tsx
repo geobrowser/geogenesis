@@ -15,16 +15,11 @@ import type { DebateLobbySummary } from '../api';
 import { useDebateLobby } from '../lobbies/hooks';
 import type { LobbyLineup } from '../lobbies/live-lobbies';
 import { markLobbyEntry } from '../lobbies/lobby-analytics';
-import { hereLabel, lobbyDateLabel, lobbyTimeLabel, notYetOpenLabel } from '../lobbies/lobby-format';
+import { lobbyDateLabel, lobbyTimeLabel, notYetOpenLabel } from '../lobbies/lobby-format';
 import { usePreOpenHosts } from '../lobbies/lobby-host-lobbies';
 import { LobbyClaimListNames, LobbyGoing, LobbyHostedBy } from '../lobbies/lobby-pre-open-details';
 import { LobbyReminderError, useLobbyReminderPress } from '../lobbies/lobby-reminder-press';
-import {
-  LOBBY_DARK_SURFACE_CLASS_NAME,
-  LiveMark,
-  SPOTLIGHT_SECONDARY_PILL_CLASS_NAME,
-  joinLabel,
-} from '../lobbies/lobby-spotlight';
+import { LiveLobbySpotlight, SPOTLIGHT_SECONDARY_PILL_CLASS_NAME } from '../lobbies/lobby-spotlight';
 import { LobbyRsvpPill } from '../lobbies/upcoming-lobbies';
 import { useMinuteNow } from '../lobbies/use-minute-now';
 import { debateRoomPath } from '../rooms/room-routes';
@@ -40,18 +35,16 @@ import { type EndedAsk, type OutgoingAsk, useAskClock } from './use-outgoing-ask
 const STRIP_CLASS_NAME = 'mx-4 mb-3 flex h-11 shrink-0 items-center gap-2 overflow-hidden rounded-lg pr-2 pl-3';
 
 const STRIP_PILL_CLASS_NAME = hubPillClassName('primary', 'px-3.5 md:h-8');
-/** The live strip's white pill on black: `tag` without its grey edge. */
-const STRIP_LIGHT_PILL_CLASS_NAME = hubPillClassName('tag', 'border-white bg-white px-3.5 md:h-8');
 
 /**
- * The one strip above the tabs (GEO-3463). At most one, 44px, and nothing at all when none of these
- * apply — so the tabs and the list start right under the header, rather than under the banners and
- * the lobby card that used to stack there.
+ * The one thing above the tabs (GEO-3463), and nothing at all when none of these apply, so the tabs
+ * and the list start right under the header rather than under the banners that used to stack there.
+ * A 44px strip, except a live lobby, which keeps its full card (Preston, 28 Oct).
  *
  * In priority order:
  *  1. your open ask — who was asked, the time left, Cancel — and once it ends unanswered, that nobody
  *     took it, with Schedule;
- *  2. a live lobby;
+ *  2. a live lobby, as the full live card (`LiveLobbySpotlight`): every live lobby, Join for each;
  *  3. the next scheduled lobby, when none is live.
  *
  * It sits outside the tabs, so the ask stays in view on every tab while it runs.
@@ -63,7 +56,7 @@ export function HubLiveStrip({ lineup }: { lineup: LobbyLineup }) {
   if (ended) return <EndedAskStrip ended={ended} onDismiss={dismissEnded} />;
 
   const [live] = lineup.live;
-  if (live) return <LiveLobbyStrip lobby={live} />;
+  if (live) return <LiveLobbySpotlight lineup={lineup} />;
 
   const next = lineup.soon ?? lineup.later[0] ?? null;
   if (next) return <NextLobbyStrip lobby={next} />;
@@ -163,30 +156,6 @@ function EndedAskStrip({ ended, onDismiss }: { ended: EndedAsk; onDismiss: () =>
         <CloseSmall />
       </button>
     </section>
-  );
-}
-
-function LiveLobbyStrip({ lobby }: { lobby: DebateLobbySummary }) {
-  return (
-    <Link
-      href={debateRoomPath(lobby.lobby_id)}
-      onClick={() => markLobbyEntry(lobby.lobby_id, 'side_panel')}
-      aria-label={`Live lobby ${lobby.name}, ${joinLabel(lobby, true).toLowerCase()}`}
-      data-testid="hub-strip-live-lobby"
-      {...hubAnalyticsAttributes(
-        lobby.viewer_on_roster ? 'Lobby spotlight Open' : 'Lobby spotlight Join',
-        'join_lobby'
-      )}
-      className={cx(STRIP_CLASS_NAME, LOBBY_DARK_SURFACE_CLASS_NAME, 'text-white')}
-    >
-      {/* The strip's 8px gap, not the mark's usual 6px. */}
-      <LiveMark count={1} className="inline-flex shrink-0 items-center gap-2" />
-      <span className="min-w-0 truncate text-metadataMedium">{lobby.name}</span>
-      <span className="shrink-0 text-breadcrumb whitespace-nowrap text-grey-03">{hereLabel(lobby.headcount)}</span>
-      <span aria-hidden className={cx(STRIP_LIGHT_PILL_CLASS_NAME, 'ml-auto')}>
-        {joinLabel(lobby, true)}
-      </span>
-    </Link>
   );
 }
 

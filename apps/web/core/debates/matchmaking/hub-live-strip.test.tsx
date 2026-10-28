@@ -105,14 +105,14 @@ describe('HubLiveStrip', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows a live lobby with Join', () => {
+  // The full live card, not a one-line strip (Preston, 28 Oct).
+  it('shows a live lobby as the live card, with Join', () => {
     render(<HubLiveStrip lineup={{ ...EMPTY, live: [lobby()] }} />);
 
-    const strip = screen.getByTestId('hub-strip-live-lobby');
-    expect(strip).toHaveTextContent('Live');
-    expect(strip).toHaveTextContent('NYC Debates');
-    expect(strip).toHaveTextContent('14 here');
-    expect(strip).toHaveAttribute('href', '/debate/lobby1');
+    const card = within(screen.getByRole('region', { name: 'Live debate lobby' }));
+    expect(card.getByText('Live')).toBeInTheDocument();
+    expect(card.getByRole('heading', { name: 'NYC Debates' })).toBeInTheDocument();
+    expect(card.getByRole('link', { name: 'Join lobby' })).toHaveAttribute('href', '/debate/lobby1');
   });
 
   it('shows the next scheduled lobby with RSVP when none is live', () => {
@@ -235,7 +235,7 @@ describe('HubLiveStrip', () => {
     };
     render(<HubLiveStrip lineup={{ ...EMPTY, live: [lobby()] }} />);
 
-    expect(screen.queryByTestId('hub-strip-live-lobby')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('lobby-spotlight')).not.toBeInTheDocument();
     const strip = screen.getByTestId('hub-strip-ask');
     expect(strip).toHaveTextContent('Requesting · people who disagree');
     expect(strip).toHaveTextContent(CLAIM.claim);

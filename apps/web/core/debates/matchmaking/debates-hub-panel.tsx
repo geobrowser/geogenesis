@@ -310,9 +310,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         </HubHeaderControls>
       </div>
 
-      {/* At most one 44px strip before the tabs, and none at all when there is nothing for it to say
-          (GEO-3463). The lobby spotlight, the upcoming lobbies card and the schedule banner used to
-          stack here — about 520px at an 800px window before the first person or claim. */}
+      {/* At most one thing before the tabs, and nothing when there is nothing to say (GEO-3463): a
+          44px strip, or the live lobby card. The lobby spotlight, the upcoming lobbies card and the
+          schedule banner used to stack here, about 520px at an 800px window before the first person
+          or claim. */}
       <HubLiveStrip lineup={lobbyLineup} />
 
       {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
