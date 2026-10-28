@@ -34,11 +34,7 @@ export type SpaceCallSummary = {
 };
 
 /** A series on the space's list (GEO-3420). */
-export type SpaceCallSeriesSummary = Omit<DebateCallSeries, 'description'> & {
-  description: string | null;
-  /** Its soonest live or scheduled call, or `null`. */
-  next_call_id: string | null;
-};
+export type SpaceCallSeriesSummary = Omit<DebateCallSeries, 'description'> & { description: string | null };
 
 /** The viewer's reminders among the listed calls and series. */
 export type SpaceCallsViewer = { reminded_call_ids: string[]; reminded_series_ids: string[] };

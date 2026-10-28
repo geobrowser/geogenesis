@@ -106,7 +106,6 @@ describe('SpaceCallsTab', () => {
           description: null,
           schedule: 'DTSTART:20261103T170000Z\r\n',
           one_off: true,
-          next_call_id: null,
         },
       ],
     };

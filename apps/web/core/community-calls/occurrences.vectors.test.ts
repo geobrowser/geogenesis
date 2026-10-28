@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import vectors from './fixtures/call_series_vectors.json';
 import { getOccurrences } from './occurrences';
 
-// geo-chat's expander is the reference; refresh the copy with scripts/refresh-call-series-vectors.sh.
+// geo-chat's expander is the reference; refresh the copy with scripts/refresh-call-series-vectors.ts.
 type Vector = {
   name: string;
   schedule: string;

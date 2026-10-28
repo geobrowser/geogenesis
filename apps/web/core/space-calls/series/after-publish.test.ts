@@ -28,7 +28,6 @@ describe('seriesSynced', () => {
     description: null,
     schedule: s,
     one_off: false,
-    next_call_id: null,
   });
 
   it('waits for the series with the schedule that was published', () => {

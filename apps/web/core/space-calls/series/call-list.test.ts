@@ -62,7 +62,6 @@ describe('splitCallList', () => {
       description: null,
       schedule: 'DTSTART:20261109T170000Z',
       one_off,
-      next_call_id: null,
     });
     const { upcoming } = splitCallList({
       calls: [
