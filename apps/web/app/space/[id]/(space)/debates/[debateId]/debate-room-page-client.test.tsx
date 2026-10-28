@@ -6,7 +6,12 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type Debate, type DebateRematchSession, GeoChatRequestError } from '~/core/debates/api';
+import {
+  type Debate,
+  type DebateRematchSession,
+  GeoChatRequestError,
+  type LiveKitJoinResponse,
+} from '~/core/debates/api';
 import {
   clearDebateReturnDestination,
   rememberDebateReturnDestination,
@@ -7360,6 +7365,44 @@ describe('DebateRoomPageClient', () => {
         expect(turnNotice()).toHaveTextContent(localOpens ? 'Listen' : 'Speak now');
       }
     );
+
+    it.each([false, true])('names the local turn while the join token loads (Open rounds: %s)', async openRounds => {
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:00:20.000'));
+      const joining = deferred<LiveKitJoinResponse>();
+      const connecting = deferred<void>();
+      mocks.liveKitJoinMutateAsync.mockReturnValue(joining.promise);
+      mocks.roomConnect.mockReturnValue(connecting.promise);
+      mocks.debate = openingDebate(openRounds);
+      render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+      await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalled());
+
+      expect(turnNotice()).toHaveTextContent('Your turn');
+      expect(turnNotice()).toHaveTextContent('Connecting to call audio…');
+      expect(turnNotice()).not.toHaveTextContent('Speak now');
+      expect(debateVideoTile('local')).toHaveAttribute('data-active-speaker', 'true');
+      expect(debateVideoTile('remote')).toHaveAttribute('data-active-speaker', 'false');
+
+      expect(screen.queryByRole('button', { name: 'End turn' })).not.toBeInTheDocument();
+
+      await act(async () =>
+        joining.resolve({
+          token: 'livekit-token',
+          url: 'wss://livekit.test',
+          room_name: 'geo-debate-debate-1',
+          role: 'participant',
+          participant_slot: 1,
+          position: true,
+          position_label: 'Yes',
+        })
+      );
+      await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+      expect(turnNotice()).toHaveTextContent('Connecting to call audio…');
+      expect(turnNotice()).not.toHaveTextContent('Speak now');
+
+      await act(async () => connecting.resolve());
+      await waitFor(() => expect(turnNotice()).toHaveTextContent('Speak now'));
+    });
 
     it.each([false, true])(
       'keeps the turn instruction in sync with the mic and connection (Open rounds: %s)',

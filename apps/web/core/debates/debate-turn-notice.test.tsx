@@ -37,8 +37,13 @@ describe('DebateTurnNotice', () => {
   });
 
   it.each([
-    { microphoneMuted: true, reconnecting: false, instruction: 'Your microphone is off.' },
-    { microphoneMuted: false, reconnecting: true, instruction: 'Reconnecting — the debate clock is still running.' },
+    { microphoneMuted: true, connectionState: 'connected' as const, instruction: 'Your microphone is off.' },
+    { microphoneMuted: false, connectionState: 'connecting' as const, instruction: 'Connecting to call audio…' },
+    {
+      microphoneMuted: false,
+      connectionState: 'reconnecting' as const,
+      instruction: 'Reconnecting — the debate clock is still running.',
+    },
   ])('keeps turn ownership visible while $instruction', ({ instruction, ...audioState }) => {
     render(<DebateTurnNotice speaker={{ name: 'You', local: true }} nextSpeaker={null} {...audioState} />);
     expect(screen.getByRole('status')).toHaveTextContent('Your turn');

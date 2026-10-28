@@ -11,25 +11,28 @@ export function DebateTurnNotice({
   speaker,
   nextSpeaker,
   microphoneMuted = false,
-  reconnecting = false,
+  connectionState = 'connected',
 }: {
   speaker: Speaker | null;
   nextSpeaker: (Speaker & { seconds: number }) | null;
   microphoneMuted?: boolean;
-  reconnecting?: boolean;
+  connectionState?: 'connecting' | 'reconnecting' | 'connected';
 }) {
   const visible = speaker !== null || nextSpeaker !== null;
   const title = speaker ? (speaker.local ? 'Your turn' : `${speaker.name}’s turn`) : 'Get ready';
   const nextLabel = nextSpeaker ? (nextSpeaker.local ? 'You’re next' : `Up next: ${nextSpeaker.name}`) : '';
-  const instruction = reconnecting
-    ? 'Reconnecting — the debate clock is still running.'
-    : speaker?.local
-      ? microphoneMuted
-        ? 'Your microphone is off.'
-        : 'Speak now — the floor is yours.'
-      : speaker
-        ? 'Listen — the floor is theirs.'
-        : 'Wait for your turn to start.';
+  const instruction =
+    connectionState === 'connecting'
+      ? 'Connecting to call audio…'
+      : connectionState === 'reconnecting'
+        ? 'Reconnecting — the debate clock is still running.'
+        : speaker?.local
+          ? microphoneMuted
+            ? 'Your microphone is off.'
+            : 'Speak now — the floor is yours.'
+          : speaker
+            ? 'Listen — the floor is theirs.'
+            : 'Wait for your turn to start.';
 
   return (
     <>
