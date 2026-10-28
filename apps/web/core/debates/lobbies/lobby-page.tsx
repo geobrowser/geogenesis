@@ -36,13 +36,7 @@ import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { useClaimsTabMark } from './lobby-claims-mark';
 import { useExitLobbyWhenOut, useLobbyExitHref } from './lobby-exit';
-import {
-  RSVP_FAILED,
-  lobbyDateLabel,
-  lobbyErrorMessage,
-  notYetOpenLabel,
-  rsvpLabel,
-} from './lobby-format';
+import { RSVP_FAILED, lobbyDateLabel, lobbyErrorMessage, notYetOpenLabel, rsvpLabel } from './lobby-format';
 import { LOBBY_GUEST_COPY, LobbyGuestBanner } from './lobby-guest';
 import {
   LobbyGuestProvider,
