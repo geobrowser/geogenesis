@@ -40,7 +40,7 @@ import { DebateRequestMediaPreview } from '~/core/debates/request-media-preview'
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { readMediaDevicePreference, rememberMediaDevice } from '~/core/media/device-preferences';
 
-import { DebateRoomPageClient, upcomingTurnLabel } from './debate-room-page-client';
+import { DebateRoomPageClient, localTurnStartsInSeconds, upcomingTurnLabel } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
   startVoiceCallTelemetry: vi.fn(),
@@ -578,6 +578,49 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+});
+
+describe('localTurnStartsInSeconds', () => {
+  it.each([
+    [3_000, 3, 3],
+    [3_000, 4, null],
+    [5_000, 4, 4],
+    [5_000, 6, null],
+    [0, 1, null],
+    [undefined, 1, null],
+    [-1, 1, null],
+  ])('uses the saved %s ms count-in with %s seconds remaining', (countInMs, remainingSeconds, expected) => {
+    const debate = openRoundsRevealRebut();
+    debate.open_rounds = { ...debate.open_rounds!, extend_count_in_ms: countInMs };
+    const countdown = {
+      effectiveStatus: 'in_progress',
+      turnIndex: 1,
+      activeSlot: null,
+      yieldingSlot: null,
+      remainingSeconds,
+      openRounds: { phase: 'result' },
+    } as Parameters<typeof localTurnStartsInSeconds>[1];
+    expect(localTurnStartsInSeconds(debate, countdown, 1)).toBe(expected);
+  });
+
+  it.each([
+    [true, 4, null],
+    [true, 3, 3],
+    [false, 5, 5],
+    [false, 6, null],
+  ])('keeps the ordinary count-in boundary for open=%s at %s seconds', (open, remainingSeconds, expected) => {
+    const debate = openRoundsListening();
+    if (!open) delete debate.open_rounds;
+    const countdown = {
+      effectiveStatus: 'in_progress',
+      turnIndex: 0,
+      activeSlot: 1,
+      yieldingSlot: null,
+      remainingSeconds,
+      openRounds: open ? { phase: 'speaking' } : null,
+    } as Parameters<typeof localTurnStartsInSeconds>[1];
+    expect(localTurnStartsInSeconds(debate, countdown, 2)).toBe(expected);
+  });
 });
 
 describe('upcomingTurnLabel', () => {
@@ -7093,16 +7136,10 @@ describe('DebateRoomPageClient', () => {
           audioTrack,
           { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
         ]);
-        const oldExtend = openRoundsRevealRebut();
         const debate: Debate =
           kind === 'required'
             ? openRoundsRequiredRoundListening({ required_round_lead_in_ms: 5_000, extend_count_in_ms: 3_000 })
-            : {
-                ...oldExtend,
-                turn_started_at: '2026-10-06T20:02:10.200Z',
-                turn_ends_at: '2026-10-06T20:02:55.200Z',
-                open_rounds: { ...oldExtend.open_rounds!, extend_count_in_ms: 3_000 },
-              };
+            : revealRebutWithCountIn(3_000);
         const startAt = openRoundsAt(kind === 'required' ? '20:02:05.000' : '20:02:10.200');
         vi.spyOn(Date, 'now').mockReturnValue(startAt - 3_500);
         const view = await renderLiveDebate(debate);
@@ -7820,15 +7857,16 @@ describe('DebateRoomPageClient', () => {
   });
 });
 
-// geo-chat's `extend_count_in_ms` (geo-chat #227): the new round starts 5 s after the window
-// closes. `next_phase_starts_at` stays the end of the window, resolved + 3 s.
-function revealRebutWithCountIn(): Debate {
+// The saved count-in follows the result window. Default to the legacy 5 s snapshot so
+// existing tests continue to protect debates already created with that duration.
+function revealRebutWithCountIn(countInMs = 5_000): Debate {
   const debate = openRoundsRevealRebut();
+  const turnStartsAtMs = Date.parse(debate.open_rounds!.next_phase_starts_at!) + countInMs;
   return {
     ...debate,
-    turn_started_at: '2026-10-06T20:02:12.200Z',
-    turn_ends_at: '2026-10-06T20:02:57.200Z',
-    open_rounds: { ...debate.open_rounds!, extend_count_in_ms: 5_000 },
+    turn_started_at: new Date(turnStartsAtMs).toISOString(),
+    turn_ends_at: new Date(turnStartsAtMs + debate.turn_durations_ms[debate.current_turn_index]).toISOString(),
+    open_rounds: { ...debate.open_rounds!, extend_count_in_ms: countInMs },
   };
 }
 

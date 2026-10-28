@@ -113,6 +113,7 @@ import {
   isBetweenOpenRounds,
   isDebatesLastTurn,
   isOpenRoundsDebate,
+  openRoundCountInMs,
   openRoundGapAfterTurn,
   openRoundLastWord,
   openRoundLeadInAfterTurn,
@@ -4239,7 +4240,7 @@ export function localTurnStartsInSeconds(
   // read their saved duration so a debate already underway keeps its original count-in.
   const countInSeconds = isOpenRoundsDebate(debate)
     ? countdown.openRounds?.phase === 'result'
-      ? (debate.open_rounds.extend_count_in_ms ?? 3_000) / 1_000
+      ? openRoundCountInMs(debate.open_rounds) / 1_000
       : 3
     : 5;
   if (!localSlot || countdown.remainingSeconds <= 0 || countdown.remainingSeconds > countInSeconds) return null;
