@@ -4235,7 +4235,14 @@ export function localTurnStartsInSeconds(
   countdown: DebateCountdown,
   localSlot: ParticipantSlot | null
 ): number | null {
-  if (!localSlot || countdown.remainingSeconds <= 0 || countdown.remainingSeconds > 5) return null;
+  // Open rounds counts in for three seconds; fixed formats retain five. Result windows
+  // read their saved duration so a debate already underway keeps its original count-in.
+  const countInSeconds = isOpenRoundsDebate(debate)
+    ? countdown.openRounds?.phase === 'result'
+      ? (debate.open_rounds.extend_count_in_ms ?? 3_000) / 1_000
+      : 3
+    : 5;
+  if (!localSlot || countdown.remainingSeconds <= 0 || countdown.remainingSeconds > countInSeconds) return null;
 
   if (countdown.effectiveStatus === 'preflight') {
     return countdown.activeSlot === localSlot ? countdown.remainingSeconds : null;

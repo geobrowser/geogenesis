@@ -34,7 +34,7 @@ import { roundLabel } from './round-cues';
  * - `result`: what the picks mean, for the rest of the window. Two Extends: "Round N" and who opens
  *   it, with the picks subdued behind the title. Anything else: "That's a wrap", with the picks
  *   left up so the split explains itself.
- * - `countIn`: Extend only, after the window. The opener gets the room's usual 5 s count-in, which
+ * - `countIn`: Extend only, after the window. The opener gets the room's 3 s count-in, which
  *   geo-chat adds after the window as `extend_count_in_ms`.
  *
  * A required round's lead-in plays the same steps after the round before it, without the flip: there
@@ -45,7 +45,10 @@ import { roundLabel } from './round-cues';
 export type OpenRoundRevealStep = 'flip' | 'result' | 'countIn';
 
 /** The share of the window the picks have to land and be read before the result takes over. */
-const OPEN_ROUND_FLIP_SHARE = 0.45;
+// GEO-3522: the title occupies 1.1 s of the 3 s result window (was 1.65 s),
+// a third shorter. The picks stay readable for the first 1.9 s.
+const OPEN_ROUND_EXTEND_FLIP_SHARE = 1.9 / 3;
+const OPEN_ROUND_END_FLIP_SHARE = 0.45;
 
 /**
  * How long "That's a wrap" stays up into thanking, before the end card. An End has nothing to start
@@ -53,8 +56,8 @@ const OPEN_ROUND_FLIP_SHARE = 0.45;
  */
 const OPEN_ROUND_WRAP_HOLD_MS = 1_500;
 
-function flipEndsMs(windowMs: number) {
-  return Math.round(windowMs * OPEN_ROUND_FLIP_SHARE);
+function flipEndsMs(windowMs: number, outcome: OpenRoundPick | null) {
+  return Math.round(windowMs * (outcome === 'extend' ? OPEN_ROUND_EXTEND_FLIP_SHARE : OPEN_ROUND_END_FLIP_SHARE));
 }
 
 export function openRoundRevealStep(
@@ -63,7 +66,7 @@ export function openRoundRevealStep(
   windowMs: number,
   hasPicks = true
 ): OpenRoundRevealStep {
-  if (hasPicks && elapsedMs < flipEndsMs(windowMs)) return 'flip';
+  if (hasPicks && elapsedMs < flipEndsMs(windowMs, outcome)) return 'flip';
   return outcome === 'extend' && elapsedMs >= windowMs ? 'countIn' : 'result';
 }
 
@@ -89,11 +92,11 @@ export function useOpenRoundRevealStep(
 
   React.useEffect(() => {
     if (elapsedMs === null || effectiveMs === null) return;
-    const next = [flipEndsMs(windowMs), windowMs].find(boundary => boundary > effectiveMs);
+    const next = [flipEndsMs(windowMs, outcome), windowMs].find(boundary => boundary > effectiveMs);
     if (next === undefined) return;
     const timer = window.setTimeout(() => setReached({ from: elapsedMs, to: next }), next - effectiveMs);
     return () => window.clearTimeout(timer);
-  }, [elapsedMs, effectiveMs, windowMs]);
+  }, [elapsedMs, effectiveMs, windowMs, outcome]);
 
   if (effectiveMs === null || outcome === null) return null;
   return openRoundRevealStep(effectiveMs, outcome, windowMs, hasPicks);
@@ -315,8 +318,9 @@ export function useOpenRoundReveal({
   // not caught up with an Extend holds on the result without it (`openRoundGapAfterTurn`), and the
   // announcement stays up rather than leave a blank screen.
   const countingIn = step === 'countIn' && roundIndex !== null && debate.turn_durations_ms.length > roundIndex * 2 + 2;
-  // The opener's own tile counts them in; the other debater keeps the announcement until then.
-  const announcing = step === 'result' || (step === 'countIn' && (!localOpens || !countingIn));
+  // Clear the title on both screens before the count-in. A stale payload still holds it
+  // until it includes the next round, so the opener never falls into an invented turn.
+  const announcing = step === 'result' || (step === 'countIn' && !countingIn);
   let result: OpenRoundResult | null = null;
   if (maxReached) {
     result = { kind: 'max', rounds: openRounds?.max_rebuttal_rounds ?? 0 };
@@ -334,7 +338,7 @@ export function useOpenRoundReveal({
   }
 
   // Keep the votes behind the result, including a new round's title. The opener clears both picks
-  // with the title for their count-in; the listener keeps them as long as their title stays up.
+  // with the title for the count-in on both screens.
   // A required round's lead-in has no vote to reveal.
   const picksShown = !leadIn && (step === 'flip' || result?.kind === 'round' || result?.kind === 'wrap');
   const newRound = resultPhase?.outcome === 'extend' && (step === 'result' || step === 'countIn');
