@@ -2,7 +2,7 @@
 
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
-import type * as React from 'react';
+import * as React from 'react';
 
 import cx from 'classnames';
 
@@ -65,12 +65,21 @@ export function PeerAvailabilityModal({
   entry = null,
   disagreementCount = null,
 }: Props) {
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
   return (
     <Root open={open} onOpenChange={next => !next && onClose()}>
       <Portal>
         <Overlay className={cx('fixed inset-0 bg-text/20', Z_LAYER_CLASS.scheduleDialogBackdrop)} />
         <Content
+          ref={contentRef}
           aria-describedby={undefined}
+          onOpenAutoFocus={event => {
+            // Start at the dialog, so its context is read before its controls. Close stays first
+            // in the tab order without drawing a focus box over the header as soon as it opens.
+            event.preventDefault();
+            contentRef.current?.focus();
+          }}
           onCloseAutoFocus={event => {
             // The opener is a row in a live list and may have unmounted while this was open.
             // Radix's own restore is a no-op on a detached node, so hand it back only if it is
@@ -94,7 +103,7 @@ export function PeerAvailabilityModal({
               so nothing can push the close button off a short window. */}
           <div
             data-no-sheet-drag
-            className="relative flex max-h-[calc(100dvh-2rem)] w-[56rem] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-hidden overscroll-none rounded-xl bg-white p-5 shadow-card md:h-dvh md:max-h-dvh md:w-screen md:max-w-none md:gap-3 md:rounded-none md:p-4"
+            className="relative flex max-h-[calc(100dvh-2rem)] w-[56rem] max-w-[calc(100vw-2rem)] flex-col gap-5 overflow-hidden overscroll-none rounded-xl bg-white p-6 shadow-card md:h-dvh md:max-h-dvh md:w-screen md:max-w-none md:gap-4 md:rounded-none md:p-4"
           >
             {/* The week's own "When … is free" is the visible heading, so the dialog's name is for
                 assistive tech only. It is here rather than on that heading because the view also
@@ -109,7 +118,7 @@ export function PeerAvailabilityModal({
               aria-label="Close"
               {...debateActionAnalyticsAttributes('peer-availability', 'Close', 'close_peer_availability')}
               onClick={onClose}
-              className="absolute top-6 right-5 z-10 grid size-4 place-items-center text-[#151515] transition-opacity hover:opacity-70 md:top-5 md:right-4"
+              className="absolute top-4 right-4 z-10 grid size-9 place-items-center rounded-md text-grey-04 transition-colors hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-grey-03 md:top-2 md:right-2"
             >
               <Close />
             </button>

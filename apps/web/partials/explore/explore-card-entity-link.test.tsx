@@ -137,6 +137,7 @@ describe('ExploreCardEntityLink', () => {
       renderLink(true, debateItem);
 
       expect(screen.getByRole('link')).not.toHaveAttribute('data-entity-side-panel-opener');
+      expect(screen.getByRole('link')).toHaveAttribute('data-entity-side-panel-full-page');
     });
 
     it('still carries the href every other title carries', () => {

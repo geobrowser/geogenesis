@@ -121,7 +121,7 @@ export default async function ProfileLayout(props: Props) {
 
   return (
     <ActionContextProvider value={actionContext}>
-      <EntityStoreProvider id={entityId} spaceId={spaceId}>
+      <EntityStoreProvider id={entityId} spaceId={spaceId} initialEntities={profile.initialEntities}>
         {stickyHeader}
         <RouteEditorProvider
           id={profile.id}
@@ -183,6 +183,8 @@ async function getProfilePage(
   tabRelations: Relation[];
   tabs: Tabs;
   initialCollectionItems: Record<string, Entity[]>;
+  /** Everything fetched here, for `EntityStoreProvider` to seed the store with — see `fetchEntityPageData`. */
+  initialEntities: Entity[];
 }> {
   const person = await cachedFetchEntity(entityId, spaceId);
 
@@ -200,6 +202,7 @@ async function getProfilePage(
       tabRelations: [],
       tabs: {},
       initialCollectionItems: {},
+      initialEntities: [],
     };
   }
 
@@ -263,5 +266,12 @@ async function getProfilePage(
     tabRelations,
     tabs,
     initialCollectionItems,
+    initialEntities: [
+      person,
+      ...allBlocks,
+      ...shownPropertyEntities,
+      ...orderedTabEntities,
+      ...Object.values(initialCollectionItems).flat(),
+    ],
   };
 }

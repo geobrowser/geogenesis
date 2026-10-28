@@ -65,7 +65,7 @@ vi.mock('~/partials/entity-page/entity-tabs', () => ({
     return <div data-testid="entity-tabs" />;
   },
 }));
-vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
+vi.mock('~/partials/editor/lazy-editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
 // that the description is handed to it at all, and with the shared line budget — the measuring
@@ -417,11 +417,13 @@ describe('TopicPageView parity with the generic entity page', () => {
     expect(TOPIC_PAGE_CONTENT_MAX_WIDTH).toBe(ENTITY_PAGE_CONTENT_MAX_WIDTH);
   });
 
-  it('renders votes, history and the overflow menu for the topic entity', () => {
+  it('renders Follow in place of the votes, with history and the overflow menu (GEO-3191)', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(screen.getByTestId('entity-page-actions')).toBeInTheDocument();
-    expect(mocks.pageActions).toMatchObject({ entityId: 'topic-1', spaceId: 'space-1', isVoteable: true });
+    expect(mocks.pageActions).toMatchObject({ entityId: 'topic-1', spaceId: 'space-1' });
+    expect(mocks.pageActions?.isVoteable).toBeFalsy();
+    expect(mocks.pageActions?.leading).toBeTruthy();
   });
 
   it('keeps them in the header, beside the types, where the entity page puts them', () => {

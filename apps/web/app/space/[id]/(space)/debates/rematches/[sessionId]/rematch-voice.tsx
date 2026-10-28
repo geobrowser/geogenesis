@@ -27,12 +27,27 @@ import type { DebateRematchParticipant, DebateRematchSession } from '~/core/deba
 import { GeoChatRequestError } from '~/core/debates/api';
 import { AudioSettings, MobileSettingsSheet } from '~/core/debates/audio-settings';
 import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
-import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
+import { cameraFailureMessage } from '~/core/debates/camera-failure';
+import { CameraIcon, MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
+import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
-import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
+import { tokenAllowsCamera } from '~/core/debates/livekit-grant';
+import { useCarriedLobbyChoice } from '~/core/debates/lobbies/lobby-return';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+import { systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
+import {
+  type DebateJoinChoiceSource,
+  isChosenJoinIntent,
+  readRematchJoinIntent,
+  rememberRematchJoinIntent,
+} from '~/core/debates/rematch-join-intent';
+import { resolveJoinChoice } from '~/core/debates/request-join-state';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
+import { TrackVideo } from '~/core/debates/track-video';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { switchMediaDevice, toMediaDeviceOptions, withMediaDeviceOptions } from '~/core/media/device-options';
+import { useInitialMediaDevices } from '~/core/media/use-initial-media-devices';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
@@ -45,10 +60,12 @@ import {
   type PairMicState,
   RematchPairHeader,
 } from './rematch-pair-header';
+import styles from './rematch-video-header.module.css';
 
 // A pair arriving from a recorded debate was already speaking with the microphone open, so the
 // debate-again room preserves that live conversation. A profile challenge has no preceding call or
 // user gesture that opened the microphone; it continues to join listen-only until the user unmutes.
+/** Whether the microphone opens on arrival when nothing chose: live after a debate, muted off a challenge. */
 function microphoneEnabledByDefault(session: DebateRematchSession) {
   return session.source_debate_id !== null;
 }
@@ -221,6 +238,7 @@ type PairContext = {
   opponentName: string;
   onOpenOpponentSpace: (event: React.MouseEvent) => void;
   leaveAction?: React.ReactNode;
+  opponentWaiting?: React.ReactNode;
 };
 
 function toHeaderParticipant(participant: DebateRematchParticipant | null): PairHeaderParticipant | null {
@@ -236,8 +254,8 @@ function toHeaderParticipant(participant: DebateRematchParticipant | null): Pair
  * The live voice channel for the rematch picker, drawn as the page's pair header (GEO-2992).
  *
  * The pair lands here from "debate again" or a profile challenge, and this keeps them talking while
- * they browse claims. Audio-only; mute is a local track toggle and the opponent's state comes
- * straight from LiveKit participant events.
+ * they browse claims, on camera where the call allows it. Mute is a local track toggle and the
+ * opponent's state comes straight from LiveKit participant events.
  *
  * Degrades to the cards alone when the backend has no LiveKit config (503), predates the endpoint
  * (404), or the session has left a voice-capable status — the two people are still in a rematch
@@ -258,6 +276,8 @@ type RematchVoiceHeaderProps = {
    * re-laying-out on the way to somewhere else.
    */
   exiting?: boolean;
+  /** What to show in the other person's video slot until they join (GEO-3427: running late). */
+  opponentWaiting?: React.ReactNode;
 };
 
 export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
@@ -267,7 +287,13 @@ export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
   return <SessionRematchVoiceHeader key={props.session.id} {...props} />;
 }
 
-function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exiting = false }: RematchVoiceHeaderProps) {
+function SessionRematchVoiceHeader({
+  session,
+  currentUserId,
+  leaveAction,
+  exiting = false,
+  opponentWaiting,
+}: RematchVoiceHeaderProps) {
   const voiceCapableNow = voiceCapable(session.status);
 
   /**
@@ -380,6 +406,26 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   const join = useRematchLiveKitJoin(session.id, voiceActive && ownership === 'owned');
 
   const [micFailure, setMicFailure] = React.useState<MediaDeviceFailure | null>(null);
+  const [cameraFailure, setCameraFailure] = React.useState<MediaDeviceFailure | null>(null);
+
+  // Off with a mic-only token (picker video off on the server, GEO-3161).
+  const cameraAllowed = join.data ? tokenAllowsCamera(join.data.token) : false;
+  // Card or room choice, then lobby, then default: the order the ready room uses too. The camera is
+  // off unless chosen; the mic is live after a debate and muted off a challenge.
+  const carriedLobby = useCarriedLobbyChoice();
+  const [chosenAtMount] = React.useState(() => readRematchJoinIntent(session.id));
+  const [joinAtMount] = React.useState(() =>
+    resolveJoinChoice(chosenAtMount, carriedLobby, {
+      micOn: microphoneEnabledByDefault(session),
+      cameraOn: false,
+    })
+  );
+  const [cameraIntent, setCameraIntent] = React.useState(joinAtMount.cameraOn);
+  const handleCameraIntentChange = React.useCallback((enabled: boolean) => {
+    if (enabled) setCameraFailure(null);
+    setCameraIntent(enabled);
+  }, []);
+  const handleCameraFailure = React.useCallback(() => setCameraIntent(false), []);
 
   // `<LiveKitRoom audio>` is not a one-time "publish on join" flag. Recovery remounts the room
   // around a fresh token via `connectionEpoch`, and each mount connects anew and replays
@@ -387,28 +433,36 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // would put a muted user back on air the moment they hit Retry. The prop has to track what the
   // user wants. (A plain reconnect is not the risk here: that republishes the existing tracks and
   // preserves their mute state, without re-running the handler.)
-  const [micIntent, setMicIntent] = React.useState(() => microphoneEnabledByDefault(session));
+  const [micIntent, setMicIntent] = React.useState(joinAtMount.micOn);
 
-  // Latched by the auto-open below *and* by the user's own toggle, so a mute chosen while waiting
-  // is not undone the moment the opponent walks in.
-  const micSettledRef = React.useRef(false);
+  // Where the mic was chosen, or null while it is still this picker's default. Set by the auto-open
+  // below and by the user's own toggle, so a mute chosen while waiting is not undone the moment the
+  // opponent walks in; a lobby's mic counts too. Recorded with the intent, so a remount keeps it.
+  const [micSource, setMicSource] = React.useState<DebateJoinChoiceSource | null>(() =>
+    isChosenJoinIntent(chosenAtMount) ? chosenAtMount.source : carriedLobby !== null ? 'picker' : null
+  );
   const handleMicIntentChange = React.useCallback((enabled: boolean) => {
-    micSettledRef.current = true;
+    setMicSource('picker');
     setMicIntent(enabled);
   }, []);
 
+  React.useEffect(() => {
+    rememberRematchJoinIntent(session.id, { micOn: micIntent, cameraOn: cameraIntent, source: micSource });
+  }, [cameraIntent, micIntent, micSource, session.id]);
+
   // GEO-2941 state 3: inside a room the mic opens when the opponent actually arrives. Off a room
   // there is no join event to key on and the dock stays muted, per GEO-2838.
-  const roomOpponentPresent = useDebateRoomContext()?.presence?.opponentPresent ?? false;
+  const roomContext = useDebateRoomContext();
+  const roomOpponentPresent = roomContext?.presence?.opponentPresent ?? false;
   React.useEffect(() => {
-    if (!roomOpponentPresent || micSettledRef.current) return;
-    micSettledRef.current = true;
+    if (!roomOpponentPresent || micSource !== null) return;
+    setMicSource('picker');
     setMicIntent(true);
     // `<LiveKitRoom audio>` is replayed only from its `SignalConnected` handler, so raising the
     // intent alone does nothing to a room that is already connected — and would then publish the
     // mic at the next reconnect instead. Drive the device here, as the mute button does.
     void roomRef.current?.localParticipant?.setMicrophoneEnabled(true)?.catch(() => undefined);
-  }, [roomOpponentPresent]);
+  }, [micSource, roomOpponentPresent]);
 
   // Owned here, where nothing below the page itself can remount them, so each one-shot is spent
   // once per visit rather than once per connection.
@@ -464,7 +518,13 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
     if (connectedRef.current) return;
     setConnectFailed(true);
   }, []);
-  const handleMediaDeviceFailure = React.useCallback((failure?: MediaDeviceFailure) => {
+
+  const handleMediaDeviceFailure = React.useCallback((failure?: MediaDeviceFailure, kind?: MediaDeviceKind) => {
+    if (kind === 'videoinput') {
+      setCameraIntent(false);
+      setCameraFailure(failure ?? null);
+      return;
+    }
     setMicFailure(failure ?? null);
   }, []);
 
@@ -479,17 +539,11 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
     retry();
   }, [retry]);
 
-  // The device the user last picked in the debate surfaces, frozen at mount: a changed room
-  // options identity makes `<LiveKitRoom>` rebuild its Room, dropping the live call.
-  const { selectedAudioInputId } = useDebateMediaSession();
-  const initialAudioInputIdRef = React.useRef(selectedAudioInputId);
+  const { selectedAudioInputId, selectedVideoInputId } = useDebateMediaSession();
+  const devices = useInitialMediaDevices({ audioInputId: selectedAudioInputId, videoInputId: selectedVideoInputId });
   const roomOptions = React.useMemo(
-    () => ({
-      // LiveKit's default reconnect gives up after ~37s; this rides out deploys and brief drops.
-      reconnectPolicy: new ExtendedReconnectPolicy(),
-      audioCaptureDefaults: initialAudioInputIdRef.current ? { deviceId: initialAudioInputIdRef.current } : undefined,
-    }),
-    []
+    () => withMediaDeviceOptions(devices, { reconnectPolicy: new ExtendedReconnectPolicy() }),
+    [devices]
   );
 
   // Every condition the controls themselves render on, because a permission prompt with no voice UI
@@ -502,8 +556,8 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // microphone, `<LiveKitRoom audio>` is opening it for real and a second request alongside the one
   // already on screen is pure redundancy.
   usePrimedMicrophonePermission(
-    !micIntent && voiceActive && ownership === 'owned' && Boolean(join.data) && Boolean(opponent),
-    initialAudioInputIdRef.current || undefined
+    devices.ready && !micIntent && voiceActive && ownership === 'owned' && Boolean(join.data) && Boolean(opponent),
+    devices.audioInputId || undefined
   );
 
   const opponentName = opponent ? opponent.display_name || opponent.profile_space_id : '';
@@ -527,6 +581,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
     opponentName,
     onOpenOpponentSpace: openOpponentProfile,
     leaveAction,
+    opponentWaiting,
   };
 
   const headerWith = (voice: PairHeaderVoice) => <RematchPairHeader {...pair} voice={voice} />;
@@ -578,7 +633,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // Only reachable on the way out, and only where the room was mounted but had not connected when
   // the exit began: there is nothing to hold open, so the header keeps the one line the room was
   // drawing from inside rather than collapsing to nothing.
-  if (!voiceActive || !join.data) return headerWith(CONNECTING_VOICE);
+  if (!voiceActive || !join.data || !devices.ready) return headerWith(CONNECTING_VOICE);
 
   return (
     <LiveKitRoom
@@ -600,6 +655,11 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
         onRoomLive={handleRoomLive}
         opponentUserId={opponent.user_id}
         micFailure={micFailure}
+        cameraAllowed={cameraAllowed}
+        cameraFailure={cameraFailure}
+        cameraIntent={cameraIntent}
+        onCameraIntentChange={handleCameraIntentChange}
+        onCameraFailure={handleCameraFailure}
         onMicIntentChange={handleMicIntentChange}
         onRetry={retry}
         roomRef={roomRef}
@@ -675,6 +735,11 @@ function VoiceHeaderBody({
   onRoomLive,
   opponentUserId,
   micFailure,
+  cameraAllowed,
+  cameraFailure,
+  cameraIntent,
+  onCameraIntentChange,
+  onCameraFailure,
   onMicIntentChange,
   onRetry,
   roomRef,
@@ -689,6 +754,11 @@ function VoiceHeaderBody({
   onRoomLive: () => void;
   opponentUserId: string;
   micFailure: MediaDeviceFailure | null;
+  cameraAllowed: boolean;
+  cameraFailure: MediaDeviceFailure | null;
+  cameraIntent: boolean;
+  onCameraIntentChange: (enabled: boolean) => void;
+  onCameraFailure: () => void;
   onMicIntentChange: (enabled: boolean) => void;
   onRetry: () => void;
   roomRef: React.MutableRefObject<Room | null>;
@@ -704,6 +774,15 @@ function VoiceHeaderBody({
       if (roomRef.current === room) roomRef.current = null;
     };
   }, [room, roomRef]);
+
+  const releasableRoomRef = React.useRef(room);
+  releasableRoomRef.current = room;
+  React.useEffect(
+    () => () => {
+      releasableRoomRef.current?.localParticipant?.trackPublications?.forEach(publication => publication.track?.stop());
+    },
+    []
+  );
 
   // No noise filter here, deliberately. Krisp substitutes its own output for the *published* track,
   // so anything that leaves it attached and not producing audio is a microphone that reads unmuted
@@ -734,6 +813,13 @@ function VoiceHeaderBody({
       analytics.recordJoined();
     }
   }, [analytics, connectionState, onRoomLive]);
+
+  React.useEffect(() => {
+    if (!cameraAllowed || connectionState !== ConnectionState.Connected) return;
+    const participant = room.localParticipant;
+    if (!participant) return;
+    void Promise.resolve(participant.setCameraEnabled(cameraIntent)).catch(() => onCameraFailure());
+  }, [cameraAllowed, cameraIntent, connectionState, onCameraFailure, room]);
 
   const remoteParticipants = useRemoteParticipants();
   const opponentParticipant = remoteParticipants.find(participant => participant.identity === opponentUserId) ?? null;
@@ -768,7 +854,7 @@ function VoiceHeaderBody({
   // button that now sits in the card, and re-insert the `role="status"` regions with their text
   // already in them — the one thing those regions are shaped to avoid. So the hooks run
   // unconditionally and the connection state picks the `voice` rather than the component.
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
+  const { localParticipant, isMicrophoneEnabled, cameraTrack } = useLocalParticipant();
   const micFailed = Boolean(micFailure);
   const muted = !isMicrophoneEnabled || micFailed;
   // Muting publishes nothing, but it does not retract the active-speaker update that came just
@@ -858,6 +944,19 @@ function VoiceHeaderBody({
     return null;
   })();
 
+  const cameraMessage =
+    cameraIntent && !cameraAllowed
+      ? 'Video isn’t available in this call.'
+      : cameraFailure
+        ? cameraFailureMessage(cameraFailure)
+        : null;
+
+  const opponentCamera = opponentParticipant?.getTrackPublication(Track.Source.Camera);
+  const localVideo =
+    cameraTrack?.track && !cameraTrack.isMuted ? <TrackVideo track={cameraTrack.track} mirrored /> : null;
+  const opponentVideo =
+    opponentCamera?.track && !opponentCamera.isMuted ? <TrackVideo track={opponentCamera.track} /> : null;
+
   const opponentState: PairMicState = !opponentParticipant
     ? 'waiting'
     : opponentMuted
@@ -872,7 +971,19 @@ function VoiceHeaderBody({
     localSpeaking,
     micFailureMessage: micFailure ? micFailureMessage(micFailure) : null,
     onRetryMic: onRetry,
-    controls: <LocalAudioControls room={room} muted={muted} micFailure={micFailure} onToggle={toggle} />,
+    localVideo,
+    cameraMessage,
+    controls: (
+      <LocalAudioControls
+        room={room}
+        muted={muted}
+        micFailure={micFailure}
+        onToggle={toggle}
+        cameraAllowed={cameraAllowed}
+        cameraOn={cameraIntent}
+        onToggleCamera={() => onCameraIntentChange(!cameraIntent)}
+      />
+    ),
     opponentState,
     // See `TALKING_WHILE_MUTED`: the states are built, the detector is a product call.
     talkingWhileMuted: TALKING_WHILE_MUTED,
@@ -927,7 +1038,7 @@ function VoiceHeaderBody({
           onMutedChange={setOpponentMuted}
         />
       ) : null}
-      <RematchPairHeader {...pair} voice={voice} notice={notice} toast={toast} />
+      <RematchPairHeader {...pair} voice={voice} notice={notice} toast={toast} opponentVideo={opponentVideo} />
     </>
   );
 }
@@ -1019,28 +1130,96 @@ function LocalAudioControls({
   muted,
   micFailure,
   onToggle,
+  cameraAllowed,
+  cameraOn,
+  onToggleCamera,
 }: {
   room: Room;
   muted: boolean;
   micFailure: MediaDeviceFailure | null;
   onToggle: () => void;
+  cameraAllowed: boolean;
+  cameraOn: boolean;
+  onToggleCamera: () => void;
 }) {
   const isMobile = useIsMobileCallLayout();
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const settings = useVoiceAudioSettings(room, micFailure);
+  const cameraSettings = useVoiceCameraSettings(room);
+  const cameraPrimary = !cameraOn;
+
+  const [cameraPanelOpen, setCameraPanelOpen] = React.useState(false);
+  const cameraTriggerRef = React.useRef<HTMLButtonElement | null>(null);
 
   // Muted is the state the user lands in without choosing it, so it carries the primary treatment:
   // a filled pill saying what pressing it does. Live is the state they chose, so its Mute is
   // secondary — visible, but not asking for anything.
   const primary = muted && !micFailure;
 
+  const cameraPanel = (
+    <div className="space-y-3">
+      <DeviceOptionGroup
+        label="Select a camera"
+        options={cameraSettings.cameraDevices}
+        selectedDeviceId={cameraSettings.selectedCameraId}
+        framed={isMobile}
+        onChange={cameraSettings.onCameraChange}
+        analytics={debateActionAnalyticsAttributes('rematch', 'Camera option')}
+      />
+      {cameraSettings.error && (
+        <p role="alert" className="text-metadata text-red-01">
+          {cameraSettings.error}
+        </p>
+      )}
+    </div>
+  );
+
+  const cameraChevron = (
+    <button
+      ref={cameraTriggerRef}
+      type="button"
+      data-media-settings
+      aria-label="Camera settings"
+      title="Camera settings"
+      {...debateActionAnalyticsAttributes('rematch', 'Camera settings')}
+      aria-expanded={cameraPanelOpen}
+      onClick={isMobile ? () => setCameraPanelOpen(current => !current) : undefined}
+      className={cx(
+        'grid size-6 shrink-0 place-items-center rounded-r-full transition-colors',
+        cameraPrimary
+          ? 'border-l border-grey-05 bg-text text-white hover:opacity-80'
+          : 'border border-l-0 border-grey-02 bg-white text-grey-04 hover:text-text'
+      )}
+    >
+      <span className={cx('grid place-items-center transition-transform', cameraPanelOpen && 'rotate-180')}>
+        <ChevronDownSmall />
+      </span>
+    </button>
+  );
+
+  const cameraTrigger = isMobile ? (
+    cameraChevron
+  ) : (
+    <DesktopSettingsPopover
+      open={cameraPanelOpen}
+      onOpenChange={setCameraPanelOpen}
+      trigger={cameraChevron}
+      triggerRef={cameraTriggerRef}
+      label="Camera settings"
+    >
+      {cameraPanel}
+    </DesktopSettingsPopover>
+  );
+
   const settingsTrigger = (
     <button
       ref={triggerRef}
       type="button"
+      data-media-settings
       aria-label="Audio settings"
       title="Audio settings"
+      {...debateActionAnalyticsAttributes('rematch', 'Audio settings')}
       aria-expanded={open}
       onClick={isMobile ? () => setOpen(current => !current) : undefined}
       className={cx(
@@ -1059,13 +1238,15 @@ function LocalAudioControls({
   );
 
   return (
-    <span className="flex h-6 shrink-0 items-center">
+    <span className={cx('flex h-6 shrink-0 items-center', styles.mediaControls)}>
       <button
+        data-media-toggle
         type="button"
         // Both derived from `muted`, like the glyph and the disabled state. Deriving the label from
         // `isMicrophoneEnabled` instead lets a failed microphone announce "Mute microphone" while
         // showing a slashed icon on a button that cannot be pressed.
         aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
+        {...debateActionAnalyticsAttributes('rematch', muted ? 'Unmute microphone' : 'Mute microphone')}
         title={micFailure ? micFailureMessage(micFailure) : muted ? 'Unmute microphone' : 'Mute microphone'}
         onClick={onToggle}
         disabled={Boolean(micFailure)}
@@ -1083,19 +1264,66 @@ function LocalAudioControls({
         )}
       >
         <MicrophoneIcon muted={muted} />
-        {muted ? 'Unmute' : 'Mute'}
+        {/* Icon-only, so both media controls fit beside Leave on a phone. */}
+        <span className="sr-only">{muted ? 'Unmute' : 'Mute'}</span>
       </button>
       {isMobile ? (
         <>
+          {cameraAllowed && (
+            <MobileSettingsSheet
+              title="Camera settings"
+              open={cameraPanelOpen}
+              onOpenChange={setCameraPanelOpen}
+              returnFocusRef={cameraTriggerRef}
+              closeAnalytics={debateActionAnalyticsAttributes('rematch', 'Camera settings close')}
+            >
+              {cameraPanel}
+            </MobileSettingsSheet>
+          )}
           {settingsTrigger}
-          <MobileSettingsSheet title="Audio settings" open={open} onOpenChange={setOpen} returnFocusRef={triggerRef}>
-            <AudioSettings {...settings} framed />
+          <MobileSettingsSheet
+            title="Audio settings"
+            open={open}
+            onOpenChange={setOpen}
+            returnFocusRef={triggerRef}
+            closeAnalytics={debateActionAnalyticsAttributes('rematch', 'Audio settings close')}
+          >
+            <AudioSettings {...settings} framed analyticsSurface="rematch" />
           </MobileSettingsSheet>
         </>
       ) : (
-        <DesktopSettingsPopover open={open} onOpenChange={setOpen} trigger={settingsTrigger} triggerRef={triggerRef}>
-          <AudioSettings {...settings} />
+        <DesktopSettingsPopover
+          open={open}
+          onOpenChange={setOpen}
+          trigger={settingsTrigger}
+          triggerRef={triggerRef}
+          label="Audio settings"
+        >
+          <AudioSettings {...settings} analyticsSurface="rematch" />
         </DesktopSettingsPopover>
+      )}
+      {cameraAllowed && (
+        <span data-media-group className="ml-1 flex h-6 shrink-0 items-center">
+          <button
+            type="button"
+            data-media-toggle
+            aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+            title={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+            {...debateActionAnalyticsAttributes('rematch', cameraOn ? 'Turn camera off' : 'Turn camera on')}
+            onClick={onToggleCamera}
+            className={cx(
+              PAIR_PILL,
+              'rounded-l-full transition',
+              cameraPrimary
+                ? 'bg-text text-white hover:opacity-80'
+                : 'border border-r-0 border-grey-02 bg-white text-text hover:text-grey-04'
+            )}
+          >
+            <CameraIcon disabled={!cameraOn} />
+            <span className="sr-only">{cameraOn ? 'Camera off' : 'Camera on'}</span>
+          </button>
+          {cameraTrigger}
+        </span>
       )}
     </span>
   );
@@ -1106,12 +1334,14 @@ function DesktopSettingsPopover({
   onOpenChange,
   trigger,
   triggerRef,
+  label,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trigger: React.ReactNode;
   triggerRef: React.RefObject<HTMLButtonElement | null>;
+  label: string;
   children: React.ReactNode;
 }) {
   // Radix's default portal wrapper is globally capped at z-60, below this picker's z-[150].
@@ -1124,10 +1354,10 @@ function DesktopSettingsPopover({
         <Popover.Portal container={elevatedPopoverPortal}>
           <Popover.Content
             role="dialog"
-            aria-label="Audio settings"
+            aria-label={label}
             side="bottom"
             align="end"
-            sideOffset={12}
+            sideOffset={20}
             collisionPadding={16}
             onCloseAutoFocus={event => {
               event.preventDefault();
@@ -1160,6 +1390,7 @@ function DesktopSettingsPopover({
  */
 function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null) {
   const { changeAudioInput, changeAudioOutput, audioOutputError } = useDebateMediaSession();
+  const [inputError, setInputError] = React.useState<string | null>(null);
   // `requestPermissions` defaults to true, and enumerating with it calls `getUserMedia` whenever a
   // device label is blank — which is exactly the state a denied microphone leaves them in. That
   // second prompt has no user gesture behind it, so it fails, and its rejection empties the list:
@@ -1170,13 +1401,14 @@ function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null
   const speakers = useMediaDeviceSelect({ kind: 'audiooutput', room, requestPermissions: false });
 
   const selectMicrophone = (deviceId: string) => {
-    void microphones.setActiveMediaDevice(deviceId);
-    changeAudioInput(deviceId);
+    setInputError(null);
+    void switchMediaDevice(room, 'audioinput', deviceId)
+      .then(() => changeAudioInput(deviceId))
+      .catch(() => setInputError('Could not switch microphones. Try another device.'));
   };
 
   const selectSpeaker = (deviceId: string) => {
-    void speakers.setActiveMediaDevice(deviceId);
-    void changeAudioOutput(deviceId);
+    void changeAudioOutput(deviceId, selectedId => switchMediaDevice(room, 'audiooutput', selectedId));
   };
 
   // Browsers without `setSinkId` enumerate no outputs at all; show the same disabled "System
@@ -1184,25 +1416,32 @@ function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null
   const audioOutputSupported = speakers.devices.length > 0;
 
   return {
-    audioInputDevices: toDeviceOptions(microphones.devices, 'Microphone'),
-    audioOutputDevices: audioOutputSupported
-      ? toDeviceOptions(speakers.devices, 'Speaker')
-      : [systemDefaultAudioOutput],
+    audioInputDevices: toMediaDeviceOptions(microphones.devices),
+    audioOutputDevices: audioOutputSupported ? toMediaDeviceOptions(speakers.devices) : [systemDefaultAudioOutput],
     selectedAudioInputId: microphones.activeDeviceId,
     selectedAudioOutputId: speakers.activeDeviceId,
     audioOutputSupported,
     // The panel is where someone goes to fix their audio, so it is where the failures belong.
-    error: micFailure ? micFailureMessage(micFailure) : audioOutputError,
+    error: inputError ?? (micFailure ? micFailureMessage(micFailure) : audioOutputError),
     onAudioInputChange: selectMicrophone,
     onAudioOutputChange: selectSpeaker,
   };
 }
 
-function toDeviceOptions(devices: MediaDeviceInfo[], fallbackLabel: string): MediaDeviceOption[] {
-  return devices.map((device, index) => ({
-    deviceId: device.deviceId,
-    groupId: device.groupId,
-    kind: device.kind as MediaDeviceOption['kind'],
-    label: device.label || `${fallbackLabel} ${index + 1}`,
-  }));
+function useVoiceCameraSettings(room: Room) {
+  const { changeVideoInput } = useDebateMediaSession();
+  const [error, setError] = React.useState<string | null>(null);
+  const cameras = useMediaDeviceSelect({ kind: 'videoinput', room, requestPermissions: false });
+
+  return {
+    cameraDevices: toMediaDeviceOptions(cameras.devices),
+    selectedCameraId: cameras.activeDeviceId,
+    error,
+    onCameraChange: (deviceId: string) => {
+      setError(null);
+      void switchMediaDevice(room, 'videoinput', deviceId)
+        .then(() => changeVideoInput(deviceId))
+        .catch(() => setError('Could not switch cameras. Try another device.'));
+    },
+  };
 }

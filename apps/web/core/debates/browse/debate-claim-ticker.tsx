@@ -117,8 +117,8 @@ export function useDebateClaimTicker(
    * has a space and an authored block. They are for the debates recorded after this one.
    *
    * **Empty while the ticker is switched off.** `useDebateTranscriptClaims` is gated on `enabled`,
-   * but the feed card and the explore card fetch the same query ungated, so a disabled ticker reads
-   * a full claim list out of a warm cache. `groupBySlot` already refused to build cards from it;
+   * but its cache outlives the gate — the claims panel reads the same query, and so did this ticker
+   * while it was active — so a disabled ticker can read a full claim list out of a warm cache. `groupBySlot` already refused to build cards from it;
    * the markers did not, so an inactive feed card could draw a clickable hash that seeks to a claim
    * whose card and backlog are both deliberately empty. One gate now, not two half-gates.
    *
@@ -145,9 +145,9 @@ export function useDebateClaimTicker(
   /**
    * Empty while this ticker is switched off, which is not the same as having no claims.
    *
-   * `useDebateTranscriptClaims` is gated on `enabled`, but the feed card and the explore card both
-   * fetch the same query *ungated* — so the cache is warm and a disabled ticker still reads a full
-   * claim list out of it. Handing that to `useDebateClaimsBySpaces`, which has no gate of its own,
+   * `useDebateTranscriptClaims` is gated on `enabled`, but its cache outlives the gate — the claims
+   * panel reads the same query, and so did this ticker while it was active — so a disabled ticker
+   * can still read a full claim list out of it. Handing that to `useDebateClaimsBySpaces`, which has no gate of its own,
    * started authenticated row queries and a gateway subscription for every mounted feed item rather
    * than the active and preloaded pair.
    */
@@ -246,6 +246,20 @@ const HISTORY_EDGE_CLEAR_PX = 4.65;
 export type ClaimCardTone = 'glass' | 'light';
 
 /**
+ * What a claim card turns into on a small player — under `@max-md`, 448px of *player*, which is a
+ * phone and also the compact gallery on a desktop. Container queries rather than breakpoints for
+ * the same reason the end card uses them: this one component is a feed card, an explore card and
+ * a fullscreen player, and the viewport is the wrong question for two of the three.
+ *
+ * - `line`: the live card, docked to the bottom edge as one line, tap to read in full (GEO-3114).
+ *   The full card is 80px of a ~217px phone tile and climbed across the speaker's face.
+ * - `sheet`: a card in the opened list, with the whole claim printed rather than clamped. The list
+ *   is something the viewer opened on purpose, and on a phone it is the one place to read a claim
+ *   all the way through.
+ */
+export type ClaimCardSmallPanel = 'line' | 'sheet';
+
+/**
  * The claim card that rises over the video as it is said.
  *
  * A translucent dark card in the player's bottom-right corner, stacked upward: the newest arrives
@@ -275,6 +289,8 @@ function DebateClaimTickerCardBody({
   entity,
   onAnswered,
   tone = 'glass',
+  smallPanel,
+  onReadInFull,
 }: {
   window: TickerWindow;
   /**
@@ -289,10 +305,24 @@ function DebateClaimTickerCardBody({
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
+  /**
+   * How the card redraws itself on a small player (`@max-md`, under 448px of player), and only
+   * there — at any wider panel these add nothing and the card is exactly the card it always was.
+   * See {@link ClaimCardSmallPanel}. Left unset by the end card's carousel, which has its own
+   * small-panel layout and must not inherit this one.
+   */
+  smallPanel?: ClaimCardSmallPanel;
+  /**
+   * Open the full claim, and the list it belongs to. The compact `line` card is one truncated
+   * line, so this is how a reader on a phone gets the rest of it. Only drawn on a small panel.
+   */
+  onReadInFull?: () => void;
 }) {
   const { claim } = window;
 
   if (!claim.spaceId) return null;
+
+  const line = smallPanel === 'line';
 
   return (
     <ActionSurfaceDiv
@@ -332,7 +362,20 @@ function DebateClaimTickerCardBody({
         'pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg p-3',
         tone === 'glass'
           ? 'bg-[#151515]/30 [mask-image:var(--claim-ramp,none)] backdrop-blur-[44px] [-webkit-mask-image:var(--claim-ramp,none)]'
-          : 'bg-grey-01'
+          : 'bg-grey-01',
+        // One row on a small panel: avatar, the claim on a single line, the two thumbs. 36px tall
+        // against the 80px card, so on a ~217px phone tile it sits under the speaker's chin rather
+        // than across their face. The header's own box dissolves (`contents`) so its two halves
+        // can sit either side of the text.
+        //
+        // `min-h-9` because the line sits over the debater's own name row, which is 36px with its
+        // byline. A 29px line left the top of the name and the position chip showing above it,
+        // half-hidden behind the blur; matching the row covers it cleanly, as the full card did.
+        line && '@max-md:min-h-9 @max-md:flex-row @max-md:items-center @max-md:gap-2 @max-md:px-2.5 @max-md:py-1.5',
+        // The opened list on a small panel is a sheet you have asked for in order to read, and the
+        // edge dissolve would eat into the very claim that was tapped to get there — the sheet is
+        // often shorter than the ramp's 71.5px plus a whole unclamped card.
+        smallPanel === 'sheet' && '@max-md:[mask-image:none] @max-md:[-webkit-mask-image:none]'
       )}
     >
       <TickerClaimHeader
@@ -343,8 +386,35 @@ function DebateClaimTickerCardBody({
         entity={entity}
         onAnswered={onAnswered}
         tone={tone}
+        compactLine={line}
       />
-      <TickerClaimText text={claim.text} tone={tone} />
+      {/* A flex column, so the text — or the expand toggle wrapping it — stays a blockified flex
+          item exactly as it was before this wrapper existed. In a plain block box the toggle is an
+          inline-level `<button>`, which sits on a line box of its own and adds the strut's 7px
+          under every truncated claim in the wide backlog. */}
+      <div className={cx('relative flex flex-col', line && '@max-md:order-2 @max-md:min-w-0 @max-md:flex-1')}>
+        <TickerClaimText text={claim.text} tone={tone} smallPanel={smallPanel} />
+        {line && onReadInFull && (
+          /* The whole line is the target on a small panel, and it does not expand in place: one
+             line growing into four is a card climbing back over the face this layout exists to
+             keep clear. It opens the sheet instead, where the claim is printed in full alongside
+             the rest of what this debater has said, and the chip under it closes it again.
+
+             Drawn over the text rather than wrapping it, so the claim stays one node — the one
+             the wide layout's expand toggle wraps — and is not printed twice. `hidden` above
+             448px, which also takes it out of the tab order there. */
+          <button
+            type="button"
+            aria-label="Read the whole claim"
+            title="Read the whole claim"
+            onClick={event => {
+              event.stopPropagation();
+              onReadInFull();
+            }}
+            className="absolute inset-0 hidden cursor-pointer @max-md:block"
+          />
+        )}
+      </div>
     </ActionSurfaceDiv>
   );
 }
@@ -361,9 +431,9 @@ function DebateClaimTickerCardBody({
 const TICKER_CLAMP_LINES = 2;
 
 /**
- * The claim itself, clamped to three lines, and expandable in place when there is more.
+ * The claim itself, clamped to two lines, and expandable in place when there is more.
  *
- * A claim runs to a sentence or two and three lines of a 209px card is often not all of it. The
+ * A claim runs to a sentence or two and two lines of a 209px card is often not all of it. The
  * alternative to expanding here is "go and find it in the panel", which means leaving the debate
  * to read a sentence that is on screen — so the text opens where it is, and closes again the same
  * way.
@@ -371,7 +441,18 @@ const TICKER_CLAMP_LINES = 2;
  * Only interactive when it is actually truncated. A button that visibly does nothing is worse than
  * no button, and most short claims fit.
  */
-function TickerClaimText({ text, tone }: { text: string; tone: ClaimCardTone }) {
+export function TickerClaimText({
+  text,
+  tone,
+  smallPanel,
+  textClassName = 'text-[1rem] leading-[1.0625rem] tracking-[-0.16px]',
+}: {
+  text: string;
+  tone: ClaimCardTone;
+  smallPanel?: ClaimCardSmallPanel;
+  /** The popup keeps its own type scale while sharing the same overflow and expansion behavior. */
+  textClassName?: string;
+}) {
   // In state rather than a ref: wrapping the text in a button below remounts this node, and the
   // measurement has to follow it. See `useLineClampOverflow`.
   const [textElement, setTextElement] = React.useState<HTMLSpanElement | null>(null);
@@ -389,13 +470,21 @@ function TickerClaimText({ text, tone }: { text: string; tone: ClaimCardTone }) 
   const body = (
     <span
       ref={setTextElement}
-      // `line-clamp-3` and `block` both set `display`, and `block` wins — which silently turns the
+      // `line-clamp-2` and `block` both set `display`, and `block` wins — which silently turns the
       // clamp off, so the card grows to fit the whole claim and nothing ever reports as truncated.
       // The clamp already blockifies the box; only the expanded state needs `block` of its own.
       className={cx(
-        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px]',
+        textClassName,
         tone === 'glass' ? 'text-white' : 'text-text',
-        expanded ? 'block' : 'line-clamp-2'
+        expanded ? 'block' : 'line-clamp-2',
+        // Container-query overrides, which `useLineClampOverflow` reads back off the computed style
+        // so it measures against the clamp actually drawn rather than the wide layout's two lines.
+        smallPanel === 'line' && '@max-md:line-clamp-1',
+        smallPanel === 'sheet' && '@max-md:line-clamp-none',
+        // The expand toggle below is hidden on the compact line (the sheet button does that job),
+        // and `visibility` is inherited — so the claim itself opts back in, or it would vanish
+        // with the control around it.
+        smallPanel === 'line' && '@max-md:visible'
       )}
     >
       {text}
@@ -410,7 +499,13 @@ function TickerClaimText({ text, tone }: { text: string; tone: ClaimCardTone }) 
       aria-expanded={expanded}
       title={expanded ? 'Show less' : 'Show the whole claim'}
       onClick={() => setExpanded(current => !current)}
-      className="w-full cursor-pointer text-left"
+      className={cx(
+        'w-full cursor-pointer text-left',
+        // On the compact line the tap opens the sheet instead (see the card). `invisible` rather
+        // than `hidden`, because this button wraps the text: it leaves the tab order and the
+        // accessibility tree, and the text inside sets itself visible again.
+        smallPanel === 'line' && '@max-md:invisible'
+      )}
     >
       {body}
     </button>
@@ -649,7 +744,14 @@ export function DebateClaimTickerStack({
            * on a phone the chip's 43px came out of the list's 130 and left 87 — one card, most of
            * it inside the ramp.
            */
-          open && 'no-scrollbar max-h-[9.75rem] min-h-0 overflow-y-auto'
+          open && 'no-scrollbar max-h-[9.75rem] min-h-0 overflow-y-auto',
+          /**
+           * On a small panel the opened list is a sheet over this debater's tile, and it is as tall
+           * as the corner the player gives it rather than 156px — see `data-claim-corner`, which
+           * pins its top edge below the tile's controls while open. Its cards print the whole
+           * claim, so the list has to be allowed the height to show one.
+           */
+          open && '@max-md:max-h-none'
         )}
       >
         {shown.map(card => (
@@ -661,6 +763,10 @@ export function DebateClaimTickerStack({
             row={rowsByClaimId.get(card.window.claim.id) ?? null}
             entity={entitiesByClaimId.get(card.window.claim.id) ?? null}
             onAnswered={onAnswered}
+            smallPanel={open ? 'sheet' : 'line'}
+            // Only where there is a sheet to open into. Without the chip's toggle the corner is
+            // hover-only, and the line would offer a tap that goes nowhere.
+            onReadInFull={!open ? onTogglePinned : undefined}
           />
         ))}
       </div>
@@ -674,6 +780,10 @@ export function DebateClaimTickerStack({
     </div>
   );
 }
+
+/** The existing fixed-format chip's type and glass surface, shared with Open rounds counters. */
+export const CLAIM_BACKLOG_CHIP_CLASS =
+  'flex shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 py-1.5 text-[0.75rem] leading-[1.0625rem] text-white backdrop-blur-[44px] transition-colors hover:bg-[#151515]/50';
 
 /**
  * The way into the backlog where there is no pointer to open it with.
@@ -699,9 +809,8 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
         onClick();
       }}
       /**
-       * 20px tall, which is the debater's avatar across the band from it — the two read as one row
-       * when they match and as a mistake when they do not. The tap target is kept at ~36px by an
-       * `::after` that reaches past the box without taking any layout.
+       * Height follows the content with 6px above and below it, so the 16px icon has breathing
+       * room in both formats. An `::after` extends the tap target without taking any layout.
        *
        * On a pointer device it is present but out of the way, not absent. It used to be `hidden`,
        * which took it out of the tab order too — and since the corner draws nothing at all when no
@@ -715,10 +824,13 @@ function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expande
        * and the sibling scroll box next to it sets `auto`. One class makes the intent local.
        *
        * Hidden by position rather than by `sr-only`: that utility also zeroes padding and height,
-       * and Tailwind emits its `not-sr-only` counterpart *after* `px-2` and `h-5`, so restoring the
+       * and Tailwind emits its `not-sr-only` counterpart *after* padding utilities, so restoring the
        * chip would have stripped its own shape. Checked, not assumed.
        */
-      className="pointer-events-none absolute flex h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white opacity-0 backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50 focus-visible:pointer-events-auto focus-visible:relative focus-visible:opacity-100 no-hover:pointer-events-auto no-hover:relative no-hover:opacity-100"
+      className={cx(
+        CLAIM_BACKLOG_CHIP_CLASS,
+        "pointer-events-none absolute opacity-0 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] focus-visible:pointer-events-auto focus-visible:relative focus-visible:opacity-100 no-hover:pointer-events-auto no-hover:relative no-hover:opacity-100"
+      )}
     >
       <InfoSmall color="white" />
       <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
@@ -748,6 +860,7 @@ function TickerClaimHeader({
   entity,
   onAnswered,
   tone,
+  compactLine = false,
 }: {
   claimId: string;
   spaceId: string;
@@ -756,6 +869,12 @@ function TickerClaimHeader({
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
   tone: ClaimCardTone;
+  /**
+   * The card is the one-line `line` layout on a small panel: this row's box dissolves so the avatar
+   * and the thumbs sit either side of the claim, and the name and the share step aside — both are
+   * in the sheet a tap away, and on a 337px line they would leave the claim about 15 characters.
+   */
+  compactLine?: boolean;
 }) {
   const { responseKind, summary, control } = useDebateClaimResponse({ claimId, spaceId, row, entity });
   const openProfile = useOpenDebaterProfile(speaker);
@@ -784,7 +903,7 @@ function TickerClaimHeader({
   const percent = summary.percent;
 
   return (
-    <div className="flex items-center justify-between gap-2">
+    <div className={cx('flex items-center justify-between gap-2', compactLine && '@max-md:contents')}>
       {/* `text-box` trimmed, as the frame has it, and on each text node rather than on the row.
           The trim acts on a box's own line boxes, and these are flex items with their own; the
           frame gives this line a 7px box in a 16px row, which is its cap height. Trimmed, the row
@@ -794,7 +913,8 @@ function TickerClaimHeader({
       <span
         className={cx(
           'flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem]',
-          tone === 'glass' ? 'text-white' : 'text-grey-04'
+          tone === 'glass' ? 'text-white' : 'text-grey-04',
+          compactLine && '@max-md:order-1 @max-md:shrink-0'
         )}
       >
         {speaker && (
@@ -814,19 +934,26 @@ function TickerClaimHeader({
             >
               <Avatar avatarUrl={speaker.avatar_cid} value={speaker.profile_space_id} size={16} />
             </span>
-            <span className="truncate [text-box:trim-both_cap_alphabetic]">{speakerLabel(speaker)}</span>
+            <span className={cx('truncate [text-box:trim-both_cap_alphabetic]', compactLine && '@max-md:hidden')}>
+              {speakerLabel(speaker)}
+            </span>
           </button>
         )}
         {percent !== null && (
           <>
             {speaker && (
-              <span aria-hidden className="[text-box:trim-both_cap_alphabetic]">
+              <span aria-hidden className={cx('[text-box:trim-both_cap_alphabetic]', compactLine && '@max-md:hidden')}>
                 ·
               </span>
             )}
             {/* Same wording as the verdict on the claim page — "65% agree" — so the share reads
                 the same wherever it is printed. */}
-            <span className="shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]">
+            <span
+              className={cx(
+                'shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]',
+                compactLine && '@max-md:hidden'
+              )}
+            >
               {percent}% {copy.positiveAction.toLowerCase()}
             </span>
           </>
@@ -835,7 +962,7 @@ function TickerClaimHeader({
       {/* 4px apart rather than the Figma card's 12px: those are bare 12px glyphs and these are
           20px buttons, so the same gap between glyph *centres* needs a smaller gap between boxes.
           No error text here — it would make the card grow while the reader is part-way through it. */}
-      <span className="flex shrink-0 items-center gap-1">
+      <span className={cx('flex shrink-0 items-center gap-1', compactLine && '@max-md:order-3')}>
         <ClaimIconButton
           responseKind={responseKind}
           position
@@ -872,8 +999,12 @@ function TickerClaimHeader({
  * Thumbs, on every claim. A factual one used to draw chevrons here, because verifying a fact and
  * agreeing with a position were different acts; claims ask one question now, so there is one
  * glyph.
+ *
+ * `column` is the Open rounds claim list's vote column (GEO-3317): a round 24px target sized to the
+ * player, with a solid glyph that reads at that size, coloured once the reader takes a side.
+ * `header` pairs outlined thumbs above the claim, as the classic + glass design shows.
  */
-function ClaimIconButton({
+export function ClaimIconButton({
   responseKind,
   position,
   label,
@@ -882,6 +1013,7 @@ function ClaimIconButton({
   title,
   onClick,
   tone,
+  layout = 'inline',
 }: {
   responseKind: ResponseKind;
   position: boolean;
@@ -891,8 +1023,10 @@ function ClaimIconButton({
   title: string;
   onClick?: () => void;
   tone: ClaimCardTone;
+  layout?: 'inline' | 'column' | 'header';
 }) {
   const glass = tone === 'glass';
+  const column = layout === 'column';
   return (
     <button
       type="button"
@@ -915,17 +1049,42 @@ function ClaimIconButton({
         // 28px on a touch screen, by the same trick: a 20px target is comfortable under a cursor
         // and small under a thumb. The negative margin absorbs all of the growth, so the row stays
         // 16px and the card stays 97px on both.
-        '-my-0.5 grid size-5 place-items-center rounded-sm transition-colors disabled:cursor-default md:-my-1.5 md:size-7',
+        'grid place-items-center transition-colors disabled:cursor-default',
+        column
+          ? // 6cqw, overlapping the column's gaps, and never under 24px.
+            '-my-[1cqw] size-[6cqw] min-h-6 min-w-6 rounded-full [&>svg]:size-[3.6cqw]'
+          : layout === 'header'
+            ? '-my-[1.5cqw] size-[6cqw] min-h-6 min-w-6 rounded-full [&>svg]:size-[3cqw]'
+            : '-my-0.5 size-5 rounded-sm md:-my-1.5 md:size-7',
         // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
         // reader has actually taken a side.
         selected
-          ? cx(glass ? 'bg-white/15' : 'bg-divider', position ? 'text-green' : 'text-red-01')
+          ? cx(
+              layout === 'header' ? 'hover:bg-white/15' : glass ? 'bg-white/15' : 'bg-divider',
+              position ? 'text-green' : layout === 'header' ? 'text-[#ff4a26]' : 'text-red-01'
+            )
           : glass
-            ? 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
+            ? layout === 'header'
+              ? 'text-white/65 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/65'
+              : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
             : 'text-grey-04 hover:bg-divider hover:text-text disabled:hover:bg-transparent disabled:hover:text-grey-04'
       )}
     >
-      <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
+      {layout === 'header' ? (
+        <svg
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+          aria-hidden
+          style={position ? undefined : { transform: 'scaleY(-1)' }}
+        >
+          <path d="M5 7.5V14H2.5V7.5H5Zm0 0 2.6-5c.9 0 1.6.8 1.4 1.7L8.6 6h4.1c.9 0 1.5.8 1.3 1.6l-1.2 5.2c-.2.7-.8 1.2-1.5 1.2H5" />
+        </svg>
+      ) : (
+        <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected || column} />
+      )}
     </button>
   );
 }

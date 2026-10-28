@@ -2,9 +2,13 @@
  * Global overlay z-index stack (low → high).
  */
 export const Z_LAYERS = {
+  assistantLauncherMobile: 79,
+
   flowBar: 1000,
   onboardingTipBackdrop: 1000,
   onboardingTip: 1001,
+
+  assistantLauncher: 1100,
 
   slideUp: 10000,
   reviewOnboardingTipBackdrop: 10000,
@@ -39,9 +43,24 @@ export const Z_LAYERS = {
   // was written, so the original pair would now sit *below* both -- the opposite of the point.
   scheduleDialogBackdrop: 10006,
   scheduleDialog: 10007,
+
+  // A modal bottom sheet (the lobby's person and claim menus on a phone). Over everything else,
+  // the assistant launcher and the debates panel included, since a modal takes every tap.
+  bottomSheetBackdrop: 10008,
+  bottomSheet: 10009,
+
+  // The save-votes prompt when the navbar's "Save N votes" opens it centred (GEO-3400), backdrop and
+  // card in one layer: the card sits inside its backdrop. Above the status bar, toasts and chat
+  // launcher; level with the schedule dialog, which needs an account, so the two never meet. Below
+  // the bottom sheet, which stays on top of everything.
+  saveVotesDialog: 10007,
 } as const;
 
 export const Z_LAYER_CLASS = {
+  // Match the side panels' mobile layout breakpoint (lg: is max-width: 1023px). Keep the
+  // launcher below their backdrops, including the comments sheet at z-80, so it cannot take
+  // taps through an open panel. Both the initial and loaded launcher use this class.
+  assistantLauncher: 'z-1100 lg:z-[79]',
   flowBar: 'z-1000',
   slideUp: 'z-slide-up',
   commentsPanelOverSlideUp: 'z-[10001]',
@@ -56,4 +75,7 @@ export const Z_LAYER_CLASS = {
   toast: 'z-toast',
   scheduleDialogBackdrop: 'z-[10006]',
   scheduleDialog: 'z-[10007]',
+  bottomSheetBackdrop: 'z-[10008]',
+  bottomSheet: 'z-[10009]',
+  saveVotesDialog: 'z-[10007]',
 } as const;

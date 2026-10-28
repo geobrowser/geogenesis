@@ -20,6 +20,8 @@ const OTHER_SPACE = 'cccccccccccccccccccccccccccccccc';
 const SOURCE_TOPIC = 'dddddddddddddddddddddddddddddddd';
 const SELECTED_TOPIC = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 const FACET_TOPIC = 'ffffffffffffffffffffffffffffffff';
+const DEBATE = '11111111111111111111111111111111';
+const CANDIDATE = '22222222222222222222222222222222';
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -30,6 +32,17 @@ beforeEach(() => {
   mocks.graphql.mockReset();
   mocks.getEntityNames.mockReset();
   mocks.graphql.mockImplementation(({ decoder, variables }) => {
+    if ('topicFilter' in variables) {
+      return Effect.succeed(
+        decoder({
+          topic: { pageInfo: { hasNextPage: false }, nodes: [{ fromEntityId: CANDIDATE }] },
+          extracted: { pageInfo: { hasNextPage: false }, nodes: [] },
+        })
+      );
+    }
+    if (!('groupBy' in variables)) {
+      return Effect.succeed(decoder({ relationsConnection: { nodes: [{ fromEntityId: DEBATE, spaceId: SPACE }] } }));
+    }
     const isTopic = variables.groupBy[0] === 'TO_ENTITY_ID';
     return Effect.succeed(
       decoder({
@@ -69,14 +82,17 @@ describe('useClaimRecordFacets', () => {
     expect(result.current.claimTopics).toEqual([{ id: FACET_TOPIC, count: 3, name: 'A corpus topic' }]);
 
     const calls = mocks.graphql.mock.calls.map(([options]) => options);
-    const spaceCall = calls.find(options => options.variables.groupBy[0] === 'SPACE_ID');
-    const topicCall = calls.find(options => options.variables.groupBy[0] === 'TO_ENTITY_ID');
+    const spaceCall = calls.find(options => options.variables.groupBy?.[0] === 'SPACE_ID');
+    const topicCall = calls.find(options => options.variables.groupBy?.[0] === 'TO_ENTITY_ID');
+    const candidatesCall = calls.find(options => 'topicFilter' in options.variables);
+    expect(candidatesCall.variables.extractedFilter.toEntityId).toEqual({ in: [DEBATE] });
     expect(spaceCall.variables.filter).toEqual(
       claimRecordFilters({
         claimId: CLAIM,
         spaceIds: [SPACE, OTHER_SPACE],
         topicIds: [SOURCE_TOPIC],
         filterTopicIds: [SELECTED_TOPIC],
+        directDebates: { [SPACE]: [DEBATE] },
       }).claimRelations
     );
     expect(topicCall.variables.filter).toEqual(
@@ -85,6 +101,8 @@ describe('useClaimRecordFacets', () => {
         spaceIds: [SPACE],
         topicIds: [SOURCE_TOPIC],
         filterTopicIds: [SELECTED_TOPIC],
+        directDebates: { [SPACE]: [DEBATE] },
+        candidateClaimIds: [CANDIDATE],
       }).claimTopicRelations
     );
   });
@@ -113,6 +131,7 @@ describe('useClaimRecordFacets', () => {
         spaceIds: [SPACE, OTHER_SPACE],
         topicIds: [SOURCE_TOPIC],
         filterTopicIds: [],
+        directDebates: {},
       }).debateRelations,
       groupBy: ['SPACE_ID'],
     });

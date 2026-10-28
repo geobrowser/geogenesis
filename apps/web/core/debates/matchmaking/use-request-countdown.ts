@@ -48,6 +48,25 @@ export function useServerClock(enabled = true) {
   return clock;
 }
 
+/**
+ * The server's `now`, re-read every `tickMs`, falling back to the browser's until the clock syncs:
+ * for comparing against a time geo-chat set, so a skewed laptop does not misreport it. The join
+ * prompt's "Scheduled in 3 mins" and the room's Nudge (GEO-3428) both read it.
+ */
+export function useServerNow(tickMs = MINUTE_TICK_MS) {
+  const clock = useServerClock();
+  const [now, setNow] = React.useState(() => Date.now());
+
+  React.useEffect(() => {
+    const read = () => (clock ? clock.now() : Date.now());
+    setNow(read());
+    const interval = setInterval(() => setNow(read()), tickMs);
+    return () => clearInterval(interval);
+  }, [clock, tickMs]);
+
+  return now;
+}
+
 export type RequestCountdown = {
   label: string;
   remainingMs: number;

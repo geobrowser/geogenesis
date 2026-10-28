@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Debate, DebateMediaTurnSegment } from './api';
+import type { Debate, DebateMediaCondensedBreak, DebateMediaTurnSegment } from './api';
 import { useDebatePlayback } from './use-debate-playback';
 
 const mocks = vi.hoisted(() => ({
@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   /** Which requests went through `refresh` — the uncached re-sign — rather than the cached lookup. */
   recordingUrlRefreshes: [] as unknown[],
   turnSegments: [] as DebateMediaTurnSegment[],
+  condensedBreaks: [] as DebateMediaCondensedBreak[],
   mediaPending: false,
   reportEvent: vi.fn(),
 }));
@@ -30,7 +31,9 @@ vi.mock('./hooks', () => ({
   }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateMedia: () => ({
-    data: mocks.mediaPending ? undefined : { turn_segments: mocks.turnSegments },
+    data: mocks.mediaPending
+      ? undefined
+      : { turn_segments: mocks.turnSegments, condensed_breaks: mocks.condensedBreaks },
     isPending: mocks.mediaPending,
     isLoading: mocks.mediaPending,
     error: null,
@@ -65,6 +68,7 @@ describe('useDebatePlayback — re-signing held URLs after a long release (GEO-3
     signature = 0;
     vi.spyOn(Date, 'now').mockImplementation(() => now);
     mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
     mocks.recordingUrlRefreshes = [];
     mocks.recordingUrl.mockReset();
     mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
@@ -175,6 +179,7 @@ describe('useDebatePlayback — re-signing held URLs after a long release (GEO-3
 describe('useDebatePlayback — playback URLs survive re-activation (GEO-2895)', () => {
   beforeEach(() => {
     mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
     mocks.recordingUrl.mockReset();
     mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
       Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
@@ -953,6 +958,7 @@ describe('useDebatePlayback — an interrupted resume must not report failure (G
 describe('useDebatePlayback — the audible slot follows the render, not the allowance (GEO-2949)', () => {
   beforeEach(() => {
     mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
     mocks.recordingUrl.mockReset();
     mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
       Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
@@ -1002,6 +1008,7 @@ describe('useDebatePlayback — the audible slot follows the render, not the all
 
   it('keeps using the allowance when the media job has produced no segments yet', async () => {
     mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
     const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
 
     await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
@@ -1014,6 +1021,7 @@ describe('useDebatePlayback — the audible slot follows the render, not the all
 describe('useDebatePlayback — no invented turn schedule (GEO-2956)', () => {
   beforeEach(() => {
     mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
     mocks.mediaPending = false;
     mocks.reportEvent.mockReset();
     mocks.recordingUrl.mockReset();
@@ -1056,6 +1064,133 @@ describe('useDebatePlayback — no invented turn schedule (GEO-2956)', () => {
     expect(mocks.reportEvent).not.toHaveBeenCalled();
   });
 
+  // A debater who yields at once leaves a turn with no length. It still ends their round, so the pick
+  // window runs from there; without it the break starts at the reveal and the pick window plays
+  // ungraphed and audible (Copilot, #2843).
+  it('starts a break’s pick window where a round’s zero-length closing turn ended', async () => {
+    mocks.turnSegments = [
+      {
+        turn_index: 0,
+        participant_slot: 1,
+        output_start_ms: 0,
+        output_end_ms: 50_000,
+        duration_ms: 50_000,
+        source_start_ms: 0,
+        source_end_ms: 50_000,
+      },
+      {
+        turn_index: 1,
+        participant_slot: 2,
+        output_start_ms: 50_000,
+        output_end_ms: 50_000,
+        duration_ms: 0,
+        source_start_ms: 50_000,
+        source_end_ms: 50_000,
+      },
+      {
+        turn_index: 2,
+        participant_slot: 1,
+        output_start_ms: 52_400,
+        output_end_ms: 100_000,
+        duration_ms: 47_600,
+        source_start_ms: 62_000,
+        source_end_ms: 109_600,
+      },
+    ];
+    mocks.condensedBreaks = [
+      {
+        kind: 'extend',
+        round_index: 0,
+        next_round_index: 1,
+        output_start_ms: 50_000,
+        output_end_ms: 52_400,
+        duration_ms: 2_400,
+        source_start_ms: 54_000,
+        source_end_ms: 62_000,
+        speed: 3.33,
+      },
+    ];
+    const openRounds = { ...untimedDebate(), open_rounds: { required_rebuttal_rounds: 0 } } as unknown as Debate;
+    const { result } = renderHook(() => useDebatePlayback(openRounds, true));
+
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.playbackBreaks.breaks[0]).toMatchObject({ decidingStartMs: 50_000, startMs: 54_000 });
+  });
+
+  // GEO-3276/3277: a final End's reveal plays after the last turn, so the video runs past it.
+  it('runs the timeline on through a final End’s reveal after the last turn', async () => {
+    mocks.turnSegments = renderedSegments;
+    mocks.condensedBreaks = [
+      {
+        kind: 'final_end',
+        round_index: 0,
+        output_start_ms: 110_000,
+        output_end_ms: 112_000,
+        duration_ms: 2_000,
+        source_start_ms: 115_000,
+        source_end_ms: 118_000,
+        speed: 1.5,
+      },
+    ];
+    // Breaks are Open rounds only.
+    const openRoundsDebate = { ...untimedDebate(), open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
+    const { result } = renderHook(() => useDebatePlayback(openRoundsDebate, true));
+
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    // On the recordings' clock: 5 s of picking after the last turn, then the 3 s reveal.
+    expect(result.current.timelineSeconds).toBe(118);
+    expect(result.current.playbackBreaks.breaks).toMatchObject([
+      { kind: 'final_end', decidingStartMs: 110_000, startMs: 115_000, endMs: 118_000 },
+    ]);
+  });
+
+  // GEO-3293: the API serves each turn on the raw recordings' clock beside the edited video's, and
+  // the player, which plays the recordings, reads that one.
+  it('places the turns after a condensed break where they are in the recordings', async () => {
+    mocks.turnSegments = [
+      {
+        turn_index: 0,
+        participant_slot: 1,
+        output_start_ms: 0,
+        output_end_ms: 50_000,
+        duration_ms: 50_000,
+        source_start_ms: 0,
+        source_end_ms: 50_000,
+      },
+      {
+        turn_index: 1,
+        participant_slot: 2,
+        output_start_ms: 52_000,
+        output_end_ms: 112_000,
+        duration_ms: 60_000,
+        source_start_ms: 58_000,
+        source_end_ms: 118_000,
+      },
+    ];
+    // The 2 s rendered catch-up stands for 8 s of the recordings.
+    mocks.condensedBreaks = [
+      {
+        kind: 'lead_in',
+        round_index: 0,
+        next_round_index: 1,
+        output_start_ms: 50_000,
+        output_end_ms: 52_000,
+        duration_ms: 2_000,
+        source_start_ms: 50_000,
+        source_end_ms: 58_000,
+        speed: 4,
+      },
+    ];
+    const { result } = renderHook(() => useDebatePlayback(untimedDebate(), true));
+
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.turnSegments.map(segment => [segment.output_start_ms, segment.output_end_ms])).toEqual([
+      [0, 50_000],
+      [58_000, 118_000],
+    ]);
+    expect(result.current.timelineSeconds).toBe(118);
+  });
+
   it('refuses to play and reports it when nothing recorded can place a turn', async () => {
     const { result } = renderHook(() => useDebatePlayback(untimedDebate(), true));
 
@@ -1088,6 +1223,7 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
     // No rendered segments, so the turn falls back to the format allowance (GEO-2949) — these
     // tests are about which element is running, not about where the boundaries sit.
     mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
     mocks.recordingUrl.mockReset();
     mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
       Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
@@ -1644,6 +1780,7 @@ describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)'
 describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)', () => {
   beforeEach(() => {
     mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
     mocks.recordingUrl.mockReset();
     mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
       Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
@@ -1923,6 +2060,7 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
 describe('useDebatePlayback — a fresh pair is positioned before it is started (GEO-2965)', () => {
   beforeEach(() => {
     mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
     mocks.recordingUrl.mockReset();
     mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
       Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
@@ -1968,6 +2106,15 @@ describe('useDebatePlayback — a fresh pair is positioned before it is started 
     result.current.slot2VideoRef.current = slot2.video;
     return { result, slot1, slot2 };
   }
+
+  // Copilot, #2843: a break's cut is checked against where the recording really is, on the debate's
+  // clock. Reading the element's own clock instead put a recording that began 4.969 s early 4.969 s
+  // ahead of the debate, so a stall just short of a cut still let it fire over the last words.
+  it('reports where the recordings really are on the debate’s clock, offset and all', async () => {
+    const { result, slot1 } = await mounted();
+    slot1.video.currentTime = 275.169;
+    expect(result.current.livePositionMs()).toBeCloseTo(270_200, 3);
+  });
 
   it('moves both elements to the start of the debate once both know their shape', async () => {
     const { result, slot1, slot2 } = await mounted();
@@ -2067,4 +2214,283 @@ describe('useDebatePlayback — a fresh pair is positioned before it is started 
 
     expect(slot1.seeks).toEqual([expect.closeTo(64.969, 6)]);
   });
+});
+
+/**
+ * Drift correction acts on the muted recording, never on the one being heard.
+ *
+ * A rate nudge time-stretches an element's audio and a sync seek on these cue-less WebM files
+ * re-primes its audio pipeline; on a phone both are heard as crackle. So the audible recording
+ * leads at rate 1 and the other follows it.
+ */
+describe('useDebatePlayback — drift correction leaves the audible recording alone', () => {
+  let now = 1_700_000_000_000;
+
+  beforeEach(() => {
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => 'visible');
+    // Allowance timing: 30s per turn, slot 1 first, so 40s is slot 2's turn.
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function playingAt(seconds: number, { unmuted }: { unmuted: boolean }) {
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    // The mute atom is module-global; set it explicitly every time so no test inherits another's.
+    act(() => result.current.setMutedByUser(!unmuted));
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    result.current.slot1VideoRef.current = slot1;
+    result.current.slot2VideoRef.current = slot2;
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    act(() => result.current.seekBoth(seconds));
+
+    // Past the floor between sync seeks, which the deliberate seek above just reset.
+    now = Date.now() + 10_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    return { result, slot1, slot2 };
+  }
+
+  it('nudges slot 1, not the audible slot 2, during slot 2’s turn', async () => {
+    const { result, slot1, slot2 } = await playingAt(40, { unmuted: true });
+    expect(result.current.turnState?.slot).toBe(2);
+
+    slot2.currentTime = 41;
+    slot1.currentTime = 40.6; // beyond the nudge threshold, inside the seek one
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.playbackRate).toBe(1.03); // behind its leader, so it speeds up
+    expect(slot2.playbackRate).toBe(1);
+    expect(slot2.currentTime).toBe(41);
+  });
+
+  it('seeks slot 1, not the audible slot 2, when the gap is too wide to nudge', async () => {
+    const { result, slot1, slot2 } = await playingAt(40, { unmuted: true });
+
+    slot2.currentTime = 41;
+    slot1.currentTime = 43;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.currentTime).toBe(41);
+    expect(slot1.playbackRate).toBe(1);
+    expect(slot2.currentTime).toBe(41);
+    expect(slot2.playbackRate).toBe(1);
+  });
+
+  it('still corrects slot 2 during slot 1’s turn', async () => {
+    const { result, slot1, slot2 } = await playingAt(10, { unmuted: true });
+    expect(result.current.turnState?.slot).toBe(1);
+
+    slot1.currentTime = 11;
+    slot2.currentTime = 10.6;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.playbackRate).toBe(1.03);
+    expect(slot1.playbackRate).toBe(1);
+  });
+
+  it('puts the new speaker back to rate 1 when the turn hands over mid-nudge', async () => {
+    const { result, slot1, slot2 } = await playingAt(29, { unmuted: true });
+
+    // Slot 1 speaking; slot 2 is behind and gets nudged.
+    slot1.currentTime = 29.5;
+    slot2.currentTime = 29.1;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.playbackRate).toBe(1.03);
+
+    // Across the boundary, still out of step: slot 2 is now heard and leads at rate 1, and the
+    // drift is taken up by slot 1 instead.
+    slot1.currentTime = 31;
+    slot2.currentTime = 30.6;
+    act(() => result.current.onPlaybackTick());
+    expect(result.current.turnState?.slot).toBe(2);
+    expect(slot2.playbackRate).toBe(1);
+    expect(slot1.playbackRate).toBe(0.97);
+  });
+
+  it('keeps correcting slot 2 when nothing is audible (the feed’s muted default)', async () => {
+    const { result, slot1, slot2 } = await playingAt(40, { unmuted: false });
+    expect(result.current.turnState?.slot).toBe(2);
+
+    slot1.currentTime = 41;
+    slot2.currentTime = 40.6;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.playbackRate).toBe(1.03);
+    expect(slot1.playbackRate).toBe(1);
+
+    slot2.currentTime = 43;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.currentTime).toBe(41);
+    expect(slot1.currentTime).toBe(41);
+  });
+});
+
+describe('automatic cut playback hold', () => {
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.condensedBreaks = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}` })
+    );
+  });
+
+  async function mounted() {
+    const debate = debateFixture();
+    const hook = renderHook(({ debate }) => useDebatePlayback(debate, true), { initialProps: { debate } });
+    await waitFor(() => expect(hook.result.current.urls.slot1).not.toBeNull());
+    const pair = [fakeVideo(), fakeVideo()];
+    hook.result.current.slot1VideoRef.current = pair[0];
+    hook.result.current.slot2VideoRef.current = pair[1];
+    await act(async () => {
+      const start = hook.result.current.resumeBoth();
+      pair.forEach(video => video.settlePlay());
+      await start;
+    });
+    return { ...hook, pair };
+  }
+
+  it('freezes both recordings and the announcement clock during a slow cut, then resumes both at its target', async () => {
+    const { result, pair } = await mounted();
+    let hold!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      hold = result.current.holdForTransition();
+      result.current.seekBoth(41.2, { preserveTransitionHold: true });
+    });
+    // No resume may even start before decoder readiness releases this automatic hold.
+    expect(pair.map(video => video.plays)).toEqual([1, 1]);
+    // Simulate two seconds of media time: the faster decoder must not speak behind an opaque canvas.
+    for (const video of pair) if (!video.paused) video.currentTime += 2;
+    act(() => result.current.onPlaybackTick());
+    expect(pair.map(video => video.paused)).toEqual([true, true]);
+    expect(result.current.livePositionMs()).toBe(41_200);
+    expect(result.current.playheadSeconds).toBe(41.2);
+    expect(result.current.playing).toBe(true);
+    expect(result.current.userPaused).toBe(false);
+    expect(result.current.turnState?.slot).toBe(2);
+    await act(async () => {
+      hold.release();
+      pair.forEach(video => video.settlePlay());
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(pair.map(video => video.paused)).toEqual([false, false]));
+    expect(pair.map(video => video.currentTime)).toEqual([41.2, 41.2]);
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+    act(() => hold.release());
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+  });
+
+  it('keeps playing after a manual seek interrupts a cut hold', async () => {
+    const { result, pair } = await mounted();
+    let hold!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      hold = result.current.holdForTransition();
+    });
+    await act(async () => {
+      result.current.seekBoth(25);
+      // The player's seek generation changes and disposes the outgoing cut after this seek.
+      hold.cancel();
+      pair.forEach(video => video.settlePlay());
+    });
+    await waitFor(() => expect(pair.map(video => video.paused)).toEqual([false, false]));
+    expect(result.current.playing).toBe(true);
+    expect(result.current.userPaused).toBe(false);
+    expect(pair.map(video => video.currentTime)).toEqual([25, 25]);
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+    act(() => {
+      hold.release();
+      hold.cancel();
+    });
+    expect(result.current.playing).toBe(true);
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+  });
+
+  it('keeps a user-paused manual seek paused and retires its old hold', async () => {
+    const { result, pair } = await mounted();
+    let hold!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      hold = result.current.holdForTransition();
+      result.current.togglePlayback();
+    });
+    act(() => {
+      result.current.seekBoth(25);
+      hold.cancel();
+      hold.release();
+    });
+    expect(pair.map(video => video.paused)).toEqual([true, true]);
+    expect(result.current.userPaused).toBe(true);
+    expect(pair.map(video => video.currentTime)).toEqual([25, 25]);
+    await act(async () => {
+      const resume = result.current.resumeBoth();
+      pair.forEach(video => video.settlePlay());
+      await resume;
+    });
+    expect(pair.map(video => video.paused)).toEqual([false, false]);
+  });
+
+  it('keeps a viewer pause and defers a viewer resume until the pair is ready', async () => {
+    const { result, pair } = await mounted();
+    let hold!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      hold = result.current.holdForTransition();
+    });
+    act(() => result.current.togglePlayback());
+    expect(result.current.userPaused).toBe(true);
+    act(() => hold.release());
+    expect(pair.map(video => video.plays)).toEqual([1, 1]);
+    let next!: ReturnType<typeof result.current.holdForTransition>;
+    act(() => {
+      next = result.current.holdForTransition();
+    });
+    await act(() => result.current.resumeBoth());
+    expect(pair.map(video => video.plays)).toEqual([1, 1]);
+    expect(result.current.playing).toBe(true);
+    expect(result.current.userPaused).toBe(false);
+    await act(async () => {
+      next.release();
+      pair.forEach(video => video.settlePlay());
+    });
+    expect(pair.map(video => video.plays)).toEqual([2, 2]);
+  });
+
+  it.each(['suspend', 'beginScrub', 'cancel', 'replacement', 'replay', 'end', 'unmount'] as const)(
+    'does not let an old cut restart playback after %s',
+    async action => {
+      const { result, pair, rerender, unmount } = await mounted();
+      let hold!: ReturnType<typeof result.current.holdForTransition>;
+      act(() => {
+        hold = result.current.holdForTransition();
+      });
+      await act(async () => {
+        if (action === 'cancel') hold.cancel();
+        else if (action === 'unmount') unmount();
+        else if (action === 'replacement') rerender({ debate: debateFixture('replacement') });
+        else if (action === 'replay') {
+          void result.current.playFromStart();
+          pair.forEach(video => video.settlePlay());
+        } else if (action === 'end') result.current.seekBoth(60);
+        else result.current[action]();
+      });
+      const starts = pair.map(video => video.plays);
+      act(() => hold.release());
+      expect(pair.map(video => video.plays)).toEqual(starts);
+      if (action !== 'replay') expect(pair.map(video => video.paused)).toEqual([true, true]);
+    }
+  );
 });

@@ -36,14 +36,22 @@ let latestProfileOpenRequest: symbol | null = null;
  *
  * Takes a personal-space id, or the participant record that carries one. Never the person's entity
  * id: the resolution below is exactly what turns the space into the profile.
+ *
+ * `lazy` reads the space on the first click instead of on mount, for long lists of people.
+ * `onOpened` runs once the profile is in the side panel, which can be after the click resolves.
  */
 export function useOpenDebaterProfile(
   participant: Pick<DebateParticipant, 'profile_space_id'> | string | null | undefined,
-  { interactionSurface = 'debate_media' }: { interactionSurface?: string } = {}
+  {
+    interactionSurface = 'debate_media',
+    lazy = false,
+    onOpened,
+  }: { interactionSurface?: string; lazy?: boolean; onOpened?: () => void } = {}
 ) {
   const { openSidePanel, sidePanelTarget } = useEntitySidePanel();
   const profileSpaceId = typeof participant === 'string' ? participant : participant?.profile_space_id;
-  const { space } = useSpace(profileSpaceId);
+  const [requested, setRequested] = React.useState(!lazy);
+  const { space } = useSpace(requested ? profileSpaceId : undefined);
   // Prefer the declared topic even when its nested entity failed to decode and `space.entity` fell
   // back to the page. Never fall back to the space id: that id is the system entity, not the person.
   const profileEntityId = space ? getSpaceSubtopicRootEntityId(space) : null;
@@ -56,7 +64,8 @@ export function useOpenDebaterProfile(
       navigation_mode: 'entity_side_panel',
     });
     openSidePanel(profileEntityId, profileSpaceId, false, { forceRequestedSpace: true });
-  }, [interactionSurface, openSidePanel, profileEntityId, profileSpaceId]);
+    onOpened?.();
+  }, [interactionSurface, onOpened, openSidePanel, profileEntityId, profileSpaceId]);
 
   React.useEffect(() => {
     const pendingProfileOpen = pendingProfileOpenRef.current;
@@ -103,6 +112,7 @@ export function useOpenDebaterProfile(
         // Remember an early click and finish it after the space query resolves. Opening the space
         // id immediately would be quicker, but it is the system entity rather than the profile.
         pendingProfileOpenRef.current = { profileSpaceId, requestToken, sidePanelTarget };
+        setRequested(true);
         return;
       }
       openResolvedProfile();

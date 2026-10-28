@@ -39,7 +39,30 @@ export type ScheduleEntry =
   /** A scheduling email's "Choose different time", which moves a request rather than making one. */
   | 'reschedule_link'
   /** "Reschedule" on an accepted debate in the Requests tab, which moves it the same way. */
-  | 'requests_reschedule';
+  | 'requests_reschedule'
+  /** "Choose different time" on an invite the viewer has yet to answer, which moves it the same way. */
+  | 'requests_new_time'
+  /** A row in one hour's list of everyone free then, on the calendar's week grid (GEO-3152). */
+  | 'calendar_hour'
+  /** The card a face on the calendar opens on hover, and the phone list's rows. */
+  | 'calendar_card'
+  /** A time beside someone who disagrees with the viewer, in the calendar's Claims panel (GEO-3220). */
+  | 'calendar_claim_match'
+  /** A row's chips or Schedule in the calendar's People panel (GEO-3220). */
+  | 'calendar_people_panel'
+  /** A time chip, More times, or type-a-time from a lobby person menu. */
+  | 'lobby_time'
+  | 'lobby_more_times'
+  | 'lobby_schedule'
+  /** Choose different time on an incoming scheduled request in the lobby. */
+  | 'lobby_new_time'
+  /** Can't make it's "Suggest another time instead" (GEO-3427). */
+  | 'cant_make_it'
+  /** Reschedule on the waiting room's running-late notice (GEO-3427, board 6b). */
+  | 'room_late_notice'
+  /** A time button in the "none of these work" email, which opens the mover's week with it picked (GEO-3429). */
+  | 'no_time_works_link'
+  | 'room_waiting_status';
 
 /** Which control opened the viewer's own schedule editor. */
 export type ScheduleEditorSurface =
@@ -49,7 +72,15 @@ export type ScheduleEditorSurface =
   /** The set-schedule banner under that header, which only introduces it. */
   | 'hub_banner'
   | 'people_tab'
-  | 'availability_link';
+  /** An admin's request for more times, shown on the Requests tab (GEO-3228). */
+  | 'requests_tab'
+  | 'availability_link'
+  /** The calendar's own prompt and its Edit my times (GEO-3152). */
+  | 'calendar'
+  /** Reopened on the way back from connecting Google Calendar. */
+  | 'google_calendar'
+  /** Reopened on the way back from connecting Outlook Calendar. */
+  | 'microsoft_calendar';
 
 /** Every event that knows how the week was opened says so the same way, `unknown` included. */
 function entryProperty(entry: ScheduleEntry | null | undefined) {
@@ -83,10 +114,14 @@ export function debateScheduleSaved(
 /**
  * Someone's week, loaded and on screen. The step between "opened" and "requested": whether there
  * was anything to pick, and whether any of it suited both of them.
+ *
+ * `requestId` is the scheduled debate being moved, when this week is a reschedule. It joins the
+ * opening to geo-chat's record of that debate, so a reschedule started and then abandoned shows up
+ * (GEO-3432). A link's id is already checked by `rescheduleRequestIdFromTarget`.
  */
 export function debateAvailabilityViewed(
   schedule: PeerSchedule,
-  { entry, bookable }: { entry: ScheduleEntry | null; bookable: boolean }
+  { entry, bookable, requestId }: { entry: ScheduleEntry | null; bookable: boolean; requestId?: string | null }
 ) {
   // Minutes rather than slot counts: a wire slot is a range of any length, so counting them would
   // rank one free afternoon below two free half-hours.
@@ -101,6 +136,7 @@ export function debateAvailabilityViewed(
     viewer_has_schedule: schedule.viewerHasSchedule,
     free_minutes: minutes(schedule.slots) || 0,
     mutual_free_minutes: minutes(schedule.slots.filter(slot => slot.viewerIsFree)) || 0,
+    request_id: requestId ?? null,
   });
 }
 
@@ -161,15 +197,18 @@ export function debateScheduledRequestAnswered({
   requestId,
   accepted,
   outcome,
+  surface,
 }: {
   requestId: string;
   accepted: boolean;
+  surface?: 'lobby';
   outcome: 'recorded' | 'conflict';
 }) {
   capture('debate_scheduled_request_answered', {
     request_id: requestId,
     accepted,
     outcome,
+    ...(surface ? { surface } : {}),
   });
 }
 
@@ -181,19 +220,25 @@ export function debateScheduledRequestAnswered({
 export function debateAvailabilityLinkOpened({
   viewer,
   peer,
-  rescheduling,
+  rescheduleRequestId,
   via,
 }: {
   viewer: 'signed_out' | 'self' | 'other';
   /** `bookable` when the week can be shown; otherwise why not. */
   peer: 'bookable' | 'no_debate_profile' | 'error' | null;
-  rescheduling: boolean;
+  /**
+   * The request a scheduling email's link moves, or null for a booking link. Sent here as well as
+   * on `debate_availability_viewed`, because this fires even when the week never loads (signed out,
+   * an error), so a reschedule abandoned there is still seen (GEO-3432).
+   */
+  rescheduleRequestId: string | null;
   via: string | null;
 }) {
   capture('debate_availability_link_opened', {
     viewer,
     peer: peer ?? 'unknown',
-    rescheduling,
+    rescheduling: rescheduleRequestId !== null,
+    request_id: rescheduleRequestId,
     link_source: availabilityLinkSource(via),
   });
 }

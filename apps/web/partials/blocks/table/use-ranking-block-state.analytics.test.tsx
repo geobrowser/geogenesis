@@ -25,9 +25,10 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/explore',
   useSearchParams: () => null,
 }));
-vi.mock('~/partials/onboarding/dialog', () => ({ stepAtom: {} }));
+vi.mock('~/partials/onboarding/onboarding-atoms', () => ({ stepAtom: {} }));
 vi.mock('~/atoms/post-onboarding-redirect', () => ({ postOnboardingRedirectAtom: {} }));
 vi.mock('~/atoms/ranking-compose-return', () => ({ rankingComposeReturnHrefAtom: {} }));
+vi.mock('~/core/state/pending-personal-space', () => ({ usePendingPersonalSpace: () => ({ isPending: false }) }));
 vi.mock('jotai', () => ({ useSetAtom: () => vi.fn() }));
 vi.mock('~/core/blocks/data/use-data-block', () => ({
   useDataBlock: () => ({
@@ -39,7 +40,7 @@ vi.mock('~/core/blocks/data/use-data-block', () => ({
   }),
 }));
 vi.mock('~/core/state/editor/editor-provider', () => ({ useEditorInstance: () => ({ id: 'parent' }) }));
-vi.mock('~/core/state/editor/use-editor', () => ({ useEditorStoreLite: () => ({ blockRelations: empty }) }));
+vi.mock('~/core/state/editor/use-editor-blocks', () => ({ useEditorStoreLite: () => ({ blockRelations: empty }) }));
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useCanUserEdit: () => false }));
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => false }));
 vi.mock('~/core/hooks/use-onboarding', () => ({ useOnboarding: () => ({}) }));

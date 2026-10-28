@@ -1164,9 +1164,13 @@ describe('useEntityResponse publishes on submission', () => {
     expect(result.current.response.isSubmittingResponse).toBe(false);
 
     // Index never catches up within the first pass: `delayed`, then a re-check back to reconciling.
-    for (let i = 0; i < 40 && result.current.snapshot.status !== 'delayed'; i++) {
+    // Step in increments below the shortest first re-check delay (1s less its 20% jitter = 800ms):
+    // a larger step can swallow the whole `delayed` window, so the re-check fires inside one
+    // advance and the test only sees the next `delayed`, whose backoff (2s plus jitter) outlasts
+    // the advance below.
+    for (let i = 0; i < 400 && result.current.snapshot.status !== 'delayed'; i++) {
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(5_000);
+        await vi.advanceTimersByTimeAsync(500);
       });
     }
     expect(result.current.snapshot.status).toBe('delayed');

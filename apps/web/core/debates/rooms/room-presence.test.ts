@@ -115,3 +115,62 @@ describe('debateRoomPresence', () => {
     expect(together?.opponentUserId).toBe(OPPONENT);
   });
 });
+
+describe('debateRoomPresence: running late (GEO-3427)', () => {
+  const late = (overrides: Partial<NonNullable<DebateRoomView['notices']>[number]> = {}) => ({
+    user_id: OPPONENT.replace(/-/g, ''),
+    kind: 'running_late' as const,
+    at: '2026-09-21T09:03:00.000Z',
+    expected_at: '2026-09-21T09:13:00.000Z',
+    note: 'Train is delayed, so sorry!',
+    ...overrides,
+  });
+  const lateOf = (overrides: Partial<DebateRoomView>) =>
+    debateRoomPresence({ room: room(overrides), currentUserId: VIEWER_AS_TOKEN_SPELLS_IT, sawOpponent: false })
+      ?.opponentLate ?? null;
+
+  it('reads the minutes they picked back off the times, counted from after the start', () => {
+    expect(lateOf({ notices: [late()] })).toEqual({
+      minutes: 10,
+      expectedAt: '2026-09-21T09:13:00.000Z',
+      note: 'Train is delayed, so sorry!',
+    });
+  });
+
+  it('counts from the start for someone who said it before the start', () => {
+    expect(
+      lateOf({ notices: [late({ at: '2026-09-21T08:55:00.000Z', expected_at: '2026-09-21T09:05:00.000Z' })] })
+    ).toMatchObject({ minutes: 5 });
+  });
+
+  it('is gone once they arrive', () => {
+    expect(lateOf({ notices: [late()], occupants: [VIEWER, OPPONENT] })).toBeNull();
+  });
+
+  it('ignores the viewer’s own notice and a Can’t make it', () => {
+    expect(
+      lateOf({
+        notices: [late({ user_id: VIEWER }), late({ kind: 'cant_make_it', expected_at: null })],
+      })
+    ).toBeNull();
+  });
+
+  // Past their estimate and its grace the room calls it a no-show, and its own note says more.
+  it('steps aside once the room calls it a no-show', () => {
+    expect(lateOf({ notices: [late()], waiting: { reason: 'no_show' } })).toBeNull();
+  });
+
+  it('steps aside once they came and went', () => {
+    const presence = debateRoomPresence({
+      room: room({ notices: [late()] }),
+      currentUserId: VIEWER_AS_TOKEN_SPELLS_IT,
+      sawOpponent: true,
+    });
+    expect(presence?.state).toBe('left');
+    expect(presence?.opponentLate).toBeNull();
+  });
+
+  it('is absent on a geo-chat that sends no notices', () => {
+    expect(lateOf({})).toBeNull();
+  });
+});

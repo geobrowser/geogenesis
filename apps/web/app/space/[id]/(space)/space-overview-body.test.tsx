@@ -5,7 +5,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./space-sidebar', () => ({ resolveSpaceSidebar: mocks.resolveSpaceSidebar }));
-vi.mock('~/core/constants', () => ({ ROOT_SPACE: 'root000000000000000000000000000' }));
+vi.mock('~/core/constants', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/constants')>()),
+  ROOT_SPACE: 'root000000000000000000000000000',
+}));
 vi.mock('../cached-fetch-space', () => ({ cachedFetchSpace: vi.fn() }));
 vi.mock('../../(entity)/[id]/[entityId]/cached-fetch-entity', () => ({ cachedFetchEntityPage: vi.fn() }));
 vi.mock('~/core/telemetry/tracked-error-boundary', () => ({ TrackedErrorBoundary: () => null }));

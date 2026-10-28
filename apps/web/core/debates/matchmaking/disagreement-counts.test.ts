@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ParticipantPosition } from '../participant-positions';
 import { groupParticipantPositions } from '../participant-positions';
-import { analyzeMatchingClaims } from './disagreement-counts';
+import { analyzeMatchingClaims, matchesInSpaces } from './disagreement-counts';
 
 const VIEWER = '019fedae-72b6-7ab2-927a-df044d57c500';
 const OTHER = '019fedae-72b6-7ab2-927a-df044d57c501';
@@ -123,5 +123,47 @@ describe('analyzeMatchingClaims', () => {
         ],
       ])
     );
+  });
+});
+
+describe('matchesInSpaces', () => {
+  const FIRST_SPACE = '019fedae-72b6-7ab2-927a-df044d57c600';
+  const positions = groupParticipantPositions([
+    // claim-1 is opposed in both spaces, claim-2 only in the second.
+    position(VIEWER, 'claim-1', true, FIRST_SPACE),
+    position(OTHER, 'claim-1', false, FIRST_SPACE),
+    position(VIEWER, 'claim-1', true, SECOND_SPACE),
+    position(OTHER, 'claim-1', false, SECOND_SPACE),
+    position(VIEWER, 'claim-2', true, SECOND_SPACE),
+    position(OTHER, 'claim-2', false, SECOND_SPACE),
+  ]);
+  const analysis = analyzeMatchingClaims(positions, VIEWER);
+  const claims = (spaceIds: string[]) =>
+    matchesInSpaces(analysis, OTHER, new Set(spaceIds)).map(item => [item.claimId, item.spaceId]);
+
+  it('is every match when no space is selected', () => {
+    expect(claims([])).toEqual([
+      ['claim-1', FIRST_SPACE],
+      ['claim-2', SECOND_SPACE],
+    ]);
+  });
+
+  it('keeps only claims opposed in a selected space, shown in that space', () => {
+    expect(claims([FIRST_SPACE])).toEqual([['claim-1', FIRST_SPACE]]);
+    expect(claims([SECOND_SPACE])).toEqual([
+      ['claim-1', SECOND_SPACE],
+      ['claim-2', SECOND_SPACE],
+    ]);
+  });
+
+  it('counts a claim once across several selected spaces, and accepts dashless ids', () => {
+    expect(claims([FIRST_SPACE.replaceAll('-', ''), SECOND_SPACE])).toEqual([
+      ['claim-1', FIRST_SPACE],
+      ['claim-2', SECOND_SPACE],
+    ]);
+  });
+
+  it('is empty for someone with no matches in the selected spaces', () => {
+    expect(matchesInSpaces(analysis, THIRD, new Set([FIRST_SPACE]))).toEqual([]);
   });
 });

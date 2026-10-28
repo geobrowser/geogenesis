@@ -9,6 +9,19 @@ vi.mock('~/core/analytics', () => ({ capture }));
 
 afterEach(() => capture.mockClear());
 
+const schedule: PeerSchedule = {
+  userId: 'them',
+  viewerTimezone: 'UTC',
+  peerTimezone: 'Europe/Vilnius',
+  viewerHasSchedule: true,
+  peerHasSchedule: true,
+  theirWeekKnown: true,
+  slots: [
+    { start: '2026-10-01T09:00:00Z', end: '2026-10-01T12:00:00Z', viewerIsFree: true },
+    { start: '2026-10-02T09:00:00Z', end: '2026-10-02T09:30:00Z', viewerIsFree: false },
+  ],
+};
+
 describe('schedule analytics', () => {
   it('describes a saved week by its shape, with no times in it', () => {
     const blocks: AvailabilityBlock[] = [
@@ -43,19 +56,6 @@ describe('schedule analytics', () => {
   });
 
   it('measures a week in minutes, so one long range is not outweighed by two short ones', () => {
-    const schedule: PeerSchedule = {
-      userId: 'them',
-      viewerTimezone: 'UTC',
-      peerTimezone: 'Europe/Vilnius',
-      viewerHasSchedule: true,
-      peerHasSchedule: true,
-      theirWeekKnown: true,
-      slots: [
-        { start: '2026-10-01T09:00:00Z', end: '2026-10-01T12:00:00Z', viewerIsFree: true },
-        { start: '2026-10-02T09:00:00Z', end: '2026-10-02T09:30:00Z', viewerIsFree: false },
-      ],
-    };
-
     debateAvailabilityViewed(schedule, { entry: 'availability_link', bookable: true });
 
     expect(capture).toHaveBeenCalledWith('debate_availability_viewed', {
@@ -66,7 +66,25 @@ describe('schedule analytics', () => {
       viewer_has_schedule: true,
       free_minutes: 210,
       mutual_free_minutes: 180,
+      request_id: null,
     });
+  });
+
+  // GEO-3432: a reschedule names the debate it moves, so one started and abandoned can be found.
+  it('names the debate a reschedule moves, and none for a booking', () => {
+    const requestId = '6676b145-0970-4c1c-bfbc-7497d9721b39';
+
+    debateAvailabilityViewed(schedule, { entry: 'reschedule_link', bookable: true, requestId });
+    expect(capture).toHaveBeenLastCalledWith(
+      'debate_availability_viewed',
+      expect.objectContaining({ request_id: requestId })
+    );
+
+    debateAvailabilityViewed(schedule, { entry: 'people_schedule', bookable: true });
+    expect(capture).toHaveBeenLastCalledWith(
+      'debate_availability_viewed',
+      expect.objectContaining({ request_id: null })
+    );
   });
 
   // `via` is URL text anyone can edit, so analytics gets a fixed vocabulary rather than the text.
@@ -75,7 +93,7 @@ describe('schedule analytics', () => {
     [null, 'none'],
     ['someone@example.com', 'other'],
   ] as const)('records a link that came via %s as %s', (via, linkSource) => {
-    debateAvailabilityLinkOpened({ viewer: 'signed_out', peer: 'bookable', rescheduling: false, via });
+    debateAvailabilityLinkOpened({ viewer: 'signed_out', peer: 'bookable', rescheduleRequestId: null, via });
 
     expect(capture).toHaveBeenCalledWith(
       'debate_availability_link_opened',

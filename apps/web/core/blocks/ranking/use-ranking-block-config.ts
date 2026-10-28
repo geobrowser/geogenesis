@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { SUBMISSION_FREQUENCY_PROPERTY_ID } from '~/core/ranking-block-ids';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
 import type { Relation, Value } from '~/core/types';
 

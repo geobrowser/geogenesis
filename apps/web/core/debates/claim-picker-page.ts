@@ -185,7 +185,31 @@ export const claimPickerEntitiesQueryKey = (ids: string[]) => ['claim-picker', '
  * for in id-sorted batches so a claim joining the list re-fetches its batch and nothing else, and
  * the claim entity itself rarely changes, so a batch stays fresh for a while.
  */
-export function useClaimEntitiesByIds(ids: string[]) {
+/**
+ * A batch's `refetchInterval`: every `pollMs` while the graph's answer is missing any of the batch's
+ * ids (or there is no answer yet), and never once all are there. Off without `pollMs`.
+ */
+export function pollWhileMissing(
+  batchSize: number,
+  pollMs: number | undefined
+): false | ((query: { state: { data?: unknown[] } }) => number | false) {
+  if (!pollMs) return false;
+  return query => ((query.state.data?.length ?? 0) < batchSize ? pollMs : false);
+}
+
+export function useClaimEntitiesByIds(
+  ids: string[],
+  {
+    pollMissingMs,
+  }: {
+    /**
+     * Re-ask a batch on this interval for as long as the graph is missing any of its ids. For ids
+     * expected to appear shortly — a debate's claims, published minutes after extraction
+     * (GEO-2870) — so a card gains its controls without the page being reloaded. Off by default.
+     */
+    pollMissingMs?: number;
+  } = {}
+) {
   const batches = React.useMemo(() => {
     const sorted = [...new Set(ids)].sort();
     const chunks: string[][] = [];
@@ -209,6 +233,7 @@ export function useClaimEntitiesByIds(ids: string[]) {
       queryKey: claimPickerEntitiesQueryKey(batch),
       queryFn: ({ signal }: { signal?: AbortSignal }) => fetchClaimPickerEntities(batch, signal),
       staleTime: 5 * 60_000,
+      refetchInterval: pollWhileMissing(batch.length, pollMissingMs),
     })),
     combine,
   });

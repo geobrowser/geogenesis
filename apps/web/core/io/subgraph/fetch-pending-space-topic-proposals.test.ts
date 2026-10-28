@@ -70,7 +70,7 @@ describe('fetchPendingSpaceTopicProposals', () => {
     });
 
     graphqlMock.mockImplementation(({ query }: { query: string }) => {
-      expect(query).toContain('entities(filter: { id: { in: ["000000000000000000000000000000aa"] } })');
+      expect(query).toContain('entities(filter: { id: { in: ["000000000000000000000000000000aa"] } }, first: 1)');
 
       return Effect.succeed({
         entities: [

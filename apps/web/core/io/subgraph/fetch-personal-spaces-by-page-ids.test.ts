@@ -46,6 +46,82 @@ describe('fetchPersonalSpacesByPageIds', () => {
     expect([...result]).toEqual([[PAGE_DASHLESS, PERSONAL]]);
   });
 
+  // GEO-3395: Susan Winter's entity is the page of two personal spaces. The order the API lists
+  // them in must not decide which one she is shown as.
+  it('picks the most active personal space when a person fronts more than one', async () => {
+    const MAIN = 'd0000000000000000000000000000001';
+    const DUPLICATE = '10000000000000000000000000000002';
+    for (const order of [
+      [MAIN, DUPLICATE],
+      [DUPLICATE, MAIN],
+    ]) {
+      mocks.queries = [];
+      mocks.responses = [
+        { entities: [{ id: PAGE_DASHLESS, spaceIds: order }] },
+        { spaces: order.map(id => ({ id, type: 'PERSONAL', page: { id: PAGE_DASHLESS } })) },
+        Object.fromEntries(
+          order.flatMap((id, index) => [
+            [`v${index}`, { totalCount: id === MAIN ? 321 : 7 }],
+            [`s${index}`, { valuesConnection: { totalCount: 10 }, relationsConnection: { totalCount: 15 } }],
+          ])
+        ),
+      ];
+
+      const result = await fetchPersonalSpacesByPageIds([PAGE]);
+
+      expect(result.get(PAGE_DASHLESS)).toBe(MAIN);
+      expect(mocks.queries).toHaveLength(3);
+    }
+  });
+
+  it('breaks a tie in votes on content, and a full tie on the id', async () => {
+    const A = 'a0000000000000000000000000000001';
+    const B = 'b0000000000000000000000000000002';
+    const counts = (contentA: number, contentB: number) => ({
+      v0: { totalCount: 0 },
+      s0: { valuesConnection: { totalCount: contentB }, relationsConnection: { totalCount: 0 } },
+      v1: { totalCount: 0 },
+      s1: { valuesConnection: { totalCount: contentA }, relationsConnection: { totalCount: 0 } },
+    });
+    const respond = (contentA: number, contentB: number) => [
+      { entities: [{ id: PAGE_DASHLESS, spaceIds: [B, A] }] },
+      { spaces: [B, A].map(id => ({ id, type: 'PERSONAL', page: { id: PAGE_DASHLESS } })) },
+      counts(contentA, contentB),
+    ];
+
+    mocks.responses = respond(1, 5);
+    expect((await fetchPersonalSpacesByPageIds([PAGE])).get(PAGE_DASHLESS)).toBe(B);
+
+    mocks.responses = respond(3, 3);
+    expect((await fetchPersonalSpacesByPageIds([PAGE])).get(PAGE_DASHLESS)).toBe(A);
+  });
+
+  it('still resolves a contested person when the activity read fails', async () => {
+    const A = 'a0000000000000000000000000000001';
+    const B = 'b0000000000000000000000000000002';
+    mocks.respond = (query: string) => {
+      if (query.includes('entities')) return { entities: [{ id: PAGE_DASHLESS, spaceIds: [B, A] }] };
+      if (query.includes('spaces('))
+        return { spaces: [B, A].map(id => ({ id, type: 'PERSONAL', page: { id: PAGE_DASHLESS } })) };
+      throw new Error('activity read failed');
+    };
+
+    const result = await fetchPersonalSpacesByPageIds([PAGE]);
+
+    expect(result.get(PAGE_DASHLESS)).toBe(A);
+  });
+
+  it('reads no activity for someone with a single personal space', async () => {
+    mocks.responses = [
+      { entities: [{ id: PAGE_DASHLESS, spaceIds: [PERSONAL] }] },
+      { spaces: [{ id: PERSONAL, type: 'PERSONAL', page: { id: PAGE_DASHLESS } }] },
+    ];
+
+    await fetchPersonalSpacesByPageIds([PAGE]);
+
+    expect(mocks.queries).toHaveLength(2);
+  });
+
   it('queries nothing for ids that are not uuids', async () => {
     const result = await fetchPersonalSpacesByPageIds(['user-them', '"}) { id } #']);
 
