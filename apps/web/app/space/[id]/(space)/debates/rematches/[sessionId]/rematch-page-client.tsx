@@ -285,6 +285,17 @@ const CLAIMS_SOURCE_LABELS: Record<ExploreSource, string> = {
  * Both the opponent's tab and Explore's "My positions" are this question asked about one of the two
  * debaters, and `positions` already covers both, so neither costs a lookup of its own.
  */
+function claimIdsAnsweredBy(byClaim: ParticipantPositionsByClaim, profileSpaceId: string | null): string[] {
+  if (!profileSpaceId) return [];
+
+  const ids: string[] = [];
+  for (const [claimId, rows] of byClaim) {
+    if (rows.some(row => idEquals(row.profileSpaceId, profileSpaceId))) ids.push(claimId);
+  }
+
+  return ids;
+}
+
 /** Each claim and space a person answered in: where their list's rows are drawn, and counted. */
 function claimsAnsweredBy(
   byClaim: ParticipantPositionsByClaim,
@@ -308,17 +319,6 @@ function rowDebatability(
   counts: ReadonlyMap<string, ClaimResponseCounts>
 ) {
   return claimDebatability(counts.get(claimCountsKey(row.claim.claim_entity_id, row.claim.space_id)), holderPosition);
-}
-
-function claimIdsAnsweredBy(byClaim: ParticipantPositionsByClaim, profileSpaceId: string | null): string[] {
-  if (!profileSpaceId) return [];
-
-  const ids: string[] = [];
-  for (const [claimId, rows] of byClaim) {
-    if (rows.some(row => idEquals(row.profileSpaceId, profileSpaceId))) ids.push(claimId);
-  }
-
-  return ids;
 }
 
 /** Each rejoin already retries its request; these space out whole attempts when all of those fail. */
