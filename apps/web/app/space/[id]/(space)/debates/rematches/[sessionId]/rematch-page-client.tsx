@@ -2743,7 +2743,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         headerMeta={saidBy}
         session={session}
         currentUserId={currentUserId}
-        opponentPositionKnown={!positions.isLoading && !positions.error && !viewerIdentityUnresolved}
+        opponent={remoteParticipant}
+        opponentPositionKnown={!positions.isLoading && !positions.isPlaceholderData && !positions.error}
         chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
         readiness={readinessByClaimId.get(normId(claim.claim.claim_entity_id)) ?? null}
         onRequest={() =>
@@ -3403,6 +3404,7 @@ function RematchClaimCard({
   claim,
   session,
   currentUserId,
+  opponent,
   opponentPositionKnown,
   chatPosition,
   readiness: claimReadiness,
@@ -3416,6 +3418,7 @@ function RematchClaimCard({
   claim: DebateRematchClaim;
   session: DebateRematchSession | null;
   currentUserId: string | null;
+  opponent: DebateRematchParticipant | null;
   /** A failed or pending participant lookup cannot establish that the opponent has no position. */
   opponentPositionKnown: boolean;
   /** geo-chat's own copy of this viewer's position; `undefined` when it has no row yet. */
@@ -3435,9 +3438,9 @@ function RematchClaimCard({
 }) {
   // `true` off a room, so this route's gate is unchanged. See `useRoomOpponentPresent`.
   const roomOpponentPresent = useRoomOpponentPresent();
-  const remoteParticipant =
-    currentUserId === null ? undefined : session?.participants.find(person => person.user_id !== currentUserId);
-  const remotePosition = claim.participants.find(side => side.user_id === remoteParticipant?.user_id)?.position ?? null;
+  const remotePosition = claim.participants.find(side => side.user_id === opponent?.user_id)?.position ?? null;
+  const showOpponentPosition = opponent !== null && opponentPositionKnown;
+  const showNoPosition = showOpponentPosition && remotePosition === null;
 
   // A claim whose stored kind didn't parse still has to render; 'stance' is the fallback
   // `responsePositionLabel` already applies, so the labels agree either way.
@@ -3527,10 +3530,10 @@ function RematchClaimCard({
       analyticsSurface="rematch"
       showParticipants={false}
       noteFor={position =>
-        opponentPositionKnown && (
+        showOpponentPosition && (
           <ClaimResponseTag
             response={remotePosition === null ? undefined : { stance: remotePosition ? 'agree' : 'disagree' }}
-            personName={remoteParticipant?.display_name}
+            personName={opponent.display_name}
             forPosition={position}
           />
         )
@@ -3568,13 +3571,9 @@ function RematchClaimCard({
       // push the row wider than the card. geo-chat's refusals here are sentences, not the couple of
       // words the side panel's are, which is why that surface can keep its own inline.
       footer={
-        (opponentPositionKnown && remoteParticipant && remotePosition === null) || context || requestError ? (
+        showNoPosition || context || requestError ? (
           <>
-            {opponentPositionKnown && remoteParticipant && remotePosition === null ? (
-              <p className="mt-1.5 text-center text-breadcrumb text-grey-04">
-                {firstName(remoteParticipant.display_name) ?? 'Your opponent'} has no position yet
-              </p>
-            ) : null}
+            {showNoPosition ? <ClaimResponseTag response={null} personName={opponent.display_name} /> : null}
             {context}
             {requestError ? (
               <div role="alert" className="mt-2">

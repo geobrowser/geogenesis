@@ -39,31 +39,31 @@ export function ClaimResponseTag({
   personName,
   forPosition,
 }: {
-  response: ClaimResponse | undefined;
-  /** The profile's owner. Falls back to "They" where the name has not loaded. */
+  /** `null` explicitly means no position; `undefined` means there is no answer to display. */
+  response: ClaimResponse | null | undefined;
+  /** The person whose position is shown. Uses a generic label when their name is unavailable. */
   personName?: string | null;
   /**
    * Which button this is rendering under. The tag appears under one of them and
-   * is nothing under the other.
+   * is nothing under the other. Omit for a neutral, full-width "no position" label.
    */
-  forPosition: boolean;
+  forPosition?: boolean;
 }) {
   const side = response?.stance;
 
-  // Nothing to say: they have not answered this claim. An absent tag is the
-  // honest rendering; a greyed one would imply a verdict never given.
-  //
-  // Not the retracted case, which is filtered out of the tab entirely rather
-  // than rendered blank here: `decodeVoteOrder` drops a claim whose answer has
-  // been taken back.
-  if (!side) return null;
-  if ((side === 'agree') !== forPosition) return null;
-
-  const word = RESPONSE_WORD[side];
+  // Profiles omit unanswered claims. The picker explicitly passes null once its lookup settles;
+  // that neutral label spans the row rather than implying agreement with either button.
+  if (!side && (response !== null || forPosition !== undefined)) return null;
+  if (side && forPosition !== undefined && (side === 'agree') !== forPosition) return null;
 
   return (
     <p className="mt-1.5 text-center text-breadcrumb text-grey-04">
-      {firstName(personName) ?? 'They'} <span className={side === 'agree' ? 'text-green' : 'text-red-01'}>{word}</span>
+      {firstName(personName) ?? (side ? 'They' : 'Your opponent')}{' '}
+      {side ? (
+        <span className={side === 'agree' ? 'text-green' : 'text-red-01'}>{RESPONSE_WORD[side]}</span>
+      ) : (
+        'has no position yet'
+      )}
     </p>
   );
 }

@@ -84,6 +84,26 @@ describe('ClaimResponseTag', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('explicitly labels a known unanswered claim without using either side’s color', () => {
+    render(<ClaimResponseTag response={null} personName="Salina Winter" />);
+
+    const tag = screen.getByText('Salina has no position yet');
+    expect(tag).toHaveClass('text-grey-04');
+    expect(tag.querySelector('.text-green, .text-red-01')).toBeNull();
+  });
+
+  it('does not put the neutral label under either position button', () => {
+    const { container } = render(<ClaimResponseTag response={null} forPosition />);
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('names the opponent when the unanswered label has no display name', () => {
+    render(<ClaimResponseTag response={null} />);
+
+    expect(screen.getByText('Your opponent has no position yet')).toBeInTheDocument();
+  });
+
   /**
    * Named, because the card is about two people at once.
    *

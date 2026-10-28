@@ -173,6 +173,7 @@ const mocks = vi.hoisted(() => ({
   /** Analytics, so the landing report can be read back (GEO-3148). */
   capture: vi.fn(),
   positionsLoading: false,
+  positionsPlaceholder: false,
   positionsError: null as unknown,
   positionsFetching: false,
   positionParticipants: [] as string[][],
@@ -719,10 +720,11 @@ vi.mock('~/core/debates/participant-positions', async importOriginal => {
       return {
         byClaim: actual.groupParticipantPositions(mocks.positions),
         isLoading: mocks.positionsLoading,
+        isPlaceholderData: mocks.positionsPlaceholder,
         // An answer for this key still on its way — whether that is the previous pair's rows held
         // over, or this pair's cached rows while the mount refetch runs. `isLoading` is false for
         // both, and both can be empty where the answer arriving is not.
-        isFetching: mocks.positionsLoading || mocks.positionsFetching,
+        isFetching: mocks.positionsLoading || mocks.positionsPlaceholder || mocks.positionsFetching,
         error: mocks.positionsError,
       };
     },
@@ -1046,6 +1048,7 @@ beforeEach(() => {
     position('profile-remote', CLAIM_SHARED, SPACE_1, false),
   ];
   mocks.positionsLoading = false;
+  mocks.positionsPlaceholder = false;
   mocks.positionsError = null;
   mocks.positionsFetching = false;
   mocks.positionParticipants.length = 0;
@@ -1304,14 +1307,20 @@ describe('DebateRematchPageClient', () => {
     expect(within(card).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('does not claim the opponent has no position while their lookup is unresolved', async () => {
-    mocks.positions = [];
-    mocks.positionsLoading = true;
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
+  it.each(['loading', 'placeholder', 'error'] as const)(
+    'does not claim the opponent has no position when the lookup is %s',
+    async state => {
+      mocks.positions = [];
+      mocks.positionsLoading = state === 'loading';
+      mocks.positionsPlaceholder = state === 'placeholder';
+      mocks.positionsError = state === 'error' ? new Error('Position lookup failed') : null;
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showAllClaims();
 
-    expect(screen.queryByText('Salina has no position yet')).toBeNull();
-  });
+      expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+      expect(screen.queryByText('Salina has no position yet')).toBeNull();
+    }
+  );
 
   it('changes responses through the semantic buttons without rendering a second response area', async () => {
     mocks.claims = [
