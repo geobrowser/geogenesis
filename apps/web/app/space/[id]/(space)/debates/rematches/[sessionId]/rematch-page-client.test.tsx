@@ -1307,6 +1307,35 @@ describe('DebateRematchPageClient', () => {
     expect(within(card).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it.each([true, null])(
+    'shows the latest opponent position (%s) while the claim list holds its previous rows',
+    async latestPosition => {
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      const card = screen.getByText('A claim both participants chose').closest('article')!;
+      expect(within(card).getByText('disagrees')).toBeInTheDocument();
+
+      // They change this answer and take a side on another claim. The position lookup has settled,
+      // but hydrating the new claim keeps the last settled list on screen.
+      mocks.positions = [
+        position('profile-local', CLAIM_SHARED, SPACE_1, true),
+        ...(latestPosition === null
+          ? []
+          : [position('profile-remote', CLAIM_SHARED.replace(/-/g, ''), SPACE_1, latestPosition)]),
+        position('profile-remote', CLAIM_FRESH, SPACE_1, false),
+      ];
+      mocks.browsedLookupLoading = true;
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByText('A claim both participants chose').closest('article')).toBe(card);
+      expect(
+        within(card).getByText(latestPosition === null ? 'Salina has no position yet' : 'agrees')
+      ).toBeInTheDocument();
+      expect(within(card).queryByText('disagrees')).toBeNull();
+      expect(within(card).queryByRole('button', { name: 'Request debate' })).toBeNull();
+    }
+  );
+
   it.each(['loading', 'placeholder', 'error'] as const)(
     'does not claim the opponent has no position when the lookup is %s',
     async state => {

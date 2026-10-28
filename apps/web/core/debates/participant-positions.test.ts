@@ -226,6 +226,40 @@ describe('fetchPositionsOnViewerClaims', () => {
 });
 
 describe('participantSidesOn', () => {
+  it.each([
+    ['019fedb10c417f3e9a112c7d5e8b4419', '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419'],
+    ['019fedb1-0c41-7f3e-9a11-2c7d5e8b4419', '019FEDB10C417F3E9A112C7D5E8B4419'],
+  ])('matches a claim indexed as %s when the card uses %s', (indexedId, cardId) => {
+    const byClaim = groupParticipantPositions([
+      {
+        profileSpaceId: LOCAL.profile_space_id,
+        claimId: cardId,
+        spaceId: 'space-1',
+        responseKind: 'stance',
+        position: true,
+      },
+      {
+        profileSpaceId: REMOTE.profile_space_id,
+        claimId: indexedId,
+        spaceId: 'space-1',
+        responseKind: 'stance',
+        position: false,
+      },
+    ]);
+
+    expect(participantSidesOn(byClaim, cardId, 'space-1', [LOCAL, REMOTE])).toEqual([
+      { participant: LOCAL, position: true, responseKind: 'stance' },
+      { participant: REMOTE, position: false, responseKind: 'stance' },
+    ]);
+    expect(participantSidesOn(byClaim, indexedId, 'space-1', [LOCAL, REMOTE])).toEqual([
+      { participant: LOCAL, position: true, responseKind: 'stance' },
+      { participant: REMOTE, position: false, responseKind: 'stance' },
+    ]);
+    expect(participantSidesOn(byClaim, cardId, 'space-2', [REMOTE])).toEqual([
+      { participant: REMOTE, position: null, responseKind: null },
+    ]);
+  });
+
   // geo-chat validates a request against the claim's home space, and the card publishes there; a
   // response in some other space that merely cites the claim is not a side on this claim.
   it('reads each participant’s side in the claim’s space only, matching ids in either form', () => {

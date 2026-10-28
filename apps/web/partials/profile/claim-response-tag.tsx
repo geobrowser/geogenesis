@@ -55,12 +55,13 @@ export function ClaimResponseTag({
   // that neutral label spans the row rather than implying agreement with either button.
   if (!side && (response !== null || forPosition !== undefined)) return null;
   if (side && forPosition !== undefined && (side === 'agree') !== forPosition) return null;
+  const name = firstName(personName);
 
   return (
     <p className="mt-1.5 text-center text-breadcrumb text-grey-04">
-      {firstName(personName) ?? (side ? 'They' : 'Your opponent')}{' '}
+      {name ?? (side ? 'They' : 'Your opponent')}{' '}
       {side ? (
-        <span className={side === 'agree' ? 'text-green' : 'text-red-01'}>{RESPONSE_WORD[side]}</span>
+        <span className={side === 'agree' ? 'text-green' : 'text-red-01'}>{name ? RESPONSE_WORD[side] : side}</span>
       ) : (
         'has no position yet'
       )}

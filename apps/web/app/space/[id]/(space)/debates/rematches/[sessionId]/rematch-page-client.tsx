@@ -2737,7 +2737,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return (
       <RematchClaimCard
         key={claim.claim.claim_entity_id}
-        claim={claim}
+        // The list can hold an older row while new claims hydrate. Its content stays visible,
+        // but both the opponent label and the request control need the latest participant sides.
+        claim={{ ...claim, participants: sidesOf(claim.claim.claim_entity_id, claim.claim.space_id) }}
         previouslyDebated={previouslyDebated}
         context={saidBy ? null : topicMatchCaptionFor(claim)}
         headerMeta={saidBy}

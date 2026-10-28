@@ -26,25 +26,25 @@ describe('ClaimResponseTag', () => {
   afterEach(cleanup);
 
   it('says how they come down on an ordinary claim', () => {
-    render(<ClaimResponseTag response={{ stance: 'agree' }} forPosition />);
+    render(<ClaimResponseTag response={{ stance: 'agree' }} personName="Susan Winter" forPosition />);
 
     expect(screen.getByText('agrees')).toBeInTheDocument();
   });
 
   it('says disagrees for the other side', () => {
-    render(<ClaimResponseTag response={{ stance: 'disagree' }} forPosition={false} />);
+    render(<ClaimResponseTag response={{ stance: 'disagree' }} personName="Susan Winter" forPosition={false} />);
 
     expect(screen.getByText('disagrees')).toBeInTheDocument();
   });
 
   it('uses the factual vocabulary on a factual claim', () => {
-    render(<ClaimResponseTag response={{ stance: 'agree' }} forPosition />);
+    render(<ClaimResponseTag response={{ stance: 'agree' }} personName="Susan Winter" forPosition />);
 
     expect(screen.getByText('agrees')).toBeInTheDocument();
   });
 
   it('says disagrees for the other side of a claim that used to be factual', () => {
-    render(<ClaimResponseTag response={{ stance: 'disagree' }} forPosition={false} />);
+    render(<ClaimResponseTag response={{ stance: 'disagree' }} personName="Susan Winter" forPosition={false} />);
 
     expect(screen.getByText('disagrees')).toBeInTheDocument();
   });
@@ -122,6 +122,12 @@ describe('ClaimResponseTag', () => {
     render(<ClaimResponseTag response={{ stance: 'agree' }} forPosition />);
 
     expect(screen.getByText(/They/)).toBeInTheDocument();
+  });
+
+  it.each(['agree', 'disagree'] as const)('uses the correct verb for an unnamed person who would %s', stance => {
+    render(<ClaimResponseTag response={{ stance }} personName="   " forPosition={stance === 'agree'} />);
+
+    expect(screen.getByText(stance).closest('p')).toHaveTextContent(`They ${stance}`);
   });
 });
 
