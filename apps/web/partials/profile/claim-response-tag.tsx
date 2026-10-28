@@ -39,32 +39,24 @@ export function ClaimResponseTag({
   personName,
   forPosition,
 }: {
-  /** `null` explicitly means no position; `undefined` means there is no answer to display. */
-  response: ClaimResponse | null | undefined;
+  response: ClaimResponse | undefined;
   /** The person whose position is shown. Uses a generic label when their name is unavailable. */
   personName?: string | null;
   /**
    * Which button this is rendering under. The tag appears under one of them and
-   * is nothing under the other. Omit for a neutral, full-width "no position" label.
+   * is nothing under the other.
    */
-  forPosition?: boolean;
+  forPosition: boolean;
 }) {
   const side = response?.stance;
 
-  // Profiles omit unanswered claims. The picker explicitly passes null once its lookup settles;
-  // that neutral label spans the row rather than implying agreement with either button.
-  if (!side && (response !== null || forPosition !== undefined)) return null;
-  if (side && forPosition !== undefined && (side === 'agree') !== forPosition) return null;
+  if (!side || (side === 'agree') !== forPosition) return null;
   const name = firstName(personName);
 
   return (
     <p className="mt-1.5 text-center text-breadcrumb text-grey-04">
-      {name ?? (side ? 'They' : 'Your opponent')}{' '}
-      {side ? (
-        <span className={side === 'agree' ? 'text-green' : 'text-red-01'}>{name ? RESPONSE_WORD[side] : side}</span>
-      ) : (
-        'has no position yet'
-      )}
+      {name ?? 'They'}{' '}
+      <span className={side === 'agree' ? 'text-green' : 'text-red-01'}>{name ? RESPONSE_WORD[side] : side}</span>
     </p>
   );
 }

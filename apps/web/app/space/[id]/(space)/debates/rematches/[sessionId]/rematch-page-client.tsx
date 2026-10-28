@@ -3503,8 +3503,7 @@ function RematchClaimCard({
   // `true` off a room, so this route's gate is unchanged. See `useRoomOpponentPresent`.
   const roomOpponentPresent = useRoomOpponentPresent();
   const remotePosition = claim.participants.find(side => side.user_id === opponent?.user_id)?.position ?? null;
-  const showOpponentPosition = opponent !== null && opponentPositionKnown;
-  const showNoPosition = showOpponentPosition && remotePosition === null;
+  const showOpponentPosition = opponent !== null && opponentPositionKnown && remotePosition !== null;
 
   // A claim whose stored kind didn't parse still has to render; 'stance' is the fallback
   // `responsePositionLabel` already applies, so the labels agree either way.
@@ -3596,7 +3595,7 @@ function RematchClaimCard({
       noteFor={position =>
         showOpponentPosition && (
           <ClaimResponseTag
-            response={remotePosition === null ? undefined : { stance: remotePosition ? 'agree' : 'disagree' }}
+            response={{ stance: remotePosition ? 'agree' : 'disagree' }}
             personName={opponent.display_name}
             forPosition={position}
           />
@@ -3635,9 +3634,8 @@ function RematchClaimCard({
       // push the row wider than the card. geo-chat's refusals here are sentences, not the couple of
       // words the side panel's are, which is why that surface can keep its own inline.
       footer={
-        showNoPosition || context || requestError ? (
+        context || requestError ? (
           <>
-            {showNoPosition ? <ClaimResponseTag response={null} personName={opponent.display_name} /> : null}
             {context}
             {requestError ? (
               <div role="alert" className="mt-2">

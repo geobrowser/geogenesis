@@ -1295,13 +1295,13 @@ describe('DebateRematchPageClient', () => {
     expect(within(card).queryByText('disagrees')).toBeNull();
   });
 
-  it('explicitly shows when the opponent has no position without implying the viewer has none', async () => {
+  it('leaves the opponent’s position blank when unanswered and keeps the viewer’s selected side', async () => {
     mocks.positions = [position('profile-local', CLAIM_SHARED, SPACE_1, true)];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
     const card = screen.getByText('A claim both participants chose').closest('article')!;
-    expect(within(card).getByText('Salina has no position yet')).toBeInTheDocument();
+    expect(within(card).queryByText(/has no position/)).toBeNull();
     expect(within(card).queryByText('agrees')).toBeNull();
     expect(within(card).queryByText('disagrees')).toBeNull();
     expect(within(card).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
@@ -1328,18 +1328,21 @@ describe('DebateRematchPageClient', () => {
       view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
       expect(screen.getByText('A claim both participants chose').closest('article')).toBe(card);
-      expect(
-        within(card).getByText(latestPosition === null ? 'Salina has no position yet' : 'agrees')
-      ).toBeInTheDocument();
+      if (latestPosition === null) {
+        expect(within(card).queryByText('agrees')).toBeNull();
+        expect(within(card).queryByText(/has no position/)).toBeNull();
+      } else {
+        expect(within(card).getByText('agrees')).toBeInTheDocument();
+      }
       expect(within(card).queryByText('disagrees')).toBeNull();
       expect(within(card).queryByRole('button', { name: 'Request debate' })).toBeNull();
     }
   );
 
   it.each(['loading', 'placeholder', 'error'] as const)(
-    'does not claim the opponent has no position when the lookup is %s',
+    'does not show an opponent position when the lookup is %s',
     async state => {
-      mocks.positions = [];
+      mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
       mocks.positionsLoading = state === 'loading';
       mocks.positionsPlaceholder = state === 'placeholder';
       mocks.positionsError = state === 'error' ? new Error('Position lookup failed') : null;
@@ -1347,7 +1350,7 @@ describe('DebateRematchPageClient', () => {
       await showAllClaims();
 
       expect(screen.getByText('A newly published claim')).toBeInTheDocument();
-      expect(screen.queryByText('Salina has no position yet')).toBeNull();
+      expect(screen.queryByText('disagrees')).toBeNull();
     }
   );
 
