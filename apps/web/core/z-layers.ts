@@ -2,9 +2,13 @@
  * Global overlay z-index stack (low → high).
  */
 export const Z_LAYERS = {
+  assistantLauncherMobile: 79,
+
   flowBar: 1000,
   onboardingTipBackdrop: 1000,
   onboardingTip: 1001,
+
+  assistantLauncher: 1100,
 
   slideUp: 10000,
   reviewOnboardingTipBackdrop: 10000,
@@ -53,6 +57,10 @@ export const Z_LAYERS = {
 } as const;
 
 export const Z_LAYER_CLASS = {
+  // Match the side panels' mobile layout breakpoint (lg: is max-width: 1023px). Keep the
+  // launcher below their backdrops, including the comments sheet at z-80, so it cannot take
+  // taps through an open panel. Both the initial and loaded launcher use this class.
+  assistantLauncher: 'z-1100 lg:z-[79]',
   flowBar: 'z-1000',
   slideUp: 'z-slide-up',
   commentsPanelOverSlideUp: 'z-[10001]',

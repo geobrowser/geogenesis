@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   authAttemptForAction,
   beginAuthAttempt,
+  claimRedirectedAuthAttempt,
   completeAuthAction,
   currentAuthAttempt,
   finishAuthAttempt,
@@ -114,6 +115,45 @@ describe('durable sign-in attempts', () => {
       expect(capture.mock.calls.filter(([event]) => event === 'auth_action_completed')).toHaveLength(0);
     }
   );
+  // GEO-3139: a headless Google sign-in starts on one load and fails on the return's.
+  it('lets a redirect return close the attempt its start left open in this tab', async () => {
+    const attempt = beginAuthAttempt(entry);
+    vi.resetModules();
+    const returned = await import('./auth-attempt');
+
+    returned.finishAuthAttempt('closed');
+    expect(returned.currentAuthAttempt()?.endedAt).toBeUndefined();
+
+    expect(returned.claimRedirectedAuthAttempt(attempt.id)).toBe(true);
+    returned.finishAuthAttempt('closed');
+    expect(capture).toHaveBeenCalledWith(
+      'auth_attempt_completed',
+      expect.objectContaining({ auth_attempt_id: attempt.id, outcome: 'closed' })
+    );
+  });
+  it('claims nothing without an open attempt in this tab', () => {
+    expect(claimRedirectedAuthAttempt('gone')).toBe(false);
+    expect(currentAuthAttempt()).toBeUndefined();
+  });
+  it('leaves a sign-in started after the return to its own starter', async () => {
+    const returnedTo = beginAuthAttempt(entry);
+    vi.resetModules();
+    const returned = await import('./auth-attempt');
+    const newer = returned.beginAuthAttempt({ ...entry, auth_control: 'navbar' });
+    capture.mockClear();
+
+    expect(returned.claimRedirectedAuthAttempt(returnedTo.id)).toBe(false);
+    expect(returned.currentAuthAttempt()?.id).toBe(newer.id);
+    expect(returned.currentAuthAttempt()?.endedAt).toBeUndefined();
+    // Only its starter could record the replaced attempt as superseded; the return does not end it.
+    expect(returned.readAuthAttempt(returnedTo.id)?.endedAt).toBeUndefined();
+    expect(capture).not.toHaveBeenCalled();
+  });
+  it('claims nothing once the attempt has ended', () => {
+    const attempt = beginAuthAttempt(entry);
+    finishAuthAttempt('signed_in');
+    expect(claimRedirectedAuthAttempt(attempt.id)).toBe(false);
+  });
   it('does not guess between concurrent attempts when completing in a new tab', () => {
     const first = beginAuthAttempt(entry);
     localStorage.setItem('geo:auth-attempt:v1:other-tab', JSON.stringify({ ...first, id: 'other-tab' }));
@@ -251,4 +291,33 @@ describe('durable sign-in attempts', () => {
     expect(currentAuthAttempt()?.id).toBe(attempt.id);
     spy.mockRestore();
   });
+});
+
+// GEO-3468: these properties belong on the funnel event and join to the sign-up attempt.
+it.each([
+  { topic_count: 3, space_pick_count: 2 },
+  { topic_count: 0, space_pick_count: 0 },
+])('reports the customize-feed decision and counts once, including after a reload (%j)', picks => {
+  const attempt = beginAuthAttempt(entry);
+  finishAuthAttempt('signed_up', attempt);
+  const outcome = picks.topic_count > 0 ? 'completed' : 'skipped';
+  trackAuthOnboarding('customize-feed', 'viewed');
+  trackAuthOnboarding('customize-feed', outcome, picks);
+  resetAuthAttempt();
+  sessionStorage.setItem('geo:auth-attempt:active', attempt.id);
+  trackAuthOnboarding('customize-feed', outcome, picks);
+  const decisions = capture.mock.calls.filter(
+    ([event, props]) => event === 'auth_onboarding_progress' && props.outcome === outcome
+  );
+  expect(decisions).toEqual([
+    [
+      'auth_onboarding_progress',
+      expect.objectContaining({
+        auth_attempt_id: attempt.id,
+        onboarding_step: 'customize-feed',
+        outcome,
+        ...picks,
+      }),
+    ],
+  ]);
 });

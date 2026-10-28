@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import type { DebateRoomView } from '../api';
 import type { DebateRoomPresence } from './room-presence';
 
 export type DebateRoomContextValue = {
@@ -10,6 +11,8 @@ export type DebateRoomContextValue = {
   presence: DebateRoomPresence | null;
   /** Asks the room for a fresh session when the one it handed out has ended; resolves whether it landed. */
   rejoin?: () => Promise<boolean>;
+  /** The room as geo-chat last answered, for what the waiting debater reads about the other (GEO-3428). */
+  room?: DebateRoomView | null;
 };
 
 /**
@@ -22,14 +25,16 @@ export function DebateRoomProvider({
   roomId,
   presence,
   rejoin,
+  room = null,
   children,
 }: {
   roomId: string;
   presence: DebateRoomPresence | null;
   rejoin?: () => Promise<boolean>;
+  room?: DebateRoomView | null;
   children: React.ReactNode;
 }) {
-  const value = React.useMemo(() => ({ roomId, presence, rejoin }), [roomId, presence, rejoin]);
+  const value = React.useMemo(() => ({ roomId, presence, rejoin, room }), [roomId, presence, rejoin, room]);
   return <DebateRoomContext.Provider value={value}>{children}</DebateRoomContext.Provider>;
 }
 

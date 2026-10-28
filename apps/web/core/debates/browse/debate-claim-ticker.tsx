@@ -119,8 +119,8 @@ export function useDebateClaimTicker(
    * has a space and an authored block. They are for the debates recorded after this one.
    *
    * **Empty while the ticker is switched off.** `useDebateTranscriptClaims` is gated on `enabled`,
-   * but the feed card and the explore card fetch the same query ungated, so a disabled ticker reads
-   * a full claim list out of a warm cache. `groupBySlot` already refused to build cards from it;
+   * but its cache outlives the gate — the claims panel reads the same query, and so did this ticker
+   * while it was active — so a disabled ticker can read a full claim list out of a warm cache. `groupBySlot` already refused to build cards from it;
    * the markers did not, so an inactive feed card could draw a clickable hash that seeks to a claim
    * whose card and backlog are both deliberately empty. One gate now, not two half-gates.
    *
@@ -147,9 +147,9 @@ export function useDebateClaimTicker(
   /**
    * Empty while this ticker is switched off, which is not the same as having no claims.
    *
-   * `useDebateTranscriptClaims` is gated on `enabled`, but the feed card and the explore card both
-   * fetch the same query *ungated* — so the cache is warm and a disabled ticker still reads a full
-   * claim list out of it. Handing that to `useDebateClaimsBySpaces`, which has no gate of its own,
+   * `useDebateTranscriptClaims` is gated on `enabled`, but its cache outlives the gate — the claims
+   * panel reads the same query, and so did this ticker while it was active — so a disabled ticker
+   * can still read a full claim list out of it. Handing that to `useDebateClaimsBySpaces`, which has no gate of its own,
    * started authenticated row queries and a gateway subscription for every mounted feed item rather
    * than the active and preloaded pair.
    */

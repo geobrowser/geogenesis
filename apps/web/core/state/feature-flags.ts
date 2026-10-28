@@ -63,6 +63,41 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'spaceCalls',
+    label: 'Space calls',
+    description:
+      'Start a call from a space you edit, and join a space’s live call from its page (GEO-3419). Needs geo-chat with space calls.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'callRecording',
+    label: 'Call recording',
+    description:
+      'Record space calls, play them back on the ended call’s page and show published ones on Explore (GEO-3421). Needs geo-chat with call recording.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'googleSignIn',
+    label: 'Google sign-in',
+    description:
+      'Offer Google in every sign-in prompt (GEO-3139). Google redirects, so an action queued before signing in is dropped. Google must also be enabled in the Privy dashboard.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'googleCalendar',
+    label: 'Google Calendar',
+    description:
+      'Connect Google Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Google Calendar configured.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'microsoftCalendar',
+    label: 'Outlook Calendar',
+    description:
+      'Connect Outlook Calendar in your debate schedule, so busy times are taken out of your availability (GEO-3139). Needs geo-chat with Microsoft Calendar configured.',
+    enabledByDefault: false,
+  },
+  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',

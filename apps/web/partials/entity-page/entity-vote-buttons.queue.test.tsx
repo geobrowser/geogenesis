@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
-  usePrivy: () => ({ authenticated: true }),
+  usePrivy: () => ({ ready: true, authenticated: true }),
   useGeoLogin: () => ({ login: vi.fn() }),
 }));
 vi.mock('~/core/analytics', () => ({

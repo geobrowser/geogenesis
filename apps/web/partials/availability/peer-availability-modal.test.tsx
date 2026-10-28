@@ -51,6 +51,14 @@ describe('PeerAvailabilityModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('opens on the dialog context and keeps Close first in the keyboard tab order', async () => {
+    const { user } = setup({ peerName: 'Ada' });
+
+    expect(screen.getByRole('dialog', { name: 'When Ada is free' })).toHaveFocus();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
+  });
+
   // The view's own "When … is free" is the first line; a visible "Availability" above it said the
   // same thing twice.
   it('draws no title of its own, but still names the dialog', () => {

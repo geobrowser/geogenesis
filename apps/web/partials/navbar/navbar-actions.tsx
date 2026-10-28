@@ -9,6 +9,7 @@ import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
+import { privyUserEmail } from '~/core/auth/privy-email';
 import { useDebateSchedule } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
@@ -38,11 +39,12 @@ import { Toggle } from '~/design-system/toggle';
 
 import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
+import { EmailSettingsDialog } from '~/partials/notifications/email-settings-dialog';
 import { EditProfileDialog } from '~/partials/profile/edit-profile-dialog';
 
 import { useCreateEntityActions } from '../create-entity/use-create-entity-actions';
 import { avatarAtom } from '../onboarding/onboarding-atoms';
-import { EmailNotificationsMenuItem } from './email-notifications-menu-item';
+import { EmailSettingsMenuItem } from './email-settings-menu-item';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount, error } = useSmartAccount();
@@ -103,6 +105,7 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
   // Deferred like the dialog above: the week grid is only built once somebody asks for it.
   const [hasOpenedSchedule, setHasOpenedSchedule] = React.useState(false);
   const avatarTriggerRef = React.useRef<HTMLButtonElement>(null);
+  const [isEmailSettingsOpen, setIsEmailSettingsOpen] = React.useState(false);
 
   const {
     isLoading: isUserLoading,
@@ -202,7 +205,7 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
         ? `/space/pending/${topicId}`
         : null;
     const displayName = profile?.name?.trim() || shortAddress(address);
-    const email = userEmail(user);
+    const email = privyUserEmail(user);
     const identityDetail = email ?? address;
 
     return (
@@ -331,9 +334,15 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
                 >
                   Set my schedule
                 </button>
-                {/* GEO-3029. Needs a personal space to register against, and the service configured. */}
+                {/* GEO-3392. Needs a personal space to register against, and the service configured. */}
                 {personalSpaceId && geoNotificationsApiUrl() ? (
-                  <EmailNotificationsMenuItem className={PROFILE_MENU_DIVIDED_ACTION_CLASS} />
+                  <EmailSettingsMenuItem
+                    className={PROFILE_MENU_DIVIDED_ACTION_CLASS}
+                    onOpen={() => {
+                      onOpenChange(false);
+                      setIsEmailSettingsOpen(true);
+                    }}
+                  />
                 ) : null}
                 {/* Sign out keeps its own group below the divider — the destructive action
                   stays alone at the bottom where people expect it. */}
@@ -358,6 +367,13 @@ export function NavbarActions({ compact = false, signInComponent }: NavbarAction
       ) : null}
       {/* `openerRef` is the avatar, not the item that was clicked: that item unmounts with the
           popover on the same click, leaving no live node for the dialog to return focus to. */}
+      {isEmailSettingsOpen ? (
+        <EmailSettingsDialog
+          entry="account_menu"
+          onClose={() => setIsEmailSettingsOpen(false)}
+          openerRef={avatarTriggerRef}
+        />
+      ) : null}
       {hasOpenedSchedule ? (
         <OwnScheduleModal
           key="availability-modal"
@@ -423,42 +439,6 @@ function IdentityHeader({
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
-}
-
-function userEmail(user: unknown) {
-  if (!isRecord(user)) return undefined;
-  const primary = emailFromUnknown(user.email);
-  if (primary) return primary;
-  if (!Array.isArray(user.linkedAccounts)) return undefined;
-
-  for (const account of user.linkedAccounts) {
-    const email = emailFromUnknown(account);
-    if (email) return email;
-  }
-
-  return undefined;
-}
-
-function emailFromUnknown(value: unknown) {
-  if (typeof value === 'string') return normalizeEmail(value);
-  if (!isRecord(value)) return undefined;
-
-  for (const key of ['address', 'email', 'emailAddress']) {
-    const email = normalizeEmail(value[key]);
-    if (email) return email;
-  }
-
-  return undefined;
-}
-
-function normalizeEmail(value: unknown) {
-  if (typeof value !== 'string') return undefined;
-  const email = value.trim().toLowerCase();
-  return email.includes('@') ? email : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
 }
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];

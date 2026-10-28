@@ -785,6 +785,41 @@ describe('EntityFeed for a reader with a wallet cookie', () => {
   });
 });
 
+describe('EntityFeed pending onboarding follows', () => {
+  it('sends the pending-follow signal only for For you', async () => {
+    render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="for-you"
+        sortOptions={['for-you', 'best']}
+        showSortFilter
+        followedTopicIds={['topic-a']}
+        pendingTopicFollows
+      />
+    );
+    expect(new URL(await requestedUrl(), 'http://localhost').searchParams.get('pendingTopicFollows')).toBe('1');
+
+    pickOption('Best');
+    const best = new URL(await requestedUrl(), 'http://localhost');
+    expect(best.searchParams.get('pendingTopicFollows')).toBeNull();
+    expect(best.searchParams.get('followedTopicIds')).toBeNull();
+  });
+
+  it('refetches when pending follows clear without changing the topic ids', () => {
+    const props = {
+      apiEndpoint: '/api/explore/feed',
+      initialSort: 'for-you' as const,
+      followedTopicIds: ['topic-a'],
+    };
+    const { rerender } = render(<EntityFeed {...props} pendingTopicFollows />);
+    const pendingKey = mocks.queryOptions?.queryKey;
+
+    rerender(<EntityFeed {...props} pendingTopicFollows={false} />);
+
+    expect(mocks.queryOptions?.queryKey).not.toEqual(pendingKey);
+  });
+});
+
 // The CDN ignores cookies, so only the plain signed-out first Best page may use the cacheable URL.
 describe('EntityFeed cacheable first page', () => {
   function renderFeed(props: Partial<React.ComponentProps<typeof EntityFeed>> = {}) {
@@ -945,5 +980,44 @@ describe('leadFirst', () => {
     expect(leadFirst(items, 'z')).toBe(items);
     expect(leadFirst(items, 'a')).toBe(items);
     expect(leadFirst(items, null)).toBe(items);
+  });
+});
+
+// GEO-3421. Past calls sit between the feed's own cards, client side, on an unfiltered feed only.
+describe('EntityFeed interleave', () => {
+  const item = (id: string) => ({
+    entityId: id,
+    spaceId: 'space-1',
+    spaceName: 'Space',
+    spaceImage: null,
+    types: [],
+    createdAtSec: 0,
+    title: id,
+    description: null,
+    imageUrl: null,
+    commentCount: 0,
+    recordingUrls: [],
+    debateVideoUrls: [],
+    debateClaim: null,
+    isMemberOrEditor: true,
+    hasPendingMembershipRequest: false,
+  });
+  const interleave = (feedLength: number) =>
+    new Map<number, React.ReactNode>([[1, <p key="extra">{`extra after 2 of ${feedLength}`}</p>]]);
+
+  it('draws the extra cards where asked, without touching the request', async () => {
+    mocks.pages = [{ items: [item('a'), item('b'), item('c')] }];
+    render(<EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" interleave={interleave} />);
+
+    expect(screen.getByText('extra after 2 of 3')).toBeTruthy();
+    expect(Object.keys(mocks.itemAt)).toEqual(['1', '2', '3']);
+    expect(await requestedUrl()).not.toContain('interleave');
+  });
+
+  it('draws none on a feed narrowed to a space', () => {
+    mocks.pages = [{ items: [item('a'), item('b'), item('c')] }];
+    render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" interleave={interleave} />);
+
+    expect(screen.queryByText(/extra after/)).toBeNull();
   });
 });

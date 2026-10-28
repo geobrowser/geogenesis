@@ -1,8 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { featureFlagsStorageKey } from '../state/feature-flags';
 import { clearLocalVotes, toggleLocalVote } from '../state/local-votes';
 import { closeSaveVotesPrompt, readSaveVotesPrompt } from '../state/save-votes-prompt';
 import { GeoConnectButton } from './wallet';
@@ -27,6 +29,7 @@ afterEach(() => {
   cleanup();
   clearLocalVotes();
   closeSaveVotesPrompt();
+  window.localStorage.removeItem(featureFlagsStorageKey);
   vi.clearAllMocks();
 });
 
@@ -86,5 +89,28 @@ describe('GeoConnectButton', () => {
     toggleLocalVote({ responseKind: 'stance', entityId: 'a', spaceId: 's', direction: 'positive', title: 'A' });
     render(<GeoConnectButton />);
     expect(screen.getByRole('button', { name: 'Save 1 vote' })).toBeInTheDocument();
+  });
+
+  // GEO-3139. With the flag off nothing Google reaches Privy: `login()` gets no options, so the
+  // modal shows the config's email-only methods exactly as before.
+  it('opens the email-only modal with the Google flag off', () => {
+    render(<GeoConnectButton />);
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+
+    expect(mocks.login).toHaveBeenCalledTimes(1);
+    expect(mocks.login.mock.calls[0]).toEqual([]);
+  });
+
+  it('adds Google to the modal with the flag on', () => {
+    window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ googleSignIn: true }));
+    // A fresh store: the flag atom reads storage when a store first touches it.
+    render(
+      <Provider store={createStore()}>
+        <GeoConnectButton />
+      </Provider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Log in' }));
+
+    expect(mocks.login).toHaveBeenCalledWith({ loginMethods: ['email', 'google'] });
   });
 });

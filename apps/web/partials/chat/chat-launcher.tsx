@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 
 import { BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import { assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
@@ -60,7 +61,7 @@ export function ChatLauncher() {
       onPointerEnter={preload}
       onFocus={preload}
       aria-label="Open assistant"
-      className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
+      className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} ${Z_LAYER_CLASS.assistantLauncher} flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
     >
       <AssistantSparkle size={20} />
     </button>

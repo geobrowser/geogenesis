@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
@@ -17,12 +17,16 @@ import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import {
   ADMIN_SCHEDULED_DEBATES_LIMIT,
   GeoChatRequestError,
+  type RunningLateMinutes,
   type ScheduledDebateRequest,
   type ScheduledDebateResponseResult,
   cancelScheduledDebate,
   createScheduledDebate,
   listAdminScheduledDebates,
   listScheduledDebates,
+  noTimeWorks,
+  nudgeDebateRoom,
+  reportRunningLate,
   rescheduleScheduledDebate,
   respondToScheduledDebate,
 } from '../api';
@@ -154,6 +158,17 @@ export function useCreateScheduledDebate() {
   );
 }
 
+/**
+ * What a move, a cancel or "none of these work" leaves stale: the requests, the upcoming rooms (an
+ * agreed debate's room closes), and every availability read, since the time is free again for both.
+ */
+function invalidateFreedTime(queryClient: QueryClient, accountKey: string | null) {
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.peerScheduleRoot(accountKey) });
+}
+
 /** Moves an existing request to a new time: "Choose different time" in the scheduling emails. */
 export function useRescheduleScheduledDebate() {
   const queryClient = useQueryClient();
@@ -162,11 +177,23 @@ export function useRescheduleScheduledDebate() {
   return useMutation<
     ScheduledDebateRequest,
     Error,
-    { requestId: string; startsAt: Date; minutes: number; analytics?: ScheduledRequestAnalytics },
+    {
+      requestId: string;
+      startsAt: Date;
+      minutes: number;
+      /** Goes to the other debater with the new time: Can't make it's note (GEO-3427). */
+      note?: string;
+      analytics?: ScheduledRequestAnalytics;
+    },
     AnalyticsRevision
   >({
-    mutationFn: ({ requestId, startsAt, minutes }) =>
-      rescheduleScheduledDebate(requestId, slotPayload(startsAt, minutes), getPrivyIdentityToken, accountKey),
+    mutationFn: ({ requestId, startsAt, minutes, note }) =>
+      rescheduleScheduledDebate(
+        requestId,
+        { ...slotPayload(startsAt, minutes), ...(note ? { note } : {}) },
+        getPrivyIdentityToken,
+        accountKey
+      ),
     onMutate: snapshotAnalyticsRevision,
     onSuccess: (request, { startsAt, analytics }, isCurrent) => {
       if (isCurrent()) {
@@ -180,10 +207,7 @@ export function useRescheduleScheduledDebate() {
       // Settled, as cancel is: a refusal means the list the viewer acted on is stale. Moving an
       // accepted debate also closes its room and frees its slot for both people, so the upcoming
       // rooms and the availability reads go too, not only the requests.
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: ['debates', 'account', accountKey, 'peer-schedule'] });
+      invalidateFreedTime(queryClient, accountKey);
     },
   });
 }
@@ -196,14 +220,14 @@ export function useRespondToScheduledDebate() {
   const mutation = useMutation<
     ScheduledDebateResponseResult,
     Error,
-    { requestId: string; accepted: boolean },
+    { requestId: string; accepted: boolean; surface?: 'lobby' },
     AnalyticsRevision
   >({
     mutationFn: ({ requestId, accepted }) =>
       respondToScheduledDebate(requestId, accepted, getPrivyIdentityToken, accountKey),
     onMutate: snapshotAnalyticsRevision,
-    onSuccess: (result, { requestId, accepted }, isCurrent) => {
-      if (isCurrent()) debateScheduledRequestAnswered({ requestId, accepted, outcome: result.outcome });
+    onSuccess: (result, { requestId, accepted, surface }, isCurrent) => {
+      if (isCurrent()) debateScheduledRequestAnswered({ requestId, accepted, outcome: result.outcome, surface });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
       // An acceptance books the room, which the join prompt reads from a different key.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
@@ -240,15 +264,86 @@ export function useCancelScheduledDebate() {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation<ScheduledDebateRequest, Error, { requestId: string }>({
-    mutationFn: ({ requestId }) => cancelScheduledDebate(requestId, getPrivyIdentityToken, accountKey),
+  return useMutation<ScheduledDebateRequest, Error, { requestId: string; note?: string }>({
+    mutationFn: ({ requestId, note }) =>
+      cancelScheduledDebate(requestId, getPrivyIdentityToken, accountKey, note ? { note } : undefined),
     onSettled: () => {
       // Settled rather than succeeded: a refusal (someone joined, or it was already resolved) means
       // the list the viewer pressed on is stale, and the refetch is what corrects it.
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.upcomingRooms(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
-      void queryClient.invalidateQueries({ queryKey: ['debates', 'account', accountKey, 'peer-schedule'] });
+      invalidateFreedTime(queryClient, accountKey);
     },
   });
+}
+
+/**
+ * Can't make it (GEO-3427): the same cancel, observed as its own action so the outcome measurement
+ * (GEO-3432) can tell a debater withdrawing from the Requests tab's quiet Cancel.
+ */
+export function useCantMakeIt() {
+  const getContext = useActionContext('scheduled_debate_notice', 'entity', '');
+  return useObservedMutation(useCancelScheduledDebate(), 'cant_make_it', ({ requestId }) =>
+    getContext({ target_type: 'scheduled_debate_request', target_id: requestId })
+  );
+}
+
+/**
+ * "None of these work" on the reschedule screen (GEO-3429): calls the debate off and emails the other
+ * debater the viewer's free times. Observed as its own action, beside Can't make it, so the outcome
+ * measurement (GEO-3432) can count it; geo-chat also tags its cancelled or declined event.
+ */
+export function useNoTimeWorks() {
+  // The week's component, as moving a request from it is: this is pressed there, not on the notice.
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const mutation = useMutation<ScheduledDebateRequest, Error, { requestId: string }>({
+    mutationFn: ({ requestId }) => noTimeWorks(requestId, getPrivyIdentityToken, accountKey),
+    onSettled: () => {
+      // As cancel: the time is free again for both, and a refusal means the list is stale.
+      invalidateFreedTime(queryClient, accountKey);
+    },
+  });
+  return useObservedMutation(mutation, 'no_time_works', ({ requestId }) =>
+    getContext({ target_type: 'scheduled_debate_request', target_id: requestId })
+  );
+}
+
+/**
+ * Running late (GEO-3427). The notice lives on the room view, which the other debater's page polls;
+ * the requests list does not change. Only the viewer's own room reads are refreshed, for a second tab
+ * of theirs with the room open.
+ */
+export function useReportRunningLate() {
+  const getContext = useActionContext('scheduled_debate_notice', 'entity', '');
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  const mutation = useMutation({
+    mutationFn: ({ requestId, minutes, note }: { requestId: string; minutes: RunningLateMinutes; note?: string }) =>
+      reportRunningLate(requestId, { minutes, ...(note ? { note } : {}) }, getPrivyIdentityToken, accountKey),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.roomRoot(accountKey) });
+    },
+  });
+  return useObservedMutation(mutation, 'running_late', ({ requestId }) =>
+    getContext({ target_type: 'scheduled_debate_request', target_id: requestId })
+  );
+}
+
+/**
+ * Nudge the other debater from the room (GEO-3428). Refetches the room either way, so the button
+ * and the timeline read what geo-chat recorded rather than what was pressed.
+ */
+export function useNudgeDebateRoom(roomId: string) {
+  const getContext = useActionContext('debate_room', 'entity', '');
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  const mutation = useMutation({
+    mutationFn: () => nudgeDebateRoom(roomId, getPrivyIdentityToken, accountKey),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.roomRoot(accountKey) });
+    },
+  });
+  return useObservedMutation(mutation, 'nudge', () => getContext({ target_type: 'debate_room', target_id: roomId }));
 }

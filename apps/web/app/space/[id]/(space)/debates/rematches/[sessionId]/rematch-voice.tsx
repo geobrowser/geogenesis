@@ -34,6 +34,7 @@ import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { tokenAllowsCamera } from '~/core/debates/livekit-grant';
 import { useCarriedLobbyChoice } from '~/core/debates/lobbies/lobby-return';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
 import {
   type DebateJoinChoiceSource,
@@ -237,6 +238,7 @@ type PairContext = {
   opponentName: string;
   onOpenOpponentSpace: (event: React.MouseEvent) => void;
   leaveAction?: React.ReactNode;
+  opponentWaiting?: React.ReactNode;
 };
 
 function toHeaderParticipant(participant: DebateRematchParticipant | null): PairHeaderParticipant | null {
@@ -274,6 +276,8 @@ type RematchVoiceHeaderProps = {
    * re-laying-out on the way to somewhere else.
    */
   exiting?: boolean;
+  /** What to show in the other person's video slot until they join (GEO-3427: running late). */
+  opponentWaiting?: React.ReactNode;
 };
 
 export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
@@ -283,7 +287,13 @@ export function RematchVoiceHeader(props: RematchVoiceHeaderProps) {
   return <SessionRematchVoiceHeader key={props.session.id} {...props} />;
 }
 
-function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exiting = false }: RematchVoiceHeaderProps) {
+function SessionRematchVoiceHeader({
+  session,
+  currentUserId,
+  leaveAction,
+  exiting = false,
+  opponentWaiting,
+}: RematchVoiceHeaderProps) {
   const voiceCapableNow = voiceCapable(session.status);
 
   /**
@@ -571,6 +581,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
     opponentName,
     onOpenOpponentSpace: openOpponentProfile,
     leaveAction,
+    opponentWaiting,
   };
 
   const headerWith = (voice: PairHeaderVoice) => <RematchPairHeader {...pair} voice={voice} />;
@@ -1154,6 +1165,7 @@ function LocalAudioControls({
         selectedDeviceId={cameraSettings.selectedCameraId}
         framed={isMobile}
         onChange={cameraSettings.onCameraChange}
+        analytics={debateActionAnalyticsAttributes('rematch', 'Camera option')}
       />
       {cameraSettings.error && (
         <p role="alert" className="text-metadata text-red-01">
@@ -1170,6 +1182,7 @@ function LocalAudioControls({
       data-media-settings
       aria-label="Camera settings"
       title="Camera settings"
+      {...debateActionAnalyticsAttributes('rematch', 'Camera settings')}
       aria-expanded={cameraPanelOpen}
       onClick={isMobile ? () => setCameraPanelOpen(current => !current) : undefined}
       className={cx(
@@ -1206,6 +1219,7 @@ function LocalAudioControls({
       data-media-settings
       aria-label="Audio settings"
       title="Audio settings"
+      {...debateActionAnalyticsAttributes('rematch', 'Audio settings')}
       aria-expanded={open}
       onClick={isMobile ? () => setOpen(current => !current) : undefined}
       className={cx(
@@ -1232,6 +1246,7 @@ function LocalAudioControls({
         // `isMicrophoneEnabled` instead lets a failed microphone announce "Mute microphone" while
         // showing a slashed icon on a button that cannot be pressed.
         aria-label={muted ? 'Unmute microphone' : 'Mute microphone'}
+        {...debateActionAnalyticsAttributes('rematch', muted ? 'Unmute microphone' : 'Mute microphone')}
         title={micFailure ? micFailureMessage(micFailure) : muted ? 'Unmute microphone' : 'Mute microphone'}
         onClick={onToggle}
         disabled={Boolean(micFailure)}
@@ -1260,13 +1275,20 @@ function LocalAudioControls({
               open={cameraPanelOpen}
               onOpenChange={setCameraPanelOpen}
               returnFocusRef={cameraTriggerRef}
+              closeAnalytics={debateActionAnalyticsAttributes('rematch', 'Camera settings close')}
             >
               {cameraPanel}
             </MobileSettingsSheet>
           )}
           {settingsTrigger}
-          <MobileSettingsSheet title="Audio settings" open={open} onOpenChange={setOpen} returnFocusRef={triggerRef}>
-            <AudioSettings {...settings} framed />
+          <MobileSettingsSheet
+            title="Audio settings"
+            open={open}
+            onOpenChange={setOpen}
+            returnFocusRef={triggerRef}
+            closeAnalytics={debateActionAnalyticsAttributes('rematch', 'Audio settings close')}
+          >
+            <AudioSettings {...settings} framed analyticsSurface="rematch" />
           </MobileSettingsSheet>
         </>
       ) : (
@@ -1277,7 +1299,7 @@ function LocalAudioControls({
           triggerRef={triggerRef}
           label="Audio settings"
         >
-          <AudioSettings {...settings} />
+          <AudioSettings {...settings} analyticsSurface="rematch" />
         </DesktopSettingsPopover>
       )}
       {cameraAllowed && (
@@ -1287,6 +1309,7 @@ function LocalAudioControls({
             data-media-toggle
             aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
             title={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+            {...debateActionAnalyticsAttributes('rematch', cameraOn ? 'Turn camera off' : 'Turn camera on')}
             onClick={onToggleCamera}
             className={cx(
               PAIR_PILL,

@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   startAudio: vi.fn(),
   isMicrophoneEnabled: false,
   setMicrophoneEnabled: vi.fn(async () => undefined),
+  setScreenShareEnabled: vi.fn(async (_enabled: boolean, _options?: unknown) => undefined),
   /** getUserMedia for the camera: a fresh track each time unless a test holds it back. */
   createTracks: vi.fn(async (_options: unknown): Promise<CameraTrack[]> => [cameraTrack()]),
   /** Every camera track acquired, oldest first. */
@@ -118,6 +119,7 @@ async function emitRoom(states: string[], disconnectReason?: number) {
 
 const localParticipant = {
   setMicrophoneEnabled: mocks.setMicrophoneEnabled,
+  setScreenShareEnabled: mocks.setScreenShareEnabled,
   createTracks: mocks.createTracks,
   publishTrack: mocks.publishTrack,
   unpublishTrack: mocks.unpublishTrack,
@@ -1197,5 +1199,74 @@ describe('a room another tab or device took over', () => {
       DisconnectReason.PARTICIPANT_REMOVED
     );
     expect(screen.queryByText('Voice is on in another tab')).not.toBeInTheDocument();
+  });
+});
+
+// GEO-3419: what a space call adds to the voice room. A lobby passes neither option.
+describe('LobbyVoice in a space call', () => {
+  const getDisplayMedia = vi.fn();
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getDisplayMedia, enumerateDevices: async () => [] },
+    });
+  });
+
+  function renderCall(options: Partial<React.ComponentProps<typeof LobbyVoice>> = {}) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={client}>
+        <LobbyVoice
+          lobby={lobby()}
+          connectionId="conn-1"
+          joined
+          currentUserId="u1"
+          onConnectedChange={vi.fn()}
+          {...options}
+        >
+          <Speaking />
+        </LobbyVoice>
+      </QueryClientProvider>
+    );
+  }
+
+  it('offers a lobby no screen share, whatever the token says', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));
+    renderCall();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(screen.queryByRole('button', { name: 'Share your screen' })).not.toBeInTheDocument();
+  });
+
+  it('lets a call’s speaker share their screen, with its audio', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));
+    renderCall({ screenShare: true });
+    fireEvent.click(await screen.findByRole('button', { name: 'Share your screen' }));
+    expect(mocks.setScreenShareEnabled).toHaveBeenCalledWith(true, { audio: true });
+  });
+
+  it('offers no screen share when the token does not allow it', async () => {
+    renderCall({ screenShare: true });
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(screen.queryByRole('button', { name: 'Share your screen' })).not.toBeInTheDocument();
+  });
+
+  it('holds a publisher at the device check, then connects with what they chose', async () => {
+    renderCall({
+      preJoin: join => (
+        <button type="button" onClick={() => join({ audioEnabled: false, videoEnabled: false })}>
+          Join with these
+        </button>
+      ),
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Join with these' }));
+    expect(mocks.roomProps).toMatchObject({ audio: false });
+    expect(screen.queryByRole('button', { name: 'Join with these' })).not.toBeInTheDocument();
+  });
+
+  it('connects a listener without the device check', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_publish: false }));
+    renderCall({ preJoin: () => <p>device check</p> });
+    await waitFor(() => expect(mocks.roomProps).not.toBeNull());
+    expect(screen.queryByText('device check')).not.toBeInTheDocument();
   });
 });

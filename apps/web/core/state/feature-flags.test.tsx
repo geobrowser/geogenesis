@@ -27,7 +27,12 @@ describe('feature flags', () => {
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
     expect(defaultFeatureFlags.lobbyHosting).toBe(false);
+    expect(defaultFeatureFlags.spaceCalls).toBe(false);
+    expect(defaultFeatureFlags.callRecording).toBe(false);
     expect(defaultFeatureFlags.debateDeviceSwitchRecording).toBe(false);
+    expect(defaultFeatureFlags.googleSignIn).toBe(false);
+    expect(defaultFeatureFlags.googleCalendar).toBe(false);
+    expect(defaultFeatureFlags.microsoftCalendar).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
@@ -37,7 +42,12 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      spaceCalls: false,
+      callRecording: false,
       debateDeviceSwitchRecording: false,
+      googleSignIn: false,
+      googleCalendar: false,
+      microsoftCalendar: false,
       bountiesTab: true,
     });
   });
@@ -64,7 +74,12 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      spaceCalls: false,
+      callRecording: false,
       debateDeviceSwitchRecording: false,
+      googleSignIn: false,
+      googleCalendar: false,
+      microsoftCalendar: false,
       bountiesTab: true,
     });
   });
@@ -92,7 +107,12 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       lobbyHosting: false,
+      spaceCalls: false,
+      callRecording: false,
       debateDeviceSwitchRecording: false,
+      googleSignIn: false,
+      googleCalendar: false,
+      microsoftCalendar: false,
       bountiesTab: true,
     });
   });

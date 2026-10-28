@@ -39,6 +39,25 @@ import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
  */
 const EAGER_CARD_COUNT = 4;
 
+// A refetch rebuilds every loaded page from a re-ranked page one, so pages never go stale by age.
+// A failed first load has no data and stays stale, so focus and reconnect still retry it.
+const FEED_SESSION_OPTIONS = { staleTime: Infinity } as const;
+
+// A reader still within a screen of the top gets a fresh feed on return; one who has scrolled keeps theirs.
+// The age matches the app's default staleTime (`core/query-client.tsx`).
+const TOP_REFRESH_AFTER_MS = 30_000;
+function refreshAtTop(query: { state: { data: unknown; dataUpdatedAt: number } }): boolean | 'always' {
+  if (query.state.data === undefined) return true;
+  const atTop = window.scrollY < window.innerHeight;
+  return atTop && Date.now() - query.state.dataUpdatedAt > TOP_REFRESH_AFTER_MS ? 'always' : false;
+}
+
+const FEED_PAGES_SESSION_OPTIONS = {
+  ...FEED_SESSION_OPTIONS,
+  refetchOnWindowFocus: refreshAtTop,
+  refetchOnReconnect: refreshAtTop,
+} as const;
+
 function LoadingSkeleton() {
   return (
     <div className="space-y-4 rounded-lg border border-grey-02 p-4">
@@ -89,6 +108,8 @@ const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
 type EntityFeedProps = {
   /** REST endpoint this feed fetches from (e.g. `/api/explore/feed` or `/api/activity/feed`). */
   apiEndpoint: string;
+  /** Explore's resume policy: loaded pages stay put, refreshing on return only near the top. Explore opts in. */
+  preserveSession?: boolean;
   /** When set, the feed is pinned to this space. */
   lockedSpaceId?: string;
   /** Initial value for the time dropdown. Defaults to "week". */
@@ -102,6 +123,8 @@ type EntityFeedProps = {
    * you waits for them rather than serving Best first and then swapping the feed underneath.
    */
   followedTopicIds?: readonly string[] | null;
+  /** Use the topic stream until onboarding's account-owned follow submissions finish. For you only. */
+  pendingTopicFollows?: boolean;
   /** Whether to render the time-range dropdown. Defaults to true. */
   showTimeFilter?: boolean;
   /** Whether to render the sort dropdown (Best / New / Top). Defaults to false. */
@@ -166,23 +189,31 @@ type EntityFeedProps = {
    * the personal URL, because the CDN ignores cookies.
    */
   cdnFirstPage?: boolean;
+  /**
+   * Extra cards between the feed's own, by the index of the card they follow, for `feedLength`
+   * cards (GEO-3421's past calls). Drawn only on an unfiltered feed; pages and cursors ignore them.
+   */
+  interleave?: (feedLength: number) => ReadonlyMap<number, React.ReactNode>;
 };
 
 /**
  * The query string of a feed request. `anonymous` adds the cacheable-URL marker, and only to the
  * plain first Best page: any cursor, filter or other sort stays on the uncached URL.
  */
-export function buildFeedQuery(params: {
+type FeedQueryParams = {
   sort: ExplorePageSort;
   time: ExploreTime | undefined;
   spaceIds: readonly string[];
   typeIds: readonly string[] | undefined;
   topicIds: readonly string[];
   followedTopicIds: readonly string[];
+  pendingTopicFollows?: boolean;
   fixedParams: Record<string, string>;
   cursor: string | undefined;
   anonymous?: boolean;
-}): string {
+};
+
+export function buildFeedQuery(params: FeedQueryParams): string {
   const sp = new URLSearchParams();
   sp.set('sort', params.sort);
   // Absent means "no time filter" — see the route's parseTime. Sending nothing is what keeps a
@@ -194,6 +225,7 @@ export function buildFeedQuery(params: {
   if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
   if (params.topicIds.length > 0) sp.set('topicIds', params.topicIds.join(','));
   if (params.followedTopicIds.length > 0) sp.set('followedTopicIds', params.followedTopicIds.join(','));
+  if (params.sort === 'for-you' && params.pendingTopicFollows) sp.set('pendingTopicFollows', '1');
   for (const [key, value] of Object.entries(params.fixedParams)) sp.set(key, value);
   if (params.cursor) sp.set('cursor', params.cursor);
   if (params.anonymous && sp.toString() === 'sort=best') sp.set(PUBLIC_FEED_PARAM, '1');
@@ -202,19 +234,8 @@ export function buildFeedQuery(params: {
 
 async function fetchFeedPage(
   apiEndpoint: string,
-  params: {
-    sort: ExplorePageSort;
-    /** Omitted when the feed's sort has no time range. */
-    time: ExploreTime | undefined;
-    /** Empty means no space narrowing at all. */
-    spaceIds: readonly string[];
-    typeIds: readonly string[] | undefined;
-    topicIds: readonly string[];
-    followedTopicIds: readonly string[];
-    fixedParams: Record<string, string>;
-    cursor: string | undefined;
+  params: FeedQueryParams & {
     identityToken?: string | null;
-    anonymous?: boolean;
   }
 ): Promise<ExploreFeedResult> {
   const res = await fetch(`${apiEndpoint}?${buildFeedQuery(params)}`, {
@@ -271,11 +292,13 @@ async function fetchTopicFacets(
  */
 export function EntityFeed({
   apiEndpoint,
+  preserveSession = false,
   lockedSpaceId,
   initialTime = 'week',
   initialSort = 'new',
   sortOptions = DEFAULT_SORT_OPTIONS,
   followedTopicIds = [],
+  pendingTopicFollows = false,
   showTimeFilter = true,
   showSortFilter = false,
   compactHeader = false,
@@ -298,6 +321,7 @@ export function EntityFeed({
   sendIdentityToken = false,
   walletAddress = null,
   cdnFirstPage = false,
+  interleave,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
@@ -509,7 +533,7 @@ export function EntityFeed({
     topicIdsKey,
     fixedParamsKey,
     // Only on For you, so every other sort's key, and so its cache, is unchanged.
-    ...(isForYou ? [requestedFollowedTopicIds.join(',')] : []),
+    ...(isForYou ? [requestedFollowedTopicIds.join(','), pendingTopicFollows] : []),
     // Last, so `placeholderData` below can tell a change of account from a change of filter.
     viewerAddress,
   ];
@@ -522,6 +546,7 @@ export function EntityFeed({
     typeIds,
     topicIds: selectedTopicIds,
     followedTopicIds: requestedFollowedTopicIds,
+    pendingTopicFollows: isForYou && pendingTopicFollows,
     fixedParams,
   };
 
@@ -533,7 +558,9 @@ export function EntityFeed({
     cdnFirstPage &&
     viewerAddress !== null &&
     buildFeedQuery({ ...feedParams, cursor: undefined, anonymous: true }).includes(`${PUBLIC_FEED_PARAM}=1`);
+  // Only a placeholder until the reader's own page lands, so it is never refreshed automatically.
   const publicFirstPage = useQuery({
+    ...(preserveSession ? FEED_SESSION_OPTIONS : {}),
     queryKey: [apiEndpoint, PUBLIC_FEED_PARAM],
     queryFn: () => fetchFeedPage(apiEndpoint, { ...feedParams, cursor: undefined, anonymous: true }),
     enabled: paintsFromPublicPage,
@@ -543,6 +570,7 @@ export function EntityFeed({
 
   const { data, isLoading, isFetchingNextPage, isPlaceholderData, fetchNextPage, hasNextPage, error } =
     useInfiniteQuery({
+      ...(preserveSession ? FEED_PAGES_SESSION_OPTIONS : {}),
       queryKey,
       queryFn: async ({ pageParam }) =>
         fetchFeedPage(apiEndpoint, {
@@ -625,6 +653,9 @@ export function EntityFeed({
   React.useEffect(() => {
     if (placeholderLeadId !== null) setPinnedLeadId(placeholderLeadId);
   }, [placeholderLeadId, setPinnedLeadId]);
+
+  const unfiltered = requestedSpaceIds.length === 0 && typeIds === undefined && selectedTopicIds.length === 0;
+  const interleaved = unfiltered ? interleave?.(items.length) : undefined;
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_LABELS[sort];
@@ -784,16 +815,18 @@ export function EntityFeed({
           <p className="text-browseMenu text-grey-04">No entities match these filters yet.</p>
         ) : (
           items.map((item, index) => (
-            <ExploreFeedCard
-              itemPosition={index + 1}
-              key={`${item.entityId}-${item.spaceId}`}
-              item={item}
-              hideSpaceLink={lockedSpaceId != null}
-              hideJoinButton={lockedSpaceId != null}
-              titleOpensSidePanel={titleOpensSidePanel}
-              claimCardVariant={claimCardVariant}
-              deferUntilNearViewport={index >= EAGER_CARD_COUNT}
-            />
+            <React.Fragment key={`${item.entityId}-${item.spaceId}`}>
+              <ExploreFeedCard
+                itemPosition={index + 1}
+                item={item}
+                hideSpaceLink={lockedSpaceId != null}
+                hideJoinButton={lockedSpaceId != null}
+                titleOpensSidePanel={titleOpensSidePanel}
+                claimCardVariant={claimCardVariant}
+                deferUntilNearViewport={index >= EAGER_CARD_COUNT}
+              />
+              {interleaved?.get(index)}
+            </React.Fragment>
           ))
         )}
         <div ref={sentinelRef} className="h-4 w-full" aria-hidden />

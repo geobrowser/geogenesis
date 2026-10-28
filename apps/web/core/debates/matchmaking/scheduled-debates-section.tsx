@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -9,7 +10,6 @@ import { useRouter } from 'next/navigation';
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import {
   type DebateParticipantSummary,
-  GeoChatRequestError,
   type ScheduledDebateRequest,
   type UpcomingDebateRoom,
 } from '~/core/debates/api';
@@ -19,16 +19,14 @@ import { hostsLabel } from '~/core/debates/lobbies/lobby-format';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
-import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
+import { SCHEDULED_NOTICE_COPY, UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
 import { sameId } from '~/core/debates/rooms/room-presence';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
 import { useOpenScheduledRequests } from '~/core/debates/rooms/scheduled-awaiting';
-import {
-  useCancelScheduledDebate,
-  useRespondToScheduledDebate,
-  useScheduledDebates,
-} from '~/core/debates/rooms/scheduling-hooks';
+import { noticeRequestState } from '~/core/debates/rooms/scheduled-notice';
+import { useCancelScheduledDebate, useScheduledDebates } from '~/core/debates/rooms/scheduling-hooks';
+import { cancelFailureMessage } from '~/core/debates/rooms/scheduling-refusals';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { normId } from '~/core/utils/norm-id';
 
@@ -38,23 +36,74 @@ import { Text } from '~/design-system/text';
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
 import { useDebatePeople } from './hooks';
-import { hubAnalyticsAttributes } from './hub-analytics';
+import { type DebateAnalyticsSurface, debateAnalyticsLabel, hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
+import { HUB_STICKY_CONTROLS_SELECTOR, scrollToSection, useHubScrollSelector } from './hub-scroll';
 import { RequestParties } from './request-parties';
 import { RequestSection } from './request-section';
+import { formatDebateSlot, formatDebateTime, formatTime } from './scheduled-debate-format';
 import { type UpcomingLobbyRow, upcomingLobbyRows } from './upcoming-lobby-rows';
+import { useAnswerOnce } from './use-answer-once';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useRequestCountdown } from './use-request-countdown';
+import { type ScheduledDebateAnswer, useScheduledDebateAnswer } from './use-scheduled-debate-answer';
+
+export { formatDebateSlot, formatDebateTime } from './scheduled-debate-format';
 
 /**
  * Scheduled debates in the Requests tab (GEO-2939, GEO-2940). Answering and joining both happen
  * here, so neither depends on an email arriving or a popup being caught.
  */
-export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
+export function ScheduledDebatesSection({
+  content,
+  focusedRequestId = null,
+}: {
+  content: ScheduledContent;
+  /** A scheduled request a link asked to see (GEO-3431): outlined, and scrolled to once. */
+  focusedRequestId?: string | null;
+}) {
   const { answerable, upcoming, lobbies, people, requestsError, roomsError, lobbiesError } = content;
-  const respond = useRespondToScheduledDebate();
-  const [conflict, setConflict] = React.useState<string | null>(null);
+  // Not until every read has landed: a section that loads above it would push the card back out of
+  // view after the scroll.
+  const focusedId = content.loading ? null : focusedRequestId;
+  const isFocused = (requestId: string | null) =>
+    focusedId !== null && requestId !== null && sameId(focusedId, requestId);
+  const hubScrollSelector = useHubScrollSelector();
+  React.useEffect(() => {
+    if (!focusedId) return;
+    // Only the hub's box, the way the lobby's sections jump: `scrollIntoView` scrolls every ancestor.
+    // Clear of the Requests tab's filter bar, pinned to the top of that box.
+    const node = document.querySelector<HTMLElement>(FOCUSED_CARD);
+    if (!node) return;
+    const scroller = hubScrollSelector ? node.closest<HTMLElement>(hubScrollSelector) : null;
+    const stickyBar = scroller?.querySelector<HTMLElement>(HUB_STICKY_CONTROLS_SELECTOR);
+    scrollToSection(node, scroller, stickyBar?.getBoundingClientRect().height ?? 0);
+    // And focus, for a keyboard or screen reader: the hub is not modal, so focus is still on the page.
+    node.focus({ preventScroll: true });
+  }, [focusedId, hubScrollSelector]);
+  // A link to a request that is no longer here (answered, withdrawn or lapsed since the email, or
+  // another account's) says so rather than opening on nothing, in the Running late dialog's words.
+  // Never for an accepted one: its card is under Upcoming debates, which another read fills, so it
+  // can be a poll behind (or that read failed); either way the debate is on. And not when the
+  // requests read failed: the read-failed line already says why.
+  const { data: scheduledRequests } = useScheduledDebates();
+  const linkedShown =
+    answerable.some(request => isFocused(request.request_id)) || upcoming.some(row => isFocused(row.requestId));
+  const linkedState =
+    focusedId !== null && !linkedShown && !requestsError
+      ? noticeRequestState(scheduledRequests?.requests.find(request => sameId(request.request_id, focusedId)))
+      : null;
+  // A pending one not listed lapsed at its start, which reads as over.
+  const linkGone = linkedState === 'missing' ? 'missing' : linkedState && linkedState !== 'active' ? 'over' : null;
+  const linkGoneNotice = linkGone && (
+    <div role="status">
+      <Text as="p" variant="footnote" color="grey-04">
+        {SCHEDULED_NOTICE_COPY.state[linkGone]}
+      </Text>
+    </div>
+  );
+  const { answer, busy, error: conflict } = useScheduledDebateAnswer();
   const viewerId = useCurrentGeoChatUserId();
   const lookUp = useParticipantLookup(answerable.length > 0 || upcoming.length > 0, people);
   // The debate whose time is being moved, on the other debater's week. One at a time, so the modal
@@ -80,25 +129,11 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
 
-  if (!hasScheduledContent(content)) return null;
-
-  const answer = (requestId: string, accepted: boolean) => {
-    setConflict(null);
-    respond.mutate(
-      { requestId, accepted },
-      {
-        onSuccess: result => {
-          if (result.outcome === 'conflict') {
-            setConflict(`That clashes with a debate ${formatDebateTime(result.conflicting_start_at)}.`);
-          }
-        },
-        onError: error => setConflict(error.message),
-      }
-    );
-  };
+  if (!hasScheduledContent(content)) return linkGoneNotice || null;
 
   return (
     <>
+      {linkGoneNotice}
       {(upcoming.length > 0 || roomsError) && (
         <RequestSection label="Upcoming debates">
           {upcoming.map(({ room, opponentUserId, scheduledEndAt, requestId }) => (
@@ -109,6 +144,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
               scheduledEndAt={scheduledEndAt}
               opponent={lookUp(opponentUserId)}
               viewer={viewer}
+              focused={isFocused(requestId)}
               onReschedule={reschedulerFor(requestId, opponentUserId, 'requests_reschedule')}
             />
           ))}
@@ -141,7 +177,8 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
                   opponent={lookUp(opponentUserId)}
                   viewer={viewer}
                   viewerId={viewerId}
-                  busy={respond.isPending}
+                  focused={isFocused(request.request_id)}
+                  busy={busy}
                   onAnswer={answer}
                   onReschedule={reschedulerFor(
                     request.request_id,
@@ -176,6 +213,9 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   );
 }
 
+/** The card a link asked for (`ScheduleCard`'s `data-focused`), which the section scrolls to. */
+const FOCUSED_CARD = '[data-focused]';
+
 /** A debate being moved: whose week to open, the request it moves, and which button asked. */
 type Rescheduling = { requestId: string; opponentUserId: string; opponentName: string | null; entry: ScheduleEntry };
 
@@ -195,6 +235,8 @@ export type ScheduledContent = {
   roomsError: Error | null;
   /** The lobby list, which hosted lobbies and hosts' names come from. */
   lobbiesError: Error | null;
+  /** Any of the three reads still on its first load. */
+  loading: boolean;
 };
 
 /** Anything for this section to show, a failed read included: one is not an empty schedule. */
@@ -271,6 +313,7 @@ export function useScheduledContent(): ScheduledContent {
     requestsError: requests.error ?? null,
     roomsError: rooms.error ?? null,
     lobbiesError: lobbyList.error ?? null,
+    loading: Boolean(requests.isLoading || rooms.isLoading || lobbyList.isLoading),
   };
 }
 
@@ -310,9 +353,12 @@ function UpcomingRow({
   scheduledEndAt,
   opponent,
   viewer,
+  focused,
   onReschedule,
 }: {
   room: UpcomingDebateRoom;
+  /** A link asked for this debate's request (GEO-3431): accepted since the email went out. */
+  focused: boolean;
   requestId: string | null;
   scheduledEndAt: string | null;
   opponent: DebateParticipantSummary | null;
@@ -329,6 +375,7 @@ function UpcomingRow({
 
   return (
     <ScheduleCard
+      focused={focused}
       parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={
         room.due
@@ -377,7 +424,7 @@ function UpcomingRow({
   );
 }
 
-function ScheduledRow({
+export function ScheduledRow({
   request,
   opponent,
   viewer,
@@ -386,15 +433,20 @@ function ScheduledRow({
   onAnswer,
   onReschedule,
   ref,
+  focused = false,
+  analyticsSurface = 'hub',
 }: {
+  /** A link asked for this request (GEO-3431). */
+  focused?: boolean;
   /** From `HubCardList`, whose `popLayout` measures the card on its way out. */
   ref?: React.Ref<HTMLElement>;
+  analyticsSurface?: DebateAnalyticsSurface;
   request: ScheduledDebateRequest;
   opponent: DebateParticipantSummary | null;
   viewer: DebateParticipantSummary | null;
   viewerId: string | null;
   busy: boolean;
-  onAnswer: (requestId: string, accepted: boolean) => void;
+  onAnswer: ScheduledDebateAnswer;
   /** Opens the other debater's week to propose a new time for this request. Null when they are not known. */
   onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
@@ -407,10 +459,10 @@ function ScheduledRow({
   const viewerAccepted =
     viewerId !== null && request.participants.some(entry => entry.accepted === true && sameId(entry.user_id, viewerId));
   const withdrawable = !request.viewer_must_answer && (proposedByViewer || viewerAccepted);
-
   return (
     <ScheduleCard
       ref={ref}
+      focused={focused}
       parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
       status={`${
@@ -423,48 +475,22 @@ function ScheduledRow({
       note={adminArrangedNote(request, opponent, viewerId)}
       actions={
         request.viewer_must_answer ? (
-          // Decline first, Accept primary on the right: the order every other request card uses.
-          // Under them, the scheduling email's third answer in its words (GEO-3232): a time that
-          // does not suit is moved, and the other side asked again, rather than declined.
-          <div className="grid grid-cols-2 gap-2">
-            {/* Labelled apart from the instant request cards' Accept and Decline, which would
-                otherwise share their labels and could not be told from these in the data. */}
-            <HubPillButton
-              analyticsLabel="Debate hub Decline scheduled debate"
-              analyticsIntent="decline_scheduled_debate"
-              onClick={() => onAnswer(request.request_id, false)}
-              disabled={busy}
-            >
-              Decline
-            </HubPillButton>
-            <HubPillButton
-              variant="primary"
-              analyticsLabel="Debate hub Accept scheduled debate"
-              analyticsIntent="accept_scheduled_debate"
-              onClick={() => onAnswer(request.request_id, true)}
-              disabled={busy}
-            >
-              Accept
-            </HubPillButton>
-            {onReschedule && (
-              <HubPillButton
-                className="col-span-2"
-                analyticsLabel="Debate hub Choose different time for scheduled request"
-                analyticsIntent="choose_different_time_scheduled_request"
-                onClick={event => onReschedule(event.currentTarget)}
-                disabled={busy}
-              >
-                Choose different time
-              </HubPillButton>
-            )}
-          </div>
+          <ScheduledAnswerButtons
+            key={`${request.scheduled_start_at}:${request.reschedule_count}`}
+            requestId={request.request_id}
+            busy={busy}
+            onAnswer={onAnswer}
+            onReschedule={onReschedule}
+            analyticsSurface={analyticsSurface}
+          />
         ) : (
           withdrawable && (
             <div className="flex flex-col gap-2">
               {viewerAccepted && onReschedule && (
                 <HubPillButton
                   className="w-full"
-                  analyticsLabel="Debate hub Reschedule scheduled request"
+                  analyticsSurface={analyticsSurface}
+                  analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Reschedule scheduled request')}
                   analyticsIntent="reschedule_scheduled_request"
                   onClick={event => onReschedule(event.currentTarget)}
                 >
@@ -475,12 +501,70 @@ function ScheduledRow({
                 requestId={request.request_id}
                 kind={proposedByViewer ? 'request' : 'debate'}
                 opponent={opponent}
+                analyticsSurface={analyticsSurface}
               />
             </div>
           )
         )
       }
     />
+  );
+}
+
+/** One answer per request version, including taps before the mutation's pending render. */
+function ScheduledAnswerButtons({
+  requestId,
+  busy,
+  onAnswer,
+  onReschedule,
+  analyticsSurface,
+}: {
+  requestId: string;
+  busy: boolean;
+  onAnswer: ScheduledDebateAnswer;
+  onReschedule: ((opener: HTMLElement) => void) | null;
+  analyticsSurface: DebateAnalyticsSurface;
+}) {
+  const { answerOnce, releaseAnswer } = useAnswerOnce();
+  return (
+    // Decline first, Accept primary on the right: the order every other request card uses.
+    // Under them, the scheduling email's third answer in its words (GEO-3232): a time that
+    // does not suit is moved, and the other side asked again, rather than declined.
+    <div className="grid grid-cols-2 gap-2">
+      {/* Labelled apart from the instant request cards' Accept and Decline, which would
+          otherwise share their labels and could not be told from these in the data. */}
+      <HubPillButton
+        analyticsSurface={analyticsSurface}
+        analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Decline scheduled debate')}
+        analyticsIntent="decline_scheduled_debate"
+        onClick={() => answerOnce(() => onAnswer(requestId, false, releaseAnswer.onError))}
+        disabled={busy}
+      >
+        Decline
+      </HubPillButton>
+      <HubPillButton
+        variant="primary"
+        analyticsSurface={analyticsSurface}
+        analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Accept scheduled debate')}
+        analyticsIntent="accept_scheduled_debate"
+        onClick={() => answerOnce(() => onAnswer(requestId, true, releaseAnswer.onError))}
+        disabled={busy}
+      >
+        Accept
+      </HubPillButton>
+      {onReschedule && (
+        <HubPillButton
+          className="col-span-2"
+          analyticsSurface={analyticsSurface}
+          analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Choose different time for scheduled request')}
+          analyticsIntent="choose_different_time_scheduled_request"
+          onClick={event => onReschedule(event.currentTarget)}
+          disabled={busy}
+        >
+          Choose different time
+        </HubPillButton>
+      )}
+    </div>
   );
 }
 
@@ -519,11 +603,13 @@ const CANCEL_COPY = {
  * Calling a scheduled debate off (GEO-3093), behind a confirm step: an accepted debate is an
  * agreement with someone else, and one press should not be able to undo it.
  */
-function CancelScheduled({
+export function CancelScheduled({
   requestId,
   kind,
   opponent,
+  analyticsSurface = 'hub',
 }: {
+  analyticsSurface?: DebateAnalyticsSurface;
   requestId: string;
   kind: keyof typeof CANCEL_COPY;
   opponent: DebateParticipantSummary | null;
@@ -548,7 +634,8 @@ function CancelScheduled({
       <div className="flex flex-col gap-2">
         <HubPillButton
           className="w-full"
-          analyticsLabel={`Debate hub ${label}`}
+          analyticsSurface={analyticsSurface}
+          analyticsLabel={debateAnalyticsLabel(analyticsSurface, label)}
           analyticsIntent={intent}
           onClick={() => {
             setError(null);
@@ -573,7 +660,8 @@ function CancelScheduled({
       </Text>
       <div className="grid grid-cols-2 gap-2">
         <HubPillButton
-          analyticsLabel={`Debate hub Keep ${kind}`}
+          analyticsSurface={analyticsSurface}
+          analyticsLabel={debateAnalyticsLabel(analyticsSurface, `Keep ${kind}`)}
           analyticsIntent={`keep_scheduled_${kind}`}
           onClick={() => setConfirming(false)}
           disabled={cancel.isPending}
@@ -582,7 +670,8 @@ function CancelScheduled({
         </HubPillButton>
         <HubPillButton
           variant="primary"
-          analyticsLabel={`Debate hub Confirm ${label}`}
+          analyticsSurface={analyticsSurface}
+          analyticsLabel={debateAnalyticsLabel(analyticsSurface, `Confirm ${label}`)}
           analyticsIntent={`confirm_${intent}`}
           pending={cancel.isPending}
           pendingLabel="Cancelling…"
@@ -603,17 +692,6 @@ function CancelScheduled({
       </div>
     </div>
   );
-}
-
-/** geo-chat's two refusals, said plainly; anything else keeps its own message. */
-export function cancelFailureMessage(error: unknown) {
-  if (error instanceof GeoChatRequestError) {
-    if (error.code === 'debate_already_started') {
-      return 'Someone has already joined this debate, so it can no longer be cancelled.';
-    }
-    if (error.code === 'request_not_cancellable') return 'This has already been answered, cancelled or expired.';
-  }
-  return error instanceof Error ? error.message : 'Could not cancel. Try again.';
 }
 
 /**
@@ -646,8 +724,11 @@ function ScheduleCard({
   actions,
   ref,
   testId,
+  focused = false,
 }: {
   ref?: React.Ref<HTMLElement>;
+  /** A link asked for this card (GEO-3431): outlined. `ScheduledDebatesSection` scrolls to it. */
+  focused?: boolean;
   /** Who it is with: the "You vs Them" strip for a debate, the lobby's name and host for a lobby. */
   parties: React.ReactNode;
   testId?: string;
@@ -662,8 +743,15 @@ function ScheduleCard({
     <motion.article
       ref={ref}
       {...hubCardMotion}
-      className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
+      className={cx(
+        'flex w-full flex-col gap-3 rounded-lg border bg-white p-3',
+        // The border is the marker; the browser's ring for a focus set from code would be a second one.
+        focused ? 'border-text outline-none' : 'border-grey-02'
+      )}
       data-testid={testId}
+      data-focused={focused || undefined}
+      aria-current={focused || undefined}
+      tabIndex={focused ? -1 : undefined}
     >
       {/* The time on its own line, with where things stand under it: side by side, a slot and a
           sentence crowd each other out at this width, and it was the status that lost. */}
@@ -777,46 +865,4 @@ function ReadFailed({ children }: { children: React.ReactNode }) {
       {children}
     </Text>
   );
-}
-
-/** `Today at 1:00 PM`, `Tomorrow at ...`, else `Thu, Sep 24 at ...`. */
-export function formatDebateTime(iso: string, now = new Date()) {
-  const at = new Date(iso);
-  if (Number.isNaN(at.getTime())) return iso;
-
-  return `${formatDay(at, now)} at ${formatTime(iso)}`;
-}
-
-function formatDay(at: Date, now: Date) {
-  const days = Math.round((startOfDay(at).getTime() - startOfDay(now).getTime()) / 86_400_000);
-  return days === 0
-    ? 'Today'
-    : days === 1
-      ? 'Tomorrow'
-      : at.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-/** `Tomorrow, 11:00 – 11:30 AM`: the day once, then the slot. Falls back to the start alone. */
-export function formatDebateSlot(startIso: string, endIso: string, now = new Date()) {
-  const start = new Date(startIso);
-  const end = new Date(endIso);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-    return formatDebateTime(startIso, now);
-  }
-  const from = formatTime(startIso);
-  const to = formatTime(endIso);
-  // `11:00 – 11:30 AM` rather than `11:00 AM – 11:30 AM`, when both ends share the period.
-  const period = /\s?([AP]M)$/i;
-  const fromPeriod = from.match(period)?.[1];
-  const shared = fromPeriod !== undefined && fromPeriod === to.match(period)?.[1];
-  return `${formatDay(start, now)}, ${shared ? from.replace(period, '') : from} – ${to}`;
-}
-
-function startOfDay(at: Date) {
-  return new Date(at.getFullYear(), at.getMonth(), at.getDate());
-}
-
-function formatTime(iso: string) {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime()) ? iso : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }

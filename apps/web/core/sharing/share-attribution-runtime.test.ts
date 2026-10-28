@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createShareLink } from './share-link';
+import { createShareLink, expandShareLink } from './share-link';
 
 const { JSDOM } = createRequire(import.meta.url)('jsdom');
 const publicDir = path.join(process.cwd(), 'public');
@@ -15,7 +15,10 @@ describe('vendored share attribution', () => {
   it('retains the landing tags after navigation, serializes the handoff contract, and rotates for another share', async () => {
     const first = createShareLink(`https://www.geobrowser.io/debate/${target}?via=lobby`, 'lobby', target, 'x');
     const second = createShareLink(`https://www.geobrowser.io/debate/${target}?via=lobby`, 'lobby', target, 'x');
-    const dom = new JSDOM('<!doctype html><body></body>', { url: first.url, runScripts: 'outside-only' });
+    const dom = new JSDOM('<!doctype html><body></body>', {
+      url: expandShareLink(first.url)!,
+      runScripts: 'outside-only',
+    });
     const browser = dom.window as Window;
     const fetch = vi.fn(async () => ({ ok: true, status: 200 }));
     browser.fetch = fetch as unknown as typeof window.fetch;
@@ -70,11 +73,11 @@ describe('vendored share attribution', () => {
         utm_source: 'x',
         utm_medium: 'share',
         utm_campaign: 'geo_share',
-        utm_content: new URL(first.url).searchParams.get('utm_content'),
+        utm_content: new URL(expandShareLink(first.url)!).searchParams.get('utm_content'),
       });
       const handoff = properties(records().find((r: any) => r.body.stringValue === 'share_link_handoff'));
       expect(handoff).toMatchObject({ ...first.attribution, sharer_profile_space_id: target, handoff_kind: 'copied' });
-      dom.window.history.replaceState({}, '', second.url);
+      dom.window.history.replaceState({}, '', expandShareLink(second.url)!);
       runtime.pageViewed!();
       const next = runtime.getContext!();
       expect(next.session_id).not.toBe(initial.session_id);
@@ -83,7 +86,7 @@ describe('vendored share attribution', () => {
       );
       expect(properties(records().filter((r: any) => r.body.stringValue === 'page_viewed')[1])).toMatchObject({
         utm_source: 'x',
-        utm_content: new URL(second.url).searchParams.get('utm_content'),
+        utm_content: new URL(expandShareLink(second.url)!).searchParams.get('utm_content'),
       });
       expect(records().filter((r: any) => r.body.stringValue === 'signed_up')).toHaveLength(1);
     } finally {

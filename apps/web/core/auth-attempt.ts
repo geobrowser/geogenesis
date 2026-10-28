@@ -220,6 +220,16 @@ export function openAuthAttempt(properties: AnalyticsProperties = { auth_trigger
   save(attempt);
   captureAuthEvent('auth_prompt_viewed', attemptProperties(attempt));
 }
+/**
+ * On a redirect's return, takes over this tab's attempt `id` so the return can end it as its starter
+ * would. False once another attempt has replaced it or it has ended.
+ */
+export function claimRedirectedAuthAttempt(id: string) {
+  const attempt = currentAuthAttempt();
+  if (!attempt || attempt.id !== id || attempt.endedAt) return false;
+  ownedAttemptId = id;
+  return true;
+}
 /** Outcomes only the document that started the attempt can record: the visitor left this one. */
 const ENDED_BY_LEAVING: ReadonlySet<AuthAttemptOutcome> = new Set([
   'closed',
@@ -275,7 +285,11 @@ export function marketingAuthProperties(search: string): AnalyticsProperties {
 }
 
 /** Progress is resumable; an explicit dismissal is separate from the last step seen. */
-export function trackAuthOnboarding(step: string, outcome: 'viewed' | 'completed' | 'dismissed' | 'failed') {
+export function trackAuthOnboarding(
+  step: string,
+  outcome: 'viewed' | 'completed' | 'skipped' | 'dismissed' | 'failed',
+  picks?: { topic_count: number; space_pick_count: number }
+) {
   const attempt = currentAuthAttempt();
   if (!attempt || !isSignedInOutcome(attempt.outcome)) return;
   // Once per attempt. Two reporters can see the same moment — the personal space runner can resolve
@@ -285,7 +299,12 @@ export function trackAuthOnboarding(step: string, outcome: 'viewed' | 'completed
   if (attempt.onboardingReported?.includes(reported)) return;
   attempt.onboardingReported = [...(attempt.onboardingReported ?? []), reported];
   save(attempt, false);
-  captureAuthEvent('auth_onboarding_progress', { ...attemptProperties(attempt), onboarding_step: step, outcome });
+  captureAuthEvent('auth_onboarding_progress', {
+    ...attemptProperties(attempt),
+    onboarding_step: step,
+    outcome,
+    ...picks,
+  });
 }
 
 /** Join only the intended action on the same target, never all later account activity. */

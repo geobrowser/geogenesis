@@ -22,8 +22,8 @@ import type { Entity } from '~/core/types';
  * so it is written once here.
  *
  * `offersDebate: false` for every debate surface, and not a parameter. The claims panel, the card
- * over the video and the end-of-debate scorecard all sit inside a debate the viewer is already
- * watching, so offering them another one is the wrong invitation at the wrong moment — and without
+ * over the video, the debate card's footer (GEO-3454) and the end-of-debate scorecard all sit
+ * inside a debate the viewer is already watching, so offering them another one is the wrong invitation at the wrong moment — and without
  * an offer there is nothing for an account-level match's faces to be borrowed into.
  *
  * Deliberately not in `core/claims/browse` beside `useClaimResponseState`: `matchmaking-claim-card`
@@ -44,7 +44,7 @@ export function useDebateClaimResponse({
 }: {
   claimId: string;
   spaceId: string;
-  /** Where the save sheet's first ask comes; see `SavePromptSurface`. */
+  /** The save ask's surface, for analytics; see `SavePromptSurface`. */
   savePromptSurface?: SavePromptSurface;
   /** geo-chat's row, where it has one. Null in the spaces it does not index, and before it answers. */
   row: DebateClaim | null;

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 import { debateRecordingFromPath } from '~/core/debates/recording-routes';
+import { expandShareLink } from '~/core/sharing/share-link';
 import { isPossibleSpacePath, isValidId } from '~/core/utils/space-url';
 
 /**
@@ -45,6 +46,12 @@ import { isPossibleSpacePath, isValidId } from '~/core/utils/space-url';
  * problem.
  */
 export default function proxy(request: NextRequest): NextResponse | Promise<NextResponse> {
+  const shared = expandShareLink(request.url);
+  if (shared) return NextResponse.redirect(shared, 307);
+  // The matcher only sends `/debate` here for a short share code; a code that does not parse opens
+  // the room as it is.
+  if (request.nextUrl.pathname.startsWith('/debate/')) return NextResponse.next();
+
   const recording = debateRecordingFromPath(request.nextUrl.pathname);
   // A recording link's debate id is checked like the space's: one that cannot exist is rejected as
   // cheaply as any other impossible URL, rather than costing a graph round-trip.
@@ -124,5 +131,9 @@ export const config = {
   // Scoped to /space so no other route pays for this check. Excludes Next's own
   // asset paths, which never look like space URLs but would otherwise be matched
   // on every request.
-  matcher: ['/space/:path*'],
+  //
+  // Lobby share links (`/debate/<id>?si=…`) come here only to expand their short share code
+  // (GEO-3485): a share link is copied short, and the analytics runtime only reads the long `utm_*`
+  // tags from the URL it lands on, so it is redirected to them before the page loads.
+  matcher: ['/space/:path*', { source: '/debate/:path*', has: [{ type: 'query', key: 'si' }] }],
 };

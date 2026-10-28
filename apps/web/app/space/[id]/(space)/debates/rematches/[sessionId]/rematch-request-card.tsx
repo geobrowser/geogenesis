@@ -6,6 +6,7 @@ import cx from 'classnames';
 import { motion } from 'framer-motion';
 
 import type { DebateRematchParticipant, DebateRematchRequest } from '~/core/debates/api';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
 import { SpaceChip } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { RequestParties } from '~/core/debates/matchmaking/request-parties';
@@ -80,7 +81,12 @@ export function RematchRequestCard({
       </Text>
 
       {/* A new tab: this card sits in a live room, and following the name in place would leave it. */}
-      <RequestParties viewer={viewer} opponent={opponent} profileLinkTarget="_blank" />
+      <RequestParties
+        viewer={viewer}
+        opponent={opponent}
+        profileLinkTarget="_blank"
+        profileAnalytics={debateActionAnalyticsAttributes('rematch', 'Request card opponent profile')}
+      />
 
       {/* The hub never draws an expired request — `useUnexpiredRequests` filters them out before its
           card sees one. Here the card is drawn from the session, which says `request_pending` until

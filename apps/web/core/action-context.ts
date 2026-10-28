@@ -21,6 +21,8 @@ export const ACTION_COMPONENTS = [
   'join_space_button',
   'bounty_interest',
   'debate_matchmaking',
+  'scheduled_debate_notice',
+  'debate_room',
   'search',
   'ai_assistant',
   'create_space',
@@ -30,6 +32,7 @@ export const ACTION_COMPONENTS = [
   'debate_end_card',
   'debate_claims_panel',
   'topic_follow_button',
+  'onboarding_customize_feed',
   'person_follow_button',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
@@ -51,6 +54,10 @@ export type ActionKind =
   | 'bounty_interest'
   | 'start_debate'
   | 'join_debate'
+  | 'running_late'
+  | 'cant_make_it'
+  | 'no_time_works'
+  | 'nudge'
   | 'search'
   | 'search_result'
   | 'assistant_message'

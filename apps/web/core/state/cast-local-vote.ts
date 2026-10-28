@@ -2,7 +2,7 @@
 
 import type { ActionContext } from '~/core/action-context';
 import { recordAction } from '~/core/analytics-operations';
-import { pushMarketingEvent } from '~/core/marketing-events';
+import { marketingVoteDirection, pushMarketingEvent } from '~/core/marketing-events';
 import { type ResponseKind, voteOutcomeProperties } from '~/core/responses/entity-response';
 
 import { type LocalVoteChange, type LocalVoteDirection, readLocalVotes, toggleLocalVote } from './local-votes';
@@ -15,7 +15,7 @@ import {
 
 /**
  * A signed-out press on any vote control (GEO-3214): kept on this device and drawn as the visitor's
- * at once, with no sign-in in the way. The save sheet asks for an account once they have a few.
+ * at once, with no sign-in in the way. The save sheet asks for an account after their first vote.
  *
  * One function for the claim pills and the up/down arrows, so both count toward the same "Save N
  * votes" and report the same event.
@@ -65,7 +65,12 @@ export function castLocalVote({
     /* Never fail a vote over analytics. */
   }
   if (change.action !== 'remove') {
-    pushMarketingEvent('geo_vote_anonymous', { target_id: entityId, space_id: spaceId, vote_kind: responseKind });
+    pushMarketingEvent('geo_vote_anonymous', {
+      target_id: entityId,
+      space_id: spaceId,
+      vote_kind: responseKind,
+      vote_direction: marketingVoteDirection(responseKind, direction),
+    });
   }
   // Only casts count toward an ask: removing or switching a vote doesn't make anyone more invested.
   if (change.action === 'cast') {

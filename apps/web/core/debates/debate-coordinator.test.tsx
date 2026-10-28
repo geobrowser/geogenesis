@@ -15,6 +15,7 @@ import {
 } from './rematch-join-intent';
 
 const mocks = vi.hoisted(() => ({
+  media: { artifacts: [{ kind: 'social_video' }] } as { artifacts: { kind: string }[] },
   leaveRematchMutate: vi.fn(),
   push: vi.fn(),
   /** The room view the page at `/debate/{id}` loaded, read by the coordinator from the cache. */
@@ -84,6 +85,7 @@ vi.mock('./hooks', () => ({
   useDebateActivity: () => ({ data: mocks.activity, refetch: mocks.refetch }),
   useDebateSharePrompts: () => ({ data: { prompts: mocks.prompts }, isFetching: mocks.promptsFetching }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
+  useDebateMedia: () => ({ data: mocks.media }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallengeMutate, isPending: false, error: null }),
   useLeaveDebateRematch: () => ({ mutate: mocks.leaveRematchMutate, isPending: false, error: null }),
@@ -108,8 +110,50 @@ vi.mock('./rooms/hooks', () => ({
 vi.mock('./rooms/room-opponent', async importOriginal => ({
   ...(await importOriginal<typeof import('./rooms/room-opponent')>()),
   useUpcomingRoomOpponent: () => null,
+  useUpcomingRoomRequest: (room: UpcomingDebateRoom) =>
+    room.kind === 'lobby' ? undefined : { request_id: `request-for-${room.room_id}` },
 }));
 
+// GEO-3427's dialog is its own suite. Here it only has to say which request and step it was opened
+// on, and report a send or a close.
+vi.mock('~/partials/scheduled-debates/scheduled-debate-notice', () => ({
+  ScheduledDebateNoticeDialog: ({
+    requestId,
+    initialStep,
+    onSent,
+    onClose,
+  }: {
+    requestId: string;
+    initialStep: string;
+    onSent?: () => void;
+    onClose: () => void;
+  }) => (
+    <div role="dialog" aria-label={`notice ${initialStep} ${requestId}`}>
+      <button type="button" onClick={onSent}>
+        Send notice
+      </button>
+      <button type="button" onClick={onClose}>
+        Close notice
+      </button>
+    </div>
+  ),
+}));
+
+// GEO-3428's nudge popup has its own tests, and reads the request list this suite does not mock.
+// Stood in for by what the coordinator relies on: when it is allowed, and its `onOpenChange`.
+const nudgePopup = vi.hoisted(() => ({ opens: false, answering: false, enabled: [] as boolean[] }));
+vi.mock('./rooms/room-nudge-popup', async () => {
+  const React = await import('react');
+  return {
+    RoomNudgePopup: ({ enabled, onOpenChange }: { enabled: boolean; onOpenChange: (open: boolean) => void }) => {
+      nudgePopup.enabled.push(enabled);
+      // Mid-answer, the real popup stays up whatever `enabled` says.
+      const open = nudgePopup.opens && (enabled || nudgePopup.answering);
+      React.useEffect(() => onOpenChange(open), [onOpenChange, open]);
+      return null;
+    },
+  };
+});
 vi.mock('./debate-attention', () => ({
   useDebatePresence: () => mocks.visiblePresence,
   useDebateAttention: () => mocks.hasAttention,
@@ -170,6 +214,7 @@ vi.mock('~/core/state/feature-flags', async importOriginal => ({
 beforeEach(() => {
   sessionStorage.clear();
   mocks.roomAtPath = null;
+  mocks.media = { artifacts: [{ kind: 'social_video' }] };
   mocks.push.mockReset();
   mocks.mediaMutate.mockReset();
   mocks.handleMutate.mockReset();
@@ -904,6 +949,69 @@ describe('DebateCoordinator', () => {
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
+  // GEO-3428: one prompt at a time. A nudge's popup holds the join banner back.
+  it('holds the join banner back while a nudge popup is up', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.upcomingRooms = [upcomingRoom({ others_present: true })];
+    nudgePopup.opens = true;
+    try {
+      render(<DebateCoordinator />);
+      await waitFor(() => expect(nudgePopup.enabled).toContain(true));
+      expect(screen.queryByText('Your opponent is waiting')).not.toBeInTheDocument();
+    } finally {
+      nudgePopup.opens = false;
+    }
+  });
+
+  it('keeps the nudge popup off under an incoming request', async () => {
+    mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+    nudgePopup.enabled = [];
+    render(<DebateCoordinator />);
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(nudgePopup.enabled.at(-1)).toBe(false);
+  });
+
+  it('keeps the nudge popup off in a space call', async () => {
+    mocks.pathname = '/space/space-1/calls/call-1';
+    nudgePopup.enabled = [];
+    render(<DebateCoordinator />);
+    await waitFor(() => expect(nudgePopup.enabled.length).toBeGreaterThan(0));
+    expect(nudgePopup.enabled).not.toContain(true);
+  });
+
+  it('holds an incoming request back while a nudge popup is being answered', async () => {
+    mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+    nudgePopup.opens = true;
+    nudgePopup.answering = true;
+    try {
+      render(<DebateCoordinator />);
+      await waitFor(() => expect(nudgePopup.enabled.length).toBeGreaterThan(0));
+      expect(screen.queryByText('Debate request')).not.toBeInTheDocument();
+    } finally {
+      nudgePopup.opens = false;
+      nudgePopup.answering = false;
+    }
+  });
+
+  it('keeps the nudge popup off in a lobby', () => {
+    mocks.pathname = '/debate/lobby-1';
+    mocks.roomAtPath = { kind: 'lobby' };
+    nudgePopup.enabled = [];
+    render(<DebateCoordinator />);
+    expect(nudgePopup.enabled.length).toBeGreaterThan(0);
+    expect(nudgePopup.enabled).not.toContain(true);
+  });
+
+  it('keeps the nudge popup off in a debate room', () => {
+    mocks.pathname = '/debate/room-1';
+    nudgePopup.enabled = [];
+    render(<DebateCoordinator />);
+    expect(nudgePopup.enabled.length).toBeGreaterThan(0);
+    expect(nudgePopup.enabled).not.toContain(true);
+  });
+
   // Urgency comes from the server's own `due` and `others_present`, so this and the Requests tab
   // cannot disagree about what is happening.
   it.each([
@@ -1120,15 +1228,54 @@ describe('DebateCoordinator', () => {
     expect(await screen.findByRole('button', { name: 'Join lobby' })).toBeInTheDocument();
   });
 
-  it('snoozes a room for the session on Not now', async () => {
+  it('snoozes a reminded lobby for the session on Not now', async () => {
     mocks.pathname = '/space/space-1/claims';
-    mocks.upcomingRooms = [upcomingRoom()];
+    mocks.upcomingRooms = [upcomingRoom({ kind: 'lobby', name: 'Debate hour' })];
 
     render(<DebateCoordinator />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Not now' }));
 
-    await waitFor(() => expect(screen.queryByText(/Your debate/)).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Debate hour is open')).not.toBeInTheDocument());
+  });
+
+  // GEO-3430. Not now on a booked debate hid it on one device and told the person waiting nothing.
+  describe('a booked debate banner', () => {
+    it('cannot be put away without a word: closing Running late unsent leaves it up', async () => {
+      mocks.pathname = '/space/space-1/claims';
+      mocks.upcomingRooms = [upcomingRoom({ due: true, others_present: true })];
+
+      render(<DebateCoordinator />);
+
+      await screen.findByText('Your debate room is open');
+      expect(screen.queryByRole('button', { name: 'Not now' })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Running late' }));
+      expect(screen.getByRole('dialog', { name: 'notice late request-for-room-1' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close notice' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(screen.getByText('Your debate room is open')).toBeInTheDocument();
+    });
+
+    it('goes once the other debater has been told, and the confirmation outlives it', async () => {
+      mocks.pathname = '/space/space-1/claims';
+      mocks.upcomingRooms = [upcomingRoom()];
+
+      const { rerender } = render(<DebateCoordinator />);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Can’t make it' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Send notice' }));
+
+      await waitFor(() => expect(screen.queryByText('Your debate room is open')).not.toBeInTheDocument());
+      // A cancel drops the room from the list; the dialog is still up to say it worked.
+      mocks.upcomingRooms = [];
+      rerender(<DebateCoordinator />);
+      expect(screen.getByRole('dialog', { name: 'notice cant request-for-room-1' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Close notice' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 
   // GEO-2941. A source-debate-less rematch is the branch this coordinator pushes a focused tab
@@ -1383,7 +1530,8 @@ describe('DebateCoordinator', () => {
       expect.any(Object)
     );
     expect(mocks.fetch).toHaveBeenCalledWith('https://video.test/social.mp4', { signal: expect.any(AbortSignal) });
-    expect(screen.getAllByText('Preparing video…')).toHaveLength(2);
+    // Only the progress row says so: the button can already open the caption choice.
+    expect(screen.getAllByText('Preparing video…')).toHaveLength(1);
     expect(screen.getByRole('progressbar', { name: 'Preparing social video' })).not.toHaveAttribute('aria-valuenow');
 
     resolveDownload?.(videoResponse());
@@ -1401,7 +1549,7 @@ describe('DebateCoordinator', () => {
     expect(player).toBeInstanceOf(HTMLVideoElement);
     expect(player).toHaveAttribute('src', 'https://video.test/social.mp4');
     expect(player).toHaveAttribute('controls');
-    expect(screen.getByRole('button', { name: 'Preparing video…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Download video' })).toBeEnabled();
   });
 
   it('shares only the prepared MP4 and claim through the native share sheet', async () => {
@@ -1415,6 +1563,7 @@ describe('DebateCoordinator', () => {
 
     const view = render(<DebateCoordinator />);
     fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'With captions' }));
 
     const file = mocks.canShare.mock.calls.at(-1)?.[0].files[0] as File;
     expect(file).toBeInstanceOf(File);
@@ -1427,6 +1576,7 @@ describe('DebateCoordinator', () => {
       expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
         debate_id: 'debate-1',
         method: 'native_share',
+        captions: true,
       });
       expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object));
     });
@@ -1477,6 +1627,7 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
     fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'With captions' }));
 
     await waitFor(() => expect(mocks.share).toHaveBeenCalled());
     expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -1491,13 +1642,14 @@ describe('DebateCoordinator', () => {
     mocks.share.mockRejectedValueOnce(new Error('Share service unavailable')).mockResolvedValueOnce(undefined);
 
     render(<DebateCoordinator />);
-    const shareButton = await screen.findByRole('button', { name: 'Share video' });
-    fireEvent.click(shareButton);
+    fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    const captioned = await screen.findByRole('button', { name: 'With captions' });
+    fireEvent.click(captioned);
 
     expect(await screen.findByText('Share service unavailable')).toBeInTheDocument();
     expect(mocks.handleMutate).not.toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' });
 
-    fireEvent.click(shareButton);
+    fireEvent.click(captioned);
     await waitFor(() =>
       expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object))
     );
@@ -1511,6 +1663,7 @@ describe('DebateCoordinator', () => {
 
     const view = render(<DebateCoordinator />);
     fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'With captions' }));
 
     expect(mocks.downloadClick).toHaveBeenCalledTimes(1);
     const downloadLink = mocks.downloadClick.mock.instances[0] as HTMLAnchorElement;
@@ -1520,6 +1673,7 @@ describe('DebateCoordinator', () => {
     expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
       debate_id: 'debate-1',
       method: 'download',
+      captions: true,
     });
     await waitFor(() =>
       expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object))
@@ -1531,6 +1685,131 @@ describe('DebateCoordinator', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mocks.handleMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches the video without captions only once it is chosen, then needs a tap to share it', async () => {
+    showSharePrompt();
+    mocks.media = { artifacts: [{ kind: 'social_video' }, { kind: 'social_video_uncaptioned' }] };
+    mockArtifactUrls();
+    let resolveClean: ((response: Response) => void) | undefined;
+    mocks.fetch.mockImplementation((url: string) =>
+      url.includes('no-captions')
+        ? new Promise<Response>(resolve => (resolveClean = resolve))
+        : Promise.resolve(videoResponse())
+    );
+    mocks.canShare.mockReturnValue(true);
+    mocks.share.mockResolvedValue(undefined);
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    expect(mocks.mediaMutate).not.toHaveBeenCalledWith(
+      { debateId: 'debate-1', request: { kind: 'social_video_uncaptioned' } },
+      expect.any(Object)
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Without captions' }));
+    expect(mocks.mediaMutate).toHaveBeenCalledWith(
+      { debateId: 'debate-1', request: { kind: 'social_video_uncaptioned' } },
+      expect.any(Object)
+    );
+    expect(await screen.findByRole('button', { name: /Without captions/ })).toBeDisabled();
+
+    resolveClean?.(videoResponse());
+    // The share sheet only opens from a tap, so a file that finishes later waits for one.
+    expect(await screen.findByText('Ready. Tap to share.')).toBeInTheDocument();
+    expect(mocks.share).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Without captions/ }));
+    const file = mocks.share.mock.calls[0]?.[0].files[0] as File;
+    expect(file.name).toBe('debate-debate-1-social-no-captions.mp4');
+    await waitFor(() => {
+      expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
+        debate_id: 'debate-1',
+        method: 'native_share',
+        captions: false,
+      });
+      expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object));
+    });
+  });
+
+  it('downloads the video without captions as soon as it is ready when sharing files is unsupported', async () => {
+    showSharePrompt();
+    mocks.media = { artifacts: [{ kind: 'social_video' }, { kind: 'social_video_uncaptioned' }] };
+    mockArtifactUrls();
+    mocks.fetch.mockImplementation(() => Promise.resolve(videoResponse()));
+    mocks.canShare.mockReturnValue(false);
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Without captions' }));
+
+    await waitFor(() => expect(mocks.downloadClick).toHaveBeenCalledTimes(1));
+    const downloadLink = mocks.downloadClick.mock.instances[0] as HTMLAnchorElement;
+    expect(downloadLink.download).toBe('debate-debate-1-social-no-captions.mp4');
+    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
+      debate_id: 'debate-1',
+      method: 'download',
+      captions: false,
+    });
+  });
+
+  it('lets people choose the video without captions before the captioned one has downloaded', async () => {
+    showSharePrompt();
+    mocks.media = { artifacts: [{ kind: 'social_video' }, { kind: 'social_video_uncaptioned' }] };
+    mockArtifactUrls();
+    mocks.fetch.mockImplementation((url: string) =>
+      url.includes('no-captions') ? Promise.resolve(videoResponse()) : new Promise<Response>(() => undefined)
+    );
+    mocks.canShare.mockReturnValue(false);
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Without captions' }));
+
+    await waitFor(() => expect(mocks.downloadClick).toHaveBeenCalledTimes(1));
+    const downloadLink = mocks.downloadClick.mock.instances[0] as HTMLAnchorElement;
+    expect(downloadLink.download).toBe('debate-debate-1-social-no-captions.mp4');
+  });
+
+  it('saves nothing when someone goes Back while the video without captions is preparing', async () => {
+    showSharePrompt();
+    mocks.media = { artifacts: [{ kind: 'social_video' }, { kind: 'social_video_uncaptioned' }] };
+    mockArtifactUrls();
+    let resolveClean: ((response: Response) => void) | undefined;
+    mocks.fetch.mockImplementation((url: string) =>
+      url.includes('no-captions')
+        ? new Promise<Response>(resolve => (resolveClean = resolve))
+        : Promise.resolve(videoResponse())
+    );
+    mocks.canShare.mockReturnValue(false);
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Without captions' }));
+    await waitFor(() => expect(resolveClean).toBeDefined());
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+
+    resolveClean?.(videoResponse());
+    await waitFor(() => expect(mocks.createObjectURL).toHaveBeenCalledTimes(2));
+    expect(mocks.downloadClick).not.toHaveBeenCalled();
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_social_video_handoff_resolved', expect.anything());
+  });
+
+  it('marks the video without captions unavailable for a debate rendered before it existed', async () => {
+    showSharePrompt();
+    mockArtifactUrls();
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
+
+    expect(screen.getByRole('button', { name: /Without captions/ })).toBeDisabled();
+    expect(screen.getByText('Not available for this debate')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Without captions/ }));
+    expect(mocks.mediaMutate).not.toHaveBeenCalledWith(
+      { debateId: 'debate-1', request: { kind: 'social_video_uncaptioned' } },
+      expect.any(Object)
+    );
+    expect(mocks.downloadClick).not.toHaveBeenCalled();
   });
 
   it('shows a retryable preparation error and retries the same social MP4', async () => {
@@ -1545,6 +1824,7 @@ describe('DebateCoordinator', () => {
       debate_id: 'debate-1',
       stage: 'video_download',
       error_name: 'Error',
+      captions: true,
     });
     fireEvent.click(screen.getByRole('button', { name: 'Retry preparation' }));
 
@@ -1631,12 +1911,13 @@ describe('DebateCoordinator', () => {
     mocks.share.mockReturnValue(new Promise<void>(resolve => (resolveShare = resolve)));
 
     render(<DebateCoordinator />);
-    const shareButton = await screen.findByRole('button', { name: 'Share video' });
-    fireEvent.click(shareButton);
-    fireEvent.click(shareButton);
+    fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    const captioned = await screen.findByRole('button', { name: 'With captions' });
+    fireEvent.click(captioned);
+    fireEvent.click(captioned);
 
     expect(mocks.share).toHaveBeenCalledTimes(1);
-    expect(await screen.findByRole('button', { name: 'Sharing…' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'With captions' })).toBeDisabled());
 
     resolveShare?.();
     await waitFor(() => expect(mocks.handleMutate).toHaveBeenCalledTimes(1));
@@ -1653,6 +1934,7 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
     fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'With captions' }));
 
     expect(
       await screen.findByText("The video was handed off, but Geo couldn't finish updating this prompt. Try again.")
@@ -1730,7 +2012,9 @@ function mockArtifactUrls() {
     const url =
       variables.request.kind === 'social_preview_image'
         ? 'https://video.test/social-preview.jpg'
-        : 'https://video.test/social.mp4';
+        : variables.request.kind === 'social_video_uncaptioned'
+          ? 'https://video.test/social-no-captions.mp4'
+          : 'https://video.test/social.mp4';
     options.onSuccess({ upload: { url } });
   });
 }

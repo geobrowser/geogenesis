@@ -1,8 +1,8 @@
 # Shared-link acquisition (GEO-3267)
 
-Existing debate copy/X/LinkedIn/Reddit controls, lobby copy controls, and availability copy controls now share tagged destinations. Downloads and native file sharing keep their existing behavior. New claim controls, caption links, and video end cards remain follow-up work.
+Existing debate copy/X/LinkedIn/Reddit controls, lobby copy controls, and availability copy controls now share tagged destinations. The debate video sent through the system share sheet carries one too, as `native_share`: the sheet can reach any app, so it is not counted as X. Downloads keep their existing behavior. New claim controls, caption links, and video end cards remain follow-up work.
 
-Each link carries `utm_source=<method>`, `utm_medium=share`, `utm_campaign=geo_share`, and `utm_content=v1:<debate|lobby|availability>:<content UUID>:<share UUID>`. UUIDs are lowercase and dashless. A new share replaces inherited campaign tags while preserving destination parameters and fragments. Canonical/OG metadata uses the existing untagged destinations.
+Each link lands with `utm_source=<method>`, `utm_medium=share`, `utm_campaign=geo_share`, and `utm_content=v1:<debate|lobby|availability>:<content UUID>:<share UUID>`. UUIDs are lowercase and dashless. Since GEO-3485 the copied link carries only a 24-character `si` code instead (method letter, content-type letter, base64url share UUID; the content UUID is the link's last path segment), and `proxy.ts` 307-redirects it to those tags before the page loads. The landing URL, and so this report's contract, is unchanged; links copied before GEO-3485 still carry the tags directly. A new share replaces inherited campaign tags while preserving destination parameters and fragments. Canonical/OG metadata uses the existing untagged destinations.
 
 The random share ID joins an arrival to `share_link_handoff`. The sharer's profile ID appears only on that outbound event, never as an additional tracking tag. An availability link identifies the calendar owner in its path/content ID; the person copying it may be someone else. Unmatched arrivals still count with unknown sharer identity.
 
