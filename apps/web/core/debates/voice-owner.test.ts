@@ -279,6 +279,20 @@ describe('tab voice owner', () => {
     expect(lobbyTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: 'debate' });
   });
 
+  it('asks again as explicit when "Use voice here" lands behind a page-open claim', async () => {
+    const left = openTab('left', 2);
+    left.surface('lobby');
+    await left.claim('lobby', true);
+
+    const right = openTab('right', 1);
+    right.surface('picker');
+    const mounting = right.claim('picker', true);
+    const pressed = right.claim('picker');
+    await expect(mounting).resolves.toBe(false);
+    await expect(pressed).resolves.toBe(true);
+    expect(left.owner.getState().ownership).toBe('elsewhere');
+  });
+
   it('shares one hold between surfaces of the same tab', async () => {
     const tab = openTab('one', 2);
     tab.surface('lobby');

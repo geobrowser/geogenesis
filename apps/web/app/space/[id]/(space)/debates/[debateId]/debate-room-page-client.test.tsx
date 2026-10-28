@@ -3198,6 +3198,7 @@ describe('DebateRoomPageClient', () => {
       )
     ).resolves.toBe(false);
 
+    const previewsBefore = mocks.createLocalTracks.mock.calls.length;
     let released: boolean | undefined;
     await act(async () => {
       released = await mocks.voiceTakeoverHandler?.({
@@ -3211,6 +3212,11 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.roomDisconnect).toHaveBeenCalled();
     expect(await screen.findByText('Voice is on in another tab.')).toBeInTheDocument();
     expect(mocks.roomConnect).toHaveBeenCalledOnce();
+    // Nor are the camera and mic opened again behind the other tab's back.
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(previewsBefore);
 
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));

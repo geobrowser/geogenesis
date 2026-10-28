@@ -1642,6 +1642,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // One voice per person across Geo tabs: a lobby, picker or card preview elsewhere stops while this
   // room holds voice. Yielding (intro, or once the debate is over) leaves a retry that takes it back.
   const { stopMedia } = mediaSession;
+  // Set when this tab gave voice up in the intro: its devices stay closed until a reconnect.
+  const [voiceYielded, setVoiceYielded] = React.useState(false);
   const tabVoice = useVoiceOwnership({
     userId: currentUserId,
     kind: 'debate',
@@ -1662,6 +1664,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (status === 'ready') {
         autoConnectAttemptedRef.current = `${debateId}:intro`;
         setAutoConnectAttemptedKey(autoConnectAttemptedRef.current);
+        setVoiceYielded(true);
       }
       setRoomState('idle');
     },
@@ -1721,6 +1724,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         if (connectStartingGenerationRef.current === generation) setConnectStarting(false);
         return;
       }
+      setVoiceYielded(false);
 
       // A retry replaces a live room, and leaving the old session up evicts
       // the new one on duplicate identity. Null the ref first so the Disconnected handler does not
@@ -3021,12 +3025,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    */
   const debateStatus = debate?.status;
   React.useEffect(() => {
-    if (debateStatus !== 'ready' || roomState !== 'idle') return;
+    if (debateStatus !== 'ready' || roomState !== 'idle' || voiceYielded) return;
     // Warm the route's largest client-only dependency before the ten/finite-second connecting
     // window starts. The import is cached by the module loader; media preview remains independent.
     void import('livekit-client').catch(() => undefined);
     void openForJoinState(joinStateRef.current);
-  }, [debateStatus, openForJoinState, roomState]);
+  }, [debateStatus, openForJoinState, roomState, voiceYielded]);
 
   React.useEffect(() => {
     if (!debate || roomState !== 'idle') return;

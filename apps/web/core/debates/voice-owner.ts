@@ -116,7 +116,7 @@ export function createTabVoiceOwner({
   const listeners = new Set<() => void>();
   let state: VoiceTabState = PENDING;
   let coordinator: DebateRoomOwnershipCoordinator | null = null;
-  let inflight: Promise<boolean> | null = null;
+  let inflight: { automatic: boolean; owned: Promise<boolean> } | null = null;
   let teardown: ReturnType<typeof setTimeout> | null = null;
   let notices: BroadcastChannel | null = null;
 
@@ -205,7 +205,7 @@ export function createTabVoiceOwner({
         }, 0);
       };
     },
-    claim: ({ automatic = false, kind }) => {
+    claim: function claim({ automatic = false, kind }): Promise<boolean> {
       const active = ensureCoordinator();
       // Without Web Locks and BroadcastChannel no tab can ask another to stop, so voice is never
       // withheld; LiveKit's one-identity rule still covers the same room in two tabs.
@@ -213,7 +213,11 @@ export function createTabVoiceOwner({
         setState(OWNED);
         return Promise.resolve(true);
       }
-      if (inflight) return inflight;
+      if (inflight) {
+        // An explicit claim behind a refused automatic one still gets asked as explicit.
+        if (automatic || !inflight.automatic) return inflight.owned;
+        return inflight.owned.then(owned => owned || claim({ automatic: false, kind }));
+      }
       const attempt = active
         .requestTakeover({ automatic, requesterLabel: kind })
         .then(owned => {
@@ -222,9 +226,9 @@ export function createTabVoiceOwner({
           return owned;
         })
         .finally(() => {
-          if (inflight === attempt) inflight = null;
+          if (inflight?.owned === attempt) inflight = null;
         });
-      inflight = attempt;
+      inflight = { automatic, owned: attempt };
       return attempt;
     },
     heldElsewhere: async () => {
