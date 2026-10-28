@@ -626,9 +626,8 @@ export class DebateGatewayClient {
         );
         break;
       }
-      // GEO-3419. To the space scope: a live call's people or hosts changed (a row, patched in place
-      // when newer), or anything else (no row, or a row no longer live: refetch). GEO-3420: a rowless
-      // event's `change` narrows the refetch.
+      // GEO-3419. A live row is patched in place when newer; anything else refetches, narrowed by a
+      // rowless event's `change` (GEO-3420).
       case 'debate.space_calls_changed': {
         if (!identifiers.space_id) break;
         const listKey = spaceCallKeys.list(identifiers.space_id);
