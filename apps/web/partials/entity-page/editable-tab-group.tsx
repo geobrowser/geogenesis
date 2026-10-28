@@ -23,6 +23,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ID } from '~/core/id';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
+import { useInPageTabSwitch } from '~/core/state/in-page-tab-switch';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
@@ -300,6 +301,11 @@ export function EditableTabGroup({
     setPendingHref(current => (pending ? href : current === href ? null : current));
   }, []);
 
+  // A tab switched in place has no link status to clear its mark, so the URL arriving does.
+  useEffect(() => {
+    setPendingHref(current => (current === fullPath ? null : current));
+  }, [fullPath]);
+
   /*
    * Both system-tab rows, drawn by one function.
    *
@@ -433,6 +439,7 @@ function StaticTab({
   onPendingChange: (href: string, pending: boolean) => void;
 }) {
   const selected = pendingHref ? pendingHref === href : active;
+  const switchTabInPage = useInPageTabSwitch();
   // `contents` rather than `block`, so the wrapper does not become a flex item
   // between the tabs and pull them apart. The same shape `TabGroup` uses.
   const wrap = (tab: React.ReactNode) => (onlyWhenNarrow ? <span className="hidden lg:contents">{tab}</span> : tab);
@@ -459,6 +466,7 @@ function StaticTab({
       prefetch
       onClick={event => {
         if (isRepeatTabClick(event, selected)) event.preventDefault();
+        switchTabInPage(event, href, () => onPendingChange(href, true));
       }}
     >
       {label}
@@ -580,7 +588,9 @@ function SortableTab({
     }
   }, [isDragging, justDragged]);
 
-  const handleLinkClick = (e: React.MouseEvent) => {
+  const switchTabInPage = useInPageTabSwitch();
+
+  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (justDragged) {
       e.preventDefault();
       e.stopPropagation();
@@ -593,6 +603,7 @@ function SortableTab({
     }
     // Clicking the tab already on screen costs a full round trip for the page already there.
     if (isRepeatTabClick(e, selected)) e.preventDefault();
+    switchTabInPage(e, tab.href, () => onPendingChange(tab.href, true));
   };
 
   // tab.name already includes the live name via EntityTabs' liveNameMap, so no per-tab subscription needed here.

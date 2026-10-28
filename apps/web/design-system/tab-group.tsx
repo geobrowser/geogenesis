@@ -11,6 +11,7 @@ import { usePathname } from 'next/navigation';
 import { useEditable } from '~/core/state/editable-store';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
+import { useInPageTabSwitch } from '~/core/state/in-page-tab-switch';
 import { entityTabIdFromHref, isEntityTabActive } from '~/core/utils/entity-tab-navigation';
 
 import { Dots } from '~/design-system/dots';
@@ -136,6 +137,9 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   const scrollStartLeft = useRef<number>(0);
   const pointerUpHandler = useRef<((e: PointerEvent) => void) | null>(null);
   const { indicator, registerActiveTab } = useActiveTabIndicator(tabs);
+  const path = usePathname();
+  const activeTabId = useActiveTabIdForEditor();
+  const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : `${path}`;
 
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   /*
@@ -149,6 +153,11 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   const handlePendingChange = React.useCallback((href: string, pending: boolean) => {
     setPendingHref(current => (pending ? href : current === href ? null : current));
   }, []);
+
+  // A tab switched in place has no link status to clear its mark, so the URL arriving does.
+  useEffect(() => {
+    setPendingHref(current => (current === fullPath ? null : current));
+  }, [fullPath]);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     // Only allow dragging if content is scrollable
@@ -219,6 +228,8 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                     hidden={t.hidden}
                     sidePanelKey={t.sidePanelKey}
                     activeRef={registerActiveTab}
+                    activeTabId={activeTabId}
+                    fullPath={fullPath}
                     pendingHref={pendingHref}
                     onPendingChange={handlePendingChange}
                   />
@@ -232,6 +243,8 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                   hidden={t.hidden}
                   sidePanelKey={t.sidePanelKey}
                   activeRef={registerActiveTab}
+                  activeTabId={activeTabId}
+                  fullPath={fullPath}
                   pendingHref={pendingHref}
                   onPendingChange={handlePendingChange}
                 />
@@ -260,6 +273,8 @@ interface TabProps {
   hidden?: boolean;
   sidePanelKey?: string;
   activeRef: (element: HTMLElement | null) => void;
+  activeTabId: string | null;
+  fullPath: string;
   pendingHref: string | null;
   onPendingChange: (href: string, pending: boolean) => void;
 }
@@ -332,16 +347,14 @@ function Tab({
   hidden,
   sidePanelKey,
   activeRef,
+  activeTabId,
+  fullPath,
   pendingHref,
   onPendingChange,
 }: TabProps) {
   const { editable } = useEditable();
-
-  const path = usePathname();
-  const activeTabId = useActiveTabIdForEditor();
   const sidePanelTab = useEntitySidePanelActiveTab();
 
-  const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : `${path}`;
   const active = isEntityTabActive({
     href,
     activeTabId,
@@ -352,9 +365,11 @@ function Tab({
   });
 
   const selected = pendingHref ? pendingHref === href : active;
+  const switchTabInPage = useInPageTabSwitch();
 
-  const guardRepeatClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+  const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (isRepeatTabClick(event, selected)) event.preventDefault();
+    switchTabInPage(event, href, () => onPendingChange(href, true));
   };
 
   if (!editable && hidden) {
@@ -401,7 +416,7 @@ function Tab({
       className={tabGroupTabLinkStyles({ active: selected, disabled })}
       href={href}
       prefetch
-      onClick={guardRepeatClick}
+      onClick={handleClick}
     >
       {label}
       {badge && <Badge>{badge}</Badge>}

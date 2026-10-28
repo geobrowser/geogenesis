@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import { ROOT_SPACE } from '~/core/constants';
+import { InPageTabSwitch, OverviewOnly } from '~/core/state/in-page-tab-switch';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { SpaceTopicFeed } from '~/core/topics/browse/topic-feed';
 import { spacePageEntityId } from '~/core/utils/space/space-page';
@@ -43,7 +44,11 @@ export async function SpaceOverviewBody({
 
   // Overview only, which is what `!tabId` means here — a tab gets no rail, and so no subspaces
   // (GEO-2875).
-  const sidebar = tabId ? null : <SpaceOverviewSidebar spaceId={spaceId} isRootSpace={isRootSpace} />;
+  const sidebar = tabId ? null : (
+    <OverviewOnly>
+      <SpaceOverviewSidebar spaceId={spaceId} isRootSpace={isRootSpace} />
+    </OverviewOnly>
+  );
 
   return (
     <EntityPageSidebarLayout sidebar={sidebar}>
@@ -60,7 +65,12 @@ export async function SpaceOverviewBody({
        * Not rendered on a tab: `tabId` means an authored page of the space's own, and an activity
        * card above it would read as a section of that page rather than of the space.
        */}
-      {!tabId && <SpaceDebateActivitySection spaceId={spaceId} />}
+      <InPageTabSwitch />
+      {!tabId && (
+        <OverviewOnly>
+          <SpaceDebateActivitySection spaceId={spaceId} />
+        </OverviewOnly>
+      )}
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing />
       </React.Suspense>
