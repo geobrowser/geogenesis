@@ -1,4 +1,4 @@
-import { CancelledError, QueryClient, QueryObserver } from '@tanstack/react-query';
+import { CancelledError, InfiniteQueryObserver, QueryClient, QueryObserver } from '@tanstack/react-query';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -209,6 +209,8 @@ describe('DebateGatewayClient', () => {
       [
         ['debates', 'detail', 'debate1'],
         ['debates', 'space', 'space-1'],
+        // Not history: this reaches space subscribers for any public debate and fires many times in
+        // one. The viewer's own ending refreshes it from the timeline, as the debate leaves activity.
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
       ],
@@ -235,6 +237,8 @@ describe('DebateGatewayClient', () => {
         ['debates', 'account', 'user-a', 'scheduled-debates'],
         ['debates', 'account', 'user-a', 'upcoming-rooms'],
         ['debates', 'account', 'user-a', 'room'],
+        // GEO-3463: a request that ends moves into the Requests timeline's history.
+        ['debates', 'account', 'user-a', 'history'],
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
       ],
@@ -257,6 +261,8 @@ describe('DebateGatewayClient', () => {
       ],
     ],
     [
+      // Any lobby's, sent to every matchmaking subscriber: not the viewer's history, which their own
+      // lobby closing refreshes through `debate.my_lobby_changed`.
       'lobby list',
       { event_type: 'debate.lobbies_changed', payload: { lobby_id: 'abc' } },
       [
@@ -270,6 +276,7 @@ describe('DebateGatewayClient', () => {
       [
         ['debates', 'account', 'user-a', 'lobbies'],
         ['debates', 'account', 'user-a', 'my-lobby'],
+        ['debates', 'account', 'user-a', 'history'],
         ['debates', 'account', 'user-a', 'lobby', 'abc'],
       ],
     ],
@@ -310,6 +317,297 @@ describe('DebateGatewayClient', () => {
       expectInvalidated(invalidateQueries, { queryKey, refetchType: 'active' });
     }
     expect(invalidateQueries).toHaveBeenCalledTimes(expectedKeys.length);
+  });
+
+  // An infinite query's refetch asks for every page it holds. What an event changes is the newest
+  // end, so history nobody is looking at is cut back to its first page.
+  it('cuts history nobody is looking at back to its first page', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', 'c3'), page('c', null)],
+      pageParams: [null, 'c2', 'c3'],
+    });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    invalidateQueries.mockClear();
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-event', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expectInvalidated(invalidateQueries, { queryKey: historyKey, refetchType: 'active' });
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
+  });
+
+  // On screen, the pages stay: cutting them would pull the rows being read out from under the viewer.
+  it('keeps every page of history the timeline is showing', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    const held = { pages: [page('a', 'c2'), page('b', null)], pageParams: [null, 'c2'] };
+    queryClient.setQueryData(historyKey, held);
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn: () => new Promise<never>(() => {}),
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      enabled: false,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-shown', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expect(queryClient.getQueryData(historyKey)).toEqual(held);
+    unsubscribe();
+  });
+
+  // Paging back ten pages, closing and coming back after they went stale re-asked all ten on mount.
+  it('cuts history to its first page as soon as the timeline stops showing it', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', 'c3'), page('c', null)],
+      pageParams: [null, 'c2', 'c3'],
+    });
+    const observer = () =>
+      new InfiniteQueryObserver(queryClient, {
+        queryKey: historyKey,
+        queryFn: () => new Promise<never>(() => {}),
+        initialPageParam: null,
+        getNextPageParam: () => null,
+        enabled: false,
+      });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    const first = observer().subscribe(() => {});
+    const second = observer().subscribe(() => {});
+
+    // Another view of it still open: nothing is cut.
+    first();
+    expect(queryClient.getQueryData<{ pages: unknown[] }>(historyKey)?.pages).toHaveLength(3);
+
+    second();
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
+  });
+
+  // The cut is not a fetch. Stamping the pages fresh and clearing an invalidation let the tab, opened
+  // again inside `staleTime`, skip the refetch an ended request was waiting on.
+  it('keeps history stale through the cut, so the tab opening again refetches it', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', null)],
+      pageParams: [null, 'c2'],
+    });
+    const updatedAt = queryClient.getQueryState(historyKey)!.dataUpdatedAt;
+    const queryFn = vi.fn(async () => page('a', 'c2'));
+    const observer = () =>
+      new InfiniteQueryObserver(queryClient, {
+        queryKey: historyKey,
+        queryFn,
+        initialPageParam: null as string | null,
+        getNextPageParam: last => last.next_cursor,
+        staleTime: 30_000,
+        retry: false,
+      });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    const unsubscribe = observer().subscribe(() => {});
+    expect(queryFn).not.toHaveBeenCalled();
+    // A request ended while the refetch that would have shown it was cancelled: still invalidated.
+    await queryClient.invalidateQueries({ queryKey: historyKey, refetchType: 'none' });
+    vi.advanceTimersByTime(5_000);
+
+    unsubscribe();
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
+    await vi.runAllTicks();
+    expect(queryClient.getQueryState(historyKey)).toMatchObject({ isInvalidated: true, dataUpdatedAt: updatedAt });
+
+    // Back within 30s of the data: the mount refetches rather than trusting the cut as fresh.
+    const again = observer().subscribe(() => {});
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    again();
+  });
+
+  // An event is what moves something into the past; the history on screen has to be asked again.
+  it('refetches the history the timeline is showing when a request changes', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const queryFn = vi.fn(async () => ({ items: [], next_cursor: null }));
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn,
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    const before = queryFn.mock.calls.length;
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-active', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expect(queryFn.mock.calls.length).toBe(before + 1);
+    unsubscribe();
+  });
+
+  // Until geo-chat#299 deploys the route is a 404, and every request event would add another.
+  it('does not ask again for history whose route was missing', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const queryFn = vi.fn(async () => {
+      throw new GeoChatRequestError('Not found', null, 404);
+    });
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn,
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      retry: false,
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    const before = queryFn.mock.calls.length;
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-missing', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    expect(queryFn.mock.calls.length).toBe(before);
+    unsubscribe();
+  });
+
+  // Refetching history re-asks every page it holds, and `requests_changed` can come faster than that.
+  // Cancelling the refetch at each flush meant a viewer paged back never saw it land.
+  it('lets the history on screen finish refetching when another event comes in', async () => {
+    invalidateQueries.mockRestore();
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const calls: { land: () => void; aborted: boolean }[] = [];
+    const queryFn = vi.fn(({ signal }: { signal: AbortSignal }) => {
+      const id = `page-${calls.length}`;
+      return new Promise(resolve => {
+        const call = { land: () => resolve({ items: [{ id }], next_cursor: null }), aborted: false };
+        signal.addEventListener('abort', () => (call.aborted = true));
+        calls.push(call);
+      });
+    });
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn,
+      initialPageParam: null,
+      getNextPageParam: () => null,
+      staleTime: Infinity,
+      retry: false,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    calls[0]!.land();
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    for (const call of calls) call.land();
+    await vi.runAllTicks();
+    const before = calls.length;
+
+    sockets[0]!.receive('EVENT', { event_id: 'history-1', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+    expect(calls).toHaveLength(before + 1);
+    const inFlight = calls[before]!;
+    sockets[0]!.receive('EVENT', { event_id: 'history-2', event_type: 'debate.requests_changed', payload: {} });
+    await flushInvalidations();
+
+    // The second flush joined the refetch in flight instead of aborting and restarting it...
+    expect(inFlight.aborted).toBe(false);
+    expect(calls).toHaveLength(before + 1);
+    inFlight.land();
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryData<{ pages: { items: { id: string }[] }[] }>(historyKey)?.pages[0]!.items).toEqual([
+        { id: `page-${before}` },
+      ])
+    );
+    // ...and asks again once it has landed, so what is on screen postdates the second event.
+    await vi.waitFor(() => expect(calls).toHaveLength(before + 2));
+    calls[before + 1]!.land();
+    unsubscribe();
+  });
+
+  // The tab closing while it pages back: the page in flight is cancelled first, then the cut, so it
+  // cannot land afterwards and bring the rest back.
+  it('cuts history to its first page once a page still loading has been cancelled', async () => {
+    const historyKey = ['debates', 'account', 'user-a', 'history'];
+    const page = (id: string, next: string | null) => ({ items: [{ id }], next_cursor: next });
+    queryClient.setQueryData(historyKey, {
+      pages: [page('a', 'c2'), page('b', 'c3')],
+      pageParams: [null, 'c2'],
+    });
+    let land!: () => void;
+    const observer = new InfiniteQueryObserver(queryClient, {
+      queryKey: historyKey,
+      queryFn: () => new Promise<ReturnType<typeof page>>(resolve => (land = () => resolve(page('c', null)))),
+      initialPageParam: null as string | null,
+      getNextPageParam: last => last.next_cursor,
+      staleTime: Infinity,
+      retry: false,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    const paging = observer.fetchNextPage().catch(() => undefined);
+    await vi.runAllTicks();
+    expect(queryClient.getQueryCache().find({ queryKey: historyKey, exact: true })!.state.fetchStatus).toBe('fetching');
+
+    unsubscribe();
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] })
+    );
+    // The page it cancelled was wanted, so the cut leaves it to be asked for again.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: historyKey, exact: true, refetchType: 'none' });
+    land();
+    await paging;
+    expect(queryClient.getQueryData(historyKey)).toEqual({ pages: [page('a', 'c2')], pageParams: [null] });
   });
 
   describe('lobby card patches', () => {

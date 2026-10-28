@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
 import type { ReactElement } from 'react';
 
@@ -10,10 +10,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from './hub-scroll';
+import { panelFilters } from './panel-filters-fixtures';
 import {
   debatesHubExploreSearchAtom,
+  debatesHubExploreShowAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubHideMyPositionsAtom,
+  debatesHubPanelExploreSearchAtom,
+  debatesHubPanelExploreSpaceIdsAtom,
+  debatesHubPositionsSpaceIdsAtom,
   lobbyExploreSearchAtom,
 } from '~/atoms';
 
@@ -2830,5 +2835,273 @@ describe('claims the viewer has already answered', () => {
 
       await waitFor(() => expect(screen.queryByRole('switch', SWITCH)).toBeNull());
     });
+  });
+});
+
+// GEO-3463. The side panel draws the list behind one search field and one Filters button, and hands
+// it the tab's own Sort and narrowing.
+describe('in the side panel', () => {
+  const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
+
+  it('swaps the menus row for a search field and a Filters button', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    render(<ClaimsTab panelFilters={panelFilters()} />);
+    await showAllClaims();
+
+    expect(await screen.findByText('A tagged claim')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Search claims' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any space/ })).not.toBeInTheDocument();
+  });
+
+  // Review: "Show 0" on a first load, and the previous count while a change was still being asked.
+  it('leaves the count off Show until the list in hand answers what is picked', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'A tagged claim'),
+      featuredClaim(FEATURED_B, 'Another tagged claim'),
+    ];
+    mocks.featuredLoading = true;
+    const view = render(<ClaimsTab panelFilters={panelFilters()} />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const filters = await screen.findByRole('dialog', { name: 'Filters' });
+    expect(within(filters).getByRole('button', { name: 'Show' })).toBeInTheDocument();
+
+    mocks.featuredLoading = false;
+    view.rerender(<ClaimsTab panelFilters={panelFilters()} />);
+    expect(await within(filters).findByRole('button', { name: 'Show 2' })).toBeInTheDocument();
+
+    // A search still settling holds the old rows; their count is not the answer to it.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'Another' } });
+    expect(within(filters).getByRole('button', { name: 'Show' })).toBeInTheDocument();
+  });
+
+  it('asks the graph for Newest when the tab sorts by it', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    render(<ClaimsTab panelFilters={panelFilters({ graphOrder: 'newest' })} />);
+    await showAllClaims();
+
+    expect(mocks.taggedFiltersAskedFor.at(-1)).toMatchObject({ order: 'newest' });
+  });
+
+  it('leaves out what the tab’s predicate rejects', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'A tagged claim'),
+      featuredClaim(FEATURED_B, 'Another tagged claim'),
+    ];
+    render(
+      <ClaimsTab panelFilters={panelFilters()} keepClaim={entry => entry.claim.claim !== 'Another tagged claim'} />
+    );
+    await showAllClaims();
+
+    expect(await screen.findByText('A tagged claim')).toBeInTheDocument();
+    expect(screen.queryByText('Another tagged claim')).not.toBeInTheDocument();
+  });
+
+  // The panel's Matches fallback explains the rows under it, so its line must know there are some.
+  it('tells a notice whether the list under it has rows', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    const notice = (listHasRows: boolean) => <p>{listHasRows ? 'Over rows' : 'Over nothing'}</p>;
+    render(<ClaimsTab panelFilters={panelFilters()} notice={notice} />);
+    await showAllClaims();
+    expect(await screen.findByText('A tagged claim')).toBeInTheDocument();
+    expect(screen.getByText('Over rows')).toBeInTheDocument();
+
+    cleanup();
+    render(<ClaimsTab panelFilters={panelFilters()} notice={notice} keepClaim={() => false} />);
+    await showAllClaims();
+    expect(await screen.findByText('Over nothing')).toBeInTheDocument();
+  });
+
+  // The tab's own narrowing emptied the list: blaming "Hide my positions" would offer a switch that
+  // does nothing for these rows, so the tab says what happened and offers its own way out.
+  it('says what the tab’s own narrowing did when it leaves nothing', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    const turnOff = vi.fn();
+    render(
+      <ClaimsTab
+        panelFilters={panelFilters({
+          emptyPredicate: {
+            message: 'Nobody holds the other side yet.',
+            action: { label: 'Turn it off', onClick: turnOff },
+          },
+        })}
+        keepClaim={() => false}
+      />
+    );
+    await showAllClaims();
+
+    expect(await screen.findByText('Nobody holds the other side yet.')).toBeInTheDocument();
+    expect(screen.queryByText(/You’ve answered every claim here/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Turn it off' }));
+    expect(turnOff).toHaveBeenCalled();
+  });
+
+  // Under the tab's own narrowing the server's facets count rows the tab will not show, so the
+  // pills count the rows on screen instead.
+  it('counts the pills over the rows the tab’s narrowing leaves', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'A tagged claim'),
+      featuredClaim(FEATURED_B, 'Another tagged claim'),
+      featuredClaim('019fedb6-5196-7e83-af66-71c2a32e9964', 'One elsewhere', OTHER_SPACE_ID),
+    ];
+    render(
+      <ClaimsTab panelFilters={panelFilters()} keepClaim={entry => entry.claim.claim !== 'Another tagged claim'} />
+    );
+    await showAllClaims();
+    expect(await screen.findByText('One elsewhere')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const filters = await screen.findByRole('dialog', { name: 'Filters' });
+
+    const counts = within(filters)
+      .getAllByRole('button', { name: /^Space/ })
+      .map(pill => pill.textContent);
+    expect(counts).toEqual(['Space1', 'Space1']);
+  });
+
+  // Review: the Sort ran after the hold, so a high-ranked claim on page 2 jumped in above the rows
+  // being read. Sorted before the hold, a page's rows go after the ones already placed.
+  it('places a new page’s rows after the sorted rows already on screen', async () => {
+    const withPeople = (entry: MatchmakingClaim, availableNow: number) => ({
+      ...entry,
+      positions: [
+        {
+          position: true,
+          position_label: 'Agree',
+          total_count: 9,
+          available_now_count: availableNow,
+          participants: [],
+        },
+      ],
+    });
+    mocks.claims = [
+      withPeople(claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44a1', 'Few people', false), 1),
+      withPeople(claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44a2', 'Some people', false), 2),
+      withPeople(claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44a3', 'Most people', false), 9),
+    ] as MatchmakingClaim[];
+    mocks.pageSize = 2;
+    const view = render(<ClaimsTab variant="positions" panelFilters={panelFilters({ clientSort: 'people' })} />);
+    await showIndexedClaims();
+    const titles = () => screen.getAllByText(/people$/).map(node => node.textContent);
+    await waitFor(() => expect(titles()).toEqual(['Some people', 'Few people']));
+
+    mocks.pageSize = null;
+    view.rerender(<ClaimsTab variant="positions" panelFilters={panelFilters({ clientSort: 'people' })} />);
+
+    await waitFor(() => expect(titles()).toEqual(['Some people', 'Few people', 'Most people']));
+  });
+
+  // Review: the pills compared the server's counts with the rows left after the answered ones folded
+  // away, and dropped a space that would still have narrowed the list.
+  it('keeps a space on offer that narrows the rows left after the answered ones fold', async () => {
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.claims = [
+      claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44b1', 'Answered one', true),
+      claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44b2', 'Answered two', true),
+      claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44b3', 'Open here', false),
+      claim('019fedb1-0c41-7f3e-9a11-2c7d5e8b44b4', 'Open elsewhere', false, false, OTHER_SPACE_ID),
+    ];
+    render(<ClaimsTab variant="lobby" atomsFrom="panelExplore" collapsesAnswered panelFilters={panelFilters()} />);
+    await showIndexedClaims();
+    expect(await screen.findByText('Open here')).toBeInTheDocument();
+    expect(screen.queryByText('Answered one')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const filters = await screen.findByRole('dialog', { name: 'Filters' });
+
+    expect(within(filters).getAllByRole('button', { name: /^Space/ })).toHaveLength(2);
+  });
+
+  it('reads the selection of the list it is told to, not its own variant’s', async () => {
+    const store = createStore();
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
+    render(<ClaimsTab variant="positions" atomsFrom="explore" panelFilters={panelFilters()} />, store);
+
+    expect(screen.getByRole('textbox', { name: 'Search claims' })).toHaveValue('nuclear');
+  });
+  // 26 Oct (Preston): spaces and topics share the pill row, so both narrow (AND), and the panel opens
+  // on All rather than on the viewer's own spaces.
+  it('opens on All rather than seeding the viewer’s spaces', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    // What the seed is drawn from: claims in both spaces, and the facet naming them.
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.sidebarData = sidebarData();
+    mocks.claims = [
+      claim('claim-a', 'One space', false, false, SPACE_ID, []),
+      claim('claim-b', 'The other space', false, false, OTHER_SPACE_ID, []),
+    ];
+    const view = renderMine(<ClaimsTab variant="positions" panelFilters={panelFilters()} />);
+    await showIndexedClaims();
+
+    // The full-screen list narrows to the member space here ("opens on the spaces the viewer belongs
+    // to"); past the selection's debounce, the panel's is still every eligible space.
+    await new Promise(resolve => setTimeout(resolve, 600));
+    expect(view.store.get(debatesHubPositionsSpaceIdsAtom)).toEqual([]);
+    expect(mocks.lastQuery).not.toMatchObject({ spaceIds: [SPACE_ID] });
+  });
+
+  // Review, 27 Oct: the panel's Explore offered "Explore claims" from its own empty list, the tab
+  // already open, so the button did nothing.
+  it('offers the tab’s own way out of an empty list rather than Explore', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [];
+    mocks.claims = [];
+    const turnOff = vi.fn();
+    const onTabChange = vi.fn();
+    render(
+      <ClaimsTab
+        variant="lobby"
+        onTabChange={onTabChange}
+        panelFilters={panelFilters({ emptyAction: { label: 'Turn off Someone online', onClick: turnOff } })}
+      />
+    );
+
+    await screen.findByText('Nobody is ready to debate you on a claim right now.');
+    expect(screen.queryByRole('button', { name: 'Explore claims' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Turn off Someone online' }));
+    expect(turnOff).toHaveBeenCalled();
+    expect(onTabChange).not.toHaveBeenCalled();
+  });
+
+  // Review, 27 Oct: the panel has no "Hide my positions" switch; Show is how it hides them.
+  it('points at Show when the viewer has answered everything', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'One you have answered')];
+    mocks.graphAnsweredIds = new Set([FEATURED_A]);
+    const store = createStore();
+    render(<ClaimsTab atomsFrom="panelExplore" panelFilters={panelFilters()} />, store);
+    await showAllClaims();
+
+    expect(await screen.findByText(/Choose All under Show to see them/)).toBeInTheDocument();
+    expect(screen.queryByText(/Hide my positions/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show all' }));
+    expect(store.get(debatesHubExploreShowAtom)).toBe('all');
+  });
+
+  // Review, 27 Oct: under the tab's own narrowing the pills count the kept rows, so a picked space
+  // the rows had left dropped out: its chip read "Space" and there was no pill to un-pick it.
+  it('keeps a picked space named, with its pill, once the rows leave it', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    mocks.sidebarData = sidebarData();
+    const store = createStore();
+    store.set(debatesHubPanelExploreSpaceIdsAtom, [SPACE_ID]);
+    store.set(debatesHubPanelExploreSearchAtom, 'nothing matches this');
+    render(<ClaimsTab atomsFrom="panelExplore" panelFilters={panelFilters()} keepClaim={() => true} />, store);
+    await showAllClaims();
+    await waitFor(() => expect(mocks.taggedFiltersAskedFor.at(-1)?.search).toBe('nothing matches this'));
+
+    expect(await screen.findByRole('button', { name: 'Remove Crypto' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+    const filters = await screen.findByRole('dialog', { name: 'Filters' });
+    expect(within(filters).getByRole('button', { name: /^Crypto/ })).toBeInTheDocument();
+  });
+
+  it('asks the graph for claims in every picked space, not any', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    render(<ClaimsTab panelFilters={panelFilters()} />);
+    await showAllClaims();
+
+    expect(mocks.taggedFiltersAskedFor.at(-1)).toMatchObject({ spaceMatch: 'all' });
   });
 });

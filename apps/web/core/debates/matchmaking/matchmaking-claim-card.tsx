@@ -9,7 +9,6 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { useActionContext } from '~/core/action-context-provider';
-import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
 import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
@@ -64,6 +63,7 @@ import {
   type DebateAnalyticsSurface,
   debateActionAnalyticsAttributes,
 } from './hub-analytics';
+import { CardEndSlot, otherSideHeld } from './hub-claim-end-slot';
 import { hubCardMotion } from './hub-motion';
 import { useHubScrollSelector } from './hub-scroll';
 
@@ -363,11 +363,13 @@ function ClaimHeader({
 
   return (
     <>
-      {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. No
-          reserved height: the slot is now the height of the chip beside it, so the row does not grow
-          when the match lookup answers. */}
-      <div className="claim-card-panel-header">
-        <span className="flex min-w-0 items-center gap-1.5">
+      {/* On one text baseline, not centred: the space (11px), Controversial (14px) and the slot's
+          Schedule (13px) are three sizes, and centring their boxes left each sitting at a different
+          height (27 Oct). The baseline is also what keeps the chip on the slot's first line when the
+          slot stacks a blocked reason under it. Here rather than in the utility, which Explore's
+          meta row also uses: Tailwind emits `items-baseline` after it, so this wins. */}
+      <div className="claim-card-panel-header items-baseline">
+        <span className="flex min-w-0 items-baseline gap-1.5" data-testid="claim-card-eyebrow">
           <SpaceChip spaceId={claim.space_id} />
           {isControversial ? <ControversialTag /> : null}
           {meta ? (
@@ -965,10 +967,11 @@ function RespondableControls({
         endSlot={
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              otherSideHeld={otherSideHeld(optimisticPositions, viewerPosition)}
+              analyticsSurface={analyticsSurface}
               // `undefined` until the reads have landed, so a card that cannot yet say which side
               // the viewer holds does not read as saying they hold none.
               viewerPosition={sideKnown ? viewerPosition : undefined}
@@ -1196,10 +1199,11 @@ function UnresolvableControls({
              is not the safe direction to be wrong in. */
           endSlot ??
           (hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
+            <CardEndSlot
+              claim={claim}
               activeDebate={activeDebate}
+              otherSideHeld={otherSideHeld(positions, readiness.viewer_response?.position)}
+              analyticsSurface={analyticsSurface}
               // No response control here, so there is no optimistic side to read — geo-chat's is
               // the only answer this card has about where the viewer stands, and where it is silent
               // this card genuinely does not know. Not `?? null`: on the Matches tab this readiness
@@ -1415,10 +1419,12 @@ export function SpaceChip({ spaceId }: { spaceId: string }) {
     );
   }
 
+  // The name sets the baseline, so the chip sits on the line of text beside it; the thumbnail, which
+  // has none, stays centred on the name.
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <span className="flex min-w-0 items-baseline gap-1.5">
       {image ? (
-        <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
+        <span className="relative h-4 w-4 shrink-0 self-center overflow-hidden rounded-sm">
           <ThumbGeoImage value={image} alt="" />
         </span>
       ) : null}
