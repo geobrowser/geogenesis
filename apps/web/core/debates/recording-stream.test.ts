@@ -425,6 +425,37 @@ describe('debate recording streaming', () => {
         await streamer.finish();
       });
 
+      it('lets a slow part age out of the estimate, so it cannot hold every later part back', async () => {
+        const timers = manualTimers();
+        const time = clock();
+        const wire = transport();
+        wire.putPart.mockImplementationOnce(async (upload: { url: string }, body: Blob) => {
+          time.advance(2_000);
+          wire.sent.push({ partNumber: Number(upload.url.split('/').pop()), body: await text(body) });
+        });
+        let window = 60_000;
+        const streamer = new stream.RecordingPartStreamer({
+          ...wire,
+          ...timers,
+          now: time.now,
+          shouldPause: () => false,
+          callWindowMs: () => window,
+        });
+
+        streamer.append(new Blob(['01234567']));
+        await timers.drain();
+        // The slow part predicts 3.5 s for the next, more than any window this short.
+        window = 3_000;
+        streamer.append(new Blob(['89abcdef']));
+        await timers.runNext();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1]);
+
+        time.advance(stream.UPLINK_SAMPLE_MAX_AGE_MS);
+        await timers.drain();
+        expect(wire.sent.map(part => part.partNumber)).toEqual([1, 2]);
+        await streamer.finish();
+      });
+
       it('assumes a modest uplink before any part is timed', async () => {
         const timers = manualTimers();
         const wire = transport();

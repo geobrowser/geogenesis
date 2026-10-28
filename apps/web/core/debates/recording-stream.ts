@@ -452,6 +452,8 @@ export const STREAM_STALL_AFTER_MS = 30_000;
 export const DEFAULT_UPLINK_BITS_PER_SECOND = 4_000_000;
 /** Recent parts the uplink estimate takes the slowest of. */
 const UPLINK_SAMPLES = 3;
+/** Older samples are dropped, so one slow part cannot hold every later one back for good. */
+export const UPLINK_SAMPLE_MAX_AGE_MS = 2 * 60_000;
 const PART_TIME_MARGIN = 1.25;
 const PART_TIME_SLACK_MS = 1_000;
 
@@ -506,8 +508,8 @@ export class RecordingPartStreamer {
   private partsAbortedForMic = 0;
   private micLiveSince: number | null = null;
   private pausedMicLiveMs = 0;
-  /** Bits per second of recent live parts, newest last. */
-  private readonly uplinkSamples: number[] = [];
+  /** Recent live parts' rates and when they landed, newest last. */
+  private uplinkSamples: { bitsPerSecond: number; at: number }[] = [];
 
   constructor(options: RecordingPartStreamerOptions) {
     this.options = {
@@ -802,13 +804,17 @@ export class RecordingPartStreamer {
 
   private noteUplink(bytes: number, elapsedMs: number) {
     if (elapsedMs <= 0 || bytes <= 0) return;
-    this.uplinkSamples.push((bytes * 8_000) / elapsedMs);
+    this.uplinkSamples.push({ bitsPerSecond: (bytes * 8_000) / elapsedMs, at: this.options.now() });
     if (this.uplinkSamples.length > UPLINK_SAMPLES) this.uplinkSamples.shift();
   }
 
   /** How long a part is expected to take, from the slowest recent part: a fast one must not oversell the link. */
   private predictedPartMs(partSize: number): number {
-    const bitsPerSecond = this.uplinkSamples.length ? Math.min(...this.uplinkSamples) : DEFAULT_UPLINK_BITS_PER_SECOND;
+    const now = this.options.now();
+    this.uplinkSamples = this.uplinkSamples.filter(sample => now - sample.at < UPLINK_SAMPLE_MAX_AGE_MS);
+    const bitsPerSecond = this.uplinkSamples.length
+      ? Math.min(...this.uplinkSamples.map(sample => sample.bitsPerSecond))
+      : DEFAULT_UPLINK_BITS_PER_SECOND;
     return ((partSize * 8_000) / bitsPerSecond) * PART_TIME_MARGIN + PART_TIME_SLACK_MS;
   }
 
@@ -996,7 +1002,8 @@ export function startLiveRecordingStream({
     ...transport,
     telemetry: { debate_id: metadata.debateId, recording_started_at_ms: metadata.startedAtMs, upload_phase: 'live' },
     shouldPause,
-    callWindowMs,
+    // Without IndexedDB nothing spills, so only uploading frees memory: send whatever the mic.
+    callWindowMs: () => (durable ? (callWindowMs?.() ?? null) : null),
     ledger,
     readDurable,
     onStall: stall => reportRecordingStreamStall(metadata.debateId, stall),
@@ -1047,7 +1054,9 @@ export function startLiveRecordingStream({
       return multipart;
     },
     size: () => ledger.size,
-    yieldToCall: () => streamer.yieldToCall(),
+    yieldToCall: () => {
+      if (durable) streamer.yieldToCall();
+    },
     resume: () => streamer.wake(),
     recording() {
       const availableFrom = ledger.confirmedBytes;
