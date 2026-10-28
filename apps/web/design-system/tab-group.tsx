@@ -11,7 +11,7 @@ import { usePathname } from 'next/navigation';
 import { useEditable } from '~/core/state/editable-store';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
-import { useInPageTabSwitch } from '~/core/state/in-page-tab-switch';
+import { useInPageTabSwitch, useSwitchesInPage } from '~/core/state/in-page-tab-switch';
 import { entityTabIdFromHref, isEntityTabActive } from '~/core/utils/entity-tab-navigation';
 
 import { Dots } from '~/design-system/dots';
@@ -366,6 +366,7 @@ function Tab({
 
   const selected = pendingHref ? pendingHref === href : active;
   const switchTabInPage = useInPageTabSwitch();
+  const switchesInPage = useSwitchesInPage(href);
 
   const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (isRepeatTabClick(event, selected)) event.preventDefault();
@@ -415,7 +416,8 @@ function Tab({
       ref={selected ? activeRef : undefined}
       className={tabGroupTabLinkStyles({ active: selected, disabled })}
       href={href}
-      prefetch
+      prefetch={!switchesInPage}
+      hoverPrefetch={!switchesInPage}
       onClick={handleClick}
     >
       {label}

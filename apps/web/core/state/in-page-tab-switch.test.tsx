@@ -5,11 +5,14 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { InPageTabSwitch, OverviewOnly, useInPageTabSwitch } from './in-page-tab-switch';
+import { InPageTabSwitch, OverviewOnly, useInPageTabSwitch, useSwitchesInPage } from './in-page-tab-switch';
 
 const search = vi.hoisted(() => ({ params: new URLSearchParams() }));
 
-vi.mock('next/navigation', () => ({ useSearchParams: () => search.params }));
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => search.params,
+  usePathname: () => window.location.pathname,
+}));
 
 const SPACE_PATH = '/space/a19c345ab9866679b001d7d2138d88a1';
 
@@ -137,6 +140,41 @@ describe('useInPageTabSwitch', () => {
     click();
 
     expect(pushState).not.toHaveBeenCalled();
+  });
+});
+
+describe('useSwitchesInPage', () => {
+  function Probe({ href }: { href: string }) {
+    return <span>{useSwitchesInPage(href) ? 'in page' : 'navigates'}</span>;
+  }
+
+  it('is true for a tab on the same page once the page has opted in', () => {
+    render(
+      <>
+        <InPageTabSwitch />
+        <Probe href={`${SPACE_PATH}?tabId=abc`} />
+      </>
+    );
+
+    expect(screen.getByText('in page')).toBeInTheDocument();
+  });
+
+  it('is false on a page that has not opted in', () => {
+    render(<Probe href={`${SPACE_PATH}?tabId=abc`} />);
+
+    expect(screen.getByText('navigates')).toBeInTheDocument();
+  });
+
+  it('is false for Overview and for a tab on another page', () => {
+    render(
+      <>
+        <InPageTabSwitch />
+        <Probe href={SPACE_PATH} />
+        <Probe href="/space/other?tabId=abc" />
+      </>
+    );
+
+    expect(screen.getAllByText('navigates')).toHaveLength(2);
   });
 });
 

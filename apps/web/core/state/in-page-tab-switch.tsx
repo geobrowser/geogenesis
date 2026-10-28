@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { atom, useAtomValue, useSetAtom } from 'jotai';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 /** Whether tabs on this page can switch without the server. */
 const inPageTabSwitchAtom = atom(false);
@@ -24,6 +24,14 @@ export function InPageTabSwitch() {
 export function OverviewOnly({ children }: { children: React.ReactNode }) {
   const tabId = useSearchParams()?.get('tabId');
   return tabId ? null : <>{children}</>;
+}
+
+/** Whether a click on this link switches the tab in place, so prefetching it is wasted. */
+export function useSwitchesInPage(href: string) {
+  const enabled = useAtomValue(inPageTabSwitchAtom);
+  const pathname = usePathname();
+  const url = new URL(href, 'http://localhost');
+  return enabled && url.pathname === pathname && Boolean(url.searchParams.get('tabId'));
 }
 
 /**

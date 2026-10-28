@@ -23,7 +23,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ID } from '~/core/id';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
-import { useInPageTabSwitch } from '~/core/state/in-page-tab-switch';
+import { useInPageTabSwitch, useSwitchesInPage } from '~/core/state/in-page-tab-switch';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
@@ -440,6 +440,7 @@ function StaticTab({
 }) {
   const selected = pendingHref ? pendingHref === href : active;
   const switchTabInPage = useInPageTabSwitch();
+  const switchesInPage = useSwitchesInPage(href);
   // `contents` rather than `block`, so the wrapper does not become a flex item
   // between the tabs and pull them apart. The same shape `TabGroup` uses.
   const wrap = (tab: React.ReactNode) => (onlyWhenNarrow ? <span className="hidden lg:contents">{tab}</span> : tab);
@@ -463,7 +464,8 @@ function StaticTab({
       ref={selected ? activeRef : undefined}
       className={tabGroupTabLinkStyles({ active: selected })}
       href={href}
-      prefetch
+      prefetch={!switchesInPage}
+      hoverPrefetch={!switchesInPage}
       onClick={event => {
         if (isRepeatTabClick(event, selected)) event.preventDefault();
         switchTabInPage(event, href, () => onPendingChange(href, true));
@@ -589,6 +591,7 @@ function SortableTab({
   }, [isDragging, justDragged]);
 
   const switchTabInPage = useInPageTabSwitch();
+  const switchesInPage = useSwitchesInPage(tab.href);
 
   const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (justDragged) {
@@ -629,7 +632,8 @@ function SortableTab({
             'cursor-grab touch-none select-none active:cursor-grabbing'
           )}
           href={onSelect ? '#' : tab.href}
-          prefetch={!onSelect}
+          prefetch={!onSelect && !switchesInPage}
+          hoverPrefetch={!switchesInPage}
           onClick={handleLinkClick}
           {...attributes}
           {...listeners}
