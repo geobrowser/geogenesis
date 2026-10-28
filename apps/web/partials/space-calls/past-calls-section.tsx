@@ -5,8 +5,9 @@ import * as React from 'react';
 import Link from 'next/link';
 
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
+import { pastCallDurationLabel } from '~/core/space-calls/recording/past-call-card';
 import { spaceCallPath } from '~/core/space-calls/routes';
-import { callDateLabel, callDurationLabel, callTimeLabel } from '~/core/space-calls/series/format';
+import { callDateLabel, callTimeLabel } from '~/core/space-calls/series/format';
 import { useSpacePastCalls } from '~/core/space-calls/series/past-calls';
 
 import { Text } from '~/design-system/text';
@@ -48,7 +49,7 @@ export function PastCallsSection({ spaceId }: { spaceId: string }) {
           const when = [callDateLabel(call.started_at), callTimeLabel(call.started_at, null)]
             .filter(Boolean)
             .join(' · ');
-          const length = callDurationLabel(call.duration_seconds);
+          const length = pastCallDurationLabel(call.duration_seconds);
           // As on upcoming rows: the series, when it names the call differently.
           const series = call.series?.name && call.series.name !== call.name ? call.series.name : null;
           return (

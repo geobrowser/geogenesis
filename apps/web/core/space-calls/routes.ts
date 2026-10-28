@@ -8,6 +8,11 @@ export function spaceCallsTabPath(spaceId: string) {
   return `/space/${spaceId}/calls`;
 }
 
+/** The schedule form for a new series or one-off, which writes its Community Call entity. */
+export function spaceCallScheduleNewPath(spaceId: string) {
+  return `/space/${spaceId}/community/new`;
+}
+
 /** A call series' schedule form; one-offs included, as each is a Community Call entity too. */
 export function spaceCallSeriesEditPath(spaceId: string, seriesId: string) {
   return `/space/${spaceId}/community/${seriesId}/edit`;

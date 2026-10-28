@@ -16,6 +16,7 @@ import { buildCreateCallOps, buildUpdateCallOps } from '~/core/community-calls/c
 import { CALL_SCHEMA } from '~/core/community-calls/constants';
 import { notifyScheduleChange } from '~/core/community-calls/notify-schedule-change';
 import {
+  type ScheduleFields,
   editedSchedule,
   repeatFromSchedule,
   ruleFromRepeat,
@@ -101,12 +102,12 @@ export function CallForm(props: Props) {
 
   const [name, setName] = React.useState(initial?.name ?? '');
   const [description, setDescription] = React.useState(initial?.description ?? '');
-  const [startDate, setStartDate] = React.useState(parsedInitial?.startDate ?? '');
-  const [startTime, setStartTime] = React.useState(parsedInitial?.startTime ?? '09:00');
-  const [endTime, setEndTime] = React.useState(parsedInitial?.endTime ?? '');
-  const [repeat, setRepeat] = React.useState(
-    parsedInitial ? repeatFromSchedule(parsedInitial.freq, parsedInitial.interval) : 'none'
-  );
+  const [fields, setFields] = React.useState<ScheduleFields>(() => ({
+    startDate: parsedInitial?.startDate ?? '',
+    startTime: parsedInitial?.startTime ?? '09:00',
+    endTime: parsedInitial?.endTime ?? '',
+    repeat: parsedInitial ? repeatFromSchedule(parsedInitial.freq, parsedInitial.interval) : 'none',
+  }));
   const [autoPublishAhead, setAutoPublishAhead] = React.useState(initial?.autoPublishAhead ?? 0);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -130,15 +131,9 @@ export function CallForm(props: Props) {
     spaceCalls && proposalId ? afterSeriesPublish({ seriesId, proposalId, schedule }) : backHref;
 
   const buildSchedule = () => {
-    if (storedSchedule) return editedSchedule(storedSchedule, { startDate, startTime, endTime, repeat });
-    return serializeSchedule({
-      startDate,
-      startTime,
-      endTime,
-      ...ruleFromRepeat(repeat),
-      byDay: [],
-      timezone: browserTimezone,
-    });
+    if (storedSchedule) return editedSchedule(storedSchedule, fields);
+    const { repeat, ...times } = fields;
+    return serializeSchedule({ ...times, ...ruleFromRepeat(repeat), byDay: [], timezone: browserTimezone });
   };
 
   const onSubmit = async () => {
@@ -279,35 +274,12 @@ export function CallForm(props: Props) {
             </span>
           </div>
         ) : (
-          <>
-            <Field label="Start date" chip="Ab">
-              <input
-                type="date"
-                value={startDate}
-                onChange={e => setStartDate(e.target.value)}
-                min={props.mode === 'create' ? todayDateInput(browserTimezone) : undefined}
-                className={fieldClass}
-              />
-            </Field>
-
-            <div className="flex gap-3">
-              <Field label={`Start time (${zoneLabel})`} className="flex-1">
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={e => setStartTime(e.target.value)}
-                  className={fieldClass}
-                />
-              </Field>
-              <Field label={`End time (${zoneLabel})`} className="flex-1">
-                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={fieldClass} />
-              </Field>
-            </div>
-
-            <Field label="Repeat">
-              <Select value={repeat} onChange={setRepeat} options={REPEAT_OPTIONS} />
-            </Field>
-          </>
+          <MeetingTimeFields
+            fields={fields}
+            onChange={setFields}
+            zoneLabel={zoneLabel}
+            minDate={props.mode === 'create' ? todayDateInput(browserTimezone) : undefined}
+          />
         )}
 
         <Field label="Auto publish ahead" chip="123">
@@ -339,6 +311,56 @@ export function CallForm(props: Props) {
         </Button>
       </div>
     </div>
+  );
+}
+
+function MeetingTimeFields({
+  fields,
+  onChange,
+  zoneLabel,
+  minDate,
+}: {
+  fields: ScheduleFields;
+  onChange: (next: ScheduleFields) => void;
+  zoneLabel: string;
+  minDate: string | undefined;
+}) {
+  const set = (key: keyof ScheduleFields) => (value: string) => onChange({ ...fields, [key]: value });
+  return (
+    <>
+      <Field label="Start date" chip="Ab">
+        <input
+          type="date"
+          value={fields.startDate}
+          onChange={e => set('startDate')(e.target.value)}
+          min={minDate}
+          className={fieldClass}
+        />
+      </Field>
+
+      <div className="flex gap-3">
+        <Field label={`Start time (${zoneLabel})`} className="flex-1">
+          <input
+            type="time"
+            value={fields.startTime}
+            onChange={e => set('startTime')(e.target.value)}
+            className={fieldClass}
+          />
+        </Field>
+        <Field label={`End time (${zoneLabel})`} className="flex-1">
+          <input
+            type="time"
+            value={fields.endTime}
+            onChange={e => set('endTime')(e.target.value)}
+            className={fieldClass}
+          />
+        </Field>
+      </div>
+
+      <Field label="Repeat">
+        <Select value={fields.repeat} onChange={set('repeat')} options={REPEAT_OPTIONS} />
+      </Field>
+    </>
   );
 }
 

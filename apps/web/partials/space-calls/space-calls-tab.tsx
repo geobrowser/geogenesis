@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 
 import { hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
 import { useSpaceCalls } from '~/core/space-calls/hooks';
+import { spaceCallScheduleNewPath } from '~/core/space-calls/routes';
 import { parseScheduledParams, seriesSynced } from '~/core/space-calls/series/after-publish';
 import { rowReminders, splitCallList } from '~/core/space-calls/series/call-list';
 import { useFeatureFlag } from '~/core/state/feature-flags';
@@ -28,11 +29,6 @@ export const CALLS_TAB_COPY = {
   loadFailed: 'Could not load calls.',
   off: 'Calls are not available yet.',
 } as const;
-
-/** The scheduling form, which writes the Community Call entity to the graph. */
-export function scheduleCallHref(spaceId: string) {
-  return `/space/${spaceId}/community/new`;
-}
 
 /** A space's Calls tab (GEO-3420): live and upcoming calls, and scheduling for editors. */
 export function SpaceCallsTab({ spaceId }: { spaceId: string }) {
@@ -70,7 +66,7 @@ function SpaceCallsTabInner({ spaceId }: { spaceId: string }) {
       {data?.viewer_can_start ? (
         <div className="flex justify-end">
           <Link
-            href={scheduleCallHref(spaceId)}
+            href={spaceCallScheduleNewPath(spaceId)}
             className={hubPillClassName('primary')}
             data-geo-analytics-label="Calls tab schedule"
           >
