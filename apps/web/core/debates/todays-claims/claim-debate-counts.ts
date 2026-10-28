@@ -18,16 +18,18 @@ export type ClaimDebateCountAsk = { claimId: string; since: string };
  * there, so a newer count would only be a reason to move a card under someone's cursor.
  *
  * Batched by `stableClaimIdChunks`, like the rematch rows, so a claim joining the list re-asks only
- * the batch it lands in. Not gated on Privy having restored the session, which none of the picker's
- * other geo-chat reads are either: a disabled query reads as settled, and the order would be set
- * without the counts it is made from.
+ * the batch it lands in. Keyed by account like them too: geo-chat needs a signed-in caller, so the
+ * request waits for Privy to restore the session, and reports that wait as loading — a disabled
+ * query reads as settled, and the order would be set without the counts it is made from.
  *
  * `byClaimId` is null until every batch has answered or one has failed. A caller that cannot get the
  * counts lists the agenda in its own order, which is the order an agenda nobody has debated yet has
  * anyway.
  */
 export function useClaimDebateCounts(asks: ClaimDebateCountAsk[], enabled = true) {
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const { ready, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  // Ready and signed out is an answer (no counts); not ready yet is not.
+  const waitingForAccount = enabled && asks.length > 0 && !ready;
 
   const batches = React.useMemo(() => {
     const sinceByClaim = new Map(asks.map(ask => [ask.claimId, ask.since]));
@@ -39,7 +41,7 @@ export function useClaimDebateCounts(asks: ClaimDebateCountAsk[], enabled = true
   const combine = React.useCallback(
     (results: { data?: ClaimDebateCountsResponse; isLoading: boolean; error: unknown }[]) => {
       const error = results.find(result => result.error)?.error ?? null;
-      const isLoading = results.some(result => result.isLoading);
+      const isLoading = waitingForAccount || results.some(result => result.isLoading);
       if (error || isLoading) return { byClaimId: null, isLoading, error };
       const byClaimId = new Map<string, number>();
       for (const result of results) {
@@ -47,13 +49,13 @@ export function useClaimDebateCounts(asks: ClaimDebateCountAsk[], enabled = true
       }
       return { byClaimId, isLoading, error };
     },
-    []
+    [waitingForAccount]
   );
 
   return useQueries({
     queries: batches.map(batch => ({
       ...debateQueryNetworkOptions,
-      queryKey: debateQueryKeys.claimDebateCounts(batch),
+      queryKey: debateQueryKeys.claimDebateCounts(accountKey, batch),
       queryFn: ({ signal }: { signal?: AbortSignal }) =>
         getClaimDebateCounts(
           batch.map(ask => ({ claim_entity_id: ask.claimId, since: ask.since })),
@@ -62,7 +64,7 @@ export function useClaimDebateCounts(asks: ClaimDebateCountAsk[], enabled = true
           signal
         ),
       staleTime: Infinity,
-      enabled,
+      enabled: enabled && accountKey !== null,
     })),
     combine,
   });

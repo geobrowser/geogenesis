@@ -9,6 +9,7 @@ import { useClaimDebateCounts } from './claim-debate-counts';
 
 const mocks = vi.hoisted(() => ({
   getClaimDebateCounts: vi.fn(),
+  auth: { ready: true, accountKey: 'account-a' as string | null },
 }));
 
 vi.mock('../api', async importOriginal => ({
@@ -16,10 +17,14 @@ vi.mock('../api', async importOriginal => ({
   getClaimDebateCounts: mocks.getClaimDebateCounts,
 }));
 
-// Signed out as far as Privy has said yet: the read must not wait on it (GEO-3489).
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
-  useGeoChatAuth: () => ({ ready: false, authenticated: false, accountKey: null, getPrivyIdentityToken: vi.fn() }),
+  useGeoChatAuth: () => ({
+    ready: mocks.auth.ready,
+    authenticated: mocks.auth.accountKey !== null,
+    accountKey: mocks.auth.accountKey,
+    getPrivyIdentityToken: vi.fn(),
+  }),
 }));
 
 let client: QueryClient;
@@ -30,42 +35,58 @@ function wrapper({ children }: { children: ReactNode }) {
 
 const A = 'a1000000000000000000000000000001';
 const B = 'a1000000000000000000000000000002';
+const ASKS = [
+  { claimId: A, since: '2026-10-28T00:00:00-04:00' },
+  { claimId: B, since: '2026-10-26T00:00:00-04:00' },
+];
 
 describe('useClaimDebateCounts', () => {
   beforeEach(() => {
     client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
     mocks.getClaimDebateCounts.mockReset();
+    mocks.auth = { ready: true, accountKey: 'account-a' };
   });
 
-  it('asks before Privy has restored the session, and reads each claim from its own listing', async () => {
+  // geo-chat refuses a caller with no account, and the counts are read once: asked too early, the
+  // refusal would stand for the visit, and the picker's order would be set without them.
+  it('waits, as loading, for Privy to restore the account, then asks with it', async () => {
+    mocks.auth = { ready: false, accountKey: null };
     mocks.getClaimDebateCounts.mockResolvedValue({
       counts: [
         { claim_entity_id: A, debates: 2 },
         { claim_entity_id: B, debates: 0 },
       ],
     });
-    const asks = [
-      { claimId: A, since: '2026-10-28T00:00:00-04:00' },
-      { claimId: B, since: '2026-10-26T00:00:00-04:00' },
-    ];
 
-    const { result } = renderHook(() => useClaimDebateCounts(asks), { wrapper });
+    const { result, rerender } = renderHook(() => useClaimDebateCounts(ASKS), { wrapper });
+    expect(result.current.isLoading).toBe(true);
+    expect(mocks.getClaimDebateCounts).not.toHaveBeenCalled();
 
-    expect(result.current.byClaimId).toBeNull();
+    mocks.auth = { ready: true, accountKey: 'account-a' };
+    rerender();
+
     await waitFor(() => expect(result.current.byClaimId).not.toBeNull());
     expect(Object.fromEntries(result.current.byClaimId!)).toEqual({ [A]: 2, [B]: 0 });
     expect(mocks.getClaimDebateCounts.mock.calls[0]![0]).toEqual([
       { claim_entity_id: A, since: '2026-10-28T00:00:00-04:00' },
       { claim_entity_id: B, since: '2026-10-26T00:00:00-04:00' },
     ]);
+    expect(mocks.getClaimDebateCounts.mock.calls[0]![2]).toBe('account-a');
+  });
+
+  it('settles with no counts once Privy says nobody is signed in', () => {
+    mocks.auth = { ready: true, accountKey: null };
+
+    const { result } = renderHook(() => useClaimDebateCounts(ASKS), { wrapper });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(mocks.getClaimDebateCounts).not.toHaveBeenCalled();
   });
 
   it('answers null, not zeros, when geo-chat cannot count', async () => {
     mocks.getClaimDebateCounts.mockImplementation(() => Promise.reject(new Error('404 not found')));
 
-    const { result } = renderHook(() => useClaimDebateCounts([{ claimId: A, since: '2026-10-28T04:00:00Z' }]), {
-      wrapper,
-    });
+    const { result } = renderHook(() => useClaimDebateCounts(ASKS), { wrapper });
 
     await waitFor(() => expect(result.current.error).not.toBeNull());
     expect(result.current.byClaimId).toBeNull();

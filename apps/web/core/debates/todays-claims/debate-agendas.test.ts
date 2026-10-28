@@ -135,6 +135,36 @@ describe('buildDebateAgendas', () => {
     });
   });
 
+  // An agenda in a space that does not count must not move a claim's listing or its Earlier slot.
+  it('decides which spaces count before dating, deduping or picking the newest day', () => {
+    const PERSONAL = 'f0000000000000000000000000000001';
+    const agendas = [
+      agenda('agenda-spam', { [PERSONAL]: { date: '2026-10-28T00:00:00-04:00', blocks: ['b-spam'] } }),
+      agenda('agenda-spam-27', { [PERSONAL]: { date: '2026-10-27T00:00:00-04:00', blocks: ['b-spam-27'] } }),
+      agenda('agenda-26', { [WORLD]: { date: '2026-10-26T00:00:00-04:00', blocks: ['b-26'] } }),
+      agenda('agenda-25', { [WORLD]: { date: '2026-10-25T00:00:00-04:00', blocks: ['b-25'] } }),
+    ];
+    const blocks = [
+      block('b-spam', 'Read this', [claim(1)], PERSONAL),
+      block('b-spam-27', 'And this', [claim(2)], PERSONAL),
+      block('b-26', 'Monday', [claim(1)]),
+      block('b-25', 'Sunday', [claim(2)]),
+    ];
+
+    const { spaces, earlier, newestDay, listedAtByClaim } = buildDebateAgendas(
+      agendas,
+      blocks,
+      allClaims,
+      TODAY,
+      spaceId => spaceId !== PERSONAL
+    );
+
+    expect(spaces.map(space => space.spaceId)).toEqual([WORLD]);
+    expect(newestDay).toBe('2026-10-26');
+    expect(listedAtByClaim.get(claim(1))).toBe('2026-10-26T00:00:00-04:00');
+    expect(earlier.map(listing => [listing.claimId, listing.listedOn])).toEqual([[claim(2), '2026-10-25']]);
+  });
+
   it('leaves out items that are not claims, and blocks with none', () => {
     const agendas = [agenda('agenda-28', { [WORLD]: { date: '2026-10-28T00:00:00-04:00', blocks: ['b-1', 'b-2'] } })];
     const blocks = [block('b-1', 'Mixed', [claim(1), 'not-a-claim']), block('b-2', 'Notes', ['not-a-claim'])];

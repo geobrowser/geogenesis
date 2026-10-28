@@ -926,16 +926,31 @@ function listedAtByClaim(agendas: typeof todays.agendas) {
   return byClaim;
 }
 
-vi.mock('~/core/debates/todays-claims/debate-agendas', () => ({
-  useDebateAgendas: (enabled: boolean) => ({
-    agendas: enabled
-      ? { ...todays.agendas, listedAtByClaim: listedAtByClaim(todays.agendas) }
-      : { spaces: [], earlier: [], newestDay: null, listedAtByClaim: new Map() },
-    claimEntities: enabled ? todays.entities : [],
-    isLoading: enabled && todays.loading,
-    error: null,
-  }),
-}));
+// The builder has its own tests; this keeps its contract: `keepSpace` decides first which spaces count.
+vi.mock('~/core/debates/todays-claims/debate-agendas', async importOriginal => {
+  const { NO_AGENDAS } = await importOriginal<typeof import('~/core/debates/todays-claims/debate-agendas')>();
+  const agendasIn = (keepSpace: (spaceId: string) => boolean) => {
+    const kept = {
+      ...todays.agendas,
+      spaces: todays.agendas.spaces.filter(space => keepSpace(space.spaceId)),
+      earlier: todays.agendas.earlier.filter(listing => keepSpace(listing.spaceId)),
+    };
+    return { ...kept, listedAtByClaim: listedAtByClaim(kept) };
+  };
+  return {
+    NO_AGENDAS,
+    useDebateAgendas: (enabled: boolean) => ({
+      agendasIn: enabled ? agendasIn : () => NO_AGENDAS,
+      spaceIds: enabled
+        ? [...todays.agendas.spaces.map(space => space.spaceId), ...todays.agendas.earlier.map(l => l.spaceId)]
+        : [],
+      claimIds: enabled ? [...listedAtByClaim(todays.agendas).keys()] : [],
+      claimEntities: enabled ? todays.entities : [],
+      isLoading: enabled && todays.loading,
+      error: null,
+    }),
+  };
+});
 
 vi.mock('~/core/debates/todays-claims/claim-debate-counts', () => ({
   useClaimDebateCounts: (asks: Array<{ claimId: string; since: string }>, enabled: boolean) => {
@@ -7573,6 +7588,38 @@ describe('Today’s claims', () => {
     );
     // Five on today's agendas and the one earlier claim nobody has debated since.
     expect(landing?.[1]).toMatchObject({ landing_tab: 'todays_claims', todays_claims_count: 6 });
+  });
+
+  // Every other tab lands on what can still be requested, not on the pair's already-debated fold.
+  it('lands where master does when the pair have debated every claim on the agendas', async () => {
+    twoAgendas();
+    const ids = [T_LULA, T_AGE, T_COURTS, T_OLD, T_OLD_DEBATED].map(id => [id, SPACE_1] as const);
+    mocks.claims = [...ids, [T_PRISON, SPACE_2] as const, [T_VOTE, SPACE_2] as const].map(([id, spaceId]) => ({
+      ...sharedClaim(),
+      claim: { id, space_id: spaceId, claim_entity_id: id, claim: 'x', description: null },
+      shared_preference: false,
+      previously_debated: true,
+    }));
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // Unknown reads as "every space allowed"; landing on rows that then vanish bounced the pair.
+  it('waits for the acceptor’s spaces before landing on agendas they rule out', async () => {
+    twoAgendas();
+    todays.agendas = { ...todays.agendas, spaces: [todays.agendas.spaces[1]!], earlier: [] };
+    mocks.publishableSpaceIds = null;
+    mocks.publishableSpacesLoading = true;
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    mocks.publishableSpaceIds = new Set([bare(SPACE_1)]);
+    mocks.publishableSpacesLoading = false;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Better reentry support reduces recidivism')).toBeNull();
   });
 
   it('lands where master does when no space has an agenda', async () => {

@@ -111,7 +111,7 @@ import {
   useTaggedTopicFacet,
 } from '~/core/debates/tagged-claims';
 import { useClaimDebateCounts } from '~/core/debates/todays-claims/claim-debate-counts';
-import { useDebateAgendas } from '~/core/debates/todays-claims/debate-agendas';
+import { NO_AGENDAS, useDebateAgendas } from '~/core/debates/todays-claims/debate-agendas';
 import { EARLIER_THIS_WEEK_SECTION, useTodaysSectionsOpen } from '~/core/debates/todays-claims/section-open-state';
 import { orderAgendaSpaces, orderByDebatesSinceListing } from '~/core/debates/todays-claims/todays-claims-order';
 import { useDebatersSpaceMembership } from '~/core/debates/todays-claims/use-debaters-space-membership';
@@ -318,7 +318,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const rejoinFailuresRef = React.useRef({ sessionId: '', count: 0 });
   // Bumped to run the effect again after a failed rejoin, since the ended session itself will not change.
   const [rejoinRetry, setRejoinRetry] = React.useState(0);
-  const { authenticated: geoChatAuthenticated } = useGeoChatAuth();
+  const { ready: geoChatReady, authenticated: geoChatAuthenticated } = useGeoChatAuth();
   const currentUserId = useCurrentGeoChatUserId();
   /**
    * The viewer's geo-chat id is still coming.
@@ -457,7 +457,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // This lookup answers `null` for *unknown* — a load in flight and a failed one alike — and
   // `isSpaceDebatePublishable` reads null as "don't filter", so it fails open.
-  const { publishableSpaceIds } = useDebatePublishableSpaces();
+  const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
 
   /* -----------------------------------------------------------------------------------------------
    * GEO-2758. Related claims: the tab the pair land on straight out of a debate.
@@ -491,27 +491,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * ---------------------------------------------------------------------------------------------*/
   const todaysClaimsEnabled = useFeatureFlag('todaysClaims');
   const todaysAgendasQuery = useDebateAgendas(todaysClaimsEnabled);
-  const todaysAgendas = todaysAgendasQuery.agendas;
-  const todaysClaimIds = React.useMemo(
-    () => [...todaysAgendas.listedAtByClaim.keys()],
-    [todaysAgendas.listedAtByClaim]
-  );
-  // Asked once the agendas have settled: the claims resolve in batches, and each partial list would
-  // be another request for counts nobody reads.
-  const todaysCountAsks = React.useMemo(
-    () =>
-      todaysAgendasQuery.isLoading
-        ? []
-        : [...todaysAgendas.listedAtByClaim].map(([claimId, listedAt]) => ({ claimId, since: listedAt })),
-    [todaysAgendas.listedAtByClaim, todaysAgendasQuery.isLoading]
-  );
-  const todaysDebateCounts = useClaimDebateCounts(todaysCountAsks, todaysClaimsEnabled && todaysCountAsks.length > 0);
-  const todaysSpaceIds = React.useMemo(() => todaysAgendas.spaces.map(space => space.spaceId), [todaysAgendas.spaces]);
-  const todaysMembership = useDebatersSpaceMembership(
-    todaysSpaceIds,
-    participantSpaceIds,
-    todaysClaimsEnabled && todaysSpaceIds.length > 0
-  );
+  // Every agenda's claims and spaces, before publishability says which count: the rows and each
+  // space's type are looked up for all of them, so they are ready when it does.
+  const todaysClaimIds = todaysAgendasQuery.claimIds;
+  const todaysSpaceIds = todaysAgendasQuery.spaceIds;
   const todaysClaimsQuery = useDebateRematchClaimsForIds(sessionId, todaysClaimIds, todaysClaimsEnabled);
 
   /* -----------------------------------------------------------------------------------------------
@@ -1111,6 +1094,38 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 
   /**
+   * GEO-3489. The agendas that count: those in a space that can carry a published debate, as
+   * GEO-3488 ranks them. Anyone can publish the type, so an agenda anywhere else would put its own
+   * headings over real claims in front of every pair — and, counted before the rest, it could move a
+   * claim's listing date, take its place in Earlier this week, or reset the day sections are
+   * remembered for. Empty until both publishability lookups have answered.
+   */
+  const todaysScopePending = publishabilityPending || publishableSpacesLoading;
+  const todaysAgendas = React.useMemo(
+    () => (todaysScopePending ? NO_AGENDAS : todaysAgendasQuery.agendasIn(canPublishDebateIn)),
+    [canPublishDebateIn, todaysAgendasQuery, todaysScopePending]
+  );
+  // Asked once the agendas that count are known: the claims resolve in batches, and each partial
+  // list would be another request for counts nobody reads.
+  const todaysCountAsks = React.useMemo(
+    () =>
+      todaysAgendasQuery.isLoading || todaysScopePending
+        ? []
+        : [...todaysAgendas.listedAtByClaim].map(([claimId, listedAt]) => ({ claimId, since: listedAt })),
+    [todaysAgendas.listedAtByClaim, todaysAgendasQuery.isLoading, todaysScopePending]
+  );
+  const todaysDebateCounts = useClaimDebateCounts(todaysCountAsks, todaysClaimsEnabled && todaysCountAsks.length > 0);
+  const todaysAgendaSpaceIds = React.useMemo(
+    () => todaysAgendas.spaces.map(space => space.spaceId),
+    [todaysAgendas.spaces]
+  );
+  const todaysMembership = useDebatersSpaceMembership(
+    todaysAgendaSpaceIds,
+    participantSpaceIds,
+    todaysClaimsEnabled && todaysAgendaSpaceIds.length > 0
+  );
+
+  /**
    * A picker row from a graph entity, with geo-chat's session row layered on when it has one.
    *
    * `preferredSpaceId` overrides the space ranking where the caller already knows which space the
@@ -1654,13 +1669,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const todaysSettling =
     todaysClaimsEnabled &&
     (todaysAgendasQuery.isLoading ||
-      // The debaters decide the space order, and they come with the session.
+      // The debaters decide the space order, and they come with the session — which, like the counts,
+      // waits for Privy to restore who the viewer is. Until then neither has an answer to give.
+      !geoChatReady ||
+      viewerIdentityUnresolved ||
       sessionQuery.isLoading ||
       (todaysClaimIds.length > 0 &&
         (todaysClaimsQuery.isLoading ||
           todaysDebateCounts.isLoading ||
           todaysMembership.isLoading ||
-          publishabilityPending)));
+          todaysScopePending)));
   const todaysNow = React.useMemo(() => {
     if (!todaysClaimsEnabled || todaysSettling) return NO_TODAYS;
     const entitiesById = new Map(todaysAgendasQuery.claimEntities.map(entity => [normId(entity.id), entity]));
@@ -1677,26 +1695,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
     const sections: TodaysSection[] = [];
     const items: TodaysItem[] = [];
-    // An agenda counts only in a space that can carry a published debate, as GEO-3488 ranks them.
-    // Anyone can publish the type, and an agenda in a personal space would otherwise put its own
-    // headings over real claims in front of every pair.
-    const agendaSpaceIds = todaysSpaceIds.filter(spaceId => canPublishDebateIn(spaceId));
-    for (const spaceId of orderAgendaSpaces(agendaSpaceIds, todaysMembership.debatersIn)) {
+    for (const spaceId of orderAgendaSpaces(todaysAgendaSpaceIds, todaysMembership.debatersIn)) {
       const space = todaysAgendas.spaces.find(candidate => idEquals(candidate.spaceId, spaceId));
       for (const section of space?.sections ?? []) {
         const rows = orderByDebatesSinceListing(section.claimIds, debatesOf).flatMap(
           claimId => rowOf(claimId, section.spaceId) ?? []
         );
         if (rows.length === 0) continue;
-        const key = todaysSectionKey(section.id);
+        const key = todaysSectionKey(section.spaceId, section.id);
         sections.push({ key, name: section.name, defaultOpen: true });
         items.push(...rows.map(row => ({ row, sectionKey: key })));
       }
     }
     const earlier = todaysAgendas.earlier.flatMap(listing =>
-      (debatesOf(listing.claimId) ?? 0) > 0 || !canPublishDebateIn(listing.spaceId)
-        ? []
-        : (rowOf(listing.claimId, listing.spaceId) ?? [])
+      (debatesOf(listing.claimId) ?? 0) > 0 ? [] : (rowOf(listing.claimId, listing.spaceId) ?? [])
     );
     if (earlier.length > 0) {
       sections.push({ key: EARLIER_THIS_WEEK_SECTION, name: 'Earlier this week', defaultOpen: false });
@@ -1713,7 +1725,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     todaysDebateCounts.byClaimId,
     todaysMembership.debatersIn,
     todaysSettling,
-    todaysSpaceIds,
+    todaysAgendaSpaceIds,
   ]);
   const todaysHeld = useLastSettled(todaysNow, todaysSettling, sessionId);
   const todaysSections = useStableListOrder(todaysHeld.sections, todaysSectionKeyOf, sessionId);
@@ -1954,7 +1966,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // the session's or the graph's, so both of the pair land on the same tab.
     [
       'todays',
-      !todaysClaimsEnabled || todaysAgendasQuery.error ? 'empty' : listLandingState(todaysSettling, todaysListedCount),
+      !todaysClaimsEnabled || todaysAgendasQuery.error
+        ? 'empty'
+        : listLandingState(todaysSettling, todaysClaims.length),
     ],
     // A lookup that failed cannot say whether there are matches. It is not a reason to wait either.
     ['matches', opponentTabError ? 'empty' : listLandingState(opponentLandingPending, matchClaims.length)],
@@ -3856,8 +3870,11 @@ function TopicMatchCaption({ names }: { names: string[] }) {
 /** The page's names for its collapsible sections, so it can tell which of them are closed. */
 const ALREADY_DEBATED_SECTION = 'already-debated';
 const recommendedSectionKey = (sectionId: string) => `recommended:${sectionId}`;
-/** A Today's claims section, by its agenda block. "Earlier this week" is `EARLIER_THIS_WEEK_SECTION`. */
-const todaysSectionKey = (blockId: string) => `todays:${normId(blockId)}`;
+/**
+ * A Today's claims section, by its space and agenda block: one block can be linked into two spaces'
+ * agendas. "Earlier this week" is `EARLIER_THIS_WEEK_SECTION`.
+ */
+const todaysSectionKey = (spaceId: string, blockId: string) => `todays:${normId(spaceId)}:${normId(blockId)}`;
 
 /** GEO-3489. A Today's claims heading, and whether it starts open. */
 type TodaysSection = { key: string; name: string; defaultOpen: boolean };

@@ -158,11 +158,17 @@ export function buildDebateAgendas(
   agendas: AgendaEntity[],
   blocks: BlockEntity[],
   claimIds: ReadonlySet<string>,
-  today: string
+  today: string,
+  /**
+   * Whether a space's agendas count at all. Applied before anything else, so an agenda in a space
+   * that does not count cannot move a claim's listing, take its place in Earlier this week, or
+   * become the newest day.
+   */
+  keepSpace: (spaceId: string) => boolean = () => true
 ): DebateAgendas {
   const blocksById = new Map(blocks.map(block => [normId(block.id), block]));
   const oldest = oldestAgendaDay(today);
-  const inWindow = spaceAgendasOf(agendas, today).filter(agenda => agenda.day >= oldest);
+  const inWindow = spaceAgendasOf(agendas, today).filter(agenda => agenda.day >= oldest && keepSpace(agenda.spaceId));
 
   const claimsOf = (agenda: SpaceAgenda) =>
     agenda.blockIds.flatMap(blockId => {
@@ -263,7 +269,7 @@ function oldestAgendaDay(today: string) {
   return zonedDay(new Date(`${today}T12:00:00Z`), 'UTC', -EARLIER_AGENDA_DAYS);
 }
 
-const NO_AGENDAS: DebateAgendas = { spaces: [], earlier: [], newestDay: null, listedAtByClaim: new Map() };
+export const NO_AGENDAS: DebateAgendas = { spaces: [], earlier: [], newestDay: null, listedAtByClaim: new Map() };
 
 /**
  * GEO-3489. Every space's newest Debate agenda, read from the graph, with the week's older listings.
@@ -274,7 +280,16 @@ const NO_AGENDAS: DebateAgendas = { spaces: [], earlier: [], newestDay: null, li
  * and the claims the blocks hold.
  */
 export function useDebateAgendas(enabled = true): {
-  agendas: DebateAgendas;
+  /**
+   * The agendas, counting only the spaces `keepSpace` keeps. A function rather than a value because
+   * which spaces count is the caller's to decide — the picker needs each space's type, which it
+   * looks up from `spaceIds`.
+   */
+  agendasIn: (keepSpace: (spaceId: string) => boolean) => DebateAgendas;
+  /** Every space with an agenda this week, before `keepSpace`. */
+  spaceIds: string[];
+  /** Every claim any of those agendas lists, before `keepSpace`. */
+  claimIds: string[];
   /** The listed claims, so callers don't fetch what this already resolved. */
   claimEntities: ClaimPickerEntity[];
   /** True until every hop has settled; empty agendas mean "none" only after. */
@@ -297,15 +312,14 @@ export function useDebateAgendas(enabled = true): {
   });
 
   const oldest = oldestAgendaDay(today);
-  const blockIds = React.useMemo(
-    () => [
-      ...new Set(
-        spaceAgendasOf(agendaEntities, today)
-          .filter(agenda => agenda.day >= oldest)
-          .flatMap(agenda => agenda.blockIds)
-      ),
-    ],
+  const inWindow = React.useMemo(
+    () => spaceAgendasOf(agendaEntities, today).filter(agenda => agenda.day >= oldest),
     [agendaEntities, oldest, today]
+  );
+  const blockIds = React.useMemo(() => [...new Set(inWindow.flatMap(agenda => agenda.blockIds))], [inWindow]);
+  const spaceIds = React.useMemo(
+    () => (enabled ? [...new Map(inWindow.map(agenda => [normId(agenda.spaceId), agenda.spaceId])).values()] : NO_IDS),
+    [enabled, inWindow]
   );
 
   const {
@@ -342,23 +356,26 @@ export function useDebateAgendas(enabled = true): {
     error: claimsError,
   } = useClaimEntitiesByIds(enabled ? itemIds : NO_IDS);
 
-  const agendas = React.useMemo(() => {
-    if (!enabled) return NO_AGENDAS;
-    const claimIds = new Set(claimEntities.map(claim => normId(claim.id)));
-    return buildDebateAgendas(agendaEntities, blockEntities, claimIds, today);
-  }, [agendaEntities, blockEntities, claimEntities, enabled, today]);
+  const claimIds = React.useMemo(() => claimEntities.map(claim => normId(claim.id)), [claimEntities]);
+  const agendasIn = React.useCallback(
+    (keepSpace: (spaceId: string) => boolean) =>
+      enabled ? buildDebateAgendas(agendaEntities, blockEntities, new Set(claimIds), today, keepSpace) : NO_AGENDAS,
+    [agendaEntities, blockEntities, claimIds, enabled, today]
+  );
 
   const isLoading =
     enabled && (agendasLoading || (blockIds.length > 0 && blocksLoading) || (itemIds.length > 0 && claimsLoading));
 
   return React.useMemo(
     () => ({
-      agendas,
+      agendasIn,
+      spaceIds,
+      claimIds: enabled ? claimIds : NO_IDS,
       claimEntities,
       isLoading,
       error: agendasError ?? blocksError ?? claimsError ?? null,
     }),
-    [agendas, agendasError, blocksError, claimEntities, claimsError, isLoading]
+    [agendasError, agendasIn, blocksError, claimEntities, claimIds, claimsError, enabled, isLoading, spaceIds]
   );
 }
 
