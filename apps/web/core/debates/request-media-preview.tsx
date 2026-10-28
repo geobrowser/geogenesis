@@ -124,6 +124,16 @@ function MediaPreview({
   const [voiceFree, setVoiceFree] = React.useState(false);
   const [voiceRefused, setVoiceRefused] = React.useState(false);
   const voiceHeldElsewhere = React.useEffectEvent(() => voice.heldElsewhere());
+  // Another tab took voice after this card opened its devices without a claim: close them.
+  const voiceTakenElsewhere = voice.ownership === 'elsewhere';
+  React.useEffect(() => {
+    if (!voiceTakenElsewhere) return;
+    setVoiceFree(false);
+    setWant(current => ({
+      micOn: toggledHere.mic ? current.micOn : false,
+      cameraOn: toggledHere.camera ? current.cameraOn : false,
+    }));
+  }, [voiceTakenElsewhere, toggledHere.camera, toggledHere.mic]);
 
   React.useEffect(() => {
     let active = true;

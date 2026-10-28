@@ -193,8 +193,21 @@ export function createTabVoiceOwner({
     notices.onmessage = event => {
       const type = (event.data as { type?: string } | null)?.type;
       if (type === 'yieldable') return restoreButton();
+      // Another tab took voice without asking this one (it held nothing): a surface using devices
+      // here without a claim, like a card preview, closes them.
+      if (type === 'held' && state.ownership === 'pending' && !coordinator?.ownsConnection()) {
+        return setState({ ownership: 'elsewhere', heldBy: null });
+      }
       if (type === 'policy-query') announceIfYieldable();
     };
+  };
+
+  const announceHeld = () => {
+    try {
+      notices?.postMessage({ type: 'held' });
+    } catch {
+      // Best effort: only device previews outside the lock listen for it.
+    }
   };
 
   const announceIfYieldable = () => {
@@ -256,6 +269,7 @@ export function createTabVoiceOwner({
         clearTimeout(teardown);
         teardown = null;
       }
+      ensureNotices();
       surfaces.add(surface);
       return () => {
         surfaces.delete(surface);
@@ -287,6 +301,7 @@ export function createTabVoiceOwner({
         .then(owned => {
           if (coordinator !== active) return false;
           setState(owned ? OWNED : { ownership: 'elsewhere', heldBy: asSurfaceKind(active.lastRefusedBy()) });
+          if (owned) announceHeld();
           return owned;
         })
         .finally(() => {

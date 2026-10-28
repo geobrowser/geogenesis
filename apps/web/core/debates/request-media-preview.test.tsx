@@ -807,4 +807,30 @@ describe('voice held by another tab', () => {
     expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn microphone on' })).toBeInTheDocument();
   });
+
+  it('closes what it opened by itself when another tab takes voice without asking it', async () => {
+    mocks.permission = 'granted';
+    const { rerender } = mount();
+    expect(await screen.findByText('Joining with mic and camera on')).toBeInTheDocument();
+    mocks.stopMedia.mockClear();
+
+    // This tab held nothing, so nothing asked it to yield; it only hears that voice is elsewhere.
+    mocks.voiceHeldElsewhere = true;
+    rerender(<DebateRequestMediaPreview sessionKey="debate:debate-1" />);
+
+    await waitFor(() => expect(mocks.stopMedia).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn microphone on' })).toBeInTheDocument();
+  });
+
+  it('keeps a device the viewer turned on here when voice moves on', async () => {
+    mocks.permission = 'prompt';
+    const { rerender } = mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.ensurePreview).toHaveBeenCalledWith({ audio: false, video: true }));
+
+    mocks.voiceHeldElsewhere = true;
+    rerender(<DebateRequestMediaPreview sessionKey="debate:debate-1" />);
+    expect(await screen.findByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+  });
 });

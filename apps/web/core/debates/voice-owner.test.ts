@@ -326,6 +326,23 @@ describe('tab voice owner', () => {
     expect(debateTab.yields).toBe(1);
   });
 
+  it('tells a tab holding nothing when another tab takes voice', async () => {
+    const previewTab = openTab('preview', 2);
+    previewTab.surface('preview');
+    expect(previewTab.owner.getState().ownership).toBe('pending');
+
+    const lobbyTab = openTab('lobby', 1);
+    lobbyTab.surface('lobby');
+    await expect(lobbyTab.claim('lobby')).resolves.toBe(true);
+    await flush();
+    expect(previewTab.owner.getState()).toEqual({ ownership: 'elsewhere', heldBy: null });
+    // Still free to take it back.
+    await expect(previewTab.claim('preview')).resolves.toBe(true);
+    await flush();
+    expect(lobbyTab.owner.getState().ownership).toBe('elsewhere');
+    expect(previewTab.owner.getState().ownership).toBe('owned');
+  });
+
   it('announces only from the tab holding voice, and only when it would yield', async () => {
     const debateTab = openTab('debate', 0);
     const debate = debateTab.surface('debate', 'refuse');
