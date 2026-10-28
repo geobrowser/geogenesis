@@ -1,5 +1,7 @@
 import { Node } from '@tiptap/core';
 import Document from '@tiptap/extension-document';
+import Heading from '@tiptap/extension-heading';
+import { BulletList, ListItem } from '@tiptap/extension-list';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import { TextSelection } from '@tiptap/pm/state';
@@ -27,16 +29,26 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-type Block = string | 'table';
+type Block = string | 'table' | 'heading' | 'bullet';
+
+function nodeFor(block: Block) {
+  if (block === 'table') return { type: 'tableNode' };
+  if (block === 'heading') return { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'H' }] };
+  if (block === 'bullet') {
+    return {
+      type: 'bulletList',
+      content: [{ type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'L' }] }] }],
+    };
+  }
+  return { type: 'paragraph', content: [{ type: 'text', text: block }] };
+}
 
 function makeEditor(blocks: Block[]) {
   const editor = new Editor({
-    extensions: [Document, Paragraph, Text, TableNode, TrailingNode],
+    extensions: [Document, Paragraph, Text, Heading, BulletList, ListItem, TableNode, TrailingNode],
     content: {
       type: 'doc',
-      content: blocks.map(block =>
-        block === 'table' ? { type: 'tableNode' } : { type: 'paragraph', content: [{ type: 'text', text: block }] }
-      ),
+      content: blocks.map(nodeFor),
     },
   });
   editors.push(editor);
@@ -130,6 +142,24 @@ describe('focusEditorAtClick', () => {
       editor.commands.insertContent('x');
 
       expect(blocks(editor)).toEqual(['xA', 'table', '']);
+    });
+
+    it('puts the caret in a new paragraph below a heading that ends the doc', () => {
+      const editor = makeTouchEditor(['A', 'heading']);
+
+      focusEditorAtClick(editor, { clientX: 300, clientY: BOX.bottom + 20 });
+      editor.commands.insertContent('x');
+
+      expect(blocks(editor)).toEqual(['A', 'H', 'x']);
+    });
+
+    it('puts the caret in a new paragraph below a bullet list that ends the doc', () => {
+      const editor = makeTouchEditor(['A', 'bullet']);
+
+      focusEditorAtClick(editor, { clientX: 300, clientY: BOX.bottom + 20 });
+      editor.commands.insertContent('x');
+
+      expect(blocks(editor)).toEqual(['A', 'L', 'x']);
     });
   });
 });

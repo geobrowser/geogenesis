@@ -1,4 +1,4 @@
-import { Selection, TextSelection } from '@tiptap/pm/state';
+import { Selection } from '@tiptap/pm/state';
 import type { Editor } from '@tiptap/react';
 
 /**
@@ -8,9 +8,7 @@ import type { Editor } from '@tiptap/react';
 export function focusEditorAtClick(editor: Editor, click: { clientX: number; clientY: number }) {
   const { view } = editor;
 
-  if (!(Selection.atEnd(view.state.doc) instanceof TextSelection)) {
-    editor.commands.insertContentAt(view.state.doc.content.size, { type: 'paragraph' });
-  }
+  view.dispatch(view.state.tr);
 
   const box = view.dom.getBoundingClientRect();
 
