@@ -875,6 +875,69 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
   },
 }));
 
+/**
+ * GEO-3489. Today's claims: the flag, the agendas, geo-chat's counts and the debaters' memberships.
+ * The flag is off unless a case turns it on, so every other suite here runs against master's picker.
+ */
+const todays = vi.hoisted(() => ({
+  flag: false,
+  agendas: { spaces: [], earlier: [], newestDay: null } as {
+    spaces: Array<{
+      spaceId: string;
+      listedOn: string;
+      sections: Array<{
+        id: string;
+        agendaId: string;
+        spaceId: string;
+        name: string;
+        claimIds: string[];
+        listedAt: string;
+      }>;
+    }>;
+    earlier: Array<{ claimId: string; spaceId: string; agendaId: string; listedOn: string; listedAt: string }>;
+    newestDay: string | null;
+  },
+  entities: [] as any[],
+  loading: false,
+  /** Debates since listing per claim id, or null for a geo-chat that cannot say. */
+  counts: null as Map<string, number> | null,
+  countsAsked: [] as Array<Array<{ claimId: string; since: string }>>,
+  /** How many of the two debaters are members of each space, by bare lowercase id. */
+  members: {} as Record<string, number>,
+}));
+
+vi.mock('~/core/state/feature-flags', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/state/feature-flags')>();
+  return {
+    ...actual,
+    useFeatureFlag: (id: string) =>
+      id === 'todaysClaims' ? todays.flag : actual.defaultFeatureFlags[id as keyof typeof actual.defaultFeatureFlags],
+  };
+});
+
+vi.mock('~/core/debates/todays-claims/debate-agendas', () => ({
+  useDebateAgendas: (enabled: boolean) => ({
+    agendas: enabled ? todays.agendas : { spaces: [], earlier: [], newestDay: null },
+    claimEntities: enabled ? todays.entities : [],
+    isLoading: enabled && todays.loading,
+    error: null,
+  }),
+}));
+
+vi.mock('~/core/debates/todays-claims/claim-debate-counts', () => ({
+  useClaimDebateCounts: (asks: Array<{ claimId: string; since: string }>, enabled: boolean) => {
+    if (enabled) todays.countsAsked.push(asks);
+    return { byClaimId: enabled ? todays.counts : null, isLoading: false, error: null };
+  },
+}));
+
+vi.mock('~/core/debates/todays-claims/use-debaters-space-membership', () => ({
+  useDebatersSpaceMembership: () => ({
+    debatersIn: (spaceId: string) => todays.members[spaceId.replace(/-/g, '').toLowerCase()] ?? 0,
+    isLoading: false,
+  }),
+}));
+
 // The curated lookup has its own tests; these cover the picker around it.
 vi.mock('~/core/debates/recommended-claims', () => ({
   useRecommendedClaimSections: () => ({
@@ -7216,5 +7279,233 @@ describe('click analytics labels in a debate room', () => {
 
     expect(await screen.findByTestId('rematch-outbound-request')).toBeInTheDocument();
     expect(unlabeledControls()).toEqual([]);
+  });
+});
+
+/**
+ * GEO-3489. Today's claims: the first tab, behind `todaysClaims`, listing every space's newest
+ * Debate agenda under its section headings.
+ */
+describe('Today’s claims', () => {
+  const T_LULA = 'a1000000000000000000000000000001';
+  const T_COURTS = 'a1000000000000000000000000000002';
+  const T_AGE = 'a1000000000000000000000000000003';
+  const T_PRISON = 'a1000000000000000000000000000004';
+  const T_VOTE = 'a1000000000000000000000000000005';
+  const T_OLD = 'a1000000000000000000000000000006';
+  const T_OLD_DEBATED = 'a1000000000000000000000000000007';
+  const bare = (id: string) => id.replace(/-/g, '').toLowerCase();
+
+  function agendaEntity(id: string, name: string, spaceId: string, topic?: { id: string; name: string }) {
+    return {
+      id,
+      name,
+      description: null,
+      spaces: [spaceId],
+      values: [{ property: { id: NAME_PROPERTY }, spaceId, value: name }],
+      relations: topic ? [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: topic, isDeleted: false, spaceId }] : [],
+    };
+  }
+
+  function section(id: string, spaceId: string, name: string, claimIds: string[]) {
+    return { id, agendaId: `agenda-${spaceId}`, spaceId, name, claimIds, listedAt: '2026-10-28T00:00:00-04:00' };
+  }
+
+  /** World affairs (SPACE_1) with two sections, U.S. Politics (SPACE_2) with one, and an older listing. */
+  function twoAgendas() {
+    todays.flag = true;
+    todays.entities = [
+      agendaEntity(T_LULA, 'Lula should be re-elected', SPACE_1, { id: 'topic-lula', name: 'Lula’s victory' }),
+      agendaEntity(T_AGE, 'Lula is too old to govern', SPACE_1, { id: 'topic-lula', name: 'Lula’s victory' }),
+      agendaEntity(T_COURTS, 'The courts are persecuting the Bolsonaros', SPACE_1, {
+        id: 'topic-courts',
+        name: 'Bolsonaro trials',
+      }),
+      agendaEntity(T_PRISON, 'Better reentry support reduces recidivism', SPACE_2),
+      agendaEntity(T_VOTE, 'Released prisoners should keep the vote', SPACE_2),
+      agendaEntity(T_OLD, 'A claim from Monday', SPACE_1),
+      agendaEntity(T_OLD_DEBATED, 'A claim from Monday, debated since', SPACE_1),
+    ];
+    todays.agendas = {
+      newestDay: '2026-10-28',
+      spaces: [
+        {
+          spaceId: SPACE_1,
+          listedOn: '2026-10-28',
+          sections: [
+            section('block-brazil', SPACE_1, 'Brazil election', [T_LULA, T_AGE]),
+            section('block-bolsonaro', SPACE_1, 'The Bolsonaro family', [T_COURTS]),
+          ],
+        },
+        {
+          spaceId: SPACE_2,
+          listedOn: '2026-10-28',
+          sections: [section('block-prison', SPACE_2, 'Prisoner reintegration', [T_PRISON, T_VOTE])],
+        },
+      ],
+      earlier: [
+        {
+          claimId: T_OLD,
+          spaceId: SPACE_1,
+          agendaId: 'agenda-old',
+          listedOn: '2026-10-26',
+          listedAt: '2026-10-26T00:00:00-04:00',
+        },
+        {
+          claimId: T_OLD_DEBATED,
+          spaceId: SPACE_1,
+          agendaId: 'agenda-old',
+          listedOn: '2026-10-26',
+          listedAt: '2026-10-26T00:00:00-04:00',
+        },
+      ],
+    };
+    todays.counts = new Map([[T_OLD_DEBATED, 1]]);
+  }
+
+  const headings = () =>
+    within(screen.getByTestId('todays-claims-sections'))
+      .getAllByRole('heading')
+      .map(heading => heading.textContent);
+
+  const cards = () =>
+    [T_LULA, T_AGE, T_COURTS, T_PRISON, T_VOTE, T_OLD, T_OLD_DEBATED]
+      .map(id => todays.entities.find(entity => entity.id === id)!.name as string)
+      .filter(name => screen.queryByText(name) !== null)
+      .sort((a, b) => (appearsBefore(a, b) ? -1 : 1));
+
+  beforeEach(() => {
+    todays.flag = false;
+    todays.agendas = { spaces: [], earlier: [], newestDay: null };
+    todays.entities = [];
+    todays.loading = false;
+    todays.counts = null;
+    todays.countsAsked.length = 0;
+    todays.members = {};
+  });
+
+  afterEach(() => {
+    todays.flag = false;
+  });
+
+  it('is not offered with the flag off, and the picker lands where it does on master', async () => {
+    twoAgendas();
+    todays.flag = false;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /^Today’s claims/ })).toBeNull();
+  });
+
+  it('opens on Today’s claims, shared spaces first, sections in the agenda’s order', async () => {
+    twoAgendas();
+    // Both debaters are in U.S. Politics, neither in World affairs.
+    todays.members = { [bare(SPACE_2)]: 2 };
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('Better reentry support reduces recidivism')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Today’s claims/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(headings()).toEqual([
+      'Prisoner reintegration',
+      'Brazil election',
+      'The Bolsonaro family',
+      'Earlier this week',
+    ]);
+    expect(cards()).toEqual([
+      'Better reentry support reduces recidivism',
+      'Released prisoners should keep the vote',
+      'Lula should be re-elected',
+      'Lula is too old to govern',
+      'The courts are persecuting the Bolsonaros',
+    ]);
+  });
+
+  it('puts the claims debated since the listing below the rest, fewest first, with nothing on the card', async () => {
+    twoAgendas();
+    todays.agendas.spaces[0]!.sections[0] = section('block-brazil', SPACE_1, 'Brazil election', [
+      T_LULA,
+      T_AGE,
+      T_COURTS,
+    ]);
+    todays.agendas.spaces[0]!.sections.splice(1, 1);
+    todays.counts = new Map([
+      [T_LULA, 2],
+      [T_AGE, 1],
+    ]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await screen.findByText('The courts are persecuting the Bolsonaros');
+    expect(cards().slice(0, 3)).toEqual([
+      'The courts are persecuting the Bolsonaros',
+      'Lula is too old to govern',
+      'Lula should be re-elected',
+    ]);
+    expect(screen.queryByText(/Debated/)).toBeNull();
+    // Each claim's count is asked from its own listing.
+    expect(todays.countsAsked.at(-1)).toEqual(
+      expect.arrayContaining([
+        { claimId: T_LULA, since: '2026-10-28T00:00:00-04:00' },
+        { claimId: T_OLD, since: '2026-10-26T00:00:00-04:00' },
+      ])
+    );
+  });
+
+  it('keeps the order it opened with when a count changes while the picker is open', async () => {
+    twoAgendas();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+    const opened = cards();
+
+    todays.counts = new Map([[T_LULA, 3]]);
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(cards()).toEqual(opened);
+  });
+
+  it('folds Earlier this week, lists only its undebated claims, and remembers a section for the day', async () => {
+    twoAgendas();
+    const { unmount } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+
+    expect(screen.queryByText('A claim from Monday')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Earlier this week/ }));
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+    expect(screen.queryByText('A claim from Monday, debated since')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Brazil election/ }));
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+
+    // Back to the picker the same day: as the viewer left it.
+    unmount();
+    const again = render(<DebateRematchPageClient sessionId="rematch-2" />);
+    await screen.findByText('The courts are persecuting the Bolsonaros');
+    expect(screen.queryByText('Lula should be re-elected')).toBeNull();
+    expect(screen.getByText('A claim from Monday')).toBeInTheDocument();
+
+    // The next day's agenda opens every section at its default again.
+    again.unmount();
+    todays.agendas = { ...todays.agendas, newestDay: '2026-10-29' };
+    render(<DebateRematchPageClient sessionId="rematch-3" />);
+    expect(await screen.findByText('Lula should be re-elected')).toBeInTheDocument();
+    expect(screen.queryByText('A claim from Monday')).toBeNull();
+  });
+
+  it('narrows with master’s pills, hiding a section that has nothing left', async () => {
+    twoAgendas();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('Lula should be re-elected');
+
+    toggleFilter('Bolsonaro trials');
+
+    await waitFor(() => expect(screen.queryByText('Lula should be re-elected')).toBeNull());
+    expect(headings()).toEqual(['The Bolsonaro family']);
+  });
+
+  it('lands where master does when no space has an agenda', async () => {
+    todays.flag = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: /^Matches/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: /^Today’s claims/ })).toBeNull();
   });
 });
