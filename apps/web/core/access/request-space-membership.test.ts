@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type SendSpaceTransaction,
   ensureSpaceMembership,
+  requestSpaceMembership,
   resetAutoRequestedMemberships,
 } from './request-space-membership';
 
@@ -69,6 +70,36 @@ beforeEach(() => {
   mocks.spaceType = 'DAO';
   tx.mockReset();
   tx.mockReturnValue(Effect.succeed('0xtransaction'));
+});
+
+describe('requestSpaceMembership cancellation', () => {
+  it('does not construct or send an already cancelled proposal', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      requestSpaceMembership({
+        spaceId: DAO_SPACE_ID,
+        personalSpaceId: PERSONAL_SPACE_ID,
+        tx,
+        queryClient: new QueryClient(),
+        signal: controller.signal,
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(mocks.proposeRequestMembership).not.toHaveBeenCalled();
+    expect(tx).not.toHaveBeenCalled();
+  });
+
+  it('forwards cancellation to the transaction queue', async () => {
+    const controller = new AbortController();
+    await requestSpaceMembership({
+      spaceId: DAO_SPACE_ID,
+      personalSpaceId: PERSONAL_SPACE_ID,
+      tx,
+      queryClient: new QueryClient(),
+      signal: controller.signal,
+    });
+    expect(tx).toHaveBeenCalledWith({ to: '0x1234', data: '0xabcd', signal: controller.signal });
+  });
 });
 
 describe('ensureSpaceMembership', () => {

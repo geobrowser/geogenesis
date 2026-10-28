@@ -16,6 +16,7 @@ export type SendSpaceTransaction = (args: {
   to: `0x${string}`;
   data: `0x${string}`;
   value?: bigint;
+  signal?: AbortSignal;
 }) => Effect.Effect<unknown, unknown>;
 
 type MembershipSpaceDisplay = { name?: string; image?: string | null };
@@ -29,6 +30,8 @@ type RequestSpaceMembershipArgs = {
   queryClient: QueryClient;
   /** Optional display data so the optimistic "pending" row can render a name/image immediately. */
   space?: MembershipSpaceDisplay;
+  /** Stops a request that has not started submitting, including while queued. */
+  signal?: AbortSignal;
 };
 
 /**
@@ -49,7 +52,9 @@ export async function requestSpaceMembership({
   tx,
   queryClient,
   space,
+  signal,
 }: RequestSpaceMembershipArgs): Promise<void> {
+  signal?.throwIfAborted();
   if (!validateSpaceId(spaceId)) {
     throw new Error('Invalid target space ID');
   }
@@ -58,7 +63,7 @@ export async function requestSpaceMembership({
 
   const { to, calldata } = geo.daoSpaces.proposeRequestMembership({ authorSpaceId: personalSpaceId, spaceId });
 
-  const writeTxEffect = tx({ to, data: calldata }).pipe(
+  const writeTxEffect = tx({ to, data: calldata, ...(signal ? { signal } : {}) }).pipe(
     Effect.withSpan('web.write.requestMembership'),
     Effect.annotateSpans({
       'io.operation': 'request_membership',

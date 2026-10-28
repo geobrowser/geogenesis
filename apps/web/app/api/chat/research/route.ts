@@ -8,6 +8,7 @@ import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 
+import { clientClosedResponse } from '../client-closed';
 import { logCallCost } from '../cost';
 import { RESEARCH_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
@@ -168,6 +169,7 @@ export async function POST(req: Request) {
       toolChoice: 'auto',
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       stopWhen: stepCountIs(MAX_TOOL_STEPS),
+      abortSignal: req.signal,
       providerOptions: {
         anthropic: { disableParallelToolUse: true },
       },
@@ -187,6 +189,7 @@ export async function POST(req: Request) {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
+    if (req.signal.aborted) return clientClosedResponse();
     console.error('[chat/research] generation failed', err);
     return jsonError(502, 'Research failed.');
   }

@@ -185,15 +185,16 @@ export function useSmartAccount() {
         // `onSubmitted` swaps the kernel's opaque submit-and-wait for the same two steps
         // run separately, so the caller hears when the bundler accepted the op (GEO-2889).
         // Same queue slot, held through inclusion either way.
-        sendTransaction: (txArgs, options) =>
+        sendTransaction: ({ signal, ...txArgs }, options) =>
           enqueueFor(
             eoaAddress,
             () => {
               const onSubmitted = options?.onSubmitted;
-              if (!onSubmitted) return withSubmissionRetry(() => zeroDevAccount.sendTransaction(txArgs));
+              if (!onSubmitted) return withSubmissionRetry(() => zeroDevAccount.sendTransaction(txArgs), signal);
+              signal?.throwIfAborted();
               return sendTransactionReportingSubmission(zeroDevAccount, txArgs, onSubmitted);
             },
-            { maxQueueWaitMs: MAX_QUEUE_WAIT_MS }
+            { maxQueueWaitMs: MAX_QUEUE_WAIT_MS, signal }
           ),
         // Deliberately NOT queue-wait bounded: publish/comment/deploy callers have no
         // outer timeout, only error-triggered retries, so a long queue wait should

@@ -11,6 +11,7 @@ import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 
+import { withInterruptionNotes } from '../interruption-note';
 import { FOLLOW_UPS_MODEL } from '../models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from '../rate-limit';
 
@@ -18,7 +19,15 @@ const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
+// Summarize at most this many messages, taken from the end. A cap is needed —
+// the payload is parsed and walked — but it must not become a refusal: the
+// request only arrives *because* the conversation got long, so rejecting long
+// conversations rejects every real caller. The client re-fires on the same
+// unchanged reading, so a refusal here is a permanent one, retried forever.
+// Trimming to the most recent messages keeps the part that still matters.
 const MAX_INPUT_MESSAGES = 60;
+// Beyond this the payload isn't a conversation any more, it's an attack.
+const MAX_ACCEPTED_MESSAGES = 2_000;
 // Cap the synthesized transcript so the Haiku call stays well under its 200k
 // context window with room for the system prompt.
 const MAX_TRANSCRIPT_CHARS = 200_000;
@@ -30,8 +39,9 @@ const SYSTEM_PROMPT = `You compress conversations between a user and Geo's in-pr
 
 - The user's overarching goals and any open follow-ups.
 - Concrete actions the assistant took (entities created, edits staged, navigations performed).
-- Key entity, space, and property ids referenced — keep them as inline links if you can recover them from the transcript: \`[Name](geo://entity/{id}?space={sid})\`.
+- Key entity, space, and property ids referenced — keep them as inline links if you can recover them from the transcript: \`[Name](geo://entity/{id}?space={sid})\`. Never invent ids or put a name such as Person in an id slot. If an id is unavailable, leave the name unlinked.
 - Decisions, constraints, or preferences the user expressed.
+- The latest attachment, mapping, exclusions, and whether the user has actually approved the current preview. Call a saved mapping a preview, never a staged or confirmed import. Readiness is not approval and a tool attempt is not success; use its recorded outcome even if earlier assistant prose claims otherwise. Preserve errors and unfinished work explicitly.
 
 Skip greetings, filler, redundant tool-call narration, and obvious progress recaps. Aim for 200–500 words. Lead with the goal in one sentence, then bulleted state. Do not invite further conversation or sign off; the next user turn will follow this summary.
 
@@ -74,10 +84,10 @@ function rateLimitResponse(reset: number) {
   return jsonError(429, 'Rate limit exceeded.', { 'Retry-After': retryAfter.toString() });
 }
 
-function validateUIMessages(input: unknown): UIMessage[] | null {
+export function validateUIMessages(input: unknown): UIMessage[] | null {
   if (!Array.isArray(input)) return null;
   if (input.length === 0) return null;
-  if (input.length > MAX_INPUT_MESSAGES) return null;
+  if (input.length > MAX_ACCEPTED_MESSAGES) return null;
   for (const msg of input) {
     if (!msg || typeof msg !== 'object') return null;
     const role = (msg as { role?: unknown }).role;
@@ -89,15 +99,16 @@ function validateUIMessages(input: unknown): UIMessage[] | null {
       if (typeof (part as { type?: unknown }).type !== 'string') return null;
     }
   }
-  return input as UIMessage[];
+  // Trim rather than refuse: this request only happens because the chat got
+  // long, so the tail is what the summary needs.
+  return (input as UIMessage[]).slice(-MAX_INPUT_MESSAGES);
 }
 
-// Plain-text transcript of just the conversational content. Tool calls become
-// `[<toolName>]` markers so the summarizer knows actions happened without
-// burning tokens on serialized inputs/outputs.
-function formatTranscript(messages: UIMessage[]): string {
+// Keep compact outcome facts: a bare tool name cannot distinguish a preview,
+// failed write, or completed edit. Full rows and payloads stay out of the summary.
+export function formatTranscript(messages: UIMessage[]): string {
   const lines: string[] = [];
-  for (const message of messages) {
+  for (const message of withInterruptionNotes(messages)) {
     const label = message.role === 'user' ? 'User' : 'Assistant';
     const segments: string[] = [];
     for (const part of message.parts) {
@@ -106,7 +117,32 @@ function formatTranscript(messages: UIMessage[]): string {
         if (text) segments.push(text);
       } else if (isToolUIPart(part)) {
         const name = part.type.startsWith('tool-') ? part.type.slice('tool-'.length) : part.type;
-        segments.push(`[${name}]`);
+        const facts: Record<string, string | number | boolean> = {};
+        if (part.state === 'output-available' && part.output && typeof part.output === 'object') {
+          const output = part.output as Record<string, unknown>;
+          for (const key of [
+            'ok',
+            'success',
+            'error',
+            'status',
+            'staged',
+            'canApply',
+            'requiresConfirmation',
+            'entityId',
+            'propertyId',
+            'spaceId',
+            'entityCount',
+            'linkedEntityCount',
+          ]) {
+            const value = output[key];
+            if (typeof value === 'string') facts[key] = value.slice(0, 200);
+            else if (typeof value === 'number' || typeof value === 'boolean') facts[key] = value;
+          }
+        }
+        if (part.state === 'output-error') {
+          facts.error = typeof part.errorText === 'string' ? part.errorText.slice(0, 200) : 'Tool execution failed.';
+        }
+        segments.push(`[${name}: ${part.state}${Object.keys(facts).length ? ` ${JSON.stringify(facts)}` : ''}]`);
       }
     }
     const joined = segments.join('\n').trim();

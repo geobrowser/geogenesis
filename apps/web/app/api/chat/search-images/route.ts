@@ -12,6 +12,7 @@ import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 
+import { clientClosedResponse } from '../client-closed';
 import { UTILITY_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 import { safeFetch } from '../web-fetch/helpers';
@@ -228,12 +229,12 @@ type FetchedImage = {
 // Server-side fetch with timeout + content-type + size guards. Drops anything
 // that doesn't actually decode as an image so the vision step doesn't waste a
 // slot on HTML error pages, 404 placeholders, or oversized files.
-async function fetchImageForVerification(candidate: ImageEntry): Promise<FetchedImage | null> {
+async function fetchImageForVerification(candidate: ImageEntry, signal: AbortSignal): Promise<FetchedImage | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), VERIFY_FETCH_TIMEOUT_MS);
   try {
     const res = await safeFetch(candidate.url, {
-      signal: controller.signal,
+      signal: AbortSignal.any([controller.signal, signal]),
       headers: {
         // Wikimedia / IMDb reject requests without a real-looking UA.
         'User-Agent': 'GeoGenesisImageVerifier/1.0 (+https://www.geobrowser.io)',
@@ -301,11 +302,16 @@ function collectVerdicts(steps: StepLike[]): VerificationVerdict[] {
 // non-image content-type) are passed through unverified — preflight on the
 // client still gates them, and we'd rather show a possibly-correct option than
 // drop a whole result set because of host quirks.
-async function verifyImages(query: string, candidates: ImageEntry[]): Promise<VerifiedImageEntry[]> {
+async function verifyImages(
+  query: string,
+  candidates: ImageEntry[],
+  signal: AbortSignal
+): Promise<VerifiedImageEntry[]> {
   if (candidates.length === 0) return [];
 
   const trimmed = candidates.slice(0, MAX_VERIFY_CANDIDATES);
-  const fetched = await Promise.all(trimmed.map(fetchImageForVerification));
+  const fetched = await Promise.all(trimmed.map(candidate => fetchImageForVerification(candidate, signal)));
+  signal.throwIfAborted();
   const verifiable: FetchedImage[] = [];
   const unverifiable: ImageEntry[] = [];
   fetched.forEach((entry, i) => {
@@ -353,9 +359,11 @@ async function verifyImages(query: string, candidates: ImageEntry[]): Promise<Ve
       toolChoice: { type: 'tool', toolName: 'report' },
       maxOutputTokens: VERIFY_MAX_OUTPUT_TOKENS,
       stopWhen: stepCountIs(2),
+      abortSignal: signal,
     });
     verdicts = collectVerdicts(result.steps as unknown as StepLike[]);
   } catch (err) {
+    if (signal.aborted) throw err;
     console.error('[chat/search-images] verification call failed', err);
     // Verification is a defense-in-depth layer — if it crashes, return the raw
     // candidates rather than starving the orchestrator.
@@ -440,18 +448,20 @@ export async function POST(req: Request) {
       toolChoice: 'auto',
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       stopWhen: stepCountIs(MAX_TOOL_STEPS),
+      abortSignal: req.signal,
       providerOptions: {
         anthropic: { disableParallelToolUse: true },
       },
     });
 
     const rawImages = collectImages(result.steps as unknown as StepLike[]);
-    const images = await verifyImages(query, rawImages);
+    const images = await verifyImages(query, rawImages, req.signal);
     return new Response(JSON.stringify({ images }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
+    if (req.signal.aborted) return clientClosedResponse();
     console.error('[chat/search-images] generation failed', err);
     return jsonError(502, 'Image search failed.');
   }

@@ -8,15 +8,17 @@ type SetEntityImageInput = {
   // Cover image / Avatar / Poster / etc. Must be a RELATION-typed property
   // with renderable type IMAGE.
   propertyId: string;
-  // Direct image URL (http / https) or an existing ipfs:// URL. The dispatcher
-  // uploads http URLs to IPFS via Graph.createImage and mints an Image entity
+  // Exactly one of these. `sourceUrl` is a direct image URL (http / https) or
+  // an existing ipfs:// URL; `attachmentId` names a file the user attached in
+  // the chat. Either way the dispatcher uploads to IPFS, mints an Image entity
   // client-side, then writes the relation.
-  sourceUrl: string;
+  sourceUrl?: string;
+  attachmentId?: string;
 };
 
 export const setEntityImage = tool({
   description:
-    "Attach an image to an entity via a RELATION-typed image property — cover image, avatar, poster, logo, etc. ALWAYS use this for image properties; never `setEntityValue` (image properties are RELATION-typed) and never `setEntityRelation` (those don't upload to IPFS or mint the Image entity). The dispatcher uploads `sourceUrl` to IPFS, mints an Image entity, and links it to `entityId` via `propertyId` in one shot. Pass an http(s) URL — call `searchImages` first if you don't already have one. ipfs:// URLs are accepted as-is. Members only.",
+    "Attach an image to an entity via a RELATION-typed image property — cover image, avatar, poster, logo, etc. ALWAYS use this for image properties; never `setEntityValue` (image properties are RELATION-typed) and never `setEntityRelation` (those don't upload to IPFS or mint the Image entity). The dispatcher uploads the image to IPFS, mints an Image entity, and links it to `entityId` via `propertyId` in one shot. Give it EITHER `attachmentId` — the id from the `[Attached image]` note, when the user attached a file — OR `sourceUrl`, an http(s) URL (call `searchImages` first if you don't have one; ipfs:// URLs are accepted as-is). Never both, and never call `searchImages` when the user has attached an image. Members only.",
   inputSchema: jsonSchema<SetEntityImageInput>({
     type: 'object',
     properties: {
@@ -29,10 +31,15 @@ export const setEntityImage = tool({
       },
       sourceUrl: {
         type: 'string',
-        description: 'http/https URL or ipfs:// URL of the image to attach.',
+        description: 'http/https URL or ipfs:// URL of the image to attach. Omit when passing attachmentId.',
+      },
+      attachmentId: {
+        type: 'string',
+        description:
+          'The attachmentId from the `[Attached image]` note, when the user attached an image. Omit when passing sourceUrl.',
       },
     },
-    required: ['entityId', 'spaceId', 'propertyId', 'sourceUrl'],
+    required: ['entityId', 'spaceId', 'propertyId'],
     additionalProperties: false,
   }),
 });

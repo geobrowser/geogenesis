@@ -12,6 +12,7 @@ type SendTxArgs = {
   to: `0x${string}`;
   data: `0x${string}`;
   value?: bigint;
+  signal?: AbortSignal;
   /**
    * Called once the bundler has accepted the op, before it is included (GEO-2889). The Effect
    * still settles on inclusion, so a caller that acts on this must keep listening for the failure
@@ -51,7 +52,7 @@ export function useSmartAccountTransaction() {
   // without re-running on every render — `useRankingComposeAccess` fires its
   // membership check from an effect keyed on the callback it builds from this.
   const sendTransaction = useCallback(
-    ({ to, data, value = 0n, onSubmitted }: SendTxArgs) =>
+    ({ to, data, value = 0n, signal, onSubmitted }: SendTxArgs) =>
       Effect.gen(function* () {
         const account = readCachedSmartAccount(queryClient, smartAccount);
 
@@ -65,11 +66,13 @@ export function useSmartAccountTransaction() {
 
         const hash = yield* Effect.tryPromise({
           try: async () => {
+            signal?.throwIfAborted();
             return await account.sendTransaction(
               {
                 to,
                 value,
                 data,
+                ...(signal ? { signal } : {}),
               },
               onSubmitted ? { onSubmitted } : undefined
             );
