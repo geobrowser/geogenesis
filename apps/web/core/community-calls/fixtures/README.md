@@ -11,4 +11,7 @@ bun scripts/refresh-call-series-vectors.ts ~/path/to/geo-chat
 bunx vitest run core/community-calls/occurrences.vectors.test.ts
 ```
 
-A failure caused by zone data, not logic, names both tzdb releases: the file's and the runtime's.
+The file is generated with tzdb 2026e (geo-chat's bundled jiff-tzdb) and writes each zoned instant
+with its local offset. When the runtime's tzdb differs, a case whose zone has other offsets at those
+instants is skipped with a warning naming the zone and both releases; every other case is still
+compared strictly.
