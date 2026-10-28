@@ -110,6 +110,8 @@ const mocks = vi.hoisted(() => ({
   ownershipRelease: vi.fn(),
   ownershipClose: vi.fn(),
   ownershipTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
+  // Not reset per test: the tab voice owner can outlive a test and keep its coordinator.
+  voiceTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
   ownershipCoordinationMode: 'lock-and-broadcast' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
   useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
@@ -268,6 +270,20 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
     createDebateRoomOwnershipCoordinator: (
       options: Parameters<typeof actual.createDebateRoomOwnershipCoordinator>[0]
     ) => {
+      // The tab's cross-surface voice lock: never contested here (as without Web Locks).
+      if (options.debateId === 'voice') {
+        mocks.voiceTakeoverHandler = options.onTakeoverRequested;
+        return {
+          instanceId: 'voice-instance',
+          coordinationMode: 'livekit-fallback' as const,
+          acquire: async () => ({ acquired: true, waitedForLocalRelease: false }),
+          requestTakeover: async () => true,
+          release: async () => undefined,
+          close: () => undefined,
+          ownsConnection: () => true,
+          lastRefusedBy: () => undefined,
+        };
+      }
       if (mocks.useRealRoomOwnership) return actual.createDebateRoomOwnershipCoordinator(options);
       mocks.ownershipTakeoverHandler = options.onTakeoverRequested;
       return {
@@ -278,6 +294,7 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
         release: mocks.ownershipRelease,
         close: mocks.ownershipClose,
         ownsConnection: () => true,
+        lastRefusedBy: () => undefined,
       };
     },
   };
@@ -3161,6 +3178,66 @@ describe('DebateRoomPageClient', () => {
       released = await mocks.ownershipTakeoverHandler?.({ requesterPriority: 1, ownerPriority: 1, automatic: false });
     });
     expect(released).toBe(true);
+  });
+
+  it('hands voice to a lobby tab during the intro and offers to take it back', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    // A lobby page opening in another tab does not take it by itself.
+    await expect(
+      Promise.resolve(
+        mocks.voiceTakeoverHandler?.({
+          requesterPriority: 2,
+          ownerPriority: 0,
+          automatic: true,
+          requesterLabel: 'lobby',
+        })
+      )
+    ).resolves.toBe(false);
+
+    let released: boolean | undefined;
+    await act(async () => {
+      released = await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+        requesterLabel: 'lobby',
+      });
+    });
+    expect(released).toBe(true);
+    expect(mocks.roomDisconnect).toHaveBeenCalled();
+    expect(await screen.findByText('Voice is on in another tab.')).toBeInTheDocument();
+    expect(mocks.roomConnect).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps voice from another tab while the debate is under way', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    let released: boolean | undefined;
+    await act(async () => {
+      released = await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+        requesterLabel: 'lobby',
+      });
+    });
+    expect(released).toBe(false);
+    expect(mocks.roomDisconnect).not.toHaveBeenCalled();
   });
 
   it('does not auto-reclaim across devices after a duplicate-identity disconnect', async () => {

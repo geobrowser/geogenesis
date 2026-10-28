@@ -147,6 +147,7 @@ import { REMOTE_OVERRUN_WINDOW_MS, opponentTurnState, useTurnOverrun } from '~/c
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useScrollLock } from '~/core/debates/use-scroll-lock';
+import { debateVoicePolicy, useVoiceOwnership } from '~/core/debates/voice-owner';
 import { disconnectReasonName } from '~/core/livekit/disconnect-reason';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { switchMediaDevice } from '~/core/media/device-options';
@@ -1638,6 +1639,39 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, []);
 
+  // One voice per person across Geo tabs: a lobby, picker or card preview elsewhere stops while this
+  // room holds voice. Yielding (intro, or once the debate is over) leaves a retry that takes it back.
+  const { stopMedia } = mediaSession;
+  const tabVoice = useVoiceOwnership({
+    userId: currentUserId,
+    kind: 'debate',
+    active: Boolean(currentUserId),
+    policy: () => debateVoicePolicy(debateStatusRef.current, roomStateRef.current !== 'idle'),
+    onYield: () => {
+      const status = debateStatusRef.current;
+      connectionGenerationRef.current += 1;
+      disconnectConnectingRoom(connectingRoomRef);
+      disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+      localMediaStreamRef.current = null;
+      stopMedia();
+      setRemoteVideoReady(false);
+      setRemotePresence('absent');
+      setConnectStarting(false);
+      if (status !== 'complete' && status !== 'cancelled') setRoomError('Voice is on in another tab.');
+      // The intro stays off until a retry; the debate itself still connects when it starts.
+      if (status === 'ready') {
+        autoConnectAttemptedRef.current = `${debateId}:intro`;
+        setAutoConnectAttemptedKey(autoConnectAttemptedRef.current);
+      }
+      setRoomState('idle');
+    },
+  });
+  const { takeOver: claimVoice, announceYieldable } = tabVoice;
+  const voicePolicy = debateVoicePolicy(countdown.effectiveStatus, roomState !== 'idle');
+  React.useEffect(() => {
+    if (voicePolicy === 'yield') announceYieldable();
+  }, [announceYieldable, voicePolicy]);
+
   const connect = React.useCallback(
     async (options: { takeover?: boolean; automatic?: boolean } = {}) => {
       const generation = connectionGenerationRef.current + 1;
@@ -1678,6 +1712,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           roomState: roomStateRef.current,
         });
         reportConnectionConflict(generation, 'web_lock_blocked', ownership?.coordinationMode ?? 'livekit-fallback');
+        return;
+      }
+
+      // Best effort: only another live debate refuses, and the room lock above already governs that.
+      await claimVoice();
+      if (!isCurrent()) {
+        if (connectStartingGenerationRef.current === generation) setConnectStarting(false);
         return;
       }
 
@@ -2083,6 +2124,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       attachRemoteTrack,
       audioOutputSelectionPromiseRef,
       audioOutputSupportedRef,
+      claimVoice,
       debateId,
       initializeNoiseFilter,
       liveKitJoin,

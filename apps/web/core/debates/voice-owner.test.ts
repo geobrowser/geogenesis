@@ -6,6 +6,7 @@ import {
   type VoiceSurfaceKind,
   type VoiceYieldPolicy,
   createTabVoiceOwner,
+  debateVoicePolicy,
   shouldYieldVoice,
 } from './voice-owner';
 
@@ -169,6 +170,22 @@ describe('shouldYieldVoice', () => {
     expect(shouldYieldVoice(['yield', 'refuse'], explicit)).toBe(false);
     expect(shouldYieldVoice(['explicit-only', 'yield'], { ...explicit, automatic: true })).toBe(false);
     expect(shouldYieldVoice([], { ...explicit, automatic: true })).toBe(true);
+  });
+});
+
+describe('debateVoicePolicy', () => {
+  it.each([
+    ['ready', true, 'explicit-only'],
+    ['connecting', true, 'refuse'],
+    ['preflight', true, 'refuse'],
+    ['in_progress', true, 'refuse'],
+    ['thanking', true, 'refuse'],
+    ['complete', true, 'yield'],
+    ['cancelled', true, 'yield'],
+    ['in_progress', false, 'yield'],
+    [null, true, 'yield'],
+  ] as const)('%s, holding the room %s: %s', (status, holdsRoom, expected) => {
+    expect(debateVoicePolicy(status, holdsRoom)).toBe(expected);
   });
 });
 

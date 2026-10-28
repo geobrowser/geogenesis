@@ -72,6 +72,16 @@ function strongestPolicy(policies: readonly VoiceYieldPolicy[]): VoiceYieldPolic
   );
 }
 
+/**
+ * A debate room's answer while it holds its room: the intro gives voice up only to an explicit
+ * claim, a debate in progress keeps it, and an ended one gives it to anyone.
+ */
+export function debateVoicePolicy(status: string | null, holdsRoom: boolean): VoiceYieldPolicy {
+  if (!holdsRoom || status === null || status === 'complete' || status === 'cancelled') return 'yield';
+  if (status === 'ready') return 'explicit-only';
+  return 'refuse';
+}
+
 const SURFACE_KINDS: readonly string[] = ['lobby', 'picker', 'preview', 'debate'] satisfies VoiceSurfaceKind[];
 
 function asSurfaceKind(label: string | undefined): VoiceSurfaceKind | null {
