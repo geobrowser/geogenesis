@@ -986,7 +986,7 @@ describe('RematchVoiceHeader', () => {
     mocks.acquireResult = { acquired: false, waitedForLocalRelease: false };
     mocks.requestTakeover.mockResolvedValue(false);
     const { client } = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
-    await waitFor(() => expect(screen.getByText('Voice is active in another tab')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Voice is on in another tab')).toBeInTheDocument());
 
     const reset = vi.spyOn(client, 'resetQueries');
     mocks.requestTakeover.mockResolvedValue(true);
@@ -1017,7 +1017,7 @@ describe('RematchVoiceHeader', () => {
     expect(yielded).toBe(true);
     expect(mocks.disconnect).toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByTestId('livekit-room')).toBeNull());
-    expect(screen.getByText('Voice is active in another tab')).toBeInTheDocument();
+    expect(screen.getByText('Voice is on in another tab')).toBeInTheDocument();
   });
 
   // A page opening in another tab takes voice only from a tab further from the viewer than it is.
@@ -1424,7 +1424,7 @@ describe('RematchVoiceHeader', () => {
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
-    expect(screen.getByText('Voice is active in another tab')).toBeInTheDocument();
+    expect(screen.getByText('Voice is on in another tab')).toBeInTheDocument();
     expect(mocks.getUserMedia).not.toHaveBeenCalled();
   });
 
@@ -2445,7 +2445,7 @@ describe('RematchVoiceHeader', () => {
     mocks.acquireResult = { acquired: false, waitedForLocalRelease: false };
     mocks.requestTakeover.mockResolvedValue(false);
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
-    await waitFor(() => expect(screen.getByText('Voice is active in another tab')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Voice is on in another tab')).toBeInTheDocument());
     expect(screen.queryByTestId('livekit-room')).toBeNull();
     // The token was never requested by this tab.
     expect(mocks.joinCalls.every(call => !call.enabled)).toBe(true);

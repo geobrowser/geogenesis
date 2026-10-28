@@ -9,11 +9,8 @@ import {
   debateRoomTabPriority,
 } from './debate-room-ownership';
 
-/**
- * One voice per person across all Geo tabs. Each tab holds a single per-user lock while any of its
- * voice surfaces (lobby or call, debate-again picker, request card preview, debate room) is in use;
- * every other tab stops sending and playing. Surfaces in the same tab share the tab's hold.
- */
+// One voice per person across Geo tabs: a tab holds one per-user lock while any of its voice
+// surfaces is in use, and every other tab stops sending and playing.
 
 export type VoiceSurfaceKind = 'lobby' | 'picker' | 'preview' | 'debate';
 

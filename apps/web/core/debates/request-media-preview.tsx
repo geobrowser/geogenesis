@@ -338,7 +338,7 @@ function MediaPreview({
         </Text>
       ) : voiceRefused && voice.ownership === 'elsewhere' ? (
         <Text variant="footnote" color="grey-04">
-          {voice.heldBy === 'debate' ? 'Voice is on in your debate tab.' : 'Voice is on in another tab.'}
+          {voice.heldBy === 'debate' ? 'Voice is on in your debate tab' : 'Voice is on in another tab'}
         </Text>
       ) : failure ? (
         <Text variant="footnote" color="grey-04">

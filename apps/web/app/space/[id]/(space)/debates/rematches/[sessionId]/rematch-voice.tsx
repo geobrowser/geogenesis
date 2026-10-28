@@ -551,7 +551,7 @@ function SessionRematchVoiceHeader({
       if (tabVoice.heldBy === 'debate') return { kind: 'message', message: 'Voice is on in your debate tab' };
       return {
         kind: 'message',
-        message: 'Voice is active in another tab',
+        message: 'Voice is on in another tab',
         actionLabel: 'Use voice here',
         onAction: takeOver,
       };

@@ -790,7 +790,7 @@ describe('voice held by another tab', () => {
     mount();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Turn microphone on' }));
-    expect(await screen.findByText('Voice is on in your debate tab.')).toBeInTheDocument();
+    expect(await screen.findByText('Voice is on in your debate tab')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn microphone on' })).toBeInTheDocument();
     expect(mocks.ensurePreview).not.toHaveBeenCalled();
   });
