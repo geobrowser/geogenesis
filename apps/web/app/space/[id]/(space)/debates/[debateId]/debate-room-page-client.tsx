@@ -85,7 +85,7 @@ import { useCarriedLobbyChoice, useDebateReturnNavigation } from '~/core/debates
 import {
   type LocalAudioGateInput,
   MIC_OVERRUN_MAX_MS,
-  MIC_PREARM_BEFORE_TURN_MS,
+  msLocalAudioStaysClosed,
   shouldEnableLocalAudio,
   turnOverrunPossible,
 } from '~/core/debates/local-audio-gate';
@@ -822,7 +822,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const inRecordingWindow = countdown.effectiveStatus === 'preflight' || countdown.effectiveStatus === 'in_progress';
   const recordingMicLive = inRecordingWindow && localAudioEnabled;
   const recordingCallWindowEndsAt = inRecordingWindow
-    ? Date.now() + (recordingMicLive ? 0 : Math.max(0, countdown.remainingMs - MIC_PREARM_BEFORE_TURN_MS))
+    ? Date.now() + msLocalAudioStaysClosed(localAudioGate, countdown.remainingMs)
     : null;
   recordingCallWindowRef.current = () =>
     recordingCallWindowEndsAt === null ? null : Math.max(0, recordingCallWindowEndsAt - Date.now());

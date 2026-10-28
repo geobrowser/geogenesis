@@ -114,3 +114,17 @@ export function shouldEnableLocalAudio({
   if (msUntilTurnStarts !== null && msUntilTurnStarts <= MIC_PREARM_BEFORE_TURN_MS) return true;
   return false;
 }
+
+/**
+ * How long the local microphone is sure to stay closed: `0` while it is live.
+ *
+ * Read from the gate itself, so the two cannot disagree. Closed, the gate opens again only at the
+ * room clock's next boundary (`msUntilPhaseEnds`: the next turn, a vote, a result, the thank-you),
+ * at the earliest the prearm before it; or on something nobody can schedule, an unmute or a turn
+ * yielded early, which recording uploads answer by being cut short (GEO-3410).
+ */
+export function msLocalAudioStaysClosed(input: LocalAudioGateInput, msUntilPhaseEnds: number): number {
+  if (shouldEnableLocalAudio(input)) return 0;
+  const opensAtMs = Math.min(msUntilPhaseEnds, input.msUntilTurnStarts ?? Infinity);
+  return Math.max(0, opensAtMs - MIC_PREARM_BEFORE_TURN_MS);
+}
