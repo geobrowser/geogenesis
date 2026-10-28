@@ -1328,6 +1328,14 @@ describe('LobbyVoice screen share in a lobby', () => {
     expect(shareButton()).not.toBeInTheDocument();
   });
 
+  it('lets an acting host share once the grant includes it', async () => {
+    mocks.permissions = { canPublish: true, canPublishSources: withShare() };
+    const view = lobby('speaker');
+    renderLobby({ ...view, viewer: { ...view.viewer, hosting: true } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Share your screen' }));
+    expect(mocks.setScreenShareEnabled).toHaveBeenCalledWith(true, { audio: true });
+  });
+
   it('follows the live grant over the token after a promotion', async () => {
     mocks.permissions = { canPublish: true, canPublishSources: withShare() };
     renderLobby(lobby('speaker'));
