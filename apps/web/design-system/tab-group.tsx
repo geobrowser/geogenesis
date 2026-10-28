@@ -12,6 +12,7 @@ import { useEditable } from '~/core/state/editable-store';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useInPageTabSwitch, useSwitchesInPage } from '~/core/state/in-page-tab-switch';
+import { usePendingTab, useTabContentSkeleton } from '~/core/state/pending-tab';
 import { entityTabIdFromHref, isEntityTabActive } from '~/core/utils/entity-tab-navigation';
 
 import { Dots } from '~/design-system/dots';
@@ -141,23 +142,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   const activeTabId = useActiveTabIdForEditor();
   const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : `${path}`;
 
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
-  /*
-   * Last click wins, and a tab only releases the slot if it is the one holding it.
-   *
-   * The `current === href` test is not defensive noise. Tabs report in tree order, so when the
-   * pending tab moves backwards along the row the tab being released reports *after* the one being
-   * claimed — an unconditional clear would undo the new claim and drop the underline back to the
-   * committed tab, which is the original bug by another route. Covered by a test in both rows.
-   */
-  const handlePendingChange = React.useCallback((href: string, pending: boolean) => {
-    setPendingHref(current => (pending ? href : current === href ? null : current));
-  }, []);
-
-  // A tab switched in place has no link status to clear its mark, so the URL arriving does.
-  useEffect(() => {
-    setPendingHref(current => (current === fullPath ? null : current));
-  }, [fullPath]);
+  const { pendingHref, handlePendingChange } = usePendingTab(fullPath);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     // Only allow dragging if content is scrollable
@@ -305,12 +290,13 @@ export function TabPendingMarker({
   onPendingChange: (href: string, pending: boolean) => void;
 }) {
   const { pending } = useLinkStatus();
+  const hasSkeleton = useTabContentSkeleton();
 
   useEffect(() => {
     onPendingChange(href, pending);
   }, [href, onPendingChange, pending]);
 
-  if (!pending) return null;
+  if (!pending || hasSkeleton) return null;
 
   return (
     <span data-tab-pending aria-hidden className="flex items-center">

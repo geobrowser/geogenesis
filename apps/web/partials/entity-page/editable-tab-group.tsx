@@ -24,6 +24,7 @@ import { ID } from '~/core/id';
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useInPageTabSwitch, useSwitchesInPage } from '~/core/state/in-page-tab-switch';
+import { usePendingTab } from '~/core/state/pending-tab';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
@@ -288,23 +289,7 @@ export function EditableTabGroup({
   ].join('|');
   const { indicator, registerActiveTab } = useActiveTabIndicator(indicatorLayoutKey);
 
-  const [pendingHref, setPendingHref] = useState<string | null>(null);
-  /*
-   * Last click wins, and a tab only releases the slot if it is the one holding it.
-   *
-   * The `current === href` test is not defensive noise. Tabs report in tree order, so when the
-   * pending tab moves backwards along the row the tab being released reports *after* the one being
-   * claimed — an unconditional clear would undo the new claim and drop the underline back to the
-   * committed tab, which is the original bug by another route. Covered by a test in both rows.
-   */
-  const handlePendingChange = React.useCallback((href: string, pending: boolean) => {
-    setPendingHref(current => (pending ? href : current === href ? null : current));
-  }, []);
-
-  // A tab switched in place has no link status to clear its mark, so the URL arriving does.
-  useEffect(() => {
-    setPendingHref(current => (current === fullPath ? null : current));
-  }, [fullPath]);
+  const { pendingHref, handlePendingChange } = usePendingTab(fullPath);
 
   /*
    * Both system-tab rows, drawn by one function.

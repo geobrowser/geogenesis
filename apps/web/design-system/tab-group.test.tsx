@@ -5,6 +5,9 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { InPageTabSwitch } from '~/core/state/in-page-tab-switch';
+import { TabContentPending } from '~/core/state/pending-tab';
+
 import { TabGroup } from './tab-group';
 
 const mocks = vi.hoisted(() => ({ pending: new Set<string>(), pathname: '/space/space-1/overview' }));
@@ -186,5 +189,70 @@ describe('TabGroup repeat-click guard', () => {
     render(<TabGroup tabs={TABS} />);
 
     expect(clickTab('Community').defaultPrevented).toBe(false);
+  });
+});
+
+describe('TabGroup with a content skeleton on the page', () => {
+  let mounts = 0;
+
+  function Content() {
+    React.useEffect(() => {
+      mounts++;
+    }, []);
+    return <p>content</p>;
+  }
+
+  function Page() {
+    return (
+      <>
+        <TabGroup tabs={TABS} />
+        <TabContentPending fallback={<p>loading</p>}>
+          <Content />
+        </TabContentPending>
+      </>
+    );
+  }
+
+  beforeEach(() => {
+    mounts = 0;
+  });
+
+  it('shows the skeleton instead of the marker while a tab loads', () => {
+    mocks.pending = new Set(['/space/space-1/community']);
+    render(<Page />);
+
+    expect(document.querySelectorAll('[data-tab-pending]')).toHaveLength(0);
+    expect(screen.getByText('loading')).toBeInTheDocument();
+    expect(screen.getByText('content').parentElement).toHaveClass('hidden');
+  });
+
+  it('shows the content again once the tab has arrived, without remounting it', () => {
+    mocks.pending = new Set(['/space/space-1/community']);
+    const { rerender } = render(<Page />);
+
+    mocks.pending = new Set();
+    mocks.pathname = '/space/space-1/community';
+    rerender(<Page />);
+
+    expect(screen.queryByText('loading')).toBeNull();
+    expect(screen.getByText('content').parentElement).not.toHaveClass('hidden');
+    expect(mounts).toBe(1);
+  });
+
+  it('shows the skeleton for a tab switched in place, which has no link status', () => {
+    window.history.replaceState(null, '', '/space/space-1/overview');
+    render(
+      <>
+        <InPageTabSwitch />
+        <TabGroup tabs={[{ label: 'Claims', href: '/space/space-1/overview?tabId=claims' }]} />
+        <TabContentPending fallback={<p>loading</p>}>
+          <Content />
+        </TabContentPending>
+      </>
+    );
+
+    clickTab('Claims');
+
+    expect(screen.getByText('loading')).toBeInTheDocument();
   });
 });
