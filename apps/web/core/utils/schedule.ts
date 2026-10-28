@@ -403,6 +403,9 @@ export interface ParsedSchedule {
   interval: number; // 1 = default
   /** IANA zone the schedule was authored in (e.g. "America/Los_Angeles"), or unset for legacy UTC schedules. */
   timezone?: string;
+  /** DTSTART and DTEND seconds, set only when not zero. The form never writes them. */
+  startSeconds?: number;
+  endSeconds?: number;
 }
 
 /** Parse an iCalendar schedule string into structured fields. */
@@ -443,6 +446,7 @@ export function parseSchedule(schedule: string): ParsedSchedule {
       const day = d.getUTCDate().toString().padStart(2, '0');
       result.startDate = `${y}-${m}-${day}`;
       result.startTime = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+      if (d.getUTCSeconds()) result.startSeconds = d.getUTCSeconds();
     }
   }
 
@@ -450,6 +454,7 @@ export function parseSchedule(schedule: string): ParsedSchedule {
     const d = parseICalDate(props.DTEND);
     if (d) {
       result.endTime = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+      if (d.getUTCSeconds()) result.endSeconds = d.getUTCSeconds();
     }
   }
 

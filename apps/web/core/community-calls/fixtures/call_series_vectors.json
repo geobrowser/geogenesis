@@ -1,0 +1,1340 @@
+{
+  "cases": [
+    {
+      "length_minutes": 60,
+      "name": "weekly_lagos",
+      "now": "2026-10-26T12:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-10-28T17:00:00Z",
+          "start": "2026-10-28T16:00:00Z"
+        },
+        {
+          "end": "2026-11-04T17:00:00Z",
+          "start": "2026-11-04T16:00:00Z"
+        },
+        {
+          "end": "2026-11-11T17:00:00Z",
+          "start": "2026-11-11T16:00:00Z"
+        },
+        {
+          "end": "2026-11-18T17:00:00Z",
+          "start": "2026-11-18T16:00:00Z"
+        },
+        {
+          "end": "2026-11-25T17:00:00Z",
+          "start": "2026-11-25T16:00:00Z"
+        },
+        {
+          "end": "2026-12-02T17:00:00Z",
+          "start": "2026-12-02T16:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Africa/Lagos:20261014T170000\nDTEND;TZID=Africa/Lagos:20261014T180000\nRRULE:FREQ=WEEKLY;BYDAY=WE"
+    },
+    {
+      "length_minutes": 60,
+      "name": "weekly_riyadh",
+      "now": "2026-10-26T12:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-10-28T19:30:00Z",
+          "start": "2026-10-28T18:30:00Z"
+        },
+        {
+          "end": "2026-11-04T19:30:00Z",
+          "start": "2026-11-04T18:30:00Z"
+        },
+        {
+          "end": "2026-11-11T19:30:00Z",
+          "start": "2026-11-11T18:30:00Z"
+        },
+        {
+          "end": "2026-11-18T19:30:00Z",
+          "start": "2026-11-18T18:30:00Z"
+        },
+        {
+          "end": "2026-11-25T19:30:00Z",
+          "start": "2026-11-25T18:30:00Z"
+        },
+        {
+          "end": "2026-12-02T19:30:00Z",
+          "start": "2026-12-02T18:30:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Asia/Riyadh:20260826T213000\nDTEND;TZID=Asia/Riyadh:20260826T223000\nRRULE:FREQ=WEEKLY;BYDAY=WE"
+    },
+    {
+      "length_minutes": 60,
+      "name": "new_york_one_off_in_the_spring_gap",
+      "now": "2026-03-01T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-03-08T08:30:00Z",
+          "start": "2026-03-08T07:30:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/New_York:20260308T023000\nDTEND;TZID=America/New_York:20260308T033000"
+    },
+    {
+      "length_minutes": 60,
+      "name": "new_york_one_off_in_the_repeated_hour",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-01T06:30:00Z",
+          "start": "2026-11-01T05:30:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/New_York:20261101T013000\nDTEND;TZID=America/New_York:20261101T023000"
+    },
+    {
+      "length_minutes": 60,
+      "name": "london_one_off_in_the_repeated_hour",
+      "now": "2026-10-20T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-10-25T01:30:00Z",
+          "start": "2026-10-25T00:30:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Europe/London:20261025T013000\nDTEND;TZID=Europe/London:20261025T023000"
+    },
+    {
+      "length_minutes": 60,
+      "name": "lord_howe_one_off_in_the_half_hour_gap",
+      "now": "2026-09-30T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-10-03T17:15:00Z",
+          "start": "2026-10-03T16:15:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Australia/Lord_Howe:20261004T021500"
+    },
+    {
+      "length_minutes": 60,
+      "name": "santiago_one_off_at_the_skipped_midnight",
+      "now": "2026-09-01T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-09-06T05:00:00Z",
+          "start": "2026-09-06T04:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/Santiago:20260906T000000"
+    },
+    {
+      "length_minutes": 60,
+      "name": "new_york_weekly_into_the_spring_gap",
+      "now": "2026-03-01T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-03-01T08:30:00Z",
+          "start": "2026-03-01T07:30:00Z"
+        },
+        {
+          "end": "2026-03-08T08:30:00Z",
+          "start": "2026-03-08T07:30:00Z"
+        },
+        {
+          "end": "2026-03-15T07:30:00Z",
+          "start": "2026-03-15T06:30:00Z"
+        },
+        {
+          "end": "2026-03-22T07:30:00Z",
+          "start": "2026-03-22T06:30:00Z"
+        },
+        {
+          "end": "2026-03-29T07:30:00Z",
+          "start": "2026-03-29T06:30:00Z"
+        },
+        {
+          "end": "2026-04-05T07:30:00Z",
+          "start": "2026-04-05T06:30:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/New_York:20260301T023000\nRRULE:FREQ=WEEKLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "new_york_weekly_into_the_repeated_hour",
+      "now": "2026-10-25T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-10-25T06:30:00Z",
+          "start": "2026-10-25T05:30:00Z"
+        },
+        {
+          "end": "2026-11-01T06:30:00Z",
+          "start": "2026-11-01T05:30:00Z"
+        },
+        {
+          "end": "2026-11-08T07:30:00Z",
+          "start": "2026-11-08T06:30:00Z"
+        },
+        {
+          "end": "2026-11-15T07:30:00Z",
+          "start": "2026-11-15T06:30:00Z"
+        },
+        {
+          "end": "2026-11-22T07:30:00Z",
+          "start": "2026-11-22T06:30:00Z"
+        },
+        {
+          "end": "2026-11-29T07:30:00Z",
+          "start": "2026-11-29T06:30:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/New_York:20261025T013000\nDTEND;TZID=America/New_York:20261025T023000\nRRULE:FREQ=WEEKLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "new_york_weekly_across_spring_dst",
+      "now": "2027-02-25T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2027-03-01T15:00:00Z",
+          "start": "2027-03-01T14:00:00Z"
+        },
+        {
+          "end": "2027-03-03T15:00:00Z",
+          "start": "2027-03-03T14:00:00Z"
+        },
+        {
+          "end": "2027-03-08T15:00:00Z",
+          "start": "2027-03-08T14:00:00Z"
+        },
+        {
+          "end": "2027-03-10T15:00:00Z",
+          "start": "2027-03-10T14:00:00Z"
+        },
+        {
+          "end": "2027-03-15T14:00:00Z",
+          "start": "2027-03-15T13:00:00Z"
+        },
+        {
+          "end": "2027-03-17T14:00:00Z",
+          "start": "2027-03-17T13:00:00Z"
+        },
+        {
+          "end": "2027-03-22T14:00:00Z",
+          "start": "2027-03-22T13:00:00Z"
+        },
+        {
+          "end": "2027-03-24T14:00:00Z",
+          "start": "2027-03-24T13:00:00Z"
+        },
+        {
+          "end": "2027-03-29T14:00:00Z",
+          "start": "2027-03-29T13:00:00Z"
+        },
+        {
+          "end": "2027-03-31T14:00:00Z",
+          "start": "2027-03-31T13:00:00Z"
+        },
+        {
+          "end": "2027-04-05T14:00:00Z",
+          "start": "2027-04-05T13:00:00Z"
+        },
+        {
+          "end": "2027-04-07T14:00:00Z",
+          "start": "2027-04-07T13:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/New_York:20270301T090000\nDTEND;TZID=America/New_York:20270301T100000\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE"
+    },
+    {
+      "length_minutes": 60,
+      "name": "vancouver_weekly_across_autumn_dst",
+      "now": "2026-10-20T12:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-10-22T18:15:00Z",
+          "start": "2026-10-22T17:15:00Z"
+        },
+        {
+          "end": "2026-10-29T18:15:00Z",
+          "start": "2026-10-29T17:15:00Z"
+        },
+        {
+          "end": "2026-11-05T19:15:00Z",
+          "start": "2026-11-05T18:15:00Z"
+        },
+        {
+          "end": "2026-11-12T19:15:00Z",
+          "start": "2026-11-12T18:15:00Z"
+        },
+        {
+          "end": "2026-11-19T19:15:00Z",
+          "start": "2026-11-19T18:15:00Z"
+        },
+        {
+          "end": "2026-11-26T19:15:00Z",
+          "start": "2026-11-26T18:15:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/Vancouver:20260910T101500\nDTEND;TZID=America/Vancouver:20260910T111500\nRRULE:FREQ=WEEKLY;BYDAY=TH"
+    },
+    {
+      "length_minutes": 60,
+      "name": "london_daily_across_autumn_dst",
+      "now": "2026-10-21T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-10-21T18:30:00Z",
+          "start": "2026-10-21T17:30:00Z"
+        },
+        {
+          "end": "2026-10-22T18:30:00Z",
+          "start": "2026-10-22T17:30:00Z"
+        },
+        {
+          "end": "2026-10-23T18:30:00Z",
+          "start": "2026-10-23T17:30:00Z"
+        },
+        {
+          "end": "2026-10-24T18:30:00Z",
+          "start": "2026-10-24T17:30:00Z"
+        },
+        {
+          "end": "2026-10-25T19:30:00Z",
+          "start": "2026-10-25T18:30:00Z"
+        },
+        {
+          "end": "2026-10-26T19:30:00Z",
+          "start": "2026-10-26T18:30:00Z"
+        },
+        {
+          "end": "2026-10-27T19:30:00Z",
+          "start": "2026-10-27T18:30:00Z"
+        },
+        {
+          "end": "2026-10-28T19:30:00Z",
+          "start": "2026-10-28T18:30:00Z"
+        },
+        {
+          "end": "2026-10-29T19:30:00Z",
+          "start": "2026-10-29T18:30:00Z"
+        },
+        {
+          "end": "2026-10-30T19:30:00Z",
+          "start": "2026-10-30T18:30:00Z"
+        },
+        {
+          "end": "2026-10-31T19:30:00Z",
+          "start": "2026-10-31T18:30:00Z"
+        },
+        {
+          "end": "2026-11-01T19:30:00Z",
+          "start": "2026-11-01T18:30:00Z"
+        },
+        {
+          "end": "2026-11-02T19:30:00Z",
+          "start": "2026-11-02T18:30:00Z"
+        },
+        {
+          "end": "2026-11-03T19:30:00Z",
+          "start": "2026-11-03T18:30:00Z"
+        },
+        {
+          "end": "2026-11-04T19:30:00Z",
+          "start": "2026-11-04T18:30:00Z"
+        },
+        {
+          "end": "2026-11-05T19:30:00Z",
+          "start": "2026-11-05T18:30:00Z"
+        },
+        {
+          "end": "2026-11-06T19:30:00Z",
+          "start": "2026-11-06T18:30:00Z"
+        },
+        {
+          "end": "2026-11-07T19:30:00Z",
+          "start": "2026-11-07T18:30:00Z"
+        },
+        {
+          "end": "2026-11-08T19:30:00Z",
+          "start": "2026-11-08T18:30:00Z"
+        },
+        {
+          "end": "2026-11-09T19:30:00Z",
+          "start": "2026-11-09T18:30:00Z"
+        },
+        {
+          "end": "2026-11-10T19:30:00Z",
+          "start": "2026-11-10T18:30:00Z"
+        },
+        {
+          "end": "2026-11-11T19:30:00Z",
+          "start": "2026-11-11T18:30:00Z"
+        },
+        {
+          "end": "2026-11-12T19:30:00Z",
+          "start": "2026-11-12T18:30:00Z"
+        },
+        {
+          "end": "2026-11-13T19:30:00Z",
+          "start": "2026-11-13T18:30:00Z"
+        },
+        {
+          "end": "2026-11-14T19:30:00Z",
+          "start": "2026-11-14T18:30:00Z"
+        },
+        {
+          "end": "2026-11-15T19:30:00Z",
+          "start": "2026-11-15T18:30:00Z"
+        },
+        {
+          "end": "2026-11-16T19:30:00Z",
+          "start": "2026-11-16T18:30:00Z"
+        },
+        {
+          "end": "2026-11-17T19:30:00Z",
+          "start": "2026-11-17T18:30:00Z"
+        },
+        {
+          "end": "2026-11-18T19:30:00Z",
+          "start": "2026-11-18T18:30:00Z"
+        },
+        {
+          "end": "2026-11-19T19:30:00Z",
+          "start": "2026-11-19T18:30:00Z"
+        },
+        {
+          "end": "2026-11-20T19:30:00Z",
+          "start": "2026-11-20T18:30:00Z"
+        },
+        {
+          "end": "2026-11-21T19:30:00Z",
+          "start": "2026-11-21T18:30:00Z"
+        },
+        {
+          "end": "2026-11-22T19:30:00Z",
+          "start": "2026-11-22T18:30:00Z"
+        },
+        {
+          "end": "2026-11-23T19:30:00Z",
+          "start": "2026-11-23T18:30:00Z"
+        },
+        {
+          "end": "2026-11-24T19:30:00Z",
+          "start": "2026-11-24T18:30:00Z"
+        },
+        {
+          "end": "2026-11-25T19:30:00Z",
+          "start": "2026-11-25T18:30:00Z"
+        },
+        {
+          "end": "2026-11-26T19:30:00Z",
+          "start": "2026-11-26T18:30:00Z"
+        },
+        {
+          "end": "2026-11-27T19:30:00Z",
+          "start": "2026-11-27T18:30:00Z"
+        },
+        {
+          "end": "2026-11-28T19:30:00Z",
+          "start": "2026-11-28T18:30:00Z"
+        },
+        {
+          "end": "2026-11-29T19:30:00Z",
+          "start": "2026-11-29T18:30:00Z"
+        },
+        {
+          "end": "2026-11-30T19:30:00Z",
+          "start": "2026-11-30T18:30:00Z"
+        },
+        {
+          "end": "2026-12-01T19:30:00Z",
+          "start": "2026-12-01T18:30:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Europe/London:20261020T183000\nDTEND;TZID=Europe/London:20261020T193000\nRRULE:FREQ=DAILY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "lord_howe_weekly_into_the_half_hour_gap",
+      "now": "2026-09-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-09-26T16:45:00Z",
+          "start": "2026-09-26T15:45:00Z"
+        },
+        {
+          "end": "2026-10-03T17:15:00Z",
+          "start": "2026-10-03T16:15:00Z"
+        },
+        {
+          "end": "2026-10-10T16:15:00Z",
+          "start": "2026-10-10T15:15:00Z"
+        },
+        {
+          "end": "2026-10-17T16:15:00Z",
+          "start": "2026-10-17T15:15:00Z"
+        },
+        {
+          "end": "2026-10-24T16:15:00Z",
+          "start": "2026-10-24T15:15:00Z"
+        },
+        {
+          "end": "2026-10-31T16:15:00Z",
+          "start": "2026-10-31T15:15:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Australia/Lord_Howe:20260927T021500\nRRULE:FREQ=WEEKLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "lord_howe_weekly_into_the_repeated_half_hour",
+      "now": "2027-03-27T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2027-03-27T15:45:00Z",
+          "start": "2027-03-27T14:45:00Z"
+        },
+        {
+          "end": "2027-04-03T15:45:00Z",
+          "start": "2027-04-03T14:45:00Z"
+        },
+        {
+          "end": "2027-04-10T16:15:00Z",
+          "start": "2027-04-10T15:15:00Z"
+        },
+        {
+          "end": "2027-04-17T16:15:00Z",
+          "start": "2027-04-17T15:15:00Z"
+        },
+        {
+          "end": "2027-04-24T16:15:00Z",
+          "start": "2027-04-24T15:15:00Z"
+        },
+        {
+          "end": "2027-05-01T16:15:00Z",
+          "start": "2027-05-01T15:15:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Australia/Lord_Howe:20270328T014500\nRRULE:FREQ=WEEKLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "santiago_daily_into_the_skipped_midnight",
+      "now": "2026-09-04T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-09-04T05:00:00Z",
+          "start": "2026-09-04T04:00:00Z"
+        },
+        {
+          "end": "2026-09-05T05:00:00Z",
+          "start": "2026-09-05T04:00:00Z"
+        },
+        {
+          "end": "2026-09-06T05:00:00Z",
+          "start": "2026-09-06T04:00:00Z"
+        },
+        {
+          "end": "2026-09-07T04:00:00Z",
+          "start": "2026-09-07T03:00:00Z"
+        },
+        {
+          "end": "2026-09-08T04:00:00Z",
+          "start": "2026-09-08T03:00:00Z"
+        },
+        {
+          "end": "2026-09-09T04:00:00Z",
+          "start": "2026-09-09T03:00:00Z"
+        },
+        {
+          "end": "2026-09-10T04:00:00Z",
+          "start": "2026-09-10T03:00:00Z"
+        },
+        {
+          "end": "2026-09-11T04:00:00Z",
+          "start": "2026-09-11T03:00:00Z"
+        },
+        {
+          "end": "2026-09-12T04:00:00Z",
+          "start": "2026-09-12T03:00:00Z"
+        },
+        {
+          "end": "2026-09-13T04:00:00Z",
+          "start": "2026-09-13T03:00:00Z"
+        },
+        {
+          "end": "2026-09-14T04:00:00Z",
+          "start": "2026-09-14T03:00:00Z"
+        },
+        {
+          "end": "2026-09-15T04:00:00Z",
+          "start": "2026-09-15T03:00:00Z"
+        },
+        {
+          "end": "2026-09-16T04:00:00Z",
+          "start": "2026-09-16T03:00:00Z"
+        },
+        {
+          "end": "2026-09-17T04:00:00Z",
+          "start": "2026-09-17T03:00:00Z"
+        },
+        {
+          "end": "2026-09-18T04:00:00Z",
+          "start": "2026-09-18T03:00:00Z"
+        },
+        {
+          "end": "2026-09-19T04:00:00Z",
+          "start": "2026-09-19T03:00:00Z"
+        },
+        {
+          "end": "2026-09-20T04:00:00Z",
+          "start": "2026-09-20T03:00:00Z"
+        },
+        {
+          "end": "2026-09-21T04:00:00Z",
+          "start": "2026-09-21T03:00:00Z"
+        },
+        {
+          "end": "2026-09-22T04:00:00Z",
+          "start": "2026-09-22T03:00:00Z"
+        },
+        {
+          "end": "2026-09-23T04:00:00Z",
+          "start": "2026-09-23T03:00:00Z"
+        },
+        {
+          "end": "2026-09-24T04:00:00Z",
+          "start": "2026-09-24T03:00:00Z"
+        },
+        {
+          "end": "2026-09-25T04:00:00Z",
+          "start": "2026-09-25T03:00:00Z"
+        },
+        {
+          "end": "2026-09-26T04:00:00Z",
+          "start": "2026-09-26T03:00:00Z"
+        },
+        {
+          "end": "2026-09-27T04:00:00Z",
+          "start": "2026-09-27T03:00:00Z"
+        },
+        {
+          "end": "2026-09-28T04:00:00Z",
+          "start": "2026-09-28T03:00:00Z"
+        },
+        {
+          "end": "2026-09-29T04:00:00Z",
+          "start": "2026-09-29T03:00:00Z"
+        },
+        {
+          "end": "2026-09-30T04:00:00Z",
+          "start": "2026-09-30T03:00:00Z"
+        },
+        {
+          "end": "2026-10-01T04:00:00Z",
+          "start": "2026-10-01T03:00:00Z"
+        },
+        {
+          "end": "2026-10-02T04:00:00Z",
+          "start": "2026-10-02T03:00:00Z"
+        },
+        {
+          "end": "2026-10-03T04:00:00Z",
+          "start": "2026-10-03T03:00:00Z"
+        },
+        {
+          "end": "2026-10-04T04:00:00Z",
+          "start": "2026-10-04T03:00:00Z"
+        },
+        {
+          "end": "2026-10-05T04:00:00Z",
+          "start": "2026-10-05T03:00:00Z"
+        },
+        {
+          "end": "2026-10-06T04:00:00Z",
+          "start": "2026-10-06T03:00:00Z"
+        },
+        {
+          "end": "2026-10-07T04:00:00Z",
+          "start": "2026-10-07T03:00:00Z"
+        },
+        {
+          "end": "2026-10-08T04:00:00Z",
+          "start": "2026-10-08T03:00:00Z"
+        },
+        {
+          "end": "2026-10-09T04:00:00Z",
+          "start": "2026-10-09T03:00:00Z"
+        },
+        {
+          "end": "2026-10-10T04:00:00Z",
+          "start": "2026-10-10T03:00:00Z"
+        },
+        {
+          "end": "2026-10-11T04:00:00Z",
+          "start": "2026-10-11T03:00:00Z"
+        },
+        {
+          "end": "2026-10-12T04:00:00Z",
+          "start": "2026-10-12T03:00:00Z"
+        },
+        {
+          "end": "2026-10-13T04:00:00Z",
+          "start": "2026-10-13T03:00:00Z"
+        },
+        {
+          "end": "2026-10-14T04:00:00Z",
+          "start": "2026-10-14T03:00:00Z"
+        },
+        {
+          "end": "2026-10-15T04:00:00Z",
+          "start": "2026-10-15T03:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/Santiago:20260904T000000\nDTEND;TZID=America/Santiago:20260904T010000\nRRULE:FREQ=DAILY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "sydney_weekly_into_the_spring_gap",
+      "now": "2026-09-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-09-26T17:30:00Z",
+          "start": "2026-09-26T16:30:00Z"
+        },
+        {
+          "end": "2026-10-03T17:30:00Z",
+          "start": "2026-10-03T16:30:00Z"
+        },
+        {
+          "end": "2026-10-10T16:30:00Z",
+          "start": "2026-10-10T15:30:00Z"
+        },
+        {
+          "end": "2026-10-17T16:30:00Z",
+          "start": "2026-10-17T15:30:00Z"
+        },
+        {
+          "end": "2026-10-24T16:30:00Z",
+          "start": "2026-10-24T15:30:00Z"
+        },
+        {
+          "end": "2026-10-31T16:30:00Z",
+          "start": "2026-10-31T15:30:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Australia/Sydney:20260927T023000\nRRULE:FREQ=WEEKLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "sydney_weekly_into_the_repeated_hour",
+      "now": "2027-03-27T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2027-03-27T16:30:00Z",
+          "start": "2027-03-27T15:30:00Z"
+        },
+        {
+          "end": "2027-04-03T16:30:00Z",
+          "start": "2027-04-03T15:30:00Z"
+        },
+        {
+          "end": "2027-04-10T17:30:00Z",
+          "start": "2027-04-10T16:30:00Z"
+        },
+        {
+          "end": "2027-04-17T17:30:00Z",
+          "start": "2027-04-17T16:30:00Z"
+        },
+        {
+          "end": "2027-04-24T17:30:00Z",
+          "start": "2027-04-24T16:30:00Z"
+        },
+        {
+          "end": "2027-05-01T17:30:00Z",
+          "start": "2027-05-01T16:30:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Australia/Sydney:20270328T023000\nRRULE:FREQ=WEEKLY"
+    },
+    {
+      "length_minutes": 30,
+      "name": "dtend_utc",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-05T17:30:00Z",
+          "start": "2026-11-05T17:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20261105T170000Z\nDTEND:20261105T173000Z"
+    },
+    {
+      "length_minutes": 30,
+      "name": "dtend_floating",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-05T17:30:00Z",
+          "start": "2026-11-05T17:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20261105T170000Z\nDTEND:20261105T173000"
+    },
+    {
+      "length_minutes": 30,
+      "name": "dtend_with_an_unknown_zone_reads_its_clock",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-05T17:30:00Z",
+          "start": "2026-11-05T17:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20261105T170000Z\nDTEND;TZID=Nowhere/Else:20261105T173000"
+    },
+    {
+      "length_minutes": 15,
+      "name": "dtend_shortest_kept",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-05T17:15:00Z",
+          "start": "2026-11-05T17:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20261105T170000Z\nDTEND:20261105T171500Z"
+    },
+    {
+      "length_minutes": 60,
+      "name": "dtend_too_short_is_an_hour",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-05T18:00:00Z",
+          "start": "2026-11-05T17:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20261105T170000Z\nDTEND:20261105T171000Z"
+    },
+    {
+      "length_minutes": 150,
+      "name": "dtend_overnight",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-06T00:30:00Z",
+          "start": "2026-11-05T22:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Europe/London:20261105T220000\nDTEND;TZID=Europe/London:20261106T003000"
+    },
+    {
+      "length_minutes": 60,
+      "name": "dtend_without_seconds_is_absent",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-05T18:00:00Z",
+          "start": "2026-11-05T17:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20261105T170000Z\nDTEND:20261105T1730"
+    },
+    {
+      "length_minutes": 60,
+      "name": "dtend_date_only_is_absent",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-05T18:00:00Z",
+          "start": "2026-11-05T17:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20261105T170000Z\nDTEND:20261106"
+    },
+    {
+      "length_minutes": 60,
+      "name": "dtend_lowercase_z_is_absent",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-05T18:00:00Z",
+          "start": "2026-11-05T17:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20261105T170000Z\nDTEND:20261105T173000z"
+    },
+    {
+      "length_minutes": 60,
+      "name": "dtend_dashed_is_absent",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-05T18:00:00Z",
+          "start": "2026-11-05T17:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20261105T170000Z\nDTEND:2026-11-05T17:30:00Z"
+    },
+    {
+      "length_minutes": 60,
+      "name": "dtend_missing",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-22T18:00:00Z",
+          "start": "2026-11-22T17:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/Los_Angeles:20261122T090000"
+    },
+    {
+      "length_minutes": 120,
+      "name": "one_off_in_a_zone",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-10T20:00:00Z",
+          "start": "2026-11-10T18:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Europe/Berlin:20261110T190000\nDTEND;TZID=Europe/Berlin:20261110T210000"
+    },
+    {
+      "length_minutes": 60,
+      "name": "one_off_at_the_reach",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2027-10-26T01:00:00Z",
+          "start": "2027-10-26T00:00:00Z"
+        }
+      ],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20271026T000000Z"
+    },
+    {
+      "length_minutes": 60,
+      "name": "one_off_beyond_the_reach",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20271026T000001Z"
+    },
+    {
+      "length_minutes": 60,
+      "name": "one_off_already_started",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [],
+      "one_off": true,
+      "readable": true,
+      "schedule": "DTSTART:20261025T170000Z"
+    },
+    {
+      "length_minutes": 60,
+      "name": "every_other_week_sunday_and_monday",
+      "now": "2026-11-01T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-02T18:00:00Z",
+          "start": "2026-11-02T17:00:00Z"
+        },
+        {
+          "end": "2026-11-15T18:00:00Z",
+          "start": "2026-11-15T17:00:00Z"
+        },
+        {
+          "end": "2026-11-16T18:00:00Z",
+          "start": "2026-11-16T17:00:00Z"
+        },
+        {
+          "end": "2026-11-29T18:00:00Z",
+          "start": "2026-11-29T17:00:00Z"
+        },
+        {
+          "end": "2026-11-30T18:00:00Z",
+          "start": "2026-11-30T17:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART:20261102T170000Z\nDTEND:20261102T180000Z\nRRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=SU,MO"
+    },
+    {
+      "length_minutes": 60,
+      "name": "every_other_thursday_london",
+      "now": "2026-10-15T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-10-15T18:00:00Z",
+          "start": "2026-10-15T17:00:00Z"
+        },
+        {
+          "end": "2026-10-29T19:00:00Z",
+          "start": "2026-10-29T18:00:00Z"
+        },
+        {
+          "end": "2026-11-12T19:00:00Z",
+          "start": "2026-11-12T18:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Europe/London:20260528T180000\nDTEND;TZID=Europe/London:20260528T190000\nRRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=TH"
+    },
+    {
+      "length_minutes": 60,
+      "name": "every_third_day",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-10-29T01:00:00Z",
+          "start": "2026-10-29T00:00:00Z"
+        },
+        {
+          "end": "2026-11-01T01:00:00Z",
+          "start": "2026-11-01T00:00:00Z"
+        },
+        {
+          "end": "2026-11-04T01:00:00Z",
+          "start": "2026-11-04T00:00:00Z"
+        },
+        {
+          "end": "2026-11-07T01:00:00Z",
+          "start": "2026-11-07T00:00:00Z"
+        },
+        {
+          "end": "2026-11-10T01:00:00Z",
+          "start": "2026-11-10T00:00:00Z"
+        },
+        {
+          "end": "2026-11-13T01:00:00Z",
+          "start": "2026-11-13T00:00:00Z"
+        },
+        {
+          "end": "2026-11-16T01:00:00Z",
+          "start": "2026-11-16T00:00:00Z"
+        },
+        {
+          "end": "2026-11-19T01:00:00Z",
+          "start": "2026-11-19T00:00:00Z"
+        },
+        {
+          "end": "2026-11-22T01:00:00Z",
+          "start": "2026-11-22T00:00:00Z"
+        },
+        {
+          "end": "2026-11-25T01:00:00Z",
+          "start": "2026-11-25T00:00:00Z"
+        },
+        {
+          "end": "2026-11-28T01:00:00Z",
+          "start": "2026-11-28T00:00:00Z"
+        },
+        {
+          "end": "2026-12-01T01:00:00Z",
+          "start": "2026-12-01T00:00:00Z"
+        },
+        {
+          "end": "2026-12-04T01:00:00Z",
+          "start": "2026-12-04T00:00:00Z"
+        },
+        {
+          "end": "2026-12-07T01:00:00Z",
+          "start": "2026-12-07T00:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Asia/Tokyo:20261020T090000\nRRULE:FREQ=DAILY;INTERVAL=3"
+    },
+    {
+      "length_minutes": 60,
+      "name": "every_other_month_first_tuesday",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-12-01T18:00:00Z",
+          "start": "2026-12-01T17:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/Sao_Paulo:20261006T140000\nRRULE:FREQ=MONTHLY;INTERVAL=2;BYDAY=1TU"
+    },
+    {
+      "length_minutes": 30,
+      "name": "weekly_tuesday_thursday_saturday_auckland",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-10-28T19:30:00Z",
+          "start": "2026-10-28T19:00:00Z"
+        },
+        {
+          "end": "2026-10-30T19:30:00Z",
+          "start": "2026-10-30T19:00:00Z"
+        },
+        {
+          "end": "2026-11-02T19:30:00Z",
+          "start": "2026-11-02T19:00:00Z"
+        },
+        {
+          "end": "2026-11-04T19:30:00Z",
+          "start": "2026-11-04T19:00:00Z"
+        },
+        {
+          "end": "2026-11-06T19:30:00Z",
+          "start": "2026-11-06T19:00:00Z"
+        },
+        {
+          "end": "2026-11-09T19:30:00Z",
+          "start": "2026-11-09T19:00:00Z"
+        },
+        {
+          "end": "2026-11-11T19:30:00Z",
+          "start": "2026-11-11T19:00:00Z"
+        },
+        {
+          "end": "2026-11-13T19:30:00Z",
+          "start": "2026-11-13T19:00:00Z"
+        },
+        {
+          "end": "2026-11-16T19:30:00Z",
+          "start": "2026-11-16T19:00:00Z"
+        },
+        {
+          "end": "2026-11-18T19:30:00Z",
+          "start": "2026-11-18T19:00:00Z"
+        },
+        {
+          "end": "2026-11-20T19:30:00Z",
+          "start": "2026-11-20T19:00:00Z"
+        },
+        {
+          "end": "2026-11-23T19:30:00Z",
+          "start": "2026-11-23T19:00:00Z"
+        },
+        {
+          "end": "2026-11-25T19:30:00Z",
+          "start": "2026-11-25T19:00:00Z"
+        },
+        {
+          "end": "2026-11-27T19:30:00Z",
+          "start": "2026-11-27T19:00:00Z"
+        },
+        {
+          "end": "2026-11-30T19:30:00Z",
+          "start": "2026-11-30T19:00:00Z"
+        },
+        {
+          "end": "2026-12-02T19:30:00Z",
+          "start": "2026-12-02T19:00:00Z"
+        },
+        {
+          "end": "2026-12-04T19:30:00Z",
+          "start": "2026-12-04T19:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Pacific/Auckland:20261029T080000\nDTEND;TZID=Pacific/Auckland:20261029T083000\nRRULE:FREQ=WEEKLY;BYDAY=TU,TH,SA"
+    },
+    {
+      "length_minutes": 60,
+      "name": "monthly_third_monday",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-16T14:00:00Z",
+          "start": "2026-11-16T13:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=Europe/London:20260518T130000\nDTEND;TZID=Europe/London:20260518T140000\nRRULE:FREQ=MONTHLY;BYDAY=3MO"
+    },
+    {
+      "length_minutes": 60,
+      "name": "monthly_on_the_31st",
+      "now": "2026-12-15T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-12-31T16:00:00Z",
+          "start": "2026-12-31T15:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART:20261031T150000Z\nDTEND:20261031T160000Z\nRRULE:FREQ=MONTHLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "monthly_on_the_31st_in_a_zone",
+      "now": "2026-02-20T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-04-01T01:00:00Z",
+          "start": "2026-04-01T00:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART;TZID=America/Chicago:20260131T190000\nDTEND;TZID=America/Chicago:20260131T200000\nRRULE:FREQ=MONTHLY"
+    },
+    {
+      "length_minutes": 60,
+      "name": "legacy_utc_weekly",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-11-04T18:00:00Z",
+          "start": "2026-11-04T17:00:00Z"
+        },
+        {
+          "end": "2026-11-11T18:00:00Z",
+          "start": "2026-11-11T17:00:00Z"
+        },
+        {
+          "end": "2026-11-18T18:00:00Z",
+          "start": "2026-11-18T17:00:00Z"
+        },
+        {
+          "end": "2026-11-25T18:00:00Z",
+          "start": "2026-11-25T17:00:00Z"
+        },
+        {
+          "end": "2026-12-02T18:00:00Z",
+          "start": "2026-12-02T17:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART:20261104T170000Z\nDTEND:20261104T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=WE"
+    },
+    {
+      "length_minutes": 149,
+      "name": "legacy_utc_weekly_without_byday",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [
+        {
+          "end": "2026-10-27T11:29:00Z",
+          "start": "2026-10-27T09:00:00Z"
+        },
+        {
+          "end": "2026-11-03T11:29:00Z",
+          "start": "2026-11-03T09:00:00Z"
+        },
+        {
+          "end": "2026-11-10T11:29:00Z",
+          "start": "2026-11-10T09:00:00Z"
+        },
+        {
+          "end": "2026-11-17T11:29:00Z",
+          "start": "2026-11-17T09:00:00Z"
+        },
+        {
+          "end": "2026-11-24T11:29:00Z",
+          "start": "2026-11-24T09:00:00Z"
+        },
+        {
+          "end": "2026-12-01T11:29:00Z",
+          "start": "2026-12-01T09:00:00Z"
+        }
+      ],
+      "one_off": false,
+      "readable": true,
+      "schedule": "DTSTART:20260707T090000Z\nDTEND:20260707T112900Z\nRRULE:FREQ=WEEKLY"
+    },
+    {
+      "length_minutes": null,
+      "name": "unknown_zone",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [],
+      "one_off": null,
+      "readable": false,
+      "schedule": "DTSTART;TZID=Mars/Olympus:20261105T170000\nRRULE:FREQ=WEEKLY"
+    },
+    {
+      "length_minutes": null,
+      "name": "bad_rule",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [],
+      "one_off": null,
+      "readable": false,
+      "schedule": "DTSTART:20261105T170000Z\nRRULE:FREQ=FORTNIGHTLY"
+    },
+    {
+      "length_minutes": null,
+      "name": "no_dtstart",
+      "now": "2026-10-26T00:00:00Z",
+      "occurrences": [],
+      "one_off": null,
+      "readable": false,
+      "schedule": "RRULE:FREQ=WEEKLY"
+    }
+  ],
+  "horizon_days": 42,
+  "one_off_reach_days": 365,
+  "tzdb": "2025b"
+}
