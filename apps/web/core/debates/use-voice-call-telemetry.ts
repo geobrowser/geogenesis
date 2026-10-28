@@ -53,11 +53,11 @@ const NOTABLE_QUALITIES = new Set<ConnectionQuality>([ConnectionQuality.Poor, Co
  *
  * - `debate_voice_sampled` every {@link VOICE_SAMPLE_MS} while connected (and once early): the
  *   connection quality LiveKit reports, packet loss each way, round trip, jitter, how much of what we
- *   heard had to be concealed, the microphone's own level, what kind of microphone it is, and the
- *   transport each way (UDP, TCP or a relay: a TCP fallback is what made GEO-3343 choppy).
+ *   heard had to be concealed and how loud it arrived, the microphone's own level, what kind of
+ *   microphone it is, and the transport each way (UDP, TCP or a relay: a TCP fallback is what made GEO-3343 choppy).
  * - `debate_voice_changed` the moment something moves: quality into or out of poor or lost, a
  *   reconnect starting or finishing, a disconnect with its reason, a different kind of microphone,
- *   a different transport.
+ *   a different transport, incoming audio blocked or unblocked by the browser's autoplay policy.
  * - `debate_voice_ended` once per call: seconds connected, seconds at poor and lost quality,
  *   reconnects, the worst loss and concealment seen, and the last transport each way.
  *
@@ -312,6 +312,11 @@ export function startVoiceCallTelemetry(
   };
   const onLocalTrackPublished = () => void noteMicKind();
 
+  // LiveKit plays incoming audio unprompted and only says so when the browser's autoplay policy
+  // refuses it; until the person clicks, the call carries audio nobody hears.
+  const onAudioPlayback = (playing: boolean) =>
+    reportChange({ change: 'audio_playback', playing, ...(playing ? {} : { reason: 'autoplay_blocked' }) });
+
   const onPageHide = () => {
     if (surface !== 'debate') return finish('page_closed');
     // The debate deliberately keeps its Room alive on pagehide (mobile lock/background).
@@ -335,6 +340,7 @@ export function startVoiceCallTelemetry(
     room.on(RoomEvent.Disconnected, onDisconnected);
     room.on(RoomEvent.ActiveDeviceChanged, onActiveDevice);
     room.on(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
+    room.on(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
     local.on(ParticipantEvent.ConnectionQualityChanged, onQuality);
     local.on(ParticipantEvent.TrackMuted, onMuteChange);
     local.on(ParticipantEvent.TrackUnmuted, onMuteChange);
@@ -360,6 +366,7 @@ export function startVoiceCallTelemetry(
     room.off(RoomEvent.Disconnected, onDisconnected);
     room.off(RoomEvent.ActiveDeviceChanged, onActiveDevice);
     room.off(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
+    room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlayback);
     local.off(ParticipantEvent.ConnectionQualityChanged, onQuality);
     local.off(ParticipantEvent.TrackMuted, onMuteChange);
     local.off(ParticipantEvent.TrackUnmuted, onMuteChange);

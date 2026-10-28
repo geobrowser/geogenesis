@@ -452,6 +452,22 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     }
   });
 
+  it('reports incoming audio the browser blocks, and the click that unblocks it', () => {
+    const call = fakeRoom();
+    renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
+
+    act(() => call.emit(RoomEvent.AudioPlaybackStatusChanged, false));
+    act(() => call.emit(RoomEvent.AudioPlaybackStatusChanged, true));
+
+    expect(events('debate_voice_changed')).toEqual([
+      expect.objectContaining({ change: 'audio_playback', playing: false, reason: 'autoplay_blocked' }),
+      expect.not.objectContaining({ reason: expect.anything() }),
+    ]);
+    expect(events('debate_voice_changed')[1]).toEqual(
+      expect.objectContaining({ change: 'audio_playback', playing: true })
+    );
+  });
+
   // Copilot on #2884 (round 2): the summary is the last word on a call. Leaving the page summarises
   // it before LiveKit tears the room down, and nothing the room says after that may report.
   it('reports nothing after the summary, whatever the room says next', () => {
