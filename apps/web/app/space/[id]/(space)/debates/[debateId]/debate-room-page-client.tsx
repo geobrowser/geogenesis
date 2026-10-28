@@ -2540,7 +2540,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         localMediaStreamRef.current = null;
         setRemoteVideoReady(false);
         setOpponentLeftNotice({ recordingDiscarded: false });
-        returnFromDebate({ forwardOnly: true });
+        returnFromDebate();
         return;
       }
       returnFromDebate();
@@ -3020,7 +3020,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (debate && didLocallyLeaveDebate(debate.id)) return;
     if (debate?.rematch_session_id && didLocallyLeaveRematch(debate.rematch_session_id)) return;
     setOpponentLeftNotice({ recordingDiscarded: opponentLeftDiscardedRecording });
-    returnFromDebate({ forwardOnly: true });
+    returnFromDebate();
   }, [
     shouldAnnounceOpponentLeft,
     roomState,
