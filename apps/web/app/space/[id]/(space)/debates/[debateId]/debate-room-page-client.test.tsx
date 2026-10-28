@@ -3252,6 +3252,34 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument();
   });
 
+  it('does not mark ready or open devices from an intro that gave voice up', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await act(async () => {
+      await mocks.voiceTakeoverHandler?.({
+        requesterPriority: 2,
+        ownerPriority: 0,
+        automatic: false,
+        requesterLabel: 'lobby',
+      });
+    });
+    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
+    const previewsBefore = mocks.createLocalTracks.mock.calls.length;
+
+    // Both devices show off, so Ready waits on one being turned on, which takes voice back.
+    expect(screen.getByText('Enable video and audio to start')).toBeInTheDocument();
+    const ready = screen.getByRole('button', { name: "I'm ready to debate" });
+    expect(ready).toBeDisabled();
+    fireEvent.click(ready);
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    expect(mocks.readyMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.createLocalTracks.mock.calls.length).toBe(previewsBefore);
+  });
+
   it('gives voice to the tab it just handed the room to, before re-rendering', async () => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),

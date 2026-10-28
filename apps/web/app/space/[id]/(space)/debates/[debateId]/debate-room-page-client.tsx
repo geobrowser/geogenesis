@@ -2384,13 +2384,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // Taking voice back after giving it up in the intro: an explicit claim, then the devices and room.
   const resumeVoice = React.useCallback(
     async (next?: { audioMuted: boolean; videoEnabled: boolean }) => {
-      if (!(await claimVoice())) return;
+      if (!(await claimVoice())) return false;
       const restored = next ?? yieldedJoinStateRef.current ?? joinStateRef.current;
       yieldedJoinStateRef.current = null;
       setJoinState(restored);
       setVoiceYielded(false);
       await openForJoinState(restored);
       void connect();
+      return true;
     },
     [claimVoice, connect, openForJoinState, setJoinState]
   );
@@ -2832,6 +2833,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   reportJoinedRef.current = reportJoinedForConnecting;
 
   const markLocalReady = React.useCallback(async () => {
+    // Ready opens both devices, so in an intro that gave voice up it takes voice back first.
+    if (voiceYielded && !(await resumeVoice({ audioMuted: false, videoEnabled: true }))) return;
     setRoomError(null);
     // Ready needs both devices. A failure takes the toggle's way back, or with nothing live leaves
     // the preview's error and a Try again that asks for both.
@@ -2842,7 +2845,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not mark you ready.');
     }
-  }, [markReady, openForJoinState, syncLocalPublications]);
+  }, [markReady, openForJoinState, resumeVoice, syncLocalPublications, voiceYielded]);
 
   const publishRematchLeave = React.useCallback(async () => {
     if (rematchLeavePublishedRef.current) return;
