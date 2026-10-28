@@ -41,8 +41,9 @@ describe('DebateVideoTile', () => {
       expect(screen.getByRole('img', { name: 'Microphone still open' })).toBeInTheDocument();
       expect(tile.querySelector('[data-muted-indicator]')).not.toBeInTheDocument();
       expect(tile).toHaveAttribute('data-turn-finishing', 'true');
-      // Still outlined as the one being heard.
-      expect(tile.className).toContain('outline-[3px]');
+      // The next speaker owns the floor; an open microphone is not a second active turn.
+      expect(tile).not.toHaveClass('outline-[3px]');
+      expect(tile.querySelector('[data-room-speaker-outline]')).not.toBeInTheDocument();
     }
   );
 
@@ -63,17 +64,9 @@ describe('DebateVideoTile', () => {
     expect(view.container.querySelector('[data-muted-indicator]')).not.toBeInTheDocument();
   });
 
-  it('keeps its outline and badges in a stacking context of their own, under the vote card (GEO-3407)', () => {
-    // The outline is z-50 inside the tile and the vote card z-40 across both tiles; without the
-    // tile's own context the outline of a speaker finishing into the vote painted over the card.
+  it('keeps the active outline and badges in a stacking context of their own, under room overlays', () => {
     const view = render(
-      <DebateVideoTile
-        participantPosition={null}
-        active={false}
-        inactiveIndicatorId="remote"
-        openRounds
-        finishingSince={Date.now()}
-      >
+      <DebateVideoTile participantPosition={null} active inactiveIndicatorId="remote" openRounds>
         <div />
       </DebateVideoTile>
     );

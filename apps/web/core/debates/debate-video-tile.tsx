@@ -123,6 +123,7 @@ export function DebateVideoTile({
   revealInactive = false,
   inactiveIndicatorId,
   tileLabel,
+  participantName,
   showMutedIndicator = false,
   countdown,
   closingMessage = false,
@@ -159,6 +160,8 @@ export function DebateVideoTile({
   inactiveIndicatorId: 'local' | 'remote';
   /** Names the tile for assistive technology — otherwise both are unlabelled `section`s. */
   tileLabel?: string;
+  /** Visible name, so the room's turn announcement maps to a picture. */
+  participantName?: string;
   showMutedIndicator?: boolean;
   countdown?: React.ReactElement<RecordingCountdownRingProps> | null;
   closingMessage?: boolean;
@@ -186,11 +189,11 @@ export function DebateVideoTile({
   dimmed?: boolean;
   /** Open rounds only: the speaker's last five seconds, when their outline turns warning red with the timer. */
   finalSeconds?: boolean;
-  /** Open rounds only: after you end your turn, whose turn it is now, on their tile. */
+  /** Open rounds only: after you end your turn, who will speak next, on their tile. */
   nextTurnName?: string | null;
   /**
    * GEO-3407. When this speaker's turn ended (`Date.now()`), while their microphone is still open
-   * past the buzzer because they are finishing a sentence. Null otherwise. Holds the outline and puts
+   * past the buzzer because they are finishing a sentence. Null otherwise. Puts
    * `TurnFinishingIndicator` in the corner instead of the muted microphone, so the tile never shows
    * them muted while they can still be heard.
    */
@@ -201,7 +204,7 @@ export function DebateVideoTile({
   const finishing = finishingSince !== null;
   const showInactiveIndicator =
     !finishing && (showMutedIndicator || (inactive && !revealInactive && !countdown && !overlayText && !endingTurn));
-  const outlined = active || finishing;
+  const outlined = active;
   const upcoming = upcomingSeconds !== null && upcomingSeconds !== undefined;
 
   return (
@@ -214,8 +217,7 @@ export function DebateVideoTile({
       style={openRounds ? ROOM_UI_FONT : undefined}
       className={cx(
         // Its own stacking context: the outline and badges inside are z-indexed against each other,
-        // and must stay under what the room lays across both tiles, like the vote card. A finishing
-        // speaker's outline, up during the vote (GEO-3407), otherwise painted over the card.
+        // and must stay under what the room lays across both tiles, like the vote card.
         'relative isolate min-h-0 overflow-hidden bg-black shadow-card',
         openRounds ? '@container aspect-[8/5] rounded-[3cqw] text-white' : 'aspect-[5/3] rounded-lg',
         outlined && ['outline-[3px]', openRounds ? '-outline-offset-3' : 'outline-offset-0'],
@@ -302,7 +304,7 @@ export function DebateVideoTile({
           own width first, so the label gives up the space instead and truncates. Everywhere there
           is room for equal columns, which is every width from ~360px up, the two resolve equal and
           the controls land exactly on the centre line. */}
-      {(positionLabel !== null || tileControls || status) && (
+      {(participantName || positionLabel !== null || tileControls || status) && (
         <div
           data-tile-chips={chipsHidden ? 'hidden' : 'visible'}
           className={cx(
@@ -311,7 +313,16 @@ export function DebateVideoTile({
             chipsHidden && 'opacity-0'
           )}
         >
-          <div className="flex min-w-0 justify-start">
+          <div className="flex min-w-0 flex-col items-start gap-1">
+            {participantName && (
+              <span
+                className="w-full truncate text-sm leading-5 font-semibold text-white"
+                style={recordingOverlayTextShadow}
+                title={participantName}
+              >
+                {participantName}
+              </span>
+            )}
             {positionLabel !== null && <DebatePositionChip label={positionLabel} openRounds={openRounds} />}
           </div>
           <div className="pointer-events-auto">{tileControls}</div>
@@ -342,7 +353,7 @@ export function DebateVideoTile({
           <RoomExit className="z-30">
             {nextTurnName && (
               <RoomTilePill delayMs={600} data-room-pill="turn">
-                {nextTurnName}’s turn
+                {nextTurnName} is next
               </RoomTilePill>
             )}
           </RoomExit>
