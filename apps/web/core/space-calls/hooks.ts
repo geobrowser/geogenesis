@@ -2,6 +2,8 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import * as React from 'react';
+
 import { useDebateGatewayScope } from '~/core/debates/debate-gateway';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '~/core/debates/hooks';
 
@@ -14,6 +16,8 @@ export const SIGNED_OUT_SPACE_CALLS_POLL_MS = 3 * 60_000;
 const CALL_HOLD_OPEN_MS = 15 * 60_000;
 /** Past a transition, so the read lands after geo-chat has made it. */
 const TRANSITION_SLACK_MS = 2_000;
+/** Each page adds up to this past a transition, so viewers do not all read at the same second. */
+export const TRANSITION_JITTER_MS = 15_000;
 /** A transition already due that the list does not show yet is read again after this. */
 const OVERDUE_REFETCH_MS = 30_000;
 
@@ -21,7 +25,7 @@ const OVERDUE_REFETCH_MS = 30_000;
  * The signed-out poll, sooner when a scheduled call opens or a held one can close first. React
  * Query skips it while the tab is hidden. `false` for a space without calls, which cannot gain one.
  */
-export function nextSpaceCallsRefetch(data: SpaceCallsResponse | undefined, now: number): number | false {
+export function nextSpaceCallsRefetch(data: SpaceCallsResponse | undefined, now: number, jitterMs = 0): number | false {
   // Nothing read yet, or the first read failed: keep trying. A failed later read keeps its data.
   if (!data) return SIGNED_OUT_SPACE_CALLS_POLL_MS;
   if (!data.supported) return false;
@@ -35,7 +39,7 @@ export function nextSpaceCallsRefetch(data: SpaceCallsResponse | undefined, now:
           ? Date.parse(call.starts_at) + CALL_HOLD_OPEN_MS
           : NaN;
     if (status === 'scheduled' && at <= now) return OVERDUE_REFETCH_MS;
-    if (at > now) next = Math.min(next, at + TRANSITION_SLACK_MS);
+    if (at > now) next = Math.min(next, at + TRANSITION_SLACK_MS + jitterMs);
   }
   return next - now;
 }
@@ -44,9 +48,10 @@ export function nextSpaceCallsRefetch(data: SpaceCallsResponse | undefined, now:
 export function spaceCallsRefetchInterval(
   { authenticated, live }: { authenticated: boolean; live: boolean },
   data: SpaceCallsResponse | undefined,
-  now: number
+  now: number,
+  jitterMs = 0
 ): number | false {
-  return authenticated || !live ? false : nextSpaceCallsRefetch(data, now);
+  return authenticated || !live ? false : nextSpaceCallsRefetch(data, now, jitterMs);
 }
 
 /**
@@ -58,6 +63,7 @@ export function useSpaceCalls(spaceId: string, enabled = true, { live = true }: 
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
   const viewerKey = authenticated ? accountKey : null;
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, enabled && live && authenticated);
+  const [jitterMs] = React.useState(() => Math.random() * TRANSITION_JITTER_MS);
 
   return useQuery({
     ...debateQueryNetworkOptions,
@@ -65,7 +71,8 @@ export function useSpaceCalls(spaceId: string, enabled = true, { live = true }: 
     queryFn: ({ signal }) => listSpaceCalls(spaceId, getPrivyIdentityToken, viewerKey, signal),
     enabled: enabled && ready && Boolean(spaceId),
     refetchOnWindowFocus: live && !authenticated,
-    refetchInterval: query => spaceCallsRefetchInterval({ authenticated, live }, query.state.data, Date.now()),
+    refetchInterval: query =>
+      spaceCallsRefetchInterval({ authenticated, live }, query.state.data, Date.now(), jitterMs),
   });
 }
 

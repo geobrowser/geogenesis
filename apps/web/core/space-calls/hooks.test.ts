@@ -53,6 +53,12 @@ describe('nextSpaceCallsRefetch', () => {
     );
   });
 
+  it('adds the page’s jitter to a transition, not to the poll', () => {
+    const opening = list([call({ status: 'scheduled', opens_at: '2026-10-28T12:01:00Z' })]);
+    expect(nextSpaceCallsRefetch(opening, NOW, 9_000)).toBe(MIN + 2_000 + 9_000);
+    expect(nextSpaceCallsRefetch(list([]), NOW, 9_000)).toBe(POLL);
+  });
+
   it('reads an overdue opening again in 30s', () => {
     expect(nextSpaceCallsRefetch(list([call({ status: 'scheduled', opens_at: '2026-10-28T11:59:00Z' })]), NOW)).toBe(
       30_000
