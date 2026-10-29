@@ -11,9 +11,11 @@
  * debate. For you's version is assembled from gaia's, which bumps itself on any gaia-side change
  * (code version plus a config revision kept by trigger, migration 0102), and this app's own
  * FOR_YOU_WEB_VERSION, bumped by hand on any change to how this app builds a For you page.
+ *
+ * best-2: gaia ranks Debate agenda claims, their debates and agenda topics (GEO-3488, migration 0113).
  */
 
-export const BEST_FEED_VERSION = 'best-1';
+export const BEST_FEED_VERSION = 'best-2';
 
 /** This app's half of For you: candidates (Best's window), the diversity pass, the lead debate. */
 export const FOR_YOU_WEB_VERSION = 1;
