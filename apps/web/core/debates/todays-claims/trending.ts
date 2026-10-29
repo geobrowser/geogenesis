@@ -9,6 +9,7 @@ import { parse } from 'graphql';
 import { createBatchLoader } from '~/core/io/batch-loader';
 import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
+import { validateEntityId } from '~/core/utils/utils';
 
 import { zonedDay } from '../debate-hours';
 
@@ -80,7 +81,8 @@ export function useIsTrending(entityId: string | null | undefined, enabled = tru
   const { data } = useQuery({
     queryKey: ['entity-last-listed-on', id],
     queryFn: () => loadLastListedOn(id),
-    enabled: enabled && id.length > 0,
+    // One id the API rejects as a UUID fails the whole batch, and with it every other card's tag.
+    enabled: enabled && validateEntityId(id),
     // Agendas are swept into the ranking hourly, so a listing is never fresher than that.
     staleTime: 10 * 60_000,
     retry: 1,

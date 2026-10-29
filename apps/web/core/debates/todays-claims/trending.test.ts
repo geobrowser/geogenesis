@@ -1,9 +1,15 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
+
+import * as React from 'react';
+
 import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { graphql } from '~/core/io/graphql-client';
 
-import { isTrendingListing, loadLastListedOn } from './trending';
+import { zonedDay } from '../debate-hours';
+import { isTrendingListing, loadLastListedOn, useIsTrending } from './trending';
 
 vi.mock('~/core/io/graphql-client', () => ({ graphql: vi.fn() }));
 
@@ -93,5 +99,30 @@ describe('loadLastListedOn', () => {
     mockedGraphql.mockImplementation(() => Effect.fail(new Error('down')) as any);
 
     await expect(loadLastListedOn('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')).rejects.toBeTruthy();
+  });
+});
+
+describe('useIsTrending', () => {
+  function wrapper({ children }: { children: React.ReactNode }) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return React.createElement(QueryClientProvider, { client }, children);
+  }
+
+  it('never sends an id the API would reject, which would fail every card in the batch', async () => {
+    answer([]);
+    const { result } = renderHook(() => useIsTrending('debate-1'), { wrapper });
+
+    // Give a scheduled batch the chance to go out.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(mockedGraphql).not.toHaveBeenCalled();
+    expect(result.current).toBe(false);
+  });
+
+  it('asks for a valid id, dashed or not, by its normalized form', async () => {
+    answer([{ id: '0f9f4ea4aaaa4bbb8ccc0123456789ab', lastListedOn: zonedDay(new Date(), 'America/New_York') }]);
+    const { result } = renderHook(() => useIsTrending('0f9f4ea4-aaaa-4bbb-8ccc-0123456789ab'), { wrapper });
+
+    await waitFor(() => expect(result.current).toBe(true));
+    expect(mockedGraphql.mock.calls[0][0].variables).toEqual({ ids: ['0f9f4ea4aaaa4bbb8ccc0123456789ab'] });
   });
 });
