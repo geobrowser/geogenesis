@@ -18,10 +18,21 @@ const mocks = vi.hoisted(() => ({
   rowGroups: [] as unknown[],
   scores: {} as Record<string, number>,
   scoresLoading: false,
+  typesPending: false,
+  notPublishable: new Set<string>(),
+  personalSpaceLoading: false,
+  agendaEntityIds: null as string[] | null,
+  fetchedIds: [] as string[][],
+  entitiesError: null as Error | null,
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.flag }));
-vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: 'me' }) }));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({
+    personalSpaceId: mocks.personalSpaceLoading ? null : 'me',
+    isLoading: mocks.personalSpaceLoading,
+  }),
+}));
 vi.mock('../hooks', () => ({
   useGeoChatAuth: () => mocks.auth,
   useDebateClaimsBySpaces: (groups: unknown[]) => {
@@ -30,27 +41,43 @@ vi.mock('../hooks', () => ({
   },
 }));
 vi.mock('../claim-picker-page', () => ({
-  useClaimEntitiesByIds: (ids: string[]) => ({
-    entities: ids.map(id => ({ id, name: `Claim ${id}` })),
-    isLoading: false,
+  useClaimEntitiesByIds: (ids: string[]) => {
+    if (ids.length > 0) mocks.fetchedIds.push(ids);
+    return {
+      entities: mocks.entitiesError ? [] : ids.map(id => ({ id, name: `Claim ${id}` })),
+      isLoading: false,
+      error: mocks.entitiesError,
+    };
+  },
+}));
+vi.mock('../use-can-publish-debate-in', () => ({
+  useCanPublishDebateIn: () => ({
+    canPublishDebateIn: (spaceId: string) => !mocks.notPublishable.has(spaceId),
+    allowlistLoading: false,
+    typesPending: mocks.typesPending,
   }),
 }));
-vi.mock('../use-debate-publishable-spaces', () => ({
-  useDebatePublishableSpaces: () => ({ publishableSpaceIds: null, isLoading: false }),
-  isSpaceDebatePublishable: () => true,
-}));
-vi.mock('./debate-agendas', () => ({
+vi.mock('./debate-agendas', async importOriginal => ({
+  ...(await importOriginal<typeof import('./debate-agendas')>()),
   useDebateAgendas: (enabled: boolean) => ({
-    agendasIn: () =>
-      enabled ? mocks.agendas : { spaces: [], earlier: [], newestDay: null, listedAtByClaim: new Map() },
-    claimEntities: [],
+    agendasIn: (keepSpace: (spaceId: string) => boolean) => {
+      if (!enabled) return { spaces: [], earlier: [], newestDay: null, listedAtByClaim: new Map() };
+      const spaces = mocks.agendas.spaces.filter(space => keepSpace(space.spaceId));
+      return { ...mocks.agendas, spaces };
+    },
+    spaceIds: mocks.agendas.spaces.map(space => space.spaceId),
+    claimEntities: (mocks.agendaEntityIds ?? mocks.agendas.spaces.flatMap(space => space.sections[0]!.claimIds)).map(
+      id => ({ id, name: `Claim ${id}` })
+    ),
     isLoading: enabled && mocks.agendasLoading,
+    error: null,
   }),
 }));
 vi.mock('./claim-debate-counts', () => ({
   useClaimDebateCounts: () => ({ byClaimId: new Map([['a', 3]]), isLoading: false }),
 }));
-vi.mock('../matchmaking/claim-order-facts', () => ({
+vi.mock('../matchmaking/claim-order-facts', async importOriginal => ({
+  ...(await importOriginal<typeof import('../matchmaking/claim-order-facts')>()),
   useClaimOrderFacts: (ids: string[]) => ({
     facts: new Map(ids.map(id => [id, { rankingScore: mocks.scores[id] ?? null, createdAtMs: null }])),
     isLoading: mocks.scoresLoading,
@@ -110,7 +137,15 @@ beforeEach(() => {
   mocks.rowGroups = [];
   mocks.scores = {};
   mocks.scoresLoading = false;
+  mocks.typesPending = false;
+  mocks.notPublishable = new Set();
+  mocks.personalSpaceLoading = false;
+  mocks.agendaEntityIds = null;
+  mocks.fetchedIds = [];
+  mocks.entitiesError = null;
 });
+
+const storedFor = (accountKey: string) => store.get(todaysClaimsCalloutAtom)[accountKey];
 
 afterEach(() => cleanup());
 
@@ -124,7 +159,7 @@ describe('useTodaysCallout', () => {
     expect(result.current.claims.map(claim => claim.claimId)).toEqual(['c', 'a', 'x', 'y']);
     expect(result.current.claims[1]).toMatchObject({ spaceId: 'member', debatesSinceListing: 3 });
     expect(result.current.step?.current?.claimId).toBe('c');
-    expect(store.get(todaysClaimsCalloutAtom)).toMatchObject({ day: '2026-10-29', accountKey: 'acct1' });
+    expect(storedFor('acct1')).toMatchObject({ day: '2026-10-29', answered: [], dismissed: false });
   });
 
   it('picks the highest-ranked first', () => {
@@ -149,14 +184,69 @@ describe('useTodaysCallout', () => {
     const { result, rerender } = renderHook(() => useTodaysCallout(), { wrapper });
     expect(result.current.visible).toBe(false);
 
-    mocks.unresolved = new Set(['member']);
     mocks.rowsLoading = false;
     rerender();
+    expect(result.current.visible).toBe(true);
+  });
+
+  // Review: one space geo-chat refuses for good must not hold the whole callout back.
+  it('leaves out a space whose rows failed, and takes the set from the rest', () => {
+    mocks.unresolved = new Set(['member']);
+    const { result } = renderHook(() => useTodaysCallout(), { wrapper });
+
+    expect(result.current.visible).toBe(true);
+    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['x', 'y']);
+  });
+
+  it('takes nothing while no space’s rows have answered', () => {
+    mocks.unresolved = new Set(['member', 'other']);
+    const { result } = renderHook(() => useTodaysCallout(), { wrapper });
+
+    expect(result.current.visible).toBe(false);
+    expect(storedFor('acct1')).toBeUndefined();
+  });
+
+  // Review: an agenda only counts in a space a debate could be published in, judged once known.
+  it('waits for the spaces’ types, then leaves out agendas in spaces that can’t carry a debate', () => {
+    mocks.typesPending = true;
+    const { result, rerender } = renderHook(() => useTodaysCallout(), { wrapper });
     expect(result.current.visible).toBe(false);
 
-    mocks.unresolved = new Set();
+    mocks.typesPending = false;
+    mocks.notPublishable = new Set(['other']);
+    rerender();
+    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['b', 'c', 'a']);
+  });
+
+  // Review: before the viewer's own space is known, nobody is a member of anything.
+  it('waits for the viewer’s personal space before taking the set', () => {
+    mocks.personalSpaceLoading = true;
+    const { result, rerender } = renderHook(() => useTodaysCallout(), { wrapper });
+    expect(result.current.visible).toBe(false);
+
+    mocks.personalSpaceLoading = false;
     rerender();
     expect(result.current.visible).toBe(true);
+  });
+
+  it('draws the set from the agendas’ claims, and looks up only the ones they no longer hold', () => {
+    mocks.agendaEntityIds = ['a', 'b', 'c', 'x'];
+    const { result } = renderHook(() => useTodaysCallout(), { wrapper });
+
+    expect(mocks.fetchedIds.at(-1)).toEqual(['y']);
+    expect(result.current.entityOf('a')).toMatchObject({ id: 'a' });
+    expect(result.current.entityOf('y')).toMatchObject({ id: 'y' });
+    expect(result.current.entitiesSettled).toBe(true);
+  });
+
+  // Review: a failed lookup is not an answer that a claim is gone.
+  it('does not report the claims settled when their lookup failed', () => {
+    mocks.agendaEntityIds = ['a', 'b', 'c'];
+    mocks.entitiesError = new Error('graph down');
+    const { result } = renderHook(() => useTodaysCallout(), { wrapper });
+
+    expect(result.current.entityOf('x')).toBeUndefined();
+    expect(result.current.entitiesSettled).toBe(false);
   });
 
   it('holds the set once taken, as sides are answered and skipped', () => {
@@ -191,13 +281,21 @@ describe('useTodaysCallout', () => {
     expect(result.current.claims.map(claim => claim.claimId)).toEqual(['n']);
   });
 
-  it('starts over for a different account on the same browser', () => {
+  // Review: one browser, two accounts, the same day.
+  it('keeps each account’s day apart on the same browser', () => {
     const { result, rerender } = renderHook(() => useTodaysCallout(), { wrapper });
     act(() => result.current.markAnswered('c'));
+    act(() => result.current.dismiss());
 
     mocks.auth = { authenticated: true, accountKey: 'acct2' };
     rerender();
-    expect(store.get(todaysClaimsCalloutAtom)).toMatchObject({ accountKey: 'acct2', answered: [] });
+    expect(result.current.visible).toBe(true);
+    expect(storedFor('acct2')).toMatchObject({ answered: [], dismissed: false });
+
+    mocks.auth = { authenticated: true, accountKey: 'acct1' };
+    rerender();
+    expect(result.current.visible).toBe(false);
+    expect(storedFor('acct1')).toMatchObject({ answered: ['c'], dismissed: true });
   });
 
   it('has nothing when every claim is already answered', () => {
@@ -218,6 +316,6 @@ describe('useTodaysCallout', () => {
     mocks.flag = false;
     const flagOff = renderHook(() => useTodaysCallout(), { wrapper });
     expect(flagOff.result.current.visible).toBe(false);
-    expect(store.get(todaysClaimsCalloutAtom).day).toBeNull();
+    expect(store.get(todaysClaimsCalloutAtom)).toEqual({});
   });
 });

@@ -24,6 +24,9 @@ export const DEBATE_AGENDA_DATE_PROPERTY_ID = '52665f3efb7d48d58b6babb21b0d36db'
 /** Agenda days are New York days, the way the agendas are written and the ranking reads them. */
 export const AGENDA_TIME_ZONE = 'America/New_York';
 
+/** The heading of an agenda section whose block has no name of its own. */
+export const UNNAMED_AGENDA_SECTION = 'Today’s claims';
+
 /** "Earlier this week": agendas from the six days before today. */
 export const EARLIER_AGENDA_DAYS = 6;
 
@@ -207,7 +210,7 @@ export function buildDebateAgendas(
           id: block.id,
           agendaId: agenda.agendaId,
           spaceId: agenda.spaceId,
-          name: block.name ?? 'Today’s claims',
+          name: block.name ?? UNNAMED_AGENDA_SECTION,
           claimIds: ids,
           listedAt: agenda.listedAt,
         }))

@@ -7,6 +7,7 @@ import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DebatesHubWorkspace, URL_SYNC_DELAY_MS } from './hub-workspace';
+import { todaysCalloutMock } from './todays-claims-callout-fixtures';
 import {
   debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
@@ -42,15 +43,14 @@ vi.mock('./lobby-tab', () => ({
 
 vi.mock('./hub-live-rail', () => ({ HubLiveRail: () => <div data-testid="hub-live-rail" /> }));
 // The callout and its day's set have their own suites; here it only matters where it is drawn.
-const todaysCallout = vi.hoisted(() => ({ visible: false }));
-vi.mock('../todays-claims/use-todays-callout', () => ({ useTodaysCallout: () => todaysCallout }));
-vi.mock('./todays-claims-callout', () => ({
-  TodaysClaimsCallout: ({ layout, onFindDebate }: { layout: string; onFindDebate: () => void }) => (
-    <button type="button" data-testid="todays-claims-callout" data-layout={layout} onClick={onFindDebate}>
-      Find a debate
-    </button>
-  ),
-}));
+vi.mock(
+  '../todays-claims/use-todays-callout',
+  async () => (await import('./todays-claims-callout-fixtures')).useTodaysCalloutModule
+);
+vi.mock(
+  './todays-claims-callout',
+  async () => (await import('./todays-claims-callout-fixtures')).todaysClaimsCalloutModule
+);
 // The open ask is the strip's and the cards' business, covered in their own suites.
 vi.mock('./hub-ask-context', () => ({ HubAskProvider: ({ children }: { children: React.ReactNode }) => children }));
 // Covered through the side panel's suite; here it only matters that the header draws them.
@@ -81,7 +81,7 @@ vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(w
 
 // The picker is a popover, which measures itself. jsdom has no layout and no observer to report it.
 beforeEach(() => {
-  todaysCallout.visible = false;
+  todaysCalloutMock.visible = false;
   mocks.ready = true;
   mocks.authenticated = true;
   setUrl('');
@@ -181,7 +181,7 @@ describe('the Today’s claims callout', () => {
     expect(screen.queryByTestId('todays-claims-callout')).not.toBeInTheDocument();
     cleanup();
 
-    todaysCallout.visible = true;
+    todaysCalloutMock.visible = true;
     render(<DebatesHubWorkspace />);
     const callout = screen.getByTestId('todays-claims-callout');
     expect(callout).toHaveAttribute('data-layout', 'hub');

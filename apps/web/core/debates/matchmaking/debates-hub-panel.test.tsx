@@ -11,6 +11,7 @@ import { GeoChatRequestError } from '../api';
 import type { DebateClaimListId } from '../debate-claim-card-surface';
 import { DEBATES_MODAL } from '../debates-panel-deep-link';
 import { DebatesHubPanel } from './debates-hub-panel';
+import { todaysCalloutMock } from './todays-claims-callout-fixtures';
 import {
   type DebatesHubTab,
   debatesHubAtom,
@@ -102,15 +103,14 @@ vi.mock('./hub-live-strip', () => ({
   ),
 }));
 // The callout and its day's set have their own suites; here it only matters where it is drawn.
-const todaysCallout = vi.hoisted(() => ({ visible: false }));
-vi.mock('../todays-claims/use-todays-callout', () => ({ useTodaysCallout: () => todaysCallout }));
-vi.mock('./todays-claims-callout', () => ({
-  TodaysClaimsCallout: ({ layout, onFindDebate }: { layout: string; onFindDebate: () => void }) => (
-    <button type="button" data-testid="todays-claims-callout" data-layout={layout} onClick={onFindDebate}>
-      Find a debate
-    </button>
-  ),
-}));
+vi.mock(
+  '../todays-claims/use-todays-callout',
+  async () => (await import('./todays-claims-callout-fixtures')).useTodaysCalloutModule
+);
+vi.mock(
+  './todays-claims-callout',
+  async () => (await import('./todays-claims-callout-fixtures')).todaysClaimsCalloutModule
+);
 vi.mock('./no-times-nudge', () => ({ NoTimesNudge: () => <div data-testid="no-times-nudge" /> }));
 vi.mock('./requests-schedule', () => ({ RequestsSchedule: () => <div data-testid="requests-schedule" /> }));
 // Matches reads geo-chat's match list and the graph through react-query, which this suite does not
@@ -300,7 +300,7 @@ function renderOpen(tab: DebatesHubTab = 'requests') {
 beforeEach(() => {
   mocks.warmClaimsTab = null;
   lineup.live = [];
-  todaysCallout.visible = false;
+  todaysCalloutMock.visible = false;
   mocks.ready = true;
   mocks.authenticated = true;
   mocks.accountKey = 'user-a';
@@ -623,7 +623,7 @@ describe('DebatesHubPanel', () => {
     expect(screen.queryByTestId('todays-claims-callout')).not.toBeInTheDocument();
     cleanup();
 
-    todaysCallout.visible = true;
+    todaysCalloutMock.visible = true;
     renderOpen('people');
     const callout = within(screen.getByTestId('hub-live-strip')).getByTestId('todays-claims-callout');
     expect(callout).toHaveAttribute('data-layout', 'panel');

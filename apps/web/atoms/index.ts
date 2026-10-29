@@ -526,18 +526,12 @@ export const todaysClaimsSectionsAtom = atomWithStorage<{ day: string | null; op
 );
 
 /**
- * GEO-3498. The day's Today's claims callout: the claims it asks about, which were answered or
- * skipped there, and whether it was dismissed. One copy for the side panel and the full-screen hub,
- * so answering in one counts in the other. Read through `useTodaysCallout`.
+ * GEO-3498. The day's Today's claims callout, per account: the claims it asks about, which were
+ * answered or skipped there, and whether it was dismissed. One copy for the side panel and the
+ * full-screen hub, so answering in one counts in the other; per account, so someone else signing in
+ * on the same browser doesn't reset it. Read through `useTodaysCallout`.
  */
-export const todaysClaimsCalloutAtom = atomWithStorage<CalloutDay>('todaysClaimsCallout', {
-  accountKey: null,
-  day: null,
-  claims: [],
-  answered: [],
-  skipped: [],
-  dismissed: false,
-});
+export const todaysClaimsCalloutAtom = atomWithStorage<Record<string, CalloutDay>>('todaysClaimsCallout', {});
 
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 

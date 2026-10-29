@@ -12,11 +12,22 @@ import { normId } from '~/core/utils/norm-id';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import { useClaimOrderFacts } from '../matchmaking/claim-order-facts';
-import { claimRowGroups, placedClaimKey, rowsByPlacedClaim } from '../matchmaking/tagged-claim-entry';
-import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import {
+  claimRowGroups,
+  placedAnswersReady,
+  placedClaimKey,
+  rowsByPlacedClaim,
+} from '../matchmaking/tagged-claim-entry';
+import { useCanPublishDebateIn } from '../use-can-publish-debate-in';
 import { useClaimDebateCounts } from './claim-debate-counts';
 import { useDebateAgendas } from './debate-agendas';
-import { type CalloutClaim, calloutStep, pickCalloutClaims, todaysClaimsInOrder } from './todays-callout';
+import {
+  type CalloutClaim,
+  type CalloutDay,
+  calloutStep,
+  pickCalloutClaims,
+  todaysClaimsInOrder,
+} from './todays-callout';
 import { orderAgendaSpaces } from './todays-claims-order';
 import { useDebatersSpaceMembership } from './use-debaters-space-membership';
 import { todaysClaimsCalloutAtom } from '~/atoms';
@@ -27,10 +38,10 @@ const NO_IDS: string[] = [];
  * GEO-3498. The daily Today's claims callout, shared by the side panel and the full-screen hub.
  *
  * The day's set is taken once, the first time every read it is made from has settled: up to
- * `CALLOUT_MAX_CLAIMS` claims the viewer has not answered, the highest-ranked spread across the
- * agendas' spaces (`pickCalloutClaims`). It is stored with the agenda day and the account, so
- * the panel and the hub walk the same set, and a newer agenda day starts a new one — which is also
- * what brings a dismissed callout back.
+ * `CALLOUT_MAX_CLAIMS` of today's agenda claims the viewer has not answered, highest-ranked first
+ * and varied by topic and space (`pickCalloutClaims`). It is stored per account with the agenda
+ * day, so the panel and the hub walk the same set, and a newer agenda day starts a new one — which
+ * is also what brings a dismissed callout back.
  *
  * Signed out there is nothing: the reads are all held back.
  */
@@ -41,18 +52,29 @@ export function useTodaysCallout() {
   const [stored, setStored] = useAtom(todaysClaimsCalloutAtom);
 
   const agendasQuery = useDebateAgendas(enabled);
-  const { publishableSpaceIds, isLoading: publishableLoading } = useDebatePublishableSpaces({ enabled });
+  // The picker's gate (GEO-3489): anyone can publish the agenda type, so an agenda only counts in a
+  // space that could carry a published debate. Judged once every agenda space's type has resolved.
+  const publishability = useCanPublishDebateIn(agendasQuery.spaceIds, { enabled });
   const agendas = React.useMemo(
-    () => agendasQuery.agendasIn(spaceId => isSpaceDebatePublishable(spaceId, publishableSpaceIds)),
-    [agendasQuery, publishableSpaceIds]
+    () => agendasQuery.agendasIn(publishability.canPublishDebateIn),
+    [agendasQuery, publishability.canPublishDebateIn]
   );
   const day = agendas.newestDay;
-  const current = enabled && day !== null && stored.day === day && stored.accountKey === accountKey ? stored : null;
+  const mine = accountKey !== null ? stored[accountKey] : undefined;
+  const current = enabled && day !== null && mine?.day === day ? mine : null;
   // Only the first time a day's set is taken. Once it is, nothing below is asked again.
-  const choosing = enabled && !agendasQuery.isLoading && !publishableLoading && day !== null && current === null;
+  const choosing =
+    enabled &&
+    !agendasQuery.isLoading &&
+    !publishability.allowlistLoading &&
+    !publishability.typesPending &&
+    day !== null &&
+    current === null;
 
+  // Member spaces first, which needs the viewer's own space: until it is known, nobody is a member
+  // of anything and the order would be taken without it.
   const agendaSpaceIds = React.useMemo(() => agendas.spaces.map(space => space.spaceId), [agendas.spaces]);
-  const { personalSpaceId } = usePersonalSpaceId();
+  const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
   const membership = useDebatersSpaceMembership(
     agendaSpaceIds,
     personalSpaceId ? [personalSpaceId] : NO_IDS,
@@ -67,19 +89,18 @@ export function useTodaysCallout() {
 
   const ordered = React.useMemo(
     () =>
-      choosing && !membership.isLoading && !counts.isLoading
+      choosing && !personalSpaceLoading && !membership.isLoading && !counts.isLoading
         ? todaysClaimsInOrder(agendas, orderAgendaSpaces(agendaSpaceIds, membership.debatersIn), claimId =>
             counts.byClaimId?.get(claimId)
           )
         : [],
-    [agendaSpaceIds, agendas, choosing, counts.byClaimId, counts.isLoading, membership]
+    [agendaSpaceIds, agendas, choosing, counts.byClaimId, counts.isLoading, membership, personalSpaceLoading]
   );
 
-  // Each claim's ranking score, the one Explore's Best orders by (agenda boost included), for picking
-  // the highest-ranked across the spaces. Without an answer the set keeps Today's claims order.
+  // Each claim's ranking score, the one Explore's Best orders by (agenda boost included). A failed
+  // lookup leaves every claim unscored, and the set keeps Today's claims order under the same caps.
   const orderedIds = React.useMemo(() => ordered.map(claim => claim.claimId), [ordered]);
   const scores = useClaimOrderFacts(orderedIds, choosing && orderedIds.length > 0);
-  const scoresSettled = !scores.isLoading;
 
   // The viewer's side on each claim the callout could ask about, then on the day's set: geo-chat's
   // rows, per space, the way the hub's graph-sourced lists read them.
@@ -101,32 +122,40 @@ export function useTodaysCallout() {
     },
     [placed, rowOf]
   );
+  const answersReadyIn = React.useCallback(
+    (spaceId: string) => placedAnswersReady({ authenticated, accountKey }, rows.unresolvedSpaceIds, spaceId),
+    [accountKey, authenticated, rows.unresolvedSpaceIds]
+  );
 
-  // Taken once the rows have answered for every space: a set taken over a failed lookup would ask
-  // about claims the viewer already holds a side on.
-  const rowsSettled = !rows.isLoading && rows.unresolvedSpaceIds.size === 0;
+  const writeMine = React.useCallback(
+    (next: (previous: CalloutDay | undefined) => CalloutDay | undefined) =>
+      setStored(previous => {
+        if (accountKey === null) return previous;
+        const updated = next(previous[accountKey]);
+        return updated === previous[accountKey] || !updated ? previous : { ...previous, [accountKey]: updated };
+      }),
+    [accountKey, setStored]
+  );
+
+  // Taken once every space's rows have answered or failed. A space whose rows failed is left out —
+  // asking about its claims could ask about a side the viewer already holds — rather than holding
+  // the whole callout back for it; with no space answered, nothing is taken and it asks again later.
   React.useEffect(() => {
-    if (!choosing || ordered.length === 0 || !rowsSettled || !scoresSettled || day === null) return;
-    const claims = pickCalloutClaims(
-      ordered,
-      answeredInRows,
-      claimId => scores.facts.get(uuidToHex(claimId))?.rankingScore
+    if (!choosing || day === null || ordered.length === 0 || rows.isLoading || scores.isLoading) return;
+    const answerable = ordered.filter(claim => answersReadyIn(claim.spaceId));
+    if (answerable.length === 0) return;
+    const claims = pickCalloutClaims(answerable, answeredInRows, claimId => scores.facts.get(uuidToHex(claimId)));
+    writeMine(previous =>
+      previous?.day === day ? previous : { day, claims, answered: [], skipped: [], dismissed: false }
     );
-    setStored(previous =>
-      previous.day === day && previous.accountKey === accountKey
-        ? previous
-        : { accountKey, day, claims, answered: [], skipped: [], dismissed: false }
-    );
-  }, [accountKey, answeredInRows, choosing, day, ordered, rowsSettled, scores.facts, scoresSettled, setStored]);
+  }, [answeredInRows, answersReadyIn, choosing, day, ordered, rows.isLoading, scores, writeMine]);
 
   const step = React.useMemo(() => (current ? calloutStep(current, answeredInRows) : null), [answeredInRows, current]);
 
   const update = React.useCallback(
-    (change: (day: NonNullable<typeof current>) => Partial<NonNullable<typeof current>>) =>
-      setStored(previous =>
-        previous.day === day && previous.accountKey === accountKey ? { ...previous, ...change(previous) } : previous
-      ),
-    [accountKey, day, setStored]
+    (change: (previous: CalloutDay) => Partial<CalloutDay>) =>
+      writeMine(previous => (previous?.day === day ? { ...previous, ...change(previous) } : previous)),
+    [day, writeMine]
   );
   const markAnswered = React.useCallback(
     (claimId: string) =>
@@ -140,10 +169,22 @@ export function useTodaysCallout() {
   );
   const dismiss = React.useCallback(() => update(() => ({ dismissed: true })), [update]);
 
-  // The set's own claims, looked up by id rather than taken from the agendas, so a set taken from
-  // an agenda that has since changed still draws.
-  const setIds = React.useMemo(() => (current ? current.claims.map(claim => claim.claimId) : NO_IDS), [current]);
-  const entities = useClaimEntitiesByIds(setIds);
+  // The set's claims, from the agendas' own lookup where it has them; only the ones it lacks — a set
+  // taken from an agenda that has changed since — are asked for again.
+  const agendaEntities = agendasQuery.claimEntities;
+  const missingIds = React.useMemo(() => {
+    if (!current) return NO_IDS;
+    const held = new Set(agendaEntities.map(entity => normId(entity.id)));
+    const missing = current.claims.map(claim => claim.claimId).filter(claimId => !held.has(normId(claimId)));
+    return missing.length > 0 ? missing : NO_IDS;
+  }, [agendaEntities, current]);
+  const fetched = useClaimEntitiesByIds(missingIds);
+  const entityOf = React.useCallback(
+    (claimId: string) =>
+      agendaEntities.find(entity => normId(entity.id) === normId(claimId)) ??
+      fetched.entities.find(entity => normId(entity.id) === normId(claimId)),
+    [agendaEntities, fetched.entities]
+  );
 
   const visible = Boolean(current && step && !current.dismissed && current.claims.length > 0);
 
@@ -151,17 +192,14 @@ export function useTodaysCallout() {
     visible,
     claims: current?.claims ?? [],
     step,
-    entityOf: React.useCallback(
-      (claimId: string) => entities.entities.find(entity => normId(entity.id) === normId(claimId)),
-      [entities.entities]
-    ),
-    entitiesLoading: entities.isLoading,
+    entityOf,
+    /**
+     * Whether a claim missing from `entityOf` is known to be gone, rather than still loading or lost
+     * to a failed lookup — only then may the callout move past it.
+     */
+    entitiesSettled: !agendasQuery.isLoading && !fetched.isLoading && !agendasQuery.error && !fetched.error,
     rowOf,
-    /** Whether a card in `spaceId` may be answered yet: that space's rows have landed. */
-    answersReadyIn: React.useCallback(
-      (spaceId: string) => !rows.unresolvedSpaceIds.has(spaceId),
-      [rows.unresolvedSpaceIds]
-    ),
+    answersReadyIn,
     markAnswered,
     skip,
     dismiss,

@@ -6,16 +6,17 @@ import cx from 'classnames';
 
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
-import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_KIND, isAwaitingResponseSubmission } from '~/core/responses/entity-response';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
-import { Text } from '~/design-system/text';
 
+import { trustedIndexedPosition } from '../backfill-readiness-for-held-position';
 import { DebateClaimCardSurface } from '../debate-claim-card-surface';
 import type { CalloutClaim } from '../todays-claims/todays-callout';
 import { todaysCardScope } from '../todays-claims/todays-claims-attribution';
 import type { TodaysCallout } from '../todays-claims/use-todays-callout';
 import { hubAnalyticsAttributes } from './hub-analytics';
+import { HUB_CALLOUT_CLASS_NAME, HubCalloutTitle } from './hub-callout';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
 import { HubScrollSelectorProvider } from './hub-scroll';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -34,8 +35,9 @@ type Props = {
 
 /**
  * GEO-3498. The daily Today's claims callout: one claim at a time from the day's set, on the
- * standard claim card, with Skip and the set's progress. Once nothing is left to ask, it says so and
- * offers Matches. Dismissing it hides it until the next agenda day.
+ * standard claim card, with Skip and the set's progress. Once nothing is left to ask it offers
+ * Matches, and says the viewer is set for today only when every claim was answered rather than
+ * skipped. Dismissing it hides it until the next agenda day.
  *
  * Draw it only while `callout.visible`.
  */
@@ -45,14 +47,10 @@ export function TodaysClaimsCallout({ callout, layout, onFindDebate }: Props) {
 
   const current = step.current;
   const finished = current === null;
-  const title = finished ? 'You’re set for today' : 'Today’s claims';
+  const title = step.allAnswered ? 'You’re set for today' : 'Today’s claims';
+  const headingLevel = layout === 'hub' ? 'h2' : 'h3';
   const answeredCount = step.done.filter(Boolean).length;
 
-  const heading = (
-    <Text as={layout === 'hub' ? 'h2' : 'h3'} variant="smallTitle">
-      {title}
-    </Text>
-  );
   const dots = (
     <ol aria-label={`${answeredCount} of ${claims.length} answered`} className="flex items-center gap-1.5">
       {claims.map((claim, index) => (
@@ -107,10 +105,13 @@ export function TodaysClaimsCallout({ callout, layout, onFindDebate }: Props) {
       <section
         aria-label="Today’s claims"
         data-testid="todays-claims-callout"
-        className="relative mb-4 flex items-center gap-6 rounded-lg bg-purple-tint p-4 pr-12 md:flex-col md:items-stretch md:gap-3"
+        className={cx(
+          HUB_CALLOUT_CLASS_NAME,
+          'relative mb-4 flex items-center gap-6 pr-12 md:flex-col md:items-stretch md:gap-3'
+        )}
       >
         <div className="flex w-48 shrink-0 flex-col items-start gap-3 md:w-auto">
-          {heading}
+          <HubCalloutTitle as={headingLevel} title={title} />
           {dots}
           {action}
         </div>
@@ -124,12 +125,11 @@ export function TodaysClaimsCallout({ callout, layout, onFindDebate }: Props) {
     <section
       aria-label="Today’s claims"
       data-testid="todays-claims-callout"
-      className="mx-4 mb-3 shrink-0 rounded-lg bg-purple-tint p-4"
+      className={cx(HUB_CALLOUT_CLASS_NAME, 'mx-4 mb-3 shrink-0')}
     >
-      <div className="flex items-center justify-between gap-3">
-        {heading}
+      <HubCalloutTitle as={headingLevel} title={title}>
         {dismiss}
-      </div>
+      </HubCalloutTitle>
       {card ? <div className="mt-3">{card}</div> : null}
       <div className="mt-3 flex items-center justify-between gap-3">
         {dots}
@@ -140,9 +140,10 @@ export function TodaysClaimsCallout({ callout, layout, onFindDebate }: Props) {
 }
 
 /**
- * The claim the callout is asking about. Once the viewer takes a side, it stays a moment so the
- * pressed pill is seen, then the next claim takes its place. A side already held — taken on another
- * surface since the set was chosen — moves on straight away.
+ * The claim the callout is asking about. Once the bundler has the viewer's side — the point the rest
+ * of the UI treats a response as made — it stays a moment so the pressed pill is seen, then the next
+ * claim takes its place. A write that fails before then leaves the card up with its error. A side
+ * already held — taken on another surface since the set was chosen — moves on straight away.
  */
 function CalloutCard({ callout, claim, position }: { callout: TodaysCallout; claim: CalloutClaim; position: number }) {
   const { markAnswered, skip } = callout;
@@ -156,8 +157,8 @@ function CalloutCard({ callout, claim, position }: { callout: TodaysCallout; cla
   const indexing = useEntityResponseIndexingSnapshot(target);
   const summary = useClaimResponseSummary(claim.claimId, claim.spaceId, CLAIM_RESPONSE_KIND, Boolean(entity));
   const takingSide = indexing.status !== 'idle' && indexing.pending !== null;
-  const tookSide = takingSide && indexing.pending?.expectedResponse != null;
-  const heldAlready = !takingSide && summary.indexedViewerDirection != null;
+  const tookSide = takingSide && indexing.pending?.expectedResponse != null && !isAwaitingResponseSubmission(indexing);
+  const heldAlready = trustedIndexedPosition(summary, takingSide) !== null;
 
   React.useEffect(() => {
     if (heldAlready) {
@@ -169,8 +170,9 @@ function CalloutCard({ callout, claim, position }: { callout: TodaysCallout; cla
     return () => window.clearTimeout(timer);
   }, [claim.claimId, heldAlready, markAnswered, tookSide]);
 
-  // A claim the graph no longer has can't be answered; the next one is asked instead.
-  const missing = !entity && !callout.entitiesLoading;
+  // A claim the graph no longer has can't be answered; the next one is asked instead. Only once the
+  // lookup has answered: a failed one is not an answer, and skipping on it would empty the set.
+  const missing = !entity && callout.entitiesSettled;
   React.useEffect(() => {
     if (missing) skip(claim.claimId);
   }, [claim.claimId, missing, skip]);

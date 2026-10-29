@@ -11,9 +11,11 @@ import type { TodaysCallout } from '../todays-claims/use-todays-callout';
 const mocks = vi.hoisted(() => ({
   indexing: { status: 'idle', pending: null } as {
     status: string;
+    submitted?: boolean;
     pending: { expectedResponse: string | null } | null;
   },
   indexedDirection: null as string | null,
+  viewerResponseLoading: false,
   surfaces: [] as Array<Record<string, unknown>>,
 }));
 
@@ -21,7 +23,10 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: () => mocks.indexing,
 }));
 vi.mock('~/core/claims/browse/claim-response-summary', () => ({
-  useClaimResponseSummary: () => ({ indexedViewerDirection: mocks.indexedDirection }),
+  useClaimResponseSummary: () => ({
+    indexedViewerDirection: mocks.indexedDirection,
+    isViewerResponseLoading: mocks.viewerResponseLoading,
+  }),
 }));
 // The card has its own suites; here it only matters which claim it is drawn for and how.
 vi.mock('./matchmaking-claim-card', () => ({
@@ -58,7 +63,7 @@ function callout(overrides: Partial<TodaysCallout> = {}): TodaysCallout {
     claims: CLAIMS,
     step: { current: CLAIMS[0]!, currentIndex: 0, done: [false, false, false], allAnswered: false },
     entityOf: (claimId: string) => (NAMES[claimId] ? { id: claimId, name: NAMES[claimId] } : undefined),
-    entitiesLoading: false,
+    entitiesSettled: true,
     rowOf: () => undefined,
     answersReadyIn: () => true,
     markAnswered: vi.fn(),
@@ -71,6 +76,7 @@ function callout(overrides: Partial<TodaysCallout> = {}): TodaysCallout {
 beforeEach(() => {
   mocks.indexing = { status: 'idle', pending: null };
   mocks.indexedDirection = null;
+  mocks.viewerResponseLoading = false;
   mocks.surfaces = [];
 });
 
@@ -106,12 +112,12 @@ describe('TodaysClaimsCallout', () => {
     expect(screen.queryByRole('button', { name: 'Find a debate' })).not.toBeInTheDocument();
   });
 
-  it('moves on a moment after a side is taken, so the pressed pill is seen', () => {
+  it('moves on a moment after the bundler has the side, so the pressed pill is seen', () => {
     vi.useFakeTimers();
     const value = callout();
     const { rerender } = render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
 
-    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' } };
+    mocks.indexing = { status: 'reconciling', submitted: true, pending: { expectedResponse: 'positive' } };
     rerender(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
     expect(value.markAnswered).not.toHaveBeenCalled();
 
@@ -119,9 +125,27 @@ describe('TodaysClaimsCallout', () => {
     expect(value.markAnswered).toHaveBeenCalledWith('a');
   });
 
+  // Review: a write still on its way to the bundler can fail, and the card has to be there to say so.
+  it('stays on the claim while the side is still being submitted, and after the write fails', () => {
+    vi.useFakeTimers();
+    const value = callout();
+    const { rerender } = render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+
+    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' } };
+    rerender(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    act(() => vi.advanceTimersByTime(CALLOUT_ADVANCE_DELAY_MS * 3));
+    expect(value.markAnswered).not.toHaveBeenCalled();
+
+    mocks.indexing = { status: 'idle', pending: null };
+    rerender(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+    act(() => vi.advanceTimersByTime(CALLOUT_ADVANCE_DELAY_MS * 3));
+    expect(value.markAnswered).not.toHaveBeenCalled();
+    expect(screen.getByTestId('claim-card')).toHaveTextContent('Claim A');
+  });
+
   it('does not count taking a side back as an answer', () => {
     vi.useFakeTimers();
-    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: null } };
+    mocks.indexing = { status: 'reconciling', submitted: true, pending: { expectedResponse: null } };
     const value = callout();
     render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
 
@@ -137,12 +161,40 @@ describe('TodaysClaimsCallout', () => {
     expect(value.markAnswered).toHaveBeenCalledWith('a');
   });
 
+  it('does not read a side off an indexed read that is still loading', () => {
+    mocks.indexedDirection = 'negative';
+    mocks.viewerResponseLoading = true;
+    const value = callout();
+    render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+
+    expect(value.markAnswered).not.toHaveBeenCalled();
+  });
+
   it('skips a claim the graph no longer has', () => {
     const value = callout({ entityOf: () => undefined } as Partial<TodaysCallout>);
     render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
 
     expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument();
     expect(value.skip).toHaveBeenCalledWith('a');
+  });
+
+  // Review: one failed lookup used to skip all ten and report the viewer set for the day.
+  it('does not skip a claim while its lookup has not answered', () => {
+    const value = callout({ entityOf: () => undefined, entitiesSettled: false } as Partial<TodaysCallout>);
+    render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+
+    expect(value.skip).not.toHaveBeenCalled();
+  });
+
+  it('offers Matches without saying the viewer is set when claims were skipped', () => {
+    const value = callout({
+      step: { current: null, currentIndex: -1, done: [true, false, false], allAnswered: false },
+    });
+    render(<TodaysClaimsCallout callout={value} layout="panel" onFindDebate={vi.fn()} />);
+
+    expect(screen.getByRole('heading', { level: 3, name: 'Today’s claims' })).toBeInTheDocument();
+    expect(screen.queryByText('You’re set for today')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Find a debate' })).toBeInTheDocument();
   });
 
   it('says so once every claim is answered and offers Matches', () => {

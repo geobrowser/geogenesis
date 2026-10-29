@@ -1,7 +1,8 @@
 import { normId } from '~/core/utils/norm-id';
 
-import type { DebateAgendas } from './debate-agendas';
-import { orderByDebatesSinceListing } from './todays-claims-order';
+import { type ClaimOrderFacts, compareByRanking } from '../matchmaking/claim-order-facts';
+import { type DebateAgendas, UNNAMED_AGENDA_SECTION } from './debate-agendas';
+import { todaysSectionsInOrder } from './todays-claims-order';
 
 /** The most claims the callout asks about in a day (GEO-3498). The rest stay in the Today's claims lists. */
 export const CALLOUT_MAX_CLAIMS = 10;
@@ -18,18 +19,20 @@ export type CalloutClaim = {
   spaceId: string;
   agendaId: string;
   sectionId: string;
-  /** The agenda section's heading: its topic. */
+  /**
+   * What the topic cap counts by: the agenda section's heading, so the same story listed in two
+   * spaces counts once, or the section's own id when it has no heading.
+   */
   topic: string;
   listedAt: string;
   /** Debates since the listing when the set was taken, when geo-chat could count them. */
   debatesSinceListing?: number;
 };
 
-/** The day's set as the viewer's browser holds it, so the panel and the hub walk the same one. */
+/** One account's day, as the viewer's browser holds it, so the panel and the hub walk the same set. */
 export type CalloutDay = {
-  accountKey: string | null;
   /** The agenda day the set was taken on. A newer agenda day starts a new set. */
-  day: string | null;
+  day: string;
   claims: CalloutClaim[];
   /** Claims answered from the callout, before geo-chat reports them. */
   answered: string[];
@@ -38,79 +41,66 @@ export type CalloutDay = {
 };
 
 /**
- * Today's claims in the order the lists draw them: spaces in `spaceOrder` (member spaces first),
- * each space's sections in agenda order, and inside a section the claims nobody has debated since
- * the listing ahead of the debated ones. Each claim once, at its first place. Earlier this week is
- * left out: the callout is about today's agendas.
+ * Today's claims in the order the lists draw them (`todaysSectionsInOrder`), each claim once at its
+ * first place. Only agendas from the newest agenda day: a space that last published days ago, and
+ * Earlier this week, are left out, so the callout asks about today's agendas.
  */
 export function todaysClaimsInOrder(
   agendas: DebateAgendas,
   spaceOrder: string[],
   debatesOf: (claimId: string) => number | undefined
 ): CalloutClaim[] {
+  const today = agendas.spaces.filter(space => space.listedOn === agendas.newestDay);
   const seen = new Set<string>();
-  const out: CalloutClaim[] = [];
-  for (const spaceId of spaceOrder) {
-    const space = agendas.spaces.find(candidate => normId(candidate.spaceId) === normId(spaceId));
-    for (const section of space?.sections ?? []) {
-      for (const claimId of orderByDebatesSinceListing(section.claimIds, debatesOf)) {
-        if (seen.has(claimId)) continue;
-        seen.add(claimId);
-        const debates = debatesOf(claimId);
-        out.push({
+  return todaysSectionsInOrder(today, spaceOrder, debatesOf).flatMap(({ section, claimIds }) =>
+    claimIds.flatMap(claimId => {
+      if (seen.has(claimId)) return [];
+      seen.add(claimId);
+      const debates = debatesOf(claimId);
+      return [
+        {
           claimId,
           spaceId: section.spaceId,
           agendaId: section.agendaId,
           sectionId: section.id,
-          topic: section.name,
+          topic: section.name === UNNAMED_AGENDA_SECTION ? section.id : section.name.trim().toLowerCase(),
           listedAt: section.listedAt,
           ...(debates === undefined ? {} : { debatesSinceListing: debates }),
-        });
-      }
-    }
-  }
-  return out;
+        },
+      ];
+    })
+  );
 }
 
 /**
  * The day's set: up to `CALLOUT_MAX_CLAIMS` of today's agenda claims the viewer has not answered,
- * the highest-ranked first, kept varied (Preston, 29 Oct): at most `CALLOUT_MAX_PER_TOPIC` from one
- * topic and `CALLOUT_MAX_PER_SPACE` from one space. Only when the agendas can't fill the set that
- * way are the caps relaxed, the space cap first, so a day with one or two agendas still gets ten.
- *
- * A topic is the agenda section's heading, so the same story listed in two spaces counts once. A
- * claim with no score ranks below every scored one; ties, and claims with no score at all, keep
- * their Today's claims order, member spaces first.
+ * the highest-ranked first (`compareByRanking`, Explore's Best), kept varied (Preston, 29 Oct): at
+ * most `CALLOUT_MAX_PER_TOPIC` from one topic and `CALLOUT_MAX_PER_SPACE` from one space. Only when
+ * the agendas can't fill the set that way are the caps relaxed, the space cap first, so a day with
+ * one or two agendas still gets ten. Ties, and claims with no score, keep Today's claims order.
  */
 export function pickCalloutClaims(
   ordered: CalloutClaim[],
   isAnswered: (claimId: string) => boolean,
-  scoreOf: (claimId: string) => number | null | undefined
+  factsOf: (claimId: string) => ClaimOrderFacts | undefined
 ): CalloutClaim[] {
   const ranked = ordered
-    .map((claim, index) => ({ claim, index, score: scoreOf(claim.claimId) ?? null }))
+    .map((claim, index) => ({ claim, index }))
     .filter(({ claim }) => !isAnswered(claim.claimId))
-    .sort((a, z) => {
-      if (a.score === z.score) return a.index - z.index;
-      if (a.score === null) return 1;
-      if (z.score === null) return -1;
-      return z.score - a.score || a.index - z.index;
-    })
+    .sort((a, z) => compareByRanking(factsOf(a.claim.claimId), factsOf(z.claim.claimId)) || a.index - z.index)
     .map(({ claim }) => claim);
 
-  const picked: CalloutClaim[] = [];
+  const picked = new Set<CalloutClaim>();
   const perTopic = new Map<string, number>();
   const perSpace = new Map<string, number>();
-  const topicOf = (claim: CalloutClaim) => claim.topic.trim().toLowerCase();
   const fill = (topicCap: number, spaceCap: number) => {
     for (const claim of ranked) {
-      if (picked.length >= CALLOUT_MAX_CLAIMS) return;
-      if (picked.includes(claim)) continue;
-      const topic = topicOf(claim);
+      if (picked.size >= CALLOUT_MAX_CLAIMS) return;
       const space = normId(claim.spaceId);
-      if ((perTopic.get(topic) ?? 0) >= topicCap || (perSpace.get(space) ?? 0) >= spaceCap) continue;
-      picked.push(claim);
-      perTopic.set(topic, (perTopic.get(topic) ?? 0) + 1);
+      if (picked.has(claim)) continue;
+      if ((perTopic.get(claim.topic) ?? 0) >= topicCap || (perSpace.get(space) ?? 0) >= spaceCap) continue;
+      picked.add(claim);
+      perTopic.set(claim.topic, (perTopic.get(claim.topic) ?? 0) + 1);
       perSpace.set(space, (perSpace.get(space) ?? 0) + 1);
     }
   };
@@ -119,12 +109,13 @@ export function pickCalloutClaims(
   fill(Infinity, Infinity);
 
   // Asked best first, whichever pass let a claim in.
-  return ranked.filter(claim => picked.includes(claim));
+  return ranked.filter(claim => picked.has(claim));
 }
 
 /**
  * Where the viewer is in the day's set: the claim to ask about now, or null once every claim has
- * been answered or skipped, and whether each claim is answered, for the progress dots.
+ * been answered or skipped; whether each claim is answered, for the progress dots; and whether all
+ * of them were, which is the only time the callout says the viewer is set for today.
  */
 export function calloutStep(
   day: Pick<CalloutDay, 'claims' | 'answered' | 'skipped'>,
