@@ -14,7 +14,8 @@ import type { DebatesHubTab } from '~/atoms';
  * decided how it was arranged: the row led with People while the panel opened on Explore, which is
  * the one an anonymous visitor is actually here for and the one `visibleTab` falls back to.
  */
-export const SIGNED_OUT_TABS: DebatesHubTab[] = ['explore', 'people'];
+// People first since GEO-3463, matching the signed-in row and the tab the panel opens on.
+export const SIGNED_OUT_TABS: DebatesHubTab[] = ['people', 'explore'];
 
 /**
  * A tab with nothing to show until the viewer signs in. A link naming one (a scheduling email's

@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
-import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbySummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { NavUtils } from '~/core/utils/utils';
@@ -118,7 +118,7 @@ vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.viewerId,
 }));
 
-const { ScheduledDebatesSection, formatDebateSlot, formatDebateTime, useScheduledContent } =
+const { ScheduledDebatesSection, formatDebateSlot, formatDebateTime, useLinkedScheduledRequest, useScheduledContent } =
   await import('./scheduled-debates-section');
 
 const request = (overrides: Partial<ScheduledDebateRequest> = {}): ScheduledDebateRequest => ({
@@ -159,12 +159,10 @@ type SetupContent = {
   roomsError?: Error | null;
   lobbiesError?: Error | null;
   loading?: boolean;
-  focusedRequestId?: string | null;
 };
 
 const sectionFor = (content: SetupContent) => (
   <ScheduledDebatesSection
-    focusedRequestId={content.focusedRequestId ?? null}
     content={{
       answerable: content.answerable ?? [],
       upcoming: content.upcoming ?? [],
@@ -533,127 +531,69 @@ describe('useScheduledContent loading', () => {
 });
 
 // GEO-3431: the requester heads-up email's "Withdraw the invite" opens the Requests tab on that
-// invite (`modalTarget=requests:<id>`), so of several, the one the email was about is the one shown.
-describe('a link to one request', () => {
+// invite (`modalTarget=requests:<id>`). The timeline outlines and scrolls to it (its own suite); which
+// request that is, and what a link to one no longer here says, is decided here.
+describe('useLinkedScheduledRequest', () => {
   const mine = (overrides: Partial<ScheduledDebateRequest> = {}) =>
     request({ viewer_must_answer: false, proposed_by_user_id: 'user-me', ...overrides });
-  const second = mine({
-    request_id: 'request-2',
-    scheduled_start_at: '2099-09-25T13:00:00Z',
-    scheduled_end_at: '2099-09-25T13:30:00Z',
+  const content = (overrides: Partial<Parameters<typeof useLinkedScheduledRequest>[1]> = {}) => ({
+    answerable: [],
+    upcoming: [],
+    requestsError: null,
+    loading: false,
+    ...overrides,
   });
-  const focusedCards = () => screen.getAllByRole('article').filter(card => card.hasAttribute('data-focused'));
-  // No hub box around the section here, so the scroll is the page's.
-  let scrollTo: MockInstance<typeof window.scrollTo>;
-  beforeEach(() => {
-    scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-  });
-  afterEach(() => scrollTo.mockRestore());
+  const linked = (id: string | null, overrides: Parameters<typeof content>[0] = {}) =>
+    renderHook(() => useLinkedScheduledRequest(id, content(overrides))).result.current;
 
-  it('outlines that request and scrolls to it, and no other', () => {
-    setup({ answerable: [mine(), second], focusedRequestId: 'request-2' });
+  it('focuses that request, and no other', () => {
+    const second = mine({ request_id: 'request-2' });
+    const result = linked('request-2', { answerable: [mine(), second] });
 
-    expect(focusedCards()).toHaveLength(1);
-    expect(focusedCards()[0]).toHaveClass('border-text');
-    expect(focusedCards()[0]).toHaveTextContent('Sep 25');
-    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(result.linkedShown).toBe(true);
+    expect(result.isFocused('request-2')).toBe(true);
+    expect(result.isFocused('request-1')).toBe(false);
   });
 
-  it('waits for every read to land before outlining or scrolling', () => {
-    const { rerender } = setup({ answerable: [mine()], focusedRequestId: 'request-1', loading: true });
-    expect(screen.getByRole('article')).not.toHaveAttribute('data-focused');
-    expect(scrollTo).not.toHaveBeenCalled();
-
-    rerender(sectionFor({ answerable: [mine()], focusedRequestId: 'request-1' }));
-    expect(screen.getByRole('article')).toHaveAttribute('data-focused');
-    expect(scrollTo).toHaveBeenCalledTimes(1);
+  it('waits for every read to land before focusing', () => {
+    expect(linked('request-1', { answerable: [mine()], loading: true }).focusedId).toBeNull();
+    expect(linked('request-1', { answerable: [mine()] }).focusedId).toBe('request-1');
   });
 
-  it('outlines the upcoming debate when the invite was accepted since the email', () => {
-    setup({ upcoming: [upcomingRow({}, 'user-them', 'request-1')], focusedRequestId: 'request-1' });
+  it('focuses the upcoming debate when the invite was accepted since the email', () => {
+    const result = linked('request-1', { upcoming: [upcomingRow({}, 'user-them', 'request-1')] });
 
-    expect(focusedCards()).toHaveLength(1);
-  });
-
-  it('scrolls the hub box, clear of its sticky filter bar, and leaves the page alone', () => {
-    const boxScrollTo = vi.fn();
-    const originalScrollTo = Element.prototype.scrollTo;
-    Element.prototype.scrollTo = boxScrollTo;
-    const rect = (top: number, height = 0) => ({ top, height }) as DOMRect;
-    const rects = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-      if (this.hasAttribute('data-focused')) return rect(500);
-      if (this.hasAttribute('data-debates-hub-scroll')) return rect(100);
-      if (this.hasAttribute('data-hub-sticky-controls')) return rect(100, 57);
-      return rect(0);
-    });
-    try {
-      render(
-        <div data-debates-hub-scroll="">
-          <div data-hub-sticky-controls="" />
-          {sectionFor({ answerable: [mine()], focusedRequestId: 'request-1' })}
-        </div>
-      );
-
-      // The card's top in the box (500 - 100), less the bar it has to clear (57).
-      expect(boxScrollTo).toHaveBeenCalledWith({ top: 343, behavior: 'smooth' });
-      expect(scrollTo).not.toHaveBeenCalled();
-    } finally {
-      rects.mockRestore();
-      Element.prototype.scrollTo = originalScrollTo;
-    }
-  });
-
-  it('marks the card current and moves focus to it, for a keyboard or screen reader', () => {
-    setup({ answerable: [mine(), second], focusedRequestId: 'request-2' });
-
-    const [card] = focusedCards();
-    expect(card).toHaveAttribute('aria-current', 'true');
-    expect(card).toHaveFocus();
-    expect(card).toHaveClass('outline-none');
+    expect(result.linkedShown).toBe(true);
+    expect(result.isFocused('request-1')).toBe(true);
   });
 
   it('says a request that is no longer open is no longer on, in the Running late dialog’s words', () => {
     mocks.requests = [mine({ status: 'declined' })];
-    setup({ answerable: [], focusedRequestId: 'request-1' });
-
-    expect(screen.getByRole('status')).toHaveTextContent('This debate is no longer on.');
-    expect(scrollTo).not.toHaveBeenCalled();
+    expect(linked('request-1').linkGone).toBe('over');
   });
 
   it('says it could not find a request that is not this account’s', () => {
-    setup({ answerable: [mine()], focusedRequestId: 'request-9' });
-
-    expect(screen.getByRole('status')).toHaveTextContent('We couldn’t find this debate.');
-    expect(focusedCards()).toHaveLength(0);
+    expect(linked('request-9', { answerable: [mine()] }).linkGone).toBe('missing');
   });
 
   it('says nothing about the link while loading, or when a read its card could be in failed', () => {
-    const { rerender } = setup({ answerable: [], focusedRequestId: 'request-1', loading: true });
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
-
-    rerender(sectionFor({ focusedRequestId: 'request-1', requestsError: new Error('down') }));
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
-
-    // Accepted, so its card would be under Upcoming debates, which could not be read.
-    mocks.requests = [mine({ status: 'accepted', room_id: 'room-1' })];
-    rerender(sectionFor({ focusedRequestId: 'request-1', roomsError: new Error('down') }));
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(linked('request-1', { loading: true }).linkGone).toBeNull();
+    expect(linked('request-1', { requestsError: new Error('down') }).linkGone).toBeNull();
   });
 
   // Accepted between two polls: the requests read has it, the rooms read (its own timer, no refetch
   // on focus) has not caught up. The debate is on, so nothing says otherwise.
   it('says nothing for a request accepted before its room has been read', () => {
     mocks.requests = [mine({ status: 'accepted', room_id: 'room-1' })];
-    setup({ upcoming: [], focusedRequestId: 'request-1' });
-
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(linked('request-1').linkGone).toBeNull();
   });
 
-  it('outlines and scrolls nothing without one', () => {
-    setup({ answerable: [mine()] });
+  it('focuses nothing without one', () => {
+    const result = linked(null, { answerable: [mine()] });
 
-    expect(screen.getByRole('article')).not.toHaveAttribute('data-focused');
-    expect(scrollTo).not.toHaveBeenCalled();
+    expect(result.focusedId).toBeNull();
+    expect(result.isFocused('request-1')).toBe(false);
+    expect(result.linkGone).toBeNull();
   });
 });
 
