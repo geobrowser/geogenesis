@@ -27,6 +27,8 @@ describe('openRoundRevealStep', () => {
   });
 
   it('counts the opener in once the window closes after an Extend', () => {
+    expect(openRoundRevealStep(1_949, 'extend', 3_000)).toBe('flip');
+    expect(openRoundRevealStep(1_950, 'extend', 3_000)).toBe('result');
     expect(openRoundRevealStep(2_999, 'extend', 3_000)).toBe('result');
     expect(openRoundRevealStep(3_000, 'extend', 3_000)).toBe('countIn');
     expect(openRoundRevealStep(7_999, 'extend', 3_000)).toBe('countIn');
@@ -54,10 +56,10 @@ describe('useOpenRoundRevealStep', () => {
     const { result } = renderHook(() => useOpenRoundRevealStep(600, 'extend', 3_000));
     expect(result.current).toBe('flip');
 
-    act(() => vi.advanceTimersByTime(1_350 - 600));
+    act(() => vi.advanceTimersByTime(1_950 - 600));
     expect(result.current).toBe('result');
 
-    act(() => vi.advanceTimersByTime(3_000 - 1_350));
+    act(() => vi.advanceTimersByTime(3_000 - 1_950));
     expect(result.current).toBe('countIn');
   });
 
@@ -68,7 +70,7 @@ describe('useOpenRoundRevealStep', () => {
       ({ elapsed }: { elapsed: number | null }) => useOpenRoundRevealStep(elapsed, 'extend', 3_000),
       { initialProps: { elapsed: 600 as number | null } }
     );
-    act(() => vi.advanceTimersByTime(1_350 - 600));
+    act(() => vi.advanceTimersByTime(1_950 - 600));
     expect(result.current).toBe('result');
 
     // A round is spoken between the two reveals.
@@ -247,12 +249,19 @@ describe('useOpenRoundReveal', () => {
     expect(current.announcedRoundPhase).toMatchObject({ phase: 'speaking', roundIndex: 1 });
   });
 
-  it('names the opener to the other debater, and keeps it up through the count-in', () => {
-    const current = reveal({ elapsedMs: 4_000, localSlot: 2, remote: { slot: 1, name: 'Alice' } });
+  it('names the opener to the listener, then clears the title and votes for the count-in', () => {
+    const listener = { localSlot: 2 as const, remote: { slot: 1 as const, name: 'Alice' } };
+    expect(reveal({ ...listener, elapsedMs: 2_000 }).result).toEqual({
+      kind: 'round',
+      round: 2,
+      label: 'Round 2 · Rebuttal',
+      opener: 'Alice',
+    });
+    const current = reveal({ ...listener, elapsedMs: 3_000 });
     expect(current.step).toBe('countIn');
-    expect(current.result).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: 'Alice' });
-    expect(current.localPick?.pick).toBe('extend');
-    expect(current.remotePick?.pick).toBe('extend');
+    expect(current.result).toBeNull();
+    expect(current.localPick).toBeNull();
+    expect(current.remotePick).toBeNull();
   });
 
   it("keeps the opener's announcement up while a stale payload has not brought the new round yet", () => {
@@ -357,11 +366,31 @@ describe('useOpenRoundReveal', () => {
       expect(current.announcedRoundPhase).toMatchObject({ phase: 'speaking', roundIndex: 1 });
     });
 
-    it('counts the opener in for the end of the pause, while the other debater keeps the announcement', () => {
+    it('clears both announcements as the opener starts counting in', () => {
       expect(reveal({ debate, phase: leadIn, elapsedMs: 3_000 })).toMatchObject({ step: 'countIn', result: null });
       expect(
         reveal({ debate, phase: leadIn, elapsedMs: 3_000, localSlot: 2, remote: { slot: 1, name: 'Alice' } }).result
-      ).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: 'Alice' });
+      ).toBeNull();
     });
+  });
+  it.each([1, 2] as const)('gives slot %s a 2 s required-round title before the 3 s count-in', slot => {
+    const debate = requiredRoundListening({ required_round_lead_in_ms: 5_000, extend_count_in_ms: 3_000 });
+    const phase = {
+      phase: 'result' as const,
+      roundIndex: 0,
+      isFinalRound: false as const,
+      outcome: 'extend' as const,
+      resolvedAtMs: 0,
+      nextPhaseStartsAtMs: 5_000,
+      leadIn: true as const,
+    };
+    const input = { debate, phase, localSlot: slot, remote: { slot: (slot === 1 ? 2 : 1) as 1 | 2, name: 'Opponent' } };
+    expect(reveal({ ...input, elapsedMs: 1_999, remainingSeconds: 4 }).result?.kind).toBe('round');
+    const counting = reveal({ ...input, elapsedMs: 2_000, remainingSeconds: 3 });
+    expect(counting.step).toBe('countIn');
+    expect(counting.result).toBeNull();
+    expect(counting.holdsCountIn).toBe(false);
+    expect(counting.localPick).toBeNull();
+    expect(counting.remotePick).toBeNull();
   });
 });
