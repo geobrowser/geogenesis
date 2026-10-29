@@ -10,6 +10,8 @@ export function focusEditorAtClick(editor: Editor, click: { clientX: number; cli
 
   view.dispatch(view.state.tr);
 
+  (view.dom as HTMLElement).focus({ preventScroll: true });
+
   const box = view.dom.getBoundingClientRect();
 
   if (click.clientY < box.bottom) {
