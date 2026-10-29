@@ -423,8 +423,13 @@ export function useCreateDebateRequest() {
       void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'claim', target_id: request.claim_entity_id })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request => getContext({ target_type: 'claim', target_id: request.claim_entity_id }),
+    undefined,
+    // GEO-3495: geo-chat records the accepted request as the origin of the debate it becomes.
+    created => ({ request_id: created.id })
   );
 }
 

@@ -7,6 +7,11 @@ import { useAtom } from 'jotai';
 import { Input } from '~/design-system/input';
 
 import type { MatchmakingMatch } from '../api';
+import {
+  DebateClaimCardSurface,
+  useRecordedSpaceTopicFilters,
+  useReportDrawnHubList,
+} from '../debate-claim-card-surface';
 import { useDebateActivity } from '../hooks';
 import { claimRowKey } from './claim-row-key';
 import {
@@ -25,7 +30,7 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState, exploreClaimsAction } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { carriesEveryTopic, countBy, inEverySpace, toggleId, topicsFor } from './topic-facets';
+import { carriesEveryTopic, countBy, inEverySpace, topicsFor } from './topic-facets';
 import { useClaimRowTopics, useHeldClaimRows, useRowTopicFacet } from './use-claim-rows';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
@@ -217,6 +222,15 @@ export function MatchesList({
     seedSpent: spaceSeedSpent,
     onSeedSpend: () => setSpaceSeedSpent(true),
   });
+  // GEO-3495. The viewer's own filter presses, by what they chose, and this list as the one on screen.
+  useReportDrawnHubList('hub_matches');
+  const recordedFilters = useRecordedSpaceTopicFilters('hub_matches', {
+    spaceIds,
+    onSpaceToggle,
+    onSpacesClear,
+    topicIds,
+    setTopicIds,
+  });
 
   const filtered = React.useMemo(
     () => matches.filter(match => passesSpace(match) && passesTopics(match) && passesSearch(match)),
@@ -235,12 +249,12 @@ export function MatchesList({
         <HubFacetRail
           facetSpaces={facetSpaces}
           spaceIds={spaceIds}
-          onSpaceToggle={onSpaceToggle}
-          onSpacesClear={onSpacesClear}
+          onSpaceToggle={recordedFilters.onSpaceToggle}
+          onSpacesClear={recordedFilters.onSpacesClear}
           facetTopics={facetTopics}
           topicIds={topicIds}
-          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-          onTopicsClear={() => setTopicIds([])}
+          onTopicToggle={recordedFilters.onTopicToggle}
+          onTopicsClear={recordedFilters.onTopicsClear}
         />
       }
     >
@@ -261,6 +275,7 @@ export function MatchesList({
             onSpaceToggle={onSpaceToggle}
             onSpacesClear={onSpacesClear}
             onTopicIdsChange={setTopicIds}
+            onFilterChoice={recordedFilters.recordFilter}
             listedCount={filtered.length}
             resultCount={matchesQuery.isLoading ? null : filtered.length}
           />
@@ -280,11 +295,11 @@ export function MatchesList({
               leading={scopePicker}
               menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
               spaceIds={spaceIds}
-              onSpaceToggle={onSpaceToggle}
-              onSpacesClear={onSpacesClear}
+              onSpaceToggle={recordedFilters.onSpaceToggle}
+              onSpacesClear={recordedFilters.onSpacesClear}
               topicIds={topicIds}
-              onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-              onTopicsClear={() => setTopicIds([])}
+              onTopicToggle={recordedFilters.onTopicToggle}
+              onTopicsClear={recordedFilters.onTopicsClear}
               facetSpaces={facetSpaces}
               facetTopics={facetTopics}
               trailing={trailing}
@@ -346,6 +361,7 @@ export function MatchesList({
                   label: 'Clear filters',
                   onClick: () => {
                     setSearch('');
+                    recordedFilters.recordFilter({ kind: 'filters', value: 'all' });
                     // The menu's own clear row, so this counts as choosing the unfiltered list and
                     // the default cannot put its spaces back.
                     onSpacesClear();
@@ -357,8 +373,17 @@ export function MatchesList({
           }
         >
           <HubCardList>
-            {filtered.map(match => (
-              <MatchCard key={claimRowKey(match)} match={match} />
+            {filtered.map((match, index) => (
+              // GEO-3495: the card's impression, and a request sent from it, name this list and place.
+              <DebateClaimCardSurface
+                key={claimRowKey(match)}
+                claimId={match.claim.claim_entity_id}
+                listId="hub_matches"
+                position={index + 1}
+                scope={debouncedSearch ? { list_searched: true } : undefined}
+              >
+                <MatchCard match={match} />
+              </DebateClaimCardSurface>
             ))}
           </HubCardList>
         </HubQueryState>

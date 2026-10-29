@@ -5,12 +5,13 @@ import userEvent from '@testing-library/user-event';
 
 import type { ReactElement } from 'react';
 
-import { Provider, createStore } from 'jotai';
+import { Provider, atom, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 
 import type { MatchmakingMatch } from '../api';
+import { type DebateClaimListId, DrawnHubListProvider } from '../debate-claim-card-surface';
 import { MatchesList } from './matches-list';
 import { PanelMatchesTab } from './panel-claim-tabs';
 import { panelFilters } from './panel-filters-fixtures';
@@ -465,6 +466,20 @@ describe('MatchesList', () => {
 
   // The other direction: a fresh session starts unfiltered, so the atom is not quietly sticky
   // across viewers or page loads.
+  // GEO-3495: the hub's tab row records a press as leaving the list on screen, which this says.
+  it('says it is the hub list on screen', () => {
+    const store = createStore();
+    const drawn = atom<DebateClaimListId | null>(null);
+    render(
+      <DrawnHubListProvider value={drawn}>
+        <MatchesList onTabChange={vi.fn()} />
+      </DrawnHubListProvider>,
+      store
+    );
+
+    expect(store.get(drawn)).toBe('hub_matches');
+  });
+
   it('starts unfiltered in a new session', () => {
     render(<MatchesList onTabChange={vi.fn()} />, createStore());
 
