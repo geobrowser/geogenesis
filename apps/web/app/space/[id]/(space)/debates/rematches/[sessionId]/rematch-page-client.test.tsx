@@ -2489,6 +2489,23 @@ describe('DebateRematchPageClient', () => {
       expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     });
 
+    it('offers Explore when the hidden matches no longer have opposing positions', async () => {
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      // The hidden set stays fixed until a tab switch, but Matches is now empty.
+      mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleExit();
+
+      expect(within(screen.getByRole('button', { name: /^Matches/ })).getByText('0')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'See matches' })).toBeNull();
+      expect(screen.queryByText(/Check Matches for claims/)).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+      await settleTabSwap();
+      expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+    });
+
     it('leaves spaces belonging only to hidden matches out of their position filters', async () => {
       threeClaims();
       mocks.entities = [publishedEntity(CLAIM_SHARED, 'A claim both participants chose'), ...mocks.entities.slice(1)];

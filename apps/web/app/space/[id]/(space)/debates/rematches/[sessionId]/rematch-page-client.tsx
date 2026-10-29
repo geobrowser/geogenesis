@@ -3609,7 +3609,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                               : `You and ${remoteName} haven’t taken opposite sides on anything yet. Once ${remoteName} takes a side on a claim, take the other one to start a debate.`
                           : tab === 'opponent'
                             ? opponentClaims.length > 0
-                              ? 'No other positions to show. Check Matches for claims you can debate.'
+                              ? matchClaims.length > 0
+                                ? 'No other positions to show. Check Matches for claims you can debate.'
+                                : 'No other positions to show. Explore more claims to find something to debate.'
                               : `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
                             : tab === 'debate'
                               ? debateExtractionRunning
@@ -3656,7 +3658,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                         ? { label: `See ${remoteFirstName}’s positions`, onClick: () => setTab('opponent') }
                         : exploreClaimsAction(setTab)
                       : tab === 'opponent'
-                        ? opponentClaims.length > 0
+                        ? matchClaims.length > 0
                           ? { label: 'See matches', onClick: () => setTab('matches') }
                           : exploreClaimsAction(setTab)
                         : source === 'mine'
