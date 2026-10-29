@@ -37,6 +37,15 @@ describe('claimDebatability', () => {
     expect(claimDebatability({ positive: 5, negative: 5 }, AGREE)).toBe(1);
   });
 
+  it('scores mirrored counts exactly the same, so neither jumps the other', () => {
+    expect(claimDebatability({ positive: 7, negative: 3 }, null)).toBe(
+      claimDebatability({ positive: 3, negative: 7 }, null)
+    );
+    expect(claimDebatability({ positive: 7, negative: 3 }, AGREE)).toBe(
+      claimDebatability({ positive: 3, negative: 7 }, DISAGREE)
+    );
+  });
+
   it('falls back to the split when the holder has no side, and to 0 without counts', () => {
     expect(claimDebatability({ positive: 5, negative: 5 }, null)).toBe(1);
     expect(claimDebatability(undefined, AGREE)).toBe(0);
@@ -73,6 +82,17 @@ describe('orderByDebatability', () => {
     const scores: Record<string, number> = { a: 0.2, b: 1, c: 0.5, d: 0.9 };
     const pinned = (row: string) => row === 'a' || row === 'c';
     expect(orderByDebatability(['a', 'b', 'c', 'd'], row => scores[row]!, pinned)).toEqual(['c', 'a', 'b', 'd']);
+  });
+
+  it('keeps mirrored splits in the order they came in', () => {
+    const rows = [
+      { id: 'three-seven', counts: { positive: 3, negative: 7 } },
+      { id: 'seven-three', counts: { positive: 7, negative: 3 } },
+    ];
+
+    const ordered = orderByDebatability(rows, row => claimDebatability(row.counts, null)).map(row => row.id);
+
+    expect(ordered).toEqual(['three-seven', 'seven-three']);
   });
 
   it('keeps the incoming order among equal scores', () => {

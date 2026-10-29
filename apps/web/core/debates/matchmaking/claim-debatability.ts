@@ -59,7 +59,9 @@ export function claimDebatability(counts: ClaimResponseCounts | undefined, holde
   const { total, meetsFloor } = summarizeClaimResponses(counts.positive, counts.negative);
   if (!meetsFloor) return 0;
 
-  const split = 1 - Math.abs((2 * counts.positive) / total - 1);
+  // From the smaller side, so mirrored counts score exactly alike: `1 - |2p/total - 1|` is the same
+  // number on paper but not in floating point, and the sort would put 7–3 ahead of 3–7.
+  const split = (2 * Math.min(counts.positive, counts.negative)) / total;
   const score = holderPosition === null ? split : Math.max(split, againstTheCrowd(counts, holderPosition));
   return score >= DEBATABLE_SCORE_CUTOFF ? score : 0;
 }
