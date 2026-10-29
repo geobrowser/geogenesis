@@ -368,3 +368,49 @@ function settleAfterSwitch<T>(value: T, reject = false): Promise<never> {
   revision.current += 1;
   return (reject ? Promise.reject(value) : Promise.resolve(value)) as Promise<never>;
 }
+
+// GEO-3532: a pending invite holds its time for both people, so sending or answering one changes
+// what anyone's week shows as free.
+describe('availability after an invite', () => {
+  const startsAt = new Date(Date.now() + 3 * 3_600_000);
+  const sent = { request_id: 'req-1' } as ScheduledDebateRequest;
+
+  function invalidatedKeys() {
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    return { wrapper, keys: () => invalidate.mock.calls.map(([filters]) => filters?.queryKey) };
+  }
+
+  it('refreshes every availability read once an invite is sent', async () => {
+    vi.spyOn(api, 'createScheduledDebate').mockResolvedValue(sent);
+    const { wrapper, keys } = invalidatedKeys();
+    const { result } = renderHook(() => useCreateScheduledDebate(), { wrapper });
+
+    await act(() => result.current.mutateAsync({ opponentUserId: 'them', startsAt, minutes: 30 }));
+
+    expect(keys()).toEqual(
+      expect.arrayContaining([debateQueryKeys.schedulablePeopleRoot('acct'), debateQueryKeys.peerScheduleRoot('acct')])
+    );
+  });
+
+  it.each([true, false])(
+    'refreshes every availability read once an invite is answered (accepted=%s)',
+    async accepted => {
+      vi.spyOn(api, 'respondToScheduledDebate').mockResolvedValue({ ...sent, outcome: 'recorded' });
+      const { wrapper, keys } = invalidatedKeys();
+      const { result } = renderHook(() => useRespondToScheduledDebate(), { wrapper });
+
+      await act(() => result.current.mutateAsync({ requestId: 'req-1', accepted }));
+
+      expect(keys()).toEqual(
+        expect.arrayContaining([
+          debateQueryKeys.schedulablePeopleRoot('acct'),
+          debateQueryKeys.peerScheduleRoot('acct'),
+        ])
+      );
+    }
+  );
+});
