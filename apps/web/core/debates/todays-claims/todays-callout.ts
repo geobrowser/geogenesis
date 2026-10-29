@@ -6,12 +6,20 @@ import { orderByDebatesSinceListing } from './todays-claims-order';
 /** The most claims the callout asks about in a day (GEO-3498). The rest stay in the Today's claims lists. */
 export const CALLOUT_MAX_CLAIMS = 10;
 
+/** At most this many of the day's set from one topic, so one story can't fill it (Geo Daily's rule). */
+export const CALLOUT_MAX_PER_TOPIC = 3;
+
+/** At most this many from one space, so the set reaches across the spaces with agendas. */
+export const CALLOUT_MAX_PER_SPACE = 4;
+
 /** One claim the callout asks about, with the agenda it was listed on, for its card's attribution. */
 export type CalloutClaim = {
   claimId: string;
   spaceId: string;
   agendaId: string;
   sectionId: string;
+  /** The agenda section's heading: its topic. */
+  topic: string;
   listedAt: string;
   /** Debates since the listing when the set was taken, when geo-chat could count them. */
   debatesSinceListing?: number;
@@ -54,6 +62,7 @@ export function todaysClaimsInOrder(
           spaceId: section.spaceId,
           agendaId: section.agendaId,
           sectionId: section.id,
+          topic: section.name,
           listedAt: section.listedAt,
           ...(debates === undefined ? {} : { debatesSinceListing: debates }),
         });
@@ -64,43 +73,53 @@ export function todaysClaimsInOrder(
 }
 
 /**
- * The day's set: up to `CALLOUT_MAX_CLAIMS` claims the viewer has not answered, the highest-ranked
- * spread across the spaces (Preston, 29 Oct) rather than the top of one space's agenda.
+ * The day's set: up to `CALLOUT_MAX_CLAIMS` of today's agenda claims the viewer has not answered,
+ * the highest-ranked first, kept varied (Preston, 29 Oct): at most `CALLOUT_MAX_PER_TOPIC` from one
+ * topic and `CALLOUT_MAX_PER_SPACE` from one space. Only when the agendas can't fill the set that
+ * way are the caps relaxed, the space cap first, so a day with one or two agendas still gets ten.
  *
- * Round by round: each space's best claim first, then each space's second best, and so on, each
- * round best first. So ten spaces with agendas give one claim each, and two spaces give five each
- * unless one runs out. A claim with no score ranks below every scored one; ties, and claims with no
- * score at all, keep their Today's claims order, member spaces first.
+ * A topic is the agenda section's heading, so the same story listed in two spaces counts once. A
+ * claim with no score ranks below every scored one; ties, and claims with no score at all, keep
+ * their Today's claims order, member spaces first.
  */
 export function pickCalloutClaims(
   ordered: CalloutClaim[],
   isAnswered: (claimId: string) => boolean,
   scoreOf: (claimId: string) => number | null | undefined
 ): CalloutClaim[] {
-  const byScore = (a: { claim: CalloutClaim; index: number }, z: { claim: CalloutClaim; index: number }) => {
-    const left = scoreOf(a.claim.claimId) ?? null;
-    const right = scoreOf(z.claim.claimId) ?? null;
-    if (left === right) return a.index - z.index;
-    if (left === null) return 1;
-    if (right === null) return -1;
-    return right - left || a.index - z.index;
-  };
-
-  const bySpace = new Map<string, Array<{ claim: CalloutClaim; index: number }>>();
-  ordered.forEach((claim, index) => {
-    if (isAnswered(claim.claimId)) return;
-    const key = normId(claim.spaceId);
-    bySpace.set(key, [...(bySpace.get(key) ?? []), { claim, index }]);
-  });
-  const queues = [...bySpace.values()].map(claims => claims.sort(byScore));
+  const ranked = ordered
+    .map((claim, index) => ({ claim, index, score: scoreOf(claim.claimId) ?? null }))
+    .filter(({ claim }) => !isAnswered(claim.claimId))
+    .sort((a, z) => {
+      if (a.score === z.score) return a.index - z.index;
+      if (a.score === null) return 1;
+      if (z.score === null) return -1;
+      return z.score - a.score || a.index - z.index;
+    })
+    .map(({ claim }) => claim);
 
   const picked: CalloutClaim[] = [];
-  for (let round = 0; picked.length < CALLOUT_MAX_CLAIMS; round++) {
-    const tops = queues.flatMap(queue => queue[round] ?? []);
-    if (tops.length === 0) break;
-    picked.push(...tops.sort(byScore).map(({ claim }) => claim));
-  }
-  return picked.slice(0, CALLOUT_MAX_CLAIMS);
+  const perTopic = new Map<string, number>();
+  const perSpace = new Map<string, number>();
+  const topicOf = (claim: CalloutClaim) => claim.topic.trim().toLowerCase();
+  const fill = (topicCap: number, spaceCap: number) => {
+    for (const claim of ranked) {
+      if (picked.length >= CALLOUT_MAX_CLAIMS) return;
+      if (picked.includes(claim)) continue;
+      const topic = topicOf(claim);
+      const space = normId(claim.spaceId);
+      if ((perTopic.get(topic) ?? 0) >= topicCap || (perSpace.get(space) ?? 0) >= spaceCap) continue;
+      picked.push(claim);
+      perTopic.set(topic, (perTopic.get(topic) ?? 0) + 1);
+      perSpace.set(space, (perSpace.get(space) ?? 0) + 1);
+    }
+  };
+  fill(CALLOUT_MAX_PER_TOPIC, CALLOUT_MAX_PER_SPACE);
+  fill(CALLOUT_MAX_PER_TOPIC, Infinity);
+  fill(Infinity, Infinity);
+
+  // Asked best first, whichever pass let a claim in.
+  return ranked.filter(claim => picked.includes(claim));
 }
 
 /**

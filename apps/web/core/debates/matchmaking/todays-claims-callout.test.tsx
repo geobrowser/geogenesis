@@ -45,6 +45,7 @@ const claim = (claimId: string): CalloutClaim => ({
   spaceId: 'space1',
   agendaId: 'agenda1',
   sectionId: 'block1',
+  topic: 'Elections',
   listedAt: '2026-10-29T00:00:00-04:00',
 });
 

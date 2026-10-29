@@ -27,11 +27,12 @@ const agendas = (spaces: Array<{ spaceId: string; sections: Array<{ id: string; 
     listedAtByClaim: new Map(),
   }) satisfies DebateAgendas;
 
-const claim = (claimId: string, spaceId = 's'): CalloutClaim => ({
+const claim = (claimId: string, spaceId = 's', topic = `topic-${claimId}`): CalloutClaim => ({
   claimId,
   spaceId,
   agendaId: 'a',
   sectionId: 'b',
+  topic,
   listedAt: '2026-10-29',
 });
 
@@ -53,7 +54,7 @@ describe('todaysClaimsInOrder', () => {
     );
 
     expect(ordered.map(item => item.claimId)).toEqual(['c', 'b', 'a', 'd', 'x']);
-    expect(ordered[0]).toMatchObject({ spaceId: 'member', agendaId: 'agenda-member', sectionId: 'm1' });
+    expect(ordered[0]).toMatchObject({ spaceId: 'member', agendaId: 'agenda-member', sectionId: 'm1', topic: 'm1' });
     expect(ordered[1]?.debatesSinceListing).toBe(1);
     expect(ordered[0]).not.toHaveProperty('debatesSinceListing');
   });
@@ -77,41 +78,60 @@ describe('todaysClaimsInOrder', () => {
 
 describe('pickCalloutClaims', () => {
   const ids = (picked: CalloutClaim[]) => picked.map(item => item.claimId);
+  const scored = (scores: Record<string, number>) => (claimId: string) => scores[claimId];
 
-  it('spreads the highest-ranked across spaces, each round best first, up to the daily cap', () => {
-    // Space a's agenda is long and highly ranked; b and c have a few each.
+  it('takes the highest-ranked first, at most 3 from one topic and 4 from one space', () => {
     const ordered = [
-      ...Array.from({ length: 12 }, (_, index) => claim(`a${index}`, 'a')),
-      claim('b0', 'b'),
-      claim('b1', 'b'),
-      claim('c0', 'c'),
+      // Space a: five claims on one story, then two others, all ranked high.
+      ...['a1', 'a2', 'a3', 'a4', 'a5'].map(id => claim(id, 'a', 'Election')),
+      claim('a6', 'a', 'Economy'),
+      claim('a7', 'a', 'AI'),
+      claim('b1', 'b', 'Health'),
+      claim('b2', 'b', 'Health'),
+      claim('c1', 'c', 'Crypto'),
+      claim('d1', 'd', 'Sport'),
+      claim('d2', 'd', 'Sport'),
+      claim('e1', 'e', 'Music'),
     ];
-    const scores: Record<string, number> = { b0: 4, b1: 9, c0: 2 };
     const picked = pickCalloutClaims(
       ordered,
       () => false,
-      claimId => scores[claimId] ?? 100 - Number(claimId.slice(1))
+      scored({ a1: 99, a2: 98, a3: 97, a4: 96, a5: 95, a6: 94, a7: 93, b1: 50, b2: 49, c1: 40, d1: 30, d2: 29, e1: 1 })
+    );
+
+    // a3 fills Election's three, a6 is a's fourth; a4, a5 and a7 wait for the caps.
+    expect(ids(picked)).toEqual(['a1', 'a2', 'a3', 'a6', 'b1', 'b2', 'c1', 'd1', 'd2', 'e1']);
+  });
+
+  it('counts a story listed in two spaces as one topic', () => {
+    const ordered = [
+      claim('a1', 'a', 'Election'),
+      claim('a2', 'a', 'Election'),
+      claim('b1', 'b', 'election '),
+      claim('b2', 'b', 'Election'),
+      ...Array.from({ length: 8 }, (_, index) => claim(`z${index}`, `z${index}`)),
+    ];
+    const picked = pickCalloutClaims(ordered, () => false, scored({ a1: 9, a2: 8, b1: 7, b2: 6 }));
+
+    expect(ids(picked).slice(0, 3)).toEqual(['a1', 'a2', 'b1']);
+    expect(ids(picked)).not.toContain('b2');
+    expect(picked).toHaveLength(CALLOUT_MAX_CLAIMS);
+  });
+
+  it('relaxes the caps, the space cap first, when the agendas can’t fill ten otherwise', () => {
+    const ordered = [
+      ...Array.from({ length: 8 }, (_, index) => claim(`a${index}`, 'a', `topic-${index % 4}`)),
+      ...Array.from({ length: 4 }, (_, index) => claim(`b${index}`, 'b', 'Same')),
+    ];
+    const picked = pickCalloutClaims(
+      ordered,
+      () => false,
+      () => null
     );
 
     expect(picked).toHaveLength(CALLOUT_MAX_CLAIMS);
-    // Round one: a's best, b's best (b1), c's only. Round two: a's second, b's other. Then a alone.
-    expect(ids(picked)).toEqual(['a0', 'b1', 'c0', 'a1', 'b0', 'a2', 'a3', 'a4', 'a5', 'a6']);
-  });
-
-  it('gives one claim each when ten spaces have agendas, the best-ranked spaces’ claims first', () => {
-    const ordered = Array.from({ length: 12 }, (_, space) => [
-      claim(`s${space}x`, `s${space}`),
-      claim(`s${space}y`, `s${space}`),
-    ]).flat();
-    const picked = pickCalloutClaims(
-      ordered,
-      () => false,
-      claimId => (claimId.endsWith('x') ? Number(claimId.slice(1, -1)) : 50)
-    );
-
-    expect(new Set(picked.map(item => item.spaceId)).size).toBe(CALLOUT_MAX_CLAIMS);
-    // Every space's top is its y (50), so the round is in Today's claims order.
-    expect(ids(picked).slice(0, 3)).toEqual(['s0y', 's1y', 's2y']);
+    // Within the caps: a0–a3 and b0–b2. Space cap off: a4–a6. b3 only with every cap off, and not needed.
+    expect(ids(picked)).toEqual(['a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'b0', 'b1', 'b2']);
   });
 
   it('leaves answered claims out, and ranks unscored ones last in Today’s claims order', () => {
@@ -122,7 +142,7 @@ describe('pickCalloutClaims', () => {
       claimId => (claimId === 'a2' ? 1 : null)
     );
 
-    expect(ids(picked)).toEqual(['a2', 'b0', 'a0']);
+    expect(ids(picked)).toEqual(['a2', 'a0', 'b0']);
   });
 });
 
