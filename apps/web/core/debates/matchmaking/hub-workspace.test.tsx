@@ -23,6 +23,7 @@ vi.mock('./claims-tab', async importOriginal => {
   const actual = await importOriginal<typeof import('./claims-tab')>();
   return {
     ...actual,
+    useRecordHubTabPress: () => mocks.recordTabPress,
     ClaimsTab: ({ variant, scopePicker }: { variant?: string; scopePicker?: React.ReactNode }) => {
       const logged = React.useRef(false);
       React.useEffect(() => {
@@ -45,7 +46,12 @@ vi.mock('./hub-ask-context', () => ({ HubAskProvider: ({ children }: { children:
 // Covered through the side panel's suite; here it only matters that the header draws them.
 vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => <div data-testid="hub-header-controls" /> }));
 
-const mocks = vi.hoisted(() => ({ ready: true, authenticated: true, mounts: [] as string[] }));
+const mocks = vi.hoisted(() => ({
+  ready: true,
+  authenticated: true,
+  mounts: [] as string[],
+  recordTabPress: vi.fn(),
+}));
 
 /**
  * The address bar, which is both what `useSearchParams` reads and what the workspace writes to. In
@@ -260,6 +266,17 @@ describe('choosing which claim list the workspace shows', () => {
 
     expect(screen.getByTestId('claims-tab-positions')).toBeInTheDocument();
     expect(screen.queryByTestId('lobby-tab')).toBeNull();
+  });
+
+  // GEO-3495: the same recorder as the side panel's tab row, from the list on screen to the one picked.
+  it('records the list the viewer picks', () => {
+    mocks.recordTabPress.mockClear();
+    render(<DebatesHubWorkspace />);
+
+    fireEvent.click(picker('Explore'));
+    fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
+
+    expect(mocks.recordTabPress).toHaveBeenCalledExactlyOnceWith('positions');
   });
 
   it('remounts the tab when the list changes, rather than reusing the instance', () => {

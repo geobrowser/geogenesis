@@ -173,6 +173,7 @@ const mocks = vi.hoisted(() => ({
   /** Analytics, so the landing report can be read back (GEO-3148). */
   capture: vi.fn(),
   positionsLoading: false,
+  positionsPlaceholder: false,
   positionsError: null as unknown,
   positionsFetching: false,
   positionParticipants: [] as string[][],
@@ -719,10 +720,11 @@ vi.mock('~/core/debates/participant-positions', async importOriginal => {
       return {
         byClaim: actual.groupParticipantPositions(mocks.positions),
         isLoading: mocks.positionsLoading,
+        isPlaceholderData: mocks.positionsPlaceholder,
         // An answer for this key still on its way — whether that is the previous pair's rows held
         // over, or this pair's cached rows while the mount refetch runs. `isLoading` is false for
         // both, and both can be empty where the answer arriving is not.
-        isFetching: mocks.positionsLoading || mocks.positionsFetching,
+        isFetching: mocks.positionsLoading || mocks.positionsPlaceholder || mocks.positionsFetching,
         error: mocks.positionsError,
       };
     },
@@ -1146,6 +1148,7 @@ beforeEach(() => {
     position('profile-remote', CLAIM_SHARED, SPACE_1, false),
   ];
   mocks.positionsLoading = false;
+  mocks.positionsPlaceholder = false;
   mocks.positionsError = null;
   mocks.positionsFetching = false;
   mocks.positionParticipants.length = 0;
@@ -1350,7 +1353,7 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled());
   });
 
-  it('renders active semantic response buttons with holder avatars', async () => {
+  it('renders active response buttons without faces and shows the opponent’s position beneath their side', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
@@ -1368,7 +1371,88 @@ describe('DebateRematchPageClient', () => {
         .getByRole('button', { name: /^Disagree/ })
         .querySelector('img, svg')
     ).not.toBeNull();
+    for (const button of within(sharedClaimCard!).getAllByRole('button', { name: /^(Agree|Disagree)/ })) {
+      expect(button.querySelector('img, [aria-hidden="true"]')).toBeNull();
+    }
+    const tag = within(sharedClaimCard!).getByText('disagrees').closest('p')!;
+    expect(tag).toHaveTextContent('Salina disagrees');
+    expect(tag.parentElement).toContainElement(within(sharedClaimCard!).getByRole('button', { name: /^Disagree/ }));
+    expect(within(sharedClaimCard!).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it('shows the opponent’s agreement under Agree independently of the viewer’s side', async () => {
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED, SPACE_1, false),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, true),
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const card = screen.getByText('A claim both participants chose').closest('article')!;
+    const tag = within(card).getByText('agrees').closest('p')!;
+    expect(tag).toHaveTextContent('Salina agrees');
+    expect(tag.parentElement).toContainElement(within(card).getByRole('button', { name: /^Agree/ }));
+    expect(within(card).queryByText('disagrees')).toBeNull();
+  });
+
+  it('leaves the opponent’s position blank when unanswered and keeps the viewer’s selected side', async () => {
+    mocks.positions = [position('profile-local', CLAIM_SHARED, SPACE_1, true)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const card = screen.getByText('A claim both participants chose').closest('article')!;
+    expect(within(card).queryByText(/has no position/)).toBeNull();
+    expect(within(card).queryByText('agrees')).toBeNull();
+    expect(within(card).queryByText('disagrees')).toBeNull();
+    expect(within(card).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it.each([true, null])(
+    'shows the latest opponent position (%s) while the claim list holds its previous rows',
+    async latestPosition => {
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      const card = screen.getByText('A claim both participants chose').closest('article')!;
+      expect(within(card).getByText('disagrees')).toBeInTheDocument();
+
+      // They change this answer and take a side on another claim. The position lookup has settled,
+      // but hydrating the new claim keeps the last settled list on screen.
+      mocks.positions = [
+        position('profile-local', CLAIM_SHARED, SPACE_1, true),
+        ...(latestPosition === null
+          ? []
+          : [position('profile-remote', CLAIM_SHARED.replace(/-/g, ''), SPACE_1, latestPosition)]),
+        position('profile-remote', CLAIM_FRESH, SPACE_1, false),
+      ];
+      mocks.browsedLookupLoading = true;
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByText('A claim both participants chose').closest('article')).toBe(card);
+      if (latestPosition === null) {
+        expect(within(card).queryByText('agrees')).toBeNull();
+        expect(within(card).queryByText(/has no position/)).toBeNull();
+      } else {
+        expect(within(card).getByText('agrees')).toBeInTheDocument();
+      }
+      expect(within(card).queryByText('disagrees')).toBeNull();
+      expect(within(card).queryByRole('button', { name: 'Request debate' })).toBeNull();
+    }
+  );
+
+  it.each(['loading', 'placeholder', 'error'] as const)(
+    'does not show an opponent position when the lookup is %s',
+    async state => {
+      mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+      mocks.positionsLoading = state === 'loading';
+      mocks.positionsPlaceholder = state === 'placeholder';
+      mocks.positionsError = state === 'error' ? new Error('Position lookup failed') : null;
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showAllClaims();
+
+      expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+      expect(screen.queryByText('disagrees')).toBeNull();
+    }
+  );
 
   it('changes responses through the semantic buttons without rendering a second response area', async () => {
     mocks.claims = [
@@ -5564,6 +5648,24 @@ describe('where the pair land', () => {
     expect(landings).toEqual(['rematch-1', 'rematch-2']);
   });
 
+  // GEO-3495: a tab press is recorded as leaving the list on screen. Before the landing there is
+  // none, only the skeleton, so the first press names nothing it left.
+  it('records a tab press from the list on screen, and none from the skeleton', async () => {
+    mocks.positionsFetching = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    mocks.capture.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
+    await settleTabSwap();
+    fireEvent.click(screen.getByRole('button', { name: /^Matches/ }));
+
+    const presses = mocks.capture.mock.calls
+      .filter(([event, properties]) => event === 'action_completed' && properties?.target_type === 'tab')
+      .map(([, properties]) => [properties.list_id, properties.target_id]);
+    expect(presses).toEqual([['rematch_explore', 'rematch_matches']]);
+  });
+
   it('reports where it landed, once, with what each earlier tab held', async () => {
     nothingToRematch();
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -6476,7 +6578,8 @@ describe('inside a debate room', () => {
   // Each rejoin already retries its request. When all of those fail, the session is still ended and
   // will not change, so nothing would ever ask again without this.
   it('tries a failed rejoin again, a bounded number of times', async () => {
-    vi.useFakeTimers();
+    // Only the retry timers need to advance. Faking the animation clock can stall later tab swaps.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       const rejoin = vi.fn().mockResolvedValue(false);
       mocks.session = session({ status: 'expired' });

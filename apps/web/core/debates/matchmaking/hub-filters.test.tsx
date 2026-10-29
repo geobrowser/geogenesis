@@ -10,8 +10,13 @@ import type { ClaimOrderFacts } from './claim-order-facts';
 
 const mocks = vi.hoisted(() => ({ isMobile: false }));
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobile }));
+// The panel bar names its spaces; these tests are about what it records, not the names.
+vi.mock('~/core/hooks/use-space-labels', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/hooks/use-space-labels')>()),
+  useSpaceLabels: () => ({ labelsById: new Map(), isLoading: false }),
+}));
 
-const { HubFiltersBar, panelFacetOptions, sortClaimRows } = await import('./hub-filters');
+const { HubFiltersBar, PanelFiltersBar, panelFacetOptions, sortClaimRows } = await import('./hub-filters');
 
 beforeAll(() => {
   // Radix poppers and the pill row measure themselves; jsdom ships no observer.
@@ -247,6 +252,107 @@ describe('HubFiltersBar', () => {
 
     fireEvent.click(within(filters).getByRole('button', { name: 'Clear all' }));
     expect(onClearAll).toHaveBeenCalled();
+  });
+});
+
+/** GEO-3495: the panel's Filters, each press recorded by what it chose before it is applied. */
+describe('PanelFiltersBar', () => {
+  function PanelHarness({ onFilterChoice }: { onFilterChoice: (choice: unknown) => void }) {
+    const [sort, setSort] = React.useState('best');
+    const [online, setOnline] = React.useState(false);
+    const [show, setShow] = React.useState('unanswered');
+    const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
+    const [topicIds, setTopicIds] = React.useState<string[]>([]);
+    return (
+      <PanelFiltersBar
+        filters={{
+          sort: { options: SORTS, value: sort, onChange: setSort },
+          choice: {
+            heading: 'Show',
+            options: [
+              { value: 'unanswered', label: 'Not answered' },
+              { value: 'all', label: 'All' },
+            ],
+            value: show,
+            defaultValue: 'unanswered',
+            onChange: setShow,
+          },
+          toggles: [
+            {
+              id: 'someone-online',
+              label: 'Someone online to debate',
+              chipLabel: 'Someone online',
+              checked: online,
+              onChange: setOnline,
+            },
+          ],
+          onClearExtras: () => {
+            setShow('unanswered');
+            setOnline(false);
+          },
+        }}
+        search=""
+        onSearchChange={() => {}}
+        searchPlaceholder="Search claims"
+        spaces={[{ id: 'space1', count: 2 }]}
+        topics={[{ id: 'topic1', name: 'Bitcoin', count: 1 }]}
+        spaceIds={spaceIds}
+        topicIds={topicIds}
+        onSpaceToggle={id => setSpaceIds(current => (current.includes(id) ? [] : [id]))}
+        onSpacesClear={() => setSpaceIds([])}
+        onTopicIdsChange={update => setTopicIds(update)}
+        onFilterChoice={onFilterChoice}
+        listedCount={3}
+        resultCount={3}
+      />
+    );
+  }
+
+  it('records each control as the viewer sets it', async () => {
+    const onFilterChoice = vi.fn();
+    render(<PanelHarness onFilterChoice={onFilterChoice} />);
+    const filters = await openFilters();
+
+    fireEvent.click(within(filters).getByRole('radio', { name: 'Newest' }));
+    fireEvent.click(within(filters).getByRole('radio', { name: 'All' }));
+    fireEvent.click(within(filters).getByRole('checkbox', { name: 'Someone online to debate' }));
+    fireEvent.click(within(filters).getByRole('button', { name: /Space/ }));
+    fireEvent.click(within(filters).getByRole('button', { name: /Bitcoin/ }));
+    fireEvent.click(within(filters).getByRole('button', { name: /Bitcoin/ }));
+
+    expect(onFilterChoice.mock.calls.map(([choice]) => choice)).toEqual([
+      { kind: 'sort', value: 'newest' },
+      { kind: 'show', value: 'all' },
+      { kind: 'toggle', value: 'someone-online', selected: true },
+      { kind: 'space', value: 'space1', selected: true },
+      { kind: 'topic', value: 'topic1', selected: true },
+      { kind: 'topic', value: 'topic1', selected: false },
+    ]);
+  });
+
+  // The segmented controls answer a press on the option already set, which chose nothing.
+  it('does not record pressing the Sort or Show already set', async () => {
+    const onFilterChoice = vi.fn();
+    render(<PanelHarness onFilterChoice={onFilterChoice} />);
+    const filters = await openFilters();
+
+    fireEvent.click(within(filters).getByRole('radio', { name: 'Best' }));
+    fireEvent.click(within(filters).getByRole('radio', { name: 'Not answered' }));
+
+    expect(onFilterChoice).not.toHaveBeenCalled();
+  });
+
+  it('records Clear all once, rather than as each thing it cleared', async () => {
+    const onFilterChoice = vi.fn();
+    render(<PanelHarness onFilterChoice={onFilterChoice} />);
+    const filters = await openFilters();
+    fireEvent.click(within(filters).getByRole('checkbox', { name: 'Someone online to debate' }));
+    fireEvent.click(within(filters).getByRole('button', { name: /Space/ }));
+    onFilterChoice.mockClear();
+
+    fireEvent.click(within(filters).getByRole('button', { name: 'Clear all' }));
+
+    expect(onFilterChoice.mock.calls.map(([choice]) => choice)).toEqual([{ kind: 'filters', value: 'all' }]);
   });
 });
 
