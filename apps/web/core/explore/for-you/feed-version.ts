@@ -12,8 +12,9 @@
  * (code version plus a config revision kept by trigger, migration 0102), and this app's own
  * FOR_YOU_WEB_VERSION, bumped by hand on any change to how this app builds a For you page.
  *
- * best-1: the first labelled Best (GEO-3140).
- * best-2: gaia ranks Debate agenda claims, their debates and agenda topics (GEO-3488, gaia migration 0113).
+ * best-1: Best from GEO-3140 on. gaia 0111/0112 (23 Oct) changed how it scores debates without a bump.
+ * best-2: one gaia deploy of two changes. Debate agenda claims, their debates and agenda topics rank
+ *   first (GEO-3488, gaia 0113); new debates get a starting lift that fades with impressions (gaia 0114).
  */
 
 export const BEST_FEED_VERSION = 'best-2';
