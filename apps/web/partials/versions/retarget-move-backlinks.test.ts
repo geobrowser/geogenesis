@@ -93,8 +93,19 @@ describe('retargetMoveBacklinks', () => {
     expect(run()).toEqual([]);
   });
 
-  it('leaves a backlink with no space hint alone', () => {
-    store.relations = [relation({ id: 'backlink', from: 'other-entity', to: ENTITY, toSpaceId: null })];
+  it.each([null, undefined])('points a backlink with no space hint (%s) at the destination', toSpaceId => {
+    store.relations = [relation({ id: 'backlink', from: 'other-entity', to: ENTITY, toSpaceId })];
+
+    const [retargeted, ...rest] = run();
+
+    expect(rest).toEqual([]);
+    expect(retargeted?.id).toBe('backlink');
+    expect(retargeted?.spaceId).toBe(SOURCE);
+    expect(retargeted?.toSpaceId).toBe(TARGET);
+  });
+
+  it('leaves a backlink with no space hint held in another space alone', () => {
+    store.relations = [relation({ id: 'elsewhere', from: 'other-entity', to: ENTITY, spaceId: OTHER })];
 
     expect(run()).toEqual([]);
   });

@@ -4,8 +4,10 @@ import { getRelations } from '~/core/sync/use-store';
 /**
  * Points backlinks in the source space at where the move put the data.
  *
- * `toSpaceId` says which space holds a relation's target, and after a move the source space no
- * longer does. Other spaces' backlinks are left alone — a move must not publish edits there.
+ * `toSpaceId` says which space holds a relation's target, and without one a link resolves to the
+ * space it is stored in. Either way a source-space backlink resolves to the source, which after a
+ * move no longer holds the data. Other spaces' backlinks are left alone — a move must not publish
+ * edits there.
  */
 export function retargetMoveBacklinks(
   entityId: string,
@@ -17,7 +19,7 @@ export function retargetMoveBacklinks(
     selector: relation =>
       relation.toEntity.id === entityId &&
       relation.spaceId === sourceSpaceId &&
-      relation.toSpaceId === sourceSpaceId &&
+      (relation.toSpaceId ?? relation.spaceId) === sourceSpaceId &&
       relation.fromEntity.id !== entityId,
   }).forEach(relation => {
     storage.relations.update(relation, draft => {
