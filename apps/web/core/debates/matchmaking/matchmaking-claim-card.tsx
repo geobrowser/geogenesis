@@ -1443,7 +1443,8 @@ export function SpaceChip({ spaceId }: { spaceId: string }) {
           <ThumbGeoImage value={image} alt="" />
         </span>
       ) : null}
-      <span className="truncate text-footnoteMedium text-grey-04">{name}</span>
+      {/* Calibre's letters sit high in the line box; optically centre them with the thumbnail. */}
+      <span className="translate-y-px truncate text-footnoteMedium text-grey-04">{name}</span>
     </span>
   );
 }
