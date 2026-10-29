@@ -71,7 +71,7 @@ export type FeedItemRanking = {
   explorationProbability?: number | null;
   /**
    * GEO-3221. `fresh` when the card filled Best's fresh slot rather than earning its rank; Best's
-   * version then reads `best-1+fresh.<config revision>`.
+   * version then reads `<BEST_FEED_VERSION>+fresh.<config revision>`.
    */
   slot?: 'fresh';
   /**
