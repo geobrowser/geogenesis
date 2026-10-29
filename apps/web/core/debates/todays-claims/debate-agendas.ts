@@ -30,6 +30,8 @@ export type DebateAgendaSection = {
   spaceId: string;
   name: string;
   claimIds: string[];
+  /** The agenda's day, `YYYY-MM-DD`. */
+  listedOn: string;
   /** Midnight New York on the agenda's day. When a debate starts counting as "since the listing". */
   listedAt: string;
 };
@@ -81,15 +83,6 @@ export type DebateAgendaRow = {
   sectionName: string | null;
   entityId: string;
 };
-
-/**
- * The calendar day of an agenda listing: `2026-10-27T00:00:00-04:00` and `2026-10-27T04:00:00+00:00`
- * (midnight New York, as the API writes `listedAt`) are both the 27th.
- */
-export function agendaDayFromValue(value: string): string | null {
-  const day = value.slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
-}
 
 /**
  * The picker's agendas from the API's rows: each space's current agenda as sections, and what the
@@ -146,6 +139,7 @@ export function buildDebateAgendas(
         spaceId: row.spaceId,
         name: row.sectionName ?? 'Today’s claims',
         claimIds: [],
+        listedOn: row.listedOn,
         listedAt: row.listedAt,
       };
       sectionsById.set(sectionKey, section);
@@ -246,6 +240,11 @@ export function useDebateAgendas(enabled = true): {
     queryFn: ({ signal }) => fetchCurrentDebateAgendas(signal),
     enabled,
     ...debateQueryNetworkOptions,
+    // A public gaia read, unlike the geo-chat fan-out those options are tuned for. `graphql` retries
+    // only transport failures, so a GraphQL error (a statement timeout) gets one retry here, and a
+    // failed load tries again when the tab regains focus. Loaded agendas never refetch on focus.
+    retry: 1,
+    refetchOnWindowFocus: query => query.state.status === 'error',
     // Read once per visit. A picker left open past midnight keeps the agendas it opened on, and
     // nothing outlives the visit, so the next one asks again: the page's flag only turns on after
     // hydration, and a cached answer would otherwise be reused without a request.

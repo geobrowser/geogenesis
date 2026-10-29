@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { AGENDA_FIXTURE_SPACE, agendaRow, agendaMidnight as midnight } from './debate-agenda-fixtures';
-import { type DebateAgendaRow, agendaDayFromValue, buildDebateAgendas } from './debate-agendas';
+import { type DebateAgendaRow, buildDebateAgendas } from './debate-agendas';
 
 const WORLD = AGENDA_FIXTURE_SPACE;
 const DEBATES = '9284477c8fe746368698994e2e517b32';
@@ -36,14 +36,6 @@ const earlierRow = (spaceId: string, agendaId: string, listedOn: string) => (ent
 
 const allClaims = new Set(Array.from({ length: 20 }, (_, index) => claim(index)));
 
-describe('agenda days', () => {
-  it('reads the calendar day of a listing, written with an offset or as the API’s UTC midnight New York', () => {
-    expect(agendaDayFromValue('2026-10-27T00:00:00-04:00')).toBe('2026-10-27');
-    expect(agendaDayFromValue('2026-10-27T04:00:00+00:00')).toBe('2026-10-27');
-    expect(agendaDayFromValue('not a date')).toBeNull();
-  });
-});
-
 describe('buildDebateAgendas', () => {
   it('lists each space’s current agenda as sections, in the order the API returns them', () => {
     const brazil = current(WORLD, 'agenda-28', '2026-10-28', { id: 'b-brazil', name: 'Brazil election' });
@@ -62,6 +54,7 @@ describe('buildDebateAgendas', () => {
     ]);
     expect(world.sections[0]!.agendaId).toBe('agenda-28');
     expect(world.sections[0]!.listedAt).toBe('2026-10-28T04:00:00+00:00');
+    expect(world.sections[0]!.listedOn).toBe('2026-10-28');
     expect(spaces.find(space => space.spaceId === DEBATES)!.sections.map(section => section.name)).toEqual([
       'Debates space',
     ]);

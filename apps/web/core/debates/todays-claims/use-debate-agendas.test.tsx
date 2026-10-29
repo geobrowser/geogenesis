@@ -1,5 +1,5 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
+import { cleanup, renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   signals: [] as unknown[],
   pending: false,
   fail: false,
+  /** Requests that fail before the agendas answer. */
+  failTimes: 0,
   claims: { entities: [] as unknown[], isLoading: false },
 }));
 
@@ -30,6 +32,10 @@ vi.mock('~/core/io/graphql-client', () => ({
     mocks.calls.push(variables);
     mocks.signals.push(signal);
     if (mocks.fail) return Effect.fail(new Error('down'));
+    if (mocks.failTimes > 0) {
+      mocks.failTimes -= 1;
+      return Effect.fail(new Error('statement timeout'));
+    }
     return mocks.pending ? Effect.never : Effect.succeed(decoder({ currentDebateAgendas: mocks.rows }));
   },
 }));
@@ -64,10 +70,15 @@ beforeEach(() => {
   mocks.signals = [];
   mocks.pending = false;
   mocks.fail = false;
+  mocks.failTimes = 0;
   mocks.claims = { entities: [{ id: CLAIM, name: 'A claim' }], isLoading: false };
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  // Unmount every hook, so an earlier test's failed query doesn't answer this one's focus event.
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('fetchCurrentDebateAgendas', () => {
   // The API stops at 100 rows unless asked for more, and a week of earlier listings passes that.
@@ -128,9 +139,40 @@ describe('useDebateAgendas', () => {
     mocks.fail = true;
     const { result } = renderHook(() => useDebateAgendas(), { wrapper: Wrapper });
 
-    await waitFor(() => expect(result.current.error).toBeTruthy());
+    await waitFor(() => expect(result.current.error).toBeTruthy(), { timeout: 3000 });
     expect(result.current.isLoading).toBe(false);
     expect(result.current.agendasIn(() => true).spaces).toEqual([]);
+  });
+
+  // `graphql` retries transport failures only; a GraphQL error such as a statement timeout gets one
+  // retry here.
+  it('retries a failed request once', async () => {
+    mocks.failTimes = 1;
+    const { result } = renderHook(() => useDebateAgendas(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.agendasIn(() => true).spaces).toHaveLength(1), { timeout: 3000 });
+    expect(result.current.error).toBeNull();
+    expect(mocks.calls).toHaveLength(2);
+  });
+
+  // The page has no retry button, so a failed load must not stay failed for the whole visit.
+  it('tries a failed load again when the tab regains focus, and leaves loaded agendas alone', async () => {
+    mocks.failTimes = 2;
+    const { result } = renderHook(() => useDebateAgendas(), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.error).toBeTruthy(), { timeout: 3000 });
+
+    const refocus = () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    };
+    refocus();
+    await waitFor(() => expect(result.current.agendasIn(() => true).spaces).toHaveLength(1));
+    expect(mocks.calls).toHaveLength(3);
+
+    refocus();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.calls).toHaveLength(3);
+    focusManager.setFocused(undefined);
   });
 
   // The gateway refetches the whole `debates` root on every (re)connect. An open picker keeps the

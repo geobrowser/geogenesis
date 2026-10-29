@@ -1874,7 +1874,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             sectionKey: key,
             scope: todaysCardScope(
               section.agendaId,
-              section.listedAt,
+              section.listedOn,
               debatesOf(normId(row.claim.claim_entity_id)),
               section.id
             ),
@@ -1890,7 +1890,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             {
               row,
               sectionKey: EARLIER_THIS_WEEK_SECTION,
-              scope: todaysCardScope(listing.agendaId, listing.listedAt, debatesOf(listing.claimId)),
+              scope: todaysCardScope(listing.agendaId, listing.listedOn, debatesOf(listing.claimId)),
             },
           ]
         : [];
