@@ -14,8 +14,8 @@ import { type DebateLobbySummary, dashlessId } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
 import { debateRoomPath } from '../rooms/room-routes';
-import { debateHours } from './debate-hours';
-import { useDebateLobbies } from './hooks';
+import { debateHours, debateHoursLobbies, debateHoursRange } from './debate-hours';
+import { useDebateLobbies, useDebateLobbyCalendar } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
 import { goingLabel, personName, rsvpLabel } from './lobby-format';
 import { LobbyByline, LobbyHostNames } from './lobby-host-names';
@@ -39,11 +39,18 @@ export function DebateHoursPage({ className }: { className?: string }) {
   useMatchmakingScope(true);
   const lobbies = useDebateLobbies();
   const now = useMinuteNow();
-  const hours = React.useMemo(
-    () => (lobbies.data ? debateHours(lobbies.data.lobbies, now) : null),
-    [lobbies.data, now]
+  const { from, to } = debateHoursRange(now);
+  const calendar = useDebateLobbyCalendar(from, to, true, { signedOut: true });
+  // Waits for the calendar, so a host's later lobbies do not pop in after the page draws. If it
+  // fails, the list alone: every room open now, and most of the week.
+  const calendarSettled = calendar.data !== undefined || calendar.isError;
+  const week = React.useMemo(
+    () =>
+      lobbies.data && calendarSettled ? debateHoursLobbies(lobbies.data.lobbies, calendar.data?.lobbies) : undefined,
+    [calendar.data, calendarSettled, lobbies.data]
   );
-  useGoingToast(lobbies.data?.lobbies);
+  const hours = React.useMemo(() => (week ? debateHours(week, now) : null), [week, now]);
+  useGoingToast(week);
 
   const upcomingCount = hours ? hours.rest.length + (hours.featured ? 1 : 0) : 0;
 

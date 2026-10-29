@@ -1021,6 +1021,36 @@ it('reads the calendar week for its bounds, and again whenever the lobby list is
   await waitFor(() => expect(api.listDebateLobbyCalendar).toHaveBeenCalledTimes(2));
 });
 
+// GEO-3517. The debate hours page reads the week signed out; the Calendar still waits for an account.
+it('reads the calendar week signed out only when asked to, and then polls it as the list is', async () => {
+  api.listDebateLobbyCalendar.mockResolvedValue({ lobbies: [] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const from = new Date('2026-10-11T07:00:00Z');
+  const to = new Date('2026-10-18T07:00:00Z');
+  try {
+    Object.assign(auth, { authenticated: false, accountKey: null });
+    const calendarPage = renderHook(() => useDebateLobbyCalendar(from, to), { wrapper });
+    expect(calendarPage.result.current.fetchStatus).toBe('idle');
+    expect(api.listDebateLobbyCalendar).not.toHaveBeenCalled();
+
+    const hoursPage = renderHook(() => useDebateLobbyCalendar(from, to, true, { signedOut: true }), { wrapper });
+    await waitFor(() => expect(hoursPage.result.current.isSuccess).toBe(true));
+    expect(api.listDebateLobbyCalendar).toHaveBeenCalledWith({ from, to }, expect.anything(), null, expect.anything());
+    const query = client
+      .getQueryCache()
+      .find({ queryKey: debateQueryKeys.lobbyCalendar(null, from.getTime(), to.getTime()) });
+    expect((query?.observers[0]?.options as { refetchInterval?: number }).refetchInterval).toBe(
+      SIGNED_OUT_LOBBIES_POLL_MS
+    );
+  } finally {
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    api.listDebateLobbyCalendar.mockReset();
+  }
+});
+
 // Card patches stop while the panel is closed, so a reopen inside the stale window still reloads.
 it('reloads the lobbies list on every mount', async () => {
   api.listDebateLobbies.mockResolvedValue({ lobbies: [] });

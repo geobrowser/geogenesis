@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbySummary } from '../api';
+import type { DebateLobbyCalendarRow, DebateLobbySummary } from '../api';
 
 const NOW = Date.parse('2026-10-28T16:00:00Z');
 const HOUR = 60 * 60_000;
@@ -14,13 +14,24 @@ const mocks = vi.hoisted(() => ({
     isError: boolean;
     refetch: () => void;
   },
+  calendar: { data: { lobbies: [] }, isError: false } as {
+    data: { lobbies: DebateLobbyCalendarRow[] } | undefined;
+    isError: boolean;
+  },
+  calendarOptions: [] as unknown[],
   accountKey: null as string | null,
   setToast: vi.fn(),
   press: vi.fn(),
   pressOptions: [] as unknown[],
 }));
 
-vi.mock('./hooks', () => ({ useDebateLobbies: () => mocks.list }));
+vi.mock('./hooks', () => ({
+  useDebateLobbies: () => mocks.list,
+  useDebateLobbyCalendar: (_from: Date, _to: Date, _enabled: boolean, options: unknown) => {
+    mocks.calendarOptions.push(options);
+    return mocks.calendar;
+  },
+}));
 vi.mock('../hooks', () => ({ useGeoChatAuth: () => ({ accountKey: mocks.accountKey }) }));
 vi.mock('../matchmaking/hooks', () => ({ useMatchmakingScope: () => false }));
 vi.mock('./use-minute-now', () => ({ useMinuteNow: () => NOW }));
@@ -80,6 +91,8 @@ const week = () => [
 
 beforeEach(() => {
   mocks.list = { data: { lobbies: week() }, isError: false, refetch: vi.fn() };
+  mocks.calendar = { data: { lobbies: [] }, isError: false };
+  mocks.calendarOptions = [];
   mocks.accountKey = null;
   mocks.pressOptions = [];
 });
@@ -166,6 +179,44 @@ describe('DebateHoursPage', () => {
     expect(quiet).toHaveTextContent('3 here');
     expect(quiet).not.toHaveTextContent('5 going');
     expect(within(later!).getByRole('button', { name: 'RSVP' })).toBeInTheDocument();
+  });
+
+  describe('a host with more debate hours than the list shows', () => {
+    const third = () => ({
+      ...lobby('fri', { starts_at: new Date(NOW + 74 * HOUR).toISOString() }),
+      state: 'upcoming' as const,
+      closed_at: null,
+    });
+
+    it('lists a lobby only the calendar has, read signed out', () => {
+      mocks.calendar = { data: { lobbies: [third()] }, isError: false };
+      render(<DebateHoursPage />);
+      expect(
+        screen
+          .getAllByTestId('debate-hour-card')
+          .map(card => within(card).getByRole('link', { name: /Debate/ }).textContent)
+      ).toEqual([
+        expect.stringContaining('Debate wed'),
+        expect.stringContaining('Debate thu'),
+        expect.stringContaining('Debate fri'),
+      ]);
+      expect(screen.getByText(/4 this week/)).toBeInTheDocument();
+      expect(mocks.calendarOptions.every(options => (options as { signedOut: boolean }).signedOut)).toBe(true);
+    });
+
+    it('waits for the calendar before drawing the week', () => {
+      mocks.calendar = { data: undefined, isError: false };
+      render(<DebateHoursPage />);
+      expect(screen.queryByTestId('featured-debate-hour')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('debate-hour-card')).not.toBeInTheDocument();
+    });
+
+    it('draws the list alone when the calendar cannot be read', () => {
+      mocks.calendar = { data: undefined, isError: true };
+      render(<DebateHoursPage />);
+      expect(screen.getByTestId('featured-debate-hour')).toBeInTheDocument();
+      expect(screen.getAllByTestId('debate-hour-card')).toHaveLength(2);
+    });
   });
 
   it('says plainly when nothing is scheduled this week, and points somewhere to watch', () => {

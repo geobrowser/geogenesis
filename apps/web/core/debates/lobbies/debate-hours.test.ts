@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DebateLobbySummary } from '../api';
-import { DEBATE_HOURS_WINDOW_MS, debateHours } from './debate-hours';
+import type { DebateLobbyCalendarRow, DebateLobbySummary } from '../api';
+import { DEBATE_HOURS_WINDOW_MS, debateHours, debateHoursLobbies, debateHoursRange } from './debate-hours';
 
 const NOW = Date.parse('2026-10-28T12:00:00Z');
 const HOUR = 60 * 60_000;
@@ -87,5 +87,51 @@ describe('debateHours', () => {
 
   it('has nothing to feature with no lobbies', () => {
     expect(debateHours([], NOW)).toEqual({ featured: null, rest: [], goingTotal: 0 });
+  });
+});
+
+const calendarRow = (
+  id: string,
+  state: DebateLobbyCalendarRow['state'] = 'upcoming',
+  overrides: Partial<DebateLobbySummary> = {}
+): DebateLobbyCalendarRow => ({ ...lobby(id, overrides), state, closed_at: null });
+
+// GEO-3517: the list shows two lobbies per host, so a host's third this week comes from the calendar.
+describe('debateHoursLobbies', () => {
+  it('adds the calendar lobbies still to open that the list leaves out', () => {
+    const merged = debateHoursLobbies(
+      [lobby('first'), lobby('second')],
+      [calendarRow('first'), calendarRow('second'), calendarRow('third')]
+    );
+    expect(merged.map(row => row.lobby_id)).toEqual(['first', 'second', 'third']);
+  });
+
+  it('keeps the list row for a lobby on both, matched however its id is written', () => {
+    const listed = lobby('0123456789abcdef0123456789abcdef', { viewer_reminded: true });
+    const merged = debateHoursLobbies(
+      [listed],
+      [calendarRow('01234567-89ab-cdef-0123-456789abcdef', 'upcoming', { viewer_reminded: false })]
+    );
+    expect(merged).toEqual([listed]);
+  });
+
+  it('leaves rooms open now and ended ones to the list', () => {
+    const merged = debateHoursLobbies([], [calendarRow('open', 'open', { open: true }), calendarRow('ended', 'ended')]);
+    expect(merged).toEqual([]);
+  });
+
+  it('is the list alone without a calendar', () => {
+    const list = [lobby('only')];
+    expect(debateHoursLobbies(list, undefined)).toBe(list);
+  });
+});
+
+describe('debateHoursRange', () => {
+  it('runs from the top of the hour past the week, and holds through the hour', () => {
+    const { from, to } = debateHoursRange(NOW + 25 * 60_000);
+    expect(from.toISOString()).toBe('2026-10-28T12:00:00.000Z');
+    expect(to.getTime()).toBeGreaterThanOrEqual(NOW + 25 * 60_000 + DEBATE_HOURS_WINDOW_MS);
+    expect(debateHoursRange(NOW + 59 * 60_000)).toEqual({ from, to });
+    expect(debateHoursRange(NOW + HOUR).from.getTime()).toBe(NOW + HOUR);
   });
 });
