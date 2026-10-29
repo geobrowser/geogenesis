@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { AGENDA_FIXTURE_SPACE, agendaRow, agendaMidnight as midnight } from './debate-agenda-fixtures';
 import { type DebateAgendaRow, agendaDayFromValue, buildDebateAgendas } from './debate-agendas';
 
-const WORLD = '89bd89bf28ff8a0963faf92a8c905e20';
+const WORLD = AGENDA_FIXTURE_SPACE;
 const DEBATES = '9284477c8fe746368698994e2e517b32';
 
 const claim = (n: number) => `c${String(n).padStart(31, '0')}`;
-const midnight = (day: string) => `${day}T04:00:00+00:00`;
-
-/** A block item row as `currentDebateAgendas` returns it. */
+/** A block item row; earlier rows carry no section. */
 function item(
   spaceId: string,
   agendaId: string,
@@ -17,17 +16,15 @@ function item(
   entityId: string,
   section: { id: string; name: string | null } | null = null
 ): DebateAgendaRow {
-  return {
+  return agendaRow({
     spaceId,
     agendaId,
     listedOn,
-    listedAt: midnight(listedOn),
     isCurrent,
-    source: 'block_item',
+    entityId,
     sectionId: section?.id ?? null,
     sectionName: section?.name ?? null,
-    entityId,
-  };
+  });
 }
 
 const current =

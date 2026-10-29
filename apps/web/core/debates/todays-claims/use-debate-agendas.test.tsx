@@ -6,22 +6,29 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateAgendaRow } from './debate-agendas';
-
-const WORLD = '89bd89bf28ff8a0963faf92a8c905e20';
-const CLAIM = 'c0000000000000000000000000000001';
+import { AGENDA_FIXTURE_CLAIM as CLAIM, AGENDA_FIXTURE_SPACE as WORLD, agendaRow } from './debate-agenda-fixtures';
 
 const mocks = vi.hoisted(() => ({
   rows: [] as unknown[],
   calls: [] as Record<string, unknown>[],
+  signals: [] as unknown[],
   pending: false,
   fail: false,
   claims: { entities: [] as unknown[], isLoading: false },
 }));
 
 vi.mock('~/core/io/graphql-client', () => ({
-  graphql: ({ decoder, variables }: { decoder: (data: unknown) => unknown; variables: Record<string, unknown> }) => {
+  graphql: ({
+    decoder,
+    variables,
+    signal,
+  }: {
+    decoder: (data: unknown) => unknown;
+    variables: Record<string, unknown>;
+    signal?: AbortSignal;
+  }) => {
     mocks.calls.push(variables);
+    mocks.signals.push(signal);
     if (mocks.fail) return Effect.fail(new Error('down'));
     return mocks.pending ? Effect.never : Effect.succeed(decoder({ currentDebateAgendas: mocks.rows }));
   },
@@ -37,29 +44,24 @@ vi.mock('../claim-picker-page', () => ({
 
 const { fetchCurrentDebateAgendas, useDebateAgendas } = await import('./debate-agendas');
 
-function row(overrides: Partial<DebateAgendaRow> = {}): DebateAgendaRow {
-  return {
-    spaceId: WORLD,
-    agendaId: 'agenda-today',
-    listedOn: '2026-10-28',
-    listedAt: '2026-10-28T04:00:00+00:00',
-    isCurrent: true,
-    source: 'block_item',
-    sectionId: 'block-1',
-    sectionName: 'Brazil election',
-    entityId: CLAIM,
-    ...overrides,
-  };
-}
-
 function Wrapper({ children }: { children: React.ReactNode }) {
   const [client] = React.useState(() => new QueryClient());
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
+/** One client across mounts, for what a visit leaves behind for the next. */
+function sharedClient() {
+  const client = new QueryClient();
+  const SharedWrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return { client, SharedWrapper };
+}
+
 beforeEach(() => {
-  mocks.rows = [row()];
+  mocks.rows = [agendaRow()];
   mocks.calls = [];
+  mocks.signals = [];
   mocks.pending = false;
   mocks.fail = false;
   mocks.claims = { entities: [{ id: CLAIM, name: 'A claim' }], isLoading: false };
@@ -70,13 +72,24 @@ afterEach(() => vi.restoreAllMocks());
 describe('fetchCurrentDebateAgendas', () => {
   // The API stops at 100 rows unless asked for more, and a week of earlier listings passes that.
   it('asks for this week’s agendas in one request, up to the API’s 1000-row maximum', async () => {
-    expect(await fetchCurrentDebateAgendas()).toEqual([row()]);
+    const controller = new AbortController();
+    expect(await fetchCurrentDebateAgendas(controller.signal)).toEqual([agendaRow()]);
     expect(mocks.calls).toEqual([{ earlierDays: 6, first: 1000 }]);
+    expect(mocks.signals).toEqual([controller.signal]);
+  });
+
+  // gaia's columns are non-null; a row that breaks that is dropped rather than taking the tab down.
+  it('drops null and incomplete rows, and reads a missing list as none', async () => {
+    mocks.rows = [agendaRow(), null, { ...agendaRow(), entityId: null }, { ...agendaRow(), listedOn: undefined }];
+    expect(await fetchCurrentDebateAgendas()).toEqual([agendaRow()]);
+
+    mocks.rows = null as unknown as unknown[];
+    expect(await fetchCurrentDebateAgendas()).toEqual([]);
   });
 
   it('says so when the agendas fill the row limit, rather than passing off a cut list as whole', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    mocks.rows = Array.from({ length: 1000 }, () => row());
+    mocks.rows = Array.from({ length: 1000 }, () => agendaRow());
 
     await fetchCurrentDebateAgendas();
 
@@ -97,7 +110,7 @@ describe('useDebateAgendas', () => {
   });
 
   it('lists the current agenda’s claims once the agendas and claims have answered', async () => {
-    mocks.rows = [row(), row({ source: 'agenda_topics', entityId: 'topic-1', sectionId: null })];
+    mocks.rows = [agendaRow(), agendaRow({ source: 'agenda_topics', entityId: 'topic-1', sectionId: null })];
     const { result } = renderHook(() => useDebateAgendas(), { wrapper: Wrapper });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -118,6 +131,37 @@ describe('useDebateAgendas', () => {
     await waitFor(() => expect(result.current.error).toBeTruthy());
     expect(result.current.isLoading).toBe(false);
     expect(result.current.agendasIn(() => true).spaces).toEqual([]);
+  });
+
+  // The gateway refetches the whole `debates` root on every (re)connect. An open picker keeps the
+  // agendas it opened on.
+  it('is left alone when the gateway refetches debates', async () => {
+    const { client, SharedWrapper } = sharedClient();
+    const { result } = renderHook(() => useDebateAgendas(), { wrapper: SharedWrapper });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await client.invalidateQueries({ predicate: query => query.queryKey[0] === 'debates', refetchType: 'active' });
+
+    expect(mocks.calls).toHaveLength(1);
+  });
+
+  // The page's flag only turns on after hydration, so each visit mounts disabled and then enables.
+  // A cached answer from the last visit must not stand in for this one.
+  it('asks again on the next visit, even when it mounts disabled', async () => {
+    const { SharedWrapper } = sharedClient();
+    const first = renderHook(() => useDebateAgendas(), { wrapper: SharedWrapper });
+    await waitFor(() => expect(first.result.current.isLoading).toBe(false));
+    first.unmount();
+    // Leaving the page and coming back takes longer than react-query's gcTime-0 timer.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const next = renderHook(({ enabled }) => useDebateAgendas(enabled), {
+      wrapper: SharedWrapper,
+      initialProps: { enabled: false },
+    });
+    next.rerender({ enabled: true });
+
+    await waitFor(() => expect(mocks.calls).toHaveLength(2));
   });
 
   it('asks for nothing with the flag off', () => {

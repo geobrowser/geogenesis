@@ -7587,7 +7587,7 @@ describe('Today’s claims', () => {
   }
 
   function section(id: string, spaceId: string, name: string, claimIds: string[]) {
-    return { id, agendaId: `agenda-${spaceId}`, spaceId, name, claimIds, listedAt: '2026-10-28T00:00:00-04:00' };
+    return { id, agendaId: `agenda-${spaceId}`, spaceId, name, claimIds, listedAt: '2026-10-28T04:00:00+00:00' };
   }
 
   /** World affairs (SPACE_1) with two sections, U.S. Politics (SPACE_2) with one, and an older listing. */
@@ -7628,14 +7628,14 @@ describe('Today’s claims', () => {
           spaceId: SPACE_1,
           agendaId: 'agenda-old',
           listedOn: '2026-10-26',
-          listedAt: '2026-10-26T00:00:00-04:00',
+          listedAt: '2026-10-26T04:00:00+00:00',
         },
         {
           claimId: T_OLD_DEBATED,
           spaceId: SPACE_1,
           agendaId: 'agenda-old',
           listedOn: '2026-10-26',
-          listedAt: '2026-10-26T00:00:00-04:00',
+          listedAt: '2026-10-26T04:00:00+00:00',
         },
       ],
     };
@@ -7724,8 +7724,8 @@ describe('Today’s claims', () => {
     // Each claim's count is asked from its own listing.
     expect(todays.countsAsked.at(-1)).toEqual(
       expect.arrayContaining([
-        { claimId: T_LULA, since: '2026-10-28T00:00:00-04:00' },
-        { claimId: T_OLD, since: '2026-10-26T00:00:00-04:00' },
+        { claimId: T_LULA, since: '2026-10-28T04:00:00+00:00' },
+        { claimId: T_OLD, since: '2026-10-26T04:00:00+00:00' },
       ])
     );
   });

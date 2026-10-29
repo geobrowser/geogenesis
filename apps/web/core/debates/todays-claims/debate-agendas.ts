@@ -10,13 +10,8 @@ import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
 
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '../claim-picker-page';
+import { debateQueryKeys, debateQueryNetworkOptions } from '../hooks';
 import { currentDebateAgendasDocument } from './current-debate-agendas-document';
-
-/**
- * GEO-3487's Debate agenda type: one Page per space per day, a data block per topic with that
- * topic's claims as its items. Not tagged Debate, so the lobby's list picker leaves it alone.
- */
-export const DEBATE_AGENDA_TYPE_ID = '79e3757b2630492c9d3bd73a78d45893';
 
 /** "Earlier this week": agendas from the six days before today. */
 export const EARLIER_AGENDA_DAYS = 6;
@@ -202,8 +197,8 @@ export async function fetchCurrentDebateAgendas(signal?: AbortSignal): Promise<D
   const rows = await Effect.runPromise(
     graphql({
       query: currentDebateAgendasDocument,
-      decoder: (data: { currentDebateAgendas?: (DebateAgendaRow | null)[] | null }) =>
-        (data.currentDebateAgendas ?? []).flatMap(row => (row ? [row] : [])),
+      decoder: (data: { currentDebateAgendas?: (Partial<DebateAgendaRow> | null)[] | null }) =>
+        (data.currentDebateAgendas ?? []).filter(isAgendaRow),
       variables: { earlierDays: EARLIER_AGENDA_DAYS, first: AGENDA_ROW_LIMIT },
       signal,
     })
@@ -247,16 +242,15 @@ export function useDebateAgendas(enabled = true): {
     isLoading: agendasLoading,
     error: agendasError,
   } = useQuery({
-    queryKey: ['debates', 'current-debate-agendas'],
+    queryKey: debateQueryKeys.todaysAgendas(),
     queryFn: ({ signal }) => fetchCurrentDebateAgendas(signal),
     enabled,
-    // A picker left open past midnight keeps the agendas it opened on; a new mount asks again.
+    ...debateQueryNetworkOptions,
+    // Read once per visit. A picker left open past midnight keeps the agendas it opened on, and
+    // nothing outlives the visit, so the next one asks again: the page's flag only turns on after
+    // hydration, and a cached answer would otherwise be reused without a request.
     staleTime: Infinity,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    // `graphql` already retries transport failures with backoff.
-    retry: false,
+    gcTime: 0,
   });
 
   const items = React.useMemo(() => rows.filter(row => row.source === 'block_item'), [rows]);
@@ -291,6 +285,20 @@ export function useDebateAgendas(enabled = true): {
       error: agendasError ?? claimsError ?? null,
     }),
     [agendasError, agendasIn, claimEntities, claimIds, claimsError, enabled, isLoading, spaceIds]
+  );
+}
+
+/** A row with every field the picker reads. gaia's columns are non-null; one that isn't is dropped, not fatal. */
+function isAgendaRow(row: Partial<DebateAgendaRow> | null): row is DebateAgendaRow {
+  return (
+    row != null &&
+    typeof row.spaceId === 'string' &&
+    typeof row.agendaId === 'string' &&
+    typeof row.listedOn === 'string' &&
+    typeof row.listedAt === 'string' &&
+    typeof row.isCurrent === 'boolean' &&
+    typeof row.source === 'string' &&
+    typeof row.entityId === 'string'
   );
 }
 

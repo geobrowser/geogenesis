@@ -225,6 +225,12 @@ export const debateQueryKeys = {
   // Reconnecting makes livekit-client abandon the resume and rejoin from scratch (GEO-3343) — and a
   // network blip is exactly when the socket and the call drop together.
   rematchLiveKit: (accountKey: string | null, sessionId: string) => ['rematch-livekit', accountKey, sessionId] as const,
+  /**
+   * GEO-3538. gaia's current debate agendas, the same for everyone. Outside the `debates` root for
+   * the reason `rematchLiveKit` is: the gateway refetches that root on every (re)connect, which would
+   * swap an open picker's agendas under the reader, and after midnight New York swap in a new day.
+   */
+  todaysAgendas: () => ['todays-agendas'] as const,
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
   /**

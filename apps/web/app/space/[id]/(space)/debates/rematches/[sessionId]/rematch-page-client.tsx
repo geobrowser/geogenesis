@@ -1933,9 +1933,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   /** Every row the tab lists, the pair's already-debated fold included. */
   const todaysListedCount = todaysClaimsListed.length;
   /**
-   * The agendas failed before the tab had anything to show. A refetch that fails later — they are
-   * refetched on focus — keeps the list it already has, as the queries themselves do, rather than
-   * taking the tab out from under someone reading it.
+   * The agendas failed before the tab had anything to show. The agendas are read once per visit,
+   * but the claims behind the cards can still refetch, and one that fails later keeps the list it
+   * already has, as the queries themselves do, rather than taking the tab out from under someone
+   * reading it.
    */
   const todaysFailed = Boolean(todaysAgendasQuery.error) && todaysListedCount === 0;
   /** What the pair land on: claims they can still request, in the sections that start open. */
