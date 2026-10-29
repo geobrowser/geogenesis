@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   rowsLoading: false,
   unresolved: new Set<string>(),
   rowGroups: [] as unknown[],
+  scores: {} as Record<string, number>,
+  scoresLoading: false,
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.flag }));
@@ -47,6 +49,13 @@ vi.mock('./debate-agendas', () => ({
 }));
 vi.mock('./claim-debate-counts', () => ({
   useClaimDebateCounts: () => ({ byClaimId: new Map([['a', 3]]), isLoading: false }),
+}));
+vi.mock('../matchmaking/claim-order-facts', () => ({
+  useClaimOrderFacts: (ids: string[]) => ({
+    facts: new Map(ids.map(id => [id, { rankingScore: mocks.scores[id] ?? null, createdAtMs: null }])),
+    isLoading: mocks.scoresLoading,
+    failed: false,
+  }),
 }));
 vi.mock('./use-debaters-space-membership', () => ({
   useDebatersSpaceMembership: () => ({
@@ -92,21 +101,41 @@ beforeEach(() => {
   mocks.rowsLoading = false;
   mocks.unresolved = new Set();
   mocks.rowGroups = [];
+  mocks.scores = {};
+  mocks.scoresLoading = false;
 });
 
 afterEach(() => cleanup());
 
 describe('useTodaysCallout', () => {
-  it('takes the day’s set in Today’s claims order, member spaces first, leaving out answered claims', () => {
+  it('with no scores, alternates the spaces in Today’s claims order, leaving out answered claims', () => {
     mocks.rows = [{ space_id: 'member', claim_entity_id: 'b', viewer_response: { position: true } }];
     const { result } = renderHook(() => useTodaysCallout(), { wrapper });
 
     expect(result.current.visible).toBe(true);
-    // a has been debated since the listing, so it follows c; b is already answered.
-    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['c', 'a', 'x', 'y']);
-    expect(result.current.claims[1]).toMatchObject({ spaceId: 'member', debatesSinceListing: 3 });
+    // Member space first; a has been debated since the listing, so it follows c; b is already answered.
+    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['c', 'x', 'a', 'y']);
+    expect(result.current.claims[2]).toMatchObject({ spaceId: 'member', debatesSinceListing: 3 });
     expect(result.current.step?.current?.claimId).toBe('c');
     expect(store.get(todaysClaimsCalloutAtom)).toMatchObject({ day: '2026-10-29', accountKey: 'acct1' });
+  });
+
+  it('picks the highest-ranked spread across the spaces', () => {
+    mocks.scores = { x: 1, y: 8, a: 5, b: 9, c: 7 };
+    const { result } = renderHook(() => useTodaysCallout(), { wrapper });
+
+    // Round one: member's best (b, 9) and other's best (y, 8); round two: c (7), x (1); then a.
+    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['b', 'y', 'c', 'x', 'a']);
+  });
+
+  it('waits for the ranking scores before taking the set', () => {
+    mocks.scoresLoading = true;
+    const { result, rerender } = renderHook(() => useTodaysCallout(), { wrapper });
+    expect(result.current.visible).toBe(false);
+
+    mocks.scoresLoading = false;
+    rerender();
+    expect(result.current.visible).toBe(true);
   });
 
   it('waits for the viewer’s sides before taking the set', () => {
@@ -130,16 +159,16 @@ describe('useTodaysCallout', () => {
 
     act(() => result.current.markAnswered('c'));
     act(() => result.current.skip('a'));
-    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['b', 'c', 'a', 'x', 'y']);
+    expect(result.current.claims.map(claim => claim.claimId)).toEqual(['b', 'x', 'c', 'y', 'a']);
     expect(result.current.step?.current?.claimId).toBe('b');
-    expect(result.current.step?.done).toEqual([false, true, false, false, false]);
+    expect(result.current.step?.done).toEqual([false, false, true, false, false]);
 
     // A side taken on another surface counts too, without changing the set.
     mocks.rows = [{ space_id: 'member', claim_entity_id: 'b', viewer_response: { position: false } }];
     rerender();
     expect(result.current.claims).toEqual(taken);
     expect(result.current.step?.current?.claimId).toBe('x');
-    expect(result.current.step?.done).toEqual([true, true, false, false, false]);
+    expect(result.current.step?.done).toEqual([true, false, true, false, false]);
   });
 
   it('stays dismissed for the day and comes back with the next day’s agenda', () => {

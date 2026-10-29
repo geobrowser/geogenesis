@@ -5,11 +5,13 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { uuidToHex } from '~/core/id/normalize';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
+import { useClaimOrderFacts } from '../matchmaking/claim-order-facts';
 import { claimRowGroups, placedClaimKey, rowsByPlacedClaim } from '../matchmaking/tagged-claim-entry';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useClaimDebateCounts } from './claim-debate-counts';
@@ -24,9 +26,9 @@ const NO_IDS: string[] = [];
 /**
  * GEO-3498. The daily Today's claims callout, shared by the side panel and the full-screen hub.
  *
- * The day's set is taken once, the first time every read it is made from has settled: the first
- * `CALLOUT_MAX_CLAIMS` claims in Today's claims order (member spaces first, undebated ahead of
- * debated) that the viewer has not answered. It is stored with the agenda day and the account, so
+ * The day's set is taken once, the first time every read it is made from has settled: up to
+ * `CALLOUT_MAX_CLAIMS` claims the viewer has not answered, the highest-ranked spread across the
+ * agendas' spaces (`pickCalloutClaims`). It is stored with the agenda day and the account, so
  * the panel and the hub walk the same set, and a newer agenda day starts a new one — which is also
  * what brings a dismissed callout back.
  *
@@ -73,6 +75,12 @@ export function useTodaysCallout() {
     [agendaSpaceIds, agendas, choosing, counts.byClaimId, counts.isLoading, membership]
   );
 
+  // Each claim's ranking score, the one Explore's Best orders by (agenda boost included), for picking
+  // the highest-ranked across the spaces. Without an answer the set keeps Today's claims order.
+  const orderedIds = React.useMemo(() => ordered.map(claim => claim.claimId), [ordered]);
+  const scores = useClaimOrderFacts(orderedIds, choosing && orderedIds.length > 0);
+  const scoresSettled = !scores.isLoading;
+
   // The viewer's side on each claim the callout could ask about, then on the day's set: geo-chat's
   // rows, per space, the way the hub's graph-sourced lists read them.
   const placed = current ? current.claims : ordered;
@@ -98,14 +106,18 @@ export function useTodaysCallout() {
   // about claims the viewer already holds a side on.
   const rowsSettled = !rows.isLoading && rows.unresolvedSpaceIds.size === 0;
   React.useEffect(() => {
-    if (!choosing || ordered.length === 0 || !rowsSettled || day === null) return;
-    const claims = pickCalloutClaims(ordered, answeredInRows);
+    if (!choosing || ordered.length === 0 || !rowsSettled || !scoresSettled || day === null) return;
+    const claims = pickCalloutClaims(
+      ordered,
+      answeredInRows,
+      claimId => scores.facts.get(uuidToHex(claimId))?.rankingScore
+    );
     setStored(previous =>
       previous.day === day && previous.accountKey === accountKey
         ? previous
         : { accountKey, day, claims, answered: [], skipped: [], dismissed: false }
     );
-  }, [accountKey, answeredInRows, choosing, day, ordered, rowsSettled, setStored]);
+  }, [accountKey, answeredInRows, choosing, day, ordered, rowsSettled, scores.facts, scoresSettled, setStored]);
 
   const step = React.useMemo(() => (current ? calloutStep(current, answeredInRows) : null), [answeredInRows, current]);
 

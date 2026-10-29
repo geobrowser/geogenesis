@@ -63,9 +63,44 @@ export function todaysClaimsInOrder(
   return out;
 }
 
-/** The first `CALLOUT_MAX_CLAIMS` the viewer has not answered: the day's set. */
-export function pickCalloutClaims(ordered: CalloutClaim[], isAnswered: (claimId: string) => boolean): CalloutClaim[] {
-  return ordered.filter(claim => !isAnswered(claim.claimId)).slice(0, CALLOUT_MAX_CLAIMS);
+/**
+ * The day's set: up to `CALLOUT_MAX_CLAIMS` claims the viewer has not answered, the highest-ranked
+ * spread across the spaces (Preston, 29 Oct) rather than the top of one space's agenda.
+ *
+ * Round by round: each space's best claim first, then each space's second best, and so on, each
+ * round best first. So ten spaces with agendas give one claim each, and two spaces give five each
+ * unless one runs out. A claim with no score ranks below every scored one; ties, and claims with no
+ * score at all, keep their Today's claims order, member spaces first.
+ */
+export function pickCalloutClaims(
+  ordered: CalloutClaim[],
+  isAnswered: (claimId: string) => boolean,
+  scoreOf: (claimId: string) => number | null | undefined
+): CalloutClaim[] {
+  const byScore = (a: { claim: CalloutClaim; index: number }, z: { claim: CalloutClaim; index: number }) => {
+    const left = scoreOf(a.claim.claimId) ?? null;
+    const right = scoreOf(z.claim.claimId) ?? null;
+    if (left === right) return a.index - z.index;
+    if (left === null) return 1;
+    if (right === null) return -1;
+    return right - left || a.index - z.index;
+  };
+
+  const bySpace = new Map<string, Array<{ claim: CalloutClaim; index: number }>>();
+  ordered.forEach((claim, index) => {
+    if (isAnswered(claim.claimId)) return;
+    const key = normId(claim.spaceId);
+    bySpace.set(key, [...(bySpace.get(key) ?? []), { claim, index }]);
+  });
+  const queues = [...bySpace.values()].map(claims => claims.sort(byScore));
+
+  const picked: CalloutClaim[] = [];
+  for (let round = 0; picked.length < CALLOUT_MAX_CLAIMS; round++) {
+    const tops = queues.flatMap(queue => queue[round] ?? []);
+    if (tops.length === 0) break;
+    picked.push(...tops.sort(byScore).map(({ claim }) => claim));
+  }
+  return picked.slice(0, CALLOUT_MAX_CLAIMS);
 }
 
 /**
