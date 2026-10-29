@@ -1,8 +1,9 @@
-import { dashlessId } from '~/core/debates/api';
+import { type DebateLobbyView, dashlessId } from '~/core/debates/api';
+import { sameId } from '~/core/debates/rooms/room-presence';
 
 import type { SpaceCallSummary, SpaceCallsResponse } from './api';
 
-/** A `debate.space_calls_changed` row: a live call whose people or hosts changed (GEO-3419). */
+/** A `debate.space_calls_changed` row: a call that opened, or whose people or hosts changed. */
 export type SpaceCallPatch = { status: string; as_of: string; call: SpaceCallSummary };
 
 /** The event's `space_call`, or `null` when it has none (refetch the list) or it is malformed. */
@@ -16,8 +17,10 @@ export function parseSpaceCallPatch(value: unknown): SpaceCallPatch | null {
   return { status, as_of, call: row as SpaceCallSummary };
 }
 
-/** `a` is later than `b`. Stamps carry microseconds, past what `Date.parse` keeps. */
-function later(a: string, b: string) {
+/** `a` is later than `b`, or `b` is unset. Stamps carry microseconds, past what `Date.parse` keeps. */
+function later(a: string | null, b: string | null) {
+  if (b === null) return a !== null;
+  if (a === null) return false;
   const at = Date.parse(a);
   const bt = Date.parse(b);
   if (Number.isNaN(at) || Number.isNaN(bt) || at === bt) return a > b;
@@ -34,4 +37,33 @@ export function withSpaceCallPatch(list: SpaceCallsResponse, patch: SpaceCallPat
     return patch.call;
   });
   return changed ? { ...list, calls } : list;
+}
+
+/**
+ * What a rowless `debate.space_calls_changed` refetches besides the call it names; `preOpen` is the
+ * space's calls not yet open, which a schedule edit can move or cancel. Missing or unknown, all.
+ */
+export function spaceCallsRefetch(change: unknown): { list: boolean; past: boolean; preOpen: boolean } {
+  switch (change) {
+    case 'started':
+      return { list: true, past: false, preOpen: false };
+    case 'schedule':
+      return { list: true, past: false, preOpen: true };
+    case 'agenda':
+      return { list: false, past: false, preOpen: false };
+    case 'ended':
+      return { list: true, past: true, preOpen: false };
+    default:
+      return { list: true, past: true, preOpen: true };
+  }
+}
+
+/** The lobby view of `callId` before its room opened, however either id is spelled. */
+export function isPreOpenViewOfCall(view: DebateLobbyView | undefined, callId: string) {
+  return Boolean(view?.call && sameId(view.lobby_id, callId) && view.access.status === 'not_yet_open');
+}
+
+/** A lobby view of a call in `spaceId` whose room has not opened. */
+export function isPreOpenCallView(view: DebateLobbyView | undefined, spaceId: string) {
+  return Boolean(view?.call && sameId(view.call.space_id, spaceId) && view.access.status === 'not_yet_open');
 }

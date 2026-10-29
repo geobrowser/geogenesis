@@ -96,6 +96,7 @@ function LobbyHighlightedClaims({
   return (
     <section aria-label="Highlighted claims" data-testid="lobby-highlighted-claims">
       <LobbyRoomClaimsList
+        listId="lobby_highlighted"
         claims={entries}
         renderOffer={renderOffer}
         renderMenu={renderMenu}
@@ -170,7 +171,7 @@ function RoomVoteCard({
           {moderationErrorMessage(endVote.error)}
         </Text>
       ) : null}
-      <LobbyRoomClaimsList claims={[entry]} renderOffer={renderOffer} />
+      <LobbyRoomClaimsList listId="lobby_room_vote" claims={[entry]} renderOffer={renderOffer} />
       <RoomVoteTally tally={vote.tally} />
       {guest ? (
         <Text as="p" variant="footnote" color="grey-04" className="px-1 pb-0.5">

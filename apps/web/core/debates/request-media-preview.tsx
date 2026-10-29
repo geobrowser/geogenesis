@@ -5,6 +5,7 @@ import * as React from 'react';
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
+import { getCurrentGeoChatUserId } from './api';
 import { CameraIcon, DebateTileToggleButton, MicrophoneIcon } from './debate-room-controls';
 import { DebateVideoTile } from './debate-video-tile';
 import { lobbyCaptureLive, releaseLobbyCapture, useLobbyCapture } from './lobbies/step-out';
@@ -17,6 +18,7 @@ import {
   mayAutoStartPreview,
 } from './request-join-state';
 import { RequestParticipantTile } from './request-participant-tile';
+import { useVoiceOwnership } from './voice-owner';
 
 type DebateMediaPermissions = { camera: DebateMediaPermission; microphone: DebateMediaPermission };
 
@@ -108,13 +110,46 @@ function MediaPreview({
     }));
   }, [lobbyCameraOn, lobbyMicOn]);
 
+  // One voice per person across Geo tabs: while another tab holds voice this card opens nothing by
+  // itself, and turning a device on here takes voice for this tab.
+  const voice = useVoiceOwnership({
+    userId: getCurrentGeoChatUserId(),
+    kind: 'preview',
+    active: true,
+    onYield: () => {
+      session.stopMedia();
+      setWant({ micOn: false, cameraOn: false });
+    },
+  });
+  const [voiceFree, setVoiceFree] = React.useState(false);
+  const [voiceRefused, setVoiceRefused] = React.useState(false);
+  const voiceHeldElsewhere = React.useEffectEvent(() => voice.heldElsewhere());
+  // Another tab took voice after this card opened its devices without a claim: close them.
+  const voiceTakenElsewhere = voice.ownership === 'elsewhere';
+  const voiceTakenElsewhereNow = React.useEffectEvent(() => voiceTakenElsewhere);
+  React.useEffect(() => {
+    if (!voiceTakenElsewhere) return;
+    setVoiceFree(false);
+    setWant(current => ({
+      micOn: toggledHere.mic ? current.micOn : false,
+      cameraOn: toggledHere.camera ? current.cameraOn : false,
+    }));
+  }, [voiceTakenElsewhere, toggledHere.camera, toggledHere.mic]);
+
   React.useEffect(() => {
     let active = true;
     session.beginSession(sessionKey);
 
-    void readMediaPermission().then(answer => {
+    void Promise.all([readMediaPermission(), voiceHeldElsewhere()]).then(([answer, wasHeldElsewhere]) => {
       if (!active) return;
+      // Voice can move while the permission query is out; a "free" from before then is stale.
+      const heldElsewhere = wasHeldElsewhere || voiceTakenElsewhereNow();
       setPermission(answer);
+      setVoiceFree(!heldElsewhere);
+      if (heldElsewhere) {
+        if (!chosenByViewer.current) setWant({ micOn: false, cameraOn: false });
+        return;
+      }
 
       // Two ways a choice can already exist, and a default applies over neither: one arrived with
       // the card, and one was made here while this query was still out.
@@ -131,7 +166,12 @@ function MediaPreview({
     };
   }, [sessionKey]);
 
-  const open = { micOn: want.micOn && !micToLobby, cameraOn: want.cameraOn && !cameraToLobby };
+  // Opened by itself only while no other tab holds voice; a device turned on here claimed it.
+  const mayOpenUnasked = voiceFree && !voiceTakenElsewhere;
+  const open = {
+    micOn: want.micOn && !micToLobby && (mayOpenUnasked || toggledHere.mic),
+    cameraOn: want.cameraOn && !cameraToLobby && (mayOpenUnasked || toggledHere.camera),
+  };
   const openKey = `${open.micOn}:${open.cameraOn}`;
   React.useEffect(() => {
     let active = true;
@@ -219,9 +259,12 @@ function MediaPreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraOn, micOn, sessionKey]);
 
-  const toggle = (next: Partial<DebateJoinState>) => {
+  const toggle = async (next: Partial<DebateJoinState>) => {
     if (next.micOn !== undefined && micBlocked) return;
     if (next.cameraOn !== undefined && cameraBlocked) return;
+    const turningOn = Boolean(next.micOn || next.cameraOn);
+    if (turningOn && !(await voice.takeOver())) return setVoiceRefused(true);
+    if (turningOn) setVoiceRefused(false);
     chosenByViewer.current = true;
     if (next.micOn !== undefined) setToggledHere(current => ({ ...current, mic: true }));
     if (next.cameraOn !== undefined) setToggledHere(current => ({ ...current, camera: true }));
@@ -243,7 +286,7 @@ function MediaPreview({
           compact={appearance === 'compact'}
           appearance={appearance === 'tile' ? 'overlay' : 'default'}
           enabled={micOn}
-          onClick={() => toggle({ micOn: !micOn })}
+          onClick={() => void toggle({ micOn: !micOn })}
         >
           <MicrophoneIcon muted={!micOn} />
         </DebateTileToggleButton>
@@ -254,7 +297,7 @@ function MediaPreview({
           compact={appearance === 'compact'}
           appearance={appearance === 'tile' ? 'overlay' : 'default'}
           enabled={cameraOn}
-          onClick={() => toggle({ cameraOn: !cameraOn })}
+          onClick={() => void toggle({ cameraOn: !cameraOn })}
         >
           <CameraIcon disabled={!cameraOn} />
         </DebateTileToggleButton>
@@ -307,6 +350,10 @@ function MediaPreview({
       ) : micBlocked ? (
         <Text variant="footnote" color="grey-04">
           Mic is blocked for this site. Allow it in your browser&apos;s address bar to turn it on.
+        </Text>
+      ) : voiceRefused && voice.ownership === 'elsewhere' ? (
+        <Text variant="footnote" color="grey-04">
+          {voice.heldBy === 'debate' ? 'Voice is on in your debate tab' : 'Voice is on in another tab'}
         </Text>
       ) : failure ? (
         <Text variant="footnote" color="grey-04">

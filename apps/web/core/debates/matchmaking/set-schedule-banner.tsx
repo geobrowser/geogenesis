@@ -42,12 +42,6 @@ type Props = {
   surface?: 'hub' | 'calendar';
   /** Replaces the panel's spacing, for a page with its own gutters. */
   className?: string;
-  /**
-   * Something else has the banner's place, as a live lobby's spotlight does in the panel (GEO-3268).
-   * The callout goes, but the banner stays mounted: it holds the schedule dialog, and swapping it
-   * out would close that dialog on someone mid-edit.
-   */
-  hidden?: boolean;
 };
 
 export function SetScheduleBanner(props: Props) {
@@ -58,49 +52,67 @@ export function SetScheduleBanner(props: Props) {
   );
 }
 
-function Banner({ scheduleButtonRef, surface = 'hub', className, hidden = false }: Props) {
+/**
+ * The part of asking for times that every prompt shares (this banner and the panel's one-line
+ * `NoTimesNudge`): whether the viewer offers no time anyone could book, and the editor its button
+ * opens, with focus handed on when a save retires the prompt.
+ *
+ * Render `modal` in the same place whether or not the prompt shows: a save retires the prompt while
+ * the editor is still closing, and moving it would remount it.
+ */
+export function useSetTimesPrompt({
+  scheduleButtonRef,
+  surface = 'hub',
+}: Pick<Props, 'scheduleButtonRef' | 'surface'>) {
   const { authenticated } = useGeoChatAuth();
-  const [modalOpen, setModalOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
   // Saved server-side (GEO-2932). The modal reads and saves the week itself; this only asks whether
   // it still offers anything.
   const { data, blocks } = useDebateSchedule();
-  const openerRef = React.useRef<HTMLButtonElement | null>(null);
-  // Where the dialog returns focus on close. The banner's own button, unless the save retires the
-  // banner moments later, and focus parked on its button would go with it.
+  // Where the dialog returns focus on close. The prompt's own button, unless the save retires the
+  // prompt moments later, and focus parked on its button would go with it.
   const returnFocusRef = React.useRef<HTMLElement | null>(null);
 
-  // Hidden, the banner's own button is gone, so a dialog still open hands focus to the header's
-  // availability pill when it closes.
-  React.useEffect(() => {
-    if (hidden && scheduleButtonRef?.current) returnFocusRef.current = scheduleButtonRef.current;
-  }, [hidden, scheduleButtonRef]);
+  // A schedule is keyed to the Privy account, so signed out the read stays disabled and the modal it
+  // opens has nothing to resolve to. And it waits for the read rather than defaulting to "unset":
+  // everyone who already has a schedule would otherwise watch the prompt appear and vanish each time
+  // the panel opens.
+  const noTimes = authenticated && data !== undefined && !hasUpcomingAvailability(blocks, data.schedule.timezone);
 
-  // A schedule is keyed to the Privy account, so signed out the read stays disabled and the
-  // modal it opens has nothing to resolve to.
-  if (!authenticated) return null;
-  // Waits for the read rather than defaulting to "unset": everyone who already has a schedule
-  // would otherwise watch the banner appear and vanish each time the panel opens.
-  if (data === undefined || hasUpcomingAvailability(blocks, data.schedule.timezone)) return null;
+  const openEditor = (opener: HTMLElement | null) => {
+    returnFocusRef.current = opener;
+    setEditing(true);
+  };
 
   const modal = (
     <OwnScheduleModal
-      open={modalOpen}
-      onOpenChange={setModalOpen}
+      open={editing}
+      onOpenChange={setEditing}
       openerRef={returnFocusRef}
       surface={surface === 'calendar' ? 'calendar' : 'hub_banner'}
       onSaved={saved => {
-        // A save with no upcoming time leaves the banner up, so focus comes back to its button.
+        // A save with no upcoming time leaves the prompt up, so focus comes back to its button.
         if (scheduleButtonRef?.current && hasUpcomingAvailability(saved, localTimezone())) {
           returnFocusRef.current = scheduleButtonRef.current;
         }
       }}
     />
   );
-  // Hidden, only the callout goes. The modal keeps its place in the tree, so React keeps the one
-  // already open, with the unsaved week inside it, rather than mounting a fresh one.
+
+  return { noTimes, editing, openEditor, modal };
+}
+
+function Banner({ scheduleButtonRef, surface = 'hub', className }: Props) {
+  const { noTimes, editing, openEditor, modal } = useSetTimesPrompt({ scheduleButtonRef, surface });
+  const openerRef = React.useRef<HTMLButtonElement | null>(null);
+
+  if (!noTimes && !editing) return null;
+
+  // Retired mid-edit, only the callout goes. The modal keeps its place in the tree, so React keeps
+  // the one already open rather than mounting a fresh one.
   return (
-    <div className={hidden ? 'contents' : cx(className ?? 'mx-4 mb-3', 'rounded-lg bg-[#EFE2FF] p-4')}>
-      {hidden ? null : (
+    <div className={noTimes ? cx(className ?? 'mx-4 mb-3', 'rounded-lg bg-purple-tint p-4') : 'contents'}>
+      {noTimes ? (
         <>
           <div className="flex items-center justify-between gap-3">
             <Text as={surface === 'calendar' ? 'h2' : 'h3'} variant="smallTitle">
@@ -112,10 +124,7 @@ function Banner({ scheduleButtonRef, surface = 'hub', className, hidden = false 
               analyticsSurface={surface}
               analyticsLabel={debateAnalyticsLabel(surface, 'Open schedule')}
               analyticsIntent="open_debate_schedule"
-              onClick={() => {
-                returnFocusRef.current = openerRef.current;
-                setModalOpen(true);
-              }}
+              onClick={() => openEditor(openerRef.current)}
             >
               Set my schedule
             </HubPillButton>
@@ -126,7 +135,7 @@ function Banner({ scheduleButtonRef, surface = 'hub', className, hidden = false 
             both of you. You can change it any time in the dropdown above.
           </Text>
         </>
-      )}
+      ) : null}
       {modal}
     </div>
   );
