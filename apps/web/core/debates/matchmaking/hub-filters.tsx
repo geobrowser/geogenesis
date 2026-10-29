@@ -18,6 +18,7 @@ import { inputStyles } from '~/design-system/input';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import type { DebateClaimPositionSummary } from '../api';
+import type { ClaimFilterChoice } from '../debate-claim-card-surface';
 import type { TaggedClaimOrder } from '../tagged-claims';
 import { type ClaimOrderFacts, compareByNewest, compareByRanking } from './claim-order-facts';
 import { SegmentedControl } from './debate-calendar-controls';
@@ -27,7 +28,7 @@ import { HUB_EYEBROW_CLASS_NAME } from './hub-eyebrow';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import type { HubEmptyAction } from './hub-states';
 import { opposingPositions } from './opposing-positions';
-import { narrowingOptions, orderFacetOptions, toggleId } from './topic-facets';
+import { hasId, narrowingOptions, orderFacetOptions, toggleId } from './topic-facets';
 
 /**
  * The side panel's one search field and one Filters button (GEO-3463).
@@ -586,6 +587,7 @@ export function PanelFiltersBar({
   onSpaceToggle,
   onSpacesClear,
   onTopicIdsChange,
+  onFilterChoice,
   spacesAreExclusive = true,
   listedCount,
   resultCount,
@@ -604,6 +606,8 @@ export function PanelFiltersBar({
   onSpaceToggle: (spaceId: string) => void;
   onSpacesClear: () => void;
   onTopicIdsChange?: (update: (current: string[]) => string[]) => void;
+  /** GEO-3495: each of the viewer's own presses here, by what it chose. */
+  onFilterChoice?: (choice: ClaimFilterChoice) => void;
   spacesAreExclusive?: boolean;
   /** Distinct rows under the current filters, for which pills still narrow; 0 while unknown. */
   listedCount: number;
@@ -618,6 +622,46 @@ export function PanelFiltersBar({
     onSpacesClear();
     onTopicIdsChange?.(() => []);
   }, [onSpacesClear, onTopicIdsChange]);
+
+  // GEO-3495: the controls below, each recording the viewer's choice before applying it.
+  const recorded = React.useMemo(() => {
+    const record = onFilterChoice ?? (() => {});
+    const { sort, choice, toggles } = filters;
+    return {
+      sort: {
+        ...sort,
+        onChange: (next: string) => {
+          // The segmented controls answer a press on the option already set; that chose nothing.
+          if (next !== sort.value) record({ kind: 'sort', value: next });
+          sort.onChange(next);
+        },
+      },
+      choice: choice && {
+        ...choice,
+        onChange: (next: string) => {
+          if (next !== choice.value) record({ kind: 'show', value: next });
+          choice.onChange(next);
+        },
+      },
+      toggles: toggles?.map(toggle => ({
+        ...toggle,
+        onChange: (next: boolean) => {
+          record({ kind: 'toggle', value: toggle.id, selected: next });
+          toggle.onChange(next);
+        },
+      })),
+      facetToggle: (option: FacetPillOption) => {
+        const picked = option.kind === 'space' ? spaceIds : (topicIds ?? []);
+        record({ kind: option.kind, value: option.id, selected: !hasId(picked, option.id) });
+      },
+      // Each kind that had a pick, as a per-kind clear records it elsewhere.
+      facetsClear: () => {
+        if (spaceIds.length > 0) record({ kind: 'space', value: 'all', selected: false });
+        if ((topicIds ?? []).length > 0) record({ kind: 'topic', value: 'all', selected: false });
+      },
+      clearAll: () => record({ kind: 'filters', value: 'all' }),
+    };
+  }, [filters, onFilterChoice, spaceIds, topicIds]);
 
   const facets = React.useMemo<HubFacetFilter>(
     () => ({
@@ -634,11 +678,15 @@ export function PanelFiltersBar({
       }),
       pickedSpaceIds: spaceIds,
       pickedTopicIds: topicIds ?? [],
-      onToggle: option =>
-        option.kind === 'space'
-          ? onSpaceToggle(option.id)
-          : onTopicIdsChange?.(current => toggleId(current, option.id)),
-      onClear: clearFacets,
+      onToggle: option => {
+        recorded.facetToggle(option);
+        if (option.kind === 'space') onSpaceToggle(option.id);
+        else onTopicIdsChange?.(current => toggleId(current, option.id));
+      },
+      onClear: () => {
+        recorded.facetsClear();
+        clearFacets();
+      },
       countsPending,
     }),
     [
@@ -650,6 +698,7 @@ export function PanelFiltersBar({
       listedCount,
       onSpaceToggle,
       onTopicIdsChange,
+      recorded,
       spaceIds,
       spaces,
       spacesAreExclusive,
@@ -664,12 +713,13 @@ export function PanelFiltersBar({
       search={search}
       onSearchChange={onSearchChange}
       searchPlaceholder={searchPlaceholder}
-      sort={filters.sort}
-      choice={filters.choice}
-      toggles={filters.toggles}
+      sort={recorded.sort}
+      choice={recorded.choice}
+      toggles={recorded.toggles}
       facets={facets}
       resultCount={resultCount}
       onClearAll={() => {
+        recorded.clearAll();
         clearFacets();
         filters.onClearExtras?.();
       }}

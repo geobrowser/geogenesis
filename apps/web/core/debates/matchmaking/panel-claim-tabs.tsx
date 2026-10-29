@@ -160,6 +160,8 @@ export function PanelMatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHub
   return showsOffline ? (
     <ClaimsTab
       variant="positions"
+      // GEO-3495: Matches' wider list, recorded apart from Explore's My positions.
+      listId="hub_matches_offline"
       atomsFrom="panelMatches"
       panelFilters={filters}
       keepClaim={hasSomeoneOnTheOtherSide}

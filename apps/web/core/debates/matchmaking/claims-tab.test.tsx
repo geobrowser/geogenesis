@@ -4,10 +4,11 @@ import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within }
 
 import type { ReactElement } from 'react';
 
-import { Provider, createStore } from 'jotai';
+import { Provider, atom, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
+import { type DebateClaimListId, DrawnHubListProvider } from '../debate-claim-card-surface';
 import { ClaimsTab } from './claims-tab';
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from './hub-scroll';
 import { panelFilters } from './panel-filters-fixtures';
@@ -1303,6 +1304,25 @@ describe('All claims reads the Debate tag', () => {
    * Both hops are asserted, not just the catalog: the rows are the one my first-paint gate waits
    * on, so a warmer that stopped at the catalog would leave the slowest hop still on the clock.
    */
+  // GEO-3495: a press on the hub's tabs is recorded as leaving the list on screen, which the list says
+  // itself to its host. Not the warm copy behind the other tabs, which draws nothing, nor a lobby's
+  // own Explore; and a host's override names the list, as the panel's Matches does for its wider one.
+  it('says which hub list is on screen, unless it is warming or a lobby’s', () => {
+    const drawnIn = (ui: ReactElement) => {
+      const store = createStore();
+      const drawn = atom<DebateClaimListId | null>(null);
+      const view = render(<DrawnHubListProvider value={drawn}>{ui}</DrawnHubListProvider>, store);
+      const value = store.get(drawn);
+      view.unmount();
+      return value;
+    };
+
+    expect(drawnIn(<ClaimsTab variant="positions" />)).toBe('hub_my_positions');
+    expect(drawnIn(<ClaimsTab variant="positions" listId="hub_matches_offline" />)).toBe('hub_matches_offline');
+    expect(drawnIn(<ClaimsTab variant="explore" warm />)).toBeNull();
+    expect(drawnIn(<ClaimsTab variant="lobbyExplore" />)).toBeNull();
+  });
+
   it('runs the queries without drawing anything when warming', async () => {
     mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
     render(<ClaimsTab warm />);
