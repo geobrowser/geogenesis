@@ -63,6 +63,15 @@ export function decodeEntityCommentCounts(data: CountsResponse): Map<string, num
 
 export const entityCommentCountsQueryKey = (ids: string[]) => ['entity-comment-counts', ids] as const;
 
+export function getEntityCommentCounts(ids: string[], signal?: AbortSignal) {
+  return graphql({
+    query: entityCommentCountsDocument,
+    decoder: decodeEntityCommentCounts,
+    variables: { ids, replyToTypeId: COMMENT_REPLY_TO_ID },
+    signal,
+  });
+}
+
 /**
  * Comment counts for a set of entities, read through {@link countFor}.
  *
@@ -76,15 +85,7 @@ export function useEntityCommentCounts(entityIds: string[], enabled = true): Bat
 
   const { data, isError } = useQuery({
     queryKey: entityCommentCountsQueryKey(ids),
-    queryFn: ({ signal }) =>
-      Effect.runPromise(
-        graphql({
-          query: entityCommentCountsDocument,
-          decoder: decodeEntityCommentCounts,
-          variables: { ids, replyToTypeId: COMMENT_REPLY_TO_ID },
-          signal,
-        })
-      ),
+    queryFn: ({ signal }) => Effect.runPromise(getEntityCommentCounts(ids, signal)),
     enabled: enabled && ids.length > 0,
     staleTime: 60_000,
   });

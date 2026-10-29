@@ -8,10 +8,15 @@ import { useRouter } from 'next/navigation';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { NavUtils } from '~/core/utils/utils';
 
-type Props = React.ComponentPropsWithoutRef<typeof Link> & { entityId?: string; spaceId?: string };
+type Props = React.ComponentPropsWithoutRef<typeof Link> & {
+  entityId?: string;
+  spaceId?: string;
+  /** Prefetch when hovered. On by default. */
+  hoverPrefetch?: boolean;
+};
 
 export const PrefetchLink = React.forwardRef<HTMLAnchorElement, Props>(function PrefetchLink(
-  { children, entityId, spaceId, prefetch: prefetchProp = false, onMouseEnter, href, ...rest },
+  { children, entityId, spaceId, prefetch: prefetchProp = false, hoverPrefetch = true, onMouseEnter, href, ...rest },
   ref
 ) {
   const { hydrate } = useSyncEngine();
@@ -21,7 +26,7 @@ export const PrefetchLink = React.forwardRef<HTMLAnchorElement, Props>(function 
     const prefetchTarget =
       typeof href === 'string' ? href : entityId && spaceId ? NavUtils.toEntity(spaceId, entityId) : null;
 
-    if (prefetchTarget) {
+    if (hoverPrefetch && prefetchTarget) {
       router.prefetch(prefetchTarget);
     }
 

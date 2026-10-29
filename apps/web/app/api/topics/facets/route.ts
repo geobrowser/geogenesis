@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ topics: [] }, { status: 400 });
   }
 
-  const selectedTopicIds = parseTopicFeedSelectedIds(body?.selectedTopicIds, topicId);
+  const selectedTopicIds = parseTopicFeedSelectedIds(body?.selectedTopicIds, { pageTopicId: topicId });
   const typeIds = parseTopicFeedBodyTypeIds(body?.typeIds);
   if (typeIds.length === 0) {
     return NextResponse.json({ topics: [] });

@@ -15,8 +15,8 @@ import {
   cellKey,
   cellOf,
   dayListLabel,
-  timeRangeLabel,
 } from './debate-calendar-model';
+import { formatTimeRange } from './scheduled-debate-format';
 import { HubPillButton } from './hub-pill-button';
 import { useDebatesHub } from './use-debates-hub';
 
@@ -126,7 +126,7 @@ function OwnDebateRow({
           {name ? `You · Debate with ${name}` : 'You · Debate'}
         </Text>
         <Text as="p" variant="footnote" color="grey-04">
-          {timeRangeLabel(debate.start, debate.end)} · {state}
+          {formatTimeRange(debate.start, debate.end, { periodOnce: false })} · {state}
         </Text>
       </div>
       <HubPillButton

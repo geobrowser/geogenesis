@@ -3,18 +3,21 @@
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
-import type { DebateOpenRounds, DebateRequest } from './api';
+import type { DebateRequest } from './api';
 import {
   type DebateTurnRole,
+  type OpenRoundsFormat,
   debateFormatById,
   debateTurnRole,
   defaultDebateFormatId,
   formatTurnDuration,
+  hasNumberedOpenRoundsTurns,
   isOpenRoundsFormatId,
   openRoundsDefaultRebuttalTurnMs,
-  openRoundsOpeningTurnDurationsMs,
+  openRoundsExtraTurnMs,
+  openRoundsInitialTurnDurationsMs,
 } from './formats';
-import { openRoundsRequiredRebuttalRounds } from './open-rounds';
+import { openRoundIndexForTurn, openRoundNumber, openRoundsRequiredRebuttalRounds } from './open-rounds';
 import { speakerLabel } from './playback-utils';
 
 type FormatParticipant = {
@@ -24,25 +27,22 @@ type FormatParticipant = {
   avatar_cid: string | null;
 };
 
-/** What the format box needs from a debate's `open_rounds` block. */
-export type DebateFormatOpenRounds = Pick<
-  DebateOpenRounds,
-  'max_rebuttal_rounds' | 'rebuttal_turn_ms' | 'required_rebuttal_rounds'
->;
-
 /**
  * The format box's Open rounds block for a pending request. The server decides the format, cap and
- * required rounds when the request is made (GEO-3201); the rebuttal turn length isn't on the
- * request, so it uses the default every Open rounds debate starts with.
+ * required rounds and initial turns when the request is made. Missing turns identify a legacy
+ * request; its required-round count alone cannot identify the timing generation.
  */
 export function requestOpenRounds(
-  request: Pick<DebateRequest, 'max_rebuttal_rounds' | 'required_rebuttal_rounds'>
-): DebateFormatOpenRounds | null {
+  request: Pick<DebateRequest, 'max_rebuttal_rounds' | 'required_rebuttal_rounds' | 'turn_durations_ms'>
+): OpenRoundsFormat | null {
   if (request.max_rebuttal_rounds == null) return null;
   return {
     max_rebuttal_rounds: request.max_rebuttal_rounds,
     required_rebuttal_rounds: request.required_rebuttal_rounds ?? 0,
-    rebuttal_turn_ms: openRoundsDefaultRebuttalTurnMs,
+    ...(request.turn_durations_ms && { turn_durations_ms: request.turn_durations_ms }),
+    rebuttal_turn_ms: hasNumberedOpenRoundsTurns(request.turn_durations_ms ?? [])
+      ? openRoundsExtraTurnMs
+      : openRoundsDefaultRebuttalTurnMs,
   };
 }
 
@@ -57,7 +57,7 @@ export function DebateFormatDetails({
    * The debate's own `open_rounds` block, when there is a debate. It carries the cap the server
    * snapshotted for this debate. For a pending request, build it with `requestOpenRounds`.
    */
-  openRounds?: DebateFormatOpenRounds | null;
+  openRounds?: OpenRoundsFormat | null;
   participants: FormatParticipant[];
   currentUserId: string;
 }) {
@@ -73,6 +73,10 @@ export function DebateFormatDetails({
   const fixedFormat = isOpenRounds ? null : debateFormatById(formatId || defaultDebateFormatId);
   const rebuttalTurnMs = openRounds?.rebuttal_turn_ms ?? openRoundsDefaultRebuttalTurnMs;
   const requiredRebuttalRounds = openRounds ? openRoundsRequiredRebuttalRounds(openRounds) : 0;
+  const initialTurns = openRoundsInitialTurnDurationsMs(
+    openRounds ?? { max_rebuttal_rounds: 0, rebuttal_turn_ms: rebuttalTurnMs }
+  );
+  const numberedOnly = isOpenRounds && hasNumberedOpenRoundsTurns(initialTurns);
   const maxRebuttalRounds = openRounds?.max_rebuttal_rounds ?? null;
   if (!isOpenRounds && !fixedFormat) {
     return (
@@ -87,25 +91,25 @@ export function DebateFormatDetails({
         durationMs,
         role: debateTurnRole(index, all.length),
       }))
-    : [
-        ...openRoundsOpeningTurnDurationsMs.map(durationMs => ({ durationMs, role: 'opening' as const })),
-        ...Array.from({ length: requiredRebuttalRounds * 2 }, () => ({
-          durationMs: rebuttalTurnMs,
-          role: 'rebuttal' as const,
-        })),
-      ];
+    : initialTurns.map((durationMs, index) => ({
+        durationMs,
+        role: index < 2 ? ('opening' as const) : ('rebuttal' as const),
+      }));
 
   return (
     <div className="grid">
       {turns.map(({ durationMs, role }, index) => {
+        if (numberedOnly && index % 2 === 1) return null;
+        const rowIndex = numberedOnly ? openRoundIndexForTurn(index) : index;
         const participant = participants[index % participants.length] ?? firstParticipant;
         return (
-          <TurnRow
+          <FormatRow
             key={index}
             durationMs={durationMs}
-            alternate={index % 2 === 1}
+            alternate={rowIndex % 2 === 1}
             participant={participant}
-            label={turnLabel(participant, currentUserId, role)}
+            perSpeaker={numberedOnly}
+            label={numberedOnly ? `Round ${openRoundNumber(rowIndex)}` : turnLabel(participant, currentUserId, role)}
           />
         );
       })}
@@ -121,31 +125,41 @@ export function DebateFormatDetails({
   );
 }
 
-function TurnRow({
+function FormatRow({
   durationMs,
   alternate,
   participant,
   label,
+  perSpeaker,
 }: {
   durationMs: number;
   alternate: boolean;
   participant: FormatParticipant;
   label: string;
+  perSpeaker: boolean;
 }) {
   return (
     <div className={`flex items-center gap-5 rounded-md px-3 py-3 ${alternate ? 'bg-grey-01' : ''}`}>
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-text text-smallButton text-text">
-        {formatTurnDuration(durationMs)}
+      <span
+        className={
+          perSpeaker
+            ? 'order-last ml-auto grid h-7 shrink-0 place-items-center text-metadata text-grey-04'
+            : 'grid h-7 w-7 shrink-0 place-items-center rounded-full border border-text text-smallButton text-text'
+        }
+      >
+        {`${formatTurnDuration(durationMs)}${perSpeaker ? ' each' : ''}`}
       </span>
       <div className="flex min-w-0 items-center gap-1.5">
-        <span className="h-4 w-4 shrink-0 overflow-hidden rounded-full">
-          <Avatar
-            avatarUrl={participant.avatar_cid}
-            value={participant.profile_space_id}
-            alt={speakerLabel(participant)}
-            size={16}
-          />
-        </span>
+        {!perSpeaker && (
+          <span className="h-4 w-4 shrink-0 overflow-hidden rounded-full">
+            <Avatar
+              avatarUrl={participant.avatar_cid}
+              value={participant.profile_space_id}
+              alt={speakerLabel(participant)}
+              size={16}
+            />
+          </span>
+        )}
         <Text as="div" variant="metadataMedium" color="text" className="min-w-0 truncate">
           {label}
         </Text>
@@ -154,7 +168,7 @@ function TurnRow({
   );
 }
 
-/** The dashed row: rebuttal rounds that happen when one debater picks Extend and neither picks End. */
+/** The dashed row: optional rounds added when both debaters pick Extend. */
 function OpenRoundsRebuttalRow({
   rebuttalTurnMs,
   extendableRounds,
@@ -183,7 +197,8 @@ function OpenRoundsRebuttalRow({
           Then extend, round by round
         </Text>
         <Text as="div" variant="metadata" color="grey-04">
-          A round happens if one of you picks Extend and neither picks End.{cap}
+          Both of you must pick Extend to add a round.
+          {cap}
         </Text>
       </div>
     </div>
