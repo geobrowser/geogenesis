@@ -81,6 +81,7 @@ import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState, HubSkeleton, exploreClaimsAction } from '~/core/debates/matchmaking/hub-states';
 import { HideAgreedSwitch, HideMyPositionsSwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { NewArrivalTag, NewArrivalsPill, useArrivalHold } from '~/core/debates/matchmaking/new-arrivals';
 import { ScrollableTabRow } from '~/core/debates/matchmaking/scrollable-tab-row';
 import {
   carriesEveryTopic,
@@ -99,7 +100,7 @@ import { TopicSearchSuggestions } from '~/core/debates/matchmaking/topic-search-
 import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
 import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
-import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
+import { useNewArrivalsFirst, useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import {
   type ParticipantPositionsByClaim,
@@ -443,7 +444,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // back out by `participantSidesOn`, which matches on the current participants' space ids.
   const localParticipant =
     currentUserId === null ? null : (participants.find(participant => participant.user_id === currentUserId) ?? null);
-  const positions = useParticipantPositions(participants, localParticipant?.profile_space_id ?? null);
+  // The other debater's responses show as soon as geo-chat reports them, ahead of the graph (GEO-3505).
+  const positions = useParticipantPositions(participants, localParticipant?.profile_space_id ?? null, {
+    liveFrom:
+      currentUserId === null
+        ? null
+        : (participants.find(participant => participant.user_id !== currentUserId)?.profile_space_id ?? null),
+  });
 
   const remoteParticipant =
     currentUserId === null ? null : (participants.find(participant => participant.user_id !== currentUserId) ?? null);
@@ -2205,6 +2212,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   /** The tab the strip marks, which is none until there is one. */
   const activeTab = landingPending ? null : tab;
 
+  // GEO-3505: a match made after the picker loaded goes to the top of Matches, tagged New, but
+  // waits while the viewer is working the list or scrolled down, so nothing moves under them.
+  const arrivalHold = useArrivalHold(activeTab === 'matches');
+  const matchArrivals = useNewArrivalsFirst(matchClaims, claimRowKey, {
+    resetKey: sessionId,
+    settled: !opponentLandingPending,
+    hold: arrivalHold.hold,
+  });
+
   // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
   // a source that appears doesn't reshuffle the ones already in the menu. The rest are in the hub's
   // order — All claims, Featured, My positions — so the same menu means the same thing on both
@@ -2237,7 +2253,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     tab === 'todays'
       ? todaysClaims
       : tab === 'matches'
-        ? matchClaims
+        ? matchArrivals.items
         : tab === 'opponent'
           ? opponentClaims
           : tab === 'related'
@@ -3130,20 +3146,26 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           claim={{ ...claim, participants: sidesOf(claim.claim.claim_entity_id, claim.claim.space_id) }}
           previouslyDebated={previouslyDebated}
           context={saidBy ? null : topicMatchCaptionFor(claim)}
-          headerMeta={saidBy}
+          headerMeta={
+            saidBy ??
+            (tab === 'matches' && matchArrivals.newKeys.has(claimRowKey(claim)) ? (
+              <NewArrivalTag onSeen={() => matchArrivals.dismiss(claimRowKey(claim))} />
+            ) : null)
+          }
           session={session}
           currentUserId={currentUserId}
           opponent={remoteParticipant}
           opponentPositionKnown={!positions.isLoading && !positions.isPlaceholderData && !positions.error}
           chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
           readiness={readinessByClaimId.get(normId(claim.claim.claim_entity_id)) ?? null}
-          onRequest={() =>
+          onRequest={() => {
+            matchArrivals.dismiss(claimRowKey(claim));
             createRequest.mutate({
               source_space_id: claim.claim.space_id,
               claim_id: claim.claim.claim_entity_id,
               format_id: defaultDebateFormatId,
-            })
-          }
+            });
+          }}
           busy={createRequest.isPending || session?.status === 'request_pending'}
           // Associate the shared mutation error with the claim that initiated it.
           requestError={hasRequestTarget(claim) ? requestError : null}
@@ -3458,6 +3480,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               }}
             />
           </div>
+          {tab === 'matches' && !landingPending ? (
+            <NewArrivalsPill count={matchArrivals.waitingCount} onClick={arrivalHold.scrollToTop} />
+          ) : null}
         </div>
 
         {/* A request error belongs on the card it was sent from; this line is the fallback for when
@@ -3664,6 +3689,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 ])}
               </HubCardList>
             </div>
+          ) : tab === 'matches' ? (
+            <>
+              <div ref={arrivalHold.topRef} />
+              <div ref={arrivalHold.listRef}>
+                <HubCardList>{visibleClaims.map((claim, index) => renderClaimCard(claim, index + 1))}</HubCardList>
+              </div>
+            </>
           ) : (
             <HubCardList>{visibleClaims.map((claim, index) => renderClaimCard(claim, index + 1))}</HubCardList>
           )}

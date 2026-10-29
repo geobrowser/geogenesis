@@ -3030,6 +3030,33 @@ describe('DebateRematchPageClient', () => {
       expect(appearsBefore(THIRD_CLAIM, FIRST_CLAIM)).toBe(true);
     });
 
+    // GEO-3505. The pill hangs off the sticky filter block: a sticky of its own above the list
+    // slid under that block once the list scrolled, so it showed only back at the top.
+    it('holds a match that arrives while the list is in use, with the pill under the sticky filters', async () => {
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      const matches = await screen.findByRole('button', { name: /^Matches/ });
+      await waitFor(() => expect(matches).toHaveAttribute('aria-pressed', 'true'));
+      fireEvent.pointerMove(await screen.findByText(FIRST_CLAIM));
+
+      mocks.positions = [
+        ...mocks.positions,
+        position('profile-local', CLAIM_FRESH, SPACE_1, true),
+        position('profile-remote', CLAIM_FRESH, SPACE_1, false),
+      ];
+      mocks.entities = [...mocks.entities, opponentEntity(CLAIM_FRESH, THIRD_CLAIM)];
+      mocks.claims = [...mocks.claims, sessionRow(CLAIM_FRESH, THIRD_CLAIM, true)];
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      const filters = screen.getByRole('group', { name: 'Claim picker filters' });
+      expect(within(filters).getByTestId('new-matches-pill')).toHaveTextContent('1 new match');
+      expect(screen.queryByText(THIRD_CLAIM)).toBeNull();
+
+      // Once the viewer stops, it lands on top and the pill goes.
+      await waitFor(() => expect(screen.queryByTestId('new-matches-pill')).toBeNull(), { timeout: 4_000 });
+      expect(appearsBefore(THIRD_CLAIM, FIRST_CLAIM)).toBe(true);
+    });
+
     /**
      * GEO-3527. Their claims are ordered by how debatable they are for them: here both are 9 to 1,
      * and they sit with the nine on the first and against them on the second.

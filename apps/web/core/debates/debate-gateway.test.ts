@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
 import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
 import { type LobbyHighlightsState, settleFetchedLobbyHighlights } from './lobbies/lobby-highlights-state';
+import { type RemoteClaimResponse, subscribeRemoteClaimResponses } from './remote-claim-responses';
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
@@ -1497,6 +1498,43 @@ describe('DebateGatewayClient', () => {
 
     client.stop();
     expect(client.getSnapshot().capabilities).toEqual([]);
+  });
+
+  it('hands a claims_changed claim_response to the picker at once, and nothing for one without it', async () => {
+    const heard: RemoteClaimResponse[] = [];
+    const unsubscribe = subscribeRemoteClaimResponses(response => heard.push(response));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-plain',
+      event_type: 'debate.claims_changed',
+      payload: { space_id: 'space-1', claim_entity_ids: ['claim-1'] },
+    });
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-response',
+      event_type: 'debate.claims_changed',
+      payload: {
+        space_id: 'space-1',
+        claim_entity_ids: ['claim-1', 'claim-2'],
+        claim_response: {
+          claim_entity_id: 'claim-1',
+          profile_space_id: 'profile-2',
+          response_kind: 'stance',
+          position: false,
+        },
+      },
+    });
+    unsubscribe();
+
+    expect(heard).toEqual([
+      { profileSpaceId: 'profile-2', claimId: 'claim-1', spaceId: 'space-1', responseKind: 'stance', position: false },
+    ]);
   });
 
   it('filters claim invalidations to active claim queries that intersect the event', async () => {
