@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { CallRoom } from '~/core/space-calls/call-room';
+import { CallScreenStage } from '~/core/space-calls/call-screen-stage';
 import { EndedCallRecording } from '~/core/space-calls/recording/ended-call-recording';
 import { spaceCallPath } from '~/core/space-calls/routes';
 import { useBrowseSidebarPageDefault } from '~/core/state/browse-sidebar-state';
@@ -565,7 +566,15 @@ function LobbyRoom({
       header={<LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />}
       belowHeader={!guest && state.status === 'joined' ? <LobbyScheduledRequests lobby={lobby} /> : null}
       people={
-        <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={ownAvailable} disagreements={disagreements} />
+        // A host's shared screen (GEO-3507), above the speakers as in a call.
+        <CallScreenStage members={lobby.members}>
+          <LobbyPeople
+            lobby={lobby}
+            viewerId={currentUserId}
+            ownAvailable={ownAvailable}
+            disagreements={disagreements}
+          />
+        </CallScreenStage>
       }
       aside={{
         tab: 'Claims',
@@ -578,9 +587,12 @@ function LobbyRoom({
       availability={availability}
       queuedOutcome={queuedRequest.outcome}
       onDismissQueuedOutcome={queuedRequest.dismissOutcome}
+      voiceExtras={LOBBY_VOICE_EXTRAS}
     />
   );
 }
+
+const LOBBY_VOICE_EXTRAS = { screenShare: true };
 
 function LobbyTitle({ lobby }: { lobby: LobbyPageView }) {
   return (

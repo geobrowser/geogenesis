@@ -48,6 +48,7 @@ const { LobbyPeople } = await import('./lobby-roster');
 const { LobbyVoiceStatesProvider } = await import('./lobby-voice');
 const { LobbyShowPeopleContext, LobbySlotsProvider } = await import('./lobby-slots');
 const { callMetaLabel, lobbyMetaLabel } = await import('./lobby-header');
+const { CallScreenStage } = await import('~/core/space-calls/call-screen-stage');
 
 afterEach(() => {
   cleanup();
@@ -309,6 +310,52 @@ describe('LobbyPeople on a phone', () => {
     expect(sheet).toHaveAttribute('role', 'dialog');
     expect(within(sheet).getByRole('button', { name: 'Request a debate with Daniel' })).toBeInTheDocument();
     expect(within(sheet).getByTestId('host-controls')).toBeInTheDocument();
+  });
+});
+
+// GEO-3507: a sharer's tile is tagged, and the tag puts their screen on the stage.
+describe('LobbyPeople with shared screens', () => {
+  function shareScreens(view: LobbyPageView, sharers: string[]) {
+    const screens = new Map(
+      sharers.map(id => {
+        const track = { attach: vi.fn(), detach: vi.fn() };
+        return [id, { participant: { identity: id }, publication: { track, isMuted: false } }];
+      })
+    );
+    return render(
+      <LobbyVoiceStatesProvider
+        value={{
+          speaking: new Set(),
+          micOn: new Set(),
+          cameras: new Map(),
+          screens: screens as never,
+          connected: true,
+        }}
+      >
+        <CallScreenStage members={view.members}>
+          <LobbyPeople lobby={view} viewerId="Adam" ownAvailable={undefined} disagreements={null} />
+        </CallScreenStage>
+      </LobbyVoiceStatesProvider>
+    );
+  }
+  const view = () => lobby([member('Adam', { role: 'host' }), member('Daniel', { role: 'host' }), member('Elena')]);
+  const stage = (name: string) => screen.getByRole('region', { name: `${name} is sharing their screen` });
+
+  it('tags only the sharers’ tiles', () => {
+    shareScreens(view(), ['adam', 'daniel']);
+    const tag = (name: string) =>
+      within(screen.getByRole('group', { name })).queryByRole('button', { name: `Show ${name}’s screen` });
+    expect(tag('Daniel')).toHaveAttribute('aria-pressed', 'true');
+    expect(tag('Elena')).toBeNull();
+  });
+
+  it('puts a sharer’s screen on the stage from their tile, without opening their menu', () => {
+    shareScreens(view(), ['adam', 'daniel']);
+    expect(stage('Daniel')).toBeInTheDocument();
+    const adam = screen.getByRole('group', { name: 'Adam (you)' });
+    fireEvent.click(within(adam).getByRole('button', { name: 'Show Adam’s screen' }));
+    expect(stage('Adam')).toBeInTheDocument();
+    expect(screen.queryByTestId('lobby-person-card')).toBeNull();
   });
 });
 
