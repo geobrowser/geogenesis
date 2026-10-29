@@ -258,6 +258,16 @@ export const debateQueryKeys = {
   notInterested: (accountKey: string | null) => ['debates', 'account', accountKey, 'not-interested'] as const,
 };
 
+/**
+ * Every read of who is free when: Find a time and anyone's week. Each is computed from the viewer's
+ * schedule, their calendar, and the time both people hold for accepted debates and pending invites
+ * (GEO-3532), so a change to any of those leaves all of them stale.
+ */
+export function invalidateAvailabilityReads(queryClient: QueryClient, accountKey: string | null) {
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+  void queryClient.invalidateQueries({ queryKey: debateQueryKeys.peerScheduleRoot(accountKey) });
+}
+
 export function useGeoChatAuth() {
   const privy = usePrivy();
   useIdentityTokenSync();
@@ -741,8 +751,9 @@ export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurf
         debateScheduleSaved(fromPayload(saved.schedule), { surface, isFirstSchedule: before?.is_set !== true });
       }
       queryClient.setQueryData(scheduleKey, saved);
-      // Who shares a slot with the viewer is computed from this schedule.
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+      // Who shares a slot with the viewer is computed from this schedule, and so is which of
+      // anyone's times the viewer is free for.
+      invalidateAvailabilityReads(queryClient, accountKey);
       // An admin's request for more times is answered by saving (GEO-3228).
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
     },

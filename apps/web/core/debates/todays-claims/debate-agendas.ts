@@ -246,8 +246,8 @@ export function useDebateAgendas(enabled = true): {
     retry: 1,
     refetchOnWindowFocus: query => query.state.status === 'error',
     // Read once per visit. A picker left open past midnight keeps the agendas it opened on, and
-    // nothing outlives the visit, so the next one asks again: the page's flag only turns on after
-    // hydration, and a cached answer would otherwise be reused without a request.
+    // nothing outlives the visit, so the next one asks again: under `staleTime: Infinity` a cached
+    // answer would otherwise be reused without a request.
     staleTime: Infinity,
     gcTime: 0,
   });

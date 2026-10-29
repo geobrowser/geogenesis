@@ -247,6 +247,9 @@ describe('DebateGatewayClient', () => {
         ['debates', 'account', 'user-a', 'room'],
         // GEO-3463: a request that ends moves into the Requests timeline's history.
         ['debates', 'account', 'user-a', 'history'],
+        // GEO-3532: a pending scheduled request holds its time, so availability reads go too.
+        ['debates', 'account', 'user-a', 'schedulable-people'],
+        ['debates', 'account', 'user-a', 'peer-schedule'],
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
       ],

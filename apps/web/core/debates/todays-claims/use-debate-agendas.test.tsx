@@ -187,9 +187,8 @@ describe('useDebateAgendas', () => {
     expect(mocks.calls).toHaveLength(1);
   });
 
-  // The page's flag only turns on after hydration, so each visit mounts disabled and then enables.
-  // A cached answer from the last visit must not stand in for this one.
-  it('asks again on the next visit, even when it mounts disabled', async () => {
+  // A visit after midnight, or after a new agenda is published, must not reuse the last visit's answer.
+  it('asks again on the next visit', async () => {
     const { SharedWrapper } = sharedClient();
     const first = renderHook(() => useDebateAgendas(), { wrapper: SharedWrapper });
     await waitFor(() => expect(first.result.current.isLoading).toBe(false));
@@ -197,16 +196,24 @@ describe('useDebateAgendas', () => {
     // Leaving the page and coming back takes longer than react-query's gcTime-0 timer.
     await new Promise(resolve => setTimeout(resolve, 0));
 
-    const next = renderHook(({ enabled }) => useDebateAgendas(enabled), {
-      wrapper: SharedWrapper,
-      initialProps: { enabled: false },
-    });
-    next.rerender({ enabled: true });
+    renderHook(() => useDebateAgendas(), { wrapper: SharedWrapper });
 
     await waitFor(() => expect(mocks.calls).toHaveLength(2));
   });
 
-  it('asks for nothing with the flag off', () => {
+  // Once loaded, a re-render or a second reader on the same visit reads the cache.
+  it('asks once per visit', async () => {
+    const { SharedWrapper } = sharedClient();
+    const first = renderHook(() => useDebateAgendas(), { wrapper: SharedWrapper });
+    await waitFor(() => expect(first.result.current.isLoading).toBe(false));
+
+    renderHook(() => useDebateAgendas(), { wrapper: SharedWrapper });
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    expect(mocks.calls).toHaveLength(1);
+  });
+
+  it('asks for nothing when disabled', () => {
     const { result } = renderHook(() => useDebateAgendas(false), { wrapper: Wrapper });
 
     expect(mocks.calls).toEqual([]);
