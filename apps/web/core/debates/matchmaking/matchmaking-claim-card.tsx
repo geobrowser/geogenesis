@@ -369,15 +369,15 @@ function ClaimHeader({
 
   return (
     <>
-      {/* On one text baseline, not centred: the space (11px), Controversial (14px) and the slot's
-          Schedule (13px) are three sizes, and centring their boxes left each sitting at a different
-          height (27 Oct). The baseline is also what keeps the chip on the slot's first line when the
-          slot stacks a blocked reason under it. Here rather than in the utility, which Explore's
-          meta row also uses: Tailwind emits `items-baseline` after it, so this wins. */}
+      {/* Keep the space and offer on one text baseline, including when the offer stacks a blocked
+          reason under its first line. The larger Controversial tag centres itself against the space
+          chip instead: sharing the smaller name's baseline lifts the tag above its thumbnail.
+          Here rather than in the utility, which Explore's meta row also uses: Tailwind emits
+          `items-baseline` after it, so this wins. */}
       <div className="claim-card-panel-header items-baseline">
         <span className="flex min-w-0 items-baseline gap-1.5" data-testid="claim-card-eyebrow">
           <SpaceChip spaceId={claim.space_id} />
-          {isControversial ? <ControversialTag /> : null}
+          {isControversial ? <ControversialTag className="self-center" /> : null}
           {meta ? (
             <span className="flex min-w-0 items-center gap-1.5 text-footnoteMedium text-grey-04">
               <span aria-hidden>·</span>
