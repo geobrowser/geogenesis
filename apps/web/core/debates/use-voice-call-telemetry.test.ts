@@ -25,6 +25,9 @@ function fakeRoom() {
 
   const mic = {
     label: 'MacBook Pro Microphone',
+    /** Set once a processor (the noise filter) has replaced the published track. */
+    processor: null as object | null,
+    deviceId: 'mic-1',
     stats: [] as Record<string, unknown>[],
     /** The browser refuses the next stats read. */
     rejects: false,
@@ -58,7 +61,11 @@ function fakeRoom() {
             }
           : {
               track: {
-                mediaStreamTrack: { label: mic.label },
+                get mediaStreamTrack() {
+                  return { label: mic.label };
+                },
+                getProcessor: () => mic.processor ?? undefined,
+                getDeviceId: async () => mic.deviceId,
                 getRTCStatsReport: async () => {
                   if (mic.hold) await mic.hold;
                   if (mic.rejects) throw new Error('stats unavailable');
@@ -405,7 +412,7 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_FIRST_SAMPLE_MS)));
 
     call.mic.label = 'AirPods Pro';
-    act(() => call.emit(RoomEvent.ActiveDeviceChanged, 'audioinput', 'device-2'));
+    await act(async () => call.emit(RoomEvent.ActiveDeviceChanged, 'audioinput', 'device-2'));
 
     const change = events('debate_voice_changed').at(-1);
     expect(change).toEqual(
@@ -413,6 +420,84 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     );
     expect(JSON.stringify(capture.mock.calls)).not.toContain('AirPods');
     expect(JSON.stringify(capture.mock.calls)).not.toContain('MacBook');
+  });
+
+  it('reports the physical mic once a noise filter replaces the published track', async () => {
+    const call = fakeRoom();
+    const devices = [
+      { kind: 'audioinput', deviceId: 'mic-1', label: 'MacBook Pro Microphone' },
+      { kind: 'audioinput', deviceId: 'mic-2', label: 'AirPods Pro' },
+    ];
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { enumerateDevices: async () => devices },
+    });
+    try {
+      renderHook(() => useVoiceCallTelemetry(call.room, 'picker', 'session-1'));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_FIRST_SAMPLE_MS)));
+
+      call.mic.processor = {};
+      call.mic.label = 'MediaStreamAudioDestinationNode';
+      await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
+      expect(events('debate_voice_changed')).toEqual([]);
+      expect(events('debate_voice_sampled').at(-1)).toEqual(expect.objectContaining({ mic_kind: 'built_in' }));
+
+      call.mic.deviceId = 'mic-2';
+      await act(async () => call.emit(RoomEvent.ActiveDeviceChanged, 'audioinput', 'mic-2'));
+      expect(events('debate_voice_changed')).toEqual([
+        expect.objectContaining({ change: 'mic_device', mic_kind: 'bluetooth', previous_mic_kind: 'built_in' }),
+      ]);
+    } finally {
+      Reflect.deleteProperty(navigator, 'mediaDevices');
+    }
+  });
+
+  it('reports incoming audio the browser blocks, and the click that unblocks it', () => {
+    const call = fakeRoom();
+    renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
+
+    act(() => call.emit(RoomEvent.AudioPlaybackStatusChanged, false));
+    act(() => call.emit(RoomEvent.AudioPlaybackStatusChanged, true));
+
+    expect(events('debate_voice_changed')).toEqual([
+      expect.objectContaining({ change: 'audio_playback', playing: false, reason: 'autoplay_blocked' }),
+      expect.not.objectContaining({ reason: expect.anything() }),
+    ]);
+    expect(events('debate_voice_changed')[1]).toEqual(
+      expect.objectContaining({ change: 'audio_playback', playing: true })
+    );
+  });
+
+  it('adds a probe’s measurements to each sample and stops it with the call', async () => {
+    const call = fakeRoom();
+    const stop = vi.fn();
+    const sample = vi.fn(async () => ({ recv_audio_state: 'playing' }));
+    let report: ((change: Record<string, unknown>) => void) | undefined;
+    const end = startVoiceCallTelemetry(call.room, 'debate', 'debate-1', undefined, {
+      probe: reporter => {
+        report = reporter;
+        return { sample, stop };
+      },
+    });
+
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_FIRST_SAMPLE_MS)));
+    expect(events('debate_voice_sampled').at(-1)).toEqual(
+      expect.objectContaining({ call_id: 'debate-1', recv_audio_state: 'playing' })
+    );
+
+    sample.mockRejectedValueOnce(new Error('probe failed'));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
+    expect(events('debate_voice_sampled')).toHaveLength(2);
+
+    report?.({ change: 'recv_video', recv_video_state: 'no_track' });
+    expect(events('debate_voice_changed').at(-1)).toEqual(
+      expect.objectContaining({ call_surface: 'debate', call_id: 'debate-1', change: 'recv_video' })
+    );
+
+    end();
+    expect(stop).toHaveBeenCalledOnce();
+    report?.({ change: 'recv_video', recv_video_state: 'shown' });
+    expect(events('debate_voice_changed').at(-1)).toEqual(expect.objectContaining({ recv_video_state: 'no_track' }));
   });
 
   // Copilot on #2884 (round 2): the summary is the last word on a call. Leaving the page summarises

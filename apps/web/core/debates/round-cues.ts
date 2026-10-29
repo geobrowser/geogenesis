@@ -113,7 +113,7 @@ function cueFor(span: TurnSpan, turnCount: TurnCount, opacity: number): RoundCue
  * names its turns itself (`debateTurnRoleForDebate`), so counting turns would call its last round
  * a closing one (GEO-3277).
  */
-export type TurnCount = number | ((turnIndex: number) => DebateTurnRole);
+export type TurnCount = number | ((turnIndex: number) => DebateTurnRole | null);
 
 /** The turn the playhead is inside, or nothing before the first and after the last. */
 function currentSpan(spans: TurnSpan[], playheadSeconds: number) {

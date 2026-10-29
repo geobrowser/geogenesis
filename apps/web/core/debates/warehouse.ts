@@ -1,7 +1,7 @@
 import { uuidToHex } from '../id/normalize';
 import type { Debate, DebateMediaTurnSegment, DebateTranscriptSegment } from './api';
 import { resolveClaimTimings } from './claim-timing';
-import { debateTurnRole } from './formats';
+import { debateTurnRoleForDebate } from './open-rounds';
 import type { DebateTranscriptClaims } from './transcript-claims';
 
 export type WarehouseTurn = {
@@ -30,7 +30,7 @@ export type WarehouseClaim = {
 
 /** Use the rendered timeline, including grace windows and early yields, never planned durations. */
 export function warehouseTurns(
-  debate: Pick<Debate, 'id' | 'participants' | 'turn_durations_ms'>,
+  debate: Pick<Debate, 'id' | 'participants' | 'turn_durations_ms' | 'open_rounds'>,
   segments: DebateMediaTurnSegment[]
 ): WarehouseTurn[] {
   const ordered = [...segments].sort((a, b) => a.output_start_ms - b.output_start_ms);
@@ -57,7 +57,7 @@ export function warehouseTurns(
       turn_index: turn,
       start_ms: start,
       end_ms: end,
-      round: debateTurnRole(turn, debate.turn_durations_ms.length),
+      round: debateTurnRoleForDebate(debate, turn),
       speaker_space_id: uuidToHex(speakers[0].profile_space_id),
     };
   });

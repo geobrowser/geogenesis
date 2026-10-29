@@ -38,12 +38,19 @@ export const HUB_STICKY_CONTROLS_SELECTOR = '[data-hub-sticky-controls]';
  */
 export function scrollToSection(node: HTMLElement, scroller: HTMLElement | null, extraOffset = 0) {
   const margin = (Number.parseFloat(getComputedStyle(node).scrollMarginTop) || 0) + extraOffset;
-  const nodeTop = node.getBoundingClientRect().top;
   if (scroller) {
-    const top = nodeTop - scroller.getBoundingClientRect().top + scroller.scrollTop - margin;
+    const top = scrollOffsetWithin(node, scroller) - margin;
     if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ top, behavior: 'smooth' });
     else scroller.scrollTop = top;
     return;
   }
-  window.scrollTo({ top: nodeTop + window.scrollY - margin, behavior: 'smooth' });
+  window.scrollTo({ top: node.getBoundingClientRect().top + window.scrollY - margin, behavior: 'smooth' });
+}
+
+/**
+ * How far down `scroller`'s content `node` starts: the `scrollTop` that would put it at the very top
+ * of the box. What a jump subtracts its clearance from — here, and the Requests timeline's pin.
+ */
+export function scrollOffsetWithin(node: Element, scroller: HTMLElement) {
+  return node.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
 }

@@ -7,12 +7,12 @@ import { useAtom } from 'jotai';
 import { type DebatesHubTab, debatesHubAtom } from '~/atoms';
 
 /**
- * Opening the panel lands on Lobby (GEO-2861) — the one answer to "what can I debate right now",
- * which is the reason to open the hub at all. Deliberately not the megaphone's badge target: a
- * pending request still needs one click to Requests, which is the trade for not opening onto an
- * empty list the rest of the time.
+ * Opening the panel lands on People (GEO-3463). It is the tab people use most, and it can always
+ * answer — someone is online or has times this week — where Matches is often empty. Deliberately not
+ * the megaphone's badge target: a pending request still needs one click to Requests, which is the
+ * trade for not opening onto an empty list the rest of the time.
  */
-const DEFAULT_TAB: DebatesHubTab = 'lobby';
+const DEFAULT_TAB: DebatesHubTab = 'people';
 
 export function useDebatesHub() {
   const [state, setState] = useAtom(debatesHubAtom);

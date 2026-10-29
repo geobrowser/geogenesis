@@ -3,6 +3,7 @@ import type { JSONContent } from '@tiptap/core';
 import { generateJSON } from '@tiptap/html';
 
 import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import type Token from 'markdown-it/lib/token.mjs';
 
 import {

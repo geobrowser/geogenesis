@@ -7,9 +7,18 @@ import { useSearchParams } from 'next/navigation';
 
 import { Text } from '~/design-system/text';
 
+import { DrawnHubListProvider, useDrawnHubList } from '../debate-claim-card-surface';
 import { useGeoChatAuth } from '../hooks';
 import { fromClaimsFilterSearch } from './claims-filter-params';
-import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST, VARIANT_ATOMS, readUrlSeed } from './claims-tab';
+import {
+  ClaimsTab,
+  type ClaimsTabVariant,
+  DEFAULT_WORKSPACE_LIST,
+  VARIANT_ATOMS,
+  readUrlSeed,
+  useRecordHubTabPress,
+} from './claims-tab';
+import { HubAskProvider } from './hub-ask-context';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubLiveRail } from './hub-live-rail';
@@ -20,8 +29,8 @@ import { isWorkspaceList, useWorkspaceQuery, workspaceHref } from './use-workspa
 import type { DebatesHubTab } from '~/atoms';
 
 const LIST_OPTIONS: HubFilterOption<ClaimsTabVariant>[] = [
-  { value: 'lobby', label: 'Matches' },
   { value: 'explore', label: 'Explore' },
+  { value: 'lobby', label: 'Matches' },
   { value: 'positions', label: 'My positions' },
 ];
 
@@ -43,7 +52,7 @@ export const URL_SYNC_DELAY_MS = 300;
  * Width is capped by the shell's 1200px `<main>`.
  */
 export function DebatesHubWorkspace() {
-  const [list, setList] = React.useState<ClaimsTabVariant>('lobby');
+  const [list, setList] = React.useState<ClaimsTabVariant>(DEFAULT_WORKSPACE_LIST);
 
   const { ready, authenticated, accountKey } = useGeoChatAuth();
 
@@ -120,44 +129,55 @@ export function DebatesHubWorkspace() {
     if (isWorkspaceList(tab)) setList(tab);
   }, []);
 
+  const drawnList = useDrawnHubList();
+  const recordTabPress = useRecordHubTabPress(shown, drawnList);
   const picker = (
     <HubFilterMenu
       label={options.find(option => option.value === shown)?.label ?? 'Explore'}
       options={options}
       value={shown}
-      onChange={setList}
+      onChange={next => {
+        recordTabPress(next);
+        setList(next);
+      }}
     />
   );
 
   return (
-    <div className="@container/hub flex w-full flex-col">
-      <header className="sticky top-11 z-20 flex items-center justify-between gap-3 bg-white px-4 py-5">
-        <Text as="h1" variant="mainPage" color="text">
-          Debates
-        </Text>
-        {/* The side panel's controls, so going available or setting your week does not mean
-            leaving full screen for the panel. */}
-        <HubHeaderControls />
-      </header>
+    <DrawnHubListProvider value={drawnList}>
+      <div className="@container/hub flex w-full flex-col">
+        <header className="sticky top-11 z-20 flex items-center justify-between gap-3 bg-white px-4 py-5">
+          <Text as="h1" variant="mainPage" color="text">
+            Debates
+          </Text>
+          {/* The side panel's controls, so going available or setting your week does not mean
+              leaving full screen for the panel. */}
+          <HubHeaderControls />
+        </header>
 
-      <div className="flex gap-8 px-4">
-        <div className="min-w-0 flex-1">
-          {!ready || !filtersReconciled ? (
-            <HubSkeleton />
-          ) : shown === 'lobby' ? (
-            <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} />
-          ) : (
-            <ClaimsTab key={shown} variant={shown} layout="workspace" scopePicker={picker} />
-          )}
+        <div className="flex gap-8 px-4">
+          {/* Shared claim cards read the open ask here too (GEO-3463, decision 4): "Requesting · m:ss"
+              on the card that sent it, the others paused. */}
+          <HubAskProvider>
+            <div className="min-w-0 flex-1">
+              {!ready || !filtersReconciled ? (
+                <HubSkeleton />
+              ) : shown === 'lobby' ? (
+                <LobbyTab onTabChange={showList} layout="workspace" scopePicker={picker} />
+              ) : (
+                <ClaimsTab key={shown} variant={shown} layout="workspace" scopePicker={picker} />
+              )}
+            </div>
+          </HubAskProvider>
+
+          <aside
+            aria-label="Live"
+            className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-80 shrink-0 self-start overflow-y-auto @[64rem]/hub:block"
+          >
+            <HubLiveRail />
+          </aside>
         </div>
-
-        <aside
-          aria-label="Live"
-          className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-80 shrink-0 self-start overflow-y-auto @[64rem]/hub:block"
-        >
-          <HubLiveRail />
-        </aside>
       </div>
-    </div>
+    </DrawnHubListProvider>
   );
 }

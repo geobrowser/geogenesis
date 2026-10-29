@@ -4,10 +4,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 
 import * as React from 'react';
 
-import { ConnectionState, DisconnectReason } from 'livekit-client';
+import { ConnectionState, DisconnectReason, Track } from 'livekit-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyVoiceToken } from '../api';
+import { LobbyPurposeProvider } from './lobby-purpose';
 import type { MemberLobbyPageView } from './lobby-view';
 import {
   type LobbyCapture,
@@ -53,7 +54,7 @@ const mocks = vi.hoisted(() => ({
   microphoneTrack: undefined as { track: object } | undefined,
   cameraTracks: [] as { participant: { identity: string }; publication: { track: object | null; isMuted: boolean } }[],
   participants: [] as { identity: string; isMicrophoneEnabled: boolean; isSpeaking: boolean }[],
-  permissions: undefined as { canPublish: boolean } | undefined,
+  permissions: undefined as { canPublish: boolean; canPublishSources?: number[] } | undefined,
   /** Local participant listeners, by event name. */
   listeners: new Map<string, (...args: unknown[]) => void>(),
   /** Room event listeners, by event name; `emitRoom` plays connection states. */
@@ -1223,39 +1224,48 @@ describe('a room another tab or device took over', () => {
   });
 });
 
-// GEO-3419: what a space call adds to the voice room. A lobby passes neither option.
-describe('LobbyVoice in a space call', () => {
-  const getDisplayMedia = vi.fn();
-  beforeEach(() => {
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getDisplayMedia, enumerateDevices: async () => [] },
-    });
+const CALL = { purpose: 'call', spaceId: 'space1', exitHref: '/space/space1' } as const;
+const shareButton = () => screen.queryByRole('button', { name: 'Share your screen' });
+const sources = (...list: Track.Source[]) => list.map(source => Track.sourceToProto(source));
+
+function withDisplayMedia(available = true) {
+  Object.defineProperty(navigator, 'mediaDevices', {
+    configurable: true,
+    value: available
+      ? { getDisplayMedia: vi.fn(), enumerateDevices: async () => [] }
+      : { enumerateDevices: async () => [] },
   });
+}
+
+// GEO-3419: what a space call adds to the voice room.
+describe('LobbyVoice in a space call', () => {
+  beforeEach(() => withDisplayMedia());
 
   function renderCall(options: Partial<React.ComponentProps<typeof LobbyVoice>> = {}) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return render(
       <QueryClientProvider client={client}>
-        <LobbyVoice
-          lobby={lobby()}
-          connectionId="conn-1"
-          joined
-          currentUserId="u1"
-          onConnectedChange={vi.fn()}
-          {...options}
-        >
-          <Speaking />
-        </LobbyVoice>
+        <LobbyPurposeProvider value={CALL}>
+          <LobbyVoice
+            lobby={lobby()}
+            connectionId="conn-1"
+            joined
+            currentUserId="u1"
+            onConnectedChange={vi.fn()}
+            {...options}
+          >
+            <Speaking />
+          </LobbyVoice>
+        </LobbyPurposeProvider>
       </QueryClientProvider>
     );
   }
 
-  it('offers a lobby no screen share, whatever the token says', async () => {
+  it('offers no screen share without the option, whatever the token says', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));
     renderCall();
     await screen.findByRole('button', { name: /Unmute|Mute/ });
-    expect(screen.queryByRole('button', { name: 'Share your screen' })).not.toBeInTheDocument();
+    expect(shareButton()).not.toBeInTheDocument();
   });
 
   it('lets a call’s speaker share their screen, with its audio', async () => {
@@ -1289,5 +1299,94 @@ describe('LobbyVoice in a space call', () => {
     renderCall({ preJoin: () => <p>device check</p> });
     await waitFor(() => expect(mocks.roomProps).not.toBeNull());
     expect(screen.queryByText('device check')).not.toBeInTheDocument();
+  });
+});
+
+// GEO-3507: in a debate lobby the server grants hosts the share; the web follows LiveKit's live grant.
+describe('LobbyVoice screen share in a lobby', () => {
+  beforeEach(() => withDisplayMedia());
+
+  const withShare = () => sources(Track.Source.Microphone, Track.Source.ScreenShare, Track.Source.ScreenShareAudio);
+
+  function renderLobby(view: MemberLobbyPageView) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (current: MemberLobbyPageView) => (
+      <QueryClientProvider client={client}>
+        <LobbyVoice
+          lobby={current}
+          connectionId="conn-1"
+          joined
+          currentUserId="u1"
+          onConnectedChange={vi.fn()}
+          screenShare
+        >
+          <Speaking />
+        </LobbyVoice>
+      </QueryClientProvider>
+    );
+    const result = render(ui(view));
+    return { rerender: (next: MemberLobbyPageView) => result.rerender(ui(next)) };
+  }
+
+  it('lets a host share their screen, with its audio', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));
+    renderLobby(lobby('host'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Share your screen' }));
+    expect(mocks.setScreenShareEnabled).toHaveBeenCalledWith(true, { audio: true });
+  });
+
+  it('offers no share before the live grant when the token does not allow it', async () => {
+    renderLobby(lobby('speaker'));
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(shareButton()).not.toBeInTheDocument();
+  });
+
+  it('offers an acting host no share while the grant leaves it out', async () => {
+    mocks.permissions = { canPublish: true, canPublishSources: sources(Track.Source.Microphone) };
+    const view = lobby('speaker');
+    renderLobby({ ...view, viewer: { ...view.viewer, hosting: true } });
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(shareButton()).not.toBeInTheDocument();
+  });
+
+  it('lets an acting host share once the grant includes it', async () => {
+    mocks.permissions = { canPublish: true, canPublishSources: withShare() };
+    const view = lobby('speaker');
+    renderLobby({ ...view, viewer: { ...view.viewer, hosting: true } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Share your screen' }));
+    expect(mocks.setScreenShareEnabled).toHaveBeenCalledWith(true, { audio: true });
+  });
+
+  it('follows the live grant over the token after a promotion', async () => {
+    mocks.permissions = { canPublish: true, canPublishSources: withShare() };
+    renderLobby(lobby('speaker'));
+    expect(await screen.findByRole('button', { name: 'Share your screen' })).toBeInTheDocument();
+  });
+
+  it('offers no share once the live grant drops it, whatever the token says', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));
+    mocks.permissions = { canPublish: true, canPublishSources: sources(Track.Source.Microphone) };
+    renderLobby(lobby('host'));
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(shareButton()).not.toBeInTheDocument();
+  });
+
+  it('stops the share when a demotion drops it from the live grant', async () => {
+    mocks.permissions = { canPublish: true, canPublishSources: withShare() };
+    const { rerender } = renderLobby(lobby('host'));
+    await screen.findByRole('button', { name: 'Share your screen' });
+    mocks.setScreenShareEnabled.mockClear();
+    mocks.permissions = { canPublish: true, canPublishSources: sources(Track.Source.Microphone) };
+    rerender(lobby('speaker'));
+    await waitFor(() => expect(mocks.setScreenShareEnabled).toHaveBeenCalledWith(false));
+    expect(shareButton()).not.toBeInTheDocument();
+  });
+
+  it('offers a host no share where the browser cannot capture a screen', async () => {
+    withDisplayMedia(false);
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));
+    renderLobby(lobby('host'));
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(shareButton()).not.toBeInTheDocument();
   });
 });

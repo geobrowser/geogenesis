@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
+import { CALL_SCREEN_COPY, useScreenShareChoice } from '~/core/space-calls/call-screen-stage';
 
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
@@ -265,6 +266,7 @@ function SpeakerTile({
           </span>
         </button>
       </LobbyPersonMenu>
+      <SharingTag member={member} />
       <div className="flex min-w-0 items-center px-1">
         <TileStatus
           member={member}
@@ -475,6 +477,24 @@ const DESKTOP_GRID_CLASS = {
 } as const;
 
 type HoldFocus = (key: string, on: boolean) => void;
+
+/** Over a sharer's frame (GEO-3507): shows their screen on the stage above. */
+function SharingTag({ member }: { member: DebateLobbyMember }) {
+  const choice = useScreenShareChoice();
+  const sharerId = choice?.sharers.find(id => sameId(id, member.user_id));
+  if (!choice || !sharerId) return null;
+  return (
+    <button
+      type="button"
+      aria-pressed={choice.shown === sharerId}
+      aria-label={CALL_SCREEN_COPY.show(personName(member))}
+      onClick={() => choice.show(sharerId)}
+      className="absolute top-2.5 left-2.5 z-[1] rounded-md bg-text/70 px-1.5 py-0.5 text-metadataMedium text-white md:top-2 md:left-2"
+    >
+      {CALL_SCREEN_COPY.sharingTag}
+    </button>
+  );
+}
 
 /**
  * Holds a speaker in place while focus is inside it (see `nextVideoGrid`'s `held`). Released on blur,

@@ -309,6 +309,7 @@ export function LobbyRoomShell({
               )}
             >
               {/* The roster's speaker thumbnails (GEO-3399), drawn here so they stay in view on the aside. */}
+              {tabbed ? <div ref={slots.shareNoticeRef} className="empty:hidden" /> : null}
               {tabbed ? <div ref={slots.speakerStripRef} className="empty:hidden" /> : null}
               <HubScrollSelectorProvider value={columns ? HUB_SCROLL_SELECTOR : undefined}>
                 {aside.content}

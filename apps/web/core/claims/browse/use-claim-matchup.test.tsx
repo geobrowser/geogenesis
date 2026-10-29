@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   /** What the next request fails with, or null for a request that goes through. */
   failWith: null as Error | null,
+  outbound: null as { id: string; status: string; expires_at: string } | null,
+  challenge: null as { id: string; status: string; expires_at: string; requester: { user_id: string } } | null,
 }));
 
 vi.mock('~/core/debates/api', async importOriginal => ({
@@ -22,13 +24,13 @@ vi.mock('~/core/debates/api', async importOriginal => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useDebateActivity: () => ({ data: undefined }),
+  useDebateActivity: () => ({ data: { available_to_debate: true, challenge: mocks.challenge } }),
   useGeoChatAuth: () => ({ accountKey: 'account-1', getPrivyIdentityToken: () => Promise.resolve('token') }),
 }));
 
 vi.mock('~/core/debates/matchmaking/hooks', () => ({
   useMatchmakingMatches: () => ({ data: { matches: [] } }),
-  useDebateRequests: () => ({ data: undefined }),
+  useDebateRequests: () => ({ data: { incoming: [], outbound: mocks.outbound } }),
   useCreateDebateRequest: () => ({
     isPending: false,
     error: mocks.failWith,
@@ -38,6 +40,8 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
     },
   }),
 }));
+
+vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'user-me' }));
 
 const intentMissing = () =>
   new GeoChatRequestError('respond to this claim before sending a debate request', 'intent_missing', 400);
@@ -65,6 +69,54 @@ beforeEach(() => {
   mocks.notify.mockClear();
   mocks.mutate.mockClear();
   mocks.failWith = null;
+  mocks.outbound = null;
+  mocks.challenge = null;
+});
+
+// The strip says "Nobody took it this time" at `expires_at`; every card and "Debate on this" kept
+// saying to withdraw it until geo-chat's own expiry event caught up.
+describe('the viewer’s open request', () => {
+  const outbound = (expiresInMs: number) => ({
+    id: 'r-open',
+    status: 'pending',
+    expires_at: new Date(Date.now() + expiresInMs).toISOString(),
+  });
+
+  it('blocks another request while it is live', () => {
+    mocks.outbound = outbound(60_000);
+    const { result } = setup({ viewerPosition: true });
+    expect(result.current.blockedReason).toBe('Withdraw your open request to send another.');
+  });
+
+  it('no longer blocks one once it has run out, before geo-chat says so', () => {
+    mocks.outbound = outbound(-1_000);
+    const { result } = setup({ viewerPosition: true });
+    expect(result.current.blockedReason).toBeUndefined();
+  });
+});
+
+// geo-chat allows a claim request beside a challenge, but the panel's strip keeps one ask, so the
+// claim's ending would never show (GEO-3463).
+describe('the viewer’s open challenge', () => {
+  const challenge = (requester: string, expiresInMs: number) => ({
+    id: 'c-open',
+    status: 'pending',
+    expires_at: new Date(Date.now() + expiresInMs).toISOString(),
+    requester: { user_id: requester },
+  });
+
+  it('blocks a claim request while one the viewer sent is live', () => {
+    mocks.challenge = challenge('user-me', 60_000);
+    const { result } = setup({ viewerPosition: true });
+    expect(result.current.blockedReason).toBe('Cancel your challenge to send a request.');
+  });
+
+  it('does not block for a challenge someone sent the viewer, or one that has run out', () => {
+    mocks.challenge = challenge('user-them', 60_000);
+    expect(setup({ viewerPosition: true }).result.current.blockedReason).toBeUndefined();
+    mocks.challenge = challenge('user-me', -1_000);
+    expect(setup({ viewerPosition: true }).result.current.blockedReason).toBeUndefined();
+  });
 });
 
 /**
