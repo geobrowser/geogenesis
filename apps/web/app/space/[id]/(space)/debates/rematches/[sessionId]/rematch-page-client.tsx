@@ -1967,13 +1967,75 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 
   /**
+   * Related and "From this debate" can leave the strip; the rest are always there. A choice — or a
+   * landing — on a tab that has gone falls back to their positions rather than leaving the viewer on
+   * a tab with no button to get back to it.
+   */
+  const isTabOffered = (candidate: PickerTab) =>
+    candidate === 'todays'
+      ? todaysOffered
+      : candidate === 'related'
+        ? relatedOffered
+        : candidate === 'debate'
+          ? debateOffered
+          : true;
+  //
+  // Read from state alone — the choice or the latched landing, never `landingNow` — so the tab drawn
+  // is always the one the queries were enabled for: `browsing` is derived from the same state, and
+  // a landing on Explore drawn a render before it was latched would flash Explore's empty list.
+  const settledTab: PickerTab | null =
+    chosenForSession !== null && isTabOffered(chosenForSession)
+      ? chosenForSession
+      : landedForSession === null
+        ? null
+        : isTabOffered(landedForSession)
+          ? landedForSession
+          : 'opponent';
+  /** Nothing chosen and the landing not latched yet: the list holds its skeleton and no tab is marked. */
+  const landingPending = settledTab === null;
+  // Matches stands in while the landing is pending. Nothing is drawn from it in that window — the
+  // list is a skeleton — but every derivation below wants a tab.
+  const tab: PickerTab = settledTab ?? 'matches';
+  /** The tab the strip marks, which is none until there is one. */
+  const activeTab = landingPending ? null : tab;
+
+  // Hide the matches the viewer arrived with for this visit to Their positions. Keep the snapshot
+  // through position changes, searches and filter changes so creating a match never takes its card
+  // away. Leaving the tab (or changing session) clears it; the next visit uses the current matches.
+  const viewingOpponent = activeTab === 'opponent';
+  const [hiddenMatches, setHiddenMatches] = React.useState<{
+    sessionId: string;
+    keys: ReadonlySet<string>;
+  } | null>(null);
+  const currentMatchKeys = React.useMemo(
+    () => new Set(opponentClaims.filter(isRematchable).map(claimRowKey)),
+    [isRematchable, opponentClaims]
+  );
+  const hiddenMatchKeys =
+    viewingOpponent && hiddenMatches?.sessionId === sessionId ? hiddenMatches.keys : currentMatchKeys;
+  if (hiddenMatches !== null && (!viewingOpponent || hiddenMatches.sessionId !== sessionId)) {
+    setHiddenMatches(null);
+  } else if (
+    viewingOpponent &&
+    hiddenMatches === null &&
+    (opponentClaimsListed.length > 0 || (!sessionQuery.isLoading && !positions.isLoading && !opponentClaimsSettling))
+  ) {
+    // Wait for the initial list, but freeze immediately if a refetch is holding existing rows.
+    setHiddenMatches({ sessionId, keys: hiddenMatchKeys });
+  }
+  const opponentClaimsUnmatched = React.useMemo(
+    () => opponentClaims.filter(claim => !hiddenMatchKeys.has(claimRowKey(claim))),
+    [hiddenMatchKeys, opponentClaims]
+  );
+
+  /**
    * Their positions as the tab's badge, the landing and the filter menus count them. Not what the
    * list draws, which holds a claim agreed with *on* the tab rather than dropping it under the press
    * — see `visibleClaims`.
    */
   const opponentClaimsShown = React.useMemo(
-    () => (hideAgreed ? opponentClaims.filter(claim => !isAgreed(claim)) : opponentClaims),
-    [hideAgreed, isAgreed, opponentClaims]
+    () => (hideAgreed ? opponentClaimsUnmatched.filter(claim => !isAgreed(claim)) : opponentClaimsUnmatched),
+    [hideAgreed, isAgreed, opponentClaimsUnmatched]
   );
 
   /**
@@ -2179,39 +2241,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     sessionId
   );
 
-  /**
-   * Related and "From this debate" can leave the strip; the rest are always there. A choice — or a
-   * landing — on a tab that has gone falls back to their positions rather than leaving the viewer on
-   * a tab with no button to get back to it.
-   */
-  const isTabOffered = (candidate: PickerTab) =>
-    candidate === 'todays'
-      ? todaysOffered
-      : candidate === 'related'
-        ? relatedOffered
-        : candidate === 'debate'
-          ? debateOffered
-          : true;
-  //
-  // Read from state alone — the choice or the latched landing, never `landingNow` — so the tab drawn
-  // is always the one the queries were enabled for: `browsing` is derived from the same state, and
-  // a landing on Explore drawn a render before it was latched would flash Explore's empty list.
-  const settledTab: PickerTab | null =
-    chosenForSession !== null && isTabOffered(chosenForSession)
-      ? chosenForSession
-      : landedForSession === null
-        ? null
-        : isTabOffered(landedForSession)
-          ? landedForSession
-          : 'opponent';
-  /** Nothing chosen and the landing not latched yet: the list holds its skeleton and no tab is marked. */
-  const landingPending = settledTab === null;
-  // Matches stands in while the landing is pending. Nothing is drawn from it in that window — the
-  // list is a skeleton — but every derivation below wants a tab.
-  const tab: PickerTab = settledTab ?? 'matches';
-  /** The tab the strip marks, which is none until there is one. */
-  const activeTab = landingPending ? null : tab;
-
   // GEO-3505: a match made after the picker loaded goes to the top of Matches, tagged New, but
   // waits while the viewer is working the list or scrolled down, so nothing moves under them.
   const arrivalHold = useArrivalHold(activeTab === 'matches');
@@ -2255,7 +2284,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       : tab === 'matches'
         ? matchArrivals.items
         : tab === 'opponent'
-          ? opponentClaims
+          ? opponentClaimsUnmatched
           : tab === 'related'
             ? relatedClaims
             : tab === 'debate'
@@ -3569,7 +3598,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                               ? `You and ${remoteName} haven’t taken opposite sides on anything yet. Pick a side on one of their claims to start a debate.`
                               : `You and ${remoteName} haven’t taken opposite sides on anything yet. Once ${remoteName} takes a side on a claim, take the other one to start a debate.`
                           : tab === 'opponent'
-                            ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                            ? opponentClaims.length > 0
+                              ? 'No other positions to show. Check Matches for claims you can debate.'
+                              : `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
                             : tab === 'debate'
                               ? debateExtractionRunning
                                 ? 'Pulling the claims out of your debate. They appear here as they’re found.'
@@ -3615,9 +3646,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                         ? { label: `See ${remoteFirstName}’s positions`, onClick: () => setTab('opponent') }
                         : exploreClaimsAction(setTab)
                       : tab === 'opponent'
-                        ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
-                          // resolve, and the catalogue next door is the whole of the way out of it.
-                          exploreClaimsAction(setTab)
+                        ? opponentClaims.length > 0
+                          ? { label: 'See matches', onClick: () => setTab('matches') }
+                          : exploreClaimsAction(setTab)
                         : source === 'mine'
                           ? // The same dead end one tab over: a viewer who has answered nothing
                             // cannot fill this list from here, and the whole corpus is next door.
@@ -3728,9 +3759,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               analyticsLabel="Debate rematch See all their positions"
               onClick={() => setTab('opponent')}
             >
-              {opponentCountPending
-                ? `See all of ${remoteFirstName}’s positions`
-                : `See all ${opponentPositionCount} of ${remoteFirstName}’s positions`}
+              {`See ${remoteFirstName}’s other positions`}
             </HubPillButton>
           </div>
         ) : null}
