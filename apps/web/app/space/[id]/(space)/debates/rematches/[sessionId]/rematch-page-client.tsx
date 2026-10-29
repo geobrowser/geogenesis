@@ -3319,14 +3319,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // soon as one of them isn't `visible`, so `overflow-y-auto` alone left this layer horizontally
     // scrollable. Anything wider than the viewport — the tab strip, on a phone — panned the whole
     // screen sideways instead of scrolling itself.
-    <motion.div
-      // Cards animate their positions as topics narrow the list. Measure them relative to this
-      // fixed scroll layer so a changed scroll offset does not become a spurious card movement.
-      layoutRoot
-      layoutScroll
-      data-rematch-scroll
-      className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text"
-    >
+    <div data-rematch-scroll className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
       <main className="mx-auto min-h-dvh w-full max-w-[820px] px-5 pt-8 pb-8 mobile:px-4 mobile:pt-4">
         {/* The full video cards scroll with the page. Keeping one layout avoids a reformat
             or animation at a scroll threshold. Tabs and filters remain sticky below them. */}
@@ -3829,7 +3822,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           }}
         />
       )}
-    </motion.div>
+    </div>
   );
 }
 
