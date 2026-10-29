@@ -10,7 +10,7 @@ export type TodaysCardScope = Pick<
 
 /**
  * GEO-3495's attribution for a Today's claims card, on whichever surface lists it (the picker here;
- * the hub and lobby next): the agenda it was listed on and that agenda's day as written, its section
+ * the hub and lobby next): the agenda it was listed on and that agenda's day, its section
  * (an agenda's data block; Earlier this week has none), and its debates since the listing when
  * geo-chat could count them.
  */

@@ -1,16 +1,16 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk';
-import { Position } from '@geoprotocol/geo-sdk/lite';
+import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { EntitiesOrderBy } from '~/core/gql/graphql';
-import { useQueryEntities } from '~/core/sync/use-store';
+import { Effect } from 'effect';
+
+import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
 
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '../claim-picker-page';
-import { zonedDay } from '../debate-hours';
+import { currentDebateAgendasDocument } from './current-debate-agendas-document';
 
 /**
  * GEO-3487's Debate agenda type: one Page per space per day, a data block per topic with that
@@ -18,23 +18,14 @@ import { zonedDay } from '../debate-hours';
  */
 export const DEBATE_AGENDA_TYPE_ID = '79e3757b2630492c9d3bd73a78d45893';
 
-/** The agenda's day, written as midnight New York. One of the graph's several properties named "Date". */
-export const DEBATE_AGENDA_DATE_PROPERTY_ID = '52665f3efb7d48d58b6babb21b0d36db';
-
-/** Agenda days are New York days, the way the agendas are written and the ranking reads them. */
-export const AGENDA_TIME_ZONE = 'America/New_York';
-
 /** "Earlier this week": agendas from the six days before today. */
 export const EARLIER_AGENDA_DAYS = 6;
 
 /**
- * Agendas asked for, newest first. About five spaces publish one a day, so this is three weeks of
- * them, against the one week the picker reads.
+ * Rows asked for in one request: the API's maximum. Without it the API stops at 100, which a week
+ * of earlier listings across a few spaces passes (54 rows on 29 Oct 2026, across four spaces).
  */
-const AGENDA_PAGE_SIZE = 100;
-
-/** Data blocks asked for in one page. A week of agendas carries well under this. */
-const AGENDA_BLOCK_PAGE_SIZE = 500;
+const AGENDA_ROW_LIMIT = 1000;
 
 /** One data block of one space's newest agenda: a heading and its claims, in the agenda's order. */
 export type DebateAgendaSection = {
@@ -44,7 +35,7 @@ export type DebateAgendaSection = {
   spaceId: string;
   name: string;
   claimIds: string[];
-  /** The agenda's own Date value, as written. When a debate starts counting as "since the listing". */
+  /** Midnight New York on the agenda's day. When a debate starts counting as "since the listing". */
   listedAt: string;
 };
 
@@ -73,92 +64,51 @@ export type DebateAgendas = {
   /** The newest agenda day across every space, or null when there are none. */
   newestDay: string | null;
   /**
-   * Each listed claim's newest listing, the agenda Date it was listed under as written: where its
+   * Each listed claim's newest listing, as midnight New York on that agenda's day: where its
    * debates start counting.
    */
   listedAtByClaim: Map<string, string>;
 };
 
-type AgendaEntity = {
-  id: string;
-  spaces: string[];
-  values: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }>;
-  relations: Array<{
-    isDeleted?: boolean;
-    type: { id: string };
-    toEntity: { id: string };
-    position?: string;
-    spaceId?: string | null;
-  }>;
-  createdAt?: string | number;
-};
-
-type BlockEntity = {
-  id: string;
-  name: string | null;
-  relations: AgendaEntity['relations'];
+/**
+ * One row of gaia's `currentDebateAgendas` (GEO-3503): one item of one agenda, already in Geo's
+ * order. Only the fields the picker reads.
+ */
+export type DebateAgendaRow = {
+  spaceId: string;
+  agendaId: string;
+  listedOn: string;
+  listedAt: string;
+  isCurrent: boolean;
+  /** `block_item` is the agenda's contents; `agenda_claims` / `agenda_topics` only steer ranking. */
+  source: string;
+  sectionId: string | null;
+  sectionName: string | null;
+  entityId: string;
 };
 
 /**
- * The calendar day an agenda's Date value names, as it was written: `2026-10-27T00:00:00-04:00` and
- * `2026-10-27T04:00:00Z` are both the 27th. Read the way gaia reads it (GEO-3488), so the picker and
- * the ranking agree on which agenda is a space's newest.
+ * The calendar day of an agenda listing: `2026-10-27T00:00:00-04:00` and `2026-10-27T04:00:00+00:00`
+ * (midnight New York, as the API writes `listedAt`) are both the 27th.
  */
 export function agendaDayFromValue(value: string): string | null {
   const day = value.slice(0, 10);
   return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
 }
 
-/** One agenda as one space has it: the space's own Date and blocks. */
-type SpaceAgenda = { agendaId: string; spaceId: string; day: string; listedAt: string; blockIds: string[] };
-
 /**
- * Every (agenda, space) pair dated today or earlier, with that space's blocks in order. An agenda
- * can be written into more than one space, and each space has its own blocks for it, so the blocks
- * are read per space rather than off the entity as a whole.
- */
-export function spaceAgendasOf(agendas: AgendaEntity[], today: string): SpaceAgenda[] {
-  const out: SpaceAgenda[] = [];
-  for (const agenda of agendas) {
-    for (const spaceId of agenda.spaces) {
-      const dateValue = agenda.values.find(
-        value =>
-          value.isDeleted !== true &&
-          value.property.id === DEBATE_AGENDA_DATE_PROPERTY_ID &&
-          normId(value.spaceId) === normId(spaceId)
-      );
-      const day = dateValue ? agendaDayFromValue(dateValue.value) : null;
-      // A future-dated agenda waits for its day, as the ranking does.
-      if (!dateValue || !day || day > today) continue;
-      const blockIds = agenda.relations
-        .filter(
-          relation =>
-            relation.isDeleted !== true &&
-            relation.type.id === SystemIds.BLOCKS &&
-            relation.spaceId != null &&
-            normId(relation.spaceId) === normId(spaceId)
-        )
-        .slice()
-        .sort(byPosition)
-        .map(relation => relation.toEntity.id);
-      out.push({ agendaId: agenda.id, spaceId, day, listedAt: dateValue.value, blockIds });
-    }
-  }
-  return out;
-}
-
-/**
- * The picker's agendas: each space's newest day, and what the rest of the week listed that the
- * newest day does not.
+ * The picker's agendas from the API's rows: each space's current agenda as sections, and what the
+ * rest of the week listed that the current one does not.
  *
- * Two agendas a space dated the same day are both its newest, in the order the graph returned them
- * (newest written first). A claim listed twice this week shows once, at its newest listing.
+ * The rows arrive in Geo's order, with gaia's rules applied (GEO-3503): debate spaces only, an
+ * agenda's Date read as a New York day, block items typed Claim, a space's current agenda the
+ * freshest dated this week (the later-created when two share a Date), earlier rows once per claim
+ * per space and none on that space's current agenda. What is left here is the picker's own: the
+ * caller's spaces, claims it could resolve, and Earlier this week once per claim across spaces.
  */
 export function buildDebateAgendas(
-  agendas: AgendaEntity[],
-  blocks: BlockEntity[],
+  rows: readonly DebateAgendaRow[],
   claimIds: ReadonlySet<string>,
-  today: string,
   /**
    * Whether a space's agendas count at all. Applied before anything else, so an agenda in a space
    * that does not count cannot move a claim's listing, take its place in Earlier this week, or
@@ -166,71 +116,49 @@ export function buildDebateAgendas(
    */
   keepSpace: (spaceId: string) => boolean = () => true
 ): DebateAgendas {
-  const blocksById = new Map(blocks.map(block => [normId(block.id), block]));
-  const oldest = oldestAgendaDay(today);
-  const inWindow = spaceAgendasOf(agendas, today).filter(agenda => agenda.day >= oldest && keepSpace(agenda.spaceId));
+  const items = rows.filter(
+    row => row.source === 'block_item' && keepSpace(row.spaceId) && claimIds.has(normId(row.entityId))
+  );
 
-  const claimsOf = (agenda: SpaceAgenda) =>
-    agenda.blockIds.flatMap(blockId => {
-      const block = blocksById.get(normId(blockId));
-      if (!block) return [];
-      const ids = block.relations
-        .filter(
-          relation =>
-            relation.isDeleted !== true &&
-            relation.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE &&
-            (relation.spaceId == null || normId(relation.spaceId) === normId(agenda.spaceId))
-        )
-        .slice()
-        .sort(byPosition)
-        .map(relation => normId(relation.toEntity.id))
-        // A collection holds whatever was dropped in it; only claims have sides to take.
-        .filter(id => claimIds.has(id));
-      return [{ block, claimIds: [...new Set(ids)] }];
-    });
-
-  const bySpace = new Map<string, SpaceAgenda[]>();
-  for (const agenda of inWindow) {
-    const key = normId(agenda.spaceId);
-    bySpace.set(key, [...(bySpace.get(key) ?? []), agenda]);
-  }
-
-  const spaces: DebateAgendaSpace[] = [];
+  const spacesById = new Map<string, DebateAgendaSpace>();
+  const sectionsById = new Map<string, DebateAgendaSection>();
   const earlier: DebateAgendaListing[] = [];
-  for (const spaceAgendas of bySpace.values()) {
-    const newestDay = spaceAgendas.reduce((day, agenda) => (agenda.day > day ? agenda.day : day), '');
-    const newest = spaceAgendas.filter(agenda => agenda.day === newestDay);
-    const sections = newest.flatMap(agenda =>
-      claimsOf(agenda)
-        .filter(({ claimIds: ids }) => ids.length > 0)
-        .map(({ block, claimIds: ids }) => ({
-          id: block.id,
-          agendaId: agenda.agendaId,
-          spaceId: agenda.spaceId,
-          name: block.name ?? 'Today’s claims',
-          claimIds: ids,
-          listedAt: agenda.listedAt,
-        }))
-    );
-    if (sections.length > 0) spaces.push({ spaceId: newest[0]!.spaceId, listedOn: newestDay, sections });
-
-    const listedToday = new Set(sections.flatMap(section => section.claimIds));
-    for (const agenda of spaceAgendas) {
-      if (agenda.day === newestDay) continue;
-      for (const { claimIds: ids } of claimsOf(agenda)) {
-        for (const claimId of ids) {
-          if (listedToday.has(claimId)) continue;
-          earlier.push({
-            claimId,
-            spaceId: agenda.spaceId,
-            agendaId: agenda.agendaId,
-            listedOn: agenda.day,
-            listedAt: agenda.listedAt,
-          });
-        }
-      }
+  for (const row of items) {
+    const claimId = normId(row.entityId);
+    if (!row.isCurrent) {
+      earlier.push({
+        claimId,
+        spaceId: row.spaceId,
+        agendaId: row.agendaId,
+        listedOn: row.listedOn,
+        listedAt: row.listedAt,
+      });
+      continue;
     }
+    const spaceKey = normId(row.spaceId);
+    let space = spacesById.get(spaceKey);
+    if (!space) {
+      space = { spaceId: row.spaceId, listedOn: row.listedOn, sections: [] };
+      spacesById.set(spaceKey, space);
+    }
+    // A current item always sits in a block; the key falls back so a malformed row can't merge blocks.
+    const sectionKey = `${spaceKey}:${row.sectionId ?? row.agendaId}`;
+    let section = sectionsById.get(sectionKey);
+    if (!section) {
+      section = {
+        id: row.sectionId ?? row.agendaId,
+        agendaId: row.agendaId,
+        spaceId: row.spaceId,
+        name: row.sectionName ?? 'Today’s claims',
+        claimIds: [],
+        listedAt: row.listedAt,
+      };
+      sectionsById.set(sectionKey, section);
+      space.sections.push(section);
+    }
+    if (!section.claimIds.includes(claimId)) section.claimIds.push(claimId);
   }
+  const spaces = [...spacesById.values()];
 
   // Newest listing first, keeping each day's agenda order; then once per claim, at its newest.
   const seen = new Set<string>();
@@ -246,22 +174,18 @@ export function buildDebateAgendas(
       return true;
     });
 
-  // A claim's newest listing, wherever it is: each space's newest day and every older listing this
-  // week, the latest day winning. Not the listing it is shown under, which the page picks by space.
+  // A claim's newest listing among the spaces kept: each current agenda and every earlier listing
+  // this week, the latest day winning. Not the listing it is shown under, which the page picks by
+  // space. (The API's own lastListedOn counts every space, so it can't honour `keepSpace`.)
   const listedAtByClaim = new Map<string, string>();
   const newestListing = new Map<string, string>();
-  const listed = (claimId: string, listedOn: string, listedAt: string) => {
+  for (const row of items) {
+    const claimId = normId(row.entityId);
     const known = newestListing.get(claimId);
-    if (known && known >= listedOn) return;
-    newestListing.set(claimId, listedOn);
-    listedAtByClaim.set(claimId, listedAt);
-  };
-  for (const space of spaces) {
-    for (const section of space.sections) {
-      for (const claimId of section.claimIds) listed(claimId, space.listedOn, section.listedAt);
-    }
+    if (known && known >= row.listedOn) continue;
+    newestListing.set(claimId, row.listedOn);
+    listedAtByClaim.set(claimId, row.listedAt);
   }
-  for (const listing of earlier) listed(listing.claimId, listing.listedOn, listing.listedAt);
 
   const newestDay = spaces.reduce<string | null>(
     (day, space) => (day === null || space.listedOn > day ? space.listedOn : day),
@@ -271,20 +195,35 @@ export function buildDebateAgendas(
   return { spaces, earlier: earlierOnce, newestDay, listedAtByClaim };
 }
 
-/** The first day "Earlier this week" reaches back to. */
-function oldestAgendaDay(today: string) {
-  return zonedDay(new Date(`${today}T12:00:00Z`), 'UTC', -EARLIER_AGENDA_DAYS);
-}
-
 export const NO_AGENDAS: DebateAgendas = { spaces: [], earlier: [], newestDay: null, listedAtByClaim: new Map() };
 
+/** Every space's current agenda and the week's earlier listings, from gaia's one agendas query. */
+export async function fetchCurrentDebateAgendas(signal?: AbortSignal): Promise<DebateAgendaRow[]> {
+  const rows = await Effect.runPromise(
+    graphql({
+      query: currentDebateAgendasDocument,
+      decoder: (data: { currentDebateAgendas?: (DebateAgendaRow | null)[] | null }) =>
+        (data.currentDebateAgendas ?? []).flatMap(row => (row ? [row] : [])),
+      variables: { earlierDays: EARLIER_AGENDA_DAYS, first: AGENDA_ROW_LIMIT },
+      signal,
+    })
+  );
+  if (rows.length >= AGENDA_ROW_LIMIT) {
+    // Far past today's volume. Say so rather than show a cut list as if it were whole.
+    console.error('[useDebateAgendas] Agendas reached the row limit; older listings may be missing', {
+      rows: rows.length,
+    });
+  }
+  return rows;
+}
+
 /**
- * GEO-3489. Every space's newest Debate agenda, read from the graph, with the week's older listings.
+ * GEO-3489. Every space's current Debate agenda, with the week's earlier listings, read from gaia's
+ * `currentDebateAgendas` (GEO-3538) so the picker shows agendas by the rules the Best ranking uses.
  *
- * The one place the Today's claims surfaces read agendas from — the picker today, the side panel,
- * hub and lobby next (GEO-3490, GEO-3491) — so when GEO-3503's agendas query lands, only this
- * changes. Three hops by necessity, like `useRecommendedClaimSections`: the agendas, their blocks,
- * and the claims the blocks hold.
+ * The one place the Today's claims surfaces read agendas from: the picker today, the side panel,
+ * hub and lobby next (GEO-3490, GEO-3491). One request for the agendas, then the claims they list,
+ * for their cards.
  */
 export function useDebateAgendas(enabled = true): {
   /**
@@ -299,63 +238,33 @@ export function useDebateAgendas(enabled = true): {
   claimIds: string[];
   /** The listed claims, so callers don't fetch what this already resolved. */
   claimEntities: ClaimPickerEntity[];
-  /** True until every hop has settled; empty agendas mean "none" only after. */
+  /** True until the agendas and their claims have settled; empty agendas mean "none" only after. */
   isLoading: boolean;
   error: unknown;
 } {
-  // Taken once per mount. A picker left open past midnight keeps the agendas it opened on.
-  const [today] = React.useState(() => zonedDay(new Date(), AGENDA_TIME_ZONE));
-
   const {
-    entities: agendaEntities,
+    data: rows = NO_ROWS,
     isLoading: agendasLoading,
     error: agendasError,
-  } = useQueryEntities({
-    where: { types: [{ id: { equals: DEBATE_AGENDA_TYPE_ID } }] },
-    first: AGENDA_PAGE_SIZE,
-    orderBy: [EntitiesOrderBy.CreatedAtDesc],
-    prefetchNextPage: false,
+  } = useQuery({
+    queryKey: ['debates', 'current-debate-agendas'],
+    queryFn: ({ signal }) => fetchCurrentDebateAgendas(signal),
     enabled,
+    // A picker left open past midnight keeps the agendas it opened on; a new mount asks again.
+    staleTime: Infinity,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    // `graphql` already retries transport failures with backoff.
+    retry: false,
   });
 
-  const oldest = oldestAgendaDay(today);
-  const inWindow = React.useMemo(
-    () => spaceAgendasOf(agendaEntities, today).filter(agenda => agenda.day >= oldest),
-    [agendaEntities, oldest, today]
-  );
-  const blockIds = React.useMemo(() => [...new Set(inWindow.flatMap(agenda => agenda.blockIds))], [inWindow]);
+  const items = React.useMemo(() => rows.filter(row => row.source === 'block_item'), [rows]);
   const spaceIds = React.useMemo(
-    () => (enabled ? [...new Map(inWindow.map(agenda => [normId(agenda.spaceId), agenda.spaceId])).values()] : NO_IDS),
-    [enabled, inWindow]
+    () => (enabled ? [...new Map(items.map(row => [normId(row.spaceId), row.spaceId])).values()] : NO_IDS),
+    [enabled, items]
   );
-
-  const {
-    entities: blockEntities,
-    isLoading: blocksLoading,
-    error: blocksError,
-  } = useQueryEntities({
-    where: { id: { in: blockIds } },
-    first: AGENDA_BLOCK_PAGE_SIZE,
-    prefetchNextPage: false,
-    enabled: enabled && blockIds.length > 0,
-  });
-
-  const itemIds = React.useMemo(() => {
-    const blockIdSet = new Set(blockIds.map(normId));
-    return [
-      ...new Set(
-        blockEntities
-          .filter(block => blockIdSet.has(normId(block.id)))
-          .flatMap(block =>
-            block.relations
-              .filter(
-                relation => relation.isDeleted !== true && relation.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE
-              )
-              .map(relation => normId(relation.toEntity.id))
-          )
-      ),
-    ];
-  }, [blockEntities, blockIds]);
+  const itemIds = React.useMemo(() => [...new Set(items.map(row => normId(row.entityId)))], [items]);
 
   const {
     entities: claimEntities,
@@ -366,12 +275,11 @@ export function useDebateAgendas(enabled = true): {
   const claimIds = React.useMemo(() => claimEntities.map(claim => normId(claim.id)), [claimEntities]);
   const agendasIn = React.useCallback(
     (keepSpace: (spaceId: string) => boolean) =>
-      enabled ? buildDebateAgendas(agendaEntities, blockEntities, new Set(claimIds), today, keepSpace) : NO_AGENDAS,
-    [agendaEntities, blockEntities, claimIds, enabled, today]
+      enabled ? buildDebateAgendas(rows, new Set(claimIds), keepSpace) : NO_AGENDAS,
+    [claimIds, enabled, rows]
   );
 
-  const isLoading =
-    enabled && (agendasLoading || (blockIds.length > 0 && blocksLoading) || (itemIds.length > 0 && claimsLoading));
+  const isLoading = enabled && (agendasLoading || (itemIds.length > 0 && claimsLoading));
 
   return React.useMemo(
     () => ({
@@ -380,15 +288,11 @@ export function useDebateAgendas(enabled = true): {
       claimIds: enabled ? claimIds : NO_IDS,
       claimEntities,
       isLoading,
-      error: agendasError ?? blocksError ?? claimsError ?? null,
+      error: agendasError ?? claimsError ?? null,
     }),
-    [agendasError, agendasIn, blocksError, claimEntities, claimIds, claimsError, enabled, isLoading, spaceIds]
+    [agendasError, agendasIn, claimEntities, claimIds, claimsError, enabled, isLoading, spaceIds]
   );
 }
 
 const NO_IDS: string[] = [];
-
-/** Blocks and collection items both carry a fractional index, ordered the way `sortRelations` orders them. */
-function byPosition(a: { position?: string }, z: { position?: string }) {
-  return Position.compare(a.position ?? null, z.position ?? null);
-}
+const NO_ROWS: DebateAgendaRow[] = [];
