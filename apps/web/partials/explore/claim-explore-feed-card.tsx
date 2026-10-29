@@ -8,7 +8,13 @@ import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
-import { ClaimSides, ClaimSplitBar, ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
+import {
+  ClaimSides,
+  ClaimSplitBar,
+  ClaimSummary,
+  ControversialTag,
+  TrendingTag,
+} from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import {
@@ -17,6 +23,7 @@ import {
 } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useIsTrending } from '~/core/debates/todays-claims/trending';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
@@ -181,10 +188,15 @@ export function ClaimExploreFeedCard({
   // without a baseline it reports no counts and zeroes the split — but this column states the rule
   // it depends on rather than inheriting it, the same as the claim page's verdict and the shared
   // summary. A verdict drawn from a failed read is the one thing all three must never draw.
-  const extraSegments = React.useMemo(
-    () => (summary.isControversial ? [<ControversialTag key="controversial" />] : undefined),
-    [summary.isControversial]
-  );
+  // GEO-3497. Beside Controversial, and both when the claim is both.
+  const isTrending = useIsTrending(item.entityId, nearViewport);
+  const extraSegments = React.useMemo(() => {
+    const segments = [
+      ...(summary.isControversial ? [<ControversialTag key="controversial" />] : []),
+      ...(isTrending ? [<TrendingTag key="trending" />] : []),
+    ];
+    return segments.length > 0 ? segments : undefined;
+  }, [summary.isControversial, isTrending]);
 
   /*
    * Under the button it agrees with, rather than in the meta row.

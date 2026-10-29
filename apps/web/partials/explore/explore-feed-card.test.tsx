@@ -21,6 +21,8 @@ const { attribute } = vi.hoisted(() => ({ attribute: vi.fn() }));
 // The meta row's Join/Follow offer reads the space type and the viewer (GEO-3236); both have their
 // own suites.
 vi.mock('~/core/hooks/use-is-personal-space', () => ({ useIsPersonalSpace: () => undefined }));
+// The Trending tag's agenda read (GEO-3497) is a query of its own; these rows render without a client.
+vi.mock('~/core/debates/todays-claims/trending', () => ({ useIsTrending: () => false }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: null, isRegistered: false, isLoading: false }),
 }));

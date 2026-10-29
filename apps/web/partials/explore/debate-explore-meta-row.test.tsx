@@ -14,6 +14,8 @@ const SPACE = '73a82967cb12f604f9589ac4bc8024cb';
 const mocks = vi.hoisted(() => ({ isPersonal: undefined as boolean | undefined }));
 
 vi.mock('~/core/hooks/use-is-personal-space', () => ({ useIsPersonalSpace: () => mocks.isPersonal }));
+// The Trending tag's agenda read (GEO-3497) is a query of its own; these rows render without a client.
+vi.mock('~/core/debates/todays-claims/trending', () => ({ useIsTrending: () => false }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
 vi.mock('~/core/follows/follow-button', () => ({
   FollowButton: (props: { target: { kind: string; id: string } }) => (

@@ -19,6 +19,7 @@ import {
 } from '~/core/responses/entity-response';
 
 import { Fire } from '~/design-system/icons/fire';
+import { TrendingArrow } from '~/design-system/icons/trending-arrow';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
@@ -252,6 +253,26 @@ export function ControversialTag({ className }: { className?: string }) {
     >
       <Fire />
       Controversial
+    </span>
+  );
+}
+
+/**
+ * GEO-3497. A claim on today's or yesterday's agenda, or a debate on one, outside Today's claims.
+ *
+ * Controversial's shape exactly, so the two read as one family and sit side by side when a claim is
+ * both: Geo blue, with an up-right arrow where the flame is.
+ */
+export function TrendingTag({ className }: { className?: string }) {
+  return (
+    <span
+      className={cx(
+        'inline-flex items-center gap-1.5 text-[0.875rem] leading-none whitespace-nowrap text-ctaPrimary',
+        className
+      )}
+    >
+      <TrendingArrow />
+      Trending
     </span>
   );
 }
