@@ -124,11 +124,12 @@ export function useCreateAdminMatch() {
         getPrivyIdentityToken,
         accountKey
       ),
-    // The calendar draws the new match from its own list, so it has to read it again. The match is
-    // pending, which holds its time for both debaters (GEO-3532), so their weeks go too.
+    // The calendar draws the new match from its own list, so it has to read it again, and the dialog
+    // stays pending until it has. The match is pending, which holds its time for both debaters
+    // (GEO-3532), so their weeks go too.
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.adminScheduledDebatesRoot });
       invalidateAvailabilityReads(queryClient, accountKey);
+      return queryClient.invalidateQueries({ queryKey: debateQueryKeys.adminScheduledDebatesRoot });
     },
   });
 }

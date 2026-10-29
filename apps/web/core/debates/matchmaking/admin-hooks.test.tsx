@@ -44,4 +44,37 @@ describe('useCreateAdminMatch', () => {
       ])
     );
   });
+
+  it('stays pending until the admin calendar has read the new match', async () => {
+    vi.spyOn(api, 'createAdminScheduledDebate').mockResolvedValue(
+      {} as Awaited<ReturnType<typeof api.createAdminScheduledDebate>>
+    );
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    let calendarRead = () => {};
+    vi.spyOn(client, 'invalidateQueries').mockImplementation(filters =>
+      filters?.queryKey === debateQueryKeys.adminScheduledDebatesRoot
+        ? new Promise<void>(resolve => (calendarRead = resolve))
+        : Promise.resolve()
+    );
+    const { result } = renderHook(() => useCreateAdminMatch(), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+    let settled = false;
+    const created = result.current
+      .mutateAsync({ firstUserId: 'a', secondUserId: 'b', start: new Date(Date.now() + 86_400_000) })
+      .then(() => (settled = true));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    expect(settled).toBe(false);
+
+    await act(async () => {
+      calendarRead();
+      await created;
+    });
+    expect(settled).toBe(true);
+  });
 });
