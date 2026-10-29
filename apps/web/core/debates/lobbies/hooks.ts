@@ -139,6 +139,9 @@ export function useMyDebateLobby(enabled = true) {
   });
 }
 
+/** A held call opens only when scheduled calls are switched back on, which nothing announces to its page. */
+export const HELD_CALL_REFETCH_MS = 3 * 60_000;
+
 /** Floor between refetches at `opens_at`, so a client clock ahead of the server cannot spin. */
 const OPENS_REFETCH_MIN_MS = 5_000;
 /** `setTimeout`'s ceiling; a later opening refetches early and schedules again. */
@@ -180,10 +183,12 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
     },
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,
     structuralSharing: shareLobbyViewWithFreshRoster,
+    refetchInterval: ({ state }) => (state.data?.call?.held ? HELD_CALL_REFETCH_MS : false),
   });
 
   const access = query.data?.access;
-  useRefetchAtOpening(query, access?.status === 'not_yet_open' ? access.opens_at : null);
+  const held = query.data?.call?.held === true;
+  useRefetchAtOpening(query, access?.status === 'not_yet_open' && !held ? access.opens_at : null);
 
   return query;
 }

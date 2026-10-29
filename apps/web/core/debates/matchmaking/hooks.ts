@@ -51,6 +51,7 @@ import {
 } from '../hooks';
 import { lobbyDebateRequested } from '../lobbies/lobby-analytics';
 import { routeIntoDebate } from '../lobbies/step-out';
+import { markAskWithdrawn, unmarkAskWithdrawn } from './ask-withdrawals';
 
 const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
 
@@ -422,8 +423,13 @@ export function useCreateDebateRequest() {
       void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'claim', target_id: request.claim_entity_id })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request => getContext({ target_type: 'claim', target_id: request.claim_entity_id }),
+    undefined,
+    // GEO-3495: geo-chat records the accepted request as the origin of the debate it becomes.
+    created => ({ request_id: created.id })
   );
 }
 
@@ -433,6 +439,10 @@ export function useWithdrawDebateRequest() {
 
   return useMutation({
     mutationFn: (requestId: string) => withdrawDebateRequest(requestId, getPrivyIdentityToken, accountKey),
+    // On the press, so the panel reads the request's end as taken back even when a poll drops it
+    // before the response lands (GEO-3463).
+    onMutate: requestId => markAskWithdrawn(requestId),
+    onError: (_error, requestId) => unmarkAskWithdrawn(requestId),
     onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }

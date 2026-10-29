@@ -1,5 +1,12 @@
 import type { Debate, DebateOpenRounds, OpenRoundPick, OpenRoundRevealedPick } from './api';
-import { type DebateTurnRole, debateTurnRole } from './formats';
+import {
+  type DebateTurnRole,
+  debateTurnRole,
+  hasNumberedOpenRoundsTurns,
+  openRoundsRequiredRebuttalRounds,
+} from './formats';
+
+export { openRoundsRequiredRebuttalRounds } from './formats';
 
 /**
  * The room's clock for Open rounds (GEO-3175), against geo-chat `docs/open-rounds-contract.md`.
@@ -91,15 +98,11 @@ export function isFinalOpenRound(openRounds: Pick<DebateOpenRounds, 'max_rebutta
   return roundIndex >= openRounds.max_rebuttal_rounds;
 }
 
-/** The rebuttal rounds that run before the first pick. `0` from a geo-chat that does not send it. */
-export function openRoundsRequiredRebuttalRounds(openRounds: Pick<DebateOpenRounds, 'required_rebuttal_rounds'>) {
-  return Math.max(0, openRounds.required_rebuttal_rounds ?? 0);
-}
-
 /**
- * Whether a round ends on a pick. Every round before the last required one runs straight into the
- * next, like a fixed format's rounds, so the first pick follows the last required round (or the
- * opening, when none is required). The cap round goes straight to thanking.
+ * Whether a round ends on a decision window. Every round before the last required one runs
+ * straight into the next, like a fixed format's rounds. The first decision window follows the
+ * last required round (or the opening, when none is required); pre-picks can be saved during
+ * that round's speaking turns. The cap round has no picks and goes straight to thanking.
  */
 export function openRoundEndsOnPick(
   openRounds: Pick<DebateOpenRounds, 'max_rebuttal_rounds' | 'required_rebuttal_rounds'>,
@@ -175,6 +178,21 @@ export function openRoundLastWord(
   return openRoundEndsOnPick(debate.open_rounds, roundIndex) ? 'round' : null;
 }
 
+/** GEO-3521 snapshots Round 3 at 30s; every older Open rounds allowance used 45s.
+ * Use the stored turns so old recordings keep their labels and timing, even after a rerender.
+ */
+export function hasNumberedOpenRounds(debate: Pick<Debate, 'open_rounds' | 'turn_durations_ms'>) {
+  return isOpenRoundsDebate(debate) && hasNumberedOpenRoundsTurns(debate.turn_durations_ms);
+}
+
+/** Round cue roles: a null role displays only Round N; fixed and legacy labels stay as recorded. */
+export function debateRoundRoleForDebate(
+  debate: Pick<Debate, 'open_rounds' | 'turn_durations_ms'>,
+  turnIndex: number
+): DebateTurnRole | null {
+  return hasNumberedOpenRounds(debate) ? null : debateTurnRoleForDebate(debate, turnIndex);
+}
+
 /**
  * What a turn is. Open rounds sends `turn_roles`, one per appended turn, and it is read as given;
  * every fixed format keeps `debateTurnRole`'s position rule (GEO-2852).
@@ -216,7 +234,7 @@ export function openRoundGapAfterTurn(
   const openRounds = debate.open_rounds;
   const roundIndex = openRoundIndexForTurn(turnIndex);
   if (!openRoundEndsOnPick(openRounds, roundIndex)) {
-    // A required round has no pick, but may still be announced and counted in like an Extend.
+    // A round before the last required one has no decision, but the next round may be counted in.
     const leadInMs = openRoundLeadInAfterTurn(debate, turnIndex);
     if (leadInMs === 0) return proceed;
     const nextPhaseStartsAtMs = turnEndsAtMs + leadInMs;

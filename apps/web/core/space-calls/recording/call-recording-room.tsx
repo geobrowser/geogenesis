@@ -55,7 +55,7 @@ export const CALL_RECORDING_COPY = {
  * people a call records reads `callRecordingOf` instead, whatever this browser's flag says.
  */
 export function useFlaggedCallRecording(lobby: Pick<LobbyPageView, 'call'> | null): CallRecordingState | null {
-  const enabled = useFeatureFlag('callRecording');
+  const enabled = useFeatureFlag('spaceCalls');
   return enabled ? callRecordingOf(lobby) : null;
 }
 
@@ -99,7 +99,7 @@ export function CallRecordingBar({ lobby }: { lobby: LobbyPageView }) {
   const recording = callRecordingOf(lobby);
   const control = useCallRecordingControl(lobby.lobby_id);
   const [confirmingStop, setConfirmingStop] = React.useState(false);
-  const canManage = useFeatureFlag('callRecording') && canManageCallRecording(lobby);
+  const canManage = useFeatureFlag('spaceCalls') && canManageCallRecording(lobby);
   if (!recording) return null;
   // Shown from the click: people are told before the file starts.
   const starting = control.isPending && control.variables === 'start';

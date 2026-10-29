@@ -63,17 +63,17 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'spaceCalls',
-    label: 'Space calls',
+    id: 'todaysClaims',
+    label: 'Debate again: Today’s claims',
     description:
-      'Start a call from a space you edit, and join a space’s live call from its page (GEO-3419). Needs geo-chat with space calls.',
+      'Open the debate-again picker on a Today’s claims tab: every space’s newest Debate agenda, member spaces first (GEO-3489). Debated claims sort below undebated ones once geo-chat counts them.',
     enabledByDefault: false,
   },
   {
-    id: 'callRecording',
-    label: 'Call recording',
+    id: 'spaceCalls',
+    label: 'Community calls',
     description:
-      'Record space calls, play them back on the ended call’s page and show published ones on Explore (GEO-3421). Needs geo-chat with call recording.',
+      'Start, schedule and join a space’s calls, the Calls tab, agenda and reminders, recording and past calls on Explore. Needs geo-chat with space calls.',
     enabledByDefault: false,
   },
   {
