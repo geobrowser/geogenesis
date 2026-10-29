@@ -239,3 +239,17 @@ describe('round cues for Open rounds', () => {
     expect(roundCardAt(spans, 4, 0.5, round => round === 1)?.label).toBe('Round 1 · Opening');
   });
 });
+
+it('renders numbered-only round announcements and badges at every new Open round', () => {
+  const spans = turnSpansForDurations(1, [60_000, 60_000, 45_000, 45_000, 30_000, 30_000, 30_000, 30_000]);
+  const roles = () => null;
+  for (const [round, start] of [
+    [1, 0],
+    [2, 120],
+    [3, 210],
+    [4, 270],
+  ]) {
+    expect(roundCardAt(spans, roles, start + 0.5)).toMatchObject({ label: `Round ${round}`, role: null });
+    expect(roundBadgeAt(spans, roles, start + 5)).toMatchObject({ label: `Round ${round}`, role: null });
+  }
+});
