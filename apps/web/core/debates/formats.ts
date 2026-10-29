@@ -66,7 +66,7 @@ export function hasNumberedOpenRoundsTurns(turns: readonly number[]) {
   return turns[4] === openRoundsExtraTurnMs && turns[5] === openRoundsExtraTurnMs;
 }
 
-/** The rebuttal rounds that run before the first pick. `0` from a geo-chat that does not send it. */
+/** The rebuttal rounds that run before the first decision window. `0` from a geo-chat that does not send it. */
 export function openRoundsRequiredRebuttalRounds(openRounds: Pick<DebateOpenRounds, 'required_rebuttal_rounds'>) {
   return Math.max(0, openRounds.required_rebuttal_rounds ?? 0);
 }

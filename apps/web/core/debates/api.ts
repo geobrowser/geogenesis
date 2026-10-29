@@ -412,9 +412,9 @@ export type DebateOpenRounds = {
   extend_count_in_ms?: number;
   /**
    * Rebuttal rounds every debate plays: rounds `1..=required_rebuttal_rounds` are appended with the
-   * opening, the rounds before the last of them run straight on, and the first Extend / End pick
-   * follows the last of them. Snapshotted per debate like the cap, and absent from a geo-chat that
-   * predates it, which reads as `0`: the opening ends on a pick, as it always did.
+   * opening, and the first Extend / End decision window follows the last of them. Pre-picks open
+   * during that last required round once its lead-in ends, unless it is the cap. Snapshotted per
+   * debate like the cap; absent reads as `0`, so the opening itself ends on a decision.
    */
   required_rebuttal_rounds?: number;
   /**
@@ -534,7 +534,7 @@ export type DebateRematchRequest = {
   turn_format_id: string;
   /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
   max_rebuttal_rounds?: number | null;
-  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  /** The rebuttal rounds that run before the first decision window, decided with the cap. Absent reads as `0`. */
   required_rebuttal_rounds?: number | null;
   /** Exact initial turns snapshotted when the request was created. Absent means legacy timing. */
   turn_durations_ms?: number[] | null;
@@ -971,7 +971,7 @@ export type DebateRequest = {
   turn_format_id: string | null;
   /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
   max_rebuttal_rounds?: number | null;
-  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  /** The rebuttal rounds that run before the first decision window, decided with the cap. Absent reads as `0`. */
   required_rebuttal_rounds?: number | null;
   /** Exact initial turns snapshotted when the request was created. Absent means legacy timing. */
   turn_durations_ms?: number[] | null;

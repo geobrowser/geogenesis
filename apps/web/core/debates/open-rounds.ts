@@ -99,9 +99,10 @@ export function isFinalOpenRound(openRounds: Pick<DebateOpenRounds, 'max_rebutta
 }
 
 /**
- * Whether a round ends on a pick. Every round before the last required one runs straight into the
- * next, like a fixed format's rounds, so the first pick follows the last required round (or the
- * opening, when none is required). The cap round goes straight to thanking.
+ * Whether a round ends on a decision window. Every round before the last required one runs
+ * straight into the next, like a fixed format's rounds. The first decision window follows the
+ * last required round (or the opening, when none is required); pre-picks can be saved during
+ * that round's speaking turns. The cap round has no picks and goes straight to thanking.
  */
 export function openRoundEndsOnPick(
   openRounds: Pick<DebateOpenRounds, 'max_rebuttal_rounds' | 'required_rebuttal_rounds'>,
@@ -233,7 +234,7 @@ export function openRoundGapAfterTurn(
   const openRounds = debate.open_rounds;
   const roundIndex = openRoundIndexForTurn(turnIndex);
   if (!openRoundEndsOnPick(openRounds, roundIndex)) {
-    // A required round has no pick, but may still be announced and counted in like an Extend.
+    // A round before the last required one has no decision, but the next round may be counted in.
     const leadInMs = openRoundLeadInAfterTurn(debate, turnIndex);
     if (leadInMs === 0) return proceed;
     const nextPhaseStartsAtMs = turnEndsAtMs + leadInMs;
